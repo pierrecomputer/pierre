@@ -11,6 +11,7 @@ import type {
   SelectionSide,
   TokenEventBase,
 } from '../types';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
@@ -293,8 +294,16 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     private options: InteractionManagerOptions<TMode>
   ) {}
 
+  // New options take effect on the pre already set up; unchanged options are
+  // a no-op.
   setOptions(options: InteractionManagerOptions<TMode>): void {
+    if (areObjectsEqual(this.options, options)) {
+      return;
+    }
     this.options = options;
+    if (this.pre != null) {
+      this.setup(this.pre);
+    }
   }
 
   cleanUp(): void {

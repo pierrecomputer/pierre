@@ -159,6 +159,7 @@ export class VirtualizedFile<
     }
 
     super.setLineAnnotations(lineAnnotations);
+    this.managersDirty = true;
     return true;
   }
 

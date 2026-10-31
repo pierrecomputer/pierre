@@ -591,4 +591,186 @@ describe('DiffLayout matches processDiffResult', () => {
       }
     }
   });
+
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`${diffStyle}: marked lines are laid out as a full layout would, without a walk`, () => {
+      const { diff } = FIXTURES[0];
+      const result = renderDiffWithHighlighter(diff, highlighter, {
+        theme: 'github-light',
+        useTokenTransformer: true,
+        tokenizeMaxLineLength: 1000,
+        lineDiffType: 'none',
+        maxLineDiffLength: 1000,
+      });
+      const layout = new DiffLayout({
+        diffStyle,
+        expandUnchanged: true,
+        expansionLineCount: 100,
+        collapsedContextThreshold: 1,
+        hunkSeparators: 'line-info',
+        lineDiffType: 'word-alt',
+        maxLineDiffLength: 1000,
+        canHydrateContext: false,
+      });
+      const model = DiffModel.startEditSession(diff);
+      const input = {
+        host,
+        model,
+        expandedHunks: new Map(),
+        rows: new RowSource({
+          deletionRows: result.code.deletionLines,
+          additionRows: result.code.additionLines,
+          additionLines: diff.additionLines,
+          lineIds: model.lineIds(),
+        }),
+        renderRange: RANGES.all,
+        ...annotationMaps(),
+        annotationSlotName: getLineAnnotationName,
+        includeTrailingNewline: true,
+        showNoNewlineMarkers: false,
+      };
+      // Marks before any layout change nothing: the first layout walks.
+      layout.markLines([2]);
+      expect(layout.layout(input).patched).toBeUndefined();
+
+      const document = new TextDocument<'file-diff', undefined>(
+        'inmemory://lines',
+        diff.additionLines.join(''),
+        'typescript'
+      );
+      const change = model.applyChange(
+        document.applyEdits([
+          {
+            range: {
+              start: { line: 2, character: 6 },
+              end: { line: 2, character: 6 },
+            },
+            newText: 'x',
+          },
+        ])!,
+        document
+      );
+      expect(change.hunksChanged).toBe(false);
+      layout.markLines(change.changedLines);
+      const laidOut = layout.layout(input);
+      const patched = laidOut.patched!;
+      expect(patched).toBeDefined();
+      // What a fresh layout of the same input walks to.
+      const full = new DiffLayout({
+        diffStyle,
+        expandUnchanged: true,
+        expansionLineCount: 100,
+        collapsedContextThreshold: 1,
+        hunkSeparators: 'line-info',
+        lineDiffType: 'word-alt',
+        maxLineDiffLength: 1000,
+        canHydrateContext: false,
+      }).layout(input);
+
+      // The changed line's row and its pair's row, and nothing else.
+      const patchedSpecs = [
+        ...(patched.unified ?? []),
+        ...(patched.deletions ?? []),
+        ...(patched.additions ?? []),
+      ];
+      expect(
+        patchedSpecs.map((spec) => spec.key).sort((a, b) => a.localeCompare(b))
+      ).toEqual([`a${model.lineId(2)}`, 'd2']);
+      // The columns hold the same rows, in the same order, as the walk.
+      for (const type of ['unified', 'deletions', 'additions'] as const) {
+        const column = laidOut.columns[type];
+        const walked = full.columns[type];
+        expect(column?.length).toBe(walked?.length);
+        for (const [index, spec] of (column ?? []).entries()) {
+          expect(spec.key).toBe(walked![index].key);
+          expect(hastToHtml([spec.content])).toBe(
+            hastToHtml([walked![index].content])
+          );
+        }
+      }
+      const addition = patchedSpecs.find((spec) => spec.key.startsWith('a'));
+      expect(hastToHtml([addition!.content])).toContain('xchanged3');
+      // A line without a row on screen has nothing to rebuild: every column
+      // is patched with no rows. Nothing marked means a walk.
+      layout.markLines([999]);
+      const nothing = layout.layout(input).patched!;
+      for (const type of ['unified', 'deletions', 'additions'] as const) {
+        expect(nothing[type]).toEqual(
+          full.columns[type] == null ? undefined : []
+        );
+      }
+      expect(layout.layout(input).patched).toBeUndefined();
+    });
+  }
+
+  test('unified: a marked line off screen still rebuilds its pair row on screen', () => {
+    const { diff } = FIXTURES[0];
+    const result = renderDiffWithHighlighter(diff, highlighter, {
+      theme: 'github-light',
+      useTokenTransformer: true,
+      tokenizeMaxLineLength: 1000,
+      lineDiffType: 'none',
+      maxLineDiffLength: 1000,
+    });
+    const layout = new DiffLayout({
+      diffStyle: 'unified',
+      expandUnchanged: true,
+      expansionLineCount: 100,
+      collapsedContextThreshold: 1,
+      hunkSeparators: 'line-info',
+      lineDiffType: 'word-alt',
+      maxLineDiffLength: 1000,
+      canHydrateContext: false,
+    });
+    const model = DiffModel.startEditSession(diff);
+    // The third unified row is the deletion of line 3; its addition is the
+    // row after, outside this window.
+    const input = {
+      host,
+      model,
+      expandedHunks: new Map(),
+      rows: new RowSource({
+        deletionRows: result.code.deletionLines,
+        additionRows: result.code.additionLines,
+        additionLines: diff.additionLines,
+        lineIds: model.lineIds(),
+      }),
+      renderRange: {
+        startingLine: 2,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      },
+      ...annotationMaps(),
+      annotationSlotName: getLineAnnotationName,
+      includeTrailingNewline: true,
+      showNoNewlineMarkers: false,
+    };
+    expect(
+      layout.layout(input).columns.unified?.map((spec) => spec.key)
+    ).toEqual(['d2']);
+
+    const document = new TextDocument<'file-diff', undefined>(
+      'inmemory://lines',
+      diff.additionLines.join(''),
+      'typescript'
+    );
+    const change = model.applyChange(
+      document.applyEdits([
+        {
+          range: {
+            start: { line: 2, character: 6 },
+            end: { line: 2, character: 6 },
+          },
+          newText: 'x',
+        },
+      ])!,
+      document
+    );
+    layout.markLines(change.changedLines);
+    // The deletion's marks come from the edited addition's text.
+    expect(
+      layout.layout(input).patched?.unified?.map((spec) => spec.key)
+    ).toEqual(['d2']);
+  });
 });

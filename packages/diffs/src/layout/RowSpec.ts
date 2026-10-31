@@ -40,6 +40,11 @@ export type RowKey =
   | 'eof:d'
   | `inj:${string}`;
 
+/** Whether a key is a line's: every other kind of row carries a `:` prefix. */
+export function isLineKey(key: RowKey): key is LineKey {
+  return !key.includes(':');
+}
+
 export interface LayoutColumns {
   unified?: RowSpec[];
   deletions?: RowSpec[];

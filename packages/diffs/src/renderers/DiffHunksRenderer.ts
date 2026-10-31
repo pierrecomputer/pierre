@@ -14,7 +14,11 @@ import {
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
-import { DiffLayout, type DiffLayoutOptions } from '../layout/DiffLayout';
+import {
+  DiffLayout,
+  type DiffLayoutInput,
+  type DiffLayoutOptions,
+} from '../layout/DiffLayout';
 import {
   columnCells,
   type LayoutColumns,
@@ -72,7 +76,7 @@ import { createGutterWrapper, createHastElement } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
-import { endsWithNewline } from '../utils/iterateOverDiff';
+import { endsWithNewline, iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import type { WorkerPoolManager } from '../worker';
@@ -142,6 +146,13 @@ export interface HunksRenderResult {
    * writing the columns whole beats patching rows one by one.
    */
   allRowsChanged: boolean;
+  /**
+   * The rows that differ from the last result, per column, when an edit's
+   * lines were the only change since it: the DOM patches these by key
+   * instead of walking `columns`. Undefined when the window was laid out
+   * anew.
+   */
+  patched: LayoutColumns | undefined;
   hunkData: HunkData[];
   preNode: HASTElement;
   headerElement: HASTElement | undefined;
@@ -165,6 +176,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private expandedHunks = new Map<number, HunkExpansionRegion>();
 
+  // The annotations last given, so setLineAnnotations can tell an unchanged
+  // list apart and keep the maps below as they are. The layout only patches
+  // rows instead of walking when the maps are the same objects it read last
+  // time, and the component passes a new list on every render.
+  private annotationList: DiffLineAnnotation<LAnnotation>[] = [];
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
 
@@ -215,6 +231,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } else {
       this.clearRenderCache();
     }
+    this.annotationList = [];
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     this.workerManager?.cleanUpTasks(this);
@@ -272,6 +289,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           additionLines: lines.texts,
           lineIds: lines.ids,
         });
+        this.layout?.invalidateLines();
         rowSource.model = model;
       } else {
         this.rowSource = undefined;
@@ -303,6 +321,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.editSessionRows(model).source.forgetLines(result.removedLineIds);
       this.layout?.forgetLines(result.removedLineIds);
     }
+    // Rows move, appear or change type when the line count or the hunks
+    // change, when collapsed regions move, or when a batch removed lines and
+    // added others at the same count; otherwise the changed lines' rows and
+    // their pairs' are the only ones that differ.
+    if (
+      result.lineDelta !== 0 ||
+      result.removedLineIds.length > 0 ||
+      result.regionsChanged ||
+      result.hunksChanged
+    ) {
+      this.layout?.invalidateLines();
+    } else {
+      this.layout?.markLines(result.changedLines);
+    }
     if (tokens != null) {
       this.setTokens(tokens);
     }
@@ -322,6 +354,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         changed.push(line);
       }
     }
+    this.layout?.markLines(changed);
     return changed;
   }
 
@@ -560,6 +593,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.clearRenderCache();
     }
     this.expandedHunks.set(index, region);
+    // The expansion moves rows; the map is changed in place, so the layout
+    // cannot see that on its own.
+    this.layout?.invalidateLines();
   }
 
   public getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
@@ -580,6 +616,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public setLineAnnotations(
     lineAnnotations: DiffLineAnnotation<LAnnotation>[]
   ): void {
+    const { annotationList } = this;
+    if (
+      lineAnnotations === annotationList ||
+      (lineAnnotations.length === 0 && annotationList.length === 0)
+    ) {
+      return;
+    }
+    this.annotationList = lineAnnotations;
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     for (const annotation of lineAnnotations) {
@@ -1251,19 +1295,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
   }
 
-  // Places the rows of `diff` for `renderRange` from the highlight result's
-  // base rows, and packs them as the render result the components and SSR
-  // consume.
-  private layoutResult(
-    diff: FileDiffMetadata,
-    renderRange: RenderRange,
-    result: ThemedDiffResult,
-    lines?: HighlightedLines
-  ): HunksRenderResult {
-    const { themeStyles, baseThemeType } = result;
+  // The layout with this renderer's current options applied, created on
+  // first use. Every reader of the layout goes through here so a change of
+  // options reaches it before anything is read off its last walk.
+  private layoutWithOptions(diff: FileDiffMetadata): DiffLayout<LAnnotation> {
     const {
       diffStyle,
-      disableFileHeader,
       expandUnchanged,
       expansionLineCount,
       collapsedContextThreshold,
@@ -1286,13 +1323,75 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     const layout = (this.layout ??= new DiffLayout(layoutOptions));
     layout.setOptions(layoutOptions);
-    const model =
-      this.model?.diff === diff
-        ? this.model
-        : (this.model = DiffModel.fromDiff(diff));
-    const previousResult = this.rowSource?.result;
-    const rows = this.getRowSource(result, model, lines);
-    const { columns, hunkData, rowCount, totalLines } = layout.layout({
+    return layout;
+  }
+
+  /**
+   * The editor works in new-file lines, while a window is a range of rows
+   * (separators and old-side rows included). This is the range of new-file
+   * lines the window's rows show, so the editor can finish coloring exactly
+   * those lines before a render. Read off the last layout while it stands;
+   * found by iterating the window when the next layout walks anyway.
+   */
+  public editorRenderRange(
+    diff: FileDiffMetadata | undefined,
+    renderRange: RenderRange | undefined
+  ): RenderRange | undefined {
+    if (
+      renderRange == null ||
+      diff == null ||
+      isDefaultRenderRange(renderRange)
+    ) {
+      return renderRange;
+    }
+    let first: number | undefined;
+    let last: number | undefined;
+    const { model, rowSource } = this;
+    const standing =
+      model != null && model.diff === diff && rowSource != null
+        ? this.layoutWithOptions(diff).standingResult(
+            this.layoutInput(model, rowSource.source, renderRange)
+          )
+        : undefined;
+    if (standing != null) {
+      first = standing.newFileLines?.first;
+      last = standing.newFileLines?.last;
+    } else {
+      const { diffStyle, expandUnchanged, collapsedContextThreshold } =
+        this.getOptionsWithDefaults();
+      iterateOverDiff({
+        diff,
+        diffStyle,
+        startingLine: renderRange.startingLine,
+        totalLines: renderRange.totalLines,
+        expandedHunks: expandUnchanged ? true : this.expandedHunks,
+        collapsedContextThreshold,
+        includeTrailingNewline: this.includesTrailingNewline(),
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            first ??= additionLine.lineNumber;
+            last = additionLine.lineNumber;
+          }
+        },
+      });
+    }
+    return first == null || last == null
+      ? { ...renderRange, startingLine: 0, totalLines: 0 }
+      : {
+          ...renderRange,
+          startingLine: first - 1,
+          totalLines: last - first + 1,
+        };
+  }
+
+  // Everything the layout reads besides its options: the model, the row
+  // source, the window and the annotations, with this renderer as the host.
+  private layoutInput(
+    model: DiffModel,
+    rows: RowSource,
+    renderRange: RenderRange
+  ): DiffLayoutInput<LAnnotation> {
+    return {
       host: this,
       model,
       rows,
@@ -1303,11 +1402,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       annotationSlotName: this.annotationSlotName,
       includeTrailingNewline: this.includesTrailingNewline(),
       showNoNewlineMarkers: this.showsNoNewlineMarkers(),
-    });
+    };
+  }
+
+  // Places the rows of `diff` for `renderRange` from the highlight result's
+  // base rows, and packs them as the render result the components and SSR
+  // consume.
+  private layoutResult(
+    diff: FileDiffMetadata,
+    renderRange: RenderRange,
+    result: ThemedDiffResult,
+    lines?: HighlightedLines
+  ): HunksRenderResult {
+    const { themeStyles, baseThemeType } = result;
+    const { disableFileHeader } = this.getOptionsWithDefaults();
+    const layout = this.layoutWithOptions(diff);
+    const model =
+      this.model?.diff === diff
+        ? this.model
+        : (this.model = DiffModel.fromDiff(diff));
+    const previousResult = this.rowSource?.result;
+    const rows = this.getRowSource(result, model, lines);
+    const { columns, patched, hunkData, rowCount, totalLines } = layout.layout(
+      this.layoutInput(model, rows, renderRange)
+    );
     return {
       fileDiff: diff,
       columns,
       allRowsChanged: previousResult !== result,
+      patched,
       hunkData,
       preNode: this.createPreElement(
         columns.deletions != null && columns.additions != null,
@@ -1360,6 +1483,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     if (rowSource != null && model.live && rowSource.model === model) {
       rowSource.source.setHighlightRows(highlightRows);
+      this.layout?.invalidateLines();
       rowSource.result = result;
       return rowSource.source;
     }

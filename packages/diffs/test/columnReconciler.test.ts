@@ -112,6 +112,53 @@ describe('ColumnReconciler', () => {
     expect(Array.from(content.children).slice(3)).toEqual(kept);
   });
 
+  test('a patch hint rewrites the rows with the given keys and leaves the rest', () => {
+    const { content, reconciler } = createColumns();
+    const rows = [row('a1', 'one'), row('a2', 'two'), row('a3', 'three')];
+    reconciler.reconcile(rows);
+    const second = content.children[1];
+    const patchedTwo = row('a2', 'TWO');
+    const specs = [rows[0], patchedTwo, rows[2]];
+    const result = reconciler.reconcile(specs, [patchedTwo, row('a9', 'nine')]);
+    expect([...result.changed]).toEqual(['a2']);
+    expect(textsOf(content)).toEqual(['one', 'TWO', 'three']);
+    expect(content.children[1]).toBe(second);
+    // The patched spec is what the next reconcile compares against.
+    const again = reconciler.reconcile(specs);
+    expect(again.changed.size).toBe(0);
+  });
+
+  test('reports when a gutter cell was rewritten', () => {
+    const { reconciler } = createColumns();
+    const rows = [row('a1', 'one'), row('a2', 'two')];
+    reconciler.reconcile(rows);
+    // The same line with a new number: its gutter cell is rewritten.
+    const renumbered = {
+      ...rows[1],
+      gutter: cell('a9', rows[1].gutter.properties),
+    };
+    const result = reconciler.reconcile([rows[0], renumbered]);
+    expect(result.gutterRewritten).toBe(true);
+    expect(result.attributesReset).toBe(false);
+    // Content alone changing leaves the gutter cells as they are.
+    const retyped = {
+      ...rows[0],
+      content: cell('ONE', rows[0].content.properties),
+    };
+    expect(reconciler.reconcile([retyped, renumbered]).gutterRewritten).toBe(
+      false
+    );
+  });
+
+  test('a patch hint before the first paint writes the rows whole', () => {
+    const { content, reconciler } = createColumns();
+    const rows = [row('a1', 'one'), row('a2', 'two')];
+    const result = reconciler.reconcile(rows, [rows[1]]);
+    expect([...result.changed]).toEqual(['a1', 'a2']);
+    expect(result.attributesReset).toBe(true);
+    expect(textsOf(content)).toEqual(['one', 'two']);
+  });
+
   test('inserting a row in the middle keeps the rows around it', () => {
     const { content, reconciler } = createColumns();
     const one = row('a1', 'one');

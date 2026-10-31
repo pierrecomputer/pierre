@@ -348,6 +348,20 @@ describe('DiffModel.applyChange', () => {
     expect(model.lineId(3)).toBe(31);
     expect(model.lineId(4)).toBe(3);
   });
+
+  test('says whether the hunks were rebuilt', () => {
+    const model = DiffModel.startEditSession(makeDiff());
+    const document = makeDocument(makeDiff());
+    // Typing inside a change keeps the hunks: only the line's text differs.
+    const inChange = model.applyChange(edit(document, 2, 9, 9, 'x'), document);
+    expect(inChange.lineDelta).toBe(0);
+    expect(inChange.regionsChanged).toBe(false);
+    expect(inChange.hunksChanged).toBe(false);
+    // A context line becoming a change rebuilds them at the same line count.
+    const toChange = model.applyChange(edit(document, 10, 0, 0, 'x'), document);
+    expect(toChange.lineDelta).toBe(0);
+    expect(toChange.hunksChanged).toBe(true);
+  });
 });
 
 describe('DiffModel sessions', () => {

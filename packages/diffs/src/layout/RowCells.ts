@@ -2,7 +2,7 @@ import type { Element as HASTElement, Properties } from 'hast';
 
 import type { LineTypes } from '../types';
 import { createGutterItem } from '../utils/hast_utils';
-import type { RowKey, RowSpec } from './RowSpec';
+import type { LineKey, RowKey, RowSpec } from './RowSpec';
 
 interface StampedRow {
   properties: Properties;
@@ -36,24 +36,21 @@ export interface Column {
  * is how the reconciler knows it can leave the row's DOM alone.
  */
 export class RowCells {
+  // Content cells by the highlight row they stamp, reused while the line
+  // attributes match.
   readonly #stamped = new WeakMap<HASTElement, StampedRow>();
-  // Gutter cells by the highlight row they were built for, reused while the
-  // line number, type and decoration match so the element is kept too.
-  readonly #gutters = new WeakMap<HASTElement, GutterCell>();
-  // The highlight row each content cell was built from, so a cell that only
-  // got new attributes (a new line index, say) still finds its gutter cell.
-  readonly #baseOf = new WeakMap<HASTElement, HASTElement>();
+  // Gutter cells by line key, reused while the line number, type and
+  // decoration match, so a line whose text changed keeps its gutter cell.
+  readonly #gutters = new Map<LineKey, GutterCell>();
   // Kept by key while their signature matches.
   readonly #fixedRows = new Map<RowKey, FixedRow>();
 
   /**
-   * The content cell of a line: `row` with its line attributes. `base` is the
-   * highlight row `row` was built from, which the gutter cell is cached on.
-   * Reuses the last cell while the attributes match.
+   * The content cell of a line: `row` with its line attributes. Reuses the
+   * last cell while the attributes match.
    */
   line(
     row: HASTElement,
-    base: HASTElement,
     contentProperties: Properties | undefined,
     lineNumber: number,
     altLineNumber: number | undefined,
@@ -76,20 +73,21 @@ export class RowCells {
     }
     const stamped: HASTElement = { ...row, properties };
     this.#stamped.set(row, { properties, row: stamped });
-    this.#baseOf.set(stamped, base);
     return stamped;
   }
 
-  /** The gutter cell of a line, reused while its number, type and properties match. */
+  /**
+   * The gutter cell of the line with `key`, reused while its number, type
+   * and properties match, whatever happened to the line's text.
+   */
   gutter(
-    content: HASTElement,
+    key: LineKey,
     lineType: LineTypes,
     lineNumber: number,
     lineIndexText: string,
     properties: Properties = {}
   ): HASTElement {
-    const base = this.#baseOf.get(content) ?? content;
-    const cached = this.#gutters.get(base);
+    const cached = this.#gutters.get(key);
     if (
       cached != null &&
       cached.lineType === lineType &&
@@ -110,7 +108,7 @@ export class RowCells {
     if (cached != null && cached.lineNumber === lineNumber) {
       cell.children = cached.cell.children;
     }
-    this.#gutters.set(base, {
+    this.#gutters.set(key, {
       lineType,
       lineNumber,
       lineIndexText,
@@ -136,11 +134,12 @@ export class RowCells {
   }
 
   /**
-   * Drops the rows kept for lines an edit removed: their annotation rows and
-   * the buffers that followed them.
+   * Drops the rows kept for lines an edit removed: their gutter cells, their
+   * annotation rows and the buffers that followed them.
    */
   forgetLines(ids: readonly number[]): void {
     for (const id of ids) {
+      this.#gutters.delete(`a${id}`);
       this.#fixedRows.delete(`ann:a${id}`);
       this.#fixedRows.delete(`buf:a${id}`);
       this.#fixedRows.delete(`buf:ann:a${id}`);

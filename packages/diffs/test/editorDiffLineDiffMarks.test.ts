@@ -1,6 +1,7 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
+import { ColumnReconciler } from '../src/dom/ColumnReconciler';
 import { Editor } from '../src/editor/editor';
 import { getHighlighterType } from '../src/highlighter/highlighterType';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -846,5 +847,60 @@ describe('word diff highlights after the editor redraws rows in the background',
         );
       });
     }
+  }
+});
+
+describe('rows patched in place while typing', () => {
+  // A keystroke that keeps every row in place renders as a patch: the
+  // result names the changed rows and their pairs, the DOM rewrites those
+  // only, and the DOM is what a full render would produce.
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`${diffStyle}: typing inside a change patches its rows only`, async () => {
+      await withEditor(diffStyle, async (editor, container, fileDiff) => {
+        const expected = await getReadOnlyHighlights(
+          diffStyle,
+          NEW.replace('3)', '9)')
+        );
+        // Whether the writes since `from` patched by key or walked.
+        const reconcile = spyOn(ColumnReconciler.prototype, 'reconcile');
+        const patchedSince = (from: number) => {
+          const hints = reconcile.mock.calls
+            .slice(from)
+            .map(([, hint]) => hint);
+          expect(hints.length).toBeGreaterThan(0);
+          return hints.every((hint) => hint != null);
+        };
+        try {
+          replaceText(editor, 0, 23, 24, '9');
+          expect(patchedSince(0)).toBe(true);
+          expect(getHighlights(container)).toEqual(expected);
+          const patched = container.shadowRoot?.innerHTML;
+          const written = reconcile.mock.calls.length;
+          fileDiff.rerender();
+          expect(patchedSince(written)).toBe(false);
+          expect(container.shadowRoot?.innerHTML).toBe(patched);
+        } finally {
+          reconcile.mockRestore();
+        }
+      });
+    });
+
+    test(`${diffStyle}: a context line becoming a change lays the diff out again`, async () => {
+      await withEditor(diffStyle, async (editor, container) => {
+        const reconcile = spyOn(ColumnReconciler.prototype, 'reconcile');
+        try {
+          replaceText(editor, 1, 15, 19, 'gamma');
+          expect(reconcile).toHaveBeenCalled();
+          for (const [, hint] of reconcile.mock.calls) {
+            expect(hint).toBeUndefined();
+          }
+          expect(getHighlights(container)).toEqual(
+            await getReadOnlyHighlights(diffStyle, NEW.replace('beta', 'gamma'))
+          );
+        } finally {
+          reconcile.mockRestore();
+        }
+      });
+    });
   }
 });

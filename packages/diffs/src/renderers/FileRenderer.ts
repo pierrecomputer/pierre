@@ -12,7 +12,7 @@ import {
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
-import { FileLayout } from '../layout/FileLayout';
+import { FileLayout, type FileLayoutInput } from '../layout/FileLayout';
 import {
   columnCells,
   type LineKey,
@@ -98,6 +98,12 @@ export interface FileRenderResult {
   column: RowSpec[];
   /** Every row is new: the result the rows come from changed. */
   allRowsChanged: boolean;
+  /**
+   * The rows that differ from the last result, when an edit's lines were the
+   * only change since it: the DOM patches these by key instead of walking
+   * `column`. Undefined when the window was laid out anew.
+   */
+  patched: RowSpec[] | undefined;
   preAST: HASTElement;
   headerAST: HASTElement | undefined;
   totalLines: number;
@@ -123,6 +129,11 @@ export class FileRenderer<LAnnotation = undefined> {
   private pendingHighlightResult: PendingHighlightResult | undefined;
 
   private computedLang: SupportedLanguages = 'text';
+  // The annotations last given, so setLineAnnotations can tell an unchanged
+  // list apart and keep the map below as it is. The layout only patches rows
+  // instead of walking when the map is the same object it read last time,
+  // and the component passes a new list on every render.
+  private annotationList: LineAnnotation<LAnnotation>[] = [];
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
 
   private editSessionActive = false;
@@ -159,6 +170,14 @@ export class FileRenderer<LAnnotation = undefined> {
   public setLineAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): void {
+    const { annotationList } = this;
+    if (
+      lineAnnotations === annotationList ||
+      (lineAnnotations.length === 0 && annotationList.length === 0)
+    ) {
+      return;
+    }
+    this.annotationList = lineAnnotations;
     this.lineAnnotations = {};
     for (const annotation of lineAnnotations) {
       const arr = this.lineAnnotations[annotation.lineNumber] ?? [];
@@ -240,6 +259,7 @@ export class FileRenderer<LAnnotation = undefined> {
           additionLines: lines.texts,
           lineIds: lines.ids,
         });
+        this.layout?.invalidateLines();
         rowSource.model = model;
       } else {
         this.rowSource = undefined;
@@ -266,6 +286,14 @@ export class FileRenderer<LAnnotation = undefined> {
       this.editSessionRows(model).source.forgetLines(result.removedLineIds);
       this.layout?.forgetLines(result.removedLineIds);
     }
+    // Rows move when the line count changes, or when a batch removed lines
+    // and added others at the same count; otherwise the changed lines' rows
+    // are the only ones that differ.
+    if (result.lineDelta !== 0 || result.removedLineIds.length > 0) {
+      this.layout?.invalidateLines();
+    } else {
+      this.layout?.markLines(result.changedLines);
+    }
     if (tokens != null) {
       this.setTokens(tokens);
     }
@@ -285,6 +313,7 @@ export class FileRenderer<LAnnotation = undefined> {
         changed.push(line);
       }
     }
+    this.layout?.markLines(changed);
     return changed;
   }
 
@@ -854,12 +883,29 @@ export class FileRenderer<LAnnotation = undefined> {
     };
     if (rowSource != null && model.live && rowSource.model === model) {
       rowSource.source.setHighlightRows(highlightRows);
+      this.layout?.invalidateLines();
       rowSource.result = result;
       return rowSource.source;
     }
     const source = new RowSource(highlightRows);
     this.rowSource = { result, source, model };
     return source;
+  }
+
+  // Everything the layout reads: the model, the row source, the window and
+  // the annotations.
+  private layoutInput(
+    model: FileModel,
+    rows: RowSource,
+    renderRange: RenderRange
+  ): FileLayoutInput<LAnnotation> {
+    return {
+      model,
+      rows,
+      renderRange,
+      annotations: this.lineAnnotations,
+      annotationSlotName: this.annotationSlotName,
+    };
   }
 
   // Lays the window's rows out from a highlight result and the file's model.
@@ -875,17 +921,14 @@ export class FileRenderer<LAnnotation = undefined> {
     const model = this.modelFor(file);
     const previousResult = this.rowSource?.result;
     const rows = this.getRowSource(result, model, lines);
-    const { column, rowCount, totalLines } = layout.layout({
-      model,
-      rows,
-      renderRange,
-      annotations: this.lineAnnotations,
-      annotationSlotName: this.annotationSlotName,
-    });
+    const { column, patched, rowCount, totalLines } = layout.layout(
+      this.layoutInput(model, rows, renderRange)
+    );
     return {
       file,
       column,
       allRowsChanged: previousResult !== result,
+      patched,
       preAST: this.createPreElement(totalLines),
       headerAST: !disableFileHeader ? this.renderHeader(file) : undefined,
       totalLines,
