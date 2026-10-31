@@ -118,6 +118,31 @@
         </p>
       </li>
       <li>
+        <a href="/test/e2e/fixtures/code-view-edit.html">code-view-edit.html</a>
+        <p class="desc">
+          A scrollable <code>CodeView</code> with four tall edit-mode files, so
+          scrolling the edited one out of the window releases its element and
+          recycles its editor. Drives the item-unmount test in
+          <code>code-view-edit.pw.ts</code> (focus and the caret return once the
+          caret's row is on screen again). Ready flag:
+          <code>window.__codeViewEditReady</code>; helpers on
+          <code>window.__codeViewEdit</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/virtualizer-edit.html"
+          >virtualizer-edit.html</a
+        >
+        <p class="desc">
+          Four tall editable files under one plain <code>Virtualizer</code>, so
+          scrolling the edited one out of view swaps it for its placeholder.
+          Drives <code>virtualizer-edit.pw.ts</code> (focus and the caret return
+          once the caret's row renders again). Ready flag:
+          <code>window.__virtualizerEditReady</code>; helpers on
+          <code>window.__virtualizerEdit</code>.
+        </p>
+      </li>
+      <li>
         <a href="/test/e2e/fixtures/code-view-annotations.html"
           >code-view-annotations.html</a
         >

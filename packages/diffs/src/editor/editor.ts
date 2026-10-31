@@ -3939,6 +3939,12 @@ export class Editor<
       primarySelection.direction === DirectionBackward
         ? primarySelection.end
         : primarySelection.start;
+    // A virtualized view can come back without the caret's row yet; the
+    // request waits for the render that has it, so the caret lands on its
+    // line and not wherever focus alone would put it.
+    if (this.#getLineElement(primaryPosition.line) == null) {
+      return;
+    }
     this.#focus(primaryPosition, true, shouldFocus);
   }
 

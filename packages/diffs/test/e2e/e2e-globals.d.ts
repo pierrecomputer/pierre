@@ -92,6 +92,22 @@ interface Window {
     getScrollTop(): number;
   };
 
+  // code-view-edit.html: several editable items and their hosts.
+  __codeViewEditReady?: boolean;
+  __codeViewEdit?: {
+    root: HTMLElement;
+    itemIds: string[];
+    getHost(id: string): HTMLElement | undefined;
+  };
+
+  // virtualizer-edit.html: several editable files under one Virtualizer.
+  __virtualizerEditReady?: boolean;
+  __virtualizerEdit?: {
+    root: HTMLElement;
+    ids: string[];
+    getHost(id: string): HTMLElement | undefined;
+  };
+
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];
   __conflictResolutions?: string[];

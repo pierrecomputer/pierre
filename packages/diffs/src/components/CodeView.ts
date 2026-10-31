@@ -11,6 +11,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor, EditorOptions } from '../editor/editor';
+import { getCaretPosition } from '../editor/selection';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -835,6 +836,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     | undefined;
   private pendingLayoutAnchor: ScrollAnchor | undefined;
   private shouldFixContainerFocus = false;
+  private focusedItemId: string | undefined;
 
   // Active smooth-scroll animation state. Only populated while a scrollTo
   // with `behavior: 'smooth'` is in flight; cleared on settle (position +
@@ -1241,6 +1243,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.root.addEventListener('keydown', this.clearPendingScroll, {
       passive: true,
     });
+    this.root.addEventListener('focusin', this.handleFocusIn);
+    this.root.addEventListener('focusout', this.handleFocusOut);
     this.resizeObserver.observe(this.root);
     this.render(true);
 
@@ -1366,6 +1370,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
     this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
     this.root?.removeEventListener('keydown', this.clearPendingScroll);
+    this.root?.removeEventListener('focusin', this.handleFocusIn);
+    this.root?.removeEventListener('focusout', this.handleFocusOut);
+    this.focusedItemId = undefined;
     this.root?.style.removeProperty('overflow-anchor');
     this.container?.remove();
     this.stickyOffset.remove();
@@ -1476,6 +1483,89 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.shouldFixContainerFocus = false;
       this.root?.focus({ preventScroll: true });
     }
+  }
+
+  // Keeps focusedItemId current: focus inside a rendered item names that
+  // item, focus on the root (parked there while the item is away) changes
+  // nothing, focus anywhere else clears it.
+  private handleFocusIn = (event: FocusEvent): void => {
+    if (event.target === this.root) {
+      return;
+    }
+    this.focusedItemId = this.renderedItemInPath(event.composedPath())?.item.id;
+  };
+
+  // Focus leaving the CodeView for nothing (a click on the page) or for an
+  // element outside the root clears the focused item; moves within the root
+  // are followed by a focusin that names the new owner. While a released
+  // item's focus is on its way to the root, the blur its teardown causes is
+  // not the user leaving.
+  private handleFocusOut = (event: FocusEvent): void => {
+    if (this.shouldFixContainerFocus) {
+      return;
+    }
+    const { relatedTarget } = event;
+    if (
+      !(relatedTarget instanceof Node) ||
+      this.root?.contains(relatedTarget) !== true
+    ) {
+      this.focusedItemId = undefined;
+    }
+  };
+
+  private renderedItemInPath(
+    path: ReadonlyArray<EventTarget | undefined>
+  ): CodeViewContextItem<LAnnotation, Caret> | undefined {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex < 0) {
+      return undefined;
+    }
+    for (let index = firstIndex; index <= lastIndex; index++) {
+      const item = this.items[index];
+      if (item?.element != null && path.includes(item.element)) {
+        return item;
+      }
+    }
+    return undefined;
+  }
+
+  // Gives focus back to the focused item's editor after virtualization
+  // released its element and parked focus on the root: once the editor is
+  // attached again and its primary caret's row is on screen, so the caret
+  // lands on its line. Called for each edited item in a render pass.
+  private returnParkedFocus(
+    item: CodeViewContextItem<LAnnotation, Caret>
+  ): void {
+    const { id } = item.item;
+    if (this.focusedItemId !== id || !this.rootHasFocus()) {
+      return;
+    }
+    const record = this.itemEditors.get(id);
+    if (record == null || !this.attachedEditors.has(id)) {
+      return;
+    }
+    const primary = record.editor.getViewState().selections?.at(-1);
+    if (
+      primary == null ||
+      item.instance.lineElement(getCaretPosition(primary).line) == null
+    ) {
+      return;
+    }
+    record.editor.focus({ preventScroll: true });
+  }
+
+  // Whether the focus parked on the root by fixContainerFocus is still there.
+  private rootHasFocus(): boolean {
+    const { root } = this;
+    if (root == null) {
+      return false;
+    }
+    const rootNode = root.getRootNode();
+    const activeElement =
+      rootNode instanceof ShadowRoot
+        ? rootNode.activeElement
+        : document.activeElement;
+    return activeElement === root;
   }
 
   // Strip item-specific DOM while keeping the expensive shared shell assets
@@ -3701,6 +3791,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       // no-ops unless the item is in edit mode and not already attached.
       if (item.item.edit === true) {
         this.attachItemEditor(item);
+        this.returnParkedFocus(item);
       }
     }
 

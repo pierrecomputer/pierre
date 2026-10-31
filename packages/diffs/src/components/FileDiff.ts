@@ -2463,6 +2463,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.fileContainer == null) {
       return false;
     }
+    // The placeholder removes the rows the caret sits in. The editor keeps
+    // the focus it had, to put back when the rows render again.
+    this.editor?.__captureFocusForDOMReplacement();
     this.emitPostRender(true);
     this.cleanChildNodes();
 
