@@ -17,6 +17,7 @@ import type {
   LineTypes,
   RenderRange,
 } from '../types';
+import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import type { LineDiffRange } from '../utils/computeLineDiffRanges';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
@@ -45,6 +46,7 @@ import type {
   LineKey,
   RenderedLineContext,
   RowKey,
+  RowSpec,
   SplitInjectedRow,
 } from './RowSpec';
 
@@ -80,14 +82,67 @@ export interface DiffLayoutInput<LAnnotation> {
 
 export interface DiffLayoutResult {
   columns: LayoutColumns;
+  /** The first and last new-file line numbers with a row in the window. */
+  newFileLines: { first: number; last: number } | undefined;
+  /**
+   * The rows that differ from the last layout, per column, when lines marked
+   * by an edit were the only change since it; undefined when the window was
+   * walked.
+   */
+  patched: LayoutColumns | undefined;
   hunkData: HunkData[];
   rowCount: number;
   totalLines: number;
 }
 
+// The last walk: what it read and what it built, so marked lines can be
+// rebuilt into it without a walk.
+interface LastLayout<LAnnotation> {
+  input: DiffLayoutInput<LAnnotation>;
+  result: DiffLayoutResult;
+}
+
+// Whether a walk over `next` would read the same things as the walk over
+// `last` did, apart from the lines' text and marks, which the marked lines
+// account for.
+function sameInputs<LAnnotation>(
+  last: DiffLayoutInput<LAnnotation>,
+  next: DiffLayoutInput<LAnnotation>
+): boolean {
+  return (
+    last.host === next.host &&
+    last.model === next.model &&
+    last.rows === next.rows &&
+    last.expandedHunks === next.expandedHunks &&
+    last.deletionAnnotations === next.deletionAnnotations &&
+    last.additionAnnotations === next.additionAnnotations &&
+    last.annotationSlotName === next.annotationSlotName &&
+    last.includeTrailingNewline === next.includeTrailingNewline &&
+    last.showNoNewlineMarkers === next.showNoNewlineMarkers &&
+    areRenderRangesEqual(last.renderRange, next.renderRange)
+  );
+}
+
 interface MarkedRow {
   ranges: readonly LineDiffRange[];
   row: HASTElement;
+}
+
+// What a line's row is built from, kept by key after a walk so the row can
+// be built again, through the same code, when only the line's text or marks
+// changed.
+interface LineRowInputs {
+  column: keyof LayoutColumns;
+  key: LineKey;
+  side: 'deletions' | 'additions';
+  lineIndex: number;
+  marked: boolean;
+  contentProperties: Properties | undefined;
+  lineNumber: number;
+  altLineNumber: number | undefined;
+  lineIndexText: string;
+  gutterLineType: LineTypes;
+  gutterProperties: Properties | undefined;
 }
 
 // Filler rows a split view owes one column so both columns stay aligned.
@@ -114,12 +169,21 @@ const NO_RANGES: readonly LineDiffRange[] = Object.freeze([]);
  * newline" markers between them. Each row's content is its base row from
  * the row source with the word diff marks of its current pair, stamped with
  * its line attributes. Rows are memoized on their inputs, so a row that did
- * not change is the same object as last time.
+ * not change is the same object as last time. When an edit marked lines and
+ * nothing else changed since the last walk, the layout rebuilds those lines'
+ * rows and their pairs' into the last result instead of walking again.
  */
 export class DiffLayout<LAnnotation = undefined> {
   #ranges: LineDiffRangeCache;
   readonly #cells = new RowCells();
-  readonly #marked = new WeakMap<HASTElement, MarkedRow>();
+  readonly #markedRows = new WeakMap<HASTElement, MarkedRow>();
+  // The line rows of the last walk, by key, with where each sits in its
+  // column, so a marked line's row can be built again into the last result.
+  readonly #lineRows = new Map<LineKey, LineRowInputs>();
+  readonly #positions = new Map<LineKey, number>();
+  #last: LastLayout<LAnnotation> | undefined;
+  // Lines whose text or tokens changed since the last walk.
+  #marked: Set<number> | undefined;
 
   constructor(private options: DiffLayoutOptions) {
     this.#ranges = new LineDiffRangeCache(
@@ -129,28 +193,84 @@ export class DiffLayout<LAnnotation = undefined> {
   }
 
   setOptions(options: DiffLayoutOptions): void {
+    const previous = this.options;
     if (
-      options.lineDiffType !== this.options.lineDiffType ||
-      options.maxLineDiffLength !== this.options.maxLineDiffLength
+      options.lineDiffType !== previous.lineDiffType ||
+      options.maxLineDiffLength !== previous.maxLineDiffLength
     ) {
       this.#ranges = new LineDiffRangeCache(
         options.lineDiffType,
         options.maxLineDiffLength
       );
     }
+    // Every option shapes the walk, so a change means the next layout walks.
+    if (
+      options.diffStyle !== previous.diffStyle ||
+      options.expandUnchanged !== previous.expandUnchanged ||
+      options.expansionLineCount !== previous.expansionLineCount ||
+      options.collapsedContextThreshold !==
+        previous.collapsedContextThreshold ||
+      options.hunkSeparators !== previous.hunkSeparators ||
+      options.lineDiffType !== previous.lineDiffType ||
+      options.maxLineDiffLength !== previous.maxLineDiffLength ||
+      options.canHydrateContext !== previous.canHydrateContext
+    ) {
+      this.invalidateLines();
+    }
     this.options = options;
+  }
+
+  /** Lines whose text or tokens changed; the next layout rebuilds their rows. */
+  markLines(lines: Iterable<number>): void {
+    const marked = (this.#marked ??= new Set());
+    for (const line of lines) {
+      marked.add(line);
+    }
   }
 
   /** Drops the rows kept for lines an edit removed. */
   forgetLines(ids: readonly number[]): void {
     this.#cells.forgetLines(ids);
+    for (const id of ids) {
+      this.#lineRows.delete(`a${id}`);
+    }
+  }
+
+  /**
+   * After a change that moved rows: the rows of the last walk no longer
+   * stand, so the next `layout` walks the window.
+   */
+  invalidateLines(): void {
+    this.#lineRows.clear();
+    this.#positions.clear();
+    this.#last = undefined;
+    this.#marked = undefined;
+  }
+
+  /**
+   * The last layout's result while a layout of `input` would patch it rather
+   * than walk again: the same rows show, so what the walk found about them
+   * still holds. Undefined when the next layout walks.
+   */
+  standingResult(
+    input: DiffLayoutInput<LAnnotation>
+  ): DiffLayoutResult | undefined {
+    const last = this.#last;
+    return last != null && sameInputs(last.input, input)
+      ? last.result
+      : undefined;
   }
 
   layout(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
+    const marked = this.#marked;
+    this.#marked = undefined;
+    const last = this.#last;
+    if (marked != null && last != null && sameInputs(last.input, input)) {
+      return this.#patch(last, marked, input);
+    }
     const {
       host,
       model,
-      rows,
       renderRange,
       expandedHunks,
       includeTrailingNewline,
@@ -168,6 +288,8 @@ export class DiffLayout<LAnnotation = undefined> {
     const unified = diffStyle === 'unified';
     const isExpandableDiff = !diff.isPartial || canHydrateContext;
     const marks = this.options.lineDiffType !== 'none';
+    this.#lineRows.clear();
+    this.#positions.clear();
 
     const columns = {
       unified: createColumn(),
@@ -176,6 +298,8 @@ export class DiffLayout<LAnnotation = undefined> {
     };
     const hunkData: HunkData[] = [];
     let rowCount = 0;
+    let firstNewFileLine: number | undefined;
+    let lastNewFileLine: number | undefined;
     const pendingBuffer: PendingSplitBuffer = { size: 0, side: undefined };
 
     const flushBuffer = () => {
@@ -254,6 +378,10 @@ export class DiffLayout<LAnnotation = undefined> {
         deletionLine,
         type,
       }) => {
+        if (additionLine != null) {
+          firstNewFileLine ??= additionLine.lineNumber;
+          lastNewFileLine = additionLine.lineNumber;
+        }
         const splitLineIndex =
           deletionLine != null
             ? deletionLine.splitLineIndex
@@ -290,16 +418,11 @@ export class DiffLayout<LAnnotation = undefined> {
           additionLine,
         };
 
-        // Word diff marks come from each changed line's current pair. In
-        // unified view the two sides of a pair arrive as separate rows.
-        const deletionRanges =
-          marks && type === 'change' && deletionLine != null
-            ? this.#rangesFor(model, 'deletions', deletionLine.lineIndex)
-            : NO_RANGES;
-        const additionRanges =
-          marks && type === 'change' && additionLine != null
-            ? this.#rangesFor(model, 'additions', additionLine.lineIndex)
-            : NO_RANGES;
+        // A changed line's row gets word diff marks against its pair, which
+        // the row looks up through the model when it is built. The type
+        // alone decides, not whether both sides are in hand here: in unified
+        // view the two sides of a pair arrive as separate rows.
+        const marked = marks && type === 'change';
 
         const additionKey: LineKey | undefined =
           additionLine != null
@@ -334,41 +457,43 @@ export class DiffLayout<LAnnotation = undefined> {
             additionLineIndex: additionLine?.lineIndex,
             deletionLineIndex: deletionLine?.lineIndex,
           });
-          const lineNumber =
-            additionLine != null
-              ? additionLine.lineNumber
-              : deletionLine.lineNumber;
           const lineIndexText = `${unifiedLineIndex},${splitLineIndex}`;
           // A unified row shows the new line when there is one.
-          const content =
+          this.#pushLineRow(
+            input,
+            columns.unified,
             additionLine != null
-              ? this.#line(
-                  rows.additionRow(model, additionLine.lineIndex),
-                  additionRanges,
-                  decoration.contentProperties,
-                  additionLine.lineNumber,
-                  type === 'change' ? undefined : deletionLine?.lineNumber,
-                  lineIndexText
-                )
-              : this.#line(
-                  rows.deletionRow(model, deletionLine.lineIndex),
-                  deletionRanges,
-                  { ...decoration.contentProperties, contenteditable: 'false' },
-                  deletionLine.lineNumber,
-                  undefined,
-                  lineIndexText
-                );
-          pushRow(columns.unified, {
-            key: lineKey,
-            gutter: this.#cells.gutter(
-              content,
-              decoration.gutterLineType,
-              lineNumber,
-              lineIndexText,
-              decoration.gutterProperties
-            ),
-            content,
-          });
+              ? {
+                  column: 'unified',
+                  key: lineKey,
+                  side: 'additions',
+                  lineIndex: additionLine.lineIndex,
+                  marked,
+                  contentProperties: decoration.contentProperties,
+                  lineNumber: additionLine.lineNumber,
+                  altLineNumber:
+                    type === 'change' ? undefined : deletionLine?.lineNumber,
+                  lineIndexText,
+                  gutterLineType: decoration.gutterLineType,
+                  gutterProperties: decoration.gutterProperties,
+                }
+              : {
+                  column: 'unified',
+                  key: lineKey,
+                  side: 'deletions',
+                  lineIndex: deletionLine.lineIndex,
+                  marked,
+                  contentProperties: {
+                    ...decoration.contentProperties,
+                    contenteditable: 'false',
+                  },
+                  lineNumber: deletionLine.lineNumber,
+                  altLineNumber: undefined,
+                  lineIndexText,
+                  gutterLineType: decoration.gutterLineType,
+                  gutterProperties: decoration.gutterProperties,
+                }
+          );
           const span = getUnifiedAnnotationSpan(
             input,
             deletionLine?.lineNumber,
@@ -444,47 +569,35 @@ export class DiffLayout<LAnnotation = undefined> {
           }
 
           if (deletionLine != null) {
-            const lineIndexText = `${deletionLine.unifiedLineIndex},${splitLineIndex}`;
-            const content = this.#line(
-              rows.deletionRow(model, deletionLine.lineIndex),
-              deletionRanges,
-              deletionDecoration.contentProperties,
-              deletionLine.lineNumber,
-              type === 'change' ? undefined : additionLine?.lineNumber,
-              lineIndexText
-            );
-            pushRow(columns.deletions, {
+            this.#pushLineRow(input, columns.deletions, {
+              column: 'deletions',
               key: deletionsKey,
-              gutter: this.#cells.gutter(
-                content,
-                deletionDecoration.gutterLineType,
-                deletionLine.lineNumber,
-                lineIndexText,
-                deletionDecoration.gutterProperties
-              ),
-              content,
+              side: 'deletions',
+              lineIndex: deletionLine.lineIndex,
+              marked,
+              contentProperties: deletionDecoration.contentProperties,
+              lineNumber: deletionLine.lineNumber,
+              altLineNumber:
+                type === 'change' ? undefined : additionLine?.lineNumber,
+              lineIndexText: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+              gutterLineType: deletionDecoration.gutterLineType,
+              gutterProperties: deletionDecoration.gutterProperties,
             });
           }
           if (additionLine != null) {
-            const lineIndexText = `${additionLine.unifiedLineIndex},${splitLineIndex}`;
-            const content = this.#line(
-              rows.additionRow(model, additionLine.lineIndex),
-              additionRanges,
-              additionDecoration.contentProperties,
-              additionLine.lineNumber,
-              type === 'change' ? undefined : deletionLine?.lineNumber,
-              lineIndexText
-            );
-            pushRow(columns.additions, {
+            this.#pushLineRow(input, columns.additions, {
+              column: 'additions',
               key: additionsKey,
-              gutter: this.#cells.gutter(
-                content,
-                additionDecoration.gutterLineType,
-                additionLine.lineNumber,
-                lineIndexText,
-                additionDecoration.gutterProperties
-              ),
-              content,
+              side: 'additions',
+              lineIndex: additionLine.lineIndex,
+              marked,
+              contentProperties: additionDecoration.contentProperties,
+              lineNumber: additionLine.lineNumber,
+              altLineNumber:
+                type === 'change' ? undefined : deletionLine?.lineNumber,
+              lineIndexText: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+              gutterLineType: additionDecoration.gutterLineType,
+              gutterProperties: additionDecoration.gutterProperties,
             });
           }
           if (spans != null) {
@@ -635,7 +748,7 @@ export class DiffLayout<LAnnotation = undefined> {
     const hasContent = rowCount > 0 || hasBuffer;
     const includeAdditions = !unified && diff.type !== 'deleted';
     const includeDeletions = !unified && diff.type !== 'new';
-    return {
+    const result: DiffLayoutResult = {
       columns: {
         unified: unified && hasContent ? columns.unified.specs : undefined,
         deletions:
@@ -643,10 +756,75 @@ export class DiffLayout<LAnnotation = undefined> {
         additions:
           includeAdditions && hasContent ? columns.additions.specs : undefined,
       },
+      newFileLines:
+        firstNewFileLine == null || lastNewFileLine == null
+          ? undefined
+          : { first: firstNewFileLine, last: lastNewFileLine },
+      patched: undefined,
       hunkData,
       rowCount,
       totalLines,
     };
+    this.#last = { input, result };
+    return result;
+  }
+
+  // Builds the marked lines' rows, and their pairs', again by the same code
+  // as a walk, and puts them in the last result's columns in place of the
+  // rows they replace. A line without a row on screen has nothing to rebuild.
+  #patch(
+    last: LastLayout<LAnnotation>,
+    marked: ReadonlySet<number>,
+    input: DiffLayoutInput<LAnnotation>
+  ): DiffLayoutResult {
+    const { model } = input;
+    const columns: LayoutColumns = { ...last.result.columns };
+    const copied = new Set<keyof LayoutColumns>();
+    // Every column laid out gets its list, so a column with no rebuilt row
+    // still reads as patched and is not walked.
+    const patched: LayoutColumns = {
+      unified: columns.unified == null ? undefined : [],
+      deletions: columns.deletions == null ? undefined : [],
+      additions: columns.additions == null ? undefined : [],
+    };
+    const seen = new Set<LineKey>();
+    const rebuild = (key: LineKey) => {
+      const row = this.#lineRows.get(key);
+      const position = this.#positions.get(key);
+      if (row == null || position == null || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      let target = columns[row.column];
+      if (target == null) {
+        throw new Error(
+          'DiffLayout: a kept row is in a column that was not laid out'
+        );
+      }
+      if (!copied.has(row.column)) {
+        target = target.slice();
+        columns[row.column] = target;
+        copied.add(row.column);
+      }
+      const spec = this.#lineRow(input, row);
+      target[position] = spec;
+      patched[row.column]?.push(spec);
+    };
+    for (const line of marked) {
+      if (line < 0 || line >= model.lineCount) {
+        continue;
+      }
+      // Either side of the pair may be the one on screen; `rebuild` skips a
+      // key without a row.
+      rebuild(`a${model.lineId(line)}`);
+      const partner = model.pairFor('additions', line);
+      if (partner != null) {
+        rebuild(`d${partner}`);
+      }
+    }
+    const result = { ...last.result, columns, patched };
+    this.#last = { input, result };
+    return result;
   }
 
   // The marks on one side of a changed line's pair, or none when the line
@@ -776,6 +954,51 @@ export class DiffLayout<LAnnotation = undefined> {
 
   // The content cell of a line: the base row with its marks, then its line
   // attributes. Marks reuse their last result while the ranges match.
+  // Builds a line's row and keeps what it was built from.
+  #pushLineRow(
+    input: DiffLayoutInput<LAnnotation>,
+    column: Column,
+    row: LineRowInputs
+  ): void {
+    this.#lineRows.set(row.key, row);
+    this.#positions.set(row.key, column.specs.length);
+    pushRow(column, this.#lineRow(input, row));
+  }
+
+  // A line's row: its base row from the row source, marked with its pair's
+  // ranges, stamped with its line attributes, with the gutter cell beside it.
+  #lineRow(
+    { model, rows }: DiffLayoutInput<LAnnotation>,
+    row: LineRowInputs
+  ): RowSpec {
+    const base =
+      row.side === 'additions'
+        ? rows.additionRow(model, row.lineIndex)
+        : rows.deletionRow(model, row.lineIndex);
+    const ranges = row.marked
+      ? this.#rangesFor(model, row.side, row.lineIndex)
+      : NO_RANGES;
+    const content = this.#line(
+      base,
+      ranges,
+      row.contentProperties,
+      row.lineNumber,
+      row.altLineNumber,
+      row.lineIndexText
+    );
+    return {
+      key: row.key,
+      gutter: this.#cells.gutter(
+        row.key,
+        row.gutterLineType,
+        row.lineNumber,
+        row.lineIndexText,
+        row.gutterProperties
+      ),
+      content,
+    };
+  }
+
   #line(
     base: HASTElement,
     ranges: readonly LineDiffRange[],
@@ -786,17 +1009,16 @@ export class DiffLayout<LAnnotation = undefined> {
   ): HASTElement {
     let marked = base;
     if (ranges.length > 0) {
-      const cached = this.#marked.get(base);
+      const cached = this.#markedRows.get(base);
       if (cached != null && areRangesEqual(cached.ranges, ranges)) {
         marked = cached.row;
       } else {
         marked = markRow(base, ranges);
-        this.#marked.set(base, { ranges, row: marked });
+        this.#markedRows.set(base, { ranges, row: marked });
       }
     }
     return this.#cells.line(
       marked,
-      base,
       contentProperties,
       lineNumber,
       altLineNumber,

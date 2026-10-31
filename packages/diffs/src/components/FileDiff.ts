@@ -15,7 +15,10 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import { CodeColumns } from '../dom/CodeColumns';
-import { ColumnReconciler } from '../dom/ColumnReconciler';
+import {
+  ColumnReconciler,
+  type ReconcileResult,
+} from '../dom/ColumnReconciler';
 import type { Editor } from '../editor/editor';
 import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
@@ -34,6 +37,7 @@ import {
   getSharedHighlighter,
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
+import { isLineKey } from '../layout/RowSpec';
 import type { RowKey, RowSpec } from '../layout/RowSpec';
 import {
   type GetHoveredLineResult,
@@ -85,6 +89,7 @@ import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqua
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areHunkDataEqual } from '../utils/areHunkDataEqual';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
@@ -121,10 +126,8 @@ import { createGutterWrapper } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
-import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
@@ -335,6 +338,17 @@ interface EditSession<LAnnotation> {
     | undefined;
 }
 
+// The settings the managers (resize observers, scroll sync, pointer
+// handling) attach to the rendered DOM with. flushManagers compares them
+// with the last render's so the managers only re-attach when a setting or
+// the DOM changed, instead of on every render.
+interface ManagerSetup {
+  overflow: 'scroll' | 'wrap';
+  diffStyle: 'split' | 'unified';
+  disableAnnotations: boolean;
+  columnVariables: 'apply' | 'measure';
+}
+
 let instanceId = -1;
 
 export class FileDiff<LAnnotation = undefined, Caret = undefined> {
@@ -381,6 +395,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return this.renderedData?.lineAnnotations ?? EMPTY_LINE_ANNOTATIONS;
   }
   protected managersDirty = false;
+  // The settings the managers were last attached with.
+  private appliedManagerSetup: ManagerSetup | undefined;
 
   protected deletionFile?: FileContents | null;
   protected additionFile?: FileContents | null;
@@ -587,6 +603,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.clearReusableHeader();
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));
     this.syncInteractionOptions();
+    this.managersDirty = true;
   }
 
   protected syncInteractionOptions(): void {
@@ -770,15 +787,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
+  // Sets the managers up again when the DOM they watch changed (the dirty
+  // bit, set by the code that wrote it) or when what they are set up with
+  // changed; otherwise a render leaves them alone.
   public flushManagers(): void {
-    if (!this.managersDirty || this.pre == null) {
+    if (this.pre == null) {
       this.managersDirty = false;
       return;
     }
-
     const { diffStyle = 'split', overflow = 'scroll' } = this.options;
-    this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, {
+    const setup: ManagerSetup = {
+      overflow,
+      diffStyle,
       // Pairing annotation heights scans every row; skipped when wrapping,
       // which needs no pairing, and when there are no annotations.
       disableAnnotations:
@@ -786,6 +806,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       columnVariables: this.shouldApplyColumnVariables(overflow)
         ? 'apply'
         : 'measure',
+    };
+    if (
+      !this.managersDirty &&
+      areObjectsEqual(setup, this.appliedManagerSetup)
+    ) {
+      return;
+    }
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, {
+      disableAnnotations: setup.disableAnnotations,
+      columnVariables: setup.columnVariables,
     });
     if (overflow === 'scroll' && diffStyle === 'split') {
       this.scrollSyncManager.setup(
@@ -796,6 +827,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     } else {
       this.scrollSyncManager.cleanUp();
     }
+    this.appliedManagerSetup = setup;
     this.managersDirty = false;
   }
 
@@ -1504,6 +1536,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
+    // The managers pair annotation heights, so new or changed annotations
+    // are set up again in this render.
+    if (annotationsChanged) {
+      this.managersDirty = true;
+    }
 
     const workingDiff = this.getWorkingDiff();
     if (workingDiff == null) {
@@ -1593,7 +1630,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     // The new-file lines this render shows, which the editor works with.
     const editorRenderRange =
       this.editor != null
-        ? this.computeEditorRenderRange(nextRenderRange)
+        ? this.hunksRenderer.editorRenderRange(workingDiff, nextRenderRange)
         : undefined;
     const finishedTokens = this.editor?.__prepareRender(editorRenderRange);
     if (finishedTokens != null) {
@@ -1647,7 +1684,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      this.managersDirty = true;
       if (!deferManagers) {
         this.flushManagers();
       }
@@ -1777,7 +1813,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   private syncRenderViewToEditor(
-    renderRange = this.computeEditorRenderRange(this.renderRange)
+    renderRange = this.hunksRenderer.editorRenderRange(
+      this.getWorkingDiff(),
+      this.renderRange
+    )
   ): void {
     const { editor, fileContainer } = this;
     const lineAnnotations = this.getLatestAnnotations();
@@ -1843,51 +1882,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // startingLine = first addition line with a row in the window, totalLines =
   // last such line - first + 1, and 0 when the window holds no addition rows
   // (e.g. a pure-deletion run taller than the viewport).
-  private computeEditorRenderRange(
-    renderRange: RenderRange | undefined
-  ): RenderRange | undefined {
-    const fileDiff = this.getWorkingDiff();
-    if (
-      renderRange == null ||
-      fileDiff == null ||
-      isDefaultRenderRange(renderRange)
-    ) {
-      return renderRange;
-    }
-    const {
-      diffStyle = 'split',
-      expandUnchanged = false,
-      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-    } = this.options;
-    let firstLineNumber: number | undefined;
-    let lastLineNumber: number | undefined;
-    iterateOverDiff({
-      diff: fileDiff,
-      diffStyle,
-      startingLine: renderRange.startingLine,
-      totalLines: renderRange.totalLines,
-      expandedHunks: expandUnchanged
-        ? true
-        : this.hunksRenderer.getExpandedHunksMap(),
-      collapsedContextThreshold,
-      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
-      callback: ({ additionLine }) => {
-        if (additionLine != null) {
-          firstLineNumber ??= additionLine.lineNumber;
-          lastLineNumber = additionLine.lineNumber;
-        }
-      },
-    });
-    if (firstLineNumber == null || lastLineNumber == null) {
-      return { ...renderRange, startingLine: 0, totalLines: 0 };
-    }
-    return {
-      ...renderRange,
-      startingLine: firstLineNumber - 1,
-      totalLines: lastLineNumber - firstLineNumber + 1,
-    };
-  }
-
   /** @internal Settle annotations locally. */
   public __acceptEditorChange(
     event: EditorChangeEvent<'file-diff', LAnnotation, Caret>
@@ -2170,15 +2164,22 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       throw new Error('FileDiff.applyChange: requires an active edit session');
     }
     const { tokens, lineAnnotations } = options;
-    const { lineDelta, regionsChanged } = this.hunksRenderer.applyChange(
-      change,
-      document,
-      tokens
-    );
+    const { lineDelta, removedLineIds, regionsChanged, hunksChanged } =
+      this.hunksRenderer.applyChange(change, document, tokens);
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
     }
-    this.renderChange(lineDelta !== 0 || regionsChanged);
+    // Render the change. The flag says whether rows moved, which a
+    // virtualized diff needs to know up front to redo its row layout before
+    // the host's frame renders: rows move, appear or change type when the
+    // line count or the hunks change, or when a batch removed lines and added
+    // others at the same count. A plain diff renders either way.
+    this.renderChange(
+      lineDelta !== 0 ||
+        removedLineIds.length > 0 ||
+        regionsChanged ||
+        hunksChanged
+    );
     // Nothing was on screen, or a render callback ended the session.
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
@@ -2213,6 +2214,31 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     // render brings them in; nothing to show until then.
     if (changed.some((line) => this.lineElement(line) != null)) {
       this.rerender();
+    }
+  }
+
+  // Keeps the keys of the rows a reconcile wrote for the editor to measure.
+  // Rows written anew carry no selection marks and are unknown to the
+  // managers, so both are brought up to date; a rewritten gutter cell lost
+  // the gutter utility the interaction manager keeps inside it.
+  private recordRowsWritten({
+    changed,
+    attributesReset,
+    gutterRewritten,
+  }: ReconcileResult) {
+    for (const key of changed) {
+      this.changedRowKeys.push(key);
+      // The managers pair and measure annotation rows, so any row that is
+      // not a line changing concerns them.
+      if (!isLineKey(key)) {
+        this.managersDirty = true;
+      }
+    }
+    if (attributesReset) {
+      this.interactionManager.setSelectionDirty();
+    }
+    if (attributesReset || gutterRewritten) {
+      this.managersDirty = true;
     }
   }
 
@@ -2731,6 +2757,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.appliedPreAttributes = undefined;
       this.codeColumns.cleanUp();
       shadowRoot.appendChild(this.pre);
+      this.managersDirty = true;
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
@@ -2738,6 +2765,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.editor?.__captureFocusForDOMReplacement();
       shadowRoot.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
+      this.managersDirty = true;
     }
 
     this.placeHolder?.remove();
@@ -3037,16 +3065,19 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // Writes a column's rows into its code element. The first write creates
   // the gutter and content elements and fills them. Later writes patch rows
   // by key, so rows that stayed keep their elements, as does the content
-  // element the editor focuses. A new highlight result rewrites every row.
+  // element the editor focuses; `patched` names the rows an edit changed,
+  // when they are the only ones. A new highlight result rewrites every row.
   // The keys of the rows written are kept for the editor to re-measure.
   private writeColumn(
     code: HTMLElement,
     specs: readonly RowSpec[],
+    patched: readonly RowSpec[] | undefined,
     { rowCount, allRowsChanged }: HunksRenderResult
   ): void {
     let columns = this.getColumnPair(code);
     if (columns == null) {
       columns = this.createColumns(code, rowCount);
+      this.managersDirty = true;
     } else if (rowCount !== this.lastRowCount) {
       columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
       columns.content.style.setProperty('grid-row', `span ${rowCount}`);
@@ -3069,14 +3100,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.changedRowKeys.push(spec.key);
       }
       this.interactionManager.setSelectionDirty();
+      this.managersDirty = true;
     } else {
-      const { changed, attributesReset } = reconciler.reconcile(specs);
-      for (const key of changed) {
-        this.changedRowKeys.push(key);
-      }
-      if (attributesReset) {
-        this.interactionManager.setSelectionDirty();
-      }
+      this.recordRowsWritten(reconciler.reconcile(specs, patched));
     }
   }
 
@@ -3116,8 +3142,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     let shouldReplace = false;
     const codeElements: HTMLElement[] = [];
     const { unified, deletions, additions } = result.columns;
+    const { patched } = result;
     this.editor?.__captureFocusForDOMReplacement();
-    if (!result.allRowsChanged) {
+    // A result that names the rows an edit changed moved no row.
+    if (!result.allRowsChanged && patched == null) {
       this.removeStaleRows(this.codeUnified, unified);
       this.removeStaleRows(this.codeDeletions, deletions);
       this.removeStaleRows(this.codeAdditions, additions);
@@ -3140,7 +3168,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         rowSpan,
         containerSize,
       });
-      this.writeColumn(this.codeUnified, unified, result);
+      this.writeColumn(this.codeUnified, unified, patched?.unified, result);
       codeElements.push(this.codeUnified);
     } else if (deletions != null || additions != null) {
       if (deletions != null) {
@@ -3156,7 +3184,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           rowSpan,
           containerSize,
         });
-        this.writeColumn(this.codeDeletions, deletions, result);
+        this.writeColumn(
+          this.codeDeletions,
+          deletions,
+          patched?.deletions,
+          result
+        );
         codeElements.push(this.codeDeletions);
       } else {
         // If we have no deletion column, lets clean it up if it exists
@@ -3180,7 +3213,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           rowSpan,
           containerSize,
         });
-        this.writeColumn(this.codeAdditions, additions, result);
+        this.writeColumn(
+          this.codeAdditions,
+          additions,
+          patched?.additions,
+          result
+        );
         codeElements.push(this.codeAdditions);
       } else {
         // If we have no addition column, lets clean it up if it exists
@@ -3200,6 +3238,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       pre.textContent = '';
     } else if (shouldReplace) {
       pre.replaceChildren(...codeElements);
+      this.managersDirty = true;
     }
 
     this.lastRowCount = result.rowCount;

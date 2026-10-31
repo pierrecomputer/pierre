@@ -58,10 +58,9 @@ interface RegionPlan {
   previousSpan: PreviousRegionSpan | undefined;
 }
 
-const deletionLineSetCache = new WeakMap<
-  FileDiffMetadata,
-  { lines: string[]; set: Set<string> }
->();
+// The old side's lines keep their array while a session runs, so the set is
+// kept by that array.
+const deletionLineSetCache = new WeakMap<readonly string[], Set<string>>();
 
 /**
  * Find the complete old/current divergence core. The old side is immutable
@@ -247,12 +246,12 @@ function canRetainCanonicalBlocks(
 }
 
 function getDeletionLineSet(diff: FileDiffMetadata): Set<string> {
-  const cached = deletionLineSetCache.get(diff);
-  if (cached?.lines === diff.deletionLines) {
-    return cached.set;
+  const { deletionLines } = diff;
+  let set = deletionLineSetCache.get(deletionLines);
+  if (set == null) {
+    set = new Set(deletionLines);
+    deletionLineSetCache.set(deletionLines, set);
   }
-  const set = new Set(diff.deletionLines);
-  deletionLineSetCache.set(diff, { lines: diff.deletionLines, set });
   return set;
 }
 

@@ -212,6 +212,7 @@ export class VirtualizedFileDiff<
       return false;
     }
     super.setLineAnnotations(lineAnnotations);
+    this.managersDirty = true;
     return true;
   }
 

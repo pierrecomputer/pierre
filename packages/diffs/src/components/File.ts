@@ -14,7 +14,10 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import { CodeColumns } from '../dom/CodeColumns';
-import { ColumnReconciler } from '../dom/ColumnReconciler';
+import {
+  ColumnReconciler,
+  type ReconcileResult,
+} from '../dom/ColumnReconciler';
 import type { Editor } from '../editor/editor';
 import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
@@ -26,6 +29,7 @@ import type {
   EditorColumns,
   FileEditCompleteEvent,
 } from '../editor/types';
+import { isLineKey } from '../layout/RowSpec';
 import type { RowKey } from '../layout/RowSpec';
 import {
   type GetHoveredLineResult,
@@ -60,6 +64,7 @@ import type {
 } from '../types';
 import { areFileTargetsEqual } from '../utils/areFileTargetsEqual';
 import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
@@ -217,6 +222,16 @@ interface EditSession<LAnnotation> {
   annotations: EditSessionAnnotations<LineAnnotation<LAnnotation>> | undefined;
 }
 
+// The settings the managers (resize observers, scroll sync, pointer
+// handling) attach to the rendered DOM with. flushManagers compares them
+// with the last render's so the managers only re-attach when a setting or
+// the DOM changed, instead of on every render.
+interface ManagerSetup {
+  overflow: 'scroll' | 'wrap';
+  disableAnnotations: boolean;
+  columnVariables: 'apply' | 'measure';
+}
+
 let instanceId = -1;
 
 export class File<LAnnotation = undefined, Caret = undefined> {
@@ -269,6 +284,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     return this.renderedData?.lineAnnotations ?? EMPTY_LINE_ANNOTATIONS;
   }
   protected managersDirty = false;
+  // The settings the managers were last attached with.
+  private appliedManagerSetup: ManagerSetup | undefined;
 
   // Latest input. Editor changes are kept in the private edit session.
   public file: FileContents | undefined;
@@ -562,6 +579,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.options = options;
     this.cachedHeaderHTML = undefined;
     this.syncInteractionOptions();
+    this.managersDirty = true;
   }
 
   protected syncInteractionOptions(): void {
@@ -716,7 +734,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       throw new Error('File.applyChange: requires an active edit session');
     }
     const { tokens, lineAnnotations } = options;
-    const { lineDelta } = this.fileRenderer.applyChange(
+    const { lineDelta, removedLineIds } = this.fileRenderer.applyChange(
       change,
       document,
       tokens
@@ -724,7 +742,12 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
     }
-    this.renderChange(lineDelta !== 0);
+    // Render the change. The flag says whether rows moved, which a
+    // virtualized file needs to know up front to redo its row layout before
+    // the host's frame renders: rows move when the line count changes, or
+    // when a batch removed lines and added others at the same count. A plain
+    // file renders either way.
+    this.renderChange(lineDelta !== 0 || removedLineIds.length > 0);
     // Nothing was on screen, or a render callback ended the session.
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
@@ -760,6 +783,31 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
+  // Keeps the keys of the rows a reconcile wrote for the editor to measure.
+  // Rows written anew carry no selection marks and are unknown to the
+  // managers, so both are brought up to date; a rewritten gutter cell lost
+  // the gutter utility the interaction manager keeps inside it.
+  private recordRowsWritten({
+    changed,
+    attributesReset,
+    gutterRewritten,
+  }: ReconcileResult) {
+    for (const key of changed) {
+      this.changedRowKeys.push(key);
+      // The managers pair and measure annotation rows, so any row that is
+      // not a line changing concerns them.
+      if (!isLineKey(key)) {
+        this.managersDirty = true;
+      }
+    }
+    if (attributesReset) {
+      this.interactionManager.setSelectionDirty();
+    }
+    if (attributesReset || gutterRewritten) {
+      this.managersDirty = true;
+    }
+  }
+
   /** @internal The content element of a document line's row, if on screen. */
   public lineElement(line: number): HTMLElement | undefined {
     const { code } = this;
@@ -790,20 +838,34 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     return { ...this.options, ...this.fileRenderer.getEffectiveCodeOptions() };
   }
 
+  // Sets the managers up again when the DOM they watch changed (the dirty
+  // bit, set by the code that wrote it) or when what they are set up with
+  // changed; otherwise a render leaves them alone.
   public flushManagers(): void {
-    if (!this.managersDirty || this.pre == null) {
+    if (this.pre == null) {
       this.managersDirty = false;
       return;
     }
-
     const { overflow = 'scroll' } = this.options;
-    this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, {
+    const setup: ManagerSetup = {
+      overflow,
       disableAnnotations: overflow === 'wrap',
       columnVariables: this.shouldApplyColumnVariables(overflow)
         ? 'apply'
         : 'measure',
+    };
+    if (
+      !this.managersDirty &&
+      areObjectsEqual(setup, this.appliedManagerSetup)
+    ) {
+      return;
+    }
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, {
+      disableAnnotations: setup.disableAnnotations,
+      columnVariables: setup.columnVariables,
     });
+    this.appliedManagerSetup = setup;
     this.managersDirty = false;
   }
 
@@ -1310,6 +1372,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
+    // The managers pair annotation heights, so new or changed annotations
+    // are set up again in this render.
+    if (annotationsChanged) {
+      this.managersDirty = true;
+    }
     const nextRenderFile = this.fileRenderer.getFileForNextRender(workingFile);
     this.fileRenderer.setLineAnnotations(
       this.getAnnotationsForFile(nextRenderFile)
@@ -1417,7 +1484,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      this.managersDirty = true;
       if (!deferManagers) {
         this.flushManagers();
       }
@@ -1782,6 +1848,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.writeColumn(code, result);
       if (!pre.contains(code)) {
         pre.replaceChildren(code);
+        this.managersDirty = true;
       }
     };
     if (this.shouldGuardRebuildScroll()) {
@@ -1795,15 +1862,17 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   // Writes the window's rows into the code element. The first write creates
   // the gutter and content elements and fills them. Later writes patch rows
   // by key, so rows that stayed keep their elements, as does the content
-  // element the editor focuses. A new highlight result rewrites every row.
-  // The keys of the rows written are kept for the editor to re-measure.
+  // element the editor focuses; a result that names the rows an edit changed
+  // patches just those. A new highlight result rewrites every row. The keys
+  // of the rows written are kept for the editor to re-measure.
   private writeColumn(
     code: HTMLElement,
-    { column: specs, rowCount, allRowsChanged }: FileRenderResult
+    { column: specs, patched, rowCount, allRowsChanged }: FileRenderResult
   ): void {
     let columns = this.getColumnPair(code);
     if (columns == null) {
       columns = this.createColumns(code, rowCount);
+      this.managersDirty = true;
     } else if (rowCount !== this.lastRowCount) {
       columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
       columns.content.style.setProperty('grid-row', `span ${rowCount}`);
@@ -1826,14 +1895,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         this.changedRowKeys.push(spec.key);
       }
       this.interactionManager.setSelectionDirty();
+      this.managersDirty = true;
     } else {
-      const { changed, attributesReset } = reconciler.reconcile(specs);
-      for (const key of changed) {
-        this.changedRowKeys.push(key);
-      }
-      if (attributesReset) {
-        this.interactionManager.setSelectionDirty();
-      }
+      this.recordRowsWritten(reconciler.reconcile(specs, patched));
     }
   }
 
@@ -2149,6 +2213,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.appliedPreAttributes = undefined;
       this.codeColumns.cleanUp();
       shadowRoot.appendChild(this.pre);
+      this.managersDirty = true;
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
@@ -2156,6 +2221,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.editor?.__captureFocusForDOMReplacement();
       container.shadowRoot?.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
+      this.managersDirty = true;
     }
 
     this.placeHolder?.remove();

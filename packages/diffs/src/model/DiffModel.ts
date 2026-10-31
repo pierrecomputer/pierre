@@ -287,6 +287,7 @@ export class DiffModel {
     // A batch whose inserts and deletes cancel out still has the same line
     // count; its changed range covers every line the edits shifted.
     const keepsLineCount = change.lineDelta === 0;
+    const { hunks: previousHunks } = diff;
     let changedLines: number[];
     let regionsChanged = false;
 
@@ -410,6 +411,7 @@ export class DiffModel {
     this.#blockIndex = undefined;
     return {
       changedLines,
+      hunksChanged: diff.hunks !== previousHunks,
       removedLineIds,
       lineDelta: change.lineDelta,
       regionsChanged,

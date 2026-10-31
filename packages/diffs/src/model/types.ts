@@ -83,6 +83,12 @@ export interface DiffModelChange {
   readonly lineDelta: number;
   /** Hunks were rebuilt: regions appeared, disappeared or changed bounds. */
   readonly regionsChanged: boolean;
+  /**
+   * The hunks are not the ones from before the change, even where every
+   * region kept its bounds. False when only the text of `changedLines`
+   * changed, so every row keeps its place, type and pair.
+   */
+  readonly hunksChanged: boolean;
   /** The expansion to use from now on: remapped when a region moved. */
   readonly expandedHunks: Map<number, HunkExpansionRegion>;
 }

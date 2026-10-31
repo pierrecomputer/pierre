@@ -21,6 +21,12 @@ export interface ReconcileResult {
    * marks, and they need to be applied again.
    */
   attributesReset: boolean;
+  /**
+   * True when a row's gutter cell was rewritten. Anything mounted inside a
+   * gutter cell from outside the reconciler, like the gutter utility, is
+   * gone from it.
+   */
+  gutterRewritten: boolean;
 }
 
 /**
@@ -31,7 +37,8 @@ export interface ReconcileResult {
  * string), rows that moved are moved, and rows whose spec changed have their
  * attributes and children rewritten. A row whose gutter and content cells
  * are the same objects as last time is not touched, so the layout's
- * memoization decides the cost.
+ * memoization decides the cost. A change that moved no row skips the walk
+ * and patches the rows it touched by key.
  */
 export class ColumnReconciler {
   readonly #gutter: HTMLElement;
@@ -104,25 +111,54 @@ export class ColumnReconciler {
     }
   }
 
-  /** Brings the columns in step with `specs`. */
-  reconcile(specs: readonly RowSpec[]): ReconcileResult {
+  /**
+   * Brings the columns in step with `specs`. When `patched` is given, those
+   * are the only rows that differ from the last reconcile: their cells are
+   * rewritten by key and the columns are not walked. Columns without rows
+   * yet are written whole either way.
+   */
+  reconcile(
+    specs: readonly RowSpec[],
+    patched?: readonly RowSpec[]
+  ): ReconcileResult {
     if (!this.#hasRows) {
       this.replaceAll(specs);
       return {
         changed: new Set(specs.map((spec) => spec.key)),
         attributesReset: true,
+        gutterRewritten: true,
       };
     }
     this.#index();
-    return this.#walk(specs);
+    return patched == null ? this.#walk(specs) : this.#patch(patched);
+  }
+
+  // Rewrites the cells of the rows with these keys, for the rows on screen.
+  #patch(specs: readonly RowSpec[]): ReconcileResult {
+    const result: ReconcileResult = {
+      changed: new Set(),
+      attributesReset: false,
+      gutterRewritten: false,
+    };
+    for (const spec of specs) {
+      const row = this.#rows.get(spec.key);
+      if (row != null) {
+        this.#patchRow(row, spec, result);
+      }
+    }
+    return result;
   }
 
   #walk(specs: readonly RowSpec[]): ReconcileResult {
     const gutter = this.#gutter;
     const content = this.#content;
     const rows = this.#rows;
-    const changed = new Set<RowKey>();
-    let attributesReset = false;
+    const result: ReconcileResult = {
+      changed: new Set(),
+      attributesReset: false,
+      gutterRewritten: false,
+    };
+    const { changed } = result;
     const nextKeys = new Set<RowKey>();
     for (const spec of specs) {
       if (nextKeys.has(spec.key)) {
@@ -173,7 +209,7 @@ export class ColumnReconciler {
         this.#keys.set(row.content, spec.key);
         changed.add(spec.key);
       }
-      attributesReset = true;
+      result.attributesReset = true;
       pending = [];
     };
 
@@ -193,37 +229,38 @@ export class ColumnReconciler {
         gutter.insertBefore(existing.gutter, gutterCursor);
         content.insertBefore(existing.content, cursor);
       }
-      const previous = existing.spec;
-      if (previous?.content !== spec.content) {
-        const patched = patchCell(
-          existing.content,
-          previous?.content,
-          spec.content
-        );
-        if (patched.element !== existing.content) {
-          existing.content = patched.element;
-          this.#keys.set(patched.element, spec.key);
-        }
-        attributesReset ||= patched.reset;
-        changed.add(spec.key);
-      }
-      if (previous?.gutter !== spec.gutter) {
-        const patched = patchCell(
-          existing.gutter,
-          previous?.gutter,
-          spec.gutter
-        );
-        existing.gutter = patched.element;
-        attributesReset ||= patched.reset;
-        changed.add(spec.key);
-      }
-      existing.spec = spec;
+      this.#patchRow(existing, spec, result);
     }
     flushPending();
     while (cursor != null) {
       removeAtCursor();
     }
-    return { changed, attributesReset };
+    return result;
+  }
+
+  // Brings a row's cells in step with `spec` and records in `result` what
+  // that did: the key when a cell changed, whether a cell was rebuilt from
+  // scratch and lost the attributes set on it from outside, and whether the
+  // gutter cell was rewritten.
+  #patchRow(row: Row, spec: RowSpec, result: ReconcileResult): void {
+    const previous = row.spec;
+    if (previous?.content !== spec.content) {
+      const patched = patchCell(row.content, previous?.content, spec.content);
+      if (patched.element !== row.content) {
+        row.content = patched.element;
+        this.#keys.set(patched.element, spec.key);
+      }
+      result.attributesReset ||= patched.reset;
+      result.changed.add(spec.key);
+    }
+    if (previous?.gutter !== spec.gutter) {
+      const patched = patchCell(row.gutter, previous?.gutter, spec.gutter);
+      row.gutter = patched.element;
+      result.attributesReset ||= patched.reset;
+      result.gutterRewritten = true;
+      result.changed.add(spec.key);
+    }
+    row.spec = spec;
   }
 
   // Builds the key map from the specs the columns were last written from.

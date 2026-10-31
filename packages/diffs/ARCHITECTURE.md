@@ -27,15 +27,15 @@ does: `layout/` names `DiffHunksRenderer` as the host type of a layout input,
 `components/` name the editor's types, and the editor names the component
 classes.
 
-| Directory     | Owns                                                                                                                                                          | Does not know                             |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `model/`      | Text and hunks. `DiffModel` and `FileModel` hold the lines being rendered, `LineMap` gives each line of an edited document a stable id.                       | Tokens, rows, the DOM                     |
-| `rows/`       | One row at a time. `RowSource` turns tokens or highlight rows into base rows, `markRow` wraps a pair's changed text, `lineDiffRanges` memoizes the word diff. | Hunks beyond one pair                     |
-| `layout/`     | The rows of one render. `DiffLayout` and `FileLayout` walk the window and emit a `RowSpec` per row per column; `RowCells` memoizes the cells.                 | The DOM                                   |
-| `dom/`        | Elements and keys. `ColumnReconciler` is the only code that writes row DOM; `CodeColumns` holds the code elements and their scroll offsets.                   | What a row means                          |
-| `renderers/`  | Highlighting orchestration: worker pool or local highlighter, result cache, pending results, the edit session's model, and the call into the layout.          | Row DOM                                   |
-| `components/` | The shell, options and managers. They decide when to render and are the only callers of the reconciler. The virtualized subclasses add the window.            |                                           |
-| `editor/`     | The document and the user: input, selections, overlays, history, search, prediction, clipboard, composition, focus and scroll requests.                       | How rows are built or written; hunk rules |
+| Directory     | Owns                                                                                                                                                                                                  | Does not know                             |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `model/`      | Text and hunks. `DiffModel` and `FileModel` hold the lines being rendered, `LineMap` gives each line of an edited document a stable id.                                                               | Tokens, rows, the DOM                     |
+| `rows/`       | One row at a time. `RowSource` turns tokens or highlight rows into base rows, `markRow` wraps a pair's changed text, `lineDiffRanges` memoizes the word diff.                                         | Hunks beyond one pair                     |
+| `layout/`     | The rows of one render. `DiffLayout` and `FileLayout` walk the window and emit a `RowSpec` per row per column, and rebuild single rows after a change that moved none; `RowCells` memoizes the cells. | The DOM                                   |
+| `dom/`        | Elements and keys. `ColumnReconciler` is the only code that writes row DOM; `CodeColumns` holds the code elements and their scroll offsets.                                                           | What a row means                          |
+| `renderers/`  | Highlighting orchestration: worker pool or local highlighter, result cache, pending results, the edit session's model, and the call into the layout.                                                  | Row DOM                                   |
+| `components/` | The shell, options and managers. They decide when to render and are the only callers of the reconciler. The virtualized subclasses add the window.                                                    |                                           |
+| `editor/`     | The document and the user: input, selections, overlays, history, search, prediction, clipboard, composition, focus and scroll requests.                                                               | How rows are built or written; hunk rules |
 
 ## A read-only render
 
@@ -132,13 +132,21 @@ A keystroke is two hops with one DOM writer:
 
 1. The editor applies the edit to its `TextDocument` and calls the component's
    `applyChange(document, change, { tokens, lineAnnotations })`.
-2. The component updates the model, binds the tokens, and renders: the layout
-   walks the window, the reconciler patches by key, moved annotations are
-   re-slotted. A plain component renders synchronously. A virtualized component
-   asks its host to render in the host's frame; nothing writes rows outside that
-   frame. `applyChange` returns the lines whose rows were rebuilt; when there
-   are any, or the line count changed, the editor drops its cached row geometry
-   and reads it again as it needs it.
+2. The component updates the model and binds the tokens, then renders. There is
+   one render path; the layout decides how much of it to do. The renderer marks
+   the changed lines on the layout (`markLines`) when the model says no row
+   moved, and invalidates it when the line count, the hunks or the set of lines
+   changed. The next `layout` call rebuilds the marked lines' rows and their
+   pairs from the inputs the last walk kept, when every other input is the same
+   object as last time, and returns the window with `patched` naming those rows;
+   otherwise it walks the window. The component writes the window as always and
+   hands `patched` to the reconciler's `reconcile`, which rewrites those rows by
+   key instead of walking the columns. A plain component renders at once. A
+   virtualized component asks its host for a frame and renders there; nothing
+   writes rows outside that frame. Tokens that arrive later (`applyTokens`) mark
+   their lines the same way. `applyChange` returns the lines whose rows were
+   rebuilt; when there are any, or the line count changed, the editor drops its
+   cached row geometry and reads it again as it needs it.
 
 Measured row heights survive a session's structural edit on the virtualized
 surfaces: an entry can sit one row off until that row renders and is measured
@@ -158,7 +166,10 @@ lines colored in the background) and `lineElement(line)` (the row's element, if
 rendered). The editor's attach, resume, completion and state capture go through
 the `__`-prefixed hooks on the component, and the editor reaches the host's
 scroll through `scrollToLine`, `cancelScroll`, `getLinePosition` and
-`isLineRenderable`.
+`isLineRenderable`. Around its DOM write the component calls the editor's
+`__`-prefixed hooks: `__captureFocusForDOMReplacement` before rows are written
+and `__syncRenderView` after, which redraws the carets and selections and puts
+focus back on the rewritten content.
 
 ## Scrolling
 
@@ -191,11 +202,23 @@ position only when a reconciler is created over a result that did not change.
 
 ## Performance rules
 
-- The layout iterates the diff once per render, whatever the edit (a windowed
-  edit render adds one pass to find the editor's visible lines), and the
-  reconciler walks the specs once per column. A same-line-count edit still takes
-  those walks, but every row other than the changed ones gets the same cells as
-  before and the reconciler does not touch it.
+- A render iterates the diff once in the layout and walks the specs once per
+  column in the reconciler. A keystroke that moves no row takes neither walk:
+  the layout rebuilds the changed rows from what it kept of the last walk, and
+  the reconciler patches them by key. Only a change that moves rows (the line
+  count, the hunks, or a batch that removed lines) walks. Marks for lines
+  without a row on screen cost one lookup each, since tokens arriving for the
+  whole document mark every line. A line keeps its gutter cell through text
+  changes (the cell is kept by the line's key), so a keystroke rewrites two
+  content cells and nothing else. The walk also records the new-file lines the
+  window shows, which the editor's range is taken from while the walk stands, so
+  a windowed edit render iterates the diff at most once.
+- Every stage of a render keys on what it reads, so a render does only the work
+  its inputs call for: the managers are set up again only when the DOM they
+  watch changed (the code that wrote it sets the dirty bit), an annotation row
+  changed, or what they are set up with changed; the interaction manager takes
+  new options itself; the old side's lines keep their array through a session,
+  so what is derived from them is kept too.
 - A keystroke's checkpoint reads no scroll offsets from the DOM; those come from
   kept values. (A line-count edit in CodeView captures a scroll anchor, which
   reads `scrollTop` if a scroll event left it unread.) The geometry the
@@ -211,14 +234,15 @@ position only when a reconciler is created over a result that did not change.
 
 ## Where to look
 
-| To change                                    | Start at                                           |
-| -------------------------------------------- | -------------------------------------------------- |
-| Which rows a diff shows, separators, buffers | `layout/DiffLayout.ts`, `utils/iterateOverDiff.ts` |
-| A row's content or marks                     | `rows/RowSource.ts`, `rows/markRow.ts`             |
-| How the DOM is patched                       | `dom/ColumnReconciler.ts`                          |
-| Session line and hunk rules                  | `model/DiffModel.ts`, `utils/editSessionHunks.ts`  |
-| Highlighting, worker pool, result cache      | `renderers/DiffHunksRenderer.ts`                   |
-| Editor tokens on both backends               | `highlighter/DiffsEditorTokenizer.ts`              |
-| Window, heights, CodeView items              | `components/VirtualizedFileDiff.ts`, `CodeView.ts` |
-| Scroll requests                              | `components/Virtualizer.ts`, `CodeView.ts`         |
-| The editor's host calls                      | `editor/editor.ts`, `components/FileDiff.ts`       |
+| To change                                    | Start at                                                                                |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Which rows a diff shows, separators, buffers | `layout/DiffLayout.ts`, `utils/iterateOverDiff.ts`                                      |
+| A row's content or marks                     | `rows/RowSource.ts`, `rows/markRow.ts`                                                  |
+| How the DOM is patched                       | `dom/ColumnReconciler.ts`                                                               |
+| Session line and hunk rules                  | `model/DiffModel.ts`, `utils/editSessionHunks.ts`                                       |
+| Highlighting, worker pool, result cache      | `renderers/DiffHunksRenderer.ts`                                                        |
+| Editor tokens on both backends               | `highlighter/DiffsEditorTokenizer.ts`                                                   |
+| Window, heights, CodeView items              | `components/VirtualizedFileDiff.ts`, `CodeView.ts`                                      |
+| Scroll requests                              | `components/Virtualizer.ts`, `CodeView.ts`                                              |
+| The editor's host calls                      | `editor/editor.ts`, `components/FileDiff.ts`                                            |
+| What a keystroke rewrites                    | `layout/DiffLayout.ts` (`markLines`, `layout`), `dom/ColumnReconciler.ts` (`reconcile`) |
