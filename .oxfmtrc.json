@@ -52,7 +52,7 @@
     "packages/theme/zed/themes/*.json",
     "packages/tree-test-data/*-files.json",
     "packages/words/test/spec/**",
-    "packages/words/benchmark/fixtures/**",
+    "packages/words/benchmark/fixtures/**/*.md",
     "*.patch",
     "README"
   ]

@@ -162,8 +162,8 @@ paragraph still requires a full parse of that paragraph.
 | `moonx words:bench --ignore-ci-checks` | Compare parser performance.               |
 
 Read [ARCHITECTURE.md](./ARCHITECTURE.md) before edits to `src/`. The
-[benchmark guide](./benchmark/README.md) covers setup, browser comparisons,
-memory measurements, and parser optimization.
+[benchmark guide](./benchmark/README.md) covers HTML throughput, React streams,
+and memory measurements.
 
 ## License
 
