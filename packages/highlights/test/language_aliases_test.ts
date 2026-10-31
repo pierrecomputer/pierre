@@ -44,6 +44,7 @@ const additions = [
   ['liquid', ['liquid']],
   ['plsql', ['plsql']],
   ['prolog', ['prolog']],
+  ['promql', ['promql']],
   ['pug', ['pug', 'jade']],
   ['qml', ['qml']],
   ['tcl', ['tcl']],

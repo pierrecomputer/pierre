@@ -193,7 +193,8 @@
   (const $mem.abapWords 58704)               ;; 1216
   ;; group I
   (const $mem.moonbitWords 59920)            ;; 352
-  (const $mem.laterWordsFree 60272)
+  (const $mem.promqlWords 60272)             ;; 112
+  (const $mem.laterWordsFree 60384)
 
   ;; [62464:65536) language names for Markdown fences.
   (const $mem.languageNames 62464)           ;; 3072
