@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs Virtualizer edit fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-virtualizer-root] {
+        width: 1000px;
+        height: 600px;
+        overflow: auto;
+      }
+      [data-host] {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <a data-fixtures-index href="/test/e2e/fixtures/index.html"
+      >&larr; All fixtures</a
+    >
+    <div data-virtualizer-root></div>
+    <script type="module">
+      // Several tall editable files under one plain Virtualizer, so scrolling
+      // the edited one out of view swaps it for its placeholder.
+      import { VirtualizedFile, Virtualizer } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+      const root = document.querySelector('[data-virtualizer-root]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('Missing Virtualizer root.');
+      }
+      const virtualizer = new Virtualizer();
+      virtualizer.setup(root);
+      const ids = ['first', 'second', 'third', 'fourth'];
+      const hosts = {};
+      for (const id of ids) {
+        const host = document.createElement('div');
+        host.dataset.host = id;
+        root.appendChild(host);
+        hosts[id] = host;
+        const file = new VirtualizedFile(
+          { disableFileHeader: true },
+          virtualizer
+        );
+        file.render({
+          file: {
+            name: `${id}.ts`,
+            contents: Array.from(
+              { length: 120 },
+              (_, index) => `const ${id}${index + 1} = ${index + 1};`
+            ).join('\n'),
+          },
+          fileContainer: host,
+          forceRender: true,
+        });
+        new Editor('file').edit(file);
+      }
+      window.__virtualizerEdit = { root, ids, getHost: (id) => hosts[id] };
+      window.__virtualizerEditReady = true;
+    </script>
+  </body>
+</html>

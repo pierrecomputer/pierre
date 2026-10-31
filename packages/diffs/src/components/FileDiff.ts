@@ -1,4 +1,4 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import type { Element as HASTElement } from 'hast';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
@@ -14,13 +14,21 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { CodeColumns } from '../dom/CodeColumns';
+import {
+  ColumnReconciler,
+  type ReconcileResult,
+} from '../dom/ColumnReconciler';
 import type { Editor } from '../editor/editor';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
+  ApplyChangeOptions,
+  ApplyChangeResult,
   CapturedDiffSessionState,
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
+  EditorColumns,
   FileDiffEditCompleteEvent,
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
@@ -29,6 +37,8 @@ import {
   getSharedHighlighter,
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
+import { isLineKey } from '../layout/RowSpec';
+import type { RowKey, RowSpec } from '../layout/RowSpec';
 import {
   type GetHoveredLineResult,
   type GetLineIndexUtility,
@@ -79,6 +89,7 @@ import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqua
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areHunkDataEqual } from '../utils/areHunkDataEqual';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
@@ -88,6 +99,7 @@ import {
   cloneHunks,
 } from '../utils/cloneFileDiffMetadata';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { createContentColumn } from '../utils/createContentColumn';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import {
@@ -101,11 +113,7 @@ import {
   resolveEditSessionSlotName,
   writeEditSessionAnnotations,
 } from '../utils/editSessionAnnotations';
-import {
-  captureExpansionAnchors,
-  finishEditSessionForDiff,
-  rebuildExpansionFromAnchors,
-} from '../utils/editSessionHunks';
+import { finishEditSessionForDiff } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -114,21 +122,18 @@ import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
+import { createGutterWrapper } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
-import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
-import { splitFileContents } from '../utils/splitFileContents';
-import { recomputeDiffRenderLineCounts } from '../utils/updateDiffHunks';
 import {
   getExpandedRegion,
   getHunkAdditionLineRange,
@@ -144,23 +149,6 @@ type LoadedPartialDiffContents = Awaited<
   ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
 >;
 
-type DeferredSelectedLinesWrite = [
-  range: SelectedLineRange | null,
-  options: SelectionWriteOptions | undefined,
-];
-
-type DeferredEditorActiveLineWrite = [
-  lineNumber: number | null,
-  options: EditorActiveLineOptions | undefined,
-];
-
-interface UpdateRenderCacheOptions {
-  shouldRefreshDiffsView?: boolean;
-  lineCountChangeInFlight?: boolean;
-  changedDocumentLines?: ReadonlyMap<number, string>;
-  documentLineCount?: number;
-}
-
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
     fileDiff.isPartial &&
@@ -168,14 +156,6 @@ function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
       fileDiff.type === 'rename-changed' ||
       fileDiff.type === 'rename-pure')
   );
-}
-
-// Edit sessions incrementally clone the diff as needed while editing,
-// initially we start with a top level fast clone
-function createEditSessionDiff(fileDiff: FileDiffMetadata): FileDiffMetadata {
-  const editSessionDiff = { ...fileDiff };
-  delete editSessionDiff.cacheKey;
-  return editSessionDiff;
 }
 
 function shouldResetUndoState(
@@ -201,32 +181,6 @@ function shouldResetUndoState(
   }
   return prevDiff.deletionLines.some(
     (line, index) => line !== nextDiff.deletionLines[index]
-  );
-}
-
-function areLinesEqual(first: string[], second: string[]): boolean {
-  return (
-    first.length === second.length &&
-    first.every((line, index) => line === second[index])
-  );
-}
-
-// There are certain scenarios where if a diff changes in a certain way, we
-// cannot consider the session resumable.  Basically if the old file has
-// changed in any way (name or contents), then our restored diff would be
-// completely invalid
-function canRestoreDiffSession(
-  snapshot: RetainedDiffSessionSnapshot,
-  inputDiff: FileDiffMetadata
-): boolean {
-  const { oldFile } = snapshot;
-  if (oldFile == null) {
-    return inputDiff.type === 'new';
-  }
-  return (
-    inputDiff.type !== 'new' &&
-    oldFile.name === (inputDiff.prevName ?? inputDiff.name) &&
-    areLinesEqual(oldFile.lines, inputDiff.deletionLines)
   );
 }
 
@@ -311,10 +265,14 @@ export interface FileDiffOptions<LAnnotation, Caret>
   ): unknown;
 
   /**
-   * Fired for every document change of an active edit session on this
-   * component, with the same `EditorChangeEvent` the editor reports through
-   * its own `onChange`. Do not feed the event's file back into the component
-   * while the session is active.
+   * Fired synchronously for every document change of an active edit session
+   * on this component, with the same `EditorChangeEvent` the editor reports
+   * through its own `onChange`. It reports the document, not the screen; the
+   * rows may not show the change yet. Do not feed the event's file back into
+   * the component while the session is active, and do not call `render` with
+   * a new file or diff, `cleanUp`, or the editor's `applyEdits`, `undo`,
+   * `redo`, `edit` or `cleanUp` from inside the callback: that throws. An
+   * error thrown by the callback is logged and the update finishes.
    */
   onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
 
@@ -342,24 +300,6 @@ interface CustomHunkElementCache {
 interface ColumnElements {
   gutter: HTMLElement;
   content: HTMLElement;
-}
-
-interface TrimColumnsToOverlapProps {
-  columns:
-    | [ColumnElements | undefined, ColumnElements | undefined]
-    | ColumnElements;
-  diffStyle: 'split' | 'unified';
-  overlapEnd: number;
-  overlapStart: number;
-  previousStart: number;
-  trimEnd: number;
-  trimStart: number;
-}
-
-interface ApplyPartialRenderProps {
-  fileDiff: FileDiffMetadata;
-  previousRenderRange: RenderRange | undefined;
-  renderRange: RenderRange | undefined;
 }
 
 interface PendingFileLoad {
@@ -396,9 +336,17 @@ interface EditSession<LAnnotation> {
   annotations:
     | EditSessionAnnotations<DiffLineAnnotation<LAnnotation>>
     | undefined;
-  // Diff still held by the editor's document until it syncs to a replacement.
-  // Keep it to compare the old-file contents for undo and to save the session.
-  outgoingDiff: FileDiffMetadata | undefined;
+}
+
+// The settings the managers (resize observers, scroll sync, pointer
+// handling) attach to the rendered DOM with. flushManagers compares them
+// with the last render's so the managers only re-attach when a setting or
+// the DOM changed, instead of on every render.
+interface ManagerSetup {
+  overflow: 'scroll' | 'wrap';
+  diffStyle: 'split' | 'unified';
+  disableAnnotations: boolean;
+  columnVariables: 'apply' | 'measure';
 }
 
 let instanceId = -1;
@@ -414,9 +362,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
   protected pre: HTMLPreElement | undefined;
-  protected codeUnified: HTMLElement | undefined;
-  protected codeDeletions: HTMLElement | undefined;
-  protected codeAdditions: HTMLElement | undefined;
+  private readonly codeColumns = new CodeColumns<
+    'unified' | 'deletions' | 'additions'
+  >();
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
@@ -447,6 +395,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return this.renderedData?.lineAnnotations ?? EMPTY_LINE_ANNOTATIONS;
   }
   protected managersDirty = false;
+  // The settings the managers were last attached with.
+  private appliedManagerSetup: ManagerSetup | undefined;
 
   protected deletionFile?: FileContents | null;
   protected additionFile?: FileContents | null;
@@ -469,18 +419,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     fileDiff: undefined,
   };
   protected lastRowCount: number | undefined;
+  // The keyed row writer of each code element on screen.
+  private readonly columnReconcilers = new WeakMap<
+    HTMLElement,
+    ColumnReconciler
+  >();
+  // Keys of the rows the last column write inserted or rewrote.
+  private changedRowKeys: RowKey[] = [];
   private mounted = false;
 
   protected enabled = true;
 
   protected editor: Editor<'file-diff', LAnnotation, Caret> | undefined;
-  protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
-  // Defer selected-line and editor active-line writes while a refresh rebuilds
-  // the diff rows. This is separate from the timeout because the refresh can
-  // escalate to a full rerender without one.
-  protected lineStateRefreshPending = false;
-  protected deferredSelectedLines: DeferredSelectedLinesWrite | undefined;
-  protected deferredEditorActiveLine: DeferredEditorActiveLineWrite | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation, Caret> = {
@@ -653,6 +603,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.clearReusableHeader();
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));
     this.syncInteractionOptions();
+    this.managersDirty = true;
   }
 
   protected syncInteractionOptions(): void {
@@ -680,7 +631,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.applyCachedThemeState(themeType);
+    // Rows the editor built from its tokens carry one theme, so a session is
+    // highlighted again; read-only rows switch through their theme styles.
+    if (this.editSession != null) {
+      this.onThemeChange();
+    } else {
+      this.applyCachedThemeState(themeType);
+    }
   }
 
   private applyCachedThemeState(themeType: ThemeTypes): boolean {
@@ -790,11 +747,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // annotation rows. Returns true when new annotations were adopted —
   // virtualized subclasses override this and refresh their layout on true.
   //
-  // The editor delivers annotations through two calls. An edit that changes
-  // the line count sends them with the structural rebuild
-  // (applyDocumentChange) and again with the change event (__acceptEditorChange);
-  // the identity check makes the second call a no-op. An edit that keeps the
-  // line count skips the rebuild, so the event is its only path here.
+  // The editor sends moved annotations with the edit (applyChange) and again
+  // with the change event (__acceptEditorChange). The identity check makes
+  // the second call a no-op.
   //
   // The annotations the caller passed in are never touched — stale
   // re-renders keep deduping against them.
@@ -815,79 +770,53 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return true;
   }
 
-  private canPartiallyRender(
-    forceRender: boolean,
-    annotationsChanged: boolean,
-    didContentChange: boolean
-  ): boolean {
-    if (
-      forceRender ||
-      annotationsChanged ||
-      didContentChange ||
-      typeof this.options.hunkSeparators === 'function'
-    ) {
-      return false;
-    }
-    return true;
-  }
-
   public setSelectedLines(
     range: SelectedLineRange | null,
     options?: SelectionWriteOptions
   ): void {
-    if (this.lineStateRefreshPending) {
-      this.deferredSelectedLines = [range, options];
-    } else {
-      this.interactionManager.setSelection(range, options);
-    }
+    this.interactionManager.setSelection(range, options);
   }
 
   public setEditorActiveLine(
     lineNumber: number | null,
     options?: EditorActiveLineOptions
   ): void {
-    if (this.lineStateRefreshPending) {
-      this.deferredEditorActiveLine = [lineNumber, options];
-    } else {
-      this.interactionManager.setEditorActiveLine(lineNumber, {
-        lineNumberOnly: options?.lineNumberOnly,
-        side: options?.side ?? 'additions',
-      });
-    }
+    this.interactionManager.setEditorActiveLine(lineNumber, {
+      lineNumberOnly: options?.lineNumberOnly,
+      side: options?.side ?? 'additions',
+    });
   }
 
-  // A refresh can receive selected-lines and editor active-line writes in either
-  // order. Apply the latest value from each after the rows are stable.
-  protected flushDeferredLineState(): void {
-    const {
-      deferredEditorActiveLine: editorActiveLine,
-      deferredSelectedLines: selectedLines,
-    } = this;
-    this.lineStateRefreshPending = false;
-    this.deferredEditorActiveLine = undefined;
-    this.deferredSelectedLines = undefined;
-
-    if (editorActiveLine != null) {
-      this.setEditorActiveLine(...editorActiveLine);
-    }
-    if (selectedLines != null) {
-      this.interactionManager.setSelection(...selectedLines);
-    }
-  }
-
+  // Sets the managers up again when the DOM they watch changed (the dirty
+  // bit, set by the code that wrote it) or when what they are set up with
+  // changed; otherwise a render leaves them alone.
   public flushManagers(): void {
-    if (!this.managersDirty || this.pre == null) {
+    if (this.pre == null) {
       this.managersDirty = false;
       return;
     }
-
     const { diffStyle = 'split', overflow = 'scroll' } = this.options;
-    this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, {
-      disableAnnotations: overflow === 'wrap',
+    const setup: ManagerSetup = {
+      overflow,
+      diffStyle,
+      // Pairing annotation heights scans every row; skipped when wrapping,
+      // which needs no pairing, and when there are no annotations.
+      disableAnnotations:
+        overflow === 'wrap' || this.lineAnnotations.length === 0,
       columnVariables: this.shouldApplyColumnVariables(overflow)
         ? 'apply'
         : 'measure',
+    };
+    if (
+      !this.managersDirty &&
+      areObjectsEqual(setup, this.appliedManagerSetup)
+    ) {
+      return;
+    }
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, {
+      disableAnnotations: setup.disableAnnotations,
+      columnVariables: setup.columnVariables,
     });
     if (overflow === 'scroll' && diffStyle === 'split') {
       this.scrollSyncManager.setup(
@@ -898,6 +827,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     } else {
       this.scrollSyncManager.cleanUp();
     }
+    this.appliedManagerSetup = setup;
     this.managersDirty = false;
   }
 
@@ -912,24 +842,36 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     );
   }
 
+  protected get codeUnified(): HTMLElement | undefined {
+    return this.codeColumns.get('unified');
+  }
+
+  protected set codeUnified(code: HTMLElement | undefined) {
+    this.codeColumns.set('unified', code);
+  }
+
+  protected get codeDeletions(): HTMLElement | undefined {
+    return this.codeColumns.get('deletions');
+  }
+
+  protected set codeDeletions(code: HTMLElement | undefined) {
+    this.codeColumns.set('deletions', code);
+  }
+
+  protected get codeAdditions(): HTMLElement | undefined {
+    return this.codeColumns.get('additions');
+  }
+
+  protected set codeAdditions(code: HTMLElement | undefined) {
+    this.codeColumns.set('additions', code);
+  }
+
   public getCodeScrollLeft(): number {
-    return Math.max(
-      this.codeUnified?.scrollLeft ?? 0,
-      this.codeDeletions?.scrollLeft ?? 0,
-      this.codeAdditions?.scrollLeft ?? 0
-    );
+    return this.codeColumns.scrollLeft;
   }
 
   public setCodeScrollLeft(position: number): void {
-    if (this.codeUnified != null) {
-      this.codeUnified.scrollLeft = position;
-    }
-    if (this.codeAdditions != null) {
-      this.codeAdditions.scrollLeft = position;
-    }
-    if (this.codeDeletions != null) {
-      this.codeDeletions.scrollLeft = position;
-    }
+    this.codeColumns.setScrollLeft(position);
   }
 
   public __getEffectiveCodeOptions(): BaseCodeOptions {
@@ -938,6 +880,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   public cleanUp(recycle: boolean = false): void {
     const { editor } = this;
+    editor?.__assertOutsideChangeCallback('FileDiff.cleanUp');
     dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
     // Tear the editor down while the code scrollers still exist. A recycle
@@ -971,9 +914,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.annotationCache.clear();
     this.pre?.remove();
     this.pre = undefined;
-    this.codeUnified = undefined;
-    this.codeDeletions = undefined;
-    this.codeAdditions = undefined;
+    this.codeColumns.cleanUp();
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
     this.bufferAfter?.remove();
@@ -1009,13 +950,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.deletionFile = undefined;
       this.additionFile = undefined;
     }
-    if (this.refreshViewTimeout != null) {
-      clearTimeout(this.refreshViewTimeout);
-      this.refreshViewTimeout = undefined;
-    }
-    this.lineStateRefreshPending = false;
-    this.deferredEditorActiveLine = undefined;
-    this.deferredSelectedLines = undefined;
     this.enabled = false;
   }
 
@@ -1203,7 +1137,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
-  // Editors update their rows directly. Other internal renders can be driven
+  // An edit session renders in place. Other internal renders can be driven
   // by the owner, so React updates its children before calling render().
   protected requestRender(): boolean {
     const { requestOwnerRender } = this;
@@ -1370,39 +1304,48 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.options.parseDiffOptions
     );
     this.setHydratedState(files);
-    if (this.installHydratedSessionDiff(expectedDiff)) {
-      this.rerender();
-      return;
-    }
-    await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
-    if (!this.enabled || this.getInputDiff() !== expectedDiff) {
-      return;
+    if (!this.installHydratedDiff(expectedDiff)) {
+      await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
+      if (!this.enabled || this.getInputDiff() !== expectedDiff) {
+        return;
+      }
     }
     this.rerender();
   }
 
-  // Install a loaded replacement in the edit session before the editor syncs.
-  protected installHydratedSessionDiff(
-    expectedDiff: FileDiffMetadata
-  ): boolean {
-    if (expectedDiff.isPartial) {
-      throw new Error(
-        'FileDiff.installHydratedSessionDiff: diffs cannot be partial for editing'
-      );
-    }
-    if (this.getInputDiff() !== expectedDiff) {
+  // Called when a partial diff finishes loading. If an edit session exists,
+  // it is restarted from the loaded diff and the editor's document is
+  // updated. Returns false when there is no session to update.
+  protected installHydratedDiff(expectedDiff: FileDiffMetadata): boolean {
+    if (this.editSession == null || this.getInputDiff() !== expectedDiff) {
       return false;
     }
-    if (this.editSession?.outgoingDiff != null) {
-      this.installEditSession(expectedDiff);
-      return true;
-    }
-    return false;
+    this.replaceEditSession(expectedDiff, this.getLatestAnnotations());
+    return true;
   }
 
-  // Store a new input. Keep the editor's previous diff until it syncs
-  // so it can decide whether to keep or reset undo history for the
-  // replacement. Return false if the input has not changed.
+  // Restarts the session from a new diff and gives the editor's document the
+  // new contents. Undo history is kept unless the old side, name or language
+  // changed.
+  private replaceEditSession(
+    incomingDiff: FileDiffMetadata,
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
+  ): void {
+    const { editor, editSession } = this;
+    const previousDiff = editSession?.diff;
+    this.installEditSession(incomingDiff);
+    if (editor != null && previousDiff != null) {
+      editor.__replaceDocument(
+        getAdditionFile(incomingDiff),
+        shouldResetUndoState(previousDiff, incomingDiff),
+        lineAnnotations
+      );
+    }
+  }
+
+  // Stores a new input and says whether it differs from the current one. A
+  // session takes a complete input at once; a partial one is loaded first and
+  // taken by handleFilesLoaded.
   protected updateInputDiff(
     incomingDiff: FileDiffMetadata,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
@@ -1410,31 +1353,29 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (areDiffTargetsEqual(this.getInputDiff(), incomingDiff)) {
       return false;
     }
-
+    this.editor?.__assertOutsideChangeCallback('FileDiff.render');
     const previousAnnotations = this.getLatestAnnotations();
     this.fileDiff = incomingDiff;
-    const { editSession: previousSession } = this;
-    const outgoingDiff = previousSession?.outgoingDiff ?? previousSession?.diff;
-    if (previousSession != null) {
-      if (incomingDiff.isPartial) {
-        // Keep the working diff until loading provides a complete replacement.
-        previousSession.inputDiff = incomingDiff;
-      } else {
-        this.installEditSession(incomingDiff);
-      }
-      if (this.editSession != null) {
-        this.editSession.outgoingDiff = outgoingDiff;
-      }
-    }
-    if (this.editSession?.annotations != null && lineAnnotations != null) {
-      // Positions supplied with a host replacement describe its new
-      // document. Surviving annotations retain their frozen names from
-      // the old session.
-      this.editSession.annotations = adoptEditSessionAnnotations(
+    const { editSession } = this;
+    if (editSession?.annotations != null && lineAnnotations != null) {
+      editSession.annotations = adoptEditSessionAnnotations(
         lineAnnotations,
         getLineAnnotationName,
-        this.editSession.annotations
+        editSession.annotations
       );
+    }
+    if (editSession != null) {
+      if (incomingDiff.isPartial) {
+        editSession.inputDiff = incomingDiff;
+        this.loadFilesIfNecessary();
+      } else {
+        this.replaceEditSession(
+          incomingDiff,
+          editSession.annotations?.current ??
+            lineAnnotations ??
+            previousAnnotations
+        );
+      }
     }
     this.pendingData = {
       fileDiff: this.editSession?.diff ?? incomingDiff,
@@ -1443,9 +1384,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         lineAnnotations ??
         previousAnnotations,
     };
-    if (outgoingDiff != null && incomingDiff.isPartial) {
-      this.loadFilesIfNecessary();
-    }
     return true;
   }
 
@@ -1458,55 +1396,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     retainedDocument?: FileContents,
     retainedSession?: RetainedDiffSessionSnapshot
   ): void {
-    const inputContents = inputDiff.additionLines.join('');
-    const retainedLines =
-      retainedDocument != null
-        ? splitFileContents(retainedDocument.contents)
-        : undefined;
-    const restoreRetainedSession =
-      retainedSession != null &&
-      canRestoreDiffSession(retainedSession, inputDiff);
-    if (retainedSession != null && !restoreRetainedSession) {
-      throw new Error(
-        'FileDiff: retained session cannot resume against a different old file'
-      );
-    }
-    if (
-      retainedDocument != null &&
-      retainedDocument.contents !== inputContents &&
-      !restoreRetainedSession
-    ) {
-      throw new Error(
-        'FileDiff: retained edits are missing their diff session state'
-      );
-    }
-    const usesInputDocument =
-      retainedDocument == null ||
-      (retainedDocument.name === inputDiff.name &&
-        retainedDocument.lang === inputDiff.lang &&
-        retainedDocument.contents === inputContents);
-    const sessionDiff = createEditSessionDiff(inputDiff);
-    if (
-      retainedDocument != null &&
-      retainedLines != null &&
-      !usesInputDocument
-    ) {
-      sessionDiff.name = retainedDocument.name;
-      sessionDiff.lang = retainedDocument.lang;
-    }
-    if (
-      restoreRetainedSession &&
-      retainedSession != null &&
-      retainedDocument != null &&
-      retainedLines != null
-    ) {
-      sessionDiff.additionLines = retainedLines;
-      sessionDiff.additionCharacterCount = retainedDocument.contents.length;
-      sessionDiff.type = retainedSession.type;
-      sessionDiff.hunks = retainedSession.hunks;
-      sessionDiff.editSessionDirty = true;
-      recomputeDiffRenderLineCounts(sessionDiff);
-    }
+    const sessionDiff = this.hunksRenderer.startEditSession(inputDiff, {
+      document: retainedDocument,
+      snapshot: retainedSession,
+    });
     // Initialize annotations when the session starts so updateInputDiff can
     // reset their positions when a replacement arrives. An existing session
     // keeps its tracked annotations.
@@ -1520,16 +1413,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       diff: sessionDiff,
       inputDiff,
       annotations,
-      outgoingDiff: this.editSession?.outgoingDiff,
     };
     this.pendingData = {
       fileDiff: sessionDiff,
       lineAnnotations: annotations.current,
     };
-    this.hunksRenderer.beginEditSession(
-      sessionDiff,
-      usesInputDocument && !restoreRetainedSession ? inputDiff : undefined
-    );
   }
 
   protected setHydratedState(files: LoadedPartialDiffContents): void {
@@ -1621,7 +1509,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       );
     }
 
-    const { renderRange: previousRenderRange } = this;
+    // A new diff is not allowed from inside onChange. Refuse it here, before
+    // the file pair and render range below are stored, so a retry after the
+    // callback still sees it as new.
+    if ((fileDiff != null && diffDidChange) || nextParsedFileDiff != null) {
+      this.editor?.__assertOutsideChangeCallback('FileDiff.render');
+    }
     this.renderRange = nextRenderRange;
     // Store files only when this render actually carried a file input:
     // internal rerenders pass none, and wiping the pair here would defeat the
@@ -1647,6 +1540,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
+    }
+    // The managers pair annotation heights, so new or changed annotations
+    // are set up again in this render.
+    if (annotationsChanged) {
+      this.managersDirty = true;
     }
 
     const workingDiff = this.getWorkingDiff();
@@ -1734,89 +1632,70 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return true;
     }
 
+    // The new-file lines this render shows, which the editor works with.
+    const editorRenderRange =
+      this.editor != null
+        ? this.hunksRenderer.editorRenderRange(workingDiff, nextRenderRange)
+        : undefined;
+    const finishedTokens = this.editor?.__prepareRender(editorRenderRange);
+    if (finishedTokens != null) {
+      this.hunksRenderer.setTokens(finishedTokens);
+    }
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
 
-      // Attempt to partially render
-      const didPartiallyRender =
-        this.canPartiallyRender(
-          forceRender,
-          annotationsChanged,
-          filesDidChange ||
-            diffDidChange ||
-            themeChanged ||
-            !areDiffTargetsEqual(this.getRenderedDiff(), workingDiff)
-        ) &&
-        this.applyPartialRender({
-          fileDiff: workingDiff,
-          previousRenderRange,
-          renderRange: nextRenderRange,
-        });
-
-      // If we were unable to partially render, perform a full render
-      if (!didPartiallyRender) {
-        const hunksResult = this.hunksRenderer.renderDiff(
-          workingDiff,
-          nextRenderRange
-        );
-        if (hunksResult == null) {
-          if (
-            this.workerManager?.isInitialized() === false &&
-            this.workerManager.isWorkingPool()
-          ) {
-            void this.workerManager
-              .initialize()
-              .catch(() => {})
-              .then(() => this.rerender());
-          }
-          return false;
-        }
-
-        this.applyThemeState(
-          fileContainer,
-          hunksResult.themeStyles,
-          themeType,
-          hunksResult.baseThemeType
-        );
-
-        if (hunksResult.headerElement != null) {
-          this.applyHeaderToDOM(
-            hunksResult.headerElement,
-            fileContainer,
-            hunksResult.fileDiff
-          );
-        }
+      const hunksResult = this.hunksRenderer.renderDiff(
+        workingDiff,
+        nextRenderRange
+      );
+      if (hunksResult == null) {
         if (
-          hunksResult.additionsContentAST != null ||
-          hunksResult.deletionsContentAST != null ||
-          hunksResult.unifiedContentAST != null
+          this.workerManager?.isInitialized() === false &&
+          this.workerManager.isWorkingPool()
         ) {
-          this.applyHunksToDOM(pre, hunksResult);
-        } else if (this.pre != null) {
-          this.pre.remove();
-          this.pre = undefined;
+          void this.workerManager
+            .initialize()
+            .catch(() => {})
+            .then(() => this.rerender());
         }
-        this.renderSeparators(hunksResult.hunkData);
-        this.adoptRenderData(hunksResult.fileDiff);
-      } else {
-        const renderedDiff = this.getRenderedDiff();
-        if (renderedDiff != null) {
-          this.adoptRenderData(renderedDiff);
-        }
+        return false;
       }
+
+      this.applyThemeState(
+        fileContainer,
+        hunksResult.themeStyles,
+        themeType,
+        hunksResult.baseThemeType
+      );
+
+      if (hunksResult.headerElement != null) {
+        this.applyHeaderToDOM(
+          hunksResult.headerElement,
+          fileContainer,
+          hunksResult.fileDiff
+        );
+      }
+      const { unified, deletions, additions } = hunksResult.columns;
+      if (unified != null || deletions != null || additions != null) {
+        this.applyHunksToDOM(pre, hunksResult);
+      } else if (this.pre != null) {
+        this.pre.remove();
+        this.pre = undefined;
+      }
+      this.renderSeparators(hunksResult.hunkData);
+      this.adoptRenderData(hunksResult.fileDiff);
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      this.managersDirty = true;
       if (!deferManagers) {
         this.flushManagers();
       }
 
       this.finalizeRender();
       if (this.editor != null) {
-        this.syncRenderViewToEditor();
+        this.syncRenderViewToEditor(editorRenderRange);
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -1938,10 +1817,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  private syncRenderViewToEditor(): void {
+  private syncRenderViewToEditor(
+    renderRange = this.hunksRenderer.editorRenderRange(
+      this.getWorkingDiff(),
+      this.renderRange
+    )
+  ): void {
     const { editor, fileContainer } = this;
     const lineAnnotations = this.getLatestAnnotations();
-    const renderRange = this.computeEditorRenderRange(this.renderRange);
     const fileDiff = this.getWorkingDiff();
     if (
       editor == null ||
@@ -1960,22 +1843,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       ) {
         return;
       }
-      const replacement = this.editSession?.outgoingDiff;
-      const inputDiff = this.getInputDiff();
-      const externalDocument =
-        replacement != null && inputDiff != null && replacement !== fileDiff;
-      const resetHistory =
-        externalDocument && replacement != null && inputDiff != null
-          ? shouldResetUndoState(replacement, inputDiff)
-          : false;
       editor.__syncRenderView({
         highlighter,
         fileContainer,
+        columns: this.editorColumns(),
         fileDiff,
         lineAnnotations,
         renderRange,
-        externalDocument,
-        resetHistory,
+        domCurrent: this.hunksRenderer.editorRenderReady(),
       });
     };
     const theme = this.getTheme();
@@ -2012,57 +1887,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // startingLine = first addition line with a row in the window, totalLines =
   // last such line - first + 1, and 0 when the window holds no addition rows
   // (e.g. a pure-deletion run taller than the viewport).
-  private computeEditorRenderRange(
-    renderRange: RenderRange | undefined
-  ): RenderRange | undefined {
-    const fileDiff = this.getWorkingDiff();
-    if (
-      renderRange == null ||
-      fileDiff == null ||
-      isDefaultRenderRange(renderRange)
-    ) {
-      return renderRange;
-    }
-    const {
-      diffStyle = 'split',
-      expandUnchanged = false,
-      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-    } = this.options;
-    let firstLineNumber: number | undefined;
-    let lastLineNumber: number | undefined;
-    iterateOverDiff({
-      diff: fileDiff,
-      diffStyle,
-      startingLine: renderRange.startingLine,
-      totalLines: renderRange.totalLines,
-      expandedHunks: expandUnchanged
-        ? true
-        : this.hunksRenderer.getExpandedHunksMap(),
-      collapsedContextThreshold,
-      callback: ({ additionLine }) => {
-        if (additionLine != null) {
-          firstLineNumber ??= additionLine.lineNumber;
-          lastLineNumber = additionLine.lineNumber;
-        }
-      },
-    });
-    if (firstLineNumber == null || lastLineNumber == null) {
-      return { ...renderRange, startingLine: 0, totalLines: 0 };
-    }
-    return {
-      ...renderRange,
-      startingLine: firstLineNumber - 1,
-      totalLines: lastLineNumber - firstLineNumber + 1,
-    };
-  }
-
-  /** @internal The editor applied or edited past the pending external replacement. */
-  public __acknowledgeDocumentUpdate(): void {
-    if (this.editSession != null) {
-      this.editSession.outgoingDiff = undefined;
-    }
-  }
-
   /** @internal Settle annotations locally. */
   public __acceptEditorChange(
     event: EditorChangeEvent<'file-diff', LAnnotation, Caret>
@@ -2089,14 +1913,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   public __captureDocumentSessionState(
     clone = true
   ): CapturedDiffSessionState | undefined {
-    const fileDiff = this.getInputDiff();
-    let { diff: sessionDiff, outgoingDiff } = this.editSession ?? {};
-    if (outgoingDiff != null && fileDiff != null) {
-      if (!fileDiff.isPartial && shouldResetUndoState(outgoingDiff, fileDiff)) {
-        return undefined;
-      }
-      sessionDiff = outgoingDiff;
-    }
+    const sessionDiff = this.editSession?.diff;
     if (sessionDiff == null || sessionDiff.isPartial) {
       return undefined;
     }
@@ -2140,7 +1957,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     const detach = () => {
       this.editor = undefined;
-      this.finishEditSession();
+      this.endEditSession();
     };
     try {
       this.resumeEditorRendering(editor);
@@ -2163,17 +1980,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     editor: Editor<'file-diff', LAnnotation, Caret>
   ): void {
     const inputDiff = this.getInputDiff();
-    const pendingReplacement = this.editSession?.outgoingDiff;
-    // A pending replacement whose diff was partial when it arrived installs now
-    // that we are (re)attaching with a hydrated diff.
-    if (
-      pendingReplacement != null &&
-      inputDiff != null &&
-      !inputDiff.isPartial &&
-      this.editSession?.diff === pendingReplacement
-    ) {
-      this.installEditSession(inputDiff);
-    }
     const initialInputDiff =
       this.editSession == null && inputDiff != null && !inputDiff.isPartial
         ? inputDiff
@@ -2184,8 +1990,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         editor.__getDocumentContents(getAdditionFile(initialInputDiff)),
         editor.__getDocumentSessionState()
       );
-    } else if (this.editSession != null) {
-      this.hunksRenderer.beginEditSession(this.editSession.diff);
     }
     this.editor = editor;
     // The editor sync below refuses partial diffs (it needs the full file
@@ -2194,29 +1998,19 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.loadFilesIfNecessary();
     }
     const editSessionDiff = this.editSession?.diff;
-    if (this.hunksRenderer.editorRenderReady()) {
-      // Compatible markup can be reused without repainting. Once the renderer
-      // transfers that cache to the private session, the existing DOM belongs
-      // to the session as well.
-      if (
-        editSessionDiff != null &&
-        this.hunksRenderer.diffCache === editSessionDiff
-      ) {
-        this.adoptRenderData(editSessionDiff);
-      }
-      this.syncRenderViewToEditor();
-    } else {
-      // The current markup is missing the editor's token metadata, or its
-      // highlight is still pending: render through the session, which also
-      // syncs the render view once it paints.
-      this.rerender();
+    // When the session took over the input's highlight, what is on screen is
+    // now the session diff.
+    if (
+      editSessionDiff != null &&
+      this.hunksRenderer.editorRenderReady() &&
+      this.hunksRenderer.diffCache === editSessionDiff
+    ) {
+      this.adoptRenderData(editSessionDiff);
     }
-  }
-
-  // Session exit for the live detach path.
-  private finishEditSession(): void {
-    this.hunksRenderer.endEditSession();
-    this.finalizeEditSessionHunks();
+    // A render through the session gives the editor its rows and syncs it
+    // after. Rows already on screen are kept by key; the end of the file
+    // gains the editor's empty last line and loses its "No newline" markers.
+    this.renderChange(true);
   }
 
   /**
@@ -2260,8 +2054,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         'FileDiff.__completeEditSession: detach the editor before completing the session'
       );
     }
-    this.hunksRenderer.endEditSession();
-    this.finalizeEditSessionHunks();
+    this.endEditSession();
 
     const sessionAnnotationsCurrent = editSessionAnnotations?.current;
     let acceptedDiff: FileDiffMetadata | undefined;
@@ -2350,131 +2143,134 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  /**
-   * Run the session-end recompute: restore recompute-shaped hunks (a
-   * context-only region collapses away, boundaries re-derive), preserve
-   * expansion state best-effort via old-side anchors, and repaint through
-   * the session render path — which also invalidates virtualized layout,
-   * since nothing else does at exit now that editing does not flip
-   * expandUnchanged. Marker-guarded and idempotent; CodeView also calls this
-   * when ending a session whose detach closure was consumed by a recycle.
-   * Safe on a cleaned-up instance: the recompute is pure metadata work and
-   * the deferred rerender is enabled-guarded. Returns true when a recompute
-   * ran.
-   */
-  public finalizeEditSessionHunks(): boolean {
-    const fileDiff = this.getWorkingDiff();
-    if (fileDiff == null || fileDiff.editSessionDirty !== true) {
-      return false;
-    }
-    const { collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } =
-      this.options;
-    const anchors = captureExpansionAnchors(
-      fileDiff,
-      this.hunksRenderer.getExpandedHunksMap(),
-      collapsedContextThreshold
-    );
-    finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions);
-    this.hunksRenderer.setExpandedHunksMap(
-      rebuildExpansionFromAnchors(fileDiff, anchors)
-    );
-    void this.hunksRenderer.refreshHighlightedResult();
-    this.escalateEditSessionRender();
-    return true;
-  }
-
-  // normally triggered by the host when the document line count changes
-  public applyDocumentChange(
-    textDocument: TextDocument<'file-diff', LAnnotation>,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
-  ): void {
-    const editSessionDiff = this.editSession?.diff;
-    if (editSessionDiff == null) {
-      throw new Error(
-        'FileDiff.applyDocumentChange: requires an active edit session'
-      );
-    }
-    this.detachAdditionLines();
-    this.hunksRenderer.beginEditSession(editSessionDiff);
-    this.hunksRenderer.applyDocumentChange(textDocument);
-    if (newLineAnnotations != null) {
-      this.syncEditSessionAnnotationsFromEditor(newLineAnnotations);
-    }
-    this.rerender();
-    this.interactionManager.setSelectionDirty();
-  }
-
-  /** Update the private diff without editor DOM, then rehighlight on return. */
-  public applySuspendedDocumentChange(
-    textDocument: TextDocument<'file-diff', LAnnotation>,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
-  ): void {
-    this.applyDocumentChange(textDocument, newLineAnnotations);
-    this.hunksRenderer.clearRenderCache();
-  }
-
-  public updateRenderCache(
-    dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light',
-    options: UpdateRenderCacheOptions = {}
-  ): void {
-    const editSessionDiff = this.editSession?.diff;
-    if (editSessionDiff == null) {
-      throw new Error(
-        'FileDiff.updateRenderCache: requires an active edit session'
-      );
-    }
-    this.detachAdditionLines();
-    this.hunksRenderer.beginEditSession(editSessionDiff);
-    const { shouldRefreshDiffsView, lineCountChangeInFlight } = options;
-    const regionsChanged = this.hunksRenderer.updateRenderCache(
-      dirtyLines,
-      themeType,
-      lineCountChangeInFlight,
-      options.changedDocumentLines,
-      options.documentLineCount
-    );
-    // A same-line-count edit that reshaped the session regions (an edit into
-    // a collapsed gap) changes the rendered row set, which the debounced
-    // line-type refresh below cannot express. Escalate to a deferred full
-    // re-render — never a synchronous one, since this runs mid-editor-pass
-    // and rebuilding rows the editor is about to touch detaches its geometry
-    // caches.
-    if (regionsChanged) {
-      if (this.refreshViewTimeout != null) {
-        clearTimeout(this.refreshViewTimeout);
-        this.refreshViewTimeout = undefined;
-      }
-      this.lineStateRefreshPending = true;
-      this.escalateEditSessionRender();
+  // Ends the edit session and renders the diff the view-mode way again: the
+  // editor's empty last line goes, the "No newline" markers come back. If
+  // the hunks changed when editing ended, the diff is highlighted again too.
+  private endEditSession(): void {
+    if (this.editSession == null) {
       return;
     }
-    if (shouldRefreshDiffsView === true) {
-      if (this.refreshViewTimeout != null) {
-        clearTimeout(this.refreshViewTimeout);
-      }
-      this.lineStateRefreshPending = true;
-      this.refreshViewTimeout = setTimeout(() => {
-        this.refreshViewTimeout = undefined;
-        if (this.options.diffStyle === 'split') {
-          this.refreshSplitDiffView();
-        } else {
-          this.refreshUnifiedDiffView();
-        }
-        this.flushDeferredLineState();
-      }, 150);
+    if (this.hunksRenderer.endEditSession()) {
+      void this.hunksRenderer.refreshHighlightedResult();
+    }
+    this.escalateEditSessionRender('exit');
+  }
+
+  /**
+   * @internal Applies one change of the editor's document to the diff and the
+   * rows on screen.
+   */
+  public applyChange(
+    document: TextDocument<'file-diff', LAnnotation>,
+    change: TextDocumentChange,
+    options: ApplyChangeOptions<'file-diff', LAnnotation> = {}
+  ): ApplyChangeResult {
+    if (this.editSession == null) {
+      throw new Error('FileDiff.applyChange: requires an active edit session');
+    }
+    const { tokens, lineAnnotations } = options;
+    const { lineDelta, removedLineIds, regionsChanged, hunksChanged } =
+      this.hunksRenderer.applyChange(change, document, tokens);
+    if (lineAnnotations != null) {
+      this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
+    }
+    // Render the change. The flag says whether rows moved, which a
+    // virtualized diff needs to know up front to redo its row layout before
+    // the host's frame renders: rows move, appear or change type when the
+    // line count or the hunks change, or when a batch removed lines and added
+    // others at the same count. A plain diff renders either way.
+    this.renderChange(
+      lineDelta !== 0 ||
+        removedLineIds.length > 0 ||
+        regionsChanged ||
+        hunksChanged
+    );
+    // Nothing was on screen, or a render callback ended the session.
+    if (this.fileContainer == null || this.editSession == null) {
+      return { rebuiltLines: [] };
+    }
+    // A patched row keeps its selection marks. After a structural change the
+    // rows that moved still carry theirs but show other lines, so the marks
+    // are drawn again from the selection state.
+    if (lineDelta !== 0 || regionsChanged) {
+      this.interactionManager.setSelectionDirty();
+    }
+    return { rebuiltLines: this.takeRebuiltLines() };
+  }
+
+  // Renders a document change. The rows are keyed, so the render only
+  // touches what changed. Does nothing when unmounted or recycled; the next
+  // render picks the change up. VirtualizedFileDiff renders in its host's
+  // frame and invalidates its layout for a structural change.
+  protected renderChange(_structural: boolean): void {
+    if (this.fileContainer == null) {
+      return;
+    }
+    this.rerender();
+  }
+
+  /** @internal Repaints lines the editor tokenized in the background. */
+  public applyTokens(tokens: ReadonlyMap<number, HighlightedToken[]>): void {
+    if (this.editSession == null) {
+      return;
+    }
+    const changed = this.hunksRenderer.setTokens(tokens);
+    // Lines without a row on screen are drawn from the new tokens when a
+    // render brings them in; nothing to show until then.
+    if (changed.some((line) => this.lineElement(line) != null)) {
+      this.rerender();
     }
   }
 
-  private detachAdditionLines(): void {
-    const { diff: editSessionDiff, inputDiff } = this.editSession ?? {};
-    if (
-      editSessionDiff != null &&
-      (editSessionDiff.additionLines === inputDiff?.additionLines ||
-        editSessionDiff.additionLines === editSessionDiff.deletionLines)
-    ) {
-      editSessionDiff.additionLines = [...editSessionDiff.additionLines];
+  // Keeps the keys of the rows a reconcile wrote for the editor to measure.
+  // Rows written anew carry no selection marks and are unknown to the
+  // managers, so both are brought up to date; a rewritten gutter cell lost
+  // the gutter utility the interaction manager keeps inside it.
+  private recordRowsWritten({
+    changed,
+    attributesReset,
+    gutterRewritten,
+  }: ReconcileResult) {
+    for (const key of changed) {
+      this.changedRowKeys.push(key);
+      // The managers pair and measure annotation rows, so any row that is
+      // not a line changing concerns them.
+      if (!isLineKey(key)) {
+        this.managersDirty = true;
+      }
     }
+    if (attributesReset) {
+      this.interactionManager.setSelectionDirty();
+    }
+    if (attributesReset || gutterRewritten) {
+      this.managersDirty = true;
+    }
+  }
+
+  /** @internal The element showing a line of the editor's document, if rendered. */
+  public lineElement(line: number): HTMLElement | undefined {
+    const code = this.codeAdditions ?? this.codeUnified;
+    if (code == null || this.editSession == null) {
+      return undefined;
+    }
+    const key = this.hunksRenderer.lineKey(line);
+    return key == null
+      ? undefined
+      : this.columnReconcilers.get(code)?.elementFor(key)?.content;
+  }
+
+  // The document lines whose rows the last render rebuilt; cleared on read.
+  private takeRebuiltLines(): number[] {
+    const keys = this.changedRowKeys;
+    this.changedRowKeys = [];
+    const lines: number[] = [];
+    for (const key of keys) {
+      const line = this.hunksRenderer.lineOfKey(key);
+      if (line != null) {
+        lines.push(line);
+      }
+    }
+    return lines;
   }
 
   // Editor-facing visibility oracle: whether a one-based new-file line has
@@ -2620,17 +2416,15 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return this.editor == null;
   }
 
-  // Deferred full re-render for session region changes. The subsequent
-  // render() ends in syncRenderViewToEditor, which resets the editor's
-  // geometry caches against the rebuilt rows. VirtualizedFileDiff overrides
+  // Queued full render after the session's hunks are settled, for a change
+  // in the session or the recompute on exit. VirtualizedFileDiff overrides
   // this to also invalidate its layout caches.
-  protected escalateEditSessionRender(): void {
+  protected escalateEditSessionRender(_cause: 'change' | 'exit'): void {
     queueRender(this.handleEditSessionRender);
   }
 
   private handleEditSessionRender = (): void => {
     this.rerender();
-    this.flushDeferredLineState();
   };
 
   private removeRenderedCode(): void {
@@ -2644,11 +2438,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.bufferAfter = undefined;
 
     this.codeUnified?.remove();
-    this.codeUnified = undefined;
     this.codeDeletions?.remove();
-    this.codeDeletions = undefined;
     this.codeAdditions?.remove();
-    this.codeAdditions = undefined;
+    this.codeColumns.cleanUp();
 
     this.pre?.remove();
     this.pre = undefined;
@@ -2676,6 +2468,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.fileContainer == null) {
       return false;
     }
+    // The placeholder removes the rows the caret sits in. The editor keeps
+    // the focus it had, to put back when the rows render again.
+    this.editor?.__captureFocusForDOMReplacement();
     this.emitPostRender(true);
     this.cleanChildNodes();
 
@@ -2754,9 +2549,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
     this.bufferAfter = undefined;
     this.bufferBefore = undefined;
-    this.codeAdditions = undefined;
-    this.codeDeletions = undefined;
-    this.codeUnified = undefined;
+    this.codeColumns.cleanUp();
     this.errorWrapper = undefined;
     this.headerElement = undefined;
     this.headerPrefix = undefined;
@@ -2970,10 +2763,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.pre == null) {
       this.pre = document.createElement('pre');
       this.appliedPreAttributes = undefined;
-      this.codeUnified = undefined;
-      this.codeDeletions = undefined;
-      this.codeAdditions = undefined;
+      this.codeColumns.cleanUp();
       shadowRoot.appendChild(this.pre);
+      this.managersDirty = true;
     }
     // If we have a new parent container for the pre element, lets go ahead and
     // move it into the new container
@@ -2981,6 +2773,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.editor?.__captureFocusForDOMReplacement();
       shadowRoot.appendChild(this.pre);
       this.appliedPreAttributes = undefined;
+      this.managersDirty = true;
     }
 
     this.placeHolder?.remove();
@@ -2990,9 +2783,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   protected syncCodeNodesFromPre(pre: HTMLPreElement): void {
-    this.codeUnified = undefined;
-    this.codeDeletions = undefined;
-    this.codeAdditions = undefined;
+    this.codeColumns.cleanUp();
     for (const child of Array.from(pre.children)) {
       if (!(child instanceof HTMLElement)) {
         continue;
@@ -3195,6 +2986,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     themeType: ThemeTypes,
     baseThemeType?: 'light' | 'dark'
   ): void {
+    // A result without theme styles, the rows an edit session lays out before
+    // anything is highlighted, keeps the styles already on screen.
+    if (themeStyles === '') {
+      return;
+    }
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
@@ -3274,36 +3070,69 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  // Renders a code column's AST into an existing elements without replacing
-  // the gutter and content parents. Identity matters in edit mode: the content
-  // element is the focused contenteditable, and replacing it ends the
-  // browser's editing session — focus tears down and restores, and iOS
-  // answers every session restart with an animated caret reveal.
-  //
-  // Returns false when the element has no column pair yet (initial render,
-  // or a diff-style switch built a fresh element); the caller then assigns
-  // the full innerHTML.
-  private applyCodeColumnsInPlace(
+  // Writes a column's rows into its code element. The first write creates
+  // the gutter and content elements and fills them. Later writes patch rows
+  // by key, so rows that stayed keep their elements, as does the content
+  // element the editor focuses; `patched` names the rows an edit changed,
+  // when they are the only ones. A new highlight result rewrites every row.
+  // The keys of the rows written are kept for the editor to re-measure.
+  private writeColumn(
     code: HTMLElement,
-    ast: ElementContent[],
-    rowCount: number
-  ): boolean {
-    const columns = this.getColumnPair(code);
+    specs: readonly RowSpec[],
+    patched: readonly RowSpec[] | undefined,
+    { rowCount, allRowsChanged }: HunksRenderResult
+  ): void {
+    let columns = this.getColumnPair(code);
     if (columns == null) {
-      return false;
-    }
-    const gutterChildren = getElementChildren(ast[0]);
-    const contentChildren = getElementChildren(ast[1]);
-    if (gutterChildren == null || contentChildren == null) {
-      return false;
-    }
-    columns.gutter.innerHTML = hastToHtml(gutterChildren);
-    columns.content.innerHTML = hastToHtml(contentChildren);
-    if (rowCount !== this.lastRowCount) {
+      columns = this.createColumns(code, rowCount);
+      this.managersDirty = true;
+    } else if (rowCount !== this.lastRowCount) {
       columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
       columns.content.style.setProperty('grid-row', `span ${rowCount}`);
     }
-    return true;
+    let reconciler = this.columnReconcilers.get(code);
+    if (reconciler == null) {
+      reconciler = new ColumnReconciler(columns.gutter, columns.content);
+      this.columnReconcilers.set(code, reconciler);
+      // Rows already in the column, such as server-rendered markup, stand in
+      // for the specs by position until the reconcile below corrects them.
+      if (!allRowsChanged && columns.content.childElementCount > 0) {
+        reconciler.adopt(specs);
+      }
+    }
+    // Rows written anew carry no selection marks; rows patched in place
+    // keep theirs, so the marks are only rendered again when some were lost.
+    if (allRowsChanged) {
+      reconciler.replaceAll(specs);
+      for (const spec of specs) {
+        this.changedRowKeys.push(spec.key);
+      }
+      this.interactionManager.setSelectionDirty();
+      this.managersDirty = true;
+    } else {
+      this.recordRowsWritten(reconciler.reconcile(specs, patched));
+    }
+  }
+
+  // Drops the rows a column is about to lose, before any column gains rows.
+  private removeStaleRows(
+    code: HTMLElement | undefined,
+    specs: readonly RowSpec[] | undefined
+  ): void {
+    if (code == null || specs == null) return;
+    this.columnReconcilers.get(code)?.removeStale(specs);
+  }
+
+  // Creates the empty gutter and content elements of a code element.
+  private createColumns(code: HTMLElement, rowCount: number): ColumnElements {
+    const gutter = createGutterWrapper();
+    gutter.properties.style = `grid-row: span ${rowCount}`;
+    code.innerHTML = hastToHtml([gutter, createContentColumn([], rowCount)]);
+    const columns = this.getColumnPair(code);
+    if (columns == null) {
+      throw new Error('FileDiff.createColumns: the columns did not parse');
+    }
+    return columns;
   }
 
   private replaceCodeColumns(
@@ -3316,15 +3145,20 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const rowSpan = overflow === 'wrap' ? result.rowCount : undefined;
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
+    this.changedRowKeys = [];
 
     let shouldReplace = false;
-    // Create code elements and insert HTML content
     const codeElements: HTMLElement[] = [];
-    const unifiedAST = this.hunksRenderer.renderCodeAST('unified', result);
-    const deletionsAST = this.hunksRenderer.renderCodeAST('deletions', result);
-    const additionsAST = this.hunksRenderer.renderCodeAST('additions', result);
+    const { unified, deletions, additions } = result.columns;
+    const { patched } = result;
     this.editor?.__captureFocusForDOMReplacement();
-    if (unifiedAST != null) {
+    // A result that names the rows an edit changed moved no row.
+    if (!result.allRowsChanged && patched == null) {
+      this.removeStaleRows(this.codeUnified, unified);
+      this.removeStaleRows(this.codeDeletions, deletions);
+      this.removeStaleRows(this.codeAdditions, additions);
+    }
+    if (unified != null) {
       shouldReplace =
         this.codeUnified == null ||
         this.codeAdditions != null ||
@@ -3342,19 +3176,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         rowSpan,
         containerSize,
       });
-      if (
-        !this.applyCodeColumnsInPlace(
-          this.codeUnified,
-          unifiedAST,
-          result.rowCount
-        )
-      ) {
-        this.codeUnified.innerHTML =
-          this.hunksRenderer.renderPartialHTML(unifiedAST);
-      }
+      this.writeColumn(this.codeUnified, unified, patched?.unified, result);
       codeElements.push(this.codeUnified);
-    } else if (deletionsAST != null || additionsAST != null) {
-      if (deletionsAST != null) {
+    } else if (deletions != null || additions != null) {
+      if (deletions != null) {
         shouldReplace = this.codeDeletions == null || this.codeUnified != null;
 
         // Clean up unified column if necessary
@@ -3367,16 +3192,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           rowSpan,
           containerSize,
         });
-        if (
-          !this.applyCodeColumnsInPlace(
-            this.codeDeletions,
-            deletionsAST,
-            result.rowCount
-          )
-        ) {
-          this.codeDeletions.innerHTML =
-            this.hunksRenderer.renderPartialHTML(deletionsAST);
-        }
+        this.writeColumn(
+          this.codeDeletions,
+          deletions,
+          patched?.deletions,
+          result
+        );
         codeElements.push(this.codeDeletions);
       } else {
         // If we have no deletion column, lets clean it up if it exists
@@ -3384,7 +3205,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.codeDeletions = undefined;
       }
 
-      if (additionsAST != null) {
+      if (additions != null) {
         shouldReplace =
           shouldReplace ||
           this.codeAdditions == null ||
@@ -3400,16 +3221,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           rowSpan,
           containerSize,
         });
-        if (
-          !this.applyCodeColumnsInPlace(
-            this.codeAdditions,
-            additionsAST,
-            result.rowCount
-          )
-        ) {
-          this.codeAdditions.innerHTML =
-            this.hunksRenderer.renderPartialHTML(additionsAST);
-        }
+        this.writeColumn(
+          this.codeAdditions,
+          additions,
+          patched?.additions,
+          result
+        );
         codeElements.push(this.codeAdditions);
       } else {
         // If we have no addition column, lets clean it up if it exists
@@ -3420,667 +3237,35 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // if we get in here, there's no content to render, so lets just clean
       // everything up
       this.codeUnified?.remove();
-      this.codeUnified = undefined;
       this.codeDeletions?.remove();
-      this.codeDeletions = undefined;
       this.codeAdditions?.remove();
-      this.codeAdditions = undefined;
+      this.codeColumns.cleanUp();
     }
 
     if (codeElements.length === 0) {
       pre.textContent = '';
     } else if (shouldReplace) {
       pre.replaceChildren(...codeElements);
+      this.managersDirty = true;
     }
 
     this.lastRowCount = result.rowCount;
   }
 
-  private applyPartialRender({
-    fileDiff,
-    previousRenderRange,
-    renderRange,
-  }: ApplyPartialRenderProps): boolean {
-    const {
-      pre,
-      codeUnified,
-      codeAdditions,
-      codeDeletions,
-      options: { diffStyle = 'split' },
-    } = this;
-    if (
-      pre == null ||
-      // We must have a current and previous render range to do a partial render
-      previousRenderRange == null ||
-      renderRange == null ||
-      // Neither render range may be infinite
-      !Number.isFinite(previousRenderRange.totalLines) ||
-      !Number.isFinite(renderRange.totalLines) ||
-      this.lastRowCount == null
-    ) {
-      return false;
+  // The column the editor types in (additions in split view, else unified)
+  // and the deletions column beside it, from the elements already held.
+  private editorColumns(): EditorColumns | undefined {
+    const code = this.codeAdditions ?? this.codeUnified;
+    const pair = this.getColumnPair(code);
+    if (code == null || pair == null) {
+      return undefined;
     }
-    const codeElements = this.getCodeColumns(
-      diffStyle,
-      codeUnified,
-      codeDeletions,
-      codeAdditions
-    );
-    if (codeElements == null) {
-      return false;
-    }
-
-    const previousStart = previousRenderRange.startingLine;
-    const nextStart = renderRange.startingLine;
-    const previousEnd = previousStart + previousRenderRange.totalLines;
-    const nextEnd = nextStart + renderRange.totalLines;
-
-    const overlapStart = Math.max(previousStart, nextStart);
-    const overlapEnd = Math.min(previousEnd, nextEnd);
-    if (overlapEnd <= overlapStart) {
-      return false;
-    }
-
-    const trimStart = Math.max(0, overlapStart - previousStart);
-    const trimEnd = Math.max(0, previousEnd - overlapEnd);
-
-    const trimResult = this.trimColumns({
-      columns: codeElements,
-      trimStart,
-      trimEnd,
-      previousStart,
-      overlapStart,
-      overlapEnd,
-      diffStyle,
-    });
-    if (trimResult < 0) {
-      throw new Error('FileDiff.applyPartialRender: failed to trim to overlap');
-    }
-
-    if (this.lastRowCount < trimResult) {
-      throw new Error(
-        'FileDiff.applyPartialRender: trimmed beyond DOM row count'
-      );
-    }
-
-    let rowCount = this.lastRowCount - trimResult;
-    const renderChunk = (
-      startingLine: number,
-      totalLines: number
-    ): HunksRenderResult | undefined => {
-      if (totalLines <= 0) {
-        return undefined;
-      }
-      return this.hunksRenderer.renderDiff(fileDiff, {
-        startingLine,
-        totalLines,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
+    return {
+      code,
+      gutter: pair.gutter,
+      content: pair.content,
+      deletions: this.getColumnPair(this.codeDeletions),
     };
-
-    const prependResult = renderChunk(
-      nextStart,
-      Math.max(overlapStart - nextStart, 0)
-    );
-    if (prependResult == null && nextStart < overlapStart) {
-      return false;
-    }
-
-    const appendResult = renderChunk(
-      overlapEnd,
-      Math.max(nextEnd - overlapEnd, 0)
-    );
-    if (appendResult == null && nextEnd > overlapEnd) {
-      return false;
-    }
-
-    const applyChunk = (
-      result: HunksRenderResult | undefined,
-      insertPosition: 'afterbegin' | 'beforeend'
-    ) => {
-      if (result == null) {
-        return;
-      }
-      if (diffStyle === 'unified' && !Array.isArray(codeElements)) {
-        this.insertPartialHTML(diffStyle, codeElements, result, insertPosition);
-      } else if (diffStyle === 'split' && Array.isArray(codeElements)) {
-        this.insertPartialHTML(diffStyle, codeElements, result, insertPosition);
-      } else {
-        throw new Error(
-          'FileDiff.applyPartialRender.applyChunk: invalid chunk application'
-        );
-      }
-      rowCount += result.rowCount;
-      this.adoptRenderData(result.fileDiff);
-    };
-
-    this.cleanupErrorWrapper();
-    applyChunk(prependResult, 'afterbegin');
-    applyChunk(appendResult, 'beforeend');
-
-    if (this.lastRowCount !== rowCount) {
-      this.applyRowSpan(diffStyle, codeElements, rowCount);
-      this.lastRowCount = rowCount;
-    }
-
-    return true;
-  }
-
-  private insertPartialHTML(
-    diffStyle: 'unified',
-    columns: ColumnElements,
-    result: HunksRenderResult,
-    insertPosition: 'afterbegin' | 'beforeend'
-  ): void;
-  private insertPartialHTML(
-    diffStyle: 'split',
-    columns: [ColumnElements | undefined, ColumnElements | undefined],
-    result: HunksRenderResult,
-    insertPosition: 'afterbegin' | 'beforeend'
-  ): void;
-  private insertPartialHTML(
-    diffStyle: 'split' | 'unified',
-    columns:
-      | [ColumnElements | undefined, ColumnElements | undefined]
-      | ColumnElements,
-    result: HunksRenderResult,
-    insertPosition: 'afterbegin' | 'beforeend'
-  ): void {
-    if (diffStyle === 'unified' && !Array.isArray(columns)) {
-      const unifiedAST = this.hunksRenderer.renderCodeAST('unified', result);
-      this.renderPartialColumn(columns, unifiedAST, insertPosition);
-    } else if (diffStyle === 'split' && Array.isArray(columns)) {
-      const deletionsAST = this.hunksRenderer.renderCodeAST(
-        'deletions',
-        result
-      );
-      const additionsAST = this.hunksRenderer.renderCodeAST(
-        'additions',
-        result
-      );
-      this.renderPartialColumn(columns[0], deletionsAST, insertPosition);
-      this.renderPartialColumn(columns[1], additionsAST, insertPosition);
-    } else {
-      throw new Error(
-        'FileDiff.insertPartialHTML: Invalid argument composition'
-      );
-    }
-  }
-
-  // fast refresh diff view via updating the `data-line-type` after an edit.
-  // only for split view.
-  private refreshSplitDiffView(): void {
-    const fileDiff = this.getWorkingDiff();
-    if (this.options.diffStyle !== 'split' || fileDiff == null) {
-      return;
-    }
-
-    const hunksResult = this.hunksRenderer.renderDiff(
-      fileDiff,
-      this.renderRange
-    );
-    if (hunksResult == null) {
-      return;
-    }
-
-    const columns = this.getCodeColumns(
-      'split',
-      this.codeUnified,
-      this.codeDeletions,
-      this.codeAdditions
-    );
-    if (!Array.isArray(columns)) {
-      return;
-    }
-
-    const applyLineType = (
-      type: 'deletions' | 'additions',
-      column: ColumnElements | undefined
-    ) => {
-      if (column == null) {
-        return;
-      }
-      const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
-      const gutterChildren = getElementChildren(ast?.[0]);
-      const contentChildren = getElementChildren(ast?.[1]);
-      for (const [el, astChildren] of [
-        [column.gutter, gutterChildren],
-        [column.content, contentChildren],
-      ] as const) {
-        if (
-          astChildren != null &&
-          el.childElementCount === astChildren.length
-        ) {
-          for (let i = 0; i < astChildren.length; i++) {
-            const gutterElement = el.children[i] as HTMLElement;
-            const gutterChild = astChildren[i] as HASTElement;
-            const lineType = gutterChild.properties['data-line-type'] as
-              | string
-              | undefined;
-            if (
-              lineType != null &&
-              gutterElement.dataset.lineType !== lineType
-            ) {
-              gutterElement.dataset.lineType = lineType;
-            }
-          }
-        }
-      }
-    };
-
-    applyLineType('deletions', columns[0]);
-    applyLineType('additions', columns[1]);
-    this.adoptRenderData(hunksResult.fileDiff);
-  }
-
-  // full diff view re-rendering
-  // only for unified view.
-  private refreshUnifiedDiffView(): void {
-    const fileDiff = this.getWorkingDiff();
-    if (this.options.diffStyle !== 'unified' || fileDiff == null) {
-      return;
-    }
-
-    const hunksResult = this.hunksRenderer.renderDiff(
-      fileDiff,
-      this.renderRange
-    );
-    if (hunksResult == null) {
-      return;
-    }
-
-    const columns = this.getCodeColumns(
-      'unified',
-      this.codeUnified,
-      this.codeDeletions,
-      this.codeAdditions
-    );
-    if (columns == null || Array.isArray(columns)) {
-      return;
-    }
-
-    const ast = this.hunksRenderer.renderCodeAST('unified', hunksResult);
-    const gutterChildren = getElementChildren(ast?.[0]);
-    const contentChildren = getElementChildren(ast?.[1]);
-    const applyColumns = () => {
-      for (const [el, astChildren] of [
-        [columns.gutter, gutterChildren],
-        [columns.content, contentChildren],
-      ] as const) {
-        if (astChildren != null) {
-          el.innerHTML = hastToHtml(astChildren);
-        }
-      }
-
-      if (hunksResult.rowCount !== this.lastRowCount) {
-        this.applyRowSpan('unified', columns, hunksResult.rowCount);
-        this.lastRowCount = hunksResult.rowCount;
-      }
-      this.adoptRenderData(hunksResult.fileDiff);
-    };
-    if (this.shouldGuardRebuildScroll()) {
-      guardWebKitScrollDuringRebuild(this.pre, applyColumns);
-    } else {
-      applyColumns();
-    }
-    this.renderSeparators(hunksResult.hunkData);
-
-    this.managersDirty = true;
-    this.flushManagers();
-
-    // sync the render view to the editor
-    this.syncRenderViewToEditor();
-  }
-
-  private renderPartialColumn(
-    column: ColumnElements | undefined,
-    ast: ElementContent[] | undefined,
-    insertPosition: 'afterbegin' | 'beforeend'
-  ) {
-    if (column == null || ast == null) {
-      return;
-    }
-    const gutterChildren = getElementChildren(ast[0]);
-    const contentChildren = getElementChildren(ast[1]);
-    if (gutterChildren == null || contentChildren == null) {
-      throw new Error('FileDiff.insertPartialHTML: Unexpected AST structure');
-    }
-    const firstHASTElement = contentChildren.at(0);
-    if (
-      insertPosition === 'beforeend' &&
-      firstHASTElement?.type === 'element' &&
-      typeof firstHASTElement.properties['data-buffer-size'] === 'number'
-    ) {
-      this.mergeBuffersIfNecessary(
-        firstHASTElement.properties['data-buffer-size'],
-        column.content.children[column.content.children.length - 1],
-        column.gutter.children[column.gutter.children.length - 1],
-        gutterChildren,
-        contentChildren,
-        true
-      );
-    }
-    const lastHASTElement = contentChildren.at(-1);
-    if (
-      insertPosition === 'afterbegin' &&
-      lastHASTElement?.type === 'element' &&
-      typeof lastHASTElement.properties['data-buffer-size'] === 'number'
-    ) {
-      this.mergeBuffersIfNecessary(
-        lastHASTElement.properties['data-buffer-size'],
-        column.content.children[0],
-        column.gutter.children[0],
-        gutterChildren,
-        contentChildren,
-        false
-      );
-    }
-
-    column.gutter.insertAdjacentHTML(
-      insertPosition,
-      this.hunksRenderer.renderPartialHTML(gutterChildren)
-    );
-    column.content.insertAdjacentHTML(
-      insertPosition,
-      this.hunksRenderer.renderPartialHTML(contentChildren)
-    );
-  }
-
-  private mergeBuffersIfNecessary(
-    adjustmentSize: number,
-    contentElement: Element,
-    gutterElement: Element,
-    gutterChildren: ElementContent[],
-    contentChildren: ElementContent[],
-    fromStart: boolean
-  ) {
-    if (
-      !(contentElement instanceof HTMLElement) ||
-      !(gutterElement instanceof HTMLElement)
-    ) {
-      return;
-    }
-    const currentSize = this.getBufferSize(contentElement.dataset);
-    if (currentSize == null) {
-      return;
-    }
-    if (fromStart) {
-      gutterChildren.shift();
-      contentChildren.shift();
-    } else {
-      gutterChildren.pop();
-      contentChildren.pop();
-    }
-    this.updateBufferSize(contentElement, currentSize + adjustmentSize);
-    this.updateBufferSize(gutterElement, currentSize + adjustmentSize);
-  }
-
-  private applyRowSpan(
-    diffStyle: 'split' | 'unified',
-    columns:
-      | [ColumnElements | undefined, ColumnElements | undefined]
-      | ColumnElements,
-    rowCount: number
-  ): void {
-    const applySpan = (column: ColumnElements | undefined) => {
-      if (column == null) {
-        return;
-      }
-      column.gutter.style.setProperty('grid-row', `span ${rowCount}`);
-      column.content.style.setProperty('grid-row', `span ${rowCount}`);
-    };
-    if (diffStyle === 'unified' && !Array.isArray(columns)) {
-      applySpan(columns);
-    } else if (diffStyle === 'split' && Array.isArray(columns)) {
-      applySpan(columns[0]);
-      applySpan(columns[1]);
-    } else {
-      throw new Error('dun fuuuuked up');
-    }
-  }
-
-  private trimColumnRows(
-    columns: ColumnElements | undefined,
-    preTrimCount: number,
-    postTrimStart: number
-  ): number {
-    let visibleLineIndex = 0;
-    let rowCount = 0;
-    let rowIndex = 0;
-    let pendingMetadataTrim = false;
-    const hasPostTrim = postTrimStart >= 0;
-
-    if (columns == null) {
-      return 0;
-    }
-    const contentChildren = Array.from(columns.content.children);
-    const gutterChildren = Array.from(columns.gutter.children);
-    if (contentChildren.length !== gutterChildren.length) {
-      throw new Error('FileDiff.trimColumnRows: columns do not match');
-    }
-
-    while (rowIndex < contentChildren.length) {
-      if (preTrimCount <= 0 && !hasPostTrim && !pendingMetadataTrim) {
-        break;
-      }
-      const gutterElement = gutterChildren[rowIndex];
-      const contentElement = contentChildren[rowIndex];
-      rowIndex++;
-
-      if (
-        !(gutterElement instanceof HTMLElement) ||
-        !(contentElement instanceof HTMLElement)
-      ) {
-        console.error({ gutterElement, contentElement });
-        throw new Error('FileDiff.trimColumnRows: invalid row elements');
-      }
-
-      if (pendingMetadataTrim) {
-        pendingMetadataTrim = false;
-        if (
-          (gutterElement.dataset.gutterBuffer === 'annotation' &&
-            'lineAnnotation' in contentElement.dataset) ||
-          (gutterElement.dataset.gutterBuffer === 'metadata' &&
-            'noNewline' in contentElement.dataset)
-        ) {
-          gutterElement.remove();
-          contentElement.remove();
-          rowCount++;
-          continue;
-        }
-      }
-
-      // If we found a line element, lets trim it if necessary
-      if (
-        'lineIndex' in gutterElement.dataset &&
-        'lineIndex' in contentElement.dataset
-      ) {
-        if (
-          preTrimCount > 0 ||
-          (hasPostTrim && visibleLineIndex >= postTrimStart)
-        ) {
-          gutterElement.remove();
-          contentElement.remove();
-          if (preTrimCount > 0) {
-            preTrimCount--;
-            if (preTrimCount === 0) {
-              pendingMetadataTrim = true;
-            }
-          }
-          rowCount++;
-        }
-        visibleLineIndex++;
-        continue;
-      }
-
-      // Separators should be removed, but don't count towards line indices
-      if (
-        'separator' in gutterElement.dataset &&
-        'separator' in contentElement.dataset
-      ) {
-        if (
-          preTrimCount > 0 ||
-          (hasPostTrim && visibleLineIndex >= postTrimStart)
-        ) {
-          gutterElement.remove();
-          contentElement.remove();
-          rowCount++;
-        }
-        continue;
-      }
-
-      // Annotations should be removed, but don't count towards line indices
-      if (
-        gutterElement.dataset.gutterBuffer === 'annotation' &&
-        'lineAnnotation' in contentElement.dataset
-      ) {
-        if (
-          preTrimCount > 0 ||
-          (hasPostTrim && visibleLineIndex >= postTrimStart)
-        ) {
-          gutterElement.remove();
-          contentElement.remove();
-          rowCount++;
-        }
-        continue;
-      }
-
-      if (
-        gutterElement.dataset.gutterBuffer === 'metadata' &&
-        'noNewline' in contentElement.dataset
-      ) {
-        if (
-          preTrimCount > 0 ||
-          (hasPostTrim && visibleLineIndex >= postTrimStart)
-        ) {
-          gutterElement.remove();
-          contentElement.remove();
-          rowCount++;
-        }
-        continue;
-      }
-
-      if (
-        gutterElement.dataset.gutterBuffer === 'buffer' &&
-        'contentBuffer' in contentElement.dataset
-      ) {
-        const totalRows = this.getBufferSize(contentElement.dataset);
-        if (totalRows == null) {
-          throw new Error('FileDiff.trimColumnRows: invalid element');
-        }
-        if (preTrimCount > 0) {
-          const rowsToRemove = Math.min(preTrimCount, totalRows);
-          const newSize = totalRows - rowsToRemove;
-          if (newSize > 0) {
-            this.updateBufferSize(gutterElement, newSize);
-            this.updateBufferSize(contentElement, newSize);
-            rowCount += rowsToRemove;
-          } else {
-            gutterElement.remove();
-            contentElement.remove();
-            rowCount += totalRows;
-          }
-          preTrimCount -= rowsToRemove;
-          if (preTrimCount === 0 && newSize === 0) {
-            pendingMetadataTrim = true;
-          }
-        }
-        // If we are in a post clip era...
-        else if (hasPostTrim) {
-          const bufferStart = visibleLineIndex;
-          const bufferEnd = visibleLineIndex + totalRows - 1;
-          if (postTrimStart <= bufferStart) {
-            gutterElement.remove();
-            contentElement.remove();
-            rowCount += totalRows;
-          } else if (postTrimStart <= bufferEnd) {
-            const rowsToRemove = bufferEnd - postTrimStart + 1;
-            const newSize = totalRows - rowsToRemove;
-            this.updateBufferSize(gutterElement, newSize);
-            this.updateBufferSize(contentElement, newSize);
-            rowCount += rowsToRemove;
-          }
-        }
-        visibleLineIndex += totalRows;
-        continue;
-      }
-
-      console.error({ gutterElement, contentElement });
-      throw new Error('FileDiff.trimColumnRows: unknown row elements');
-    }
-
-    return rowCount;
-  }
-
-  private trimColumns({
-    columns,
-    diffStyle,
-    overlapEnd,
-    overlapStart,
-    previousStart,
-    trimEnd,
-    trimStart,
-    // NOTE(amadeus): If we return -1 it means something went wrong
-    // with the trim...
-    // oxlint-disable-next-line no-redundant-type-constituents
-  }: TrimColumnsToOverlapProps): number | -1 {
-    const preTrimCount = Math.max(0, overlapStart - previousStart);
-    const postTrimStart = overlapEnd - previousStart;
-    if (postTrimStart < 0) {
-      throw new Error('FileDiff.trimColumns: overlap ends before previous');
-    }
-    const shouldTrimStart = trimStart > 0;
-    const shouldTrimEnd = trimEnd > 0;
-    if (!shouldTrimStart && !shouldTrimEnd) {
-      return 0;
-    }
-    const effectivePreTrimCount = shouldTrimStart ? preTrimCount : 0;
-    const effectivePostTrimStart = shouldTrimEnd ? postTrimStart : -1;
-
-    if (diffStyle === 'unified' && !Array.isArray(columns)) {
-      const removedRows = this.trimColumnRows(
-        columns,
-        effectivePreTrimCount,
-        effectivePostTrimStart
-      );
-      return removedRows;
-    } else if (diffStyle === 'split' && Array.isArray(columns)) {
-      const deletionsTrim = this.trimColumnRows(
-        columns[0],
-        effectivePreTrimCount,
-        effectivePostTrimStart
-      );
-      const additionsTrim = this.trimColumnRows(
-        columns[1],
-        effectivePreTrimCount,
-        effectivePostTrimStart
-      );
-      // We should avoid the trim validation if we are split but
-      // there's only one side
-      if (
-        columns[0] != null &&
-        columns[1] != null &&
-        deletionsTrim !== additionsTrim
-      ) {
-        throw new Error('FileDiff.trimColumns: split columns out of sync');
-      }
-      return columns[0] != null ? deletionsTrim : additionsTrim;
-    } else {
-      console.error({ diffStyle, columns });
-      throw new Error('FileDiff.trimColumns: Invalid columns for diffType');
-    }
-  }
-
-  private getBufferSize(properties: DOMStringMap): number | undefined {
-    const parsed = Number.parseInt(properties?.bufferSize ?? '', 10);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-
-  private updateBufferSize(element: HTMLElement, size: number): void {
-    element.dataset.bufferSize = `${size}`;
-    element.style.setProperty('grid-row', `span ${size}`);
-    element.style.setProperty('min-height', `calc(${size} * 1lh)`);
   }
 
   private getColumnPair(
@@ -4100,26 +3285,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return undefined;
     }
     return { gutter, content };
-  }
-
-  private getCodeColumns(
-    diffStyle: 'split' | 'unified',
-    codeUnified: HTMLElement | undefined,
-    codeDeletions: HTMLElement | undefined,
-    codeAdditions: HTMLElement | undefined
-  ):
-    | [ColumnElements | undefined, ColumnElements | undefined]
-    | ColumnElements
-    | undefined {
-    if (diffStyle === 'unified') {
-      return this.getColumnPair(codeUnified);
-    } else {
-      const deletions = this.getColumnPair(codeDeletions);
-      const additions = this.getColumnPair(codeAdditions);
-      return deletions != null || additions != null
-        ? [deletions, additions]
-        : undefined;
-    }
   }
 
   protected updateBuffers(renderRange: RenderRange): void {
@@ -4184,7 +3349,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   protected applyPreNodeAttributes(
     pre: HTMLPreElement,
-    { additionsContentAST, deletionsContentAST, totalLines }: HunksRenderResult,
+    { columns, totalLines }: HunksRenderResult,
     customProperties?: CustomPreProperties
   ): void {
     const {
@@ -4203,7 +3368,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       split:
         diffStyle === 'unified'
           ? false
-          : additionsContentAST != null && deletionsContentAST != null,
+          : columns.additions != null && columns.deletions != null,
       totalLines,
       customProperties,
     };
@@ -4299,13 +3464,4 @@ function shouldRenderHeader(
   disableFileHeader = false
 ): boolean {
   return headerElement == null && hasContent && !disableFileHeader;
-}
-
-function getElementChildren(
-  node: ElementContent | undefined
-): ElementContent[] | undefined {
-  if (node == null || node.type !== 'element') {
-    return undefined;
-  }
-  return node.children ?? [];
 }

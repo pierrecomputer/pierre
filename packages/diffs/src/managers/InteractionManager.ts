@@ -11,6 +11,7 @@ import type {
   SelectionSide,
   TokenEventBase,
 } from '../types';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
@@ -281,6 +282,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private proposedSelectedRange: SelectedLineRange | null | undefined;
   private renderedSelectedLinesState: LineRenderState | undefined;
   private renderedEditorActiveLineState: LineRenderState | undefined;
+  // The elements carrying each mark, so clearing them never scans the tree.
+  // Undefined until the first render, when markup may already carry marks.
+  private markedSelectedElements: Element[] | undefined;
+  private markedEditorActiveElements: Element[] | undefined;
   private selectionAnchor: SelectionPoint | undefined;
   private pointerSession: PointerSession = { mode: 'idle' };
 
@@ -289,8 +294,16 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     private options: InteractionManagerOptions<TMode>
   ) {}
 
+  // New options take effect on the pre already set up; unchanged options are
+  // a no-op.
   setOptions(options: InteractionManagerOptions<TMode>): void {
+    if (areObjectsEqual(this.options, options)) {
+      return;
+    }
     this.options = options;
+    if (this.pre != null) {
+      this.setup(this.pre);
+    }
   }
 
   cleanUp(): void {
@@ -314,11 +327,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.interactiveLinesAttr = false;
     this.interactiveLineNumbersAttr = false;
     this.hasPointerListeners = false;
+    this.markedSelectedElements = undefined;
+    this.markedEditorActiveElements = undefined;
     this.setSelectionDirty();
   }
 
+  // Rows keep the selection marks written on them; the component calls
+  // `setSelectionDirty` when a render wrote rows that have none.
   setup(pre: HTMLPreElement): void {
-    this.setSelectionDirty();
     const { usesCustomGutterUtility = false, enableGutterUtility = false } =
       this.options;
 
@@ -1739,16 +1755,15 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       columns.some((column) => column.renderEditorActiveLine);
 
     if (selectedLinesChanged) {
-      for (const element of this.pre.querySelectorAll('[data-selected-line]')) {
-        element.removeAttribute('data-selected-line');
-      }
+      this.clearMarks('data-selected-line', this.markedSelectedElements);
+      this.markedSelectedElements = [];
     }
     if (editorActiveLineChanged) {
-      for (const element of this.pre.querySelectorAll(
-        '[data-editor-active-line]'
-      )) {
-        element.removeAttribute('data-editor-active-line');
-      }
+      this.clearMarks(
+        'data-editor-active-line',
+        this.markedEditorActiveElements
+      );
+      this.markedEditorActiveElements = [];
     }
 
     const selectedFirst =
@@ -1800,11 +1815,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
               : lineIndex === selectedLast
                 ? 'last'
                 : '';
-          gutterElement.setAttribute('data-selected-line', attributeValue);
+          this.markSelected(gutterElement, attributeValue);
           // A number-only highlight marks just the gutter number, leaving the
           // line background and any annotation rows untouched.
           if (!selectedLines.lineNumberOnly) {
-            contentElement.setAttribute('data-selected-line', attributeValue);
+            this.markSelected(contentElement, attributeValue);
             if (
               gutterElement.nextSibling instanceof HTMLElement &&
               contentElement.nextSibling instanceof HTMLElement &&
@@ -1817,27 +1832,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             ) {
               if (selectedIsSingle) {
                 attributeValue = 'last';
-                contentElement.setAttribute('data-selected-line', 'first');
+                this.markSelected(contentElement, 'first');
               } else if (lineIndex === selectedFirst) {
                 attributeValue = '';
               } else if (lineIndex === selectedLast) {
-                contentElement.setAttribute('data-selected-line', '');
+                this.markSelected(contentElement, '');
               }
-              contentElement.nextSibling.setAttribute(
-                'data-selected-line',
-                attributeValue
-              );
-              gutterElement.nextSibling.setAttribute(
-                'data-selected-line',
-                attributeValue
-              );
+              this.markSelected(contentElement.nextSibling, attributeValue);
+              this.markSelected(gutterElement.nextSibling, attributeValue);
             }
           }
         }
         if (renderEditorActiveLine && lineIndex === editorLineIndex) {
-          gutterElement.setAttribute('data-editor-active-line', '');
+          this.markEditorActive(gutterElement);
           if (!editorActiveLine.lineNumberOnly) {
-            contentElement.setAttribute('data-editor-active-line', '');
+            this.markEditorActive(contentElement);
           }
         }
       }
@@ -1850,6 +1859,26 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       this.renderedEditorActiveLineState = editorActiveLine;
     }
   };
+
+  // Removes a mark from the elements carrying it: the ones marked here, or,
+  // before anything was marked, whatever the markup came with.
+  private clearMarks(attribute: string, marked: Element[] | undefined): void {
+    const elements =
+      marked ?? this.pre?.querySelectorAll(`[${attribute}]`) ?? [];
+    for (const element of elements) {
+      element.removeAttribute(attribute);
+    }
+  }
+
+  private markSelected(element: Element, value: string): void {
+    element.setAttribute('data-selected-line', value);
+    this.markedSelectedElements?.push(element);
+  }
+
+  private markEditorActive(element: Element): void {
+    element.setAttribute('data-editor-active-line', '');
+    this.markedEditorActiveElements?.push(element);
+  }
 
   private notifySelectionCommitted(range: SelectedLineRange | null): void {
     this.options.onLineSelected?.(range);

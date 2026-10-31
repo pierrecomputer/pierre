@@ -1,21 +1,16 @@
+import type { RetainedDiffSessionSnapshot } from '../model/types';
 import type {
-  ChangeTypes,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
-  Hunk,
+  HighlightedToken,
   LineAnnotation,
   SelectionSide,
 } from '../types';
 import type { Editor, EditorOptions } from './editor';
 import type { TextDocument } from './textDocument';
 
-/** FileDiff baseline and hunk state needed to resume an editing session. */
-export interface RetainedDiffSessionSnapshot {
-  oldFile: { name: string; lines: string[] } | null;
-  type: ChangeTypes;
-  hunks: Hunk[];
-}
+export type { RetainedDiffSessionSnapshot };
 
 /** @internal Current diff state and whether the document changed while editing. */
 export interface CapturedDiffSessionState {
@@ -138,7 +133,7 @@ export type EditorLineAnnotation<
   EType extends EditorType = EditorType,
   LAnnotation = unknown,
 > = EType extends 'file'
-  ? LineAnnotation<LAnnotation> & { side?: never }
+  ? LineAnnotation<LAnnotation>
   : DiffLineAnnotation<LAnnotation>;
 
 /** The document and normalized edits reported after an editor change. */
@@ -334,3 +329,27 @@ export type EditorInitialState<
   : { type: 'file-diff' } & Partial<
       Omit<FileDiffEditState<LAnnotation>, 'type'>
     >;
+
+/** What the editor hands a component along with a document change. */
+export interface ApplyChangeOptions<EType extends EditorType, LAnnotation> {
+  /** Tokens the editor produced for the lines the change touched. */
+  tokens?: ReadonlyMap<number, HighlightedToken[]>;
+  /** The line annotations, already shifted for the change. */
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
+}
+
+/**
+ * The code column the editor types in, with its gutter and content cells'
+ * parents, and the old-side column of a split diff when there is one.
+ */
+export interface EditorColumns {
+  code: HTMLElement;
+  gutter: HTMLElement;
+  content: HTMLElement;
+  deletions: { gutter: HTMLElement; content: HTMLElement } | undefined;
+}
+
+export interface ApplyChangeResult {
+  /** Document lines whose rows were rebuilt, so the editor re-measures them. */
+  rebuiltLines: number[];
+}

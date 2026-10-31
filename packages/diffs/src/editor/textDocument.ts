@@ -1,5 +1,10 @@
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
+  type LineEnding,
+  lineEndingOf,
+  normalizeLineBreaks,
+} from '../utils/lineEndings';
+import {
   coalesceEditStackEntries,
   createEditStackEntry,
   EditStack,
@@ -75,7 +80,10 @@ export class TextDocument<
   #version: number;
   #pieceTable: PieceTable;
   #editStack: EditStack<EType, LAnnotation>;
-  #eol: '\n' | '\r\n' | '\r';
+  #eol: LineEnding;
+  // The whole text as last read, with the file's line ending. Dropped by any
+  // change to the text or to the ending.
+  #text: string | undefined;
 
   constructor(
     uri: string,
@@ -83,30 +91,18 @@ export class TextDocument<
     languageId = 'text',
     version = 0,
     editStack: EditStack<EType, LAnnotation> = new EditStack(),
-    eol?: '\n' | '\r\n' | '\r'
+    eol?: LineEnding
   ) {
     this.#uri = new URL(uri, 'file://').toString();
     this.#languageId = languageId;
     this.#version = version;
-    this.#pieceTable = new PieceTable(text);
+    // The document keeps one kind of line break, `\n`. The file's own line
+    // ending, taken from its first line break, is put back on the way out,
+    // so a file keeps its convention while every line break inside is one
+    // character. Defaults to Unix `\n` when the text has no line break.
+    this.#eol = eol ?? lineEndingOf(text);
+    this.#pieceTable = new PieceTable(normalizeLineBreaks(text));
     this.#editStack = editStack;
-
-    // The line ending the document uses, detected once from its first line. Lets
-    // inserted or pasted text match the rest of the file instead of leaving
-    // mixed endings behind and keeps that convention stable as the file is
-    // edited. Defaults to Unix `\n` when the initial text has no line break.
-    if (eol != null) {
-      this.#eol = eol;
-    } else {
-      const firstLineBreak = this.#pieceTable.getLineText(0, true);
-      if (firstLineBreak.endsWith('\r\n')) {
-        this.#eol = '\r\n';
-      } else if (firstLineBreak.endsWith('\r')) {
-        this.#eol = '\r';
-      } else {
-        this.#eol = '\n';
-      }
-    }
   }
 
   get uri(): string {
@@ -125,7 +121,7 @@ export class TextDocument<
     return this.#pieceTable.lineCount;
   }
 
-  get eol(): '\n' | '\r\n' | '\r' {
+  get eol(): LineEnding {
     return this.#eol;
   }
 
@@ -162,9 +158,11 @@ export class TextDocument<
     return this.#pieceTable.offsetAt(this.normalizePosition(position));
   }
 
+  /** The text, with the file's line ending. */
   getText(range?: Range): string {
     if (range === undefined) {
-      return this.#pieceTable.getText();
+      this.#text ??= this.#withEol(this.#pieceTable.getText());
+      return this.#text;
     }
     // Clamp the range to visible line content before extracting text. A
     // preserved vertical-move "goal column" can leave a selection focus whose
@@ -172,21 +170,39 @@ export class TextDocument<
     // to the line's offset span (which includes the trailing line break) and
     // copy/cut would pull in that newline. Mirrors `offsetAt`, which normalizes
     // positions the same way.
-    return this.#pieceTable.getText({
-      start: this.normalizePosition(range.start),
-      end: this.normalizePosition(range.end),
-    });
+    return this.#withEol(
+      this.#pieceTable.getText({
+        start: this.normalizePosition(range.start),
+        end: this.normalizePosition(range.end),
+      })
+    );
   }
 
+  /** A line's text; with `includeLineBreak`, ending in the file's line ending. */
   getLineText(line: number, includeLineBreak?: boolean): string {
-    return this.#pieceTable.getLineText(line, includeLineBreak);
+    const text = this.#pieceTable.getLineText(line, includeLineBreak);
+    return includeLineBreak === true ? this.#withEol(text) : text;
   }
 
-  // Rewrites every line break in `text` to the document's EOL. Clipboard text
-  // can carry Windows (`\r\n`) or classic-Mac (`\r`) breaks; inserting it
-  // verbatim would leave mixed line endings in a file that uses one style.
+  /**
+   * Takes the line ending of `text` as the file's. The document's own line
+   * breaks stay `\n`; only what leaves the document changes.
+   */
+  adoptLineEnding(text: string): void {
+    this.#eol = lineEndingOf(text);
+    this.#text = undefined;
+  }
+
+  // Rewrites every line break in `text` to the one the document keeps.
+  // Clipboard and file text can carry Windows (`\r\n`) or classic-Mac
+  // (`\r`) breaks.
   normalizeEol(text: string): string {
-    return text.replace(/\r\n|\r|\n/g, this.eol);
+    return normalizeLineBreaks(text);
+  }
+
+  // Puts the file's line ending back into text read from the document.
+  #withEol(text: string): string {
+    return this.#eol === '\n' ? text : text.replaceAll('\n', this.#eol);
   }
 
   getLineLength(line: number, includeLineBreak?: boolean): number {
@@ -427,7 +443,9 @@ export class TextDocument<
     } else if (this.#isInsideSurrogatePair(end)) {
       end++;
     }
-    return { start, end, text: edit.text };
+    // The text goes in with the document's line break, so a resolved edit
+    // is exactly what gets applied, remapped and recorded.
+    return { start, end, text: this.normalizeEol(edit.text) };
   }
 
   // A UTF-16 offset is invalid when it sits between the high and low units of
@@ -459,22 +477,26 @@ export class TextDocument<
   }
 
   #applyResolvedEditsToBuffer(edits: ResolvedTextEdit[]): TextDocumentChange {
-    const previousLineCount = this.#pieceTable.lineCount;
+    const table = this.#pieceTable;
+    const previousLineCount = table.lineCount;
+    const previousLastLineLength = table.getLineLength(previousLineCount - 1);
     const editPositions = this.positionsAt(
       edits.flatMap((edit) => [edit.start, edit.end])
-    );
-    const changedLineRange = this.#computeChangedLineRange(
-      edits,
-      editPositions
     );
     const startPosition = editPositions[0];
     const endPosition = editPositions[editPositions.length - 1];
     const endedAtDocumentEnd =
       endPosition.line === previousLineCount - 1 &&
-      endPosition.character ===
-        this.#pieceTable.getLineLength(endPosition.line);
-    this.#pieceTable.applyEdits(edits);
-    const lineCount = this.#pieceTable.lineCount;
+      endPosition.character === previousLastLineLength;
+    table.applyEdits(edits);
+    this.#text = undefined;
+    const changedLineRange = this.#computeChangedLineRange(
+      edits,
+      editPositions,
+      previousLineCount - 1,
+      previousLastLineLength
+    );
+    const lineCount = table.lineCount;
     const change: TextDocumentChange = {
       changes: edits.map((edit, index) => ({
         ...edit,
@@ -497,9 +519,14 @@ export class TextDocument<
     return change;
   }
 
+  // The lines each edit changed, in the document after the edits. Every line
+  // break is one `\n`, so an edit adds the breaks in its text and removes
+  // the lines it spanned.
   #computeChangedLineRange(
     edits: ResolvedTextEdit[],
-    editPositions: Position[]
+    editPositions: Position[],
+    previousLastLine: number,
+    previousLastLineLength: number
   ): {
     startLine: number;
     endLine: number;
@@ -525,9 +552,6 @@ export class TextDocument<
       endCharacter: number,
       endedAtDocumentEnd: boolean,
     ][] = [];
-    const previousLastLine = this.#pieceTable.lineCount - 1;
-    const previousLastLineLength =
-      this.#pieceTable.getLineLength(previousLastLine);
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
       const editStart = editPositions[i * 2];

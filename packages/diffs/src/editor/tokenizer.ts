@@ -8,8 +8,9 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../types';
+import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import type { TextDocument, TextDocumentChange } from './textDocument';
-import { addEventListener, h } from './utils';
+import { addEventListener } from './utils';
 
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
@@ -31,13 +32,19 @@ export interface EditorTokenizerProps {
 /** Applies editor theme CSS and delegates tokenization to the selected backend. */
 export class EditorTokenizer {
   #highlighter: DiffsHighlighter;
+  readonly #textDocument: TextDocument;
   #tokenizer: DiffsEditorTokenizer;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark' = 'dark';
   #themeName = '';
   #setStyle: EditorTokenizerProps['setStyle'];
+  #style = '';
   #onThemeChange: EditorTokenizerProps['onThemeChange'];
   #disposes?: (() => void)[];
+  // True while the observers from the constructor watch the page's color
+  // scheme and keep `#themeType` current. Otherwise a sync has to read the
+  // document's computed color scheme, which forces a style pass.
+  #followsSystemThemeType = false;
 
   get themeType(): 'light' | 'dark' {
     return this.#themeType;
@@ -102,6 +109,7 @@ export class EditorTokenizer {
         () => observer.disconnect(),
       ];
     }
+    this.#followsSystemThemeType = this.#disposes != null;
     this.#highlighter = highlighter;
     this.#setStyle = setStyle;
     this.#onThemeChange = onThemeChange;
@@ -109,6 +117,7 @@ export class EditorTokenizer {
       typeof theme === 'string' ? theme : theme[themeType],
       typeof theme === 'string' ? undefined : themeType
     );
+    this.#textDocument = textDocument;
     this.#tokenizer = highlighter.createEditorTokenizer({
       textDocument,
       theme: this.#themeName,
@@ -173,6 +182,7 @@ export class EditorTokenizer {
     // A single pinned theme does not follow the themeType option or system
     // scheme flips; its own classification stays authoritative.
     if (typeof theme === 'string') {
+      this.#followsSystemThemeType = false;
       const pinnedThemeType = this.#highlighter.getTheme(theme).type;
       if (theme === this.#themeName && pinnedThemeType === this.#themeType) {
         return;
@@ -180,8 +190,15 @@ export class EditorTokenizer {
       this.#emitThemeChange(theme, pinnedThemeType);
       return;
     }
+    // The document is only read when nothing keeps the type current.
     const nextThemeType =
-      themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
+      themeType !== 'system'
+        ? themeType
+        : this.#followsSystemThemeType
+          ? this.#themeType
+          : this.#resolveSystemThemeType();
+    this.#followsSystemThemeType =
+      themeType === 'system' && this.#disposes != null;
     const nextThemeName = theme[nextThemeType];
     if (
       nextThemeType === this.#themeType &&
@@ -223,7 +240,7 @@ export class EditorTokenizer {
     const infoForeground = colors['editorInfo.foreground'];
     const warningForeground = colors['editorWarning.foreground'];
     const errorForeground = colors['editorError.foreground'];
-    this.#setStyle(`:host {
+    this.#style = `:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-border: ${lineHighlightBorder};
       --diffs-editor-active-line-source-mix: ${activeLineSourceMix};
@@ -236,9 +253,15 @@ export class EditorTokenizer {
       --diffs-editor-info-fg: ${infoForeground ?? 'initial'};
       --diffs-editor-warning-fg: ${warningForeground ?? 'initial'};
       --diffs-editor-error-fg: ${errorForeground ?? 'initial'};
-    }`);
+    }`;
+    this.#setStyle(this.#style);
     this.#themeName = themeName;
     this.#themeType = themeType ?? theme.type;
+  }
+
+  // Writes the theme style again, for a style element created after it.
+  applyStyle(): void {
+    this.#setStyle(this.#style);
   }
 
   cleanUp(): void {
@@ -249,10 +272,9 @@ export class EditorTokenizer {
 
   tokenize(
     change: TextDocumentChange,
-    renderRange?: RenderRange,
-    hostRealignsRows = false
+    renderRange?: RenderRange
   ): Map<number, HighlightedToken[]> {
-    return this.#tokenizer.tokenize(change, renderRange, hostRealignsRows);
+    return this.#tokenizer.tokenize(change, renderRange);
   }
 
   getStringCommentRegexpRangesInLine(
@@ -261,37 +283,39 @@ export class EditorTokenizer {
     return this.#tokenizer.getStringCommentRegexpRangesInLine(lineIndex);
   }
 
-  prebuildStateStack(renderRange?: RenderRange): void {
-    this.#tokenizer.prebuildStateStack(renderRange);
+  // Remembers which lines were last tokenized on demand, and for which
+  // version of the document. flush() tokenizes the whole visible range at
+  // once, which is the right thing when the user scrolls to new lines or
+  // types. It is the wrong thing when a render was triggered by the
+  // background tokenizer handing over a finished batch: that render already
+  // has its tokens, and tokenizing everything else right then would do all
+  // the remaining background work in one blocking pass. So flush() skips the
+  // work when the visible range and the document are the same as last time.
+  #prepared?: { version: number; renderRange: RenderRange | undefined };
+
+  prebuildStateStack(renderRange?: RenderRange, domCurrent = false): void {
+    this.#prepared = { version: this.#textDocument.version, renderRange };
+    this.#tokenizer.prebuildStateStack(renderRange, domCurrent);
   }
 
-  stopBackgroundTokenize(): void {
-    this.#tokenizer.stopBackgroundTokenize();
+  flush(renderRange?: RenderRange): Map<number, HighlightedToken[]> {
+    const version = this.#textDocument.version;
+    const prepared = this.#prepared;
+    if (
+      prepared != null &&
+      prepared.version === version &&
+      areRenderRangesEqual(prepared.renderRange, renderRange)
+    ) {
+      return new Map();
+    }
+    this.#prepared = { version, renderRange };
+    return this.#tokenizer.flush(renderRange);
   }
+
   pauseBackgroundTokenize(): void {
     this.#tokenizer.pauseBackgroundTokenize();
   }
   resumeBackgroundTokenize(): void {
     this.#tokenizer.resumeBackgroundTokenize();
   }
-}
-
-export function renderLineTokens(
-  tokens: Array<HighlightedToken>
-): (HTMLElement | string)[] {
-  return tokens.map(([char, fg, textContent]) => {
-    if (char === 0 && fg === '') {
-      if (textContent === '') {
-        return h('br');
-      }
-      return textContent;
-    }
-    return h('span', {
-      dataset: {
-        char: char.toString(),
-      },
-      style: `color:${fg};`,
-      textContent: textContent,
-    });
-  });
 }

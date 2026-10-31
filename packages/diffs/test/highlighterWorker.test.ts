@@ -102,9 +102,6 @@ describe('real highlighter workers', () => {
         expect(Array.isArray(diff.result.code.additionLines)).toBe(true);
         expect(Array.isArray(diff.result.code.deletionLines)).toBe(true);
         expect(toHtml(diff.result.code.additionLines)).toContain('🌕');
-        expect(toHtml(diff.result.code.additionLines)).toContain(
-          'data-diff-span'
-        );
         await requestWorker(worker, {
           type: 'set-render-options',
           id: 'theme',

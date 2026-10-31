@@ -15,7 +15,7 @@ import type {
 } from '../src/editor/types';
 import type { FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
-import { installDom } from './domHarness';
+import { dispatchScroll, installDom } from './domHarness';
 import { createTestHighlighter } from './editorHighlighter';
 
 function createInitialState(
@@ -36,7 +36,7 @@ function createInitialState(
 
 type TestFile = File<undefined> & {
   attachErrorAfterSync: Error | undefined;
-  codeScrollLeft: number;
+  columnScrollLeft: number;
   completedEditState: FileEditState<undefined> | undefined;
   deferAttachSync: boolean;
   editorViewport: HTMLElement | Document | undefined;
@@ -85,7 +85,7 @@ function createTestFile(
   };
 
   component.attachErrorAfterSync = undefined;
-  component.codeScrollLeft = 0;
+  component.columnScrollLeft = 0;
   component.completedEditState = undefined;
   component.deferAttachSync = false;
   component.editorViewport = undefined;
@@ -111,13 +111,13 @@ function createTestFile(
   });
   component.getEditorViewport = () => component.editorViewport;
 
-  component.getCodeScrollLeft = () => component.codeScrollLeft;
+  component.getCodeScrollLeft = () => component.columnScrollLeft;
   const setCodeScrollLeft = component.setCodeScrollLeft.bind(component);
   component.setCodeScrollLeft = (position) => {
     if (component.stateRestoreError != null) {
       throw component.stateRestoreError;
     }
-    component.codeScrollLeft = position;
+    component.columnScrollLeft = position;
     component.restoredCodeScrollLefts.push(position);
     setCodeScrollLeft(position);
   };
@@ -129,15 +129,24 @@ function createTestFile(
   };
 
   const syncRenderView = (editor: Editor<'file', undefined>) => {
+    const code =
+      fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-code]');
+    const gutter = code?.querySelector<HTMLElement>('[data-gutter]');
+    const content = code?.querySelector<HTMLElement>('[data-content]');
     editor.__syncRenderView({
       highlighter: createTestHighlighter(
         { getLoadedLanguages: () => [] },
         'light'
       ),
       fileContainer,
+      columns:
+        code != null && gutter != null && content != null
+          ? { code, gutter, content, deletions: undefined }
+          : undefined,
       file: currentFile,
       lineAnnotations: undefined,
       renderRange: undefined,
+      domCurrent: false,
     });
   };
 
@@ -340,7 +349,7 @@ describe('Editor state', () => {
         ],
         view: { scrollLeft: 24, scrollTop: 48 },
       });
-      component.codeScrollLeft = 8;
+      component.columnScrollLeft = 8;
       viewport.scrollTop = 16;
       editor.edit(component);
 
@@ -1015,11 +1024,87 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      component.codeScrollLeft = 24;
+      component.columnScrollLeft = 24;
 
       expect(editor.getViewState().view).toEqual({ scrollLeft: 24 });
       component.editorViewport = document;
       expect(editor.getViewState().view).toEqual({ scrollLeft: 24 });
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('binds an owned viewport the host gets after the editor attached', () => {
+    const dom = installDom();
+    const editor = new Editor('file', {
+      ownsVerticalViewport: true,
+    });
+    const component = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+      },
+      { virtualized: true }
+    );
+
+    try {
+      editor.edit(component);
+      expect(editor.getViewState().view).toEqual({ scrollLeft: 0 });
+
+      // The host's virtualizer sets up after the editor attached.
+      const viewport = document.createElement('div');
+      component.editorViewport = viewport;
+      viewport.scrollTop = 600;
+      dispatchScroll(viewport);
+
+      expect(editor.getViewState().view).toEqual({
+        scrollLeft: 0,
+        scrollTop: 600,
+      });
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('restoring a view past the owned viewport keeps the clamped offset', () => {
+    const dom = installDom();
+    const editor = new Editor('file', {
+      ownsVerticalViewport: true,
+    });
+    const component = createTestFile(
+      {
+        name: 'state.ts',
+        contents: 'alpha\nbravo',
+      },
+      { virtualized: true }
+    );
+    const viewport = document.createElement('div');
+    // jsdom never clamps; a browser caps scrollTop at the overflow.
+    let scrollTop = 0;
+    Object.defineProperty(viewport, 'scrollTop', {
+      get: () => scrollTop,
+      set: (position: number) => {
+        scrollTop = Math.min(position, 40);
+      },
+    });
+    component.editorViewport = viewport;
+
+    try {
+      editor.edit(component);
+      editor.setViewState({
+        selections: [],
+        view: { scrollLeft: 0, scrollTop: 800 },
+      });
+
+      expect(viewport.scrollTop).toBe(40);
+      expect(editor.getViewState().view).toEqual({
+        scrollLeft: 0,
+        scrollTop: 40,
+      });
     } finally {
       editor.cleanUp();
       component.cleanUp();
@@ -1044,8 +1129,9 @@ describe('Editor state', () => {
 
     try {
       editor.edit(component);
-      component.codeScrollLeft = 24;
+      component.columnScrollLeft = 24;
       viewport.scrollTop = 48;
+      dispatchScroll(viewport);
 
       expect(editor.getViewState().view).toEqual({
         scrollLeft: 24,
@@ -1071,7 +1157,7 @@ describe('Editor state', () => {
     try {
       editor.setOptions({ ownsVerticalViewport: true });
       editor.edit(component);
-      component.codeScrollLeft = 24;
+      component.columnScrollLeft = 24;
       viewport.scrollTop = 48;
 
       expect(editor.getViewState().view).toEqual({ scrollLeft: 24 });

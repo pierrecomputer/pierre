@@ -1,5 +1,6 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
+import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
@@ -12,6 +13,7 @@ import type {
   PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
+  ScrollRequestResult,
   SelectionSide,
   StickySpecs,
   ThemeTypes,
@@ -37,7 +39,10 @@ import {
   includesFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
+import {
+  type DiffLineMetadata,
+  iterateOverDiff,
+} from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
   getExpandedRegion,
@@ -93,7 +98,7 @@ interface DiffLayoutCache {
   ghostTextRowsByIndex: Map<number, number>;
 }
 
-interface ResetLayoutCacheOptions {
+interface InvalidateLayoutOptions {
   forceSimpleRecompute?: boolean;
   includeEstimatedHeights?: boolean;
   resetRenderRange?: boolean;
@@ -144,6 +149,9 @@ export class VirtualizedFileDiff<
     ghostTextRows: NO_GHOST_TEXT_ROWS,
     ghostTextRowsByIndex: new Map(),
   };
+  // No measured row sits above this index. Only an upper bound: a write
+  // raises it, dropping rows past the end lowers it to the new row count.
+  private highestMeasuredRow = -1;
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
@@ -179,7 +187,8 @@ export class VirtualizedFileDiff<
     }
 
     this.metrics = nextMetrics;
-    this.resetLayoutCache({ includeEstimatedHeights: true });
+    this.resetMeasurements();
+    this.invalidateLayout({ includeEstimatedHeights: true });
   }
 
   override setLineAnnotations(
@@ -203,6 +212,7 @@ export class VirtualizedFileDiff<
       return false;
     }
     super.setLineAnnotations(lineAnnotations);
+    this.managersDirty = true;
     return true;
   }
 
@@ -261,6 +271,18 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
+  // Whether a line has a "No newline" marker row after it. Markers are hidden
+  // while editing.
+  private hasNoNewlineMarker(
+    additionLine: DiffLineMetadata | undefined,
+    deletionLine: DiffLineMetadata | undefined
+  ): boolean {
+    return (
+      this.hunksRenderer.showsNoNewlineMarkers() &&
+      ((additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false))
+    );
+  }
+
   override setOptions(
     options: FileDiffOptions<LAnnotation, Caret> | undefined
   ): void {
@@ -279,7 +301,8 @@ export class VirtualizedFileDiff<
     super.setOptions(options);
 
     if (layoutChanged) {
-      this.resetLayoutCache({
+      this.resetMeasurements();
+      this.invalidateLayout({
         forceSimpleRecompute: true,
         includeEstimatedHeights: hasDiffEstimateOptionChanged(
           previousOptions,
@@ -307,34 +330,59 @@ export class VirtualizedFileDiff<
     super.setThemeType(themeType);
   }
 
-  private resetLayoutCache({
-    forceSimpleRecompute = false,
-    includeEstimatedHeights = false,
-    resetRenderRange = true,
-  }: ResetLayoutCacheOptions = {}): void {
-    this.layoutDirty = true;
+  // Drops what was measured from the DOM: row heights, the ghost rows
+  // folded into them and the file annotation's height. The next renders
+  // measure again.
+  private resetMeasurements(): void {
     this.cache.fileAnnotationHeight = 0;
     this.cache.heightDeltas.clear();
     this.cache.measuredHeightDeltaTotal = 0;
+    this.highestMeasuredRow = -1;
     this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
     if (this.cache.ghostTextRowsByIndex.size > 0) {
       this.cache.ghostTextRowsByIndex.clear();
     }
-    this.invalidateDerivedLayoutCache(
-      includeEstimatedHeights,
-      resetRenderRange
-    );
-    // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
-    // at the same time, so we shouldn't trigger this there.
-    if (forceSimpleRecompute && this.isSimpleMode()) {
-      this.computeApproximateSize();
-    }
   }
 
-  private invalidateDerivedLayoutCache(
-    includeEstimatedHeights: boolean,
-    resetRenderRange = true
-  ): void {
+  // A row an edit removed leaves its measurement at an index nothing renders
+  // again, so it would stay in the height total; those are dropped here, by
+  // probing down from the highest measured row to the new row count, so the
+  // work is the rows removed past the end, not the rows measured. The row
+  // count comes from the diff itself, since the cached one is the old.
+  private dropMeasurementsPastEnd(): void {
+    const fileDiff = this.getRenderedDiff();
+    if (fileDiff == null) {
+      return;
+    }
+    const diffStyle = this.getDiffStyle();
+    const rowCount = Math.max(
+      this.getExpandedLineCount(fileDiff, diffStyle),
+      diffStyle === 'split'
+        ? fileDiff.splitLineCount
+        : fileDiff.unifiedLineCount,
+      fileDiff.additionLines.length,
+      fileDiff.deletionLines.length
+    );
+    const { heightDeltas, ghostTextRowsByIndex } = this.cache;
+    for (let row = this.highestMeasuredRow; row >= rowCount; row--) {
+      const delta = heightDeltas.get(row);
+      if (delta != null) {
+        heightDeltas.delete(row);
+        this.cache.measuredHeightDeltaTotal -= delta;
+      }
+      ghostTextRowsByIndex.delete(row);
+    }
+    this.highestMeasuredRow = Math.min(this.highestMeasuredRow, rowCount - 1);
+  }
+
+  // The rows moved or the layout inputs changed: positions, row counts and,
+  // when asked, the estimated heights are computed again from the
+  // measurements kept.
+  private invalidateLayout({
+    forceSimpleRecompute = false,
+    includeEstimatedHeights = false,
+    resetRenderRange = true,
+  }: InvalidateLayoutOptions = {}): void {
     this.layoutDirty = true;
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
@@ -348,6 +396,11 @@ export class VirtualizedFileDiff<
     }
     if (this.renderRange != null && resetRenderRange) {
       this.renderRange = undefined;
+    }
+    // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
+    // at the same time, so we shouldn't trigger this there.
+    if (forceSimpleRecompute && this.isSimpleMode()) {
+      this.computeApproximateSize();
     }
   }
 
@@ -397,6 +450,7 @@ export class VirtualizedFileDiff<
         heightDeltas.delete(rowIndex);
       } else {
         heightDeltas.set(rowIndex, nextDelta);
+        this.highestMeasuredRow = Math.max(this.highestMeasuredRow, rowIndex);
       }
       this.cache.measuredHeightDeltaTotal += delta;
       changed = true;
@@ -527,6 +581,10 @@ export class VirtualizedFileDiff<
           this.cache.heightDeltas.delete(lineIndex);
         } else {
           this.cache.heightDeltas.set(lineIndex, nextDelta);
+          this.highestMeasuredRow = Math.max(
+            this.highestMeasuredRow,
+            lineIndex
+          );
         }
       }
     }
@@ -547,13 +605,29 @@ export class VirtualizedFileDiff<
     return this.render();
   };
 
-  // Virtualized renders bypass FileDiff's queued render handler. Apply line
-  // state deferred during the refresh once managers target the rebuilt rows.
-  public override flushManagers(): void {
-    super.flushManagers();
-    if (this.lineStateRefreshPending) {
-      this.flushDeferredLineState();
+  // A structural change (line count or collapsed regions) also moves the
+  // rows below and the file's height, so the layout caches are invalidated
+  // with the render; a released item reports its new height from the next
+  // layout pass. Either way the render itself runs in the virtualizer's frame.
+  protected override renderChange(structural: boolean): void {
+    if (structural) {
+      this.escalateEditSessionRender('change');
+    } else {
+      this.rerender();
     }
+  }
+
+  public override applyChange(
+    document: TextDocument<'file-diff', LAnnotation>,
+    change: TextDocumentChange,
+    options?: ApplyChangeOptions<'file-diff', LAnnotation>
+  ): ApplyChangeResult {
+    // CodeView anchors scroll to what is on screen before the lines move, so
+    // its next frame keeps it in place.
+    if (change.lineDelta !== 0) {
+      this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
+    }
+    return super.applyChange(document, change, options);
   }
 
   // CodeView positions every item before updating the DOM. Recalculate this
@@ -564,7 +638,7 @@ export class VirtualizedFileDiff<
     reset?: PendingCodeViewLayoutReset,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): number {
-    let resetLayoutCache = false;
+    let dropMeasurements = false;
     let resetEstimatedHeights = false;
     const {
       pendingExpansions,
@@ -580,9 +654,9 @@ export class VirtualizedFileDiff<
         // and treat it as a mutation
         Object.assign(fileDiff, pendingHydratedDiff.nextDiff);
         this.setHydratedState(pendingHydratedDiff.files);
-        this.installHydratedSessionDiff(fileDiff);
+        this.installHydratedDiff(fileDiff);
         this.forceRenderOverride = true;
-        resetLayoutCache = true;
+        dropMeasurements = true;
         resetEstimatedHeights = true;
       }
     }
@@ -620,7 +694,7 @@ export class VirtualizedFileDiff<
     }
 
     if (reset?.resetDiffLayoutCache === true || layoutDiffChanged) {
-      resetLayoutCache = true;
+      dropMeasurements = true;
     }
     if (
       layoutDiffChanged ||
@@ -631,17 +705,18 @@ export class VirtualizedFileDiff<
     }
     if (reset?.metrics != null) {
       this.metrics = computeVirtualFileMetrics(reset.metrics);
-      resetLayoutCache = true;
+      dropMeasurements = true;
       resetEstimatedHeights = true;
     }
     if (this.currentCollapsed !== collapsed) {
       this.currentCollapsed = collapsed;
-      resetLayoutCache = true;
+      dropMeasurements = true;
     }
-    if (resetLayoutCache) {
-      this.resetLayoutCache({ includeEstimatedHeights: resetEstimatedHeights });
+    if (dropMeasurements) {
+      this.resetMeasurements();
+      this.invalidateLayout({ includeEstimatedHeights: resetEstimatedHeights });
     } else if (resetEstimatedHeights) {
-      this.invalidateDerivedLayoutCache(true);
+      this.invalidateLayout({ includeEstimatedHeights: true });
     }
 
     this.top = top;
@@ -701,6 +776,7 @@ export class VirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -745,7 +821,7 @@ export class VirtualizedFileDiff<
 
         const lineHeight = this.getLineHeight(
           lineIndex,
-          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false)
+          this.hasNoNewlineMarker(additionLine, deletionLine)
         );
         if (lineIndex === targetLineIndex) {
           position = {
@@ -789,6 +865,47 @@ export class VirtualizedFileDiff<
       : this.virtualizer.getContainerElement();
   }
 
+  public scrollToLine(
+    lineNumber: number,
+    align: ScrollLogicalPosition,
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    // A line folded into a collapsed region that no staged expansion opens
+    // has no row to scroll to, only the separator standing in for it. A line
+    // a staged expansion opens gets its row on the host's next layout, and
+    // the request resolves against it then.
+    const { virtualizer } = this;
+    if (!this.isLineRenderable(lineNumber)) {
+      // Still the newest request, so it replaces any scroll in flight.
+      virtualizer.cancelScroll();
+      onDone('cancelled');
+      return;
+    }
+    if (virtualizer.type === 'advanced') {
+      virtualizer.scrollToInstanceLine(this, lineNumber, align, onDone);
+    } else {
+      virtualizer.scrollSpanIntoView({
+        align,
+        onDone,
+        resolveSpan: () => {
+          const position = this.getLinePosition(lineNumber);
+          return position != null
+            ? {
+                top: this.getVirtualizedTop() + position.top,
+                height: position.height,
+              }
+            : undefined;
+        },
+      });
+    }
+  }
+
+  // Drop the host's pending scroll request. With onDone, only while that
+  // request is still the one onDone made.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    this.virtualizer.cancelScroll(onDone);
+  }
+
   public getNumericScrollAnchor(
     localViewportTop: number
   ): NumericScrollLineAnchor | undefined {
@@ -829,6 +946,7 @@ export class VirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -881,7 +999,7 @@ export class VirtualizedFileDiff<
 
         const lineHeight = this.getLineHeight(
           lineIndex,
-          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false)
+          this.hasNoNewlineMarker(additionLine, deletionLine)
         );
         top += lineHeight;
 
@@ -964,7 +1082,8 @@ export class VirtualizedFileDiff<
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
     if (!recycle) {
-      this.resetLayoutCache({ includeEstimatedHeights: true });
+      this.resetMeasurements();
+      this.invalidateLayout({ includeEstimatedHeights: true });
       this.pendingExpansions = undefined;
       this.pendingHydratedDiff = undefined;
     }
@@ -998,7 +1117,8 @@ export class VirtualizedFileDiff<
         direction,
         expansionLineCountOverride
       );
-      this.resetLayoutCache({ includeEstimatedHeights: true });
+      this.resetMeasurements();
+      this.invalidateLayout({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
     this.forceRenderOverride = true;
@@ -1040,13 +1160,14 @@ export class VirtualizedFileDiff<
         this.options.parseDiffOptions
       );
       this.setHydratedState(files);
-      if (!this.installHydratedSessionDiff(expectedDiff)) {
+      if (!this.installHydratedDiff(expectedDiff)) {
         await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
         if (this.getInputDiff() !== expectedDiff) {
           return;
         }
       }
-      this.resetLayoutCache({ includeEstimatedHeights: true });
+      this.resetMeasurements();
+      this.invalidateLayout({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
     this.forceRenderOverride = true;
@@ -1107,24 +1228,19 @@ export class VirtualizedFileDiff<
     });
   }
 
-  /**
-   * Invalidate layout after an edit session changed the rendered row set
-   * without a line-count change (a mid-session region change or the exit
-   * recompute): estimated heights bake the hunk shapes in, and nothing else
-   * invalidates them now that editing does not flip expandUnchanged. Public
-   * so CodeView can run it when reaping a session whose instance was already
-   * released.
-   */
-  public invalidateEditSessionLayout(): void {
+  // Invalidate layout after an edit session changed the rendered row set
+  // without a line-count change (a region change, entering or leaving the
+  // session): estimated heights bake the hunk shapes in, and nothing else
+  // invalidates them. CodeView computes every item's height in its own
+  // layout pass, in the frame that renders the new rows, so nothing is
+  // computed here.
+  private invalidateEditSessionLayout(): void {
     this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache({
+    this.invalidateLayout({
       forceSimpleRecompute: this.isSimpleMode(),
       includeEstimatedHeights: true,
       resetRenderRange: false,
     });
-    if (!this.isSimpleMode()) {
-      this.computeApproximateSize(true);
-    }
     this.getSimpleVirtualizer()?.requestHeightReconcile(this);
   }
 
@@ -1133,7 +1249,14 @@ export class VirtualizedFileDiff<
   // heights moved) and defers the actual render through its own queue; a
   // released instance stops at the cache invalidation and the host relayout
   // covers it.
-  protected override escalateEditSessionRender(): void {
+  protected override escalateEditSessionRender(cause: 'change' | 'exit'): void {
+    // The exit recompute renders a different diff; a change moves this one's
+    // rows, whose measurements stay, except those of rows it removed.
+    if (cause === 'exit') {
+      this.resetMeasurements();
+    } else {
+      this.dropMeasurementsPastEnd();
+    }
     this.invalidateEditSessionLayout();
     if (!this.enabled || this.getInputDiff() == null) {
       return;
@@ -1209,50 +1332,6 @@ export class VirtualizedFileDiff<
     } else {
       this.getSimpleVirtualizer()?.requestHeightReconcile(this);
     }
-  }
-
-  // Normally triggered by the host when the document line count changes.
-  override applyDocumentChange(
-    textDocument: TextDocument<'file-diff', LAnnotation>,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer = false
-  ): void {
-    const { renderRange: previousRenderRange } = this;
-    // Capture the scroll anchor before the synchronous hunk rebuild and
-    // measured-height wipe below; the host's next frame resolves it against
-    // the new geometry so on-screen rows do not shift.
-    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
-    super.applyDocumentChange(textDocument, newLineAnnotations);
-    this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache({
-      forceSimpleRecompute: this.isSimpleMode(),
-      includeEstimatedHeights: true,
-      resetRenderRange: false,
-    });
-
-    const fileDiff = this.getRenderedDiff();
-    if (!this.isSimpleMode()) {
-      this.computeApproximateSize(true);
-    } else if (
-      shouldUpdateBuffer &&
-      previousRenderRange != null &&
-      fileDiff != null
-    ) {
-      // Update the buffers caused by the line-count change to ensure the host
-      // scrolls to the correct position before re-rendering.
-      const windowSpecs = this.virtualizer.getWindowSpecs();
-      const renderRange = this.computeRenderRangeFromWindow(
-        fileDiff,
-        this.top ?? 0,
-        windowSpecs
-      );
-      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
-        this.updateBuffers(renderRange);
-      }
-    }
-
-    this.forceRenderOverride = true;
-    this.virtualizer.instanceChanged(this, true);
   }
 
   // Compute the approximate size from the cached baseline estimate plus any
@@ -1364,6 +1443,8 @@ export class VirtualizedFileDiff<
         fileDiff,
         this.options.loadDiffFiles != null
       ),
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      showNoNewlineMarkers: this.hunksRenderer.showsNoNewlineMarkers(),
     });
     this.cache.estimatedSplitHeight = splitHeight;
     this.cache.estimatedUnifiedHeight = unifiedHeight;
@@ -1464,7 +1545,8 @@ export class VirtualizedFileDiff<
     })();
 
     if (layoutDiffChanged) {
-      this.resetLayoutCache({
+      this.resetMeasurements();
+      this.invalidateLayout({
         includeEstimatedHeights: true,
       });
     }
@@ -1514,7 +1596,7 @@ export class VirtualizedFileDiff<
       fileTop,
       windowSpecs
     );
-    return super.render({
+    const rendered = super.render({
       fileDiff: nextFileDiff,
       fileContainer,
       renderRange,
@@ -1527,6 +1609,7 @@ export class VirtualizedFileDiff<
       ...fileInput,
       ...fileInputProps,
     });
+    return rendered;
   }
 
   protected override finalizeRender(): void {
@@ -1793,11 +1876,13 @@ export class VirtualizedFileDiff<
         preSeparatorHeight: pendingLeadingSeparatorHeight,
         postSeparatorHeight:
           trailingExpandedCount === 0 ? trailingSeparatorHeight : 0,
-        metadataOffsets: getHunkMetadataOffsets({
-          diffStyle,
-          hunk,
-          rowCount: hunkBodyRowCount,
-        }),
+        metadataOffsets: this.hunksRenderer.showsNoNewlineMarkers()
+          ? getHunkMetadataOffsets({
+              diffStyle,
+              hunk,
+              rowCount: hunkBodyRowCount,
+            })
+          : [],
       });
 
       if (trailingRegion != null && trailingExpandedCount > 0) {
@@ -1937,6 +2022,13 @@ export class VirtualizedFileDiff<
     if (trailingRegion != null) {
       count += trailingRegion.fromStart + trailingRegion.fromEnd;
     }
+    if (
+      fileDiff.hunks.length > 0 &&
+      (trailingRegion?.collapsedLines ?? 0) === 0 &&
+      this.hunksRenderer.hasTrailingNewlineRow(fileDiff)
+    ) {
+      count += 1;
+    }
 
     return count;
   }
@@ -1950,9 +2042,10 @@ export class VirtualizedFileDiff<
   ): number {
     const expandedLineCount = this.getExpandedLineCount(fileDiff, diffStyle);
     const metadataLineCount =
-      diffStyle === 'split'
+      (diffStyle === 'split'
         ? fileDiff.splitLineCount
-        : fileDiff.unifiedLineCount;
+        : fileDiff.unifiedLineCount) +
+      (this.hunksRenderer.hasTrailingNewlineRow(fileDiff) ? 1 : 0);
     return Math.max(
       expandedLineCount,
       metadataLineCount,
@@ -2058,6 +2151,7 @@ export class VirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -2074,8 +2168,7 @@ export class VirtualizedFileDiff<
           additionLine != null
             ? additionLine.unifiedLineIndex
             : deletionLine.unifiedLineIndex;
-        const hasMetadata =
-          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
+        const hasMetadata = this.hasNoNewlineMarker(additionLine, deletionLine);
         const isFinalHunkRow =
           hunkIndex === fileDiff.hunks.length - 1 &&
           hunk != null &&

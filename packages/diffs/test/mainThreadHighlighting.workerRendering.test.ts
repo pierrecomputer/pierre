@@ -169,14 +169,25 @@ test('Editing one File leaves the cached highlight other renderers use unchanged
     viewer.render({ file, fileContainer: viewerContainer });
     edited.render({ file, fileContainer: editedContainer });
     edited.__attachEditor(new Editor('file'));
-    // A document change without tokenizer rows keeps every shifted row, as a
+    // A document change without tokens keeps every shifted row, as a
     // programmatic edit to an offscreen editor does.
-    edited.applyDocumentChange(
-      new TextDocument(
-        'inmemory://edited',
-        `const inserted = 0;\n${file.contents}`
-      )
+    const document = new TextDocument<'file', undefined>(
+      'inmemory://edited',
+      file.contents
     );
+    const change = document.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'const inserted = 0;\n',
+      },
+    ]);
+    if (change == null) {
+      throw new Error('the edit applied nothing');
+    }
+    edited.applyChange(document, change);
 
     expect(getCachedLineNumbers()).toEqual([1, 2]);
     viewer.render({ file, fileContainer: viewerContainer, forceRender: true });

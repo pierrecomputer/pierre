@@ -133,7 +133,7 @@ describe('TextDocument', () => {
     expect(() => d.getLineText(99)).toThrow('Line index out of range: 99');
   });
 
-  test('getLineText trims line endings; getText range still includes them', () => {
+  test('getLineText trims line endings; getText range ends with the file ending', () => {
     const d = doc('first\r\nsecond\n');
     expect(d.getLineText(0)).toBe('first');
     expect(d.getLineText(1)).toBe('second');
@@ -152,7 +152,7 @@ describe('TextDocument', () => {
         start: { line: 1, character: 0 },
         end: { line: 2, character: 0 },
       })
-    ).toBe('second\n');
+    ).toBe('second\r\n');
   });
 
   // test('offsetAt clamps to line and document bounds', () => {
@@ -261,9 +261,9 @@ describe('TextDocument', () => {
     expect(d.eol).toBe('\r\n');
   });
 
-  test('normalizeEol rewrites mixed line endings to the document EOL', () => {
+  test('normalizeEol rewrites every line break to the one the document keeps', () => {
     const d = doc('a\r\nb');
-    expect(d.normalizeEol('x\ny\rz\r\nw')).toBe('x\r\ny\r\nz\r\nw');
+    expect(d.normalizeEol('x\ny\rz\r\nw')).toBe('x\ny\nz\nw');
   });
 
   test('normalizePosition clamps line and character into range', () => {
@@ -502,7 +502,7 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('a\r\nB\r\nc');
   });
 
-  test('applyEdits reports inserted lines for a lone CR line ending', () => {
+  test('a lone CR in inserted text becomes the document line break', () => {
     const d = doc('a');
     const change = d.applyEdits([
       {
@@ -513,12 +513,12 @@ describe('TextDocument', () => {
         newText: '\rb',
       },
     ]);
-    expect(d.getText()).toBe('a\rb');
+    expect(d.getText()).toBe('a\nb');
     expect(d.lineCount).toBe(2);
     expect(change).toEqual({
       changes: [
         {
-          text: '\rb',
+          text: '\nb',
           range: {
             start: { line: 0, character: 1 },
             end: { line: 0, character: 1 },
@@ -540,7 +540,7 @@ describe('TextDocument', () => {
     });
   });
 
-  test('applyEdits reports inserted lines for multiple lone CR line endings', () => {
+  test('several lone CRs in inserted text become document line breaks', () => {
     const d = doc('hello');
     const change = d.applyEdits([
       {
@@ -551,12 +551,12 @@ describe('TextDocument', () => {
         newText: '\rworld\rfoo',
       },
     ]);
-    expect(d.getText()).toBe('hello\rworld\rfoo');
+    expect(d.getText()).toBe('hello\nworld\nfoo');
     expect(d.lineCount).toBe(3);
     expect(change).toEqual({
       changes: [
         {
-          text: '\rworld\rfoo',
+          text: '\nworld\nfoo',
           range: {
             start: { line: 0, character: 5 },
             end: { line: 0, character: 5 },
@@ -1538,9 +1538,11 @@ describe('TextDocument edge cases', () => {
     // A majority vote would report '\n' here; pierre-fe reports '\r\n'.
     expect(firstCrlfRestLf.eol).toBe('\r\n');
 
-    // The consequence: pasted text is normalized to the first line's style.
-    expect(firstLfRestCrlf.normalizeEol('x\r\ny')).toBe('x\ny');
-    expect(firstCrlfRestLf.normalizeEol('x\ny')).toBe('x\r\ny');
+    // The consequence: the whole file comes out in the first line's style.
+    expect(firstLfRestCrlf.getText()).toBe('red\ngreen\nblue\nteal\npink');
+    expect(firstCrlfRestLf.getText()).toBe(
+      'red\r\ngreen\r\nblue\r\nteal\r\npink'
+    );
   });
 
   test('replacing a selected line break with a newline is a stable no-op', () => {
@@ -1602,21 +1604,20 @@ describe('TextDocument edge cases', () => {
     expect(d.lineCount).toBe(1);
   });
 
-  test('replacing a selected line break with a different break style keeps the line structure', () => {
-    // Same boundary-straddling range, but the replacement swaps \n for \r\n:
-    // the byte content changes while the logical line structure does not.
+  test('replacing a selected line break with another break style keeps the document break', () => {
+    // Same boundary-straddling range, but the replacement offers \r\n for
+    // \n: the document keeps its own break, and the line structure stands.
     const d = doc('stanza\nrefrain');
     const change = replaceLineBreak(d, 0, '\r\n');
 
-    expect(d.getText()).toBe('stanza\r\nrefrain');
+    expect(d.getText()).toBe('stanza\nrefrain');
     expect(d.lineCount).toBe(2);
     expect(d.getLineText(0)).toBe('stanza');
     expect(d.getLineText(1)).toBe('refrain');
     expect(change.lineDelta).toBe(0);
     expect(change.changedLineRanges).toEqual([[0, 1]]);
 
-    // Line 1 offsets shifted by one byte; edits addressed by position must
-    // still land correctly.
+    // Edits addressed by position still land on the right line.
     d.applyEdits([
       {
         range: {
@@ -1626,7 +1627,7 @@ describe('TextDocument edge cases', () => {
         newText: '> ',
       },
     ]);
-    expect(d.getText()).toBe('stanza\r\n> refrain');
+    expect(d.getText()).toBe('stanza\n> refrain');
   });
 
   test('normalizePosition clamps both coordinates when line and character overshoot together', () => {
@@ -1737,5 +1738,88 @@ describe('malformed numeric position components', () => {
     expect(text).toContain('harbor');
     expect(text).toContain('lantern');
     expect(text).toContain('#');
+  });
+});
+
+describe('line breaks', () => {
+  // The document keeps every line break as one `\n` and puts the file's own
+  // ending back on the way out, so an edit never forms or splits a break.
+  test('a file keeps its line ending on the way out', () => {
+    const crlf = new TextDocument('test.txt', 'a\r\nb\r\nc', 'text');
+    expect(crlf.lineCount).toBe(3);
+    expect(crlf.getText()).toBe('a\r\nb\r\nc');
+    expect(crlf.getLineText(0, true)).toBe('a\r\n');
+    expect(crlf.getLineText(0)).toBe('a');
+    expect(
+      crlf.getText({
+        start: { line: 0, character: 0 },
+        end: { line: 1, character: 0 },
+      })
+    ).toBe('a\r\n');
+    expect(crlf.offsetAt({ line: 1, character: 0 })).toBe(2);
+    const cr = new TextDocument('test.txt', 'a\rb', 'text');
+    expect(cr.getText()).toBe('a\rb');
+    expect(cr.getLineText(0, true)).toBe('a\r');
+  });
+
+  test('inserted text takes the document line break', () => {
+    const d = new TextDocument('test.txt', 'a\r\nb', 'text');
+    d.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+        },
+        newText: '\nx\ry\r\nz',
+      },
+    ]);
+    expect(d.lineCount).toBe(5);
+    expect(d.getText()).toBe('a\r\nx\r\ny\r\nz\r\nb');
+  });
+
+  test.each([
+    [
+      'a carriage return before a line feed',
+      'a\nb',
+      [{ start: 1, end: 1, text: '\r' }],
+    ],
+    [
+      'touching edits that form a CRLF',
+      'abc',
+      [
+        { start: 0, end: 1, text: '\r' },
+        { start: 1, end: 2, text: '\n' },
+      ],
+    ],
+    [
+      'text deleted between a carriage return and a line feed',
+      'a\r/*\nb',
+      [{ start: 2, end: 4, text: '' }],
+    ],
+    [
+      'two breaks inserted into one line',
+      'let a=1; let b=2; let c=3;',
+      [
+        { start: 9, end: 9, text: '\n' },
+        { start: 18, end: 18, text: '\n' },
+      ],
+    ],
+  ])('%s reports exact line changes and undoes', (_name, contents, edits) => {
+    const document = new TextDocument('test.txt', contents, 'text');
+    const before = document.lineCount;
+    const change = document.applyResolvedEdits(edits)!;
+    expect(change.lineDelta).toBe(document.lineCount - before);
+    const deltas = change.changedLineChanges?.map(([, , delta]) => delta) ?? [];
+    expect(deltas.reduce((sum, delta) => sum + delta, 0)).toBe(
+      change.lineDelta
+    );
+    for (const [start, end] of change.changedLineRanges) {
+      expect(start).toBeLessThanOrEqual(end);
+      expect(end).toBeLessThan(document.lineCount);
+    }
+    expect(document.undo()).toBeDefined();
+    expect(document.getText()).toBe(
+      contents.replace(/\r\n|\r|\n/g, document.eol)
+    );
   });
 });

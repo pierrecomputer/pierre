@@ -1,5 +1,6 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
+import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   FileContents,
   LineAnnotation,
@@ -7,6 +8,7 @@ import type {
   PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
+  ScrollRequestResult,
   StickySpecs,
   ThemeTypes,
   VirtualFileMetrics,
@@ -49,6 +51,11 @@ interface FileLayoutCache {
   // Ghost text rows folded into `heights` (zero-based line -> row count), so an
   // entry can be corrected when the editor's ghost text changes or goes away.
   ghostTextRows: ReadonlyMap<number, number>;
+}
+
+interface InvalidateLayoutOptions {
+  forceSimpleRecompute?: boolean;
+  resetRenderRange?: boolean;
 }
 
 interface PendingRender {
@@ -124,7 +131,8 @@ export class VirtualizedFile<
     }
 
     this.metrics = nextMetrics;
-    this.resetLayoutCache();
+    this.resetMeasurements();
+    this.invalidateLayout();
   }
 
   override setLineAnnotations(
@@ -151,6 +159,7 @@ export class VirtualizedFile<
     }
 
     super.setLineAnnotations(lineAnnotations);
+    this.managersDirty = true;
     return true;
   }
 
@@ -211,7 +220,8 @@ export class VirtualizedFile<
     super.setOptions(options);
 
     if (layoutChanged) {
-      this.resetLayoutCache(true);
+      this.resetMeasurements();
+      this.invalidateLayout({ forceSimpleRecompute: true });
     }
     // Any option can affect rendered DOM; only layout-affecting options clear
     // the measured height cache above.
@@ -233,22 +243,33 @@ export class VirtualizedFile<
     super.setThemeType(themeType);
   }
 
-  private resetLayoutCache(recompute = false, resetRenderRange = true): void {
-    this.layoutDirty = true;
+  // Drops what was measured from the DOM: line heights, the ghost rows
+  // folded into them and the file annotation's height. The next renders
+  // measure again.
+  private resetMeasurements(): void {
     this.cache.fileAnnotationHeight = 0;
     if (this.cache.heights.size > 0) {
       this.cache.heights.clear();
     }
+    this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
+  }
+
+  // The lines moved or the layout inputs changed: positions are computed
+  // again from the measurements kept.
+  private invalidateLayout({
+    forceSimpleRecompute = false,
+    resetRenderRange = true,
+  }: InvalidateLayoutOptions = {}): void {
+    this.layoutDirty = true;
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
     }
-    this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
     if (this.renderRange != null && resetRenderRange) {
       this.renderRange = undefined;
     }
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
-    if (recompute && this.isSimpleMode()) {
+    if (forceSimpleRecompute && this.isSimpleMode()) {
       this.computeApproximateSize();
     }
   }
@@ -451,7 +472,8 @@ export class VirtualizedFile<
     }
 
     if (shouldResetLayoutCache) {
-      this.resetLayoutCache();
+      this.resetMeasurements();
+      this.invalidateLayout();
     }
 
     if (targetChanged) {
@@ -539,6 +561,37 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple'
       ? this.virtualizer.getRoot()
       : this.virtualizer.getContainerElement();
+  }
+
+  public scrollToLine(
+    lineNumber: number,
+    align: ScrollLogicalPosition,
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    const { virtualizer } = this;
+    if (virtualizer.type === 'advanced') {
+      virtualizer.scrollToInstanceLine(this, lineNumber, align, onDone);
+      return;
+    }
+    virtualizer.scrollSpanIntoView({
+      align,
+      onDone,
+      resolveSpan: () => {
+        const position = this.getLinePosition(lineNumber);
+        return position != null
+          ? {
+              top: this.getVirtualizedTop() + position.top,
+              height: position.height,
+            }
+          : undefined;
+      },
+    });
+  }
+
+  // Drop the host's pending scroll request. With onDone, only while that
+  // request is still the one onDone made.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    this.virtualizer.cancelScroll(onDone);
   }
 
   public getNumericScrollAnchor(
@@ -688,7 +741,8 @@ export class VirtualizedFile<
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
     if (!recycle) {
-      this.resetLayoutCache();
+      this.resetMeasurements();
+      this.invalidateLayout();
     }
     this.pendingRender = undefined;
     this.isSetup = false;
@@ -834,44 +888,37 @@ export class VirtualizedFile<
     }
   }
 
-  // normally triggered by the host when the document line count changes
-  override applyDocumentChange(
-    textDocument: TextDocument<'file', LAnnotation>,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer = false
-  ): void {
-    const { renderRange: previousRenderRange } = this;
-    // Capture the scroll anchor before the synchronous document swap and
-    // layout-cache wipe below; the host's next frame resolves it against the
-    // new geometry so on-screen rows do not shift.
-    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
-    super.applyDocumentChange(textDocument, newLineAnnotations);
+  // A line-count change also moves the rows below and the file's height, so
+  // the layout caches are invalidated with the render. Either way the render
+  // itself runs in the virtualizer's frame.
+  protected override renderChange(structural: boolean): void {
+    if (!structural) {
+      this.rerender();
+      return;
+    }
     this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache(this.isSimpleMode(), false);
-
-    const file = this.getRenderedFile();
+    this.invalidateLayout({
+      forceSimpleRecompute: this.isSimpleMode(),
+      resetRenderRange: false,
+    });
     if (!this.isSimpleMode()) {
       this.computeApproximateSize(true);
-    } else if (
-      shouldUpdateBuffer &&
-      previousRenderRange != null &&
-      file != null
-    ) {
-      // Update the buffers caused by the line-count change to ensure the host
-      // scrolls to the correct position before re-rendering.
-      const windowSpecs = this.virtualizer.getWindowSpecs();
-      const renderRange = this.computeRenderRangeFromWindow(
-        file,
-        this.top ?? 0,
-        windowSpecs
-      );
-      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
-        this.updateBuffers(renderRange);
-      }
     }
-
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
+  }
+
+  public override applyChange(
+    document: TextDocument<'file', LAnnotation>,
+    change: TextDocumentChange,
+    options?: ApplyChangeOptions<'file', LAnnotation>
+  ): ApplyChangeResult {
+    // CodeView anchors scroll to what is on screen before the lines move, so
+    // its next frame keeps it in place.
+    if (change.lineDelta !== 0) {
+      this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
+    }
+    return super.applyChange(document, change, options);
   }
 
   override render({
@@ -908,7 +955,8 @@ export class VirtualizedFile<
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
     if (layoutFileChanged) {
-      this.resetLayoutCache();
+      this.resetMeasurements();
+      this.invalidateLayout();
     }
 
     fileContainer = this.getOrCreateFileContainerNode(fileContainer);

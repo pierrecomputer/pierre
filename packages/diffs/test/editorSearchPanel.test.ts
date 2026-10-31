@@ -688,20 +688,20 @@ describe('zero-width-capable patterns terminate and skip empty matches', () => {
   });
 });
 
-describe('anchored patterns on CRLF and mixed-EOL documents', () => {
-  test('$-anchored matches end before the \\r of each CRLF pair', () => {
-    const crlfDoc = 'oak\r\nelm\r\nfir';
-    const table = new PieceTable(crlfDoc);
+describe('anchored patterns around line breaks', () => {
+  test('$-anchored matches end before each line break', () => {
+    const text = 'oak\nelm\nfir';
+    const table = new PieceTable(text);
     const hits = table.search(searchParams('\\w$'));
 
     expect(hits).toEqual([
       [2, 3],
-      [7, 8],
-      [12, 13],
+      [6, 7],
+      [10, 11],
     ]);
     for (const [start, end] of hits) {
-      // The matched range never covers EOL bytes...
-      expect(crlfDoc.slice(start, end)).not.toMatch(/[\r\n]/);
+      // The matched range never covers the break...
+      expect(text.slice(start, end)).not.toMatch(/\n/);
       // ...and the end offset round-trips to the line's content end.
       const endPosition = table.positionAt(end);
       expect(endPosition.character).toBe(table.getLineLength(endPosition.line));
@@ -709,32 +709,30 @@ describe('anchored patterns on CRLF and mixed-EOL documents', () => {
     }
   });
 
-  test('^ matches at column 0 after CRLF, lone \\r, and \\n breaks alike', () => {
-    const mixedDoc = 'ash\r\nbay\rcedar\ndate';
-    const table = new PieceTable(mixedDoc);
+  test('^ matches at column 0 after every break', () => {
+    const table = new PieceTable('ash\nbay\ncedar\ndate');
 
     expect(table.search(searchParams('^\\w+'))).toEqual([
       [0, 3],
-      [5, 8],
-      [9, 14],
-      [15, 19],
+      [4, 7],
+      [8, 13],
+      [14, 18],
     ]);
     for (const [start] of table.search(searchParams('^\\w+'))) {
       expect(table.positionAt(start).character).toBe(0);
     }
-    // $ on the same document: every end offset stops short of its line break.
     expect(table.search(searchParams('\\w$'))).toEqual([
       [2, 3],
-      [7, 8],
-      [13, 14],
-      [18, 19],
+      [6, 7],
+      [12, 13],
+      [17, 18],
     ]);
   });
 
-  test('a trailing CRLF adds no phantom match on the empty final line', () => {
-    expect(findAll('app\r\n', 'p+$')).toEqual([[1, 3]]);
-    expect(findAll('app\r\n', '.$')).toEqual([[2, 3]]);
-    expect(findAll('app\r\n', '^')).toEqual([]);
+  test('a trailing break adds no phantom match on the empty final line', () => {
+    expect(findAll('app\n', 'p+$')).toEqual([[1, 3]]);
+    expect(findAll('app\n', '.$')).toEqual([[2, 3]]);
+    expect(findAll('app\n', '^')).toEqual([]);
   });
 });
 

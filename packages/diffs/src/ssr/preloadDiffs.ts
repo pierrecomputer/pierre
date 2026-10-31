@@ -17,6 +17,7 @@ import type {
   MaybeDiffFileInput,
 } from '../types';
 import {
+  createCoreStyleElement,
   createStyleElement,
   createThemeStyleElement,
 } from '../utils/createStyleElement';
@@ -265,7 +266,7 @@ function processHunkResult<LAnnotation>(
   unsafeCSS: string | undefined,
   themeType: 'system' | 'light' | 'dark'
 ) {
-  const children = [createStyleElement(hunkResult.css, true)];
+  const children = [createCoreStyleElement()];
   children.push(
     createThemeStyleElement(
       wrapThemeCSS(

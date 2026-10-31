@@ -18,6 +18,7 @@ import {
 } from './mocks';
 import {
   assertDefined,
+  contentAST,
   countRenderedLines,
   countSplitRows,
   patchDigest,
@@ -985,7 +986,8 @@ describe('parsePatchFiles', () => {
         for (const file of patch.files) {
           if (file.hunks.length === 0) continue;
           const renderer = new DiffHunksRenderer({ diffStyle: 'unified' });
-          const { unifiedContentAST } = await renderer.asyncRender(file);
+          const rendered = await renderer.asyncRender(file);
+          const unifiedContentAST = contentAST(rendered, 'unified');
           assertDefined(
             unifiedContentAST,
             'unifiedContentAST should be defined'

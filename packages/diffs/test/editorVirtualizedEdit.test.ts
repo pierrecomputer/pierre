@@ -69,7 +69,9 @@ interface WindowedEditor {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<'file', undefined>;
+  file: File<undefined>;
   fileContainer: HTMLElement;
+  initialFile: FileContents;
 }
 
 // Renders a long file into a partial window so the editor virtualizes: only the
@@ -109,86 +111,26 @@ async function createWindowedEditor(
     },
     content,
     editor,
+    file,
     fileContainer,
+    initialFile,
   };
 }
 
 describe('Editor edits at the bottom of a virtualized window', () => {
-  test('keeps the last-line caret anchored after Enter, Delete, Enter', async () => {
-    const { cleanup, content, editor, fileContainer } =
-      await createWindowedEditor(1_000, makeRange(950, 50));
-    try {
-      Object.defineProperty(window.HTMLElement.prototype, 'offsetTop', {
-        configurable: true,
-        get(this: HTMLElement) {
-          const line = Number(this.dataset.line);
-          return this.isConnected && line > 0 ? line * 20 : 0;
-        },
-      });
-
-      editor.setSelections([
-        {
-          start: { line: 999, character: 9 },
-          end: { line: 999, character: 9 },
-          direction: 'none',
-        },
-      ]);
-      content.dispatchEvent(
-        new window.InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          inputType: 'insertParagraph',
-        })
-      );
-      await wait(0);
-      const firstCaretTransform =
-        fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-caret]')
-          ?.style.transform;
-      expect(firstCaretTransform).toBeDefined();
-
-      content.dispatchEvent(
-        new window.InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          inputType: 'deleteContentBackward',
-        })
-      );
-      await wait(0);
-      content.dispatchEvent(
-        new window.InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          inputType: 'insertParagraph',
-        })
-      );
-      await wait(0);
-
-      expect(editor.getViewState().selections?.at(-1)?.start.line).toBe(1_000);
-      expect(
-        fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-caret]')
-          ?.style.transform
-      ).toBe(firstCaretTransform);
-    } finally {
-      cleanup();
-    }
-  });
-
-  // A run of Enter presses at the window's bottom edge must keep rendering each
-  // new line. The editor widens its render range when the caret reaches the
-  // last rendered line; if that widened range is not persisted, the next edit
-  // reads a stale end line, treats the caret as past the window, and leaves the
-  // just-typed line (and its caret) unrendered until a scroll re-syncs.
-  test('keeps consecutive newlines at the window bottom rendered', async () => {
-    const { cleanup, content, editor, fileContainer } =
+  // The rows on screen are the render range the host gave the component. An
+  // edit that adds lines past its end changes the document and moves the
+  // caret, but no row is built for those lines until the host renders a
+  // range that holds them.
+  test('lines past the window render once the host extends the range', async () => {
+    const { cleanup, content, editor, file, fileContainer, initialFile } =
       await createWindowedEditor(200, makeRange(100, 50));
     try {
-      // The window renders 1-indexed lines 101..150.
-      expect(renderedLineNumbers(content).at(-1)).toBe(150);
+      const windowLines = Array.from({ length: 50 }, (_, i) => 101 + i);
+      expect(renderedLineNumbers(content)).toEqual(windowLines);
 
-      // Enter on the last rendered line, then Enter again on the new last line.
+      // Enter at the start of the last rendered line pushes that line out of
+      // the window and puts the caret on it.
       editor.setSelections([collapsedCaret(149)]);
       editor.applyEdits([
         {
@@ -200,169 +142,25 @@ describe('Editor edits at the bottom of a virtualized window', () => {
         },
       ]);
       await wait(0);
-      editor.applyEdits([
-        {
-          range: {
-            start: { line: 150, character: 0 },
-            end: { line: 150, character: 0 },
-          },
-          newText: '\n',
-        },
-      ]);
+      expect(editor.getText()).toContain('line 149\n\nline 150');
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(150);
+      expect(renderedLineNumbers(content)).toEqual(windowLines);
+      expect(content.textContent).not.toContain('line 150');
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll('[data-caret]').length ?? 0
+      ).toBe(0);
+
+      file.render({
+        file: initialFile,
+        fileContainer,
+        renderRange: makeRange(100, 52),
+      });
       await wait(0);
-
-      const selections = editor.getViewState().selections ?? [];
-      expect(selections).toHaveLength(1);
-      const caretLine = selections[0].start.line + 1;
-      expect(caretLine).toBe(152);
-      // The just-typed line has a rendered row...
-      expect(renderedLineNumbers(content)).toContain(caretLine);
-      // ...and its caret is drawn, which #renderCaret only does when
-      // #isLineVisible (reading the persisted render range) returns true.
-      const caretCount =
-        fileContainer.shadowRoot?.querySelectorAll('[data-caret]').length ?? 0;
-      expect(caretCount).toBeGreaterThan(0);
-    } finally {
-      cleanup();
-    }
-  });
-
-  // A single programmatic edit that inserts several lines at the window bottom
-  // pushes the caret well past the previous end line. Every inserted line up to
-  // the caret should still get a row.
-  test('renders a multi-line insert at the window bottom', async () => {
-    const { cleanup, content, editor } = await createWindowedEditor(
-      200,
-      makeRange(100, 50)
-    );
-    try {
-      editor.setSelections([collapsedCaret(149)]);
-      editor.applyEdits([
-        {
-          range: {
-            start: { line: 149, character: 0 },
-            end: { line: 149, character: 0 },
-          },
-          newText: 'X\nY\nZ\n',
-        },
-      ]);
-      await wait(0);
-
-      const selections = editor.getViewState().selections ?? [];
-      expect(selections).toHaveLength(1);
-      const caretLine = selections[0].start.line + 1;
-      expect(caretLine).toBe(153);
-      expect(renderedLineNumbers(content)).toContain(caretLine);
-    } finally {
-      cleanup();
-    }
-  });
-
-  // A single huge insert drops the caret far below the window. Widening to reach
-  // it would build a DOM row per inserted line synchronously, defeating
-  // virtualization. The editor caps widening at twice the synced window (here
-  // 2 * 50 = 100), so the rendered row count stays bounded near the window and
-  // does not scale with the insert; the far caret is left for a scroll to render.
-  test('keeps a large multi-line insert from materializing unbounded rows', async () => {
-    const { cleanup, content, editor } = await createWindowedEditor(
-      200,
-      makeRange(100, 50)
-    );
-    try {
-      const insertedLines = 1000;
-      editor.setSelections([collapsedCaret(149)]);
-      editor.applyEdits([
-        {
-          range: {
-            start: { line: 149, character: 0 },
-            end: { line: 149, character: 0 },
-          },
-          newText: 'X\n'.repeat(insertedLines),
-        },
-      ]);
-      await wait(0);
-
-      // Bounded by the 2x cap (100), nowhere near the 1000 inserted lines.
-      const rendered = renderedLineNumbers(content).length;
-      expect(rendered).toBeLessThanOrEqual(100);
-      expect(rendered).toBeLessThan(insertedLines);
-
-      // The caret lands far below the window and is not rendered synchronously.
-      const selections = editor.getViewState().selections ?? [];
-      const caretLine = selections[0].start.line + 1;
-      expect(caretLine).toBeGreaterThan(1000);
-      expect(renderedLineNumbers(content)).not.toContain(caretLine);
-    } finally {
-      cleanup();
-    }
-  });
-
-  // Consecutive programmatic inserts with no scroll between them must not let the
-  // persisted render range ratchet up without bound. The cap is measured against
-  // the window captured at the last sync (50), so widening saturates at 2x (100)
-  // and the rendered row count stays bounded however many lines are inserted.
-  test('keeps consecutive inserts from materializing unbounded rows', async () => {
-    const { cleanup, content, editor } = await createWindowedEditor(
-      200,
-      makeRange(100, 50)
-    );
-    try {
-      let caret = 149;
-      for (let round = 0; round < 40; round++) {
-        editor.setSelections([collapsedCaret(caret)]);
-        editor.applyEdits([
-          {
-            range: {
-              start: { line: caret, character: 0 },
-              end: { line: caret, character: 0 },
-            },
-            newText: 'a\nb\nc\nd\ne\n',
-          },
-        ]);
-        await wait(0);
-        caret += 5;
-      }
-
-      // 200 lines inserted, but the window saturates at the 2x cap (100).
-      const rendered = renderedLineNumbers(content).length;
-      expect(rendered).toBeLessThanOrEqual(100);
-    } finally {
-      cleanup();
-    }
-  });
-
-  // An edit whose dirty lines start below the rendered window - e.g. a caller
-  // sets the selection to an offscreen line and edits there before the
-  // virtualizer re-syncs - must not widen. #rerender only builds rows from
-  // change.startLine, so widening would append the edited rows right after the
-  // window with the intervening lines unbuilt, while #isLineVisible reports them
-  // visible: a discontiguous render with the rows/caret mispositioned. The
-  // window must stay bounded and contiguous; the edit renders on the next scroll.
-  test('does not widen for an edit that starts below the rendered window', async () => {
-    const { cleanup, content, editor } = await createWindowedEditor(
-      300,
-      makeRange(100, 50)
-    );
-    try {
-      // Line 180 is offscreen (window ends at 150) yet within the 2x cap
-      // (reachable to line 199), so only the start-below-window guard - not the
-      // cap - keeps this edit off the widen path.
-      editor.setSelections([collapsedCaret(180)]);
-      editor.applyEdits([
-        {
-          range: {
-            start: { line: 180, character: 0 },
-            end: { line: 180, character: 0 },
-          },
-          newText: 'Z\n',
-        },
-      ]);
-      await wait(0);
-
-      // No row past the window's bottom edge was appended, so there is no
-      // unrendered gap; the offscreen edit is left for the next scroll.
-      const rendered = renderedLineNumbers(content);
-      expect(Math.max(...rendered)).toBeLessThanOrEqual(150);
+      expect(renderedLineNumbers(content)).toEqual([...windowLines, 151, 152]);
+      expect(content.textContent).toContain('line 150');
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll('[data-caret]').length ?? 0
+      ).toBeGreaterThan(0);
     } finally {
       cleanup();
     }

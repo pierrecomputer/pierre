@@ -197,10 +197,33 @@ export class ResizeManager {
         let item = observedNodes.get(child1);
 
         if (item != null) {
+          if (item.type !== 'annotations') {
+            throw new Error(
+              'ResizeManager.setup: an annotation child is observed as a code node'
+            );
+          }
           this.observedNodes.set(child1, item);
           this.observedNodes.set(child2, item);
           observedNodes.delete(child1);
           observedNodes.delete(child2);
+          // A row patched in place keeps its elements, so a height the render
+          // changed is measured now, in this frame, rather than when the
+          // observer reports it a frame later.
+          const child1Height = child1.getBoundingClientRect().height;
+          const child2Height = child2.getBoundingClientRect().height;
+          if (
+            child1Height !== item.column1.childHeight ||
+            child2Height !== item.column2.childHeight
+          ) {
+            item.column1.childHeight = child1Height;
+            item.column2.childHeight = child2Height;
+            annotationUpdates.add({
+              child1,
+              child2,
+              item,
+              newHeight: Math.max(child1Height, child2Height),
+            });
+          }
           continue;
         }
 
@@ -241,13 +264,22 @@ export class ResizeManager {
       annotationUpdates.clear();
     }
 
-    // Cleanup any old nodes that might still be observed
+    // Cleanup any old nodes that might still be observed. A row whose
+    // annotation content was rewritten keeps its container, which a new item
+    // now owns, so only containers no item uses lose their paired height.
+    const pairedContainers = new Set<HTMLElement>();
+    for (const item of this.observedNodes.values()) {
+      if (item.type === 'annotations') {
+        pairedContainers.add(item.column1.container);
+        pairedContainers.add(item.column2.container);
+      }
+    }
     for (const [element, item] of observedNodes) {
       this.unobserve(element);
       if (item.type === 'code') {
         cleanupStaleCodeItem(item);
       } else {
-        cleanupStaleAnnotationItem(item);
+        cleanupStaleAnnotationItem(item, pairedContainers);
       }
     }
     observedNodes.clear();
@@ -479,15 +511,13 @@ function cleanupStaleCodeItem(item: ObservedGridNodes): void {
   }
 }
 
-function cleanupStaleAnnotationItem(item: ObservedAnnotationNodes): void {
-  if (item.column1.container.isConnected) {
-    item.column1.container.style.removeProperty(
-      '--diffs-annotation-min-height'
-    );
-  }
-  if (item.column2.container.isConnected) {
-    item.column2.container.style.removeProperty(
-      '--diffs-annotation-min-height'
-    );
+function cleanupStaleAnnotationItem(
+  item: ObservedAnnotationNodes,
+  pairedContainers: ReadonlySet<HTMLElement>
+): void {
+  for (const { container } of [item.column1, item.column2]) {
+    if (container.isConnected && !pairedContainers.has(container)) {
+      container.style.removeProperty('--diffs-annotation-min-height');
+    }
   }
 }

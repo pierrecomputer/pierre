@@ -65,8 +65,7 @@ describe('EditorTokenizer', () => {
 
   // A single pinned theme carries its own light/dark classification; the
   // themeType option (or a system flip) must not relabel it. A wrong label
-  // flows through updateRenderCache into the render cache's baseThemeType
-  // and flips the surface's effective scheme after the first edit.
+  // would flip the surface's effective scheme after the first edit.
   test('a single pinned theme keeps its own light/dark type', () => {
     const tokenizer = new EditorTokenizer({
       highlighter: createTestHighlighter(),
@@ -399,7 +398,7 @@ describe('EditorTokenizer', () => {
     tokenizer.cleanUp();
   });
 
-  test('limits foreground tokenization to the render range after prepending lines', () => {
+  test('colors the lines an edit inserted above the window and leaves the rest alone', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalPostMessage = globalThis.postMessage;
     const postedMessages: unknown[] = [];
@@ -453,7 +452,7 @@ describe('EditorTokenizer', () => {
           endedAtDocumentEnd: false,
           previousLineCount: textDocument.lineCount,
           lineCount: textDocument.lineCount,
-          lineDelta: 1,
+          lineDelta: 0,
           changes: [],
           changedLineRanges: [[0, 999]],
         },
@@ -474,10 +473,13 @@ describe('EditorTokenizer', () => {
       ])!;
       const dirtyLines = tokenizer.tokenize(change, renderRange);
 
-      expect(tokenizeLineCount).toBe(10);
-      expect([...dirtyLines.keys()]).toEqual([
-        900, 901, 902, 903, 904, 905, 906, 907, 908, 909,
-      ]);
+      // The inserted lines are colored and returned. The line after them
+      // ends in the state it had before, so nothing below is touched; the
+      // window's rows only moved.
+      expect(tokenizeLineCount).toBe(101);
+      expect([...dirtyLines.keys()]).toEqual(
+        Array.from({ length: 101 }, (_, line) => line)
+      );
       expect(postedMessages).toHaveLength(1);
     } finally {
       globalThis.addEventListener = originalAddEventListener;
@@ -534,7 +536,6 @@ describe('EditorTokenizer', () => {
       },
       renderRange
     );
-    tokenizer.stopBackgroundTokenize();
     tokenizeLineCount = 0;
 
     const insertLine = textDocument.applyEdits([
@@ -546,7 +547,7 @@ describe('EditorTokenizer', () => {
         newText: '\n',
       },
     ])!;
-    const insertedLines = tokenizer.tokenize(insertLine, renderRange, true);
+    const insertedLines = tokenizer.tokenize(insertLine, renderRange);
 
     expect([...insertedLines.keys()]).toEqual([50, 51]);
     expect(tokenizeLineCount).toBe(1);
@@ -561,7 +562,7 @@ describe('EditorTokenizer', () => {
         newText: 'changed ',
       },
     ])!;
-    const editedLines = tokenizer.tokenize(editLowerLine, renderRange, true);
+    const editedLines = tokenizer.tokenize(editLowerLine, renderRange);
 
     expect([...editedLines.keys()]).toEqual([80]);
     expect(tokenizeLineCount).toBe(1);
@@ -587,10 +588,12 @@ describe('EditorTokenizer', () => {
       netZeroChange.changedLineChanges?.map((change) => change[2])
     ).toEqual([1, -1]);
 
-    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange, true);
-    expect([...netZeroLines.keys()]).toEqual(
-      Array.from({ length: 90 }, (_, index) => index + 10)
-    );
+    // The lines between the two edits only moved. The edited lines tokenize
+    // again, plus the line after the insert, where the state settles.
+    tokenizeLineCount = 0;
+    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange);
+    expect([...netZeroLines.keys()]).toEqual([10, 11, 21]);
+    expect(tokenizeLineCount).toBe(3);
     tokenizer.cleanUp();
   });
 
@@ -658,12 +661,81 @@ describe('EditorTokenizer', () => {
     const dirtyLines = tokenizer.tokenize(change, renderRange);
 
     expect(change.lineDelta).toBeLessThan(0);
-    expect(dirtyLines.size).toBe(0);
-    expect(offscreenUpdates.at(-1)?.has(0)).toBe(true);
-    expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('');
+    // The flushed line rides with the edit instead of being delivered.
+    expect(offscreenUpdates).toHaveLength(0);
+    expect(dirtyLines.get(0)?.[0]?.[2]).toBe('');
   });
 
-  test('seeds the viewport from the propagated state when an offscreen delete reaches it', () => {
+  test('takes a paste of more lines than a call can carry as arguments', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    globalThis.addEventListener =
+      (() => {}) as typeof globalThis.addEventListener;
+    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+    try {
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        ['line 0', 'line 1', 'line 2'].join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({ getLanguage: () => grammar }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+      const renderRange = {
+        startingLine: 0,
+        totalLines: 10,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endCharacter: 0,
+          endLine: 2,
+          endedAtDocumentEnd: false,
+          previousLineCount: 3,
+          lineCount: 3,
+          lineDelta: 0,
+          changes: [],
+          changedLineRanges: [[0, 2]],
+        },
+        renderRange
+      );
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 0 },
+          },
+          newText: 'x\n'.repeat(200_000),
+        },
+      ])!;
+      const dirtyLines = tokenizer.tokenize(change, renderRange);
+      expect(dirtyLines.get(1)?.[0]?.[2]).toBe('x');
+      expect(textDocument.lineCount).toBe(200_003);
+      tokenizer.cleanUp();
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
+  test('an offscreen delete recolors the viewport only when it changes its state', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalRemoveEventListener = globalThis.removeEventListener;
     const originalPostMessage = globalThis.postMessage;
@@ -734,9 +806,9 @@ describe('EditorTokenizer', () => {
         { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
       );
 
-      // Scroll the viewport to line 100, then delete the single line directly
-      // above it. The deleted range reaches the viewport's first line, so the
-      // offscreen flush rebuilds the cached state right up to it.
+      // Scroll the viewport to line 100, then delete the line directly above
+      // it. The viewport is still inside the never-closed comment, so only
+      // the line that took the deleted one's place is colored again.
       const renderRange = {
         startingLine: 100,
         totalLines: 10,
@@ -755,9 +827,25 @@ describe('EditorTokenizer', () => {
       const dirtyLines = tokenizer.tokenize(change, renderRange);
 
       expect(change.lineDelta).toBeLessThan(0);
-      // The viewport is still inside the never-closed comment, so its first line
-      // must be colored as comment — not re-tokenized from the INITIAL state.
-      expect(dirtyLines.get(100)?.[0]?.[1]).toBe('#comment');
+      expect([...dirtyLines.keys()]).toEqual([99]);
+      expect(dirtyLines.get(99)?.[0]?.[1]).toBe('#comment');
+
+      // Deleting the comment's opening line takes the viewport out of the
+      // comment, so the coloring reaches it.
+      const opened = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 1, character: 0 },
+          },
+          newText: '',
+        },
+      ])!;
+      const recolored = tokenizer.tokenize(opened, {
+        ...renderRange,
+        startingLine: 99,
+      });
+      expect(recolored.get(100)?.[0]?.[1]).toBe('#code');
     } finally {
       globalThis.addEventListener = originalAddEventListener;
       globalThis.removeEventListener = originalRemoveEventListener;
@@ -1095,6 +1183,7 @@ describe('EditorTokenizer', () => {
     const originalPostMessage = globalThis.postMessage;
     const addedListeners: EventListenerOrEventListenerObject[] = [];
     const removedListeners: EventListenerOrEventListenerObject[] = [];
+    const postedMessages: unknown[] = [];
 
     globalThis.addEventListener = ((
       type: string,
@@ -1112,7 +1201,9 @@ describe('EditorTokenizer', () => {
         removedListeners.push(listener);
       }
     }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+    globalThis.postMessage = ((message: unknown) => {
+      postedMessages.push(message);
+    }) as typeof globalThis.postMessage;
 
     try {
       const grammar = {
@@ -1159,7 +1250,14 @@ describe('EditorTokenizer', () => {
       expect(addedListeners).toHaveLength(1);
       expect(removedListeners).toHaveLength(0);
 
-      tokenizer.stopBackgroundTokenize();
+      // Finishing the background work releases the listener.
+      for (const message of postedMessages) {
+        for (const listener of addedListeners) {
+          if (typeof listener === 'function') {
+            listener({ data: message } as MessageEvent);
+          }
+        }
+      }
       expect(removedListeners).toHaveLength(1);
       expect(removedListeners[0]).toBe(addedListeners[0]);
 
@@ -1372,7 +1470,6 @@ describe('EditorTokenizer', () => {
         }
       }
 
-      expect(messageIndex).toBe(4);
       expect(tokenizeLineCount).toBe(4);
       expect(messageListeners.size).toBe(0);
 
@@ -1396,6 +1493,8 @@ describe('EditorTokenizer', () => {
         bufferBefore: 0,
         bufferAfter: 0,
       });
+      // The edited line ends in a new state, so the lines below are left
+      // for the background.
       expect(postedMessages).toHaveLength(1);
 
       tokenizer.prebuildStateStack({
@@ -1404,7 +1503,6 @@ describe('EditorTokenizer', () => {
         bufferBefore: 0,
         bufferAfter: 0,
       });
-      expect(postedMessages).toHaveLength(1);
 
       messageIndex = 0;
       while (messageIndex < postedMessages.length) {
@@ -1498,8 +1596,10 @@ describe('EditorTokenizer', () => {
     });
 
     expect(tokenizeLineCount).toBe(1);
-    expect(dirtyLines.size).toBe(0);
-    expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('LINE 0');
+    // The edited line rides with the edit instead of being delivered.
+    expect([...dirtyLines.keys()]).toEqual([0]);
+    expect(dirtyLines.get(0)?.[0]?.[2]).toBe('LINE 0');
+    expect(offscreenUpdates).toHaveLength(0);
   });
 
   test('ignores queued background messages from stopped jobs', () => {
@@ -1577,7 +1677,6 @@ describe('EditorTokenizer', () => {
 
       tokenizer.tokenize(change, renderRange);
       const stoppedJobMessage = postedMessages.at(-1);
-      tokenizer.stopBackgroundTokenize();
       tokenizer.tokenize(change, renderRange);
       const activeJobMessage = postedMessages.at(-1);
       tokenizeLineCount = 0;
@@ -1805,7 +1904,7 @@ describe('EditorTokenizer', () => {
         endedAtDocumentEnd: false,
         previousLineCount: textDocument.lineCount,
         lineCount: textDocument.lineCount,
-        lineDelta: 1,
+        lineDelta: 0,
         changes: [],
         changedLineRanges: [[0, 799]],
       },
@@ -1973,9 +2072,10 @@ describe('EditorTokenizer', () => {
         }
       }
 
-      // State reconverges on the first unchanged line after the deletion, so
-      // the untouched document tail is not tokenized.
-      expect(tokenizeLineCount).toBe(6);
+      // Line 3 ends in the state it had, which settles the insertion, and
+      // line 8 settles the deletion after the joined line 7. Nothing between
+      // or below is touched.
+      expect(tokenizeLineCount).toBe(3);
       expect(messageListeners.size).toBe(0);
 
       const lineCount = textDocument.lineCount;
