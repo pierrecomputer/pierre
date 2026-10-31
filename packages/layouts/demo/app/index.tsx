@@ -1,0 +1,195 @@
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+
+import {
+  getPanes,
+  type LayoutNode,
+  LayoutStore,
+  naryTree,
+  type PaneNode,
+} from '../../src';
+import { Layout, type PaneAction } from '../../src/react';
+import AgentPane from '../agent';
+import { ModelSelect } from '../model-select';
+import { ResizeSelect, type ResizeStrategy } from '../resize-select';
+import { Sessions, useSessions } from './sessions';
+import './app.css';
+
+const PANES = [
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'agent', label: 'Agent' },
+  { id: 'editor', label: 'Editor' },
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'files', label: 'Files' },
+] as const;
+
+const LABELS: Record<string, string> = Object.fromEntries(
+  PANES.map(({ id, label }) => [id, label])
+);
+
+// Every pane of the app, in place. A toggle hides a pane or shows it again.
+// The binary model nests the row as sessions | (agent | (tools | files)).
+const TEMPLATE: LayoutNode = {
+  type: 'split',
+  id: 'app-row',
+  direction: 'horizontal',
+  sizes: [0.16, 0.4, 0.29, 0.15],
+  children: [
+    { type: 'pane', id: 'sessions', minWidth: 200, minHeight: 160 },
+    { type: 'pane', id: 'agent', minWidth: 320, minHeight: 200 },
+    {
+      type: 'split',
+      id: 'app-tools',
+      direction: 'vertical',
+      sizes: [0.62, 0.38],
+      children: [
+        { type: 'pane', id: 'editor', minWidth: 260, minHeight: 140 },
+        { type: 'pane', id: 'terminal', minWidth: 260, minHeight: 100 },
+      ],
+    },
+    { type: 'pane', id: 'files', minWidth: 180, minHeight: 160 },
+  ],
+};
+
+// Sessions is a fixed sidebar; the agent chat can move but always stays; the
+// tools can move, and their close button hides them.
+const paneActions = (pane: PaneNode): readonly PaneAction[] =>
+  pane.id === 'sessions'
+    ? []
+    : pane.id === 'agent'
+      ? ['move', 'zoom']
+      : ['move', 'zoom', 'close'];
+
+// The n-ary model: a drag of a separator changes only the panes beside it.
+const store = new LayoutStore(TEMPLATE, { model: naryTree });
+
+// A hidden pane keeps its content, so the close button hides it, and the
+// header toggle shows it again in its place.
+const hidePane = (pane: PaneNode): void => store.setHidden(pane.id, true);
+
+// A stable function, so that a change of the app's state does not render the
+// content of every pane again.
+const renderPane = (pane: PaneNode): JSX.Element =>
+  pane.id === 'sessions' ? <Sessions /> : <AgentPane id={pane.id} />;
+
+/** An agent app built with the layouts library: a full window with no page scroll. */
+export default function App(): JSX.Element {
+  const state = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot
+  );
+  const { sessions, active } = useSessions();
+  const [resize, setResize] = useState<ResizeStrategy>('live');
+  const [animateLayout, setAnimateLayout] = useState(true);
+  const [animateZoom, setAnimateZoom] = useState(true);
+  const [layers, setLayers] = useState<'on' | 'off' | 'auto'>('auto');
+  const visible = new Set(
+    getPanes(state.root)
+      .filter(({ hidden }) => hidden !== true)
+      .map(({ id }) => id)
+  );
+  const activeTitle =
+    sessions.find(({ id }) => id === active)?.title ?? 'Agent';
+
+  useEffect(() => {
+    document.title = `${activeTitle} — Layouts app`;
+  }, [activeTitle]);
+
+  const getPaneTitle = useCallback(
+    (pane: PaneNode): string =>
+      pane.id === 'agent' ? activeTitle : (LABELS[pane.id] ?? pane.id),
+    [activeTitle]
+  );
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <a className="app-brand" href="/">
+          <span className="app-mark" aria-hidden="true">
+            ▦
+          </span>
+          Layouts <span>app</span>
+        </a>
+        <nav className="app-toggles" aria-label="Panes">
+          {PANES.map(({ id, label }) => {
+            const shown = visible.has(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={shown}
+                disabled={shown && visible.size === 1}
+                onClick={() => store.setHidden(id, shown)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="app-header-end">
+          <label className="app-check">
+            <input
+              type="checkbox"
+              checked={animateLayout}
+              onChange={(event) => setAnimateLayout(event.target.checked)}
+            />
+            Animate panes
+          </label>
+          <label className="app-check">
+            <input
+              type="checkbox"
+              checked={animateZoom}
+              onChange={(event) => setAnimateZoom(event.target.checked)}
+            />
+            Animate zoom
+          </label>
+          <span className="app-resize">
+            Pane layers
+            <select
+              aria-label="Pane layers"
+              value={layers}
+              onChange={(event) =>
+                setLayers(event.target.value as 'on' | 'off' | 'auto')
+              }
+            >
+              <option value="auto">from 6 panes (default)</option>
+              <option value="on">on</option>
+              <option value="off">off</option>
+            </select>
+          </span>
+          <span className="app-resize">
+            Resize drag
+            <ResizeSelect value={resize} onChange={setResize} />
+          </span>
+          <span className="app-resize">
+            Tree
+            <ModelSelect
+              value={store.getModel()}
+              onChange={(model) => store.setModel(model)}
+            />
+          </span>
+          <a href="/">Playground</a>
+        </div>
+      </header>
+      <main className="app-main">
+        <Layout
+          store={store}
+          renderPane={renderPane}
+          getPaneTitle={getPaneTitle}
+          paneActions={paneActions}
+          onPaneClose={hidePane}
+          label="Agent workspace"
+          experimentalResize={resize}
+          animate={{ layout: animateLayout, zoom: animateZoom }}
+          paneLayers={layers === 'auto' ? undefined : layers === 'on'}
+        />
+      </main>
+    </div>
+  );
+}

@@ -1,0 +1,422 @@
+{
+  "schema": 1,
+  "createdAt": "2026-10-23T18:48:55.230Z",
+  "commit": {
+    "sha": "9f5de84deb0f565cc8e79c738fcfa8193e6d10c3",
+    "branch": "necolas/layout",
+    "dirty": false
+  },
+  "environment": {
+    "browser": "chromium 134.0.6998.35",
+    "headless": true,
+    "refreshHz": 120,
+    "deviceScaleFactor": 1,
+    "os": "darwin 27.0.0 arm64",
+    "cpu": "Apple M5 Pro",
+    "cpuCount": 18,
+    "memoryGb": 64,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "runs": 5,
+    "warmupRuns": 1,
+    "variant": "resize=live&isolate=layer"
+  },
+  "records": [
+    {
+      "scenario": "resize",
+      "panes": 16,
+      "content": "heavy",
+      "steps": 16,
+      "median": {
+        "mainThreadMs": 763.353,
+        "longestTaskMs": 50.517,
+        "styleRecalcs": 20,
+        "styleElements": 805,
+        "styleMs": 3.909,
+        "layouts": 16,
+        "layoutMs": 371.297,
+        "forcedLayouts": 0,
+        "prePaintMs": 194.414,
+        "paints": 740,
+        "paintMs": 154.148,
+        "layerizeMs": 16.405,
+        "framesPresented": 33,
+        "framesPartial": 0,
+        "framesDropped": 78,
+        "framesDroppedAfterFirst": 78,
+        "framesWithMainAnimation": 107,
+        "framesWithCompositorAnimation": 0,
+        "animations": 0,
+        "animationsNotComposited": 0,
+        "cdpLayoutCount": 16,
+        "cdpRecalcStyleCount": 20,
+        "cdpLayoutMs": 371.418,
+        "cdpRecalcStyleMs": 3.859,
+        "cdpScriptMs": 15.908,
+        "cdpTaskMs": 763.038,
+        "contentRenders": 0,
+        "contentResizeCallbacks": 256
+      },
+      "samples": {
+        "mainThreadMs": [776.615, 763.353, 684.696, 754.115, 771.13],
+        "longestTaskMs": [52.175, 50.517, 43.33, 47.674, 51.106],
+        "styleRecalcs": [20, 20, 20, 20, 20],
+        "styleElements": [805, 805, 805, 805, 805],
+        "styleMs": [4.082, 3.938, 3.66, 3.732, 3.909],
+        "layouts": [16, 16, 16, 16, 16],
+        "layoutMs": [371.297, 369.391, 338.978, 372.679, 391.321],
+        "forcedLayouts": [0, 0, 0, 0, 0],
+        "prePaintMs": [202.967, 194.414, 181.558, 189.538, 198.62],
+        "paints": [756, 759, 719, 735, 740],
+        "paintMs": [158.297, 163.181, 143.465, 150.786, 154.148],
+        "layerizeMs": [17.621, 17.433, 15.567, 15.897, 16.405],
+        "framesPresented": [33, 33, 33, 33, 33],
+        "framesPartial": [0, 0, 0, 0, 1],
+        "framesDropped": [78, 78, 69, 75, 78],
+        "framesDroppedAfterFirst": [78, 78, 69, 75, 78],
+        "framesWithMainAnimation": [109, 107, 100, 103, 117],
+        "framesWithCompositorAnimation": [0, 0, 0, 0, 0],
+        "animations": [0, 0, 0, 0, 0],
+        "animationsNotComposited": [0, 0, 0, 0, 0],
+        "cdpLayoutCount": [16, 16, 16, 16, 16],
+        "cdpRecalcStyleCount": [20, 20, 20, 20, 20],
+        "cdpLayoutMs": [371.418, 369.508, 339.061, 372.786, 391.423],
+        "cdpRecalcStyleMs": [4.026, 3.9, 3.61, 3.692, 3.859],
+        "cdpScriptMs": [17.431, 15.908, 15.235, 15.219, 16.344],
+        "cdpTaskMs": [776.686, 763.038, 684.624, 754.052, 771.066],
+        "contentRenders": [0, 0, 0, 0, 0],
+        "contentResizeCallbacks": [256, 256, 256, 256, 256]
+      }
+    },
+    {
+      "scenario": "resize",
+      "panes": 16,
+      "content": "real",
+      "steps": 16,
+      "median": {
+        "mainThreadMs": 783.8,
+        "longestTaskMs": 51.648,
+        "styleRecalcs": 78,
+        "styleElements": 4633,
+        "styleMs": 8.631,
+        "layouts": 74,
+        "layoutMs": 386.432,
+        "forcedLayouts": 33,
+        "prePaintMs": 64.278,
+        "paints": 1064,
+        "paintMs": 118.137,
+        "layerizeMs": 23.817,
+        "framesPresented": 47,
+        "framesPartial": 14,
+        "framesDropped": 68,
+        "framesDroppedAfterFirst": 68,
+        "framesWithMainAnimation": 33,
+        "framesWithCompositorAnimation": 0,
+        "animations": 0,
+        "animationsNotComposited": 0,
+        "cdpLayoutCount": 74,
+        "cdpRecalcStyleCount": 78,
+        "cdpLayoutMs": 386.674,
+        "cdpRecalcStyleMs": 8.416,
+        "cdpScriptMs": 83.031,
+        "cdpTaskMs": 782.951,
+        "contentRenders": 0,
+        "contentResizeCallbacks": 256
+      },
+      "samples": {
+        "mainThreadMs": [802.721, 795.018, 783.8, 777.373, 745.739],
+        "longestTaskMs": [51.074, 53.482, 51.648, 51.413, 51.921],
+        "styleRecalcs": [78, 78, 78, 78, 78],
+        "styleElements": [4633, 4633, 4633, 4633, 4633],
+        "styleMs": [8.82, 8.631, 8.708, 8.525, 8.545],
+        "layouts": [74, 74, 74, 74, 74],
+        "layoutMs": [391.619, 391.349, 386.432, 386.048, 383.672],
+        "forcedLayouts": [33, 33, 33, 33, 33],
+        "prePaintMs": [65.998, 63.758, 65.381, 63.636, 64.278],
+        "paints": [1097, 1071, 1037, 1030, 1064],
+        "paintMs": [120.256, 118.014, 118.949, 118.137, 117.32],
+        "layerizeMs": [23.764, 24.099, 23.206, 23.939, 23.817],
+        "framesPresented": [47, 48, 47, 47, 47],
+        "framesPartial": [14, 14, 15, 14, 14],
+        "framesDropped": [68, 65, 70, 66, 70],
+        "framesDroppedAfterFirst": [68, 65, 70, 66, 70],
+        "framesWithMainAnimation": [33, 32, 34, 32, 35],
+        "framesWithCompositorAnimation": [0, 1, 0, 1, 0],
+        "animations": [0, 0, 0, 0, 0],
+        "animationsNotComposited": [0, 0, 0, 0, 0],
+        "cdpLayoutCount": [74, 74, 74, 74, 74],
+        "cdpRecalcStyleCount": [78, 78, 78, 78, 78],
+        "cdpLayoutMs": [391.869, 391.596, 386.674, 386.288, 383.902],
+        "cdpRecalcStyleMs": [8.631, 8.416, 8.497, 8.341, 8.366],
+        "cdpScriptMs": [84.343, 89.348, 83.031, 80.981, 79.896],
+        "cdpTaskMs": [802.088, 794.478, 782.951, 776.799, 745.289],
+        "contentRenders": [0, 0, 0, 0, 0],
+        "contentResizeCallbacks": [256, 256, 256, 256, 256]
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "zoom-no-dropped-frames",
+      "rule": "frame-rate",
+      "description": "A zoom drops no frame (16 light panes).",
+      "limit": "0 frames",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "resize-no-dropped-frames",
+      "rule": "frame-rate",
+      "description": "A resize drag drops no frame (16 heavy panes).",
+      "limit": "0 frames",
+      "value": 78,
+      "pass": false
+    },
+    {
+      "id": "zoom-busy-no-dropped-frames",
+      "rule": "main-thread",
+      "description": "A 200 ms long task during a zoom drops no frame of the animation (4 light panes).",
+      "limit": "0 frames",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-no-main-thread-animation",
+      "rule": "main-thread",
+      "description": "No frame of a zoom needs a main-thread animation.",
+      "limit": "0 frames",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-animations-composited",
+      "rule": "compositing",
+      "description": "Every animation of a zoom runs on the compositor.",
+      "limit": "0 animations",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "split-animations-composited",
+      "rule": "compositing",
+      "description": "Every animation of a split runs on the compositor.",
+      "limit": "0 animations",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-main-thread-budget",
+      "rule": "time",
+      "description": "A zoom uses at most 4 ms of main-thread time (4 light panes).",
+      "limit": "4 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "restore-main-thread-budget",
+      "rule": "time",
+      "description": "A restore uses at most 4 ms of main-thread time (4 light panes).",
+      "limit": "4 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "split-main-thread-budget",
+      "rule": "time",
+      "description": "A split uses at most 4 ms of main-thread time (4 light panes).",
+      "limit": "4 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "close-main-thread-budget",
+      "rule": "time",
+      "description": "A close uses at most 4 ms of main-thread time (4 light panes).",
+      "limit": "4 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "move-main-thread-budget",
+      "rule": "time",
+      "description": "A move uses at most 4 ms of main-thread time (4 light panes).",
+      "limit": "4 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "focus-main-thread-budget",
+      "rule": "time",
+      "description": "A focus uses at most 4 ms of main-thread time (4 light panes).",
+      "limit": "4 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "resize-main-thread-per-step",
+      "rule": "time",
+      "description": "A resize drag uses at most 2 ms of main-thread time per pointer move (4 light panes).",
+      "limit": "2 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "focus-no-content-render",
+      "rule": "independence-from-content",
+      "description": "A focus change renders no pane content (16 heavy panes).",
+      "limit": "0 renders",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-no-content-render",
+      "rule": "independence-from-content",
+      "description": "A zoom renders no pane content (16 heavy panes).",
+      "limit": "0 renders",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "resize-no-content-render",
+      "rule": "independence-from-content",
+      "description": "A resize drag renders no pane content (16 heavy panes).",
+      "limit": "0 renders",
+      "value": 0,
+      "pass": true
+    },
+    {
+      "id": "zoom-one-content-resize",
+      "rule": "independence-from-content",
+      "description": "A zoom resizes the content of the zoomed pane once, not once per frame.",
+      "limit": "1 callback",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-layout-once",
+      "rule": "independence-from-content",
+      "description": "A zoom lays out at most twice: at the start and at the end (4 heavy panes).",
+      "limit": "2 layouts",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "focus-style-independent-of-content",
+      "rule": "independence-from-content",
+      "description": "The style work of a focus change does not grow with content (16 panes, heavy over light).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "resize-style-independent-of-content",
+      "rule": "independence-from-content",
+      "description": "The style work of a resize drag does not grow with content (16 panes, heavy over light).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-time-independent-of-content",
+      "rule": "independence-from-content",
+      "description": "The main-thread time of a zoom does not grow with content (16 panes, heavy over light).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "append-renders-one-pane",
+      "rule": "independence-of-layers",
+      "description": "Output in one pane renders only that pane: one render per update (16 heavy panes).",
+      "limit": "1 render per update",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "append-style-independent-of-panes",
+      "rule": "independence-of-layers",
+      "description": "The style work of output in one pane does not grow with the number of panes (heavy, 16 over 4).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "append-layout-independent-of-panes",
+      "rule": "independence-of-layers",
+      "description": "The layout time of output in one pane does not grow with the number of panes (heavy, 16 over 4).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "append-time-independent-of-panes",
+      "rule": "independence-of-layers",
+      "description": "The main-thread time of output in one pane does not grow with the number of panes (heavy, 16 over 4).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "hidden-append-no-layout",
+      "rule": "hidden-content",
+      "description": "Output in a pane under a zoomed pane causes no layout (4 heavy panes).",
+      "limit": "0 ms",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "hidden-append-no-paint",
+      "rule": "hidden-content",
+      "description": "Output in a pane under a zoomed pane causes no paint (4 heavy panes).",
+      "limit": "0 paints",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "zoom-time-independent-of-panes",
+      "rule": "scale",
+      "description": "The main-thread time of a zoom does not grow with the number of panes (light, 16 over 4).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "focus-time-independent-of-panes",
+      "rule": "scale",
+      "description": "The main-thread time of a focus does not grow with the number of panes (light, 16 over 4).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    },
+    {
+      "id": "split-time-independent-of-panes",
+      "rule": "scale",
+      "description": "The main-thread time of a split does not grow with the number of panes (light, 16 over 4).",
+      "limit": "ratio ≤ 1.25",
+      "value": null,
+      "pass": null
+    }
+  ],
+  "bundle": {
+    "@pierre/layouts": {
+      "minified": 12675,
+      "gzip": 4250,
+      "brotli": 3771,
+      "zstd": 4043
+    },
+    "@pierre/layouts/react": {
+      "minified": 21934,
+      "gzip": 7094,
+      "brotli": 6298,
+      "zstd": 6751
+    },
+    "@pierre/layouts/styles.css": {
+      "minified": 2788,
+      "gzip": 868,
+      "brotli": 709,
+      "zstd": 870
+    }
+  }
+}

@@ -1,0 +1,129 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f4f6f8;
+  color: #1c2430;
+  font:
+    13px/1.4 system-ui,
+    sans-serif;
+}
+
+.bench-workspace {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+}
+
+.bench-content {
+  min-height: 100%;
+}
+
+.bench-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+.bench-terminal,
+.bench-diff {
+  font:
+    12px/1.5 ui-monospace,
+    monospace;
+  white-space: pre;
+}
+
+.bench-terminal {
+  padding: 8px;
+  background: #11161d;
+  color: #d5dde8;
+}
+
+.bench-term-prompt {
+  color: #6fcf97;
+}
+
+.bench-term-output {
+  color: #9aa7b8;
+}
+
+.bench-diff-row {
+  display: flex;
+  gap: 8px;
+}
+
+.bench-diff-add {
+  background: #e9f8ee;
+}
+
+.bench-diff-del {
+  background: #fdecee;
+}
+
+.bench-diff-number {
+  width: 3em;
+  color: #8a94a3;
+  text-align: right;
+}
+
+.bench-token-keyword {
+  color: #8a3ffc;
+}
+
+.bench-token-string {
+  color: #0f7b6c;
+}
+
+.bench-tree {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.bench-tree-node {
+  display: flex;
+  gap: 6px;
+  padding-block: 1px;
+}
+
+.bench-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.bench-chat-message header {
+  font-weight: 600;
+}
+
+.bench-chat-message p {
+  margin: 4px 0;
+}
+
+.bench-chat-message pre {
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  border-radius: 4px;
+  background: #eef1f5;
+}
+
+.bench-real {
+  height: 100%;
+}
+
+.bench-real-terminal,
+.bench-real-tree {
+  height: 100%;
+}
+
+.bench-real-terminal {
+  background: #000;
+}
