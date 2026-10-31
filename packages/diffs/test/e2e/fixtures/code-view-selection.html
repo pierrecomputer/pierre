@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView keyboard selection fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-code-view-root] {
+        width: 720px;
+        height: 480px;
+        overflow: auto;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-code-view-root></div>
+
+    <script type="module">
+      import { CodeView } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const root = document.querySelector('[data-code-view-root]');
+
+      // Alternate short lines with lines long enough to soft-wrap.
+      const lines = [];
+      for (let index = 1; index <= 60; index++) {
+        lines.push(
+          index % 3 === 0
+            ? `Line ${index}: ${'lorem ipsum dolor sit amet '.repeat(5)}`
+            : `Line ${index}: short`
+        );
+      }
+
+      const codeView = new CodeView({
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        overflow: 'wrap',
+        disableFileHeader: true,
+        createEditor: (editorType, options, editStateKey) =>
+          new Editor(editorType, options, editStateKey),
+      });
+      codeView.setup(root);
+      codeView.setItems([
+        {
+          id: 'file',
+          type: 'file',
+          file: { name: 'selection.md', contents: `${lines.join('\n')}\n` },
+          version: 0,
+          edit: true,
+        },
+      ]);
+
+      const content = () =>
+        codeView
+          .getRenderedItems()
+          .find((item) => item.id === 'file')
+          ?.element?.shadowRoot?.querySelector('[data-content]');
+
+      const started = performance.now();
+      while (
+        codeView.getEditor('file') == null ||
+        content()?.getAttribute('contenteditable') !== 'true'
+      ) {
+        if (performance.now() - started > 5000) {
+          throw new Error('Timed out waiting for the editable CodeView item.');
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+
+      window.__selection = {
+        // The editor's selections as [startLine, startChar, endLine, endChar, direction].
+        selections: () =>
+          codeView
+            .getEditor('file')
+            .getViewState()
+            .selections.map(({ start, end, direction }) => [
+              start.line,
+              start.character,
+              end.line,
+              end.character,
+              direction,
+            ]),
+        // Client point at a zero-based character on a zero-based line.
+        pointAt(line, character) {
+          const row = content().querySelector(`[data-line="${line + 1}"]`);
+          const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+          let remaining = character;
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (remaining <= node.length) {
+              const range = document.createRange();
+              range.setStart(node, remaining);
+              range.setEnd(node, remaining);
+              const rect = range.getClientRects()[0];
+              return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+            }
+            remaining -= node.length;
+          }
+          throw new Error(`No character ${character} on line ${line}.`);
+        },
+      };
+      window.__selectionReady = true;
+    </script>
+  </body>
+</html>

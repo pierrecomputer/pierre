@@ -189,6 +189,31 @@ function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
   };
 }
 
+// The window selection's range inside the editor's shadow tree. Uses the
+// standard Selection.getComposedRanges where available and falls back to
+// ShadowRoot.getSelection otherwise (see getShadowRootRange).
+function getComposedWindowRange(
+  shadowRoot: ShadowRoot
+): StaticRange | undefined {
+  const selection = document.getSelection();
+  if (selection == null) {
+    return undefined;
+  }
+  if (typeof selection.getComposedRanges === 'function') {
+    return selection.getComposedRanges({ shadowRoots: [shadowRoot] })?.[0];
+  }
+  return getShadowRootRange(shadowRoot);
+}
+
+function isSameRange(a: AbstractRange, b: AbstractRange): boolean {
+  return (
+    a.startContainer === b.startContainer &&
+    a.startOffset === b.startOffset &&
+    a.endContainer === b.endContainer &&
+    a.endOffset === b.endOffset
+  );
+}
+
 /** Describe replacing the complete document from its previous text. */
 function createFullDocumentChange(
   previousContents: string,
@@ -544,6 +569,12 @@ export class Editor<
   // clears this, and keeping it through gutter pointerup also protects against
   // a queued selectionchange.
   #suppressNativeSelectionSync = false;
+  // The boundary points #setWindowSelection last applied to the window
+  // selection. Its selectionchange can arrive after the
+  // #shouldIgnoreSelectionChange window has closed, and must not be read as a
+  // user selection. Cleared by the next selectionchange the handler reads, and
+  // by pointer presses.
+  #windowSelectionEcho: StaticRange | undefined;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
   // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
@@ -1147,7 +1178,7 @@ export class Editor<
         primarySelection.direction === DirectionBackward
           ? primarySelection.end
           : primarySelection.start;
-      this.#focus(pos, preventScroll);
+      this.#focus(pos, preventScroll, undefined, primarySelection);
     } else {
       this.#focus(undefined, preventScroll);
     }
@@ -2128,31 +2159,26 @@ export class Editor<
             return;
           }
 
-          const selectionRaw = document.getSelection();
-          if (selectionRaw == null) {
-            return;
-          }
           // Read the caret/selection through the editor's shadow root.
           // getComposedRanges is the standard, spec'd way to do this but is only
           // available in newer browsers. When it is missing (older browsers,
           // embedded WebViews, and the pinned CI Chromium), fall back to the
           // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
-          // reports the range inside the shadow tree. Normalize that live Range
-          // to a StaticRange so it matches the getComposedRanges return shape.
-          // Only bail when neither API yields a range, so a click can still seed
-          // the caret rather than leaving the surface unusable.
-          let composedRange: StaticRange | undefined;
-          if (typeof selectionRaw.getComposedRanges === 'function') {
-            composedRange = selectionRaw.getComposedRanges({
-              shadowRoots: [shadowRoot],
-            })?.[0];
-          } else {
-            composedRange = getShadowRootRange(shadowRoot);
-          }
+          // reports the range inside the shadow tree. Only bail when neither API
+          // yields a range, so a click can still seed the caret rather than
+          // leaving the surface unusable.
+          const composedRange = getComposedWindowRange(shadowRoot);
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
           ) {
+            return;
+          }
+
+          // The editor's own #setWindowSelection, reported late.
+          const echo = this.#windowSelectionEcho;
+          this.#windowSelectionEcho = undefined;
+          if (echo !== undefined && isSameRange(echo, composedRange)) {
             return;
           }
 
@@ -2356,6 +2382,8 @@ export class Editor<
         'pointerdown',
         (e) => {
           this.#canMountSelectionAction = true;
+          // A press starts a user selection; its selectionchange is never an echo.
+          this.#windowSelectionEcho = undefined;
           // Any pointer press — mouse, touch, or pen — moves off the select-all
           // selection, so let selectionchange sync #selections from the new
           // native selection again. This must run before the mouse-only guard
@@ -4001,10 +4029,15 @@ export class Editor<
     }
   }
 
+  // `selection`, when given, is mirrored into the window selection in full.
+  // Collapsing the window selection to `position` while the editor shows a
+  // range would make a click on that position a no-op for the browser, so it
+  // would never reach selectionchange and the range would not clear.
   #focus(
     position?: Position,
     preventScroll = true,
-    shouldFocus?: () => boolean
+    shouldFocus?: () => boolean,
+    selection?: EditorSelection
   ) {
     // Mark focus eagerly: the positional branch defers the real focus() to a
     // rAF, so a same-tick applyEdits would otherwise see the editor as
@@ -4012,11 +4045,13 @@ export class Editor<
     this.#contentHasFocus = true;
     if (position !== undefined) {
       this.#shouldIgnoreSelectionChange = true;
-      this.#setWindowSelection({
-        start: position,
-        end: position,
-        direction: DirectionNone,
-      });
+      this.#setWindowSelection(
+        selection ?? {
+          start: position,
+          end: position,
+          direction: DirectionNone,
+        }
+      );
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
       queueRender(() => {
@@ -4221,6 +4256,13 @@ export class Editor<
       endLineElement,
       end.character
     );
+    const echo: StaticRange = {
+      collapsed: anchorNode === focusNode && anchorOffset === focusOffset,
+      startContainer: anchorNode,
+      startOffset: clampDomOffset(anchorNode, anchorOffset),
+      endContainer: focusNode,
+      endOffset: clampDomOffset(focusNode, focusOffset),
+    };
     if (direction === DirectionBackward) {
       [anchorNode, anchorOffset, focusNode, focusOffset] = [
         focusNode,
@@ -4236,6 +4278,7 @@ export class Editor<
         focusNode,
         clampDomOffset(focusNode, focusOffset)
       );
+      this.#windowSelectionEcho = echo;
     } catch (err) {
       console.error('[diffs/editor] failed to update window selection:', err);
     }
@@ -4263,7 +4306,7 @@ export class Editor<
         if (this.#replacementFocusRequest !== undefined) {
           this.#restoreReplacementFocus(position);
         } else {
-          this.#focus(position);
+          this.#focus(position, true, undefined, primarySelection);
         }
       }
     } else {
