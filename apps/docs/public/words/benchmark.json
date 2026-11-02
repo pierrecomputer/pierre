@@ -367,7 +367,7 @@
   },
   "footprint": {
     "measuredAt": "2026-11-02",
-    "head": "deb8e7b53f2bf09a6e3df54b3d5f3598d0a543be",
+    "head": "6b6adede21c2ff1f77527c8c749fc70c607ce4e7",
     "runtime": "v24.19.0",
     "units": "gzip bytes",
     "bundler": "0.27.4",
@@ -375,14 +375,14 @@
       {
         "id": "base",
         "label": "Base React renderer · initial load",
-        "wordsGzipBytes": 57915,
-        "streamdownGzipBytes": 158047
+        "wordsGzipBytes": 49996,
+        "streamdownGzipBytes": 158048
       },
       {
         "id": "highlight",
         "label": "TypeScript + two themes · loaded closure",
-        "wordsGzipBytes": 178968,
-        "streamdownGzipBytes": 239390
+        "wordsGzipBytes": 252373,
+        "streamdownGzipBytes": 239399
       }
     ],
     "css": {
@@ -502,5 +502,233 @@
     "Replay elapsed includes 40 ms delivery pacing and final settlement, so its ratio is not a CPU-throughput ratio.",
     "Additional settled JavaScript heap excludes native DOM, Wasm, graphics, and total process memory. It is not peak memory; reset deltas do not establish a leak.",
     "Configured transfer excludes React, React DOM, separately reported library CSS, application Tailwind CSS, other Streamdown languages, and extra plugins. Grammar coverage differs."
-  ]
+  ],
+  "packageRun": {
+    "head": "6b6adede21c2ff1f77527c8c749fc70c607ce4e7",
+    "environment": {
+      "date": "2026-11-02T15:11:35.130Z",
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M4 Pro",
+      "memoryBytes": 51539607552,
+      "versions": {
+        "md4x": "0.0.29",
+        "markdown-it": "15.0.0",
+        "streamdown": "2.7.1",
+        "react": "19.2.7",
+        "jsdom": "26.1.0"
+      }
+    },
+    "metrics": [
+      {
+        "label": "HTML throughput",
+        "description": "Median HTML throughput in MiB/s. Higher is better.",
+        "decimals": 1,
+        "engines": [
+          "Words",
+          "md4x (native)",
+          "md4x (Wasm)",
+          "markdown-it"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              318.1,
+              143.9,
+              105.4,
+              14.2
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              384.8,
+              208.7,
+              166.6,
+              23.4
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              441,
+              221.4,
+              178.8,
+              32.8
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              371.5,
+              190.1,
+              132.8,
+              22.8
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              370.3,
+              175.7,
+              126.6,
+              31
+            ]
+          }
+        ]
+      },
+      {
+        "label": "React stream replay",
+        "description": "Median ms per complete React replay in JSDOM, with chunks of up to 256 UTF-16 code units. Lower is better.",
+        "decimals": 2,
+        "engines": [
+          "Words React",
+          "Streamdown"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              3.35,
+              6.84
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              11.27,
+              31.56
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              6.53,
+              10.92
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              45.25,
+              181.71
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              281.06,
+              4385.23
+            ]
+          }
+        ]
+      },
+      {
+        "label": "HTML memory",
+        "description": "Median peak RSS growth in MiB through the first HTML render, relative to each process before engine import. Five processes per engine and fixture. Lower is better.",
+        "decimals": 1,
+        "engines": [
+          "Words",
+          "md4x (native)",
+          "md4x (Wasm)",
+          "markdown-it"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              3.2,
+              0.9,
+              7.7,
+              6.2
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              3.1,
+              0.9,
+              7.7,
+              6
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              3.2,
+              0.9,
+              7.7,
+              5.7
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              3.5,
+              1.4,
+              11.5,
+              8.7
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              8.7,
+              2.6,
+              22.1,
+              17.7
+            ]
+          }
+        ]
+      },
+      {
+        "label": "React stream memory",
+        "description": "Median peak RSS growth in MiB through a complete JSDOM replay, relative to each process before engine import. Five processes per engine and fixture. Lower is better.",
+        "decimals": 1,
+        "engines": [
+          "Words React",
+          "Streamdown"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              75.6,
+              87
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              85,
+              121.7
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              76.3,
+              94.4
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              109.6,
+              145.5
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              201.4,
+              328.9
+            ]
+          }
+        ]
+      }
+    ]
+  }
 }
