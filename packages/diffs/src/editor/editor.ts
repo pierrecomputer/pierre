@@ -5843,8 +5843,6 @@ export class Editor<
               nativeRanges.set(line + 1, lineRanges);
             }
             lineRanges.push({
-              side: this.#isDiff ? 'additions' : undefined,
-              lineNumber: line + 1,
               startCharacter,
               endCharacter,
               current: isFocused,

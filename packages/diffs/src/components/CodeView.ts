@@ -157,12 +157,10 @@ interface PagedScrollPosition {
 
 interface CodeViewSearchLineMetadata {
   itemId: string;
-  itemIndex: number;
   itemType: CodeViewItem<unknown>['type'];
   side: SelectionSide | undefined;
   lineNumber: number;
   lineIndex: number;
-  renderedLineIndex: number;
 }
 
 interface CodeViewSearchLine {
@@ -1814,8 +1812,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       if (root != null && itemMatches != null) {
         highlighter.paint(root, (lineNumber, side) =>
           itemMatches.get(`${side}:${lineNumber}`)?.map((match) => ({
-            side: match.side,
-            lineNumber: match.lineNumber,
             startCharacter: match.startCharacter,
             endCharacter: match.endCharacter,
             current:
@@ -1910,8 +1906,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   // Retained editor documents include edits the host has not echoed back yet.
-  // Diff matches belong to additions; map their row indexes in one diff pass
-  // instead of scanning all hunks separately for every match.
   private searchEditedItem(
     item: CodeViewContextItem<LAnnotation, Caret>,
     searchParams: SearchParams,
@@ -1924,45 +1918,20 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return undefined;
     }
 
-    const matches = document
+    return document
       .search(searchParams, limit)
       .map(([start, end]): CodeViewSearchMatch => {
         const position = document.positionAt(start);
         return {
           itemId: item.item.id,
-          itemIndex: item.index,
           itemType: item.type,
           side: item.type === 'diff' ? 'additions' : undefined,
           lineNumber: position.line + 1,
           lineIndex: position.line,
-          renderedLineIndex: position.line,
           startCharacter: position.character,
           endCharacter: position.character + end - start,
         };
       });
-    if (item.type === 'diff' && matches.length > 0) {
-      const diffStyle = this.options.diffStyle ?? 'split';
-      let matchIndex = 0;
-      iterateOverDiff({
-        diff: item.instance.getDiffForSearch() ?? item.item.fileDiff,
-        diffStyle,
-        expandedHunks: true,
-        callback: ({ additionLine }) => {
-          if (additionLine === undefined) {
-            return;
-          }
-          while (matches[matchIndex]?.lineIndex === additionLine.lineIndex) {
-            matches[matchIndex].renderedLineIndex =
-              diffStyle === 'unified'
-                ? additionLine.unifiedLineIndex
-                : additionLine.splitLineIndex;
-            matchIndex++;
-          }
-          return matchIndex === matches.length;
-        },
-      });
-    }
-    return matches;
   }
 
   private searchFileItem(
@@ -1975,12 +1944,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         text,
         metadata: {
           itemId: item.item.id,
-          itemIndex: item.index,
           itemType: 'file',
           side: undefined,
           lineNumber: lineIndex + 1,
           lineIndex,
-          renderedLineIndex: lineIndex,
         },
       })
     );
@@ -2030,15 +1997,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         text,
         metadata: {
           itemId: item.item.id,
-          itemIndex: item.index,
           itemType: 'diff',
           side,
           lineNumber: line.lineNumber,
           lineIndex: line.lineIndex,
-          renderedLineIndex:
-            diffStyle === 'unified'
-              ? line.unifiedLineIndex
-              : line.splitLineIndex,
         },
       });
     };
@@ -5467,6 +5429,8 @@ class CodeViewLineSearchDocument implements LineByLineSearchDocument {
   }
 }
 
+// Build source matches during the search pass instead of resolving each
+// absolute match offset back to a line afterward.
 function collectCodeViewLineMatches(
   lines: readonly CodeViewSearchLine[],
   searchParams: SearchParams,
@@ -5477,16 +5441,20 @@ function collectCodeViewLineMatches(
   }
 
   const document = new CodeViewLineSearchDocument(lines);
-  const ranges = searchLineByLine(document, searchParams, limit);
-  return ranges.map(([startOffset, endOffset]) => {
-    const lineIndex = document.getLineIndexAtOffset(startOffset);
-    const lineStart = document.getLineStartOffset(lineIndex);
-    return {
-      ...document.getMetadata(lineIndex),
-      startCharacter: startOffset - lineStart,
-      endCharacter: endOffset - lineStart,
-    };
-  });
+  const matches: CodeViewSearchMatch[] = [];
+  searchLineByLine(
+    document,
+    searchParams,
+    limit,
+    (_range, _index, line, startCharacter, endCharacter) => {
+      matches.push({
+        ...document.getMetadata(line),
+        startCharacter,
+        endCharacter,
+      });
+    }
+  );
+  return matches;
 }
 
 function trimLineEnding(text: string): string {
@@ -5511,7 +5479,6 @@ function areCodeViewSearchMatchesEqual(
     a.side === b.side &&
     a.lineNumber === b.lineNumber &&
     a.lineIndex === b.lineIndex &&
-    a.renderedLineIndex === b.renderedLineIndex &&
     a.startCharacter === b.startCharacter &&
     a.endCharacter === b.endCharacter
   );

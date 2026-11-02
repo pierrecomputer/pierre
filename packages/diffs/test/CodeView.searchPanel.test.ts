@@ -23,7 +23,6 @@ interface SearchMatchProbe {
   side: 'deletions' | 'additions' | undefined;
   lineNumber: number;
   lineIndex: number;
-  renderedLineIndex: number;
   startCharacter: number;
   endCharacter: number;
 }
@@ -942,18 +941,16 @@ describe('CodeView search panel', () => {
           { side: 'additions', lineNumber: 2 },
           { side: 'additions', lineNumber: 3 },
         ]);
-        const instance = viewer.getRenderedItems()[0].instance;
-        if (instance.type !== 'file-diff') {
-          throw new Error('Expected an editable diff');
-        }
-        for (const match of matches) {
-          expect(
-            instance.getLineIndex(match.lineNumber, 'additions')?.[
-              diffStyle === 'unified' ? 0 : 1
-            ]
-          ).toBe(match.renderedLineIndex);
-        }
         const highlights = getRenderedSearchMatches(root);
+        expect(
+          highlights.map((range) =>
+            Number(
+              range.startContainer.parentElement!.closest<HTMLElement>(
+                '[data-line]'
+              )?.dataset.line
+            )
+          )
+        ).toEqual(matches.map((match) => match.lineNumber));
         expect(highlights.map((range) => range.toString())).toEqual([
           'target',
           'target',
@@ -1467,11 +1464,10 @@ describe('CodeView search panel', () => {
 
       expect(
         getSearchState(viewer).matches.map(
-          ({ side, lineNumber, lineIndex, renderedLineIndex }) => ({
+          ({ side, lineNumber, lineIndex }) => ({
             side,
             lineNumber,
             lineIndex,
-            renderedLineIndex,
           })
         )
       ).toEqual([
@@ -1479,13 +1475,11 @@ describe('CodeView search panel', () => {
           side: 'deletions',
           lineNumber: 2,
           lineIndex: 1,
-          renderedLineIndex: 1,
         },
         {
           side: 'additions',
           lineNumber: 2,
           lineIndex: 1,
-          renderedLineIndex: 1,
         },
       ]);
     } finally {
@@ -1554,13 +1548,13 @@ describe('CodeView search panel', () => {
       fillSearch(root, 'only');
 
       expect(
-        getSearchState(viewer).matches.map(({ side, renderedLineIndex }) => ({
+        getSearchState(viewer).matches.map(({ side, lineNumber }) => ({
           side,
-          renderedLineIndex,
+          lineNumber,
         }))
       ).toEqual([
-        { side: 'deletions', renderedLineIndex: 1 },
-        { side: 'additions', renderedLineIndex: 2 },
+        { side: 'deletions', lineNumber: 2 },
+        { side: 'additions', lineNumber: 2 },
       ]);
     } finally {
       viewer.cleanUp();

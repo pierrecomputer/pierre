@@ -8,8 +8,15 @@ export interface SearchParams {
   regex: boolean;
 }
 
-// Called for each accepted match while the complete result array is collected.
-export type SearchMatchVisitor = (match: MatchRange, index: number) => void;
+// Called for each accepted match with both document offsets and line-relative
+// coordinates so callers need not recover the line from the offsets.
+export type SearchMatchVisitor = (
+  match: MatchRange,
+  index: number,
+  line: number,
+  startCharacter: number,
+  endCharacter: number
+) => void;
 
 export interface SearchPosition {
   readonly line: number;
@@ -152,7 +159,7 @@ function collectSearchMatchesLineByLine(
       ) {
         const range: MatchRange = [docStart, docStart + fragment.length];
         out.push(range);
-        onMatch?.(range, out.length - 1);
+        onMatch?.(range, out.length - 1, line, rel, rel + fragment.length);
         if (out.length >= limit) {
           return out;
         }

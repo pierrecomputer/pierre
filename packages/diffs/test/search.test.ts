@@ -59,12 +59,18 @@ describe('searchLineByLine', () => {
       'inmemory://search-visitor',
       'targeting target\ntarget target'
     );
-    const visited: { match: MatchRange; index: number }[] = [];
+    const visited: {
+      match: MatchRange;
+      index: number;
+      line: number;
+      startCharacter: number;
+      endCharacter: number;
+    }[] = [];
     const result = document.search(
       searchParams({ text: 'target', wholeWord: true }),
       2,
-      (match, index) => {
-        visited.push({ match, index });
+      (match, index, line, startCharacter, endCharacter) => {
+        visited.push({ match, index, line, startCharacter, endCharacter });
       }
     );
     expect(result).toEqual([
@@ -72,8 +78,44 @@ describe('searchLineByLine', () => {
       [17, 23],
     ]);
     expect(visited).toEqual([
-      { match: [10, 16], index: 0 },
-      { match: [17, 23], index: 1 },
+      {
+        match: [10, 16],
+        index: 0,
+        line: 0,
+        startCharacter: 10,
+        endCharacter: 16,
+      },
+      {
+        match: [17, 23],
+        index: 1,
+        line: 1,
+        startCharacter: 0,
+        endCharacter: 6,
+      },
+    ]);
+  });
+
+  test('visits UTF-16 line coordinates for regex matches across CRLF lines', () => {
+    const document = createSearchDocument('😀 aa\r\n\r\n😀 bbb cc');
+    const positions: number[][] = [];
+    const ranges = searchLineByLine(
+      document,
+      searchParams({ text: '[a-z]+', regex: true }),
+      3,
+      (_range, _index, line, startCharacter, endCharacter) => {
+        positions.push([line, startCharacter, endCharacter]);
+      }
+    );
+
+    expect(ranges).toEqual([
+      [3, 5],
+      [12, 15],
+      [16, 18],
+    ]);
+    expect(positions).toEqual([
+      [0, 3, 5],
+      [2, 3, 6],
+      [2, 7, 9],
     ]);
   });
 

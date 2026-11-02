@@ -1,8 +1,6 @@
 import type { SelectionSide } from '../types';
 
 export interface SearchHighlightRange {
-  side: SelectionSide | undefined;
-  lineNumber: number;
   startCharacter: number;
   endCharacter: number;
   current: boolean;
