@@ -266,6 +266,32 @@ export class DiffModel {
   }
 
   /**
+   * The new-file line where editing continues from an old-file line number:
+   * the same line for context, the block's first added line for a deleted
+   * one, or the line after the block when it adds nothing (the line count
+   * when the deletion ends the file). Undefined outside every hunk.
+   */
+  editLineFor(deletionLineNumber: number): number | undefined {
+    for (const hunk of this.diff.hunks) {
+      const offset = deletionLineNumber - hunk.deletionStart;
+      if (offset < 0 || offset >= hunk.deletionCount) {
+        continue;
+      }
+      const lineIndex = hunk.deletionLineIndex + offset;
+      const block = this.blockAt('deletions', lineIndex);
+      if (block == null) {
+        throw new Error(
+          `DiffModel.editLineFor: old line ${deletionLineNumber} is inside a hunk but outside its blocks`
+        );
+      }
+      return block.type === 'context'
+        ? block.additionLineIndex + (lineIndex - block.deletionLineIndex)
+        : block.additionLineIndex;
+    }
+    return undefined;
+  }
+
+  /**
    * Brings the diff up to date with one change to the editor's document.
    * Same-line-count edits copy the changed lines in and keep the hunks when
    * the session rules allow; line-count edits reread the document and

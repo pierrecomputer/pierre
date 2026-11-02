@@ -335,6 +335,60 @@ describe('DiffModel pairs', () => {
   });
 });
 
+describe('DiffModel.editLineFor', () => {
+  test('a context line continues on the same line', () => {
+    const model = DiffModel.fromDiff(makeDiff());
+    expect(model.editLineFor(2)).toBe(1);
+    expect(model.editLineFor(5)).toBe(4);
+  });
+
+  test('a deleted line continues on the first added line of its block', () => {
+    const model = DiffModel.fromDiff(makeDiff());
+    expect(model.editLineFor(3)).toBe(2);
+    // Two old lines replaced by one: both continue on that one.
+    const twoForOne = DiffModel.fromDiff(
+      makeDiff(
+        makeLines(29, { 3: 'merged' }),
+        makeLines(30, { 3: 'old 3', 4: 'old 4' })
+      )
+    );
+    expect(twoForOne.editLineFor(3)).toBe(2);
+    expect(twoForOne.editLineFor(4)).toBe(2);
+  });
+
+  test('a deletion with no added lines continues on the line after it', () => {
+    const withoutLine10 = makeLines(30).filter((_, index) => index !== 9);
+    const model = DiffModel.fromDiff(makeDiff(withoutLine10));
+    expect(model.blockAt('deletions', 9)?.type).toBe('change');
+    expect(model.editLineFor(10)).toBe(9);
+    expect(model.lineText(9)).toBe('line 11\n');
+  });
+
+  test('a deletion at the end of the file continues past the last line', () => {
+    const model = DiffModel.fromDiff(makeDiff(makeLines(30), makeLines(31)));
+    expect(model.editLineFor(31)).toBe(30);
+    expect(model.lineCount).toBe(30);
+  });
+
+  test('a line outside every hunk has no answer', () => {
+    const model = DiffModel.fromDiff(makeDiff());
+    expect(model.editLineFor(0)).toBeUndefined();
+    expect(model.editLineFor(10)).toBeUndefined();
+    expect(model.editLineFor(31)).toBeUndefined();
+  });
+
+  test('follows the new side through a session edit above the block', () => {
+    const model = DiffModel.startEditSession(makeDiff());
+    const document = makeDocument(makeDiff());
+    expect(model.editLineFor(3)).toBe(2);
+    // A line inserted above shifts every new-side answer below it by one.
+    model.applyChange(edit(document, 1, 0, 0, '\n'), document);
+    expect(model.editLineFor(2)).toBe(2);
+    expect(model.editLineFor(3)).toBe(3);
+    expect(model.blockAt('deletions', 2)?.type).toBe('change');
+  });
+});
+
 describe('DiffModel.applyChange', () => {
   test('reports the lines each edit changed', () => {
     const model = DiffModel.startEditSession(makeDiff());
