@@ -154,8 +154,8 @@ export function transformWat(input: string | URL, content?: string) {
     return `(i32.and (i32.load8_u offset=${table.base} ${expr.trim()}) (i32.const ${mask}))`;
   });
 
-  // (entity-table <base> <end>) - the HTML5 named character references: names
-  // grouped by length and sorted, then their code points. See buildEntityTable
+  // (entity-table <base> <end>) - the HTML5 named character references:
+  // front-coded sorted names, then their code points. See buildEntityTable
   // and $entityMatch.
   code = replaceForm(code, 'entity-table', (inner) => {
     const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
@@ -615,64 +615,64 @@ function loadEntities() {
 
 /**
  * the HTML5 named character reference tables, laid out as
- *   [base+0]   cpLoPtr u16, cpHiPtr u16
+ *   [base+0]   valuesPtr u16, name count u16
  *   [base+4]   the second code points of two-code-point values, u16 each
- *   [base+20]  one 4-byte group per name length 0..32:
- *              namesPtr u16 (first name of that length), firstIndex u16;
- *              a group's count is the next group's firstIndex minus its own
- *   names      in (length, lexicographic) order, without separators
- *   cpLo       u16 per name: the low 16 bits of the first code point
- *   cpHi       u8 per name: bit 0 is bit 16 of the first code point, bits 1-4
- *              index the second code point (0 = none)
- * Code points compress far better than UTF-8 strings with offsets.
+ *   [base+20]  u16 per block of 64 names: where its first name starts
+ *   names      sorted by byte, front-coded: per name, a byte below '0' with
+ *              how many leading bytes it shares with the previous name (0 at
+ *              each block start), then its other bytes. A 0 byte and 0x7f end
+ *              the list as a name that sorts after every key.
+ *   values     three planes, one byte per name each: bits 0-7 and 8-15 of the
+ *              first code point, then bit 16 in bit 0 and the 1-based index of
+ *              the second code point in bits 1-4 (0 = none)
+ * Front coding and byte planes compress far better than fixed-width names.
  */
 function buildEntityTable(base: number) {
   const table = loadEntities();
-  const names = Object.keys(table).sort((a, b) =>
-    a.length - b.length !== 0 ? a.length - b.length : a < b ? -1 : a > b ? 1 : 0
-  );
-  if (names[names.length - 1].length > 31)
-    throw new Error(
-      `entity name longer than 31 bytes: ${names[names.length - 1]}`
-    );
+  const names = Object.keys(table).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const second: number[] = [];
-  const points = names.map((name) => {
+  const stream: number[] = [];
+  const blocks: number[] = [];
+  const blockStart = base + 20 + Math.ceil(names.length / 64) * 2;
+  const n = names.length;
+  const values = new Uint8Array(n * 3);
+  let prev = '';
+  names.forEach((name, i) => {
+    if (!/^[a-zA-Z][a-zA-Z0-9]{0,30}$/.test(name))
+      throw new Error(`entity name exceeds packed format: ${name}`);
+    let shared = 0;
+    if (i % 64 === 0) blocks.push(blockStart + stream.length);
+    else while (name[shared] === prev[shared]) shared++;
+    stream.push(shared);
+    for (let j = shared; j < name.length; j++) stream.push(name.charCodeAt(j));
+    prev = name;
     const cps = [...table[name]].map((c) => c.codePointAt(0)!);
     if (cps.length === 2 && !second.includes(cps[1])) second.push(cps[1]);
-    return cps;
+    if (
+      cps.length > 2 ||
+      cps[0] > 0x1ffff ||
+      second.length > 8 ||
+      (cps[1] ?? 0) > 0xffff
+    )
+      throw new Error(`entity ${name} exceeds packed format`);
+    values[i] = cps[0] & 0xff;
+    values[n + i] = (cps[0] >> 8) & 0xff;
+    values[n * 2 + i] =
+      (cps[0] >> 16) |
+      (cps.length === 2 ? (second.indexOf(cps[1]) + 1) << 1 : 0);
   });
-  if (second.length > 8 || second.some((cp) => cp > 0xffff))
-    throw new Error('entity second code points exceed packed format');
-  const groups = 20;
-  const nameBytes = names.reduce((n, s) => n + s.length, 0);
-  const namesPtr = base + groups + 33 * 4;
-  const cpLoPtr = namesPtr + nameBytes;
-  const cpHiPtr = cpLoPtr + names.length * 2;
-  if (cpHiPtr + names.length > 0xffff)
-    throw new Error(`entity-table pointers exceed u16`);
-  const bytes = new Uint8Array(cpHiPtr + names.length - base);
+  stream.push(0, 0x7f);
+  const valuesPtr = blockStart + stream.length;
+  if (valuesPtr > 0xffff) throw new Error(`entity-table pointers exceed u16`);
+  const bytes = new Uint8Array(valuesPtr + values.length - base);
   const dv = new DataView(bytes.buffer);
-  dv.setUint16(0, cpLoPtr, true);
-  dv.setUint16(2, cpHiPtr, true);
+  dv.setUint16(0, valuesPtr, true);
+  dv.setUint16(2, n, true);
   second.forEach((cp, i) => dv.setUint16(4 + i * 2, cp, true));
-  let nameAt = namesPtr - base;
-  let index = 0;
-  for (let len = 0; len <= 32; len++) {
-    dv.setUint16(groups + len * 4, base + nameAt, true);
-    dv.setUint16(groups + len * 4 + 2, index, true);
-    for (const name of names.filter((n) => n.length === len)) {
-      for (let i = 0; i < len; i++) bytes[nameAt++] = name.charCodeAt(i);
-      const cps = points[index];
-      if (cps.length > 2 || cps[0] > 0x1ffff)
-        throw new Error(`entity ${name} exceeds packed format`);
-      dv.setUint16(cpLoPtr - base + index * 2, cps[0] & 0xffff, true);
-      bytes[cpHiPtr - base + index] =
-        (cps[0] >> 16) |
-        (cps.length === 2 ? (second.indexOf(cps[1]) + 1) << 1 : 0);
-      index++;
-    }
-  }
-  return { bytes, entries: names.length };
+  blocks.forEach((at, i) => dv.setUint16(20 + i * 2, at, true));
+  bytes.set(stream, blockStart - base);
+  bytes.set(values, valuesPtr - base);
+  return { bytes, entries: n };
 }
 
 /**
