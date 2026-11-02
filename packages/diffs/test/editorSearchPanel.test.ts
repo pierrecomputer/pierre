@@ -1366,6 +1366,9 @@ describe('SearchPanelWidget', () => {
       )!;
       expect(toggle.hidden).toBe(true);
       expect(toggle.ariaExpanded).toBe('false');
+      const replacement = panel.querySelector<HTMLInputElement>(
+        'input[data-replace]'
+      )!;
       const query =
         panel.querySelector<HTMLInputElement>('input[data-search]')!;
       const outside = document.createElement('input');
@@ -1383,9 +1386,7 @@ describe('SearchPanelWidget', () => {
       expect(toggle.hidden).toBe(false);
       expect(toggle.ariaExpanded).toBe('true');
       expect(document.activeElement).toBe(outside);
-      const replacement = panel.querySelector<HTMLInputElement>(
-        'input[data-replace]'
-      )!;
+      expect(panel.querySelector('input[data-replace]')).toBe(replacement);
       setInputValue(replacement, 'bar');
       const button = panel.querySelector<HTMLButtonElement>(
         'button[title="Replace"]'
@@ -1443,7 +1444,22 @@ describe('SearchPanelWidget', () => {
       expect(searchCalls).toEqual([defaultSearchParams({ text: 'foo' })]);
       expect(updates).toEqual([[[0, 3]]]);
       expect(grid?.dataset.mode).toBe('find');
-      expect(panel?.querySelector('[data-replace]')).toBeNull();
+      const replacement = panel.querySelector<HTMLInputElement>(
+        'input[data-replace]'
+      )!;
+      expect(replacement).not.toBeNull();
+      expect(
+        panel.querySelector<HTMLButtonElement>('[data-replace-toggle]')!.hidden
+      ).toBe(true);
+      pressKey(replacement, 'Enter');
+      panel
+        .querySelector<HTMLButtonElement>('button[title="Replace"]')!
+        .click();
+      panel
+        .querySelector<HTMLButtonElement>('button[title="Replace All"]')!
+        .click();
+      expect(searchCalls).toHaveLength(1);
+      expect(updates).toHaveLength(1);
       expect(
         panel.querySelector('#diffs-editor-icon-arrow-down')
       ).not.toBeNull();

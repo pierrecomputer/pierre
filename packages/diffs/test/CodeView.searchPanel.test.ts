@@ -334,8 +334,22 @@ describe('CodeView search panel', () => {
       const panel = getSearchPanelRoot(root);
       const grid = panel.querySelector<HTMLElement>('[data-search-grid]')!;
       expect(grid.dataset.mode).toBe('find');
-      expect(panel.querySelector('input[data-replace]')).toBeNull();
+      const replacement = panel.querySelector<HTMLInputElement>(
+        'input[data-replace]'
+      )!;
+      expect(replacement).not.toBeNull();
+      expect(
+        panel.querySelector<HTMLButtonElement>('[data-replace-toggle]')!.hidden
+      ).toBe(true);
       fillSearch(root, 'target');
+      replacement.dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+      );
+      replaceFromPanel(root);
+      replaceFromPanel(root, true);
+      expect(changes).toEqual([]);
+      expect(viewer.getEditor('a')!.getText()).toBe('target target');
+      expect(viewer.getEditor('b')!.getText()).toBe('target b');
       panel
         .querySelector<HTMLButtonElement>('button[title="Match Case"]')!
         .click();
@@ -343,7 +357,7 @@ describe('CodeView search panel', () => {
       viewer.render(true);
       await wait(0);
       expect(grid.dataset.mode).toBe('replace');
-      const replacement = fillReplace(root, 'changed');
+      expect(fillReplace(root, 'changed')).toBe(replacement);
       getEditorContent(viewer, 'b').focus();
       viewer.render(true);
       await wait(0);
@@ -1375,7 +1389,11 @@ describe('CodeView search panel', () => {
       expect(panel).not.toBeNull();
       expect(panel.dataset.searchPanelOverlay).toBe('');
       expect(grid?.dataset.mode).toBe('find');
-      expect(panelRoot.querySelector('[data-replace]')).toBeNull();
+      expect(panelRoot.querySelector('input[data-replace]')).not.toBeNull();
+      expect(
+        panelRoot.querySelector<HTMLButtonElement>('[data-replace-toggle]')!
+          .hidden
+      ).toBe(true);
       expect(input).not.toBeNull();
       expect(panelRoot.activeElement).toBe(input ?? null);
 

@@ -366,61 +366,54 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       dataset: { searchClose: '' },
     });
 
-    let replaceInputElement: HTMLInputElement | undefined;
-    // Build replacement controls on first use and retain them when capability
-    // is disabled, so switching search scope preserves the replacement text.
-    const createReplaceCells = (): Node[] => {
-      replaceInputElement = h('input', {
-        type: 'text',
-        placeholder: 'Replace',
-        dataset: 'replace',
-        value: '',
-        oninput: (e: Event) => {
-          searchParams.replaceText = (e.target as HTMLInputElement).value;
-        },
-        onkeydown: (e: KeyboardEvent) => {
-          if (e.isComposing || e.keyCode === 229) {
-            return;
-          }
-          const findAgain = resolveFindAgainShortcut(e);
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            close();
-          } else if (e.key === 'Enter') {
-            e.preventDefault();
-            replaceCurrentMatch();
-          } else if (findAgain !== undefined) {
-            e.preventDefault();
-            findNextMatch(findAgain === 'previous', true);
-          }
-        },
-      });
+    const replaceInputElement = h('input', {
+      type: 'text',
+      placeholder: 'Replace',
+      dataset: 'replace',
+      value: '',
+      oninput: (e: Event) => {
+        searchParams.replaceText = (e.target as HTMLInputElement).value;
+      },
+      onkeydown: (e: KeyboardEvent) => {
+        if (e.isComposing || e.keyCode === 229) {
+          return;
+        }
+        const findAgain = resolveFindAgainShortcut(e);
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          close();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          replaceCurrentMatch();
+        } else if (findAgain !== undefined) {
+          e.preventDefault();
+          findNextMatch(findAgain === 'previous', true);
+        }
+      },
+    });
 
-      // The replace input and its action buttons are tagged as replace cells so
-      // they can be hidden together when the panel is in find-only mode.
-      const replaceInputBox = h('div', {
-        dataset: { inputBox: '', replace: '', replaceCell: '' },
-        children: [replaceInputElement],
-      });
+    // The replace input and its action buttons are tagged as replace cells so
+    // they can be hidden together when the panel is in find-only mode.
+    const replaceInputBox = h('div', {
+      dataset: { inputBox: '', replace: '', replaceCell: '' },
+      children: [replaceInputElement],
+    });
 
-      const replaceActionsElement = h('div', {
-        dataset: { replaceActions: '', replaceCell: '' },
-        children: [
-          iconButton({
-            icon: 'replace',
-            label: 'Replace',
-            onClick: replaceCurrentMatch,
-          }),
-          iconButton({
-            icon: 'replace-all',
-            label: 'Replace All',
-            onClick: replaceAllMatches,
-          }),
-        ],
-      });
-
-      return [replaceInputBox, replaceActionsElement];
-    };
+    const replaceActionsElement = h('div', {
+      dataset: { replaceActions: '', replaceCell: '' },
+      children: [
+        iconButton({
+          icon: 'replace',
+          label: 'Replace',
+          onClick: replaceCurrentMatch,
+        }),
+        iconButton({
+          icon: 'replace-all',
+          label: 'Replace All',
+          onClick: replaceAllMatches,
+        }),
+      ],
+    });
 
     // Keep the replace row reachable without its keyboard shortcut.
     const replaceToggleElement = iconButton({
@@ -432,7 +425,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
           applyMode('find');
         } else {
           applyMode('replace');
-          replaceInputElement?.focus();
+          replaceInputElement.focus();
         }
       },
     });
@@ -441,34 +434,26 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       normalizeMode(mode) === 'replace'
     );
 
-    let replaceCells =
-      replaceHandlers != null ? createReplaceCells() : undefined;
-    const gridChildren: Node[] = [
-      replaceToggleElement,
-      findInputBox,
-      ...(replaceCells ?? []),
-    ];
-
-    gridChildren.push(matchResultElement, navElement, closeElement);
-
-    // Cells are positioned by CSS grid-template-areas (see editor.css), so DOM
+    // Cells are positioned by CSS grid-template-areas (see searchPanel.css), so DOM
     // order here only drives tab/reading order, not layout. Keep the replace
     // input directly after the find input (and its toggles) so Tab walks
     // chevron -> find -> replace before reaching the nav arrows and close
     // button.
     const gridElement = h('div', {
       dataset: { searchGrid: '', mode: normalizeMode(mode) },
-      children: gridChildren,
+      children: [
+        replaceToggleElement,
+        findInputBox,
+        replaceInputBox,
+        replaceActionsElement,
+        matchResultElement,
+        navElement,
+        closeElement,
+      ],
     });
 
     this.#setReplaceHandlers = (handlers) => {
       replaceHandlers = handlers;
-      if (handlers != null && replaceCells == null) {
-        replaceCells = createReplaceCells();
-        for (const cell of replaceCells) {
-          gridElement.insertBefore(cell, matchResultElement);
-        }
-      }
       gridElement.dataset.mode = normalizeMode(requestedMode);
       replaceToggleElement.hidden = replaceHandlers == null;
       replaceToggleElement.ariaExpanded = String(

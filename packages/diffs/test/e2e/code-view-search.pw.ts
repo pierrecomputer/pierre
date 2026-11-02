@@ -473,6 +473,61 @@ for (const kind of ['file', 'split', 'unified'] as const) {
   });
 }
 
+for (const width of [1200, 360]) {
+  test(`global find skips hidden replacement controls and preserves them across scope changes at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+Alt+f');
+    const panel = root.locator('[data-search-panel-overlay]');
+    const search = panel.getByRole('textbox', { name: 'Search' });
+    const replacement = panel.locator('input[data-replace]');
+    const actions = panel.locator('[data-replace-actions] button');
+    const toggle = panel.locator('[data-replace-toggle]');
+    await search.fill('target');
+    await expect(panel.locator('[data-search-grid]')).toHaveAttribute(
+      'data-mode',
+      'find'
+    );
+    await expect(replacement).toHaveCount(1);
+    await expect(actions).toHaveCount(2);
+    await expect(replacement).toBeHidden();
+    await expect(actions.nth(0)).toBeHidden();
+    await expect(actions.nth(1)).toBeHidden();
+    await expect(toggle).toBeHidden();
+    for (const name of [
+      'Match Case',
+      'Whole Word',
+      'Regexp',
+      'Previous',
+      'Next',
+      'Close',
+    ]) {
+      await page.keyboard.press('Tab');
+      await expect(
+        panel.getByRole('button', { name, exact: true })
+      ).toBeFocused();
+    }
+
+    const content = root.locator('[contenteditable="true"]').nth(1);
+    await content.focus();
+    await expect(replacement).toBeVisible();
+    await expect(actions.nth(0)).toBeVisible();
+    await expect(actions.nth(1)).toBeVisible();
+    await expect(toggle).toBeVisible();
+    await replacement.fill('retained');
+    await root.focus();
+    await expect(replacement).toBeHidden();
+    await expect(toggle).toBeHidden();
+    await content.focus();
+    await expect(replacement).toBeVisible();
+    await expect(replacement).toHaveValue('retained');
+  });
+}
+
 test('ending edit mode with replacement input focused leaves find usable', async ({
   page,
 }) => {
