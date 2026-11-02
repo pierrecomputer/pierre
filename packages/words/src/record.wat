@@ -13,6 +13,7 @@
   (func $contentAt (param $off i32) (result i32)
     (i32.add (global.get $contentBase) (local.get $off)))
 
+  ;; A new record of $type; bits 8..15 of $type may carry its flags.
   (func $recNew (param $type i32) (result i32)
     (local $r i32)
     (call $ensureRec (i32.const $R.header))

@@ -20,19 +20,19 @@
       [48:64)         decimal conversion scratch
       [64:80)         hex digits
       [80:1088)       pooled output string literals
-      [1088:27712)    HTML5 named character references
-      [27712:29248)   Unicode P|S code point ranges
-      [29248:32576)   Unicode case folding
-      [32576:33344)   HTML block tag names and the GFM tag filter list
-      [33344:36672)   Unicode display width ranges
-      [36672:36744)   ansi marker fragments and SGR depth counters
-      [36744:42744)   block analysis container stack; render reuses it as the
+      [1088:21632)    HTML5 named character references
+      [21632:23168)   Unicode P|S code point ranges
+      [23168:26496)   Unicode case folding
+      [26496:27264)   HTML block tag names and the GFM tag filter list
+      [27264:30592)   Unicode display width ranges
+      [30592:30664)   ansi marker fragments, constants, and SGR depth counters
+      [30664:36664)   block analysis container stack; render reuses it as the
                       type/tightness stack, then opener bottoms, tick memo, and
                       the bracket stack
-      [42744:44024)   table column widths and alignments
-      [44024:45048)   ansi line prefix and pending marker
-      [45048:46584)   ansi list state
-      [46584:65536)   cached ansi table-cell widths
+      [36664:37944)   table column widths and alignments
+      [37944:38968)   ansi line prefix and pending marker
+      [38968:40504)   ansi list state
+      [40504:65536)   cached ansi table-cell widths
     [] pages 2..N (text buffer)
       [65536:EOF)     input, a NUL sentinel, then at least 32 bytes of slack
       [meta:rec)      frontmatter JSON
@@ -90,8 +90,6 @@
     (local $fmMeta i32)
     (local $blockStart i32)
     (local $blockEnd i32)
-    (local $fastText i32)
-    (local $matched i32)
     (local $fenceBlank i32)
     ;; complete() runs right before this render, so its note belongs to this input
     (local.set $fenceBlank (global.get $completeFenceBlank))
@@ -143,115 +141,103 @@
     (global.set $fnTotal (i32.const 0))
     (global.set $fnUsed (i32.const 0))
     (global.set $hrKill (i32.const 0))
+    ;; each later line starts past the first-nonspace memo of the line before
+    (global.set $fns (i32.const 0))
     (global.set $idleBlank (i32.const 0))
     (local.set $blockStart (global.get $src))
     (block $blocksDone
       (loop $blockLine
-        (br_if $blocksDone (i32.ge_u (local.get $blockStart) (global.get $eof)))
-        ;; A document-level empty LF line closes ordinary leaves immediately;
-        ;; no indentation scan or container state is needed for this boundary.
-        (if (i32.and
-              (i32.and (i32.eqz (global.get $sp))
-                (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const 10)))
-              (i32.and (i32.ne (global.get $leaf) (enum.get $Blk.code))
-                (i32.or (i32.ne (global.get $leaf) (enum.get $Blk.html))
-                  (i32.gt_u (global.get $htmlKind) (i32.const 5)))))
-          (then
-            (call $closeLeaf)
-            (local.set $blockStart (i32.add (local.get $blockStart) (i32.const 1)))
-            (if (i32.gt_u (local.get $blockStart) (local.get $fenceBlank))
+        (block $boundary
+          (br_if $blocksDone (i32.ge_u (local.get $blockStart) (global.get $eof)))
+          (if (i32.eqz (global.get $sp))
+            (then
+              ;; A document-level empty LF line closes ordinary leaves at once;
+              ;; this boundary needs no indentation scan or container state.
+              (if (i32.and (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const 10))
+                    (call $blankEndsLeaf))
+                (then
+                  (call $closeLeaf)
+                  (local.set $blockStart (i32.add (local.get $blockStart) (i32.const 1)))
+                  (br $boundary)))
+              (if (i32.eqz (i32.or (global.get $mode) (global.get $leaf)))
+                (then
+                  (if (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart))))
+                    (then
+                      (local.set $blockStart (call $startPlainParagraphRun (local.get $blockStart)))
+                      (br $blockLine)))))))
+          (local.set $blockEnd (call $findLineEnd (local.get $blockStart)))
+          (global.set $lineEnd (local.get $blockEnd))
+          (global.set $pos (local.get $blockStart))
+          (global.set $col (i32.const 0))
+          (global.set $ptab (i32.const 0))
+          (global.set $allMatched (i32.const 1))
+          (global.set $lastMatched (i32.const 0))
+          (global.set $closed (i32.const 0))
+          (global.set $skipLine (i32.const 0))
+          ;; Two or more call sites keep the line phases out of this loop, which
+          ;; leaves the engine budget to inline their small helpers.
+          (block $lineDone
+            (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
               (then
-                (i32.store (i32.const 26)
-                  (i32.sub (local.get $blockStart) (i32.const $mem.input)))
-                (global.set $boundaryRec (global.get $rec))))
-            (br $blockLine)))
-        (if (i32.eqz (i32.or (global.get $mode)
-              (i32.or (global.get $sp) (global.get $leaf))))
-          (then
-            (if (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart))))
-              (then
-                (local.set $blockStart (call $startPlainParagraphRun (local.get $blockStart)))
-                (br $blockLine)))))
-        (local.set $blockEnd (call $findLineEnd (local.get $blockStart)))
-        (global.set $lineEnd (local.get $blockEnd))
-        (global.set $pos (local.get $blockStart))
-        (global.set $col (i32.const 0))
-        (global.set $ptab (i32.const 0))
-        (global.set $fns (i32.const 0))
-        (global.set $allMatched (i32.const 1))
-        (global.set $lastMatched (i32.const 0))
-        (global.set $closed (i32.const 0))
-        (global.set $skipLine (i32.const 0))
-        (local.set $fastText (i32.const 0))
-        (local.set $matched (i32.const 0))
-        (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
-          (then
-            (local.set $fastText (call $tryCodeRun))
-            (if (local.get $fastText)
-              (then (local.set $blockEnd (global.get $lineEnd))))))
-        (if (i32.and (i32.eqz (local.get $fastText)) (i32.eqz (global.get $sp)))
-          (then
-            (call $findFirstNonspace)
-            (if (global.get $blank)
-              (then
-                (if (i32.and
-                      (i32.ne (global.get $leaf) (enum.get $Blk.code))
-                      (i32.or
-                        (i32.ne (global.get $leaf) (enum.get $Blk.html))
-                        (i32.gt_u (global.get $htmlKind) (i32.const 5))))
+                (if (call $tryCodeRun)
                   (then
-                    (call $closeLeaf)
-                    (local.set $fastText (i32.const 1)))))
-              (else
-                (if (i32.eq (global.get $leaf) (enum.get $Blk.p))
-                  (then
-                    ;; At document depth the open paragraph is the matched leaf.
-                    (global.set $lastMatched (i32.const 1))
-                    (local.set $fastText (call $tryParagraphContinuation))
-                    (if (local.get $fastText)
-                      (then (local.set $blockEnd (global.get $lineEnd))))))))))
-        ;; Nested paragraphs still match their container prefixes first. The
-        ;; ordinary-text case can then skip block-start scanning and generic
-        ;; looseness dispatch, including when the line is a lazy continuation.
-        (if (i32.and
-              (i32.eqz (local.get $fastText))
-              (i32.and (global.get $sp)
-                (i32.eq (global.get $leaf) (enum.get $Blk.p))))
-          (then
-            (local.set $matched (i32.const 1))
-            (local.set $fastText (call $matchOpenBlocks))
-            (if (i32.eqz (local.get $fastText))
-              (then (local.set $fastText (call $tryParagraphContinuation))))))
-        (if (i32.eqz (local.get $fastText))
-          (then
-            (if (i32.eqz (local.get $matched))
-              (then (local.set $fastText (call $matchOpenBlocks))))
-            (if (i32.eqz (local.get $fastText))
+                    (local.set $blockEnd (global.get $lineEnd))
+                    (br $lineDone)))))
+            (if (i32.eqz (global.get $sp))
               (then
-                (global.set $curLevel (global.get $lastMatched))
-                (call $openNewBlocks)
-                (call $addTextToContainer)))))
-        ;; Freeze only newline-terminated blank lines at document depth. EOF
-        ;; closures and open lists/code remain mutable; inline repair resets at
-        ;; a blank line, so it cannot carry delimiters across this boundary.
-        ;; $blank also holds after a thematic break or an empty heading, so the
-        ;; line itself must be blank. Repair keeps its state at blank lines
-        ;; inside what it takes for a fence, up to $fenceBlank.
-        (if (i32.and (i32.and (global.get $blank) (i32.eqz (global.get $sp)))
-              (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.none))
-                (i32.lt_u (local.get $blockEnd) (global.get $eof))))
-          (then
-            (if (i32.ge_u (call $skipSpace (local.get $blockStart) (local.get $blockEnd))
-                  (local.get $blockEnd))
-              (then
-                (local.set $blockStart (call $lineAfter (local.get $blockEnd)))
-                (if (i32.gt_u (local.get $blockStart) (local.get $fenceBlank))
+                (call $findFirstNonspace)
+                (if (global.get $blank)
                   (then
-                    (i32.store (i32.const 26)
-                      (i32.sub (local.get $blockStart) (i32.const $mem.input)))
-                    (global.set $boundaryRec (global.get $rec))))
-                (br $blockLine)))))
-        (local.set $blockStart (call $lineAfter (local.get $blockEnd)))
+                    (if (call $blankEndsLeaf)
+                      (then
+                        (call $closeLeaf)
+                        (br $lineDone))))
+                  (else
+                    ;; At document depth phase 1 only confirms an open paragraph.
+                    (if (i32.eq (global.get $leaf) (enum.get $Blk.p))
+                      (then
+                        (global.set $lastMatched (i32.const 1))
+                        (if (call $tryParagraphContinuation)
+                          (then (local.set $blockEnd (global.get $lineEnd)))
+                          (else (call $addBlockLine)))
+                        (br $lineDone)))
+                    (if (i32.eqz (global.get $leaf))
+                      (then
+                        (call $addBlockLine)
+                        (br $lineDone)))))))
+            ;; Nested paragraphs still match their container prefixes first.
+            ;; The ordinary-text case can then skip block-start scanning and
+            ;; generic looseness dispatch, also when the line is a lazy
+            ;; continuation.
+            (br_if $lineDone (call $matchOpenBlocks))
+            (br_if $lineDone (if (result i32)
+              (i32.and (global.get $sp) (i32.eq (global.get $leaf) (enum.get $Blk.p)))
+              (then (call $tryParagraphContinuation))
+              (else (i32.const 0))))
+            (call $addBlockLine))
+          ;; Freeze only newline-terminated blank lines at document depth. EOF
+          ;; closures and open lists/code remain mutable; inline repair resets
+          ;; at a blank line, so it cannot carry delimiters across this
+          ;; boundary. $blank also holds after a thematic break or an empty
+          ;; heading, so the line itself must be blank. Repair keeps its state
+          ;; at blank lines inside what it takes for a fence, up to $fenceBlank.
+          (if (i32.and (i32.and (global.get $blank) (i32.eqz (global.get $sp)))
+                (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.none))
+                  (i32.lt_u (local.get $blockEnd) (global.get $eof))))
+            (then
+              (if (i32.ge_u (call $skipSpace (local.get $blockStart) (local.get $blockEnd))
+                    (local.get $blockEnd))
+                (then
+                  (local.set $blockStart (call $lineAfter (local.get $blockEnd)))
+                  (br $boundary)))))
+          (local.set $blockStart (call $lineAfter (local.get $blockEnd)))
+          (br $blockLine))
+        ;; a blank line at document depth is a safe append boundary
+        (if (i32.gt_u (local.get $blockStart) (local.get $fenceBlank))
+          (then
+            (i32.store (i32.const 26)
+              (i32.sub (local.get $blockStart) (i32.const $mem.input)))
+            (global.set $boundaryRec (global.get $rec))))
         (br $blockLine)))
     ;; Preserve the specific leaf closed by EOF so nested/footnote code blocks
     ;; can expose their incomplete state without guessing from output order.

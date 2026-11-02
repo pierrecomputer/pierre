@@ -23,102 +23,104 @@
   (global $lmChar (mut i32) (i32.const 0))
   (global $lmStart (mut i32) (i32.const 0))
 
-  ;; advance $count bytes (or columns, when $columns is set) from $pos,
-  ;; expanding tabs to the next multiple of four
-  (func $advance (param $count i32) (param $columns i32)
-    (local $c i32)
-    (local $toTab i32)
-    (local $n i32)
+  ;; Advance $count columns into the leading spaces and tabs, expanding tabs
+  ;; to the next multiple of four. $findFirstNonspace must be current, with
+  ;; $count at most $indent, so the walk never leaves the whitespace. A tab
+  ;; that crosses the target column stays partly consumed.
+  (func $advance (param $count i32)
     (local $p i32)
     (local $column i32)
-    (local $partial i32)
-    (local $end i32)
+    (local $target i32)
+    (local $next i32)
     (local.set $p (global.get $pos))
     (local.set $column (global.get $col))
-    (local.set $partial (global.get $ptab))
-    (local.set $end (global.get $lineEnd))
-    (block $done
-      (loop $l
-        (br_if $done (i32.eqz (local.get $count)))
-        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
-        (local.set $c (i32.load8_u (local.get $p)))
-        (if (i32.eq (local.get $c) (i32.const 9))
-          (then
-            (local.set $toTab
-              (i32.sub (i32.const 4) (i32.and (local.get $column) (i32.const 3))))
-            (if (local.get $columns)
-              (then
-                (local.set $partial (i32.gt_u (local.get $toTab) (local.get $count)))
-                (local.set $n (select (local.get $count) (local.get $toTab)
-                  (local.get $partial)))
-                (local.set $column (i32.add (local.get $column) (local.get $n)))
-                (if (i32.eqz (local.get $partial))
-                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-                (local.set $count (i32.sub (local.get $count) (local.get $n))))
-              (else
-                (local.set $partial (i32.const 0))
-                (local.set $column (i32.add (local.get $column) (local.get $toTab)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (local.set $count (i32.sub (local.get $count) (i32.const 1))))))
-          (else
-            (local.set $partial (i32.const 0))
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (local.set $column (i32.add (local.get $column) (i32.const 1)))
-            (local.set $count (i32.sub (local.get $count) (i32.const 1)))))
-        (br $l)))
-    (global.set $pos (local.get $p))
-    (global.set $col (local.get $column))
-    (global.set $ptab (local.get $partial)))
-
-  ;; advance $pos to the first byte that is neither space nor tab, without
-  ;; expanding a tab that the cursor is standing on
-  (func $advanceToFns
-    (call $findFirstNonspace)
-    (global.set $pos (global.get $fns))
-    (global.set $col (global.get $fnsCol))
-    (global.set $ptab (i32.const 0)))
-
-  ;; Reuse the first-nonspace column even when the cursor has reached that byte.
-  ;; Each new line invalidates fns with zero; advancing past it requires a scan.
-  (func $findFirstNonspace
-    (local $c i32)
-    (local $toTab i32)
-    (local $p i32)
-    (local $column i32)
-    (local $first i32)
-    (local $firstCol i32)
-    (local $end i32)
-    (local.set $p (global.get $pos))
-    (local.set $column (global.get $col))
-    (local.set $first (global.get $fns))
-    (local.set $firstCol (global.get $fnsCol))
-    (local.set $end (global.get $lineEnd))
-    (if (i32.lt_u (local.get $first) (local.get $p))
+    (local.set $target (i32.add (local.get $column) (local.get $count)))
+    (global.set $ptab (i32.const 0))
+    ;; without wide tabs every byte is one column
+    (if (i32.ne (i32.sub (global.get $fns) (local.get $p)) (global.get $indent))
       (then
-        (local.set $first (local.get $p))
-        (local.set $firstCol (local.get $column))
-        (local.set $toTab
-          (i32.sub (i32.const 4) (i32.and (local.get $column) (i32.const 3))))
         (block $done
           (loop $l
-            (br_if $done (i32.ge_u (local.get $first) (local.get $end)))
+            (br_if $done (i32.ge_u (local.get $column) (local.get $target)))
+            (local.set $next (i32.add (local.get $column) (i32.const 1)))
+            (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 9))
+              (then
+                (local.set $next (i32.add (i32.or (local.get $column) (i32.const 3)) (i32.const 1)))
+                (if (i32.gt_u (local.get $next) (local.get $target))
+                  (then
+                    (global.set $ptab (i32.const 1))
+                    (br $done)))))
+            (local.set $column (local.get $next))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $l)))
+        (local.set $count (i32.sub (local.get $p) (global.get $pos)))))
+    (global.set $pos (i32.add (global.get $pos) (local.get $count)))
+    (global.set $col (local.get $target)))
+
+  ;; Move the cursor $n bytes, none of them a tab, past the first byte that is
+  ;; neither space nor tab. $findFirstNonspace must be current.
+  (func $advanceToFns (param $n i32)
+    (global.set $pos (i32.add (global.get $fns) (local.get $n)))
+    (global.set $col (i32.add (global.get $fnsCol) (local.get $n)))
+    (global.set $ptab (i32.const 0)))
+
+  ;; Consume one column of an optional space or tab after a marker; a wide
+  ;; tab stays partly consumed.
+  (func $skipMarkerSpace
+    (local $partial i32)
+    (if (i32.and (i32.lt_u (global.get $pos) (global.get $lineEnd))
+          (call $isSpaceByte (i32.load8_u (global.get $pos))))
+      (then
+        (local.set $partial (i32.and
+          (i32.eq (i32.load8_u (global.get $pos)) (i32.const 9))
+          (i32.ne (i32.and (global.get $col) (i32.const 3)) (i32.const 3))))
+        (global.set $pos (i32.add (global.get $pos) (i32.eqz (local.get $partial))))
+        (global.set $col (i32.add (global.get $col) (i32.const 1)))
+        (global.set $ptab (local.get $partial)))))
+
+  ;; The end of the run of byte $c from $p, at most $end. Reads up to 15 bytes
+  ;; past $end.
+  (func $runEnd (param $p i32) (param $end i32) (param $c i32) (result i32)
+    (local $m i32)
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
+        (local.set $m (i32.xor (i32.const 0xffff) (i8x16.bitmask
+          (i8x16.eq (v128.load (local.get $p)) (i8x16.splat (local.get $c))))))
+        (if (local.get $m)
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $m))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $l)))
+    (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
+
+  ;; Reuse the first-nonspace column even when the cursor has reached that byte.
+  ;; A new line starts past the memo, so advancing past it requires a scan.
+  (func $findFirstNonspace
+    (local $c i32)
+    (local $first i32)
+    (local $firstCol i32)
+    (if (i32.lt_u (global.get $fns) (global.get $pos))
+      (then
+        (local.set $first (global.get $pos))
+        (local.set $firstCol (global.get $col))
+        (block $done
+          (loop $l
+            (br_if $done (i32.ge_u (local.get $first) (global.get $lineEnd)))
             (local.set $c (i32.load8_u (local.get $first)))
             (if (i32.eq (local.get $c) (i32.const 32))
-              (then
-                (local.set $first (i32.add (local.get $first) (i32.const 1)))
-                (local.set $firstCol (i32.add (local.get $firstCol) (i32.const 1)))
-                (local.set $toTab (i32.sub (local.get $toTab) (i32.const 1)))
-                (if (i32.eqz (local.get $toTab)) (then (local.set $toTab (i32.const 4)))))
+              (then (local.set $firstCol (i32.add (local.get $firstCol) (i32.const 1))))
               (else
                 (br_if $done (i32.ne (local.get $c) (i32.const 9)))
-                (local.set $first (i32.add (local.get $first) (i32.const 1)))
-                (local.set $firstCol (i32.add (local.get $firstCol) (local.get $toTab)))
-                (local.set $toTab (i32.const 4))))
-            (br $l)))))
-    (global.set $fns (local.get $first))
-    (global.set $fnsCol (local.get $firstCol))
-    (global.set $indent (i32.sub (local.get $firstCol) (local.get $column)))
-    (global.set $blank (i32.ge_u (local.get $first) (local.get $end))))
+                ;; a tab reaches the next multiple of four
+                (local.set $firstCol (i32.add (i32.or (local.get $firstCol) (i32.const 3)) (i32.const 1)))))
+            (local.set $first (i32.add (local.get $first) (i32.const 1)))
+            (br $l)))
+        (global.set $fns (local.get $first))
+        (global.set $fnsCol (local.get $firstCol))))
+    (global.set $indent (i32.sub (global.get $fnsCol) (global.get $col)))
+    (global.set $blank (i32.ge_u (global.get $fns) (global.get $lineEnd))))
 
   ;; Where the last failed thematic-break scan stopped. A later scan from an
   ;; earlier byte of the same line would fail there too, so each container
@@ -185,22 +187,14 @@
   (func $scanOpenFence (param $p i32) (result i32)
     (local $c i32)
     (local $i i32)
-    (local $n i32)
     (if (i32.ge_u (local.get $p) (global.get $lineEnd)) (then (return (i32.const 0))))
     (local.set $c (i32.load8_u (local.get $p)))
     (if (i32.eqz (i32.or
           (i32.eq (local.get $c) (i32.const "\60"))
           (i32.eq (local.get $c) (i32.const "~"))))
       (then (return (i32.const 0))))
-    (local.set $i (local.get $p))
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $i) (global.get $lineEnd)))
-        (br_if $done (i32.ne (i32.load8_u (local.get $i)) (local.get $c)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l)))
-    (local.set $n (i32.sub (local.get $i) (local.get $p)))
-    (if (i32.lt_u (local.get $n) (i32.const 3)) (then (return (i32.const 0))))
+    (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
+    (if (i32.lt_u (i32.sub (local.get $i) (local.get $p)) (i32.const 3)) (then (return (i32.const 0))))
     (if (i32.eq (local.get $c) (i32.const "\60"))
       (then
         (if (i32.lt_u (call $findByte (local.get $i) (global.get $lineEnd) (i32.const "\60"))
@@ -213,57 +207,50 @@
   (func $parseListMarker (param $p i32) (param $interrupts i32) (result i32)
     (local $c i32)
     (local $q i32)
-    (local $digits i32)
     (local $start i32)
-    (if (i32.ge_u (local.get $p) (global.get $lineEnd)) (then (return (i32.const 0))))
+    (local $ordered i32)
+    (local $end i32)
+    (local.set $end (global.get $lineEnd))
     (local.set $c (i32.load8_u (local.get $p)))
-    (if (i32.or
-          (i32.le_u (i32.sub (local.get $c) (i32.const "*")) (i32.const 1))
-          (i32.eq (local.get $c) (i32.const "-")))
-      (then
-        (local.set $q (i32.add (local.get $p) (i32.const 1)))
-        (if (i32.lt_u (local.get $q) (global.get $lineEnd))
-          (then
-            (if (i32.eqz (call $isSpaceByte (i32.load8_u (local.get $q))))
-              (then (return (i32.const 0))))))
-        (if (local.get $interrupts)
-          (then
-            (if (i32.ge_u (call $skipSpace (local.get $q) (global.get $lineEnd)) (global.get $lineEnd))
-              (then (return (i32.const 0))))))
-        (global.set $lmOrdered (i32.const 0))
-        (global.set $lmChar (local.get $c))
-        (global.set $lmStart (i32.const 1))
-        (return (i32.const 1))))
-    (if (i32.eqz (call $isDigit (local.get $c))) (then (return (i32.const 0))))
-    (local.set $q (local.get $p))
-    (loop $digit
-      (local.set $start (i32.add (i32.mul (local.get $start) (i32.const 10))
-        (i32.sub (i32.load8_u (local.get $q)) (i32.const "0"))))
-      (local.set $q (i32.add (local.get $q) (i32.const 1)))
-      (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
-      (br_if $digit (i32.and
-        (i32.lt_u (local.get $digits) (i32.const 9))
-        (i32.and
-          (i32.lt_u (local.get $q) (global.get $lineEnd))
-          (call $isDigit (i32.load8_u (local.get $q)))))))
-    (if (i32.and (local.get $interrupts) (i32.ne (local.get $start) (i32.const 1)))
-      (then (return (i32.const 0))))
-    (if (i32.ge_u (local.get $q) (global.get $lineEnd)) (then (return (i32.const 0))))
-    (local.set $c (i32.load8_u (local.get $q)))
+    (local.set $q (i32.add (local.get $p) (i32.const 1)))
+    (local.set $start (i32.const 1))
     (if (i32.eqz (i32.or
-          (i32.eq (local.get $c) (i32.const "."))
-          (i32.eq (local.get $c) (i32.const ")"))))
-      (then (return (i32.const 0))))
-    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-    (if (i32.lt_u (local.get $q) (global.get $lineEnd))
+          (i32.le_u (i32.sub (local.get $c) (i32.const "*")) (i32.const 1))
+          (i32.eq (local.get $c) (i32.const "-"))))
+      (then
+        ;; one to nine digits, then `.` or `)`
+        (local.set $q (local.get $p))
+        (local.set $start (i32.const 0))
+        (block $digits
+          (loop $digit
+            (br_if $digits (i32.ge_u (local.get $q) (local.get $end)))
+            (local.set $c (i32.sub (i32.load8_u (local.get $q)) (i32.const "0")))
+            (br_if $digits (i32.gt_u (local.get $c) (i32.const 9)))
+            (local.set $start (i32.add (i32.mul (local.get $start) (i32.const 10)) (local.get $c)))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br_if $digit (i32.lt_u (i32.sub (local.get $q) (local.get $p)) (i32.const 9)))))
+        (if (i32.or (i32.eq (local.get $q) (local.get $p))
+              (i32.or (i32.ge_u (local.get $q) (local.get $end))
+                (i32.and (local.get $interrupts) (i32.ne (local.get $start) (i32.const 1)))))
+          (then (return (i32.const 0))))
+        (local.set $c (i32.load8_u (local.get $q)))
+        (if (i32.eqz (i32.or
+              (i32.eq (local.get $c) (i32.const "."))
+              (i32.eq (local.get $c) (i32.const ")"))))
+          (then (return (i32.const 0))))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (local.set $ordered (i32.const 1))))
+    ;; the marker ends the line or a space or tab follows it; an interrupting
+    ;; marker also needs content
+    (if (i32.lt_u (local.get $q) (local.get $end))
       (then
         (if (i32.eqz (call $isSpaceByte (i32.load8_u (local.get $q))))
           (then (return (i32.const 0))))))
     (if (local.get $interrupts)
       (then
-        (if (i32.ge_u (call $skipSpace (local.get $q) (global.get $lineEnd)) (global.get $lineEnd))
+        (if (i32.ge_u (call $skipSpace (local.get $q) (local.get $end)) (local.get $end))
           (then (return (i32.const 0))))))
-    (global.set $lmOrdered (i32.const 1))
+    (global.set $lmOrdered (local.get $ordered))
     (global.set $lmChar (local.get $c))
     (global.set $lmStart (local.get $start))
     (i32.sub (local.get $q) (local.get $p)))
@@ -375,27 +362,27 @@
     (local $q i32)
     (local.set $n (call $scanTagName (local.get $p) (local.get $end)))
     (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
-    (if (i32.eqz (i32.or
-          (i32.or
-            (call $wordEq (local.get $p) (local.get $n) (i64.const "pre") (i32.const 3))
-            (call $wordEq (local.get $p) (local.get $n) (i64.const "script") (i32.const 6)))
-          (i32.or
-            (call $wordEq (local.get $p) (local.get $n) (i64.const "style") (i32.const 5))
-            (call $wordEq (local.get $p) (local.get $n) (i64.const "textarea") (i32.const 8)))))
-      (then (return (i32.const 0))))
+    (if (i32.eqz (call $isRawTag (local.get $p) (local.get $n))) (then (return (i32.const 0))))
     (local.set $q (i32.add (local.get $p) (local.get $n)))
     (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 1))))
     (i32.or
       (call $isTagSpace (i32.load8_u (local.get $q)))
       (i32.eq (i32.load8_u (local.get $q)) (i32.const ">"))))
 
-  ;; case-insensitive comparison of [$p,$p+$len) against up to eight packed bytes
-  (func $wordEq (param $p i32) (param $len i32) (param $word i64) (param $n i32) (result i32)
-    (if (i32.ne (local.get $len) (local.get $n)) (then (return (i32.const 0))))
+  ;; Is [$p,$p+$n) `pre`, `script`, `style` or `textarea`, in any case? The
+  ;; length picks the one candidate; other lengths compare against zero, which
+  ;; a case-folded byte never equals.
+  (func $isRawTag (param $p i32) (param $n i32) (result i32)
     (i64.eqz (i64.shl
       (i64.xor
         (i64.or (i64.load (local.get $p)) (i64.const 0x2020202020202020))
-        (local.get $word))
+        (select (i64.const "pre")
+          (select (i64.const "style")
+            (select (i64.const "script")
+              (select (i64.const "textarea") (i64.const 0) (i32.eq (local.get $n) (i32.const 8)))
+              (i32.eq (local.get $n) (i32.const 6)))
+            (i32.eq (local.get $n) (i32.const 5)))
+          (i32.eq (local.get $n) (i32.const 3))))
       (i64.mul (i64.const 8)
         (i64.extend_i32_u (i32.sub (i32.const 8) (local.get $n)))))))
 
@@ -420,38 +407,26 @@
                         (i32.lt_u (i32.add (local.get $q) (local.get $n)) (local.get $end))
                         (i32.eq (i32.load8_u (i32.add (local.get $q) (local.get $n))) (i32.const ">"))))
                   (then
-                    (if (i32.or
-                          (i32.or
-                            (call $wordEq (local.get $q) (local.get $n) (i64.const "pre") (i32.const 3))
-                            (call $wordEq (local.get $q) (local.get $n) (i64.const "script") (i32.const 6)))
-                          (i32.or
-                            (call $wordEq (local.get $q) (local.get $n) (i64.const "style") (i32.const 5))
-                            (call $wordEq (local.get $q) (local.get $n) (i64.const "textarea") (i32.const 8))))
+                    (if (call $isRawTag (local.get $q) (local.get $n))
                       (then (return (i32.const 1))))))))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $l)))
         (return (i32.const 0))))
-    (if (i32.eq (local.get $kind) (i32.const 2))
-      (then (return (call $containsSeq (local.get $p) (local.get $end) (i32.const "-->") (i32.const 3)))))
-    (if (i32.eq (local.get $kind) (i32.const 3))
-      (then (return (call $containsSeq (local.get $p) (local.get $end) (i32.const "?>") (i32.const 2)))))
-    (if (i32.eq (local.get $kind) (i32.const 4))
-      (then (return (i32.lt_u (call $findByte (local.get $p) (local.get $end) (i32.const ">"))
-        (local.get $end)))))
-    (if (i32.eq (local.get $kind) (i32.const 5))
-      (then (return (call $containsSeq (local.get $p) (local.get $end) (i32.const "]]>") (i32.const 3)))))
-    (i32.const 0))
-
-  ;; does [$p,$end) contain the $n-byte sequence packed in $seq?
-  (func $containsSeq (param $p i32) (param $end i32) (param $seq i32) (param $n i32) (result i32)
-    (local $mask i32)
-    (local.set $mask (i32.sub (i32.shl (i32.const 1) (i32.mul (local.get $n) (i32.const 8))) (i32.const 1)))
+    ;; Kinds 2 to 5 end at `-->`, `?>`, `>`, or `]]>`; 6 and 7 at a blank line.
+    (if (i32.gt_u (local.get $kind) (i32.const 5)) (then (return (i32.const 0))))
+    (local.set $q (select
+      (select (i32.const "-->") (i32.const "?>") (i32.eq (local.get $kind) (i32.const 2)))
+      (select (i32.const ">") (i32.const "]]>") (i32.eq (local.get $kind) (i32.const 4)))
+      (i32.lt_u (local.get $kind) (i32.const 4))))
+    (local.set $n (i32.and (i32.sub (i32.const 39) (i32.clz (local.get $q))) (i32.const -8)))
     (block $done
       (loop $l
         (local.set $p (call $findByte (local.get $p) (local.get $end)
-          (i32.and (local.get $seq) (i32.const 255))))
-        (br_if $done (i32.gt_u (i32.add (local.get $p) (local.get $n)) (local.get $end)))
-        (if (i32.eq (i32.and (i32.load (local.get $p)) (local.get $mask)) (local.get $seq))
+          (i32.and (local.get $q) (i32.const 255))))
+        (br_if $done (i32.gt_u (i32.add (local.get $p) (i32.shr_u (local.get $n) (i32.const 3)))
+          (local.get $end)))
+        (if (i32.eq (i32.and (i32.load (local.get $p))
+              (i32.sub (i32.shl (i32.const 1) (local.get $n)) (i32.const 1))) (local.get $q))
           (then (return (i32.const 1))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
@@ -479,12 +454,7 @@
             (local.set $align (i32.const 1))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))))
         (local.set $q (local.get $p))
-        (block $dashDone
-          (loop $dash
-            (br_if $dashDone (i32.ge_u (local.get $p) (local.get $end)))
-            (br_if $dashDone (i32.ne (i32.load8_u (local.get $p)) (i32.const "-")))
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (br $dash)))
+        (local.set $p (call $runEnd (local.get $p) (local.get $end) (i32.const "-")))
         (if (i32.eq (local.get $p) (local.get $q)) (then (return (i32.const 0))))
         (if (i32.and (i32.lt_u (local.get $p) (local.get $end))
               (i32.eq (i32.load8_u (local.get $p)) (i32.const ":")))

@@ -182,6 +182,9 @@ strings, and DOM updates, with no Markdown node API.
   to 15 bytes beyond their range. Discard all matches outside the range.
 - Each render must reset its document state so one instance can serve many
   documents.
+- Binaryen inlines every function with one caller. V8 inlines small helpers only
+  while the caller stays within its size budget, so a large phase in a hot loop
+  needs two call sites to stay out of line (see `$addBlockLine`).
 - Limits are 250 container levels, 999 characters per link or footnote label,
   nine digits per ordered-list start, 255 characters per code fence, 255
   backticks per code span, 256 open brackets per leaf, and 1,073,610,752 bytes

@@ -70,9 +70,19 @@ const docs = {
   // alternating input aliases and escaped-pipe copies in the same table.
   tableWidthOverflow:
     '| a | b |\n| --- | --- |\n' +
-    Array.from({ length: 2400 }, (_, i) => `| \\*${i} | \`<&"\\|é\` |\n`).join(
+    Array.from({ length: 3200 }, (_, i) => `| \\*${i} | \`<&"\\|é\` |\n`).join(
       ''
     ),
+  // A wrap writes the line prefix inside a text run; when that grows memory,
+  // the run must reread its moved content
+  quotedRun:
+    '> '.repeat(25) +
+    Array.from({ length: 10500 }, (_, i) =>
+      i % 13 === 0 ? '**b** ' : i % 7 === 0 ? '`c` ' : 'word '
+    )
+      .join('')
+      .replace(/(.{60}) /g, '$1\n' + '> '.repeat(25)) +
+    '\n',
   // ANSI re-emits the line prefix at every wrap, so deep quotes write far more
   // than they read
   quoted: Array.from(

@@ -42,6 +42,7 @@ void test('quoted scalars decode their escapes into valid JSON', () => {
   );
   // unknown or short escapes keep their backslash; JSON stays valid
   assert.deepStrictEqual(meta('a: "\\q \\x4"'), { a: '\\q \\x4' });
+  assert.deepStrictEqual(meta('a: "\\x4@"'), { a: '\\x4@' });
   assert.deepStrictEqual(meta("\"k\\\"x\": 1\n'k''y': 2"), {
     'k"x': 1,
     "k'y": 2,
@@ -196,6 +197,8 @@ void test('numbers follow the YAML 1.2 core schema in JSON spelling', () => {
     ['1.2.3', '1.2.3'],
     ['1_000', '1_000'],
     ['-0x1', '-0x1'],
+    ['0x@', '0x@'],
+    ['0x1`', '0x1`'],
     ['0x1FFFFFFFFFFFFFFFF', '0x1FFFFFFFFFFFFFFFF'],
     ['.Nan', '.Nan'],
   ] as const) {
