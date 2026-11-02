@@ -224,6 +224,80 @@ afterAll(async () => {
 });
 
 describe('CodeView search panel', () => {
+  test('empty queries tolerate scope and item changes without searching or repeated renders', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, editStateKey) =>
+        new Editor(type, options, editStateKey),
+    });
+    const search = spyOn(TextDocument.prototype, 'search');
+    const render = spyOn(viewer, 'render');
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target a' },
+        },
+        {
+          id: 'b',
+          type: 'file',
+          edit: true,
+          file: { name: 'b.txt', contents: 'target b' },
+        },
+      ]);
+      const a = getEditorContent(viewer, 'a');
+      a.focus();
+      dispatchPrimaryFind(a);
+      // Change scope before the panel's initial result update runs.
+      render.mockClear();
+      getEditorContent(viewer, 'b').focus();
+      expect(render).not.toHaveBeenCalled();
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'b' });
+      expect(search).not.toHaveBeenCalled();
+
+      fillSearch(root, 'target');
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      expect(search).toHaveBeenCalled();
+      fillSearch(root, '');
+      render.mockClear();
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      outside.focus();
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(
+        getSearchPanelRoot(root).querySelector<HTMLElement>(
+          '[data-search-grid]'
+        )?.dataset.mode
+      ).toBe('find');
+      expect(render).not.toHaveBeenCalled();
+      const searchCalls = search.mock.calls.length;
+      viewer.updateItem({ ...viewer.getItem('b')!, version: 1 });
+      viewer.render(true);
+      await wait(0);
+      await wait(0);
+      const renderCalls = render.mock.calls.length;
+      await wait(0);
+      await wait(0);
+      expect(search.mock.calls.length).toBe(searchCalls);
+      expect(render.mock.calls.length).toBe(renderCalls);
+      expect(getSearchState(viewer).matches).toEqual([]);
+      expect(
+        getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
+      ).toBe('No results');
+    } finally {
+      search.mockRestore();
+      render.mockRestore();
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('replacement follows scope and retains panel state across edit-mode changes', async () => {
     const dom = installDom();
     const changes: string[] = [];

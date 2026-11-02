@@ -177,7 +177,6 @@ type CodeViewItemSearchMatches = Map<string, CodeViewSearchMatch[]>;
 
 interface CodeViewSearchState {
   scope: { itemId: string } | undefined;
-  params: SearchParams | undefined;
   matches: CodeViewSearchMatch[];
   matchesByItem: Map<string, CodeViewItemSearchMatches>;
   current: CodeViewSearchMatch | undefined;
@@ -912,7 +911,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private searchPanel: SearchPanelWidget<CodeViewSearchMatch> | undefined;
   private searchState: CodeViewSearchState = {
     scope: undefined,
-    params: undefined,
     matches: [],
     matchesByItem: new Map(),
     current: undefined,
@@ -1543,11 +1541,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       onQueryChange: () => {
         this.searchState.centerNavigation = false;
       },
-      search: (searchParams) => {
-        const result = this.searchCodeView(searchParams);
-        this.searchState.params = searchParams;
-        return result;
-      },
+      search: (searchParams) => this.searchCodeView(searchParams),
       isSameMatch: areCodeViewSearchMatchesEqual,
       scrollToMatch: (match) => {
         this.scrollToSearchMatch(match);
@@ -1616,7 +1610,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     dequeueRender(this.paintSearchHighlights);
     this.searchHighlighter?.clear();
     this.searchState.scope = undefined;
-    this.searchState.params = undefined;
     this.searchState.matches = [];
     this.searchState.matchesByItem = new Map();
     this.searchState.current = undefined;
@@ -1737,10 +1730,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.searchState.centerNavigation = false;
     }
     this.searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
-    if (
-      this.searchPanel === undefined ||
-      this.searchState.params === undefined
-    ) {
+    if (this.searchPanel?.hasQuery() !== true) {
       return;
     }
 
@@ -1754,10 +1744,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
 
     this.searchMatchesDirty = false;
-    if (
-      this.searchPanel === undefined ||
-      this.searchState.params === undefined
-    ) {
+    if (this.searchPanel === undefined) {
       return;
     }
 

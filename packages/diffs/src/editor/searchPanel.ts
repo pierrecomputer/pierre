@@ -34,7 +34,6 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
   containerElement: HTMLElement;
   defaultQuery: string;
   mode?: SearchPanelMode;
-  initialMatch?: TMatch;
   search: (searchParams: SearchParams) => SearchResult<TMatch>;
   isSameMatch?: (a: TMatch, b: TMatch) => boolean;
   scrollToMatch: (nextMatch: TMatch, retainFocus: boolean) => void;
@@ -65,7 +64,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       containerElement,
       defaultQuery,
       mode = 'find',
-      initialMatch,
       search,
       isSameMatch = Object.is,
       scrollToMatch,
@@ -518,7 +516,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       shadowRoot
     );
 
-    matches.current = initialMatch;
     containerElement.before(this.#host);
     this.#inputElement.select();
 
@@ -530,17 +527,17 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       if (matchesUpdated || !this.#host.isConnected) {
         return;
       }
-      if (initialMatch !== undefined) {
-        updateMatches();
-      } else {
-        onUpdate({ matches: [] });
-      }
+      updateMatches();
     };
     queueRender(this.#initializeMatches);
   }
 
   getHostElement(): HTMLDivElement {
     return this.#host;
+  }
+
+  hasQuery(): boolean {
+    return this.#inputElement.value !== '';
   }
 
   focus(): void {

@@ -88,16 +88,10 @@ function createWidget(
   options: {
     defaultQuery?: string;
     mode?: SearchPanelOptions['mode'];
-    initialMatch?: MatchRange;
     selectCurrent?: boolean;
   } = {}
 ): WidgetHarness {
-  const {
-    defaultQuery = '',
-    mode,
-    initialMatch,
-    selectCurrent = true,
-  } = options;
+  const { defaultQuery = '', mode, selectCurrent = true } = options;
   const dom = installDom();
   const textDocument = new TextDocument('inmemory://search-panel', contents);
   const containerElement = document.createElement('div');
@@ -128,7 +122,6 @@ function createWidget(
     containerElement,
     defaultQuery,
     mode,
-    initialMatch,
     search: (searchParams) => ({ matches: textDocument.search(searchParams) }),
     isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
       aStart === bStart && aEnd === bEnd,
@@ -232,13 +225,70 @@ describe('SearchPanelWidget', () => {
     }
   });
 
-  for (const initialMatch of [undefined, [0, 3] as MatchRange]) {
+  test('hasQuery follows query text independently of results and replacement text', () => {
+    const harness = createWidget('foo');
+    try {
+      expect(harness.widget.hasQuery()).toBe(false);
+      setInputValue(harness.replaceInput, 'replacement');
+      expect(harness.widget.hasQuery()).toBe(false);
+      setInputValue(harness.input, 'missing');
+      expect(harness.matchesText()).toBe('No results');
+      expect(harness.widget.hasQuery()).toBe(true);
+      setInputValue(harness.input, '');
+      expect(harness.widget.hasQuery()).toBe(false);
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test.each(['', 'foo'])(
+    'initializes query "%s" once and uses the host preferred match',
+    async (defaultQuery) => {
+      const dom = installDom();
+      const searches: string[] = [];
+      const updates: MatchRange[][] = [];
+      let widget: SearchPanelWidget | undefined;
+      try {
+        const matches: MatchRange[] = [
+          [0, 3],
+          [4, 7],
+        ];
+        widget = new SearchPanelWidget({
+          containerElement: createContainer(),
+          defaultQuery,
+          search: ({ text }) => {
+            searches.push(text);
+            return { matches, preferredMatch: matches[1] };
+          },
+          scrollToMatch: () => {},
+          onUpdate: (result) => {
+            updates.push(result.matches);
+            return result.preferredMatch;
+          },
+          onClose: () => {},
+        });
+        expect(widget.hasQuery()).toBe(defaultQuery !== '');
+        await waitForAnimationFrame();
+        expect(searches).toEqual(defaultQuery === '' ? [] : ['foo']);
+        expect(updates).toEqual([defaultQuery === '' ? [] : matches]);
+        expect(
+          getSearchPanelRoot().querySelector('[data-matches]')?.textContent
+        ).toBe(defaultQuery === '' ? 'No results' : '2 of 2');
+        await waitForAnimationFrame();
+        expect(updates).toHaveLength(1);
+      } finally {
+        widget?.cleanup();
+        dom.cleanup();
+      }
+    }
+  );
+
+  for (const defaultQuery of ['', 'foo']) {
     test.each(['search', 'replace', 'outside'] as const)(
-      `initial frame preserves an early search and navigation with ${initialMatch == null ? 'empty' : 'prefilled'} query and focus on %s`,
+      `initial frame preserves an early search and navigation with ${defaultQuery === '' ? 'empty' : 'prefilled'} query and focus on %s`,
       async (focusTarget) => {
         const harness = createWidget('foo foo', {
-          defaultQuery: initialMatch == null ? '' : 'foo',
-          initialMatch,
+          defaultQuery,
           mode: 'replace',
         });
         try {
@@ -284,7 +334,6 @@ describe('SearchPanelWidget', () => {
   test('closing before the initial frame prevents a late result update', async () => {
     const harness = createWidget('foo foo', {
       defaultQuery: 'foo',
-      initialMatch: [0, 3],
     });
     try {
       harness.widget.close();
@@ -1304,7 +1353,6 @@ describe('SearchPanelWidget', () => {
         containerElement: createContainer(),
         defaultQuery: 'foo',
         mode: 'replace',
-        initialMatch: [0, 3],
         search: () => ({ matches: [[0, 3]] }),
         scrollToMatch: () => {},
         onUpdate: ({ matches }) => matches[0],
@@ -1375,7 +1423,6 @@ describe('SearchPanelWidget', () => {
         containerElement: createContainer(),
         defaultQuery: 'foo',
         mode: 'replace',
-        initialMatch: [0, 3],
         search: (params) => {
           searchCalls.push(params);
           return { matches: [[0, 3]] };
@@ -1425,7 +1472,6 @@ describe('SearchPanelWidget', () => {
         containerElement: createContainer(),
         defaultQuery: 'foo',
         mode: 'replace',
-        initialMatch: matches[0],
         search: () => ({ matches }),
         isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
           aStart === bStart && aEnd === bEnd,

@@ -6639,7 +6639,6 @@ export class Editor<
     );
 
     let defaultQuery = '';
-    let initialMatch: MatchRange | undefined;
     const primarySelection = selections?.at(-1);
     if (primarySelection != null) {
       const queryRange = isCollapsedSelection(primarySelection)
@@ -6648,10 +6647,6 @@ export class Editor<
       const selectionText = textDocument.getText(queryRange);
       if (selectionText !== '' && !selectionText.includes('\n')) {
         defaultQuery = selectionText;
-        initialMatch = [
-          textDocument.offsetAt(queryRange.start),
-          textDocument.offsetAt(queryRange.end),
-        ];
       }
     }
     this.#currentSearchMatch = undefined;
@@ -6679,7 +6674,6 @@ export class Editor<
       containerElement: preElement,
       defaultQuery,
       mode,
-      initialMatch,
       onQueryChange: () => {
         centerSearchNavigation = false;
       },
