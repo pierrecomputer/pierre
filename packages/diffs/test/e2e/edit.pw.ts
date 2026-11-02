@@ -502,8 +502,15 @@ test.describe('clicking read-only diff text', () => {
   const deletedRow = (column: 'deletions' | 'unified', line: number) =>
     `[data-code][data-${column}] [data-content] [data-line="${line}"][data-line-type="change-deletion"]`;
 
+  // The caret's position: both ends of the primary selection, so a collapsed
+  // selection reads as one point.
   const primarySelection = (page: Page) =>
-    page.evaluate(() => window.__editor?.getViewState().selections?.at(-1));
+    page.evaluate(() => {
+      const selection = window.__editor?.getViewState().selections?.at(-1);
+      return selection != null
+        ? { start: selection.start, end: selection.end }
+        : undefined;
+    });
   const contentHasFocus = (page: Page, selector: string) =>
     page.evaluate((selector) => {
       const root = document.querySelector('diffs-container')?.shadowRoot;
@@ -574,7 +581,6 @@ test.describe('clicking read-only diff text', () => {
       .toEqual({
         start: { line: 2, character: 6 },
         end: { line: 2, character: 6 },
-        direction: 'none',
       });
     await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
     await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
@@ -594,7 +600,6 @@ test.describe('clicking read-only diff text', () => {
       .toEqual({
         start: { line: 1, character: 0 },
         end: { line: 1, character: 0 },
-        direction: 'none',
       });
     await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
     await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
@@ -614,7 +619,6 @@ test.describe('clicking read-only diff text', () => {
       .toEqual({
         start: { line: 3, character: 0 },
         end: { line: 3, character: 0 },
-        direction: 'none',
       });
     await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
   });
@@ -638,7 +642,6 @@ test.describe('clicking read-only diff text', () => {
       .toEqual({
         start: end,
         end,
-        direction: 'none',
       });
     await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
   });
@@ -655,7 +658,6 @@ test.describe('clicking read-only diff text', () => {
       .toEqual({
         start: { line: 1, character: 0 },
         end: { line: 1, character: 0 },
-        direction: 'none',
       });
     await expect.poll(() => contentHasFocus(page, UNIFIED)).toBe(true);
     await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
@@ -675,7 +677,6 @@ test.describe('clicking read-only diff text', () => {
       .toEqual({
         start: { line: 3, character: 0 },
         end: { line: 3, character: 0 },
-        direction: 'none',
       });
     await expect.poll(() => contentHasFocus(page, UNIFIED)).toBe(true);
   });

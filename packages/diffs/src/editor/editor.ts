@@ -2144,27 +2144,7 @@ export class Editor<
             return;
           }
 
-          const selectionRaw = document.getSelection();
-          if (selectionRaw == null) {
-            return;
-          }
-          // Read the caret/selection through the editor's shadow root.
-          // getComposedRanges is the standard, spec'd way to do this but is only
-          // available in newer browsers. When it is missing (older browsers,
-          // embedded WebViews, and the pinned CI Chromium), fall back to the
-          // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
-          // reports the range inside the shadow tree. Normalize that live Range
-          // to a StaticRange so it matches the getComposedRanges return shape.
-          // Only bail when neither API yields a range, so a click can still seed
-          // the caret rather than leaving the surface unusable.
-          let composedRange: StaticRange | undefined;
-          if (typeof selectionRaw.getComposedRanges === 'function') {
-            composedRange = selectionRaw.getComposedRanges({
-              shadowRoots: [shadowRoot],
-            })?.[0];
-          } else {
-            composedRange = getShadowRootRange(shadowRoot);
-          }
+          const composedRange = this.#composedSelectionRange(shadowRoot);
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
@@ -2800,9 +2780,29 @@ export class Editor<
             }
           },
           { passive: true }
+        ),
+        addEventListener(
+          deletionsCode,
+          'click',
+          this.#moveCaretFromReadOnlyClick,
+          { passive: true }
         )
       );
     }
+
+    // Unified view keeps its deleted rows inside the editable column.
+    this.#editorEventDisposes.push(
+      addEventListener(
+        contentEl,
+        'click',
+        (e) => {
+          if (this.#isDeletedLineTarget(e)) {
+            this.#moveCaretFromReadOnlyClick(e);
+          }
+        },
+        { passive: true }
+      )
+    );
 
     if (gutterEl !== undefined) {
       const resolveGutterTarget = (
@@ -4306,6 +4306,71 @@ export class Editor<
       direction: DirectionForward,
     };
   }
+
+  // The native selection's first range as seen through the editor's shadow
+  // root. Selection.getComposedRanges is the standard way to read it; where
+  // it is missing (older browsers, embedded WebViews, the pinned CI Chromium)
+  // the older ShadowRoot.getSelection still reports the range inside the
+  // shadow tree. Undefined when neither has a range.
+  #composedSelectionRange(shadowRoot: ShadowRoot): StaticRange | undefined {
+    const selection = document.getSelection();
+    if (selection == null) {
+      return undefined;
+    }
+    return typeof selection.getComposedRanges === 'function'
+      ? selection.getComposedRanges({ shadowRoots: [shadowRoot] })?.[0]
+      : getShadowRootRange(shadowRoot);
+  }
+
+  // A plain click on text the editor cannot edit (the deletions column in
+  // split view, a deleted row in unified view) puts the caret where editing
+  // continues on the editable side: the same line and column for a context
+  // row, the start of the line the host names for a deleted row. A drag,
+  // double-click or gutter line select leaves a native selection behind and
+  // is left alone, so deleted text can still be selected and copied.
+  #moveCaretFromReadOnlyClick = (event: MouseEvent): void => {
+    const target = event.composedPath()[0];
+    const row =
+      target instanceof HTMLElement ? target.closest('[data-line]') : null;
+    const shadowRoot = this.#fileContainer?.shadowRoot;
+    const textDocument = this.#editSession?.document;
+    if (
+      !(row instanceof HTMLElement) ||
+      shadowRoot == null ||
+      textDocument == null ||
+      !this.#isRendering
+    ) {
+      return;
+    }
+    const range = this.#composedSelectionRange(shadowRoot);
+    if (range != null && !range.collapsed) {
+      return;
+    }
+    const lineNumber = getLineNumberAttr(row);
+    const line =
+      lineNumber != null
+        ? this.#fileDiffInstance?.editLineFor(lineNumber)
+        : undefined;
+    if (line == null) {
+      return;
+    }
+    // A context row has the same text on both sides, so the caret the browser
+    // placed in it says which column to continue from.
+    const clickedPosition =
+      row.dataset.lineType !== 'change-deletion' &&
+      range != null &&
+      row.contains(range.startContainer)
+        ? convertSelection(range)?.start
+        : undefined;
+    this.#setDeletedTextSelectionActive(false);
+    this.#focusAtPosition(
+      textDocument.normalizePosition({
+        line,
+        character: clickedPosition?.character ?? 0,
+      }),
+      false
+    );
+  };
 
   // A pointer gesture targets read-only deleted text when its closest row is a
   // change-deletion. Used to route a click in unified view's deleted text to a
