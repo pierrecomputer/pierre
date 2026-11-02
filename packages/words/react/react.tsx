@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { HTMLAttributes, ReactNode } from 'react';
 
 import { createDomRenderer } from '../html/dom';
@@ -24,6 +31,7 @@ export interface MarkdownProps
 
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
+const subscribe = (): (() => void) => () => {};
 
 /** React owns one opaque container; the framework-independent renderer owns its HTML. */
 export function Markdown({
@@ -50,6 +58,12 @@ export function Markdown({
   const root = useRef<HTMLDivElement>(null);
   const renderer = useRef<ReturnType<typeof createDomRenderer> | undefined>(
     undefined
+  );
+  // False only while hydrating server HTML, which is already visible and must not fade in.
+  const hydrated = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false
   );
   const options: HtmlOptions = {
     components,
@@ -88,7 +102,13 @@ export function Markdown({
   }, [initial]);
   useIsomorphicLayoutEffect(() => {
     renderer.current?.configure(options);
-    renderer.current?.update(children, incomplete, active, animated, caret);
+    renderer.current?.update(
+      children,
+      incomplete,
+      active,
+      hydrated ? animated : false,
+      caret
+    );
   });
   const callbacks = useRef({ onAnimationStart, onAnimationEnd });
   useEffect(() => {

@@ -76,6 +76,11 @@
         (br $trimmed)))
     (local.get $end))
 
+  ;; Set when a domain fails for an underscore in its last two segments: the
+  ;; start of the second-to-last segment. A later `www.` that starts before it
+  ;; scans to the same two segments and fails too. Reset for each leaf.
+  (global $wwwRejectBefore (mut i32) (i32.const 0))
+
   ;; the length of the domain name at $p, or 0
   (func $checkDomain (param $p i32) (param $end i32) (param $allowShort i32) (result i32)
     (local $base i32)
@@ -85,7 +90,11 @@
     (local $uscore2 i32)
     (local $c i32)
     (local $cp i32)
+    (local $seg i32)
+    (local $prevSeg i32)
     (local.set $base (call $contentAt (i32.const 0)))
+    (local.set $seg (local.get $p))
+    (local.set $prevSeg (local.get $p))
     (local.set $i (i32.add (local.get $p) (i32.const 1)))
     (block $done
       (loop $l
@@ -100,6 +109,8 @@
           (then (local.set $uscore2 (i32.add (local.get $uscore2) (i32.const 1))))
           (else (if (i32.eq (local.get $c) (i32.const "."))
             (then
+              (local.set $prevSeg (local.get $seg))
+              (local.set $seg (i32.add (local.get $i) (i32.const 1)))
               (local.set $uscore1 (local.get $uscore2))
               (local.set $uscore2 (i32.const 0))
               (local.set $np (i32.add (local.get $np) (i32.const 1))))
@@ -119,7 +130,9 @@
         (br $l)))
     ;; no underscores in the last two segments of the domain
     (if (i32.or (local.get $uscore1) (local.get $uscore2))
-      (then (return (i32.const 0))))
+      (then
+        (global.set $wwwRejectBefore (local.get $prevSeg))
+        (return (i32.const 0))))
     (if (local.get $allowShort) (then (return (i32.sub (local.get $i) (local.get $p)))))
     (select (i32.sub (local.get $i) (local.get $p)) (i32.const 0) (local.get $np)))
 
@@ -153,6 +166,8 @@
                 (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "_")))
                 (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "("))))))
           (then (return (i32.add (local.get $p) (i32.const 1)))))))
+    (if (i32.lt_u (local.get $beg) (global.get $wwwRejectBefore))
+      (then (return (i32.add (local.get $p) (i32.const 1)))))
     (local.set $n (call $checkDomain (local.get $beg) (local.get $end) (i32.const 0)))
     (if (i32.eqz (local.get $n)) (then (return (i32.add (local.get $p) (i32.const 1)))))
     (local.set $stop (call $autolinkDelim
@@ -226,13 +241,35 @@
     (local $np i32)
     (local $kind i32)
     (local $xmpp i32)
+    (local $k i32)
+    (local $m i32)
+    (local $stop i32)
     (local.set $base (call $contentAt (i32.const 0)))
     (if (global.get $bracketSp) (then (return (i32.add (local.get $p) (i32.const 1)))))
     (local.set $kind (i32.const 2))
     (local.set $beg (local.get $p))
+    ;; Marks [$k, $nSlots) are `_` runs that the local part absorbs. They are
+    ;; the newest marks and still unresolved, since no bracket is open.
+    (local.set $k (global.get $nSlots))
+    (local.set $stop (global.get $lastMarkEnd))
     (block $rewound
       (loop $l
-        (br_if $rewound (i32.le_u (local.get $beg) (global.get $lastMarkEnd)))
+        (if (i32.le_u (local.get $beg) (local.get $stop))
+          (then
+            (br_if $rewound (i32.eqz (local.get $k)))
+            (local.set $m (call $slotAt (i32.sub (local.get $k) (i32.const 1))))
+            (br_if $rewound (i32.or
+              (i32.ne (i32.load offset=$M.end (local.get $m)) (local.get $beg))
+              (i32.or
+                (i32.ne (i32.load8_u offset=$M.type (local.get $m)) (enum.get $Mk.emph))
+                (i32.ne (i32.load8_u offset=$M.ch (local.get $m)) (i32.const "_")))))
+            (local.set $beg (i32.load offset=$M.beg (local.get $m)))
+            (local.set $k (i32.sub (local.get $k) (i32.const 1)))
+            (local.set $stop (i32.const 0))
+            (if (local.get $k)
+              (then (local.set $stop (i32.load offset=$M.end
+                (call $slotAt (i32.sub (local.get $k) (i32.const 1)))))))
+            (br $l)))
         (local.set $c (i32.load8_u
           (i32.add (local.get $base) (i32.sub (local.get $beg) (i32.const 1)))))
         (br_if $rewound (i32.eqz (i32.or (call $isAlnum (local.get $c))
@@ -243,7 +280,7 @@
         (br $l)))
     (if (i32.eq (local.get $beg) (local.get $p)) (then (return (i32.add (local.get $p) (i32.const 1)))))
     ;; an explicit scheme keeps the address verbatim
-    (if (i32.ge_u (local.get $beg) (i32.add (global.get $lastMarkEnd) (i32.const 7)))
+    (if (i32.ge_u (local.get $beg) (i32.add (local.get $stop) (i32.const 7)))
       (then
         (if (call $schemeIs (i32.sub (local.get $beg) (i32.const 7)) (i32.const 7)
               (i64.const "mailto:") (i32.const 7))
@@ -251,7 +288,7 @@
             (local.set $beg (i32.sub (local.get $beg) (i32.const 7)))
             (local.set $kind (i32.const 0))))))
     (if (i32.and (i32.eq (local.get $kind) (i32.const 2))
-          (i32.ge_u (local.get $beg) (i32.add (global.get $lastMarkEnd) (i32.const 5))))
+          (i32.ge_u (local.get $beg) (i32.add (local.get $stop) (i32.const 5))))
       (then
         (if (call $schemeIs (i32.sub (local.get $beg) (i32.const 5)) (i32.const 5)
               (i64.const "xmpp:") (i32.const 5))
@@ -259,13 +296,16 @@
             (local.set $beg (i32.sub (local.get $beg) (i32.const 5)))
             (local.set $kind (i32.const 0))
             (local.set $xmpp (i32.const 1))))))
-    (if (i32.eqz (local.get $kind))
+    ;; a scheme glued to a preceding word is text before a bare address
+    (if (i32.and (i32.eqz (local.get $kind)) (i32.ne (local.get $beg) (i32.const 0)))
       (then
-        (if (local.get $beg)
+        (if (call $isAlnum (i32.load8_u
+              (i32.add (local.get $base) (i32.sub (local.get $beg) (i32.const 1)))))
           (then
-            (if (call $isAlnum (i32.load8_u
-                  (i32.add (local.get $base) (i32.sub (local.get $beg) (i32.const 1)))))
-              (then (return (i32.add (local.get $p) (i32.const 1)))))))))
+            (local.set $beg (i32.add (local.get $beg)
+              (select (i32.const 5) (i32.const 7) (local.get $xmpp))))
+            (local.set $kind (i32.const 2))
+            (local.set $xmpp (i32.const 0))))))
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
     (block $host
       (loop $l
@@ -300,6 +340,14 @@
       (then (return (i32.add (local.get $p) (i32.const 1)))))
     (if (i32.le_u (local.get $q) (i32.add (local.get $p) (i32.const 1)))
       (then (return (i32.add (local.get $p) (i32.const 1)))))
+    (local.set $m (local.get $k))
+    (block $absorbed
+      (loop $l
+        (br_if $absorbed (i32.ge_u (local.get $m) (global.get $nSlots)))
+        (call $delimRemove (local.get $m))
+        (local.set $m (i32.add (local.get $m) (i32.const 1)))
+        (br $l)))
+    (global.set $nSlots (local.get $k))
     (call $pushExtLink (local.get $beg) (local.get $q) (local.get $kind))
     (local.get $q))
 )

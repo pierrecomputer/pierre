@@ -23,6 +23,19 @@ void test('leaf blocks', () => {
     html('```js\nlet x;\n```'),
     '<pre><code class="language-js">let x;\n</code></pre>\n'
   );
+  // the language is the first word after entities are decoded, as in cmark
+  for (const [info, cls] of [
+    ['a&#32;b', ' class="language-a"'],
+    [' a&#x20;', ' class="language-a"'],
+    ['&#32;a b', ' class="language-a"'],
+    ['&#32;', ''],
+    ['a\\_b&amp;', ' class="language-a_b&amp;"'],
+  ]) {
+    assert.equal(
+      html(`\`\`\`${info}\nx\n\`\`\``),
+      `<pre><code${cls}>x\n</code></pre>\n`
+    );
+  }
   assert.equal(html('<div>\nraw\n</div>'), '<div>\nraw\n</div>\n');
 });
 
@@ -199,6 +212,32 @@ void test('fenced code spans preserve embedded fence bytes, line endings, and EO
       }
     }
   }
+});
+
+void test('fenced code renders mixed line endings like LF', () => {
+  const lines = ['a', '', 'b `x`', '~~~ c', '', 'd', ''];
+  const expected = `<pre><code>${lines.join('\n')}\n</code></pre>\n`;
+  for (let mask = 0; mask < 3 ** lines.length; mask++) {
+    let source = '```\n';
+    for (let i = 0, m = mask; i < lines.length; i++, m = Math.floor(m / 3)) {
+      // a CR before an empty line would merge into one CRLF
+      const eol = ['\n', '\r\n', '\r'][m % 3];
+      source += lines[i] + (eol === '\r' && lines[i + 1] === '' ? '\r\n' : eol);
+    }
+    assert.equal(html(source + '```'), expected, JSON.stringify(source));
+  }
+});
+
+void test('merged fenced code lines keep the virtual spaces of a split tab', () => {
+  assert.equal(
+    html(' ```\n\tfoo\nbar\n```\n'),
+    '<pre><code>   foo\nbar\n</code></pre>\n'
+  );
+  assert.equal(
+    html('- Example:\n\n  ```go\n\tfunc main() {\n\n\t}\n  ```\n'),
+    '<ul>\n<li>\n<p>Example:</p>\n<pre><code class="language-go">  func main() {\n\n  }\n' +
+      '</code></pre>\n</li>\n</ul>\n'
+  );
 });
 
 void test('single-line code writers keep escaped content between their tags', () => {
@@ -552,6 +591,40 @@ void test('container blocks', () => {
   );
 });
 
+void test('an empty list item ends at its first blank line, however indented', () => {
+  for (const blank of ['', '  ', '    ', '\t']) {
+    assert.equal(
+      html(`-\n${blank}\n  foo\n`),
+      '<ul>\n<li></li>\n</ul>\n<p>foo</p>\n',
+      JSON.stringify(blank)
+    );
+    assert.equal(
+      html(`- a\n-\n${blank}\n  b\n`),
+      '<ul>\n<li>a</li>\n<li></li>\n</ul>\n<p>b</p>\n',
+      JSON.stringify(blank)
+    );
+  }
+});
+
+void test('lazy continuation lines drop their indentation', () => {
+  assert.equal(
+    html('> foo\\\n   bar\n'),
+    '<blockquote>\n<p>foo<br />\nbar</p>\n</blockquote>\n'
+  );
+  assert.equal(
+    html('> [a]: /u\n   bar\n'),
+    '<blockquote>\n<p>bar</p>\n</blockquote>\n'
+  );
+  // a lazy line and a matched line strip the same whitespace
+  for (const line of ['   b`', '>    b`', '\tb`', '  \t b`']) {
+    assert.equal(
+      html('> `a\n' + line),
+      '<blockquote>\n<p><code>a b</code></p>\n</blockquote>\n',
+      JSON.stringify(line)
+    );
+  }
+});
+
 void test('inline constructs', () => {
   assert.equal(
     html('*a* **b** ***c***'),
@@ -567,10 +640,93 @@ void test('inline constructs', () => {
   assert.equal(html('&amp; &#65; &#x42;'), '<p>&amp; A B</p>\n');
   assert.equal(html('a  \nb'), '<p>a<br />\nb</p>\n');
   assert.equal(
+    html('a \\\nb'),
+    '<p>a <br />\nb</p>\n',
+    'a backslash break keeps the spaces before it'
+  );
+  assert.equal(
     html('<https://x.test/>'),
     '<p><a href="https://x.test/">https://x.test/</a></p>\n'
   );
   assert.equal(html('<em>raw</em>'), '<p><em>raw</em></p>\n');
+});
+
+void test('code spans pair after a failed scan, and up to 255 backticks', () => {
+  // a scan that reached EOF must not have its memo lowered by later scans
+  assert.equal(
+    html('Wrap code in ``` fences; inline uses `a` and `b`.'),
+    '<p>Wrap code in ``` fences; inline uses <code>a</code> and <code>b</code>.</p>\n'
+  );
+  assert.equal(
+    html('a (`) then ``b`` and ``c``'),
+    '<p>a (`) then <code>b</code> and <code>c</code></p>\n'
+  );
+  for (const n of [65, 255]) {
+    const fence = '`'.repeat(n);
+    assert.equal(html(fence + 'a' + fence), '<p><code>a</code></p>\n');
+    assert.equal(
+      html('x ' + fence + 'a' + fence + ' `y` ' + fence),
+      `<p>x <code>a</code> <code>y</code> ${fence}</p>\n`
+    );
+  }
+  const long = '`'.repeat(256);
+  assert.equal(html(long + 'a' + long), `<p>${long}a${long}</p>\n`);
+  // the memo starts empty for each leaf
+  assert.equal(
+    html('`a ``x\n\n``b`` `c`'),
+    '<p>`a ``x</p>\n<p><code>b</code> <code>c</code></p>\n'
+  );
+});
+
+void test('raw HTML comments end at the first -->', () => {
+  assert.equal(html('a <!-- b ---> c'), '<p>a <!-- b ---> c</p>\n');
+  assert.equal(html('a <!-- b ----> c'), '<p>a <!-- b ----> c</p>\n');
+  assert.equal(html('a <!-- b - -> c'), '<p>a &lt;!-- b - -&gt; c</p>\n');
+  assert.equal(html('a <!--> b <!---> c'), '<p>a <!--> b <!---> c</p>\n');
+  // a failed opener does not hide a later construct of another kind
+  assert.equal(
+    html('a <!-- b <? c ?> <![CDATA[ d ]]> <!E f> <!-- g'),
+    '<p>a &lt;!-- b <? c ?> <![CDATA[ d ]]> <!E f> &lt;!-- g</p>\n'
+  );
+  // the flags reset for each leaf
+  assert.equal(
+    html('x <? a\n\nx <? b ?> <!-- c\n\nx <!-- d -->'),
+    '<p>x &lt;? a</p>\n<p>x <? b ?> &lt;!-- c</p>\n<p>x <!-- d --></p>\n'
+  );
+});
+
+void test('NUL is U+FFFD in raw HTML, destinations, autolinks and flanking', () => {
+  assert.equal(html('x <a b="\0">'), '<p>x <a b="�"></p>\n');
+  assert.equal(
+    html('x <a b="\0\0" c=\'\0\'>'),
+    '<p>x <a b="��" c=\'�\'></p>\n'
+  );
+  assert.equal(
+    html('![x <a b="\0">](/i)'),
+    '<p><img src="/i" alt="x &lt;a b=&quot;�&quot;&gt;" /></p>\n'
+  );
+  assert.equal(
+    dec.decode(renderToHtml('x <a b="\0">', { skipHtml: true })),
+    '<p>x </p>\n'
+  );
+  assert.equal(html('<div>\0</div>'), '<div>�</div>\n');
+  // skipped HTML blocks leave no blank lines behind
+  assert.equal(
+    dec.decode(
+      renderToHtml('a\n\n<b>\n<i>\n\n  <div>\n\nz', { skipHtml: true })
+    ),
+    '<p>a</p>\n<p>z</p>\n'
+  );
+  assert.match(html('[a](/u\0v)'), /^<p><a href="\/u[^"]*v">a<\/a><\/p>\n$/);
+  assert.match(
+    html('<ab:c\0d>'),
+    /^<p><a href="ab:c[^"]*d">ab:c�d<\/a><\/p>\n$/
+  );
+  assert.equal(html('a*\0*b'), '<p>a*�*b</p>\n');
+  assert.equal(html('a *\0*'), '<p>a <em>�</em></p>\n');
+  // DEL is an ASCII control character
+  assert.equal(html('[a](/u\x7Fv)'), '<p>[a](/u\x7Fv)</p>\n');
+  assert.equal(html('<ab:c\x7Fd>'), '<p>&lt;ab:c\x7Fd&gt;</p>\n');
 });
 
 void test('links and images', () => {
@@ -591,6 +747,122 @@ void test('links and images', () => {
     '<p><a href="/x?y=1&amp;z=2">a</a></p>\n'
   );
   assert.equal(html('[a](/ä)'), '<p><a href="/%C3%A4">a</a></p>\n');
+  // NUL is U+FFFD in a URL as in text, and fits the URL's reservation
+  assert.equal(
+    html('[a](<x\0y> "t\0t")'),
+    '<p><a href="x%EF%BF%BDy" title="t�t">a</a></p>\n'
+  );
+  assert.equal(
+    html('www.a\0b.com'),
+    '<p><a href="http://www.a%EF%BF%BDb.com">www.a�b.com</a></p>\n'
+  );
+  const nuls = '\0'.repeat(5000);
+  assert.ok(
+    html(`[a](<${nuls}>) after`).includes(
+      `${'%EF%BF%BD'.repeat(5000)}">a</a> after`
+    )
+  );
+});
+
+void test('more than 255 open brackets keep the newest ones', () => {
+  const open = '['.repeat(300);
+  assert.equal(
+    html(open + 'a](b)'),
+    `<p>${'['.repeat(299)}<a href="b">a</a></p>\n`
+  );
+  assert.equal(
+    html(open + '![x](a) y](b)'),
+    `<p>${'['.repeat(299)}<a href="b"><img src="a" alt="x" /> y</a></p>\n`
+  );
+  // the oldest brackets were dropped and stay literal
+  assert.equal(
+    html('[' + open + 'a' + ']'.repeat(301) + '(b)'),
+    `<p>[${open}a${']'.repeat(301)}(b)</p>\n`
+  );
+  assert.equal(
+    html(open + 'a' + ']'.repeat(300) + '[c](d)'),
+    `<p>${open}a${']'.repeat(300)}<a href="d">c</a></p>\n`
+  );
+});
+
+void test('link labels hold at most 999 characters', () => {
+  for (const [ch, n, linked] of [
+    ['a', 999, true],
+    ['a', 1000, false],
+    ['é', 999, true],
+    ['é', 1000, false],
+  ] as const) {
+    const label = ch.repeat(n);
+    const out = html(`[${label}]: /u\n\n[${label}]\n`);
+    assert.equal(out.startsWith('<p><a href="/u">'), linked, `${ch} x ${n}`);
+  }
+  assert.equal(
+    html(`[x][${'a'.repeat(1000)}]\n\n[${'a'.repeat(1000)}]: /u`),
+    `<p>[x][${'a'.repeat(1000)}]</p>\n<p>[${'a'.repeat(1000)}]: /u</p>\n`
+  );
+});
+
+void test('ill-formed UTF-8 in labels decodes to U+FFFD and never traps', () => {
+  const bytes = (...parts: (string | number[])[]) =>
+    new Uint8Array(
+      parts.flatMap((p) =>
+        typeof p === 'string' ? [...new TextEncoder().encode(p)] : p
+      )
+    );
+  // stray continuation bytes used to decode as two-byte leads that fold to
+  // six bytes, overrunning the label scratch
+  const stray: number[] = [];
+  for (let i = 0; i < 100000; i++) stray.push(0x8e, 0x90);
+  const out = html(bytes('[', stray, ']'));
+  assert.equal(out, `<p>[${'�'.repeat(200000)}]</p>\n`);
+  const short = stray.slice(0, 998);
+  assert.equal(
+    html(bytes('[', short, ']\n\n[', short, ']: /u')),
+    `<p><a href="/u">${'�'.repeat(998)}</a></p>\n`
+  );
+  assert.equal(
+    html(
+      bytes('[^', stray.slice(0, 900), ']: n\n\nx[^', stray.slice(0, 900), ']')
+    ).slice(0, 30),
+    '<p>x<sup class="footnote-ref">'
+  );
+  // each ill-formed subpart is one U+FFFD, as the host decoder shows it
+  assert.equal(
+    html(bytes('[', [0x8e, 0x90], ']: /u\n\n[��]')),
+    '<p><a href="/u">��</a></p>\n'
+  );
+  assert.equal(
+    html(bytes('[a', [0xce], 'b]: /u\n\n[a', [0xce], 'c]')),
+    '<p>[a�c]</p>\n'
+  );
+  assert.equal(html(bytes('*', [0xe4, 0xbd], '*a*')), '<p>*�<em>a</em></p>\n');
+});
+
+void test('reference lookups ignore the hash seed and keep namespaces apart', async () => {
+  const { init } = await import('../dist/index.js');
+  const { readFileSync } = await import('node:fs');
+  const wasm = new WebAssembly.Module(
+    readFileSync(new URL('../dist/md.wasm', import.meta.url))
+  );
+  let doc = '';
+  for (let i = 0; i < 300; i++)
+    doc += `[L${i}]: /u${i}\n[^n${i % 7}]: note ${i}\n`;
+  doc += '\n';
+  for (let i = 0; i < 400; i++) doc += `[l${(i * 7) % 350}] [^N${i % 9}] `;
+  const first = html(doc);
+  for (let round = 0; round < 3; round++) {
+    init(wasm);
+    assert.equal(html(doc), first);
+  }
+  // footnote labels carry a 0x01 prefix; a link label may start with 0x01 too
+  const both =
+    '<p>ref<sup class="footnote-ref"><a href="#fn-1" id="fnref-1" data-footnote-ref>1</a></sup>' +
+    ' <a href="/u">\x01foo</a></p>\n<section class="footnotes"';
+  for (const defs of [
+    '[\x01foo]: /u\n\n[^foo]: note',
+    '[^foo]: note\n\n[\x01foo]: /u',
+  ])
+    assert.ok(html(defs + '\n\nref[^foo] [\x01foo]\n').startsWith(both), defs);
 });
 
 void test('definition indexing preserves first matches across mixed blocks and resets', () => {
@@ -655,6 +927,21 @@ void test('GFM task lists, strikethrough and autolinks', () => {
     '<ul>\n<li><input checked="" disabled="" type="checkbox"> done</li>\n' +
       '<li><input disabled="" type="checkbox"> todo</li>\n</ul>\n'
   );
+  // a box no paragraph or heading took does not outlive its item
+  for (const item of [
+    '- [x] a | b\n  - | -',
+    '- [x] \n\n  ***',
+    '1. [x]\n   ***',
+  ]) {
+    assert.equal(
+      html(`${item}\n\n> later`).split('<blockquote>')[1],
+      '\n<p>later</p>\n</blockquote>\n'
+    );
+  }
+  assert.equal(
+    html('- [ ] a\n  ---'),
+    '<ul>\n<li>\n<h2>[ ] a</h2>\n</li>\n</ul>\n'
+  );
   assert.equal(html('~~gone~~'), '<p><del>gone</del></p>\n');
   assert.equal(html('a ~~~not~~~ b'), '<p>a ~~~not~~~ b</p>\n');
   assert.equal(
@@ -673,6 +960,38 @@ void test('GFM task lists, strikethrough and autolinks', () => {
     html('<script>x</script>'),
     '&lt;script>x&lt;/script>\n',
     'the tagfilter escapes script'
+  );
+});
+
+void test('a task marker needs paragraph content after it', () => {
+  const box = '<input checked="" disabled="" type="checkbox">';
+  for (const item of ['* [x]', '- [x]\n', '- [x] \n', '- [x]\t']) {
+    assert.equal(
+      html(item),
+      '<ul>\n<li>[x]</li>\n</ul>\n',
+      JSON.stringify(item)
+    );
+  }
+  assert.equal(html('- [ ]'), '<ul>\n<li>[ ]</li>\n</ul>\n');
+  // the checkbox never moves to a later block or item
+  assert.equal(
+    html('- [x]\n- foo\n'),
+    '<ul>\n<li>[x]</li>\n<li>foo</li>\n</ul>\n'
+  );
+  assert.equal(
+    html('- [x]\n  # h\n'),
+    '<ul>\n<li>[x]\n<h1>h</h1>\n</li>\n</ul>\n'
+  );
+  assert.equal(
+    html('- [x]\n  ===\n'),
+    '<ul>\n<li>\n<h1>[x]</h1>\n</li>\n</ul>\n'
+  );
+  // content on a later line of the paragraph still counts
+  assert.equal(html('- [x]\n  foo'), `<ul>\n<li>${box}\nfoo</li>\n</ul>\n`);
+  assert.equal(html('- [x] \n  foo'), `<ul>\n<li>${box}\nfoo</li>\n</ul>\n`);
+  assert.equal(
+    html('- [x] foo\n\n- b'),
+    `<ul>\n<li>\n<p>${box} foo</p>\n</li>\n<li>\n<p>b</p>\n</li>\n</ul>\n`
   );
 });
 
@@ -712,6 +1031,20 @@ void test('GFM footnotes', () => {
   );
 });
 
+void test('footnote definition labels hold at most 999 characters, like link labels', () => {
+  for (const [n, defined] of [
+    [999, true],
+    [1000, false],
+  ] as const) {
+    for (const ch of ['a', 'é']) {
+      const label = ch.repeat(n);
+      const out = html(`x[^${label}]\n\n[^${label}]: note`);
+      assert.equal(out.includes('data-footnote-ref'), defined, ch + n);
+      assert.equal(out.includes(`<p>[^${label}]: note</p>`), !defined, ch + n);
+    }
+  }
+});
+
 void test('tabs expand to four-column stops', () => {
   assert.equal(html('\tcode'), '<pre><code>code\n</code></pre>\n');
   assert.equal(
@@ -733,11 +1066,79 @@ void test('pathological input terminates', () => {
     '<'.repeat(2000),
     '|'.repeat(1000) + '\n|-|\n',
     '*a* [b](c) '.repeat(10000),
+    // unclosed raw HTML openers and rejected www domains used to rescan the
+    // rest of the paragraph each time (0.7 to 3 s each at these sizes)
+    'x ' + '<!-- '.repeat(40000),
+    'x ' + '<?'.repeat(40000),
+    'x ' + '<![CDATA[]'.repeat(20000),
+    'x ' + '<!A'.repeat(150000),
+    'www.a_'.repeat(32000),
+    // crafted to collide in the unseeded label hash (0.6 s before)
+    collidingLabels(8192, 40000),
+    // each container marker once rescanned the rest of the line
+    '- '.repeat(100000) + 'x',
+    '> ' + '*\t'.repeat(100000) + 'x',
+    // each blank line once walked every open level
+    '- '.repeat(125) + 'x' + '\n'.repeat(400000) + 'y',
+    '[^a]: '.repeat(249) + 'x' + '\n  '.repeat(200000) + 'y',
   ];
   for (const input of inputs) {
     const out = renderToHtml(input);
     assert.ok(out instanceof Uint8Array, JSON.stringify(input.slice(0, 20)));
   }
+});
+
+/** Definitions whose labels share one slot of the old FNV-1a low-bit table. */
+function collidingLabels(defs: number, refs: number) {
+  const prime = 16777619;
+  const fnv = (s: string) => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++)
+      h = Math.imul(h ^ s.charCodeAt(i), prime);
+    return h >>> 0;
+  };
+  let inverse = 1;
+  for (let i = 0; i < 5; i++)
+    inverse = Math.imul(inverse, 2 - Math.imul(prime, inverse));
+  let slots = 16;
+  while (slots < 2 * defs) slots *= 2;
+  const mask = slots - 1;
+  const want = Math.imul(5, inverse) & mask;
+  const labels: string[] = [];
+  for (let n = 0; labels.length < defs + 1; n++) {
+    const stem = 'd' + n.toString(36);
+    const last = (fnv(stem) ^ want) & mask;
+    // the last byte must finish the collision as a lowercase-safe character
+    if (last >= 0x7f || last <= 0x20 || (last >= 0x41 && last <= 0x5d))
+      continue;
+    labels.push(stem + String.fromCharCode(last));
+  }
+  const ref = labels.pop();
+  return (
+    labels.map((l) => `[${l}]: /u`).join('\n') +
+    '\n\n' +
+    `[${ref}] `.repeat(refs)
+  );
+}
+
+void test('container markers past the nesting limit stay text on every line', () => {
+  const count = (s: string, tag: string) => s.split(tag).length - 1;
+  let out = html('>'.repeat(249) + ' - a\n');
+  assert.equal(count(out, '<blockquote>'), 249);
+  assert.equal(count(out, '<ul>'), 0);
+  assert.match(out, /<p>- a<\/p>/);
+  out = html('> '.repeat(260) + 'x\n' + '> '.repeat(260) + 'y\n');
+  assert.equal(count(out, '<blockquote>'), 250);
+  assert.match(out, /<p>(&gt; ){10}x\n(&gt; ){10}y<\/p>/);
+  const q = '>'.repeat(252);
+  out = html(`${q} \`\`\`\n${q} code\n${q} \`\`\`\n\nafter\n`);
+  assert.equal(count(out, '<pre>'), 0);
+  assert.ok(out.endsWith('</blockquote>\n<p>after</p>\n'));
+  // the deepest list still takes sibling items
+  out = html('- '.repeat(126) + 'a\n' + '  '.repeat(124) + '- b\n');
+  assert.equal(count(out, '<ul>'), 125);
+  assert.equal(count(out, '<li>'), 126);
+  assert.match(out, /<li>- a<\/li>\n<li>b<\/li>/);
 });
 
 void test('a table can start under any line of a paragraph', () => {
@@ -750,6 +1151,36 @@ void test('a table can start under any line of a paragraph', () => {
     html('one\ntwo\n| a |\n| - |'),
     '<p>one\ntwo</p>\n<table>\n<thead>\n<tr>\n<th>a</th>\n</tr>\n</thead>\n</table>\n'
   );
+});
+
+void test('the paragraph above a table header closes like any other', () => {
+  const head =
+    '<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n</table>\n';
+  assert.equal(
+    html('[foo]: /url\na | b\n--|--\n\n[foo]\n'),
+    head + '<p><a href="/url">foo</a></p>\n'
+  );
+  assert.equal(
+    html('[foo]: /url\nrest  \na | b\n--|--\n\n[foo]\n'),
+    '<p>rest</p>\n' + head + '<p><a href="/url">foo</a></p>\n'
+  );
+  // trailing whitespace stays a hard break when no table forms
+  assert.equal(html('a | b  \n:-:\n'), '<p>a | b<br />\n:-:</p>\n');
+  assert.equal(html('a | b  \n--|--\n'), head);
+});
+
+void test('a list item interrupts a paragraph before a table delimiter row', () => {
+  assert.equal(
+    html('a | b\n- | -\n'),
+    '<p>a | b</p>\n<ul>\n<li>| -</li>\n</ul>\n'
+  );
+  assert.equal(
+    html('a | b\n-\t| -\n'),
+    '<p>a | b</p>\n<ul>\n<li>| -</li>\n</ul>\n'
+  );
+  for (const row of ['-|-', '-- | --', '| - | - |', ':- | -:']) {
+    assert.match(html(`a | b\n${row}\n`), /^<table>/, row);
+  }
 });
 
 void test('a block that consumes its whole line does not loosen its list', () => {
@@ -773,6 +1204,20 @@ void test('a block that consumes its whole line does not loosen its list', () =>
   assert.equal(
     html('- a\n\n- b'),
     '<ul>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n</li>\n</ul>\n'
+  );
+});
+
+void test('a thematic break can follow list markers that are not one', () => {
+  assert.equal(html('- * * *'), '<ul>\n<li>\n<hr />\n</li>\n</ul>\n');
+  assert.equal(
+    html('- - * * *'),
+    '<ul>\n<li>\n<ul>\n<li>\n<hr />\n</li>\n</ul>\n</li>\n</ul>\n'
+  );
+  assert.equal(html('* - - -'), '<ul>\n<li>\n<hr />\n</li>\n</ul>\n');
+  assert.equal(html('- - -'), '<hr />\n');
+  assert.equal(
+    html('- - x\n* * *'),
+    '<ul>\n<li>\n<ul>\n<li>x</li>\n</ul>\n</li>\n</ul>\n<hr />\n'
   );
 });
 
@@ -803,5 +1248,49 @@ void test('extended autolinks reject underscores in the last two domain segments
   assert.match(
     html('www.a_b.c.com'),
     /^<p><a href="http:\/\/www\.a_b\.c\.com">/
+  );
+  // a rejected domain only rejects later `www.` with the same last segments
+  assert.equal(
+    html('x_www.a_www.b'),
+    '<p>x_www.a_<a href="http://www.b">www.b</a></p>\n'
+  );
+  assert.equal(
+    html('www.a_b.c.www.d e'),
+    '<p><a href="http://www.a_b.c.www.d">www.a_b.c.www.d</a> e</p>\n'
+  );
+  assert.equal(
+    html('www.a.b_c.www.d_e.f www.g.h'),
+    '<p>www.a.b_c.www.d_e.f <a href="http://www.g.h">www.g.h</a></p>\n'
+  );
+  assert.equal(html('http://a._www.b_c.d x'), '<p>http://a._www.b_c.d x</p>\n');
+});
+
+void test('email autolinks take underscore runs into the local part', () => {
+  const mail = (a: string) => `<a href="mailto:${a}">${a}</a>`;
+  assert.equal(
+    html('mail john_@example.com now'),
+    `<p>mail ${mail('john_@example.com')} now</p>\n`
+  );
+  assert.equal(html('_first@x.com'), `<p>${mail('_first@x.com')}</p>\n`);
+  assert.equal(html('a_.b@c.de'), `<p>${mail('a_.b@c.de')}</p>\n`);
+  assert.equal(html('__init__@x.com'), `<p>${mail('__init__@x.com')}</p>\n`);
+  // the absorbed run no longer closes emphasis
+  assert.equal(html('_a b_@c.de'), `<p>_a ${mail('b_@c.de')}</p>\n`);
+  assert.equal(html('*_a@b.cd*'), `<p><em>${mail('_a@b.cd')}</em></p>\n`);
+  // a failed address leaves the delimiters alone
+  assert.equal(html('_foo@bar.com_'), '<p><em>foo@bar.com</em></p>\n');
+  assert.equal(html('[x] _a@b'), '<p>[x] _a@b</p>\n');
+  // a scheme glued to a word is text before a bare address
+  assert.equal(
+    html('xmailto:foo@bar.com'),
+    `<p>xmailto:${mail('foo@bar.com')}</p>\n`
+  );
+  assert.equal(
+    html('xxmpp:foo@bar.com/baz'),
+    `<p>xxmpp:${mail('foo@bar.com')}/baz</p>\n`
+  );
+  assert.equal(
+    html('x mailto:foo@bar.com'),
+    '<p>x <a href="mailto:foo@bar.com">mailto:foo@bar.com</a></p>\n'
   );
 });

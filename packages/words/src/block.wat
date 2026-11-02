@@ -19,6 +19,9 @@
   (global $curLevel (mut i32) (i32.const 0))
   (global $closed (mut i32) (i32.const 0))   ;; unmatched blocks already finalized
   (global $skipLine (mut i32) (i32.const 0)) ;; the line was fully consumed by a block start
+  ;; The last line was blank from its start and left a deep spine but no leaf
+  ;; open. Another blank line then changes no state.
+  (global $idleBlank (mut i32) (i32.const 0))
   ;; open fenced code block
   (global $codeFenceCh (mut i32) (i32.const 0))
   (global $codeFenceN (mut i32) (i32.const 0))
@@ -59,7 +62,9 @@
               (i32.eq (local.get $beg) (i32.add (local.get $end) (i32.const 1)))
               (i32.eq (i32.load8_u (local.get $end)) (i32.const 10)))
           (then
-            (i32.store offset=4 (local.get $line) (global.get $lineEnd))
+            (i32.store offset=4 (local.get $line)
+              (i32.or (global.get $lineEnd)
+                (i32.and (i32.load offset=4 (local.get $line)) (i32.const $R.padMask))))
             (return)))))
     (call $ensureRec (i32.const $R.line))
     (i32.store (global.get $rec) (local.get $beg))
@@ -72,26 +77,41 @@
 
   ;; Unindented top-level HTML fences need no per-line container bookkeeping.
   ;; Keep their LF-separated body as one span, stopping before the line of any
-  ;; fence byte or CR so ordinary scanning handles closers and normalization.
+  ;; fence byte so ordinary scanning handles closers. A line ending in CR gets
+  ;; its own range, so rendering still normalizes the line ending.
   (func $tryCodeRun (result i32)
     (local $stop i32)
+    (local $p i32)
     (if (i32.or (global.get $mode)
           (i32.or (global.get $sp)
             (i32.or (i32.eqz (global.get $codeFenceCh)) (global.get $codeFenceOff))))
       (then (return (i32.const 0))))
-    (local.set $stop (call $findCodeRunEnd (global.get $pos) (global.get $eof) (global.get $codeFenceCh)))
+    (local.set $p (global.get $pos))
+    (loop $crLines
+      (local.set $stop (call $findCodeRunEnd (local.get $p) (global.get $eof) (global.get $codeFenceCh)))
+      (if (i32.and (i32.lt_u (local.get $stop) (global.get $eof))
+            (i32.eq (i32.load8_u (local.get $stop)) (i32.const 13)))
+        (then
+          (global.set $pos (local.get $p))
+          (global.set $lineEnd (local.get $stop))
+          (call $addLine)
+          (local.set $p (call $lineAfter (local.get $stop)))
+          (br_if $crLines (i32.lt_u (local.get $p) (global.get $eof)))
+          (return (i32.const 1)))))
+    ;; From here on, a zero result is only possible before any CR line.
     (if (i32.lt_u (local.get $stop) (global.get $eof))
       (then
-        (local.set $stop (call $lineStartBefore (local.get $stop) (global.get $pos)))
-        (if (i32.le_u (local.get $stop) (global.get $pos))
-          (then (return (i32.const 0))))
+        (local.set $stop (call $lineStartBefore (local.get $stop) (local.get $p)))
+        (if (i32.le_u (local.get $stop) (local.get $p))
+          (then (return (i32.ne (local.get $p) (global.get $pos)))))
         (local.set $stop (i32.sub (local.get $stop) (i32.const 1))))
       (else
-        (if (i32.and (i32.gt_u (local.get $stop) (global.get $pos))
+        (if (i32.and (i32.gt_u (local.get $stop) (local.get $p))
               (i32.eq (i32.load8_u (i32.sub (local.get $stop) (i32.const 1))) (i32.const 10)))
           (then (local.set $stop (i32.sub (local.get $stop) (i32.const 1)))))))
     (if (i32.le_u (local.get $stop) (global.get $lineEnd))
       (then (return (i32.const 0))))
+    (global.set $pos (local.get $p))
     (global.set $lineEnd (local.get $stop))
     (call $addLine)
     (i32.const 1))
@@ -171,18 +191,15 @@
       (then (return (i32.const 0))))
     (global.set $curLevel (global.get $lastMatched))
     (if (i32.gt_u (global.get $lastMatched) (global.get $sp))
-      (then
-        (global.set $leafBlank (i32.const 0))
-        (call $advanceToFns)))
+      (then (global.set $leafBlank (i32.const 0))))
+    ;; Lazy lines drop their indentation too.
+    (call $advanceToFns)
     (call $addLine)
     (if (i32.and
           (i32.eqz (global.get $sp))
-          (i32.and
-            (i32.lt_u (global.get $lineEnd) (global.get $eof))
-            (i32.eq (i32.load8_u (global.get $lineEnd)) (i32.const 10))))
+          (i32.lt_u (global.get $lineEnd) (global.get $eof)))
       (then
-        (drop (call $appendParagraphRun
-          (i32.add (global.get $lineEnd) (i32.const 1))))))
+        (drop (call $appendParagraphRun (call $lineAfter (global.get $lineEnd))))))
     (i32.const 1))
 
   ;; Compact a whole eligible paragraph run, publishing its final two ranges
@@ -245,8 +262,8 @@
       (return (local.get $next)))
     (i32.const 0))
 
-  ;; Consume further unindented LF-separated lines that cannot interrupt the
-  ;; current top-level paragraph without rebuilding the phase state.
+  ;; Consume further unindented lines that cannot interrupt the current
+  ;; top-level paragraph without rebuilding the phase state.
   (func $appendParagraphRun (param $p i32) (result i32)
     (local $end i32)
     (local $next i32)
@@ -262,12 +279,7 @@
       (global.set $lineEnd (local.get $end))
       (global.set $ptab (i32.const 0))
       (call $addLine)
-      (local.set $next (call $lineAfter (local.get $end)))
-      (if (i32.or
-            (i32.ge_u (local.get $end) (global.get $eof))
-            (i32.ne (i32.load8_u (local.get $end)) (i32.const 10)))
-        (then (return (local.get $next))))
-      (local.set $p (local.get $next))
+      (local.set $p (call $lineAfter (local.get $end)))
       (br $line))
     (unreachable))
 
@@ -328,6 +340,9 @@
     (local $n i32)
     (local $line i32)
     (local $end i32)
+    (local $beg i32)
+    (local $e i32)
+    (local $c i32)
     (if (i32.eqz (global.get $leaf)) (then (return)))
     (local.set $t (global.get $leaf))
     (global.set $leaf (enum.get $Blk.none))
@@ -338,8 +353,37 @@
     (if (i32.eq (local.get $t) (enum.get $Blk.p))
       (then
         (call $resolveLinkDefs (global.get $leafRec))
-        (if (i32.eqz (i32.load offset=$R.nLines (global.get $leafRec)))
-          (then (i32.store8 (global.get $leafRec) (enum.get $Blk.none))))))
+        (local.set $n (i32.load offset=$R.nLines (global.get $leafRec)))
+        (if (i32.eqz (local.get $n))
+          (then (i32.store8 (global.get $leafRec) (enum.get $Blk.none))))
+        ;; GFM task list item: the item's first block is a paragraph that starts
+        ;; with `[ ]` or `[x]` and whitespace before more content. Drop the
+        ;; marker and flag the item; `- [x]` alone stays text.
+        (block $task
+          (br_if $task (i32.or (i32.eqz (local.get $n)) (i32.eqz (global.get $sp))))
+          (local.set $e (call $containerAt (global.get $sp)))
+          (br_if $task (i32.ne (i32.load8_u (local.get $e)) (enum.get $Blk.li)))
+          (br_if $task (i32.ne (i32.load offset=$CS.children (local.get $e)) (i32.const 1)))
+          (local.set $line (call $recLines (global.get $leafRec)))
+          (local.set $beg (call $lineBeg (local.get $line)))
+          (local.set $end (call $lineEndOf (local.get $line)))
+          (br_if $task (call $linePad (local.get $line)))
+          (br_if $task (i32.gt_u (i32.add (local.get $beg) (i32.const 3)) (local.get $end)))
+          (br_if $task (i32.ne (i32.load8_u (local.get $beg)) (i32.const "[")))
+          (local.set $c (i32.load8_u offset=1 (local.get $beg)))
+          (br_if $task (i32.eqz (i32.or
+            (i32.eq (local.get $c) (i32.const 32))
+            (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "x")))))
+          (br_if $task (i32.ne (i32.load8_u offset=2 (local.get $beg)) (i32.const "]")))
+          ;; The trimmed first line may end at the marker only if more lines follow.
+          (br_if $task (select
+            (i32.lt_u (local.get $n) (i32.const 2))
+            (i32.eqz (call $isSpaceByte (i32.load8_u offset=3 (local.get $beg))))
+            (i32.eq (i32.add (local.get $beg) (i32.const 3)) (local.get $end))))
+          (call $recFlag (i32.load offset=$CS.rec (local.get $e))
+            (i32.or (i32.const $F.task)
+              (i32.mul (i32.ne (local.get $c) (i32.const 32)) (i32.const $F.taskDone))))
+          (i32.store (local.get $line) (i32.add (local.get $beg) (i32.const 3))))))
     (if (i32.and (i32.eq (local.get $t) (enum.get $Blk.code)) (i32.eqz (global.get $codeFenceCh)))
       (then
         ;; indented code keeps interior blank lines but not trailing ones
@@ -468,6 +512,14 @@
     (local $n i32)
     (local $closeI i32)
     (local $closeK i32)
+    (local $start i32)
+    (local.set $start (global.get $pos))
+    ;; Consume a repeated blank line without the walk over every level.
+    (if (global.get $idleBlank)
+      (then
+        (if (i32.ge_u (call $skipSpace (local.get $start) (global.get $lineEnd)) (global.get $lineEnd))
+          (then (return (i32.const 1))))
+        (global.set $idleBlank (i32.const 0))))
     (local.set $i (i32.const 1))
     (local.set $e (i32.const $mem.container))
     (block $stop
@@ -503,11 +555,17 @@
                     (br $stop)))))))
         (if (i32.eq (local.get $t) (enum.get $Blk.li))
           (then
+            ;; An item can begin with at most one blank line, however indented.
+            (if (global.get $blank)
+              (then
+                (if (i32.eqz (i32.load offset=$CS.children (local.get $e)))
+                  (then
+                    (global.set $allMatched (i32.const 0))
+                    (br $stop)))))
             (if (i32.ge_u (global.get $indent) (i32.load offset=$CS.indent (local.get $e)))
               (then (call $advance (i32.load offset=$CS.indent (local.get $e)) (i32.const 1)))
               (else
-                (if (i32.and (global.get $blank)
-                      (i32.ne (i32.load offset=$CS.children (local.get $e)) (i32.const 0)))
+                (if (global.get $blank)
                   (then (call $advanceToFns))
                   (else
                     (global.set $allMatched (i32.const 0))
@@ -516,6 +574,14 @@
         (local.set $e (i32.add (local.get $e) (i32.const $CS.size)))
         (br $l)))
     (global.set $lastMatched (i32.sub (local.get $i) (i32.const 1)))
+    ;; A line blank from its start closes any leaf but code or HTML and leaves
+    ;; every matched level open. Below a deep spine, let the next blank line
+    ;; skip the walk; shallow walks are cheap enough to repeat.
+    (if (i32.and (global.get $blank) (i32.ge_u (global.get $lastMatched) (i32.const 8)))
+      (then (global.set $idleBlank (i32.and
+        (i32.gt_u (i32.sub (global.get $leaf) (enum.get $Blk.code)) (i32.const 1))
+        (i32.ge_u (call $skipSpace (local.get $start) (global.get $lineEnd))
+          (global.get $lineEnd))))))
     ;; the open leaf is the deepest block in the spine
     (if (i32.and (global.get $allMatched) (i32.ne (global.get $leaf) (i32.const 0)))
       (then
@@ -590,6 +656,12 @@
         (global.set $allMatched (i32.const 0))))
     (i32.const 0))
 
+  ;; the spine depth once the containers this line left unmatched close
+  (func $spineDepth (result i32)
+    (select (global.get $sp) (global.get $lastMatched)
+      (i32.or (global.get $closed)
+        (i32.le_u (global.get $sp) (global.get $lastMatched)))))
+
   ;; phase 2: try the block start conditions, in the order the spec requires
   (func $openNewBlocks
     (local $contType i32)
@@ -617,6 +689,7 @@
     (local $footNormalized i64)
     (local $setextC i32)
     (local $setextI i32)
+    (local $depth i32)
     (local.set $maybeLazy (i32.eq (global.get $leaf) (enum.get $Blk.p)))
     (local.set $contType
       (if (result i32) (i32.eqz (global.get $lastMatched))
@@ -634,10 +707,14 @@
         (br_if $stop (i32.and (i32.eqz (local.get $indented))
           (i32.eqz (call $mayStartBlock (i32.load8_u (global.get $fns))))))
 
-        ;; block quote
-        (if (i32.and (i32.eqz (local.get $indented))
-              (i32.and (i32.lt_u (global.get $fns) (global.get $lineEnd))
-                (i32.eq (i32.load8_u (global.get $fns)) (i32.const ">"))))
+        ;; block quote; past the nesting limit a container start stays text,
+        ;; so every line treats it alike
+        (if (if (result i32)
+              (i32.and (i32.eqz (local.get $indented))
+                (i32.and (i32.lt_u (global.get $fns) (global.get $lineEnd))
+                  (i32.eq (i32.load8_u (global.get $fns)) (i32.const ">"))))
+              (then (i32.lt_u (call $spineDepth) (i32.const $Nest)))
+              (else (i32.const 0)))
           (then
             (call $startNewBlock)
             (call $advance (i32.add (global.get $indent) (i32.const 1)) (i32.const 1))
@@ -748,49 +825,6 @@
                     (global.set $skipLine (i32.const 1))
                     (br $stop)))))))
 
-        ;; GFM table
-        (if (i32.and (i32.eqz (local.get $indented)) (i32.eq (local.get $contType) (enum.get $Blk.p)))
-          (then
-            (block $notTable
-              (br_if $notTable (i32.ne (global.get $leaf) (enum.get $Blk.p)))
-              (local.set $tableCols (call $scanTableDelimRow (global.get $fns)))
-              (br_if $notTable (i32.eqz (local.get $tableCols)))
-              (call $rtrimLines (global.get $leafRec))
-              (local.set $tableN (i32.load offset=$R.nLines (global.get $leafRec)))
-              (br_if $notTable (i32.eqz (local.get $tableN)))
-              (local.set $tableLine (call $lineAt (global.get $leafRec)
-                (i32.sub (local.get $tableN) (i32.const 1))))
-              (local.set $tableBeg (call $lineBeg (local.get $tableLine)))
-              (local.set $tableEnd (call $lineEndOf (local.get $tableLine)))
-              (br_if $notTable (i32.ne
-                (call $countRowCells (local.get $tableBeg) (local.get $tableEnd))
-                (local.get $tableCols)))
-              ;; The header leaves the paragraph, which may disappear entirely.
-              (local.set $tableN (i32.sub (local.get $tableN) (i32.const 1)))
-              (i32.store offset=$R.nLines (global.get $leafRec) (local.get $tableN))
-              (if (i32.eqz (local.get $tableN))
-                (then (i32.store8 (global.get $leafRec) (enum.get $Blk.none)))
-                (else (call $rtrimLines (global.get $leafRec))))
-              (call $openLeaf (enum.get $Blk.table))
-              (i32.store offset=8 (global.get $leafRec) (local.get $tableCols))
-              ;; Alignment bytes sit between the header and line array.
-              (local.set $tableExtra
-                (i32.and (i32.add (local.get $tableCols) (i32.const 7)) (i32.const -8)))
-              (i32.store16 offset=2 (global.get $leafRec)
-                (i32.add (i32.const $R.header) (local.get $tableExtra)))
-              (call $ensureRec (i32.add (local.get $tableExtra) (i32.const $R.line)))
-              (memory.copy (global.get $rec) (i32.const $mem.align) (local.get $tableCols))
-              (global.set $rec (i32.add (global.get $rec) (local.get $tableExtra)))
-              (i32.store (global.get $rec) (local.get $tableBeg))
-              (i32.store offset=4 (global.get $rec) (local.get $tableEnd))
-              (global.set $rec (i32.add (global.get $rec) (i32.const $R.line)))
-              (i32.store offset=$R.nLines (global.get $leafRec) (i32.const 1))
-              (call $recGrow (global.get $leafRec)
-                (i32.add (local.get $tableExtra) (i32.const $R.line)))
-              (global.set $pos (global.get $lineEnd))
-              (global.set $skipLine (i32.const 1))
-              (br $stop))))
-
         ;; thematic break
         (if (i32.and (i32.eqz (local.get $indented))
               (i32.eqz (i32.and
@@ -813,7 +847,9 @@
         (if (i32.eqz (local.get $indented))
           (then
             (local.set $m (call $scanFootnoteDef (global.get $fns)))
-            (if (local.get $m)
+            (if (if (result i32) (local.get $m)
+                  (then (i32.lt_u (call $spineDepth) (i32.const $Nest)))
+                  (else (i32.const 0)))
               (then
                 (call $startNewBlock)
                 (call $advance
@@ -866,6 +902,23 @@
           (then
             (local.set $m (call $parseListMarker (global.get $fns)
               (i32.eq (local.get $contType) (enum.get $Blk.p))))
+            ;; Reuse the enclosing list when the markers are of the same type;
+            ;; a new list needs a level for itself as well as the item.
+            (local.set $list (i32.const 0))
+            (if (local.get $m)
+              (then
+                (local.set $depth (call $spineDepth))
+                (if (local.get $depth)
+                  (then
+                    (local.set $list (call $containerAt (local.get $depth)))
+                    (local.set $list (i32.and
+                      (i32.eq (i32.load8_u (local.get $list))
+                        (i32.add (enum.get $Blk.ul) (global.get $lmOrdered)))
+                      (i32.eq (i32.load8_u offset=$CS.ch (local.get $list))
+                        (global.get $lmChar))))))
+                (if (i32.gt_u (i32.sub (i32.add (local.get $depth) (i32.const 2)) (local.get $list))
+                      (i32.const $Nest))
+                  (then (local.set $m (i32.const 0))))))
             (if (local.get $m)
               (then
                 (call $startNewBlock)
@@ -896,16 +949,6 @@
                     (if (i32.gt_u (local.get $i) (i32.const 0))
                       (then (call $advance (i32.const 1) (i32.const 1)))))
                   (else (local.set $padding (i32.add (local.get $m) (local.get $i)))))
-                ;; reuse the enclosing list when the markers are of the same type
-                (local.set $list (i32.const 0))
-                (if (global.get $sp)
-                  (then
-                    (local.set $list (call $containerAt (global.get $sp)))
-                    (local.set $list (i32.and
-                      (i32.eq (i32.load8_u (local.get $list))
-                        (i32.add (enum.get $Blk.ul) (global.get $lmOrdered)))
-                      (i32.eq (i32.load8_u offset=$CS.ch (local.get $list))
-                        (global.get $lmChar))))))
                 (if (i32.eqz (local.get $list))
                   (then
                     (call $prepareLeafParent)
@@ -917,6 +960,48 @@
                 (local.set $contType (enum.get $Blk.li))
                 (local.set $maybeLazy (i32.const 0))
                 (br $try)))))
+
+        ;; GFM table, tried after the core block starts as cmark-gfm does, so
+        ;; `- | -` is a list item
+        (if (i32.and (i32.eqz (local.get $indented)) (i32.eq (local.get $contType) (enum.get $Blk.p)))
+          (then
+            (block $notTable
+              (br_if $notTable (i32.ne (global.get $leaf) (enum.get $Blk.p)))
+              (local.set $tableCols (call $scanTableDelimRow (global.get $fns)))
+              (br_if $notTable (i32.eqz (local.get $tableCols)))
+              (local.set $tableN (i32.load offset=$R.nLines (global.get $leafRec)))
+              (br_if $notTable (i32.eqz (local.get $tableN)))
+              (local.set $tableLine (call $lineAt (global.get $leafRec)
+                (i32.sub (local.get $tableN) (i32.const 1))))
+              (local.set $tableBeg (call $lineBeg (local.get $tableLine)))
+              (local.set $tableEnd (call $trimSpaceBack
+                (call $lineEndOf (local.get $tableLine)) (local.get $tableBeg)))
+              (br_if $notTable (i32.ne
+                (call $countRowCells (local.get $tableBeg) (local.get $tableEnd))
+                (local.get $tableCols)))
+              ;; The header leaves the paragraph, which closes with what remains.
+              (i32.store offset=$R.nLines (global.get $leafRec)
+                (i32.sub (local.get $tableN) (i32.const 1)))
+              (call $closeLeaf)
+              (call $openLeaf (enum.get $Blk.table))
+              (i32.store offset=8 (global.get $leafRec) (local.get $tableCols))
+              ;; Alignment bytes sit between the header and line array.
+              (local.set $tableExtra
+                (i32.and (i32.add (local.get $tableCols) (i32.const 7)) (i32.const -8)))
+              (i32.store16 offset=2 (global.get $leafRec)
+                (i32.add (i32.const $R.header) (local.get $tableExtra)))
+              (call $ensureRec (i32.add (local.get $tableExtra) (i32.const $R.line)))
+              (memory.copy (global.get $rec) (i32.const $mem.align) (local.get $tableCols))
+              (global.set $rec (i32.add (global.get $rec) (local.get $tableExtra)))
+              (i32.store (global.get $rec) (local.get $tableBeg))
+              (i32.store offset=4 (global.get $rec) (local.get $tableEnd))
+              (global.set $rec (i32.add (global.get $rec) (i32.const $R.line)))
+              (i32.store offset=$R.nLines (global.get $leafRec) (i32.const 1))
+              (call $recGrow (global.get $leafRec)
+                (i32.add (local.get $tableExtra) (i32.const $R.line)))
+              (global.set $pos (global.get $lineEnd))
+              (global.set $skipLine (i32.const 1))
+              (br $stop))))
 
         ;; indented code block
         (if (i32.and (local.get $indented)
@@ -940,8 +1025,6 @@
     (local $excluded i32)
     (local $level i32)
     (local $isBlank i32)
-    (local $taskE i32)
-    (local $taskC i32)
     (call $findFirstNonspace)
     ;; last_line_blank bookkeeping, which decides list looseness
     (local.set $level (global.get $curLevel))
@@ -1020,6 +1103,7 @@
             (i32.eq (global.get $curLevel) (global.get $lastMatched))
             (i32.and (i32.eqz (global.get $blank)) (i32.eqz (global.get $closed)))))
       (then
+        (call $advanceToFns)
         (call $addLine)
         (return)))
     (call $closeUnmatched)
@@ -1069,34 +1153,6 @@
     (call $prepareLeafParent)
     (call $openLeaf (enum.get $Blk.p))
     (call $advanceToFns)
-    ;; GFM task list item: `[ ]` or `[x]` at the first paragraph of an item.
-    (block $taskDone
-      (br_if $taskDone (i32.eqz (global.get $sp)))
-      (local.set $taskE (call $containerAt (global.get $sp)))
-      (br_if $taskDone
-        (i32.ne (i32.load8_u (local.get $taskE)) (enum.get $Blk.li)))
-      (br_if $taskDone
-        (i32.ne (i32.load offset=$CS.children (local.get $taskE)) (i32.const 1)))
-      (br_if $taskDone
-        (i32.gt_u (i32.add (global.get $pos) (i32.const 3)) (global.get $lineEnd)))
-      (br_if $taskDone
-        (i32.ne (i32.load8_u (global.get $pos)) (i32.const "[")))
-      (local.set $taskC (i32.load8_u offset=1 (global.get $pos)))
-      (br_if $taskDone (i32.eqz (i32.or
-        (i32.eq (local.get $taskC) (i32.const 32))
-        (i32.eq (i32.or (local.get $taskC) (i32.const 32)) (i32.const "x")))))
-      (br_if $taskDone
-        (i32.ne (i32.load8_u offset=2 (global.get $pos)) (i32.const "]")))
-      (if (i32.lt_u (i32.add (global.get $pos) (i32.const 3)) (global.get $lineEnd))
-        (then
-          (br_if $taskDone (i32.eqz
-            (call $isSpaceByte (i32.load8_u offset=3 (global.get $pos)))))))
-      (call $recFlag (i32.load offset=$CS.rec (local.get $taskE))
-        (i32.or (i32.const $F.task)
-          (i32.mul (i32.ne (local.get $taskC) (i32.const 32))
-            (i32.const $F.taskDone))))
-      (global.set $pos (i32.add (global.get $pos) (i32.const 3)))
-      (global.set $col (i32.add (global.get $col) (i32.const 3))))
     (call $addLine))
 
 )

@@ -130,6 +130,41 @@ void test('random input never crashes and stays valid UTF-8', () => {
   }
 });
 
+void test('ill-formed UTF-8 in labels, definitions and delimiters never traps', () => {
+  const bytes = [
+    0x5b, 0x5d, 0x3a, 0x20, 0x0a, 0x2a, 0x5f, 0x60, 0x3c, 0x40, 0x2e, 0x00,
+    0x61, 0x5e, 0x77, 0x80, 0x8e, 0x90, 0xb0, 0xbf, 0xc2, 0xce, 0xe0, 0xe4,
+    0xed, 0xf0, 0xf4, 0xff,
+  ];
+  const rand = rng(0xb17e5);
+  for (let i = 0; i < 3000; i++) {
+    const body = Array.from(
+      { length: 1 + Math.floor(rand() * 60) },
+      () => bytes[Math.floor(rand() * bytes.length)]
+    );
+    // repeat the body as a definition so labels are normalized and matched
+    const input = new Uint8Array([
+      ...body,
+      0x0a,
+      0x0a,
+      0x5b,
+      ...body,
+      0x5d,
+      0x3a,
+      0x20,
+      0x75,
+    ]);
+    try {
+      renderToHtml(input);
+      renderToAnsi(input, { width: 30 });
+    } catch (error) {
+      assert.fail(
+        `case ${i} threw ${String(error)} on ${JSON.stringify(body)}`
+      );
+    }
+  }
+});
+
 void test('generated tags are balanced when the input has no raw HTML', () => {
   const decoder = new TextDecoder();
   const pieces = PIECES.filter(

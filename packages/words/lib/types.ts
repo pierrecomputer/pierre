@@ -9,6 +9,15 @@ export interface RenderOptions extends HtmlSessionOptions {
   frontmatter?: boolean;
 }
 
+/** A parsed YAML frontmatter document: usually a mapping, but any JSON value. */
+export type Frontmatter =
+  | { [key: string]: Frontmatter }
+  | Frontmatter[]
+  | string
+  | number
+  | boolean
+  | null;
+
 /** Options for the terminal renderer. */
 export interface AnsiOptions {
   /** Wrap text at this column. Zero, the default, leaves the terminal to wrap. */

@@ -53,10 +53,15 @@
         (global.set $sgrLive (i32.const 0))
         (i64.store (i32.const $mem.sgr) (i64.const 0))
         (global.set $pendingSpace (i32.const 0))
-        (global.set $noWrap (i32.const 0))))
+        (global.set $noWrap (i32.const 0))
+        (global.set $prefixSkip (i32.const 0))
+        (global.set $brkOut (i32.const 0))
+        (global.set $fnRefEnd (i32.const 0))))
     (local.set $r (global.get $recBase))
     (block $done
       (loop $l
+        (if (i32.eq (local.get $r) (global.get $boundaryRec))
+          (then (global.set $boundaryOut (global.get $out))))
         (br_if $done (i32.ge_u (local.get $r) (global.get $recEnd)))
         (call $renderBlock (local.get $r))
         (local.set $r (i32.add (local.get $r) (i32.load offset=4 (local.get $r))))
@@ -129,6 +134,9 @@
       (then
         (if (global.get $rsp)
           (then (global.set $rsp (i32.sub (global.get $rsp) (i32.const 1)))))
+        ;; a task box never outlives its item
+        (if (i32.eq (local.get $t) (enum.get $Blk.li))
+          (then (global.set $pendingTask (i32.const 0))))
         (if (global.get $mode)
           (then (call $ansiBlockClose (local.get $t)))
           (else (call $htmlBlockClose (local.get $t))))
@@ -322,17 +330,21 @@
           (then
             (local.set $textEnd (local.get $next))
             (local.set $markType (i32.load8_u offset=$M.type (local.get $m)))
-            ;; Keep a hard break's two source spaces out of the text span.
+            ;; Keep the spaces before a line break out of the text span. A
+            ;; backslash hard break starts at its backslash and keeps them.
             (if (i32.or
                   (i32.eq (local.get $markType) (enum.get $Mk.softbreak))
                   (i32.eq (local.get $markType) (enum.get $Mk.hardbreak)))
               (then
                 (local.set $base (call $contentAt (i32.const 0)))
-                (local.set $textEnd (i32.sub
-                  (call $trimSpaceBack
-                    (i32.add (local.get $base) (local.get $next))
-                    (local.get $base))
-                  (local.get $base)))))
+                (if (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $next)))
+                      (i32.const 10))
+                  (then
+                    (local.set $textEnd (i32.sub
+                      (call $trimSpaceBack
+                        (i32.add (local.get $base) (local.get $next))
+                        (local.get $base))
+                      (local.get $base)))))))
             (call $rLiteral (local.get $p) (local.get $textEnd))))
         (call $renderMark (local.get $i))
         (local.set $p (local.get $markEnd))
@@ -435,8 +447,14 @@
               (i32.add (local.get $base) (local.get $e)) (i32.const 10))
               (local.get $base)))
             (call $rText (local.get $b) (local.get $q))
+            ;; a line ending is a space; ANSI holds it back like any other
             (if (i32.lt_u (local.get $q) (local.get $e))
-              (then (call $outByte (i32.const 32))))
+              (then
+                (if (global.get $mode)
+                  (then
+                    (if (i32.eqz (global.get $atLineStart))
+                      (then (global.set $pendingSpace (i32.const 1)))))
+                  (else (call $outByte (i32.const 32))))))
             (local.set $b (i32.add (local.get $q) (i32.const 1)))
             (br $codeLine)))
         (if (i32.and (global.get $mode) (i32.eqz (global.get $plain)))
@@ -481,13 +499,24 @@
         (if (global.get $plain) (then (return)))
         (if (global.get $mode)
           (then
-            (call $ansiFlushSpace)
+            ;; "[n]" wraps as text; a line may break between two references
+            (if (i32.and (i32.eq (global.get $out) (global.get $fnRefEnd))
+                  (i32.eqz (global.get $pendingSpace)))
+              (then (call $markBreak (global.get $out) (global.get $ansiCol) (i32.const 0))))
             (call $sgrOn (i32.const $S.link))
-            (call $outByte (i32.const "["))
-            (call $outNum (local.get $n))
-            (call $outByte (i32.const "]"))
+            (local.set $q (i32.const $mem.numbufEnd-1))
+            (i32.store8 (local.get $q) (i32.const "]"))
+            (loop $digit
+              (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+              (i32.store8 (local.get $q)
+                (i32.add (i32.const "0") (i32.rem_u (local.get $n) (i32.const 10))))
+              (local.set $n (i32.div_u (local.get $n) (i32.const 10)))
+              (br_if $digit (local.get $n)))
+            (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+            (i32.store8 (local.get $q) (i32.const "["))
+            (call $ansiRaw (local.get $q) (i32.const $mem.numbufEnd) (i32.const 0))
             (call $sgrOff (i32.const $S.link))
-            (global.set $ansiCol (i32.add (global.get $ansiCol) (i32.const 3))))
+            (global.set $fnRefEnd (global.get $out)))
           (else (call $htmlFootnoteRef (local.get $n) (local.get $k))))
         (return)))
     (if (i32.eq (local.get $t) (enum.get $Mk.extlink))
@@ -525,7 +554,9 @@
             (if (global.get $mode)
               (then
                 (if (global.get $wrap)
-                  (then (call $ansiRawSpace))
+                  (then
+                    (if (i32.eqz (global.get $atLineStart))
+                      (then (global.set $pendingSpace (i32.const 1)))))
                   (else (call $ansiEol))))
               (else (call $outByte (i32.const 10))))))
         (return)))
@@ -574,12 +605,14 @@
                   (then (call $sgrOff (i32.const $S.dim)))
                   (else (call $sgrOff (i32.const $S.linkText))))
                 (call $sgrOn (i32.const $S.dim))
-                (call $ansiRawSpace)
-                (call $outByte (i32.const "("))
+                ;; " (url)" wraps like a word glued to its parentheses
+                (if (i32.gt_u (global.get $ansiCol) (global.get $prefixCols))
+                  (then (global.set $pendingSpace (i32.const 1))))
+                (i32.store16 (i32.const $mem.numbuf) (i32.const "()"))
+                (call $ansiRaw (i32.const $mem.numbuf) (i32.const $mem.numbuf+1) (i32.const 0))
                 (call $ansiRaw (global.get $linkUrlBeg) (global.get $linkUrlEnd)
                   (global.get $linkInContent))
-                (call $outByte (i32.const ")"))
-                (global.set $ansiCol (i32.add (global.get $ansiCol) (i32.const 2)))
+                (call $ansiRaw (i32.const $mem.numbuf+1) (i32.const $mem.numbuf+2) (i32.const 0))
                 (call $sgrOff (i32.const $S.dim)))
               (else (call $htmlLinkClose (local.get $image))))))
         (return)))
@@ -747,7 +780,8 @@
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (local.set $c (i32.load8_u (local.get $p)))))))
         ;; Houdini's href-safe ASCII, two 64-bit masks for 0..63 and 64..127.
-        ;; The caller reserved the complete URL, so this never grows output.
+        ;; The caller reserved nine bytes per URL byte (an encoded NUL), so this
+        ;; never grows output.
         (if (i32.and (i32.lt_u (local.get $c) (i32.const 128))
               (i32.wrap_i64 (i64.and (i64.const 1)
                 (i64.shr_u
@@ -767,6 +801,12 @@
                   (then
                     (i64.store (global.get $out) (i64.const "&#x27;"))
                     (global.set $out (i32.add (global.get $out) (i32.const 6))))
+                  (else (if (i32.eqz (local.get $c))
+                  (then
+                    ;; NUL is U+FFFD, as in text
+                    (i64.store (global.get $out) (i64.const "%EF%BF%B"))
+                    (i32.store8 offset=8 (global.get $out) (i32.const "D"))
+                    (global.set $out (i32.add (global.get $out) (i32.const 9))))
                   (else
                     (i32.store8 (global.get $out) (i32.const "%"))
                     (i32.store8 offset=1 (global.get $out)
@@ -775,7 +815,7 @@
                     (i32.store8 offset=2 (global.get $out)
                       (i32.load8_u offset=$mem.hexdigits
                         (i32.and (local.get $c) (i32.const 15))))
-                    (global.set $out (i32.add (global.get $out) (i32.const 3)))))))))
+                    (global.set $out (i32.add (global.get $out) (i32.const 3)))))))))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l))))
 

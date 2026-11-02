@@ -53,6 +53,14 @@ void test('multi-megabyte input still renders', () => {
   assert.equal(out.slice(0, 18), '<h1>heading</h1>\n<');
 });
 
+void test('input past the 30-bit line address limit throws a RangeError', () => {
+  // A fake length checks the guard without allocating a gigabyte.
+  const bytes = new Uint8Array(1);
+  Object.defineProperty(bytes, 'length', { value: 2 ** 30 - 2 ** 17 + 1 });
+  assert.throws(() => renderToHtml(bytes), RangeError);
+  assert.equal(html('# a'), '<h1>a</h1>\n');
+});
+
 void test('blocks with more than 65535 lines survive', () => {
   const lines = 70000;
   assert.equal(html(Array(lines).fill('a').join('\n')).length, lines * 2 + 7);
