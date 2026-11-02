@@ -55,6 +55,9 @@
   (const $F.taskDone 32)
   (const $F.joinedLines 64) ;; a paragraph descriptor contains multiple physical lines
   (const $F.plainInline 128) ;; block scanning proved literal HTML content
+  ;; opener and closer flags placed for $recNew's type argument
+  (const $F.openerType 256)
+  (const $F.closerType 512)
   (const $Nest 250)        ;; CommonMark container-nesting limit
 
   ;; Container stack entry (see $mem.container): 24 bytes so 250 levels fill

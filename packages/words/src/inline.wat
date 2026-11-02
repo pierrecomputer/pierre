@@ -25,8 +25,7 @@
   (const $M.end 4)
   (const $M.type 8)
   (const $M.flags 9)
-  (const $M.ch 10)     ;; a delimiter run's character, or 1 for a numeric entity
-  (const $M.aux 11)    ;; a named entity's replacement length
+  (const $M.ch 10)     ;; a delimiter run's character
   (const $M.rem 12)    ;; delimiters of the run still unconsumed
   (const $M.prev 16)
   (const $M.data 16)   ;; code/entity/link/autolink payload (not live with $M.prev)
@@ -98,7 +97,9 @@
   (func $tagAt (param $i i32) (result i32)
     (i32.sub (global.get $scratchTop) (local.get $i)))
 
-  (func $markNew (param $type i32) (param $beg i32) (param $end i32) (result i32)
+  ;; Append a mark and return its index. $head fills the type, flags, ch and
+  ;; aux bytes; rem starts at zero. $data fills the shared prev/data word.
+  (func $markNew (param $head i32) (param $beg i32) (param $end i32) (param $data i32) (result i32)
     (local $i i32)
     (local $m i32)
     (local.set $i (global.get $nSlots))
@@ -111,9 +112,8 @@
     (local.set $m (call $slotAt (local.get $i)))
     (i32.store offset=$M.beg (local.get $m) (local.get $beg))
     (i32.store offset=$M.end (local.get $m) (local.get $end))
-    ;; Initialize the shared header. Each constructor writes its own payload;
-    ;; only emphasis marks need delimiter links and tag-list heads.
-    (i64.store offset=$M.type (local.get $m) (i64.extend_i32_u (local.get $type)))
+    (i64.store offset=$M.type (local.get $m) (i64.extend_i32_u (local.get $head)))
+    (i32.store offset=$M.data (local.get $m) (local.get $data))
     (global.set $lastMarkEnd (local.get $end))
     (local.get $i))
 
@@ -144,8 +144,6 @@
     (local $c i32)
     (local $mask i32)
     (local $scanEnd i32)
-    (local $next i32)
-    (local $syntaxScan i64)
     (local $markLo v128)
     (local $markHi v128)
     (local $classFlags v128)
@@ -170,7 +168,7 @@
     (local.set $end (global.get $contentLen))
     (block $done
       (loop $l
-        (local.set $base (call $contentAt (i32.const 0)))
+        (local.set $base (global.get $contentBase))
         ;; Cached lanes are content-relative, so scratch growth cannot stale
         ;; them. Handlers advance p past consumed syntax without changing text.
         (if (i32.lt_u (local.get $p) (local.get $scanEnd))
@@ -238,46 +236,37 @@
               (then
                 (local.set $p (call $handleNewline (local.get $p) (local.get $end)))
                 (br $dispatched)))
+            (if (i32.eq (local.get $c) (i32.const ":"))
+              (then
+                (local.set $p (call $tryUrlAutolink (local.get $p) (local.get $end)))
+                (br $dispatched)))
             ;; These bytes are literal text, but prevent copying unmarked gaps
-            ;; without HTML escaping. Recognized constructs keep their own escapers.
+            ;; without HTML escaping. Once that is required, stop finding them.
             (if (i32.or (i32.eqz (local.get $c))
                   (i32.or (i32.eq (local.get $c) (i32.const 34))
                     (i32.eq (local.get $c) (i32.const ">"))))
               (then
                 (global.set $literalNeedsEscape (i32.const 1))
-                (local.set $syntaxScan (call $scanInlineSyntax
-                  (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1)))
-                  (i32.add (local.get $base) (local.get $end))))
-                (local.set $p (i32.sub (i32.wrap_i64 (local.get $syntaxScan)) (local.get $base)))
-                (local.set $scanEnd (i32.add (local.get $p) (i32.const 16)))
-                (local.set $mask (i32.wrap_i64 (i64.shr_u (local.get $syntaxScan) (i64.const 32))))
+                (local.set $markLo (v128.load (i32.const $mem.syntaxLo)))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const "&"))
               (then
-                (local.set $next (call $handleEntity (local.get $p) (local.get $end)))
-                (if (i32.eq (local.get $next) (i32.add (local.get $p) (i32.const 1)))
-                  (then (global.set $literalNeedsEscape (i32.const 1))))
-                (local.set $p (local.get $next))
+                (local.set $p (call $handleEntity (local.get $p) (local.get $end)))
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const "<"))
               (then
-                (local.set $next (call $handlePointy (local.get $p) (local.get $end)))
-                (if (i32.eq (local.get $next) (i32.add (local.get $p) (i32.const 1)))
-                  (then (global.set $literalNeedsEscape (i32.const 1))))
-                (local.set $p (local.get $next))
+                (local.set $p (call $handlePointy (local.get $p) (local.get $end)))
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const "!"))
               (then
-                (if (i32.and (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
-                      (i32.eq (i32.load8_u
-                        (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1))))
-                        (i32.const "[")))
-                  (then (local.set $p (call $pushBracket (local.get $p) (i32.const 1))))
-                  (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-                (br $dispatched)))
-            (if (i32.eq (local.get $c) (i32.const ":"))
-              (then
-                (local.set $p (call $tryUrlAutolink (local.get $p) (local.get $end)))
+                (local.set $p
+                  (if (result i32) (i32.and
+                        (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
+                        (i32.eq (i32.load8_u offset=1 (i32.add (local.get $base) (local.get $p)))
+                          (i32.const "[")))
+                    (then (call $pushBracket (local.get $p) (i32.const 1)))
+                    (else (i32.add (local.get $p) (i32.const 1)))))
                 (br $dispatched))))
           (local.set $p (call $handleDelim (local.get $p) (local.get $end))))
         (br $l)))
@@ -285,112 +274,90 @@
 
   (func $handleBackslash (param $p i32) (param $end i32) (result i32)
     (local $c i32)
-    (local $base i32)
-    (local.set $base (call $contentAt (i32.const 0)))
-    (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
-      (then (return (i32.add (local.get $p) (i32.const 1)))))
-    (local.set $c (i32.load8_u (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1)))))
-    (if (call $isAsciiPunct (local.get $c))
+    (if (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
       (then
-        (drop (call $markNew (enum.get $Mk.escape) (local.get $p) (i32.add (local.get $p) (i32.const 2))))
-        (return (i32.add (local.get $p) (i32.const 2)))))
-    (if (i32.eq (local.get $c) (i32.const 10))
-      (then
-        (drop (call $markNew (enum.get $Mk.hardbreak) (local.get $p)
-          (i32.add (local.get $p) (i32.const 2))))
-        (return (i32.add (local.get $p) (i32.const 2)))))
+        (local.set $c (i32.load8_u offset=1 (i32.add (global.get $contentBase) (local.get $p))))
+        (if (i32.or (call $isAsciiPunct (local.get $c)) (i32.eq (local.get $c) (i32.const 10)))
+          (then
+            (drop (call $markNew
+              (select (enum.get $Mk.hardbreak) (enum.get $Mk.escape)
+                (i32.eq (local.get $c) (i32.const 10)))
+              (local.get $p) (i32.add (local.get $p) (i32.const 2)) (i32.const 0)))
+            (return (i32.add (local.get $p) (i32.const 2)))))))
     (i32.add (local.get $p) (i32.const 1)))
 
   (func $handleNewline (param $p i32) (param $end i32) (result i32)
-    (local $base i32)
+    (local $at i32)
     (local $q i32)
-    (local $hard i32)
-    (local.set $base (call $contentAt (i32.const 0)))
+    (local.set $at (i32.add (global.get $contentBase) (local.get $p)))
     ;; HTML copies an ordinary soft break verbatim. Leave it in the surrounding
     ;; text span when neither side needs trimming. Brackets retain marks because
     ;; an image's alt text turns newlines into spaces; ANSI also needs its hook.
     (if (i32.eqz (i32.or (global.get $mode) (global.get $bracketSp)))
       (then
-        (if (local.get $p)
+        (if (i32.eqz (i32.or (i32.eqz (local.get $p))
+              (i32.or
+                (call $isSpaceByte (i32.load8_u (i32.sub (local.get $at) (i32.const 1))))
+                (call $isSpaceByte (i32.load8_u offset=1 (local.get $at))))))
           (then
-            (if (i32.eqz (i32.or
-                  (call $isSpaceByte (i32.load8_u
-                    (i32.add (local.get $base) (i32.sub (local.get $p) (i32.const 1)))))
-                  (call $isSpaceByte (i32.load8_u
-                    (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1)))))))
-              (then
-                ;; Extended autolinks still cannot reach back across this break.
-                (global.set $lastMarkEnd (i32.add (local.get $p) (i32.const 1)))
-                (return (global.get $lastMarkEnd))))))))
-    (if (i32.ge_u (local.get $p) (i32.const 2))
-      (then (local.set $hard (i32.and
-        (i32.eq (i32.load8_u (i32.add (local.get $base) (i32.sub (local.get $p) (i32.const 1))))
-          (i32.const 32))
-        (i32.eq (i32.load8_u (i32.add (local.get $base) (i32.sub (local.get $p) (i32.const 2))))
-          (i32.const 32))))))
+            ;; Extended autolinks still cannot reach back across this break.
+            (global.set $lastMarkEnd (i32.add (local.get $p) (i32.const 1)))
+            (return (global.get $lastMarkEnd))))))
     ;; leading spaces of the next line are never content
     (local.set $q (i32.sub
-      (call $skipSpace (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1)))
-        (i32.add (local.get $base) (local.get $end)))
-      (local.get $base)))
+      (call $skipSpace (i32.add (local.get $at) (i32.const 1))
+        (i32.add (global.get $contentBase) (local.get $end)))
+      (global.get $contentBase)))
     (drop (call $markNew
-      (select (enum.get $Mk.hardbreak) (enum.get $Mk.softbreak) (local.get $hard))
-      (local.get $p) (local.get $q)))
+      (select (enum.get $Mk.hardbreak) (enum.get $Mk.softbreak)
+        (i32.and (i32.ge_u (local.get $p) (i32.const 2))
+          (i32.eq (i32.load16_u (i32.sub (local.get $at) (i32.const 2))) (i32.const 0x2020))))
+      (local.get $p) (local.get $q) (i32.const 0)))
     (local.get $q))
 
+  ;; The mark keeps the value code, because the conversion scratch is reused
+  ;; by every mark.
   (func $handleEntity (param $p i32) (param $end i32) (result i32)
     (local $n i32)
-    (local $base i32)
-    (local $i i32)
-    (local.set $base (call $contentAt (i32.const 0)))
-    (local.set $n (call $entityMatch
-      (i32.add (local.get $base) (local.get $p)) (i32.add (local.get $base) (local.get $end))))
-    (if (i32.eqz (local.get $n)) (then (return (i32.add (local.get $p) (i32.const 1)))))
-    (local.set $i (call $markNew (enum.get $Mk.entity)
-      (local.get $p) (i32.add (local.get $p) (local.get $n))))
-    ;; the replacement text lives in a static table, so it is safe to remember
-    ;; a named reference points into the static table; a numeric one keeps its
-    ;; code point, because the conversion scratch is reused by every mark
-    (i32.store offset=$M.data (call $slotAt (local.get $i))
-      (select (global.get $entCp) (global.get $entVal)
-        (i32.ne (global.get $entCp) (i32.const -1))))
-    (i32.store8 offset=$M.aux (call $slotAt (local.get $i)) (global.get $entLen))
-    (i32.store8 offset=$M.ch (call $slotAt (local.get $i))
-      (i32.ne (global.get $entCp) (i32.const -1)))
-    (i32.add (local.get $p) (local.get $n)))
+    (local.set $n (call $entityMatch (i32.add (global.get $contentBase) (local.get $p))
+      (i32.add (global.get $contentBase) (local.get $end))))
+    (if (i32.eqz (local.get $n))
+      (then
+        (global.set $literalNeedsEscape (i32.const 1))
+        (return (i32.add (local.get $p) (i32.const 1)))))
+    (local.set $n (i32.add (local.get $p) (local.get $n)))
+    (drop (call $markNew (enum.get $Mk.entity) (local.get $p) (local.get $n)
+      (global.get $entCp)))
+    (local.get $n))
 
   (func $handlePointy (param $p i32) (param $end i32) (result i32)
     (local $base i32)
     (local $n i32)
-    (local $i i32)
-    (local.set $base (call $contentAt (i32.const 0)))
-    (local.set $n (call $scanAutolinkUri (local.get $p) (local.get $end)))
-    (if (local.get $n)
-      (then
-        (local.set $i (call $markNew (enum.get $Mk.autolink) (local.get $p) (local.get $n)))
-        (i32.store offset=$M.data (call $slotAt (local.get $i)) (i32.const 0))
-        (return (local.get $n))))
-    (local.set $n (call $scanAutolinkEmail (local.get $p) (local.get $end)))
-    (if (local.get $n)
-      (then
-        (local.set $i (call $markNew (enum.get $Mk.autolink) (local.get $p) (local.get $n)))
-        (i32.store offset=$M.data (call $slotAt (local.get $i)) (i32.const 1))
-        (return (local.get $n))))
-    (local.set $n (call $scanHtmlAny
-      (i32.add (local.get $base) (local.get $p)) (i32.add (local.get $base) (local.get $end))))
-    (if (local.get $n)
-      (then
-        (drop (call $markNew (enum.get $Mk.rawhtml) (local.get $p)
-          (i32.sub (local.get $n) (local.get $base))))
-        (return (i32.sub (local.get $n) (local.get $base)))))
-    (i32.add (local.get $p) (i32.const 1)))
+    (local $type i32)
+    (local $data i32)
+    (local.set $base (global.get $contentBase))
+    (local.set $type (enum.get $Mk.autolink))
+    (block $found
+      (br_if $found (local.tee $n (call $scanAutolinkUri
+        (i32.add (local.get $base) (local.get $p)) (i32.add (local.get $base) (local.get $end)))))
+      (local.set $data (i32.const 1))
+      (br_if $found (local.tee $n (call $scanAutolinkEmail
+        (i32.add (local.get $base) (local.get $p)) (i32.add (local.get $base) (local.get $end)))))
+      (local.set $type (enum.get $Mk.rawhtml))
+      (local.set $data (i32.const 0))
+      (br_if $found (local.tee $n (call $scanHtmlAny
+        (i32.add (local.get $base) (local.get $p)) (i32.add (local.get $base) (local.get $end)))))
+      (global.set $literalNeedsEscape (i32.const 1))
+      (return (i32.add (local.get $p) (i32.const 1))))
+    (local.set $n (i32.sub (local.get $n) (local.get $base)))
+    (drop (call $markNew (local.get $type) (local.get $p) (local.get $n) (local.get $data)))
+    (local.get $n))
 
   (func $handleBackticks (param $p i32) (param $end i32) (result i32)
     (local $base i32)
-    (local $n i32)
     (local $q i32)
-    (local $i i32)
-    (local.set $base (call $contentAt (i32.const 0)))
+    (local $close i32)
+    (local.set $base (global.get $contentBase))
     (local.set $q (local.get $p))
     (block $counted
       (loop $l
@@ -398,14 +365,12 @@
         (br_if $counted (i32.ne (i32.load8_u (i32.add (local.get $base) (local.get $q)))
           (i32.const "\60")))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (br $l)))
-    (local.set $i (call $scanToClosingBackticks (local.get $q) (local.get $end) (local.get $n)))
-    (if (i32.eqz (local.get $i)) (then (return (local.get $q))))
-    (local.set $q (call $markNew (enum.get $Mk.code) (local.get $p) (local.get $i)))
-    (i32.store offset=$M.data (call $slotAt (local.get $q))
-      (i32.add (local.get $p) (local.get $n)))
-    (local.get $i))
+    (local.set $close (call $scanToClosingBackticks (local.get $q) (local.get $end)
+      (i32.sub (local.get $q) (local.get $p))))
+    (if (i32.eqz (local.get $close)) (then (return (local.get $q))))
+    (drop (call $markNew (enum.get $Mk.code) (local.get $p) (local.get $close) (local.get $q)))
+    (local.get $close))
 
   ;; The position just past a run of exactly $n backticks, or 0. Runs longer
   ;; than 255 never pair. $mem.tickMemo holds, per run length, the start of
@@ -416,13 +381,14 @@
   ;; before it fails without scanning, and further stores could only lower it.
   (func $scanToClosingBackticks (param $p i32) (param $end i32) (param $n i32) (result i32)
     (local $base i32)
+    (local $q i32)
     (local $ticks i32)
-    (local.set $base (call $contentAt (i32.const 0)))
+    (local.set $base (global.get $contentBase))
     (if (i32.gt_u (local.get $n) (i32.const 255)) (then (return (i32.const 0))))
     (if (i32.and (global.get $scannedBackticks)
           (i32.or (i32.gt_u (local.get $n) (global.get $tickTop))
-            (i32.le_u (i32.load (i32.add (i32.const $mem.tickMemo)
-              (i32.mul (local.get $n) (i32.const 4)))) (local.get $p))))
+            (i32.le_u (i32.load offset=$mem.tickMemo (i32.shl (local.get $n) (i32.const 2)))
+              (local.get $p))))
       (then (return (i32.const 0))))
     (block $eof
       (loop $l
@@ -431,15 +397,15 @@
             (i32.add (local.get $base) (local.get $end)) (i32.const "\60"))
           (local.get $base)))
         (br_if $eof (i32.ge_u (local.get $p) (local.get $end)))
-        (local.set $ticks (i32.const 0))
+        (local.set $q (local.get $p))
         (block $counted
           (loop $c
-            (br_if $counted (i32.ge_u (local.get $p) (local.get $end)))
-            (br_if $counted (i32.ne (i32.load8_u (i32.add (local.get $base) (local.get $p)))
+            (br_if $counted (i32.ge_u (local.get $q) (local.get $end)))
+            (br_if $counted (i32.ne (i32.load8_u (i32.add (local.get $base) (local.get $q)))
               (i32.const "\60")))
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (local.set $ticks (i32.add (local.get $ticks) (i32.const 1)))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
             (br $c)))
+        (local.set $ticks (i32.sub (local.get $q) (local.get $p)))
         (if (i32.and (i32.le_u (local.get $ticks) (i32.const 255))
               (i32.eqz (global.get $scannedBackticks)))
           (then
@@ -447,12 +413,13 @@
               (loop $clear
                 (br_if $fresh (i32.le_u (local.get $ticks) (global.get $tickTop)))
                 (global.set $tickTop (i32.add (global.get $tickTop) (i32.const 1)))
-                (i32.store (i32.add (i32.const $mem.tickMemo)
-                  (i32.mul (global.get $tickTop) (i32.const 4))) (i32.const 0))
+                (i32.store offset=$mem.tickMemo
+                  (i32.shl (global.get $tickTop) (i32.const 2)) (i32.const 0))
                 (br $clear)))
-            (i32.store (i32.add (i32.const $mem.tickMemo) (i32.mul (local.get $ticks) (i32.const 4)))
-              (i32.sub (local.get $p) (local.get $ticks)))))
-        (if (i32.eq (local.get $ticks) (local.get $n)) (then (return (local.get $p))))
+            (i32.store offset=$mem.tickMemo (i32.shl (local.get $ticks) (i32.const 2))
+              (local.get $p))))
+        (if (i32.eq (local.get $ticks) (local.get $n)) (then (return (local.get $q))))
+        (local.set $p (local.get $q))
         (br $l)))
     (global.set $scannedBackticks (i32.const 1))
     (i32.const 0))
@@ -462,20 +429,11 @@
     (local $c i32)
     (local $q i32)
     (local $n i32)
-    (local $before i32)
-    (local $after i32)
-    (local $left i32)
-    (local $right i32)
-    (local $beforeWhite i32)
-    (local $beforePunct i32)
-    (local $afterWhite i32)
-    (local $afterPunct i32)
-    (local $canOpen i32)
-    (local $canClose i32)
+    (local $k i32)
+    (local $flags i32)
     (local $i i32)
     (local $m i32)
-    (local $scan i32)
-    (local.set $base (call $contentAt (i32.const 0)))
+    (local.set $base (global.get $contentBase))
     (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $p))))
     (local.set $q (local.get $p))
     (block $counted
@@ -484,90 +442,42 @@
         (br_if $counted (i32.ne (i32.load8_u (i32.add (local.get $base) (local.get $q)))
           (local.get $c)))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (br $l)))
+    (local.set $n (i32.sub (local.get $q) (local.get $p)))
     ;; only runs of one or two tildes are strikethrough delimiters
     (if (i32.and (i32.eq (local.get $c) (i32.const "~")) (i32.gt_u (local.get $n) (i32.const 2)))
       (then (return (local.get $q))))
-    (local.set $before
-      (if (result i32) (i32.eqz (local.get $p))
-        (then (i32.const 10))
-        (else (if (result i32) (i32.eq (local.get $c) (i32.const "~"))
-          (then
-            (local.set $scan (local.get $p))
-            (block $beforeDone
-              (loop $beforeTilde
-                (br_if $beforeDone (i32.eqz (local.get $scan)))
-                (br_if $beforeDone (i32.ne
-                  (i32.load8_u (i32.add (local.get $base)
-                    (i32.sub (local.get $scan) (i32.const 1))))
-                  (i32.const "~")))
-                (local.set $scan (i32.sub (local.get $scan) (i32.const 1)))
-                (br $beforeTilde)))
-            (if (result i32) (i32.eqz (local.get $scan))
-              (then (i32.const 10))
-              (else (call $utf8Before
-                (i32.add (local.get $base) (local.get $scan)) (local.get $base)))))
-          (else (call $utf8Before
-            (i32.add (local.get $base) (local.get $p)) (local.get $base)))))))
-    (local.set $after
-      (if (result i32) (i32.ge_u (local.get $q) (local.get $end))
-        (then (i32.const 10))
-        (else (if (result i32) (i32.eq (local.get $c) (i32.const "~"))
-          (then
-            (local.set $scan (local.get $q))
-            (block $afterDone
-              (loop $afterTilde
-                (br_if $afterDone (i32.ge_u (local.get $scan) (local.get $end)))
-                (br_if $afterDone (i32.ne
-                  (i32.load8_u (i32.add (local.get $base) (local.get $scan)))
-                  (i32.const "~")))
-                (local.set $scan (i32.add (local.get $scan) (i32.const 1)))
-                (br $afterTilde)))
-            (if (result i32) (i32.ge_u (local.get $scan) (local.get $end))
-              (then (i32.const 10))
-              (else (call $utf8At
-                (i32.add (local.get $base) (local.get $scan))
-                (i32.add (local.get $base) (local.get $end))))))
-          (else (call $utf8At
-            (i32.add (local.get $base) (local.get $q))
-            (i32.add (local.get $base) (local.get $end))))))))
-    (local.set $beforeWhite (call $isWhiteCp (local.get $before)))
-    (local.set $beforePunct (call $isPunctCp (local.get $before)))
-    (local.set $afterWhite (call $isWhiteCp (local.get $after)))
-    (local.set $afterPunct (call $isPunctCp (local.get $after)))
-    (local.set $left (i32.and
-      (i32.eqz (local.get $afterWhite))
-      (i32.eqz (i32.and (local.get $afterPunct)
-        (i32.and (i32.eqz (local.get $beforeWhite))
-          (i32.eqz (local.get $beforePunct)))))))
-    (local.set $right (i32.and
-      (i32.eqz (local.get $beforeWhite))
-      (i32.eqz (i32.and (local.get $beforePunct)
-        (i32.and (i32.eqz (local.get $afterWhite))
-          (i32.eqz (local.get $afterPunct)))))))
-    (if (i32.eq (local.get $c) (i32.const "_"))
-      (then
-        (local.set $canOpen (i32.and (local.get $left)
-          (i32.or (i32.eqz (local.get $right)) (local.get $beforePunct))))
-        (local.set $canClose (i32.and (local.get $right)
-          (i32.or (i32.eqz (local.get $left)) (local.get $afterPunct)))))
-      (else
-        (local.set $canOpen (local.get $left))
-        (local.set $canClose (local.get $right))))
-    (if (i32.eqz (i32.or (local.get $canOpen) (local.get $canClose)))
+    ;; $k is the class of the character before the run times four plus the
+    ;; class after it: 2 for whitespace, 1 for punctuation, else 0. The text
+    ;; boundaries count as whitespace. Two bits per
+    ;; $k give left and right flanking, which for `*` and `~` are canOpen and
+    ;; canClose. `_` differs only between two other characters: it is
+    ;; intraword and can do neither.
+    (local.set $k (select (i32.const 10)
+      (call $utf8Before (i32.add (local.get $base) (local.get $p)) (local.get $base))
+      (i32.eqz (local.get $p))))
+    (local.set $flags (select (i32.const 10)
+      (call $utf8At (i32.add (local.get $base) (local.get $q))
+        (i32.add (local.get $base) (local.get $end)))
+      (i32.ge_u (local.get $q) (local.get $end))))
+    (local.set $k (i32.or
+      (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
+        (i32.const 2))
+      (select (i32.const 2) (call $isPunctCp (local.get $flags)) (call $isWhiteCp (local.get $flags)))))
+    (local.set $flags (i32.and
+      (i32.shr_u (i32.const 0x52d2b) (i32.shl (local.get $k) (i32.const 1))) (i32.const 3)))
+    (if (i32.or (i32.eqz (local.get $flags))
+          (i32.and (i32.eq (local.get $c) (i32.const "_")) (i32.eqz (local.get $k))))
       (then (return (local.get $q))))
-    (local.set $i (call $markNew (enum.get $Mk.emph) (local.get $p) (local.get $q)))
+    (local.set $i (call $markNew
+      (i32.or (enum.get $Mk.emph) (i32.or
+        (i32.shl (i32.or (local.get $flags) (i32.const $MF.inList)) (i32.const 8))
+        (i32.shl (local.get $c) (i32.const 16))))
+      (local.get $p) (local.get $q) (global.get $delimTail)))
     (local.set $m (call $slotAt (local.get $i)))
     (i32.store offset=$M.rem (local.get $m) (local.get $n))
-    (i32.store8 offset=$M.ch (local.get $m) (local.get $c))
-    (i32.store8 offset=$M.flags (local.get $m) (i32.or
-      (i32.or (select (i32.const $MF.canOpen) (i32.const 0) (local.get $canOpen))
-        (i32.const $MF.inList))
-      (select (i32.const $MF.canClose) (i32.const 0) (local.get $canClose))))
-    (i32.store offset=$M.prev (local.get $m) (global.get $delimTail))
-    (i32.store offset=$M.next (local.get $m) (i32.const -1))
-    (i64.store offset=$M.openHead (local.get $m) (i64.const 0))
+    (i64.store offset=$M.next (local.get $m) (i64.const 0xffffffff))
+    (i32.store offset=$M.closeTail (local.get $m) (i32.const 0))
     (if (i32.ge_s (global.get $delimTail) (i32.const 0))
       (then (i32.store offset=$M.next (call $slotAt (global.get $delimTail)) (local.get $i)))
       (else (global.set $delimHead (local.get $i))))
@@ -577,7 +487,6 @@
   (func $processEmphasis (param $bottom i32) (param $delimBottom i32)
     (local $closer i32)
     (local $opener i32)
-    (local $found i32)
     (local $old i32)
     (local $idx i32)
     (local $cm i32)
@@ -595,12 +504,14 @@
     ;; There is nothing to resolve or clear when every delimiter precedes the
     ;; bottom. Initialize four opener entries per iteration only when needed.
     (if (i32.lt_s (local.get $closer) (i32.const 0)) (then (return)))
+    ;; Opener bottoms are indexed by the run character's 0x60 bits, whether
+    ;; the closer can open, and its length modulo 3: bytes 32..123.
     (local.set $bottom4 (i32x4.splat (local.get $bottom)))
-    (local.set $i (i32.const 0))
+    (local.set $i (i32.const 32))
     (loop $init
-      (v128.store (i32.add (i32.const $mem.opener) (local.get $i)) (local.get $bottom4))
+      (v128.store offset=$mem.opener (local.get $i) (local.get $bottom4))
       (local.set $i (i32.add (local.get $i) (i32.const 16)))
-      (br_if $init (i32.lt_u (local.get $i) (i32.const 80))))
+      (br_if $init (i32.lt_u (local.get $i) (i32.const 128))))
     (block $done
       (loop $walk
         (br_if $done (i32.lt_s (local.get $closer) (i32.const 0)))
@@ -612,52 +523,41 @@
             (br $walk)))
         (local.set $ch (i32.load8_u offset=$M.ch (local.get $cm)))
         (local.set $closerLen (call $markLen (local.get $cm)))
-        (local.set $idx (i32.add
-          (i32.mul
-            (select (i32.const 0) (select (i32.const 1) (i32.const 2)
-              (i32.eq (local.get $ch) (i32.const "_")))
-              (i32.eq (local.get $ch) (i32.const "*")))
-            (i32.const 6))
-          (i32.add
-            (select (i32.const 3) (i32.const 0)
-              (i32.and (local.get $flags) (i32.const $MF.canOpen)))
-            (i32.rem_u (local.get $closerLen) (i32.const 3)))))
+        (local.set $idx (i32.or
+          (i32.or (i32.and (local.get $ch) (i32.const 0x60))
+            (i32.shl (i32.and (local.get $flags) (i32.const $MF.canOpen)) (i32.const 4)))
+          (i32.shl (i32.rem_u (local.get $closerLen) (i32.const 3)) (i32.const 2))))
         (local.set $opener (i32.load offset=$M.prev (local.get $cm)))
-        (local.set $found (i32.const 0))
-        (block $search
-          (loop $back
-            (br_if $search (i32.lt_s (local.get $opener) (i32.const 0)))
-            (local.set $om (call $slotAt (local.get $opener)))
-            (br_if $search (i32.lt_u (i32.load offset=$M.beg (local.get $om))
-              (i32.load (i32.add (i32.const $mem.opener) (i32.mul (local.get $idx) (i32.const 4))))))
-            (local.set $openerFlags (i32.load8_u offset=$M.flags (local.get $om)))
-            (if (i32.and
-                  (i32.and (local.get $openerFlags) (i32.const $MF.canOpen))
-                  (i32.eq (i32.load8_u offset=$M.ch (local.get $om)) (local.get $ch)))
-              (then
-                (if (i32.or
-                      (i32.or
-                        (i32.eqz (i32.or
-                          (i32.and (local.get $flags) (i32.const $MF.canOpen))
-                          (i32.and (local.get $openerFlags) (i32.const $MF.canClose))))
-                        (i32.eqz (i32.rem_u (local.get $closerLen) (i32.const 3))))
-                      (i32.ne (i32.rem_u (i32.add
-                        (call $markLen (local.get $om))
-                        (local.get $closerLen)) (i32.const 3)) (i32.const 0)))
-                  (then
-                    (local.set $found (i32.const 1))
-                    (br $search)))))
-            (local.set $opener (i32.load offset=$M.prev (local.get $om)))
-            (br $back)))
+        (block $noMatch
+          (block $match
+            (loop $back
+              (br_if $noMatch (i32.lt_s (local.get $opener) (i32.const 0)))
+              (local.set $om (call $slotAt (local.get $opener)))
+              (br_if $noMatch (i32.lt_u (i32.load offset=$M.beg (local.get $om))
+                (i32.load offset=$mem.opener (local.get $idx))))
+              (local.set $openerFlags (i32.load8_u offset=$M.flags (local.get $om)))
+              (if (i32.and
+                    (i32.and (local.get $openerFlags) (i32.const $MF.canOpen))
+                    (i32.eq (i32.load8_u offset=$M.ch (local.get $om)) (local.get $ch)))
+                (then
+                  (br_if $match (i32.or
+                    (i32.or
+                      (i32.eqz (i32.or
+                        (i32.and (local.get $flags) (i32.const $MF.canOpen))
+                        (i32.and (local.get $openerFlags) (i32.const $MF.canClose))))
+                      (i32.eqz (i32.rem_u (local.get $closerLen) (i32.const 3))))
+                    (i32.rem_u (i32.add
+                      (call $markLen (local.get $om))
+                      (local.get $closerLen)) (i32.const 3))))))
+              (local.set $opener (i32.load offset=$M.prev (local.get $om)))
+              (br $back)))
+          (local.set $closer (call $insertEmph (local.get $opener) (local.get $closer)))
+          (br $walk))
         (local.set $old (local.get $closer))
-        (if (local.get $found)
-          (then (local.set $closer (call $insertEmph (local.get $opener) (local.get $closer))))
-          (else
-            (local.set $closer (i32.load offset=$M.next (local.get $cm)))
-            (i32.store (i32.add (i32.const $mem.opener) (i32.mul (local.get $idx) (i32.const 4)))
-              (i32.load offset=$M.beg (local.get $cm)))
-            (if (i32.eqz (i32.and (local.get $flags) (i32.const $MF.canOpen)))
-              (then (call $delimRemove (local.get $old))))))
+        (local.set $closer (i32.load offset=$M.next (local.get $cm)))
+        (i32.store offset=$mem.opener (local.get $idx) (i32.load offset=$M.beg (local.get $cm)))
+        (if (i32.eqz (i32.and (local.get $flags) (i32.const $MF.canOpen)))
+          (then (call $delimRemove (local.get $old))))
         (br $walk)))
     ;; drop every delimiter at or above the bottom
     (block $cleared
@@ -706,6 +606,8 @@
     (local $om i32)
     (local $cm i32)
     (local $use i32)
+    (local $kind i32)
+    (local $tilde i32)
     (local $tmp i32)
     (local $next i32)
     (local $openerRem i32)
@@ -714,39 +616,26 @@
     (local.set $cm (call $slotAt (local.get $closer)))
     (local.set $openerRem (i32.load offset=$M.rem (local.get $om)))
     (local.set $closerRem (i32.load offset=$M.rem (local.get $cm)))
-    ;; strikethrough consumes both runs at once, and only when they match
-    (if (i32.eq (i32.load8_u offset=$M.ch (local.get $cm)) (i32.const "~"))
-      (then
-        (local.set $next (i32.load offset=$M.next (local.get $cm)))
-        (if (i32.eq (local.get $openerRem) (local.get $closerRem))
-          (then
-            (call $tagPair (local.get $opener) (local.get $closer) (i32.const $T.del))
-            (local.set $om (call $slotAt (local.get $opener)))
-            (local.set $cm (call $slotAt (local.get $closer)))
-            (i32.store offset=$M.rem (local.get $om) (i32.const 0))
-            (i32.store offset=$M.rem (local.get $cm) (i32.const 0))))
-        ;; either way both delimiters and everything between them are done
-        (local.set $tmp (i32.load offset=$M.next (call $slotAt (local.get $opener))))
-        (block $cleared
-          (loop $l
-            (br_if $cleared (i32.lt_s (local.get $tmp) (i32.const 0)))
-            (br_if $cleared (i32.eq (local.get $tmp) (local.get $closer)))
-            (local.set $om (i32.load offset=$M.next (call $slotAt (local.get $tmp))))
-            (call $delimRemove (local.get $tmp))
-            (local.set $tmp (local.get $om))
-            (br $l)))
-        (call $delimRemove (local.get $opener))
-        (call $delimRemove (local.get $closer))
-        (return (local.get $next))))
     (local.set $use (select (i32.const 2) (i32.const 1) (i32.and
       (i32.ge_u (local.get $openerRem) (i32.const 2))
       (i32.ge_u (local.get $closerRem) (i32.const 2)))))
+    (local.set $kind
+      (select (i32.const $T.em) (i32.const $T.strong) (i32.eq (local.get $use) (i32.const 1))))
+    ;; strikethrough consumes both runs at once, and only when they match;
+    ;; either way both delimiters are done
+    (if (local.tee $tilde (i32.eq (i32.load8_u offset=$M.ch (local.get $cm)) (i32.const "~")))
+      (then
+        (local.set $use (select (local.get $openerRem) (i32.const 0)
+          (i32.eq (local.get $openerRem) (local.get $closerRem))))
+        (local.set $kind (i32.const $T.del))))
     (local.set $openerRem (i32.sub (local.get $openerRem) (local.get $use)))
     (local.set $closerRem (i32.sub (local.get $closerRem) (local.get $use)))
     (i32.store offset=$M.rem (local.get $om) (local.get $openerRem))
     (i32.store offset=$M.rem (local.get $cm) (local.get $closerRem))
+    (if (local.get $use)
+      (then (call $tagPair (local.get $opener) (local.get $closer) (local.get $kind))))
     ;; delimiters between the pair can never match anything now
-    (local.set $tmp (i32.load offset=$M.next (local.get $om)))
+    (local.set $tmp (i32.load offset=$M.next (call $slotAt (local.get $opener))))
     (block $cleared
       (loop $l
         (br_if $cleared (i32.lt_s (local.get $tmp) (i32.const 0)))
@@ -755,15 +644,11 @@
         (call $delimRemove (local.get $tmp))
         (local.set $tmp (local.get $next))
         (br $l)))
-    (local.set $tmp
-      (select (i32.const $T.em) (i32.const $T.strong) (i32.eq (local.get $use) (i32.const 1))))
-    (call $tagPair (local.get $opener) (local.get $closer) (local.get $tmp))
-    (if (i32.eqz (local.get $openerRem))
+    (local.set $next (i32.load offset=$M.next (call $slotAt (local.get $closer))))
+    (if (i32.or (local.get $tilde) (i32.eqz (local.get $openerRem)))
       (then (call $delimRemove (local.get $opener))))
-    (if (i32.eqz (local.get $closerRem))
+    (if (i32.or (local.get $tilde) (i32.eqz (local.get $closerRem)))
       (then
-        (local.set $cm (call $slotAt (local.get $closer)))
-        (local.set $next (i32.load offset=$M.next (local.get $cm)))
         (call $delimRemove (local.get $closer))
         (return (local.get $next))))
     (local.get $closer))
@@ -779,9 +664,9 @@
     (local $b i32)
     (local $end i32)
     (local.set $end (i32.add (local.get $p) (i32.add (local.get $image) (i32.const 1))))
-    (local.set $i (call $markNew (enum.get $Mk.bracket) (local.get $p) (local.get $end)))
-    (if (local.get $image)
-      (then (i32.store8 offset=$M.flags (call $slotAt (local.get $i)) (i32.const $MF.image))))
+    (local.set $i (call $markNew
+      (i32.or (enum.get $Mk.bracket) (i32.shl (local.get $image) (i32.const 10)))
+      (local.get $p) (local.get $end) (i32.const 0)))
     (if (i32.eq (i32.sub (global.get $bracketSp) (global.get $bracketLo)) (i32.const 256))
       (then (global.set $bracketLo (i32.add (global.get $bracketLo) (i32.const 1)))))
     (if (global.get $bracketSp)
@@ -799,315 +684,245 @@
     (local $b i32)
     (local $initial i32)
     (local $q i32)
+    (local $t i32)
+    (local $n i32)
     (local $image i32)
-    (local $matched i32)
     (local $urlB i32)
     (local $urlE i32)
     (local $titleB i32)
     (local $titleE i32)
-    (local $hasTitle i32)
+    (local $flags i32)
+    (local $angle i32)
+    (local $e i32)
     (local $def i32)
     (local $rawB i32)
     (local $rawE i32)
-    (local $found i32)
-    (local $t i32)
-    (local $starttitle i32)
-    (local $endtitle i32)
     (local $open i32)
-    (local $close i32)
-    (local $n i32)
-    (local $angle i32)
     (local $bottom i32)
     (local $delimBottom i32)
-    (local $pending i32)
     (local.set $initial (i32.add (local.get $p) (i32.const 1)))
     (if (i32.eqz (global.get $bracketSp)) (then (return (local.get $initial))))
-    (if (i32.eq (global.get $bracketSp) (global.get $bracketLo))
-      (then
-        (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
-        (global.set $bracketLo (global.get $bracketSp))
-        (return (local.get $initial))))
-    (local.set $b (call $bracketAt (i32.sub (global.get $bracketSp) (i32.const 1))))
-    (local.set $image (i32.load8_u offset=8 (local.get $b)))
-    (local.set $bottom
-      (i32.load offset=$M.end (call $slotAt (i32.load (local.get $b)))))
-    (local.set $delimBottom (i32.load offset=4 (local.get $b)))
-    (if (i32.eqz (i32.load8_u offset=9 (local.get $b)))
-      (then
-        (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
-        (return (local.get $initial))))
-    (local.set $base (call $contentAt (i32.const 0)))
-    (local.set $q (local.get $initial))
-    ;; a GFM footnote reference
-    (if (i32.and (i32.eqz (local.get $image))
-          (i32.and
-            (i32.gt_u (local.get $p) (local.get $bottom))
-            (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $bottom)))
-              (i32.const "^"))))
-      (then
-        (local.set $def (call $lookupLabel
-          (i32.add (local.get $bottom) (i32.const 1)) (local.get $p) (i32.const 1)))
-        (if (local.get $def)
+    (block $fail
+      (if (i32.eq (global.get $bracketSp) (global.get $bracketLo))
+        (then
+          (global.set $bracketLo (i32.sub (global.get $bracketSp) (i32.const 1)))
+          (br $fail)))
+      (local.set $b (call $bracketAt (i32.sub (global.get $bracketSp) (i32.const 1))))
+      (br_if $fail (i32.eqz (i32.load8_u offset=9 (local.get $b))))
+      (local.set $open (i32.load (local.get $b)))
+      (local.set $image (i32.load8_u offset=8 (local.get $b)))
+      (local.set $bottom (i32.load offset=$M.end (call $slotAt (local.get $open))))
+      (local.set $delimBottom (i32.load offset=4 (local.get $b)))
+      (local.set $q (local.get $initial))
+      (block $resolved
+        ;; a GFM footnote reference
+        (if (i32.and (i32.eqz (local.get $image))
+              (i32.and
+                (i32.gt_u (local.get $p) (local.get $bottom))
+                (i32.eq (i32.load8_u (i32.add (global.get $contentBase) (local.get $bottom)))
+                  (i32.const "^"))))
           (then
-            (i32.store8 offset=$M.type (call $slotAt (i32.load (local.get $b)))
-              (enum.get $Mk.footnote))
-            (i32.store offset=$M.end (call $slotAt (i32.load (local.get $b))) (local.get $initial))
-            (i32.store offset=$M.data (call $slotAt (i32.load (local.get $b))) (local.get $def))
-            (call $processEmphasis (local.get $bottom) (local.get $delimBottom))
-            (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
-            (return (local.get $initial))))
-        (local.set $def (i32.const 0))))
-    (local.set $base (call $contentAt (i32.const 0)))
-    ;; an inline link or image
-    (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
-          (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $q))) (i32.const "(")))
-      (then
-        (local.set $t (call $skipWhite (i32.add (local.get $q) (i32.const 1)) (local.get $end)))
-        (local.set $n (call $scanLinkDest
-          (i32.add (local.get $base) (local.get $t)) (i32.add (local.get $base) (local.get $end))))
-        (if (i32.ge_s (local.get $n) (i32.const 0))
-          (then
-            (local.set $angle (i32.eq
-              (i32.load8_u (i32.add (local.get $base) (local.get $t))) (i32.const "<")))
-            (local.set $urlB (i32.add (local.get $t) (local.get $angle)))
-            (local.set $urlE (i32.sub
-              (i32.sub (local.get $n) (local.get $base)) (local.get $angle)))
-            (local.set $endtitle (i32.sub (local.get $n) (local.get $base)))
-            (local.set $starttitle (call $skipWhite (local.get $endtitle) (local.get $end)))
-            (if (i32.ne (local.get $starttitle) (local.get $endtitle))
+            (local.set $def (call $lookupLabel
+              (i32.add (local.get $bottom) (i32.const 1)) (local.get $p) (i32.const 1)))
+            (if (local.get $def)
               (then
-                (local.set $t (call $scanLinkTitle
-                  (i32.add (local.get $base) (local.get $starttitle))
-                  (i32.add (local.get $base) (local.get $end))))
-                (if (local.get $t)
-                  (then
-                    (local.set $hasTitle (i32.const 1))
-                    (local.set $titleB (i32.add (local.get $starttitle) (i32.const 1)))
-                    (local.set $titleE (i32.sub
-                      (i32.sub (local.get $t) (local.get $base)) (i32.const 1)))
-                    (local.set $endtitle (i32.sub (local.get $t) (local.get $base)))))))
-            (local.set $t (call $skipWhite (local.get $endtitle) (local.get $end)))
-            (if (i32.and (i32.lt_u (local.get $t) (local.get $end))
-                  (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $t))) (i32.const ")")))
-              (then
-                (local.set $q (i32.add (local.get $t) (i32.const 1)))
-                (local.set $matched (i32.const 1)))
-              (else
-                (local.set $hasTitle (i32.const 0))
-                (local.set $q (local.get $initial))))))))
-    ;; a reference link or image
-    (if (i32.eqz (local.get $matched))
-      (then
-        (local.set $t (call $scanLinkLabel
-          (i32.add (local.get $base) (local.get $q)) (i32.add (local.get $base) (local.get $end))))
-        (if (local.get $t)
-          (then
-            (local.set $found (i32.const 1))
-            (local.set $rawB (i32.add (local.get $q) (i32.const 1)))
-            (local.set $rawE (i32.sub
-              (i32.sub (local.get $t) (local.get $base)) (i32.const 1)))
-            (local.set $q (i32.sub (local.get $t) (local.get $base))))
-          (else (local.set $q (local.get $initial))))
-        ;; a collapsed or shortcut reference uses the link text as its label
-        (if (i32.and
-              (i32.or (i32.eqz (local.get $found)) (i32.eq (local.get $rawE) (local.get $rawB)))
-              (i32.eqz (i32.load8_u offset=10 (local.get $b))))
-          (then
-            (local.set $rawB (local.get $bottom))
-            (local.set $rawE (local.get $p))
-            (local.set $found (i32.const 1))))
-        (if (local.get $found)
-          (then (local.set $def
-            (call $lookupLabel (local.get $rawB) (local.get $rawE) (i32.const 0)))))
-        (if (local.get $def) (then (local.set $matched (i32.const 1))))))
-    ;; Repair only the original document's trailing label, after real
-    ;; references have failed. Code blocks and definition destinations never
-    ;; reach this inline path; rebuilt nested content retains its source end.
-    (if (i32.and (i32.eqz (local.get $matched))
-          (i32.and (i32.eqz (local.get $image))
-            (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 4)) (i32.const 0))
-              (i32.and (i32.eq (global.get $contentInputEnd) (global.get $eof))
-                (i32.eq (local.get $initial)
+                (local.set $t (call $slotAt (local.get $open)))
+                (i32.store8 offset=$M.type (local.get $t) (enum.get $Mk.footnote))
+                (i32.store offset=$M.end (local.get $t) (local.get $initial))
+                (i32.store offset=$M.data (local.get $t) (local.get $def))
+                ;; enclosing brackets stay active
+                (local.set $image (i32.const 1))
+                (br $resolved)))))
+        (block $link
+          ;; The inline form works on absolute positions: nothing here can
+          ;; move scratch. $e is the absolute content end.
+          (local.set $base (global.get $contentBase))
+          (local.set $e (i32.add (local.get $base) (local.get $end)))
+          (local.set $t (i32.add (local.get $base) (local.get $q)))
+          ;; an inline link or image
+          (if (i32.and (i32.lt_u (local.get $t) (local.get $e))
+                (i32.eq (i32.load8_u (local.get $t)) (i32.const "(")))
+            (then
+              (local.set $t (call $skipWs (i32.add (local.get $t) (i32.const 1)) (local.get $e)))
+              (local.set $n (call $scanLinkDest (local.get $t) (local.get $e)))
+              (if (i32.ge_s (local.get $n) (i32.const 0))
+                (then
+                  (local.set $angle (i32.eq (i32.load8_u (local.get $t)) (i32.const "<")))
+                  (local.set $urlB
+                    (i32.sub (i32.add (local.get $t) (local.get $angle)) (local.get $base)))
+                  (local.set $urlE
+                    (i32.sub (i32.sub (local.get $n) (local.get $angle)) (local.get $base)))
+                  (local.set $t (call $skipWs (local.get $n) (local.get $e)))
+                  (if (i32.ne (local.get $t) (local.get $n))
+                    (then
+                      (local.set $titleE (call $scanLinkTitle (local.get $t) (local.get $e)))
+                      (if (local.get $titleE)
+                        (then
+                          (local.set $flags (i32.const $LF.hasTitle))
+                          (local.set $titleB
+                            (i32.sub (i32.add (local.get $t) (i32.const 1)) (local.get $base)))
+                          (local.set $t (call $skipWs (local.get $titleE) (local.get $e)))
+                          (local.set $titleE (i32.sub (i32.sub (local.get $titleE) (i32.const 1))
+                            (local.get $base)))))))
+                  (if (i32.and (i32.lt_u (local.get $t) (local.get $e))
+                        (i32.eq (i32.load8_u (local.get $t)) (i32.const ")")))
+                    (then
+                      (local.set $q (i32.sub (i32.add (local.get $t) (i32.const 1)) (local.get $base)))
+                      (br $link)))
+                  (local.set $flags (i32.const 0))))))
+          ;; A reference link or image. A missing or empty label uses the link
+          ;; text instead, unless the text contains another bracket.
+          (local.set $t (call $scanLinkLabel (i32.add (local.get $base) (local.get $q)) (local.get $e)))
+          (local.set $q
+            (select (i32.sub (local.get $t) (local.get $base)) (local.get $q) (local.get $t)))
+          (local.set $rawB (i32.add (local.get $initial) (i32.const 1)))
+          (local.set $rawE (i32.sub (local.get $q) (i32.const 1)))
+          (if (i32.ge_u (local.get $rawB) (local.get $rawE))
+            (then
+              (local.set $rawB (local.get $bottom))
+              (local.set $rawE (select (local.get $bottom) (local.get $p)
+                (i32.load8_u offset=10 (local.get $b))))))
+          (br_if $link (local.tee $def
+            (call $lookupLabel (local.get $rawB) (local.get $rawE) (i32.const 0))))
+          ;; Repair only the original document's trailing label, after real
+          ;; references have failed. Code blocks and definition destinations never
+          ;; reach this inline path; rebuilt nested content retains its source end.
+          (br_if $fail (i32.or (local.get $image)
+            (i32.or (i32.eqz (i32.and (i32.load8_u (i32.const 1)) (i32.const 4)))
+              (i32.or (i32.ne (global.get $contentInputEnd) (global.get $eof))
+                (i32.ne (local.get $initial)
                   (i32.sub (global.get $contentLen)
                     (i32.sub (global.get $eof) (global.get $completeClosedLabelEnd))))))))
-      (then
-        (local.set $q (local.get $initial))
-        (local.set $pending (i32.const 1))
-        (local.set $matched (i32.const 1))))
-    (if (i32.eqz (local.get $matched))
-      (then
-        (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
-        (return (local.get $initial))))
-    (local.set $open (i32.load (local.get $b)))
-    (local.set $close (call $markNew (enum.get $Mk.linkclose) (local.get $p) (local.get $q)))
-    (local.set $open (call $slotAt (local.get $open)))
-    (i32.store8 offset=$M.type (local.get $open) (enum.get $Mk.linkopen))
-    (i32.store offset=$M.data (local.get $open) (local.get $close))
-    (local.set $close (call $slotAt (local.get $close)))
-    (i32.store offset=$L.urlBeg (local.get $close) (local.get $urlB))
-    (i32.store offset=$L.urlEnd (local.get $close) (local.get $urlE))
-    (i32.store offset=$L.titleBeg (local.get $close) (local.get $titleB))
-    (i32.store offset=$L.titleEnd (local.get $close) (local.get $titleE))
-    (i32.store offset=$L.def (local.get $close) (local.get $def))
-    (i32.store8 offset=$M.flags (local.get $close) (i32.or
-      (select (i32.const $LF.pending) (i32.const 0) (local.get $pending))
-      (i32.or
-        (select (i32.const $LF.hasTitle) (i32.const 0) (local.get $hasTitle))
-        (select (i32.const $MF.image) (i32.const 0) (local.get $image)))))
-    (call $processEmphasis (local.get $bottom) (local.get $delimBottom))
+          (local.set $q (local.get $initial))
+          (local.set $flags (i32.const $LF.pending)))
+        (local.set $n (call $markNew
+          (i32.or (enum.get $Mk.linkclose) (i32.shl
+            (i32.or (local.get $flags) (i32.shl (local.get $image) (i32.const 2))) (i32.const 8)))
+          (local.get $p) (local.get $q) (local.get $urlE)))
+        (local.set $t (call $slotAt (local.get $open)))
+        (i32.store8 offset=$M.type (local.get $t) (enum.get $Mk.linkopen))
+        (i32.store offset=$M.data (local.get $t) (local.get $n))
+        (local.set $t (call $slotAt (local.get $n)))
+        (i32.store offset=$L.urlBeg (local.get $t) (local.get $urlB))
+        (i32.store offset=$L.titleBeg (local.get $t) (local.get $titleB))
+        (i32.store offset=$L.titleEnd (local.get $t) (local.get $titleE))
+        (i32.store offset=$L.def (local.get $t) (local.get $def)))
+      (call $processEmphasis (local.get $bottom) (local.get $delimBottom))
+      (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
+      ;; A link may not contain another link: every bracket still open below this
+      ;; one can no longer become one. Those below an inactive `[` already are.
+      (if (i32.eqz (local.get $image))
+        (then
+          (local.set $n (global.get $bracketSp))
+          (block $done
+            (loop $l
+              (br_if $done (i32.le_u (local.get $n) (global.get $bracketLo)))
+              (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+              (local.set $b (call $bracketAt (local.get $n)))
+              (if (i32.eqz (i32.load8_u offset=8 (local.get $b)))
+                (then
+                  (br_if $done (i32.eqz (i32.load8_u offset=9 (local.get $b))))
+                  (i32.store8 offset=9 (local.get $b) (i32.const 0))))
+              (br $l)))))
+      (return (local.get $q)))
     (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
-    ;; A link may not contain another link: every bracket still open below this
-    ;; one can no longer become one. Those below an inactive `[` already are.
-    (if (i32.eqz (local.get $image))
-      (then
-        (local.set $n (global.get $bracketSp))
-        (block $done
-          (loop $l
-            (br_if $done (i32.le_u (local.get $n) (global.get $bracketLo)))
-            (local.set $n (i32.sub (local.get $n) (i32.const 1)))
-            (local.set $b (call $bracketAt (local.get $n)))
-            (if (i32.eqz (i32.load8_u offset=8 (local.get $b)))
-              (then
-                (br_if $done (i32.eqz (i32.load8_u offset=9 (local.get $b))))
-                (i32.store8 offset=9 (local.get $b) (i32.const 0))))
-            (br $l)))))
-    (local.get $q))
+    (local.get $initial))
 
   ;; normalize [$b,$e) of the content buffer and look it up in the reference map.
   ;; A footnote label is prefixed so the two namespaces never collide.
   (func $lookupLabel (param $b i32) (param $e i32) (param $footnote i32) (result i32)
     (local $tmp i32)
-    (local $len i32)
     (local $normalized i64)
     ;; with no definitions there is nothing to normalize the text for
     (if (i32.or (i32.eqz (global.get $linkHash)) (i32.ge_u (local.get $b) (local.get $e)))
       (then (return (i32.const 0))))
     (call $ensureScratch (i32.add
-      (i32.add (global.get $markOff) (i32.mul (i32.add (global.get $nSlots) (i32.const 2))
-        (i32.const $M.size)))
+      (i32.add (global.get $markOff) (i32.shl (i32.add (global.get $nSlots) (i32.const 2))
+        (i32.const 5)))
       (i32.add (i32.mul (i32.sub (local.get $e) (local.get $b)) (i32.const 3)) (i32.const 64))))
-    (local.set $tmp (i32.add (i32.add (global.get $scratchBase) (global.get $markOff))
-      (i32.mul (i32.add (global.get $nSlots) (i32.const 1)) (i32.const $M.size))))
+    (local.set $tmp (call $slotAt (i32.add (global.get $nSlots) (i32.const 1))))
     (local.set $normalized (call $normalizeLabel
-      (call $contentAt (local.get $b))
-      (call $contentAt (local.get $e))
+      (i32.add (global.get $contentBase) (local.get $b))
+      (i32.add (global.get $contentBase) (local.get $e))
       (local.get $tmp) (local.get $footnote)))
-    (local.set $len (i32.wrap_i64 (local.get $normalized)))
-    (call $linkLookup (local.get $tmp) (local.get $len)
+    ;; an empty normalized label matches no definition
+    (i32.load (call $linkSlot (local.get $tmp) (i32.wrap_i64 (local.get $normalized))
       (i32.wrap_i64 (i64.shr_u (local.get $normalized) (i64.const 32)))
-      (select (enum.get $Blk.footnote) (enum.get $Blk.linkdef) (local.get $footnote))))
+      (select (enum.get $Blk.footnote) (enum.get $Blk.linkdef) (local.get $footnote)))))
 
-  ;; spaces, tabs and line endings, as offsets into the content buffer
-  (func $skipWhite (param $p i32) (param $end i32) (result i32)
-    (local $base i32)
-    (local.set $base (call $contentAt (i32.const 0)))
-    (i32.sub
-      (call $skipWs (i32.add (local.get $base) (local.get $p))
-        (i32.add (local.get $base) (local.get $end)))
-      (local.get $base)))
-
-  ;; `<scheme:...>`; returns the offset just past `>`, or 0
+  ;; `<scheme:...>` at $p; returns the position just past `>`, or 0
   (func $scanAutolinkUri (param $p i32) (param $end i32) (result i32)
-    (local $base i32)
     (local $q i32)
-    (local $n i32)
     (local $c i32)
-    (local.set $base (call $contentAt (i32.const 0)))
+    ;; a scheme of 2 to 32 letters, digits, `+`, `.` or `-`, starting with a letter
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
-    (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
-    (if (i32.eqz (call $isAlpha (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
-      (then (return (i32.const 0))))
-    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-    (local.set $n (i32.const 1))
     (block $scheme
       (loop $l
         (br_if $scheme (i32.ge_u (local.get $q) (local.get $end)))
-        (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $q))))
+        (local.set $c (i32.load8_u (local.get $q)))
         (br_if $scheme (i32.eqz (i32.or (call $isAlnum (local.get $c))
           (i32.or
             (i32.or (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $c) (i32.const "+")))
             (i32.eq (local.get $c) (i32.const "-"))))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (local.set $n (i32.add (local.get $n) (i32.const 1)))
-        (br_if $scheme (i32.gt_u (local.get $n) (i32.const 32)))
-        (br $l)))
-    (if (i32.or (i32.lt_u (local.get $n) (i32.const 2)) (i32.gt_u (local.get $n) (i32.const 32)))
+        (br_if $l (i32.le_u (i32.sub (local.get $q) (local.get $p)) (i32.const 33)))))
+    (if (i32.or (i32.gt_u (i32.sub (i32.sub (local.get $q) (local.get $p)) (i32.const 3))
+          (i32.const 30))
+          (i32.eqz (call $isAlpha (i32.load8_u offset=1 (local.get $p)))))
       (then (return (i32.const 0))))
     (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
-    (if (i32.ne (i32.load8_u (i32.add (local.get $base) (local.get $q))) (i32.const ":"))
+    (if (i32.ne (i32.load8_u (local.get $q)) (i32.const ":"))
       (then (return (i32.const 0))))
-    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-    (block $body
-      (loop $l
-        (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
-        (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $q))))
-        (br_if $body (i32.eq (local.get $c) (i32.const ">")))
-        ;; no ASCII controls, space or `<`; NUL stands for U+FFFD
-        (if (i32.or (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 32))
-              (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const 127))))
-          (then (return (i32.const 0))))
-        (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (br $l)))
+    (loop $l
+      (local.set $q (i32.add (local.get $q) (i32.const 1)))
+      (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
+      (local.set $c (i32.load8_u (local.get $q)))
+      ;; no ASCII controls, space or `<`; NUL stands for U+FFFD
+      (if (i32.or (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 32))
+            (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const 127))))
+        (then (return (i32.const 0))))
+      (br_if $l (i32.ne (local.get $c) (i32.const ">"))))
     (i32.add (local.get $q) (i32.const 1)))
 
-  ;; `<user@host>`; returns the offset just past `>`, or 0
+  ;; `<user@host>` at $p; returns the position just past `>`, or 0
   (func $scanAutolinkEmail (param $p i32) (param $end i32) (result i32)
-    (local $base i32)
     (local $q i32)
     (local $c i32)
-    (local $n i32)
     (local $seg i32)
-    (local $k i32)
-    (local.set $base (call $contentAt (i32.const 0)))
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
+    ;; one or more letters, digits or ``.!#$%&'*+/=?^_`{|}~-``
     (block $local
       (loop $l
         (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
-        (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $q))))
+        (local.set $c (i32.load8_u (local.get $q)))
         (br_if $local (i32.eq (local.get $c) (i32.const "@")))
-        (local.set $k (i32.sub (local.get $c) (i32.const 33)))
-        (if (i32.eqz (i32.or (call $isAlnum (local.get $c))
-              (if (result i32) (i32.le_u (local.get $k) (i32.const 63))
-                (then (i32.wrap_i64 (i64.and
-                  (i64.shr_u (i64.const 0xe00000005000767d)
-                    (i64.extend_i32_u (local.get $k)))
-                  (i64.const 1))))
-                (else
-                  (local.set $k (i32.sub (local.get $c) (i32.const 97)))
-                  (i32.and (i32.le_u (local.get $k) (i32.const 29))
-                    (i32.wrap_i64 (i64.and
-                      (i64.shr_u (i64.const 0x3c000000)
-                        (i64.extend_i32_u (local.get $k)))
-                      (i64.const 1))))))))
+        (if (i32.eqz (i32.and (i32.lt_u (local.get $c) (i32.const 128))
+              (i32.wrap_i64 (i64.shr_u
+                (select (i64.const 0x7fffffffc7fffffe) (i64.const 0xa3ffecfa00000000)
+                  (i32.ge_u (local.get $c) (i32.const 64)))
+                (i64.extend_i32_u (local.get $c))))))
           (then (return (i32.const 0))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (br $l)))
-    (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
-    (local.set $q (i32.add (local.get $q) (i32.const 1)))
+    (if (i32.eq (local.get $q) (i32.add (local.get $p) (i32.const 1))) (then (return (i32.const 0))))
     ;; one or more dot-separated labels of alphanumerics and hyphens
-    (block $host
-      (loop $label
-        (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
-        (if (i32.eqz (call $isAlnum (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
-          (then (return (i32.const 0))))
-        (local.set $seg (i32.const 0))
-        (block $labelDone
-          (loop $l
-            (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
-            (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $q))))
-            (br_if $labelDone (i32.eqz (i32.or (call $isAlnum (local.get $c))
-              (i32.eq (local.get $c) (i32.const "-")))))
-            (local.set $q (i32.add (local.get $q) (i32.const 1)))
-            (local.set $seg (i32.add (local.get $seg) (i32.const 1)))
-            (br_if $labelDone (i32.gt_u (local.get $seg) (i32.const 63)))
-            (br $l)))
-        (if (i32.eq (i32.load8_u (i32.add (local.get $base)
-              (i32.sub (local.get $q) (i32.const 1)))) (i32.const "-"))
-          (then (return (i32.const 0))))
-        (br_if $host (i32.ne (local.get $c) (i32.const ".")))
-        (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (br $label)))
+    (loop $label
+      (local.set $q (i32.add (local.get $q) (i32.const 1)))
+      (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
+      (if (i32.eqz (call $isAlnum (i32.load8_u (local.get $q))))
+        (then (return (i32.const 0))))
+      (local.set $seg (local.get $q))
+      (block $labelDone
+        (loop $l
+          (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
+          (local.set $c (i32.load8_u (local.get $q)))
+          (br_if $labelDone (i32.eqz (i32.or (call $isAlnum (local.get $c))
+            (i32.eq (local.get $c) (i32.const "-")))))
+          (local.set $q (i32.add (local.get $q) (i32.const 1)))
+          (br_if $l (i32.le_u (i32.sub (local.get $q) (local.get $seg)) (i32.const 63)))))
+      (if (i32.eq (i32.load8_u offset=0 (i32.sub (local.get $q) (i32.const 1))) (i32.const "-"))
+        (then (return (i32.const 0))))
+      (br_if $label (i32.eq (local.get $c) (i32.const "."))))
     (if (i32.ne (local.get $c) (i32.const ">")) (then (return (i32.const 0))))
     (i32.add (local.get $q) (i32.const 1)))
 

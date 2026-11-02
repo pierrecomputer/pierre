@@ -31,6 +31,23 @@
     (if (i32.lt_u (local.get $c) (i32.const 0xf0)) (then (return (i32.const 3))))
     (i32.const 4))
 
+  ;; The last of $n sorted 8-byte fold entries at $at whose low 21 bits are at
+  ;; most $cp, or the entry before $at when there is none.
+  (func $foldFind (param $at i32) (param $n i32) (param $cp i32) (result i32)
+    (local $lo i32)
+    (local $mid i32)
+    (block $done
+      (loop $search
+        (br_if $done (i32.ge_u (local.get $lo) (local.get $n)))
+        (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $n)) (i32.const 1)))
+        ;; entry key <= $cp
+        (if (i32.ge_u (local.get $cp) (i32.and (i32.const 0x1fffff)
+              (i32.load (i32.add (local.get $at) (i32.shl (local.get $mid) (i32.const 3))))))
+          (then (local.set $lo (i32.add (local.get $mid) (i32.const 1))))
+          (else (local.set $n (local.get $mid))))
+        (br $search)))
+    (i32.add (local.get $at) (i32.shl (i32.sub (local.get $lo) (i32.const 1)) (i32.const 3))))
+
   ;; Case fold [$src,$end), trim it, and collapse internal whitespace runs to a
   ;; single space. A nonzero prefix keeps footnotes in their own namespace.
   ;; Returns hash in the high word and normalized length in the low word.
@@ -38,31 +55,21 @@
     (param $src i32) (param $end i32) (param $dst i32) (param $prefix i32) (result i64)
     (local $p i32)
     (local $out i32)
-    (local $q i32)
     (local $c i32)
     (local $space i32)
     (local $h i32)
-    (local $foldCp i32)
-    (local $foldLen i32)
-    (local $foldLo i32)
-    (local $foldHi i32)
-    (local $foldMid i32)
-    (local $foldAt i32)
-    (local $foldRunLo i32)
-    (local $foldRange i32)
-    (local $foldPacked i32)
-    (local $foldKey i32)
-    (local $foldHeader i32)
-    (local $foldMulti i32)
+    (local $cp i32)
+    (local $n i32)
+    (local $at i32)
+    (local $range i32)
+    (local $packed i32)
+    (local $header i32)
     (local.set $p (local.get $src))
     (local.set $out (local.get $dst))
-    (local.set $h (global.get $hashSeed))
     (if (local.get $prefix)
       (then
         (i32.store8 (local.get $out) (local.get $prefix))
-        (local.set $out (i32.add (local.get $out) (i32.const 1)))
-        (local.set $h (i32.mul
-          (i32.xor (local.get $h) (local.get $prefix)) (i32.const 16777619)))))
+        (local.set $out (i32.add (local.get $out) (i32.const 1)))))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
@@ -75,9 +82,7 @@
         (if (i32.and (local.get $space) (i32.gt_u (local.get $out) (local.get $dst)))
           (then
             (i32.store8 (local.get $out) (i32.const 32))
-            (local.set $out (i32.add (local.get $out) (i32.const 1)))
-            (local.set $h (i32.mul
-              (i32.xor (local.get $h) (i32.const 32)) (i32.const 16777619)))))
+            (local.set $out (i32.add (local.get $out) (i32.const 1)))))
         (local.set $space (i32.const 0))
         (if (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 0x7f))
           (then
@@ -85,87 +90,50 @@
               (then (local.set $c (i32.add (local.get $c) (i32.const 32)))))
             (i32.store8 (local.get $out) (local.get $c))
             (local.set $out (i32.add (local.get $out) (i32.const 1)))
-            (local.set $h (i32.mul
-              (i32.xor (local.get $h) (local.get $c)) (i32.const 16777619)))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $l)))
         ;; NUL and ill-formed bytes become U+FFFD, so the output is at most
         ;; three times the input (the fold of U+0390 is six bytes).
-        (local.set $q (local.get $out))
-        (local.set $foldCp (call $utf8At (local.get $p) (local.get $end)))
+        (local.set $cp (call $utf8At (local.get $p) (local.get $end)))
         (local.set $p (global.get $utf8Next))
-        (block $folded
-          ;; Most non-ASCII folds map to one code point.
-          (local.set $foldHeader (i32.load (i32.const $mem.fold)))
-          (local.set $foldHi (i32.and (local.get $foldHeader) (i32.const 0xffff)))
-          (local.set $foldLo (i32.const 0))
-          (block $foldNoRun
-            (loop $foldRunSearch
-              (br_if $foldNoRun (i32.ge_u (local.get $foldLo) (local.get $foldHi)))
-              (local.set $foldMid
-                (i32.shr_u (i32.add (local.get $foldLo) (local.get $foldHi)) (i32.const 1)))
-              (local.set $foldAt (i32.add (i32.const $mem.fold+4)
-                (i32.mul (local.get $foldMid) (i32.const 8))))
-              (local.set $foldRange (i32.load (local.get $foldAt)))
-              (local.set $foldRunLo (i32.and (local.get $foldRange) (i32.const 0x1fffff)))
-              (if (i32.lt_u (local.get $foldCp) (local.get $foldRunLo))
-                (then (local.set $foldHi (local.get $foldMid)))
-                (else
-                  (if (i32.le_u (i32.sub (local.get $foldCp) (local.get $foldRunLo))
-                        (i32.shr_u (local.get $foldRange) (i32.const 21)))
-                    (then
-                      (local.set $foldPacked (i32.load offset=4 (local.get $foldAt)))
-                      (if (i32.eqz (i32.and
-                            (i32.sub (local.get $foldCp) (local.get $foldRunLo))
-                            (i32.sub
-                              (i32.shr_u (local.get $foldPacked) (i32.const 24))
-                              (i32.const 1))))
-                        (then
-                          (local.set $foldCp (i32.add (local.get $foldCp)
-                            (i32.shr_s
-                              (i32.shl (local.get $foldPacked) (i32.const 8))
-                              (i32.const 8))))
-                          (local.set $foldLen
-                            (call $utf8Encode (local.get $out) (local.get $foldCp)))
-                          (br $folded)))
-                      (br $foldNoRun)))
-                  (local.set $foldLo (i32.add (local.get $foldMid) (i32.const 1)))))
-              (br $foldRunSearch)))
-          ;; The remaining folds expand to multiple code points.
-          (local.set $foldHi (i32.shr_u (local.get $foldHeader) (i32.const 16)))
-          (local.set $foldLo (i32.const 0))
-          (local.set $foldMulti (i32.add (i32.const $mem.fold+4)
-            (i32.mul
-              (i32.and (local.get $foldHeader) (i32.const 0xffff)) (i32.const 8))))
-          (block $foldNoMulti
-            (loop $foldMultiSearch
-              (br_if $foldNoMulti (i32.ge_u (local.get $foldLo) (local.get $foldHi)))
-              (local.set $foldMid
-                (i32.shr_u (i32.add (local.get $foldLo) (local.get $foldHi)) (i32.const 1)))
-              (local.set $foldAt (i32.add (local.get $foldMulti)
-                (i32.mul (local.get $foldMid) (i32.const 8))))
-              (local.set $foldKey (i32.load (local.get $foldAt)))
-              (if (i32.eq (local.get $foldKey) (local.get $foldCp))
-                (then
-                  (local.set $foldLen (i32.load8_u offset=6 (local.get $foldAt)))
-                  (memory.copy (local.get $out)
-                    (i32.load16_u offset=4 (local.get $foldAt)) (local.get $foldLen))
-                  (br $folded)))
-              (if (i32.lt_u (local.get $foldKey) (local.get $foldCp))
-                (then (local.set $foldLo (i32.add (local.get $foldMid) (i32.const 1))))
-                (else (local.set $foldHi (local.get $foldMid))))
-              (br $foldMultiSearch)))
-          (local.set $foldLen (call $utf8Encode (local.get $out) (local.get $foldCp))))
-        (local.set $out (i32.add (local.get $out) (local.get $foldLen)))
-        (block $hashed
-          (loop $hash
-            (br_if $hashed (i32.ge_u (local.get $q) (local.get $out)))
-            (local.set $h (i32.mul
-              (i32.xor (local.get $h) (i32.load8_u (local.get $q)))
-              (i32.const 16777619)))
-            (local.set $q (i32.add (local.get $q) (i32.const 1)))
-            (br $hash)))
+        ;; Most non-ASCII folds map to one code point: find the run that may
+        ;; hold $cp. Runs start at U+0041, so one always precedes it.
+        (local.set $header (i32.load (i32.const $mem.fold)))
+        (local.set $at (call $foldFind (i32.const $mem.fold+4)
+          (i32.and (local.get $header) (i32.const 0xffff)) (local.get $cp)))
+        (local.set $range (i32.load (local.get $at)))
+        (local.set $n (i32.sub (local.get $cp) (i32.and (local.get $range) (i32.const 0x1fffff))))
+        (local.set $packed (i32.load offset=4 (local.get $at)))
+        (if (i32.and (i32.le_u (local.get $n) (i32.shr_u (local.get $range) (i32.const 21)))
+              (i32.eqz (i32.and (local.get $n)
+                (i32.sub (i32.shr_u (local.get $packed) (i32.const 24)) (i32.const 1)))))
+          (then (local.set $cp (i32.add (local.get $cp)
+            (i32.shr_s (i32.shl (local.get $packed) (i32.const 8)) (i32.const 8)))))
+          (else
+            ;; The remaining folds expand to multiple code points.
+            (local.set $at (call $foldFind
+              (i32.add (i32.const $mem.fold+4)
+                (i32.shl (i32.and (local.get $header) (i32.const 0xffff)) (i32.const 3)))
+              (i32.shr_u (local.get $header) (i32.const 16)) (local.get $cp)))
+            (if (i32.eq (i32.load (local.get $at)) (local.get $cp))
+              (then
+                (local.set $n (i32.load8_u offset=6 (local.get $at)))
+                (memory.copy (local.get $out) (i32.load16_u offset=4 (local.get $at)) (local.get $n))
+                (local.set $out (i32.add (local.get $out) (local.get $n)))
+                (br $l)))))
+        (local.set $out (i32.add (local.get $out) (call $utf8Encode (local.get $out) (local.get $cp))))
         (br $l)))
+    ;; FNV-1a over the normalized bytes
+    (local.set $h (global.get $hashSeed))
+    (local.set $p (local.get $dst))
+    (block $hashed
+      (loop $hash
+        (br_if $hashed (i32.ge_u (local.get $p) (local.get $out)))
+        (local.set $h (i32.mul
+          (i32.xor (local.get $h) (i32.load8_u (local.get $p)))
+          (i32.const 16777619)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $hash)))
     (i64.or
       (i64.extend_i32_u (i32.sub (local.get $out) (local.get $dst)))
       (i64.shl (i64.extend_i32_u (local.get $h)) (i64.const 32))))
@@ -208,67 +176,74 @@
     (local $i i32)
     (local $c i32)
     (local $depth i32)
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const -1))))
-    (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
-      (then
-        (local.set $i (i32.add (local.get $p) (i32.const 1)))
-        (block $found
+    (local $w v128)
+    (block $fail
+      (br_if $fail (i32.ge_u (local.get $p) (local.get $end)))
+      (local.set $i (local.get $p))
+      (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
+        (then
+          ;; `<...>`: no line ending or unescaped `<`; `\` skips the next byte
           (loop $l
-            (if (i32.ge_u (local.get $i) (local.get $end)) (then (return (i32.const -1))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br_if $fail (i32.ge_u (local.get $i) (local.get $end)))
             (local.set $c (i32.load8_u (local.get $i)))
-            (if (i32.eq (local.get $c) (i32.const ">"))
-              (then
-                (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                (br $found)))
             (if (i32.eq (local.get $c) (i32.const "\5c"))
               (then
-                (local.set $i (i32.add (local.get $i) (i32.const 2)))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
                 (br $l)))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const "<")))
-              (then (return (i32.const -1))))
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $l)))
-        (return (local.get $i))))
-    (local.set $i (local.get $p))
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $i) (local.get $end)))
-        (local.set $c (i32.load8_u (local.get $i)))
-        ;; most bytes are past `)` and are neither `\` nor DEL
-        (if (i32.and (i32.gt_u (local.get $c) (i32.const ")"))
-              (i32.and (i32.ne (local.get $c) (i32.const "\5c")) (i32.ne (local.get $c) (i32.const 127))))
-          (then
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $l)))
-        (if (i32.eq (local.get $c) (i32.const "\5c"))
-          (then
-            (if (i32.and (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))
-                  (call $isAsciiPunct (i32.load8_u offset=1 (local.get $i))))
+            (br_if $fail
+              (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const "<"))))
+            (br_if $l (i32.ne (local.get $c) (i32.const ">"))))
+          (return (i32.add (local.get $i) (i32.const 1)))))
+      (block $done
+        (loop $l
+          ;; Most bytes are past `)` and are neither `\` nor DEL: skip 16 of
+          ;; them at a time. Bytes past $end may stop the skip, never extend it.
+          (loop $wide
+            (local.set $w (v128.load (local.get $i)))
+            (if (i32.eqz (v128.any_true (v128.or
+                  (i8x16.le_u (local.get $w) (i8x16.splat (i32.const ")")))
+                  (v128.or
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "\5c")))
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const 127)))))))
               (then
-                (local.set $i (i32.add (local.get $i) (i32.const 2)))
-                (br $l)))))
-        (if (i32.eq (local.get $c) (i32.const "("))
-          (then
-            (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
-            (if (i32.gt_u (local.get $depth) (i32.const 32)) (then (return (i32.const -1))))
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $l)))
-        (if (i32.eq (local.get $c) (i32.const ")"))
-          (then
-            (br_if $done (i32.eqz (local.get $depth)))
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $l)))
-        ;; ASCII controls and space end it; NUL stands for U+FFFD
-        (if (i32.or (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 32))
-              (i32.eq (local.get $c) (i32.const 127)))
-          (then
-            (if (i32.eq (local.get $i) (local.get $p)) (then (return (i32.const -1))))
-            (br $done)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l)))
-    (if (local.get $depth) (then (return (i32.const -1))))
-    (local.get $i))
+                (local.set $i (i32.add (local.get $i) (i32.const 16)))
+                (br_if $wide (i32.lt_u (local.get $i) (local.get $end)))
+                (local.set $i (local.get $end)))))
+          (br_if $done (i32.ge_u (local.get $i) (local.get $end)))
+          (local.set $c (i32.load8_u (local.get $i)))
+          (if (i32.and (i32.gt_u (local.get $c) (i32.const ")"))
+                (i32.and (i32.ne (local.get $c) (i32.const "\5c")) (i32.ne (local.get $c) (i32.const 127))))
+            (then
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (br $l)))
+          (if (i32.eq (local.get $c) (i32.const "\5c"))
+            (then
+              ;; an escaped punctuation character
+              (local.set $i (i32.add (local.get $i) (i32.and
+                (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))
+                (call $isAsciiPunct (i32.load8_u offset=1 (local.get $i)))))))
+            (else
+              (if (i32.eq (local.get $c) (i32.const "("))
+                (then
+                  (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
+                  (br_if $fail (i32.gt_u (local.get $depth) (i32.const 32))))
+                (else
+                  (if (i32.eq (local.get $c) (i32.const ")"))
+                    (then
+                      (br_if $done (i32.eqz (local.get $depth)))
+                      (local.set $depth (i32.sub (local.get $depth) (i32.const 1))))
+                    ;; ASCII controls and space end it; NUL stands for U+FFFD
+                    (else (if (i32.or (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 32))
+                          (i32.eq (local.get $c) (i32.const 127)))
+                      (then
+                        (br_if $fail (i32.eq (local.get $i) (local.get $p)))
+                        (br $done)))))))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $l)))
+      (br_if $fail (local.get $depth))
+      (return (local.get $i)))
+    (i32.const -1))
 
   ;; a link title in double quotes, single quotes or parentheses
   (func $scanLinkTitle (param $p i32) (param $end i32) (result i32)
@@ -303,27 +278,34 @@
         (br $l)))
     (i32.add (local.get $q) (i32.const 1)))
 
+  ;; skip spaces and tabs, at most one line ending, then spaces and tabs again
+  (func $skipLineSpace (param $p i32) (param $end i32) (result i32)
+    (local.set $p (call $skipSpace (local.get $p) (local.get $end)))
+    (if (i32.and (i32.lt_u (local.get $p) (local.get $end))
+          (i32.eq (i32.load8_u (local.get $p)) (i32.const 10)))
+      (then (local.set $p (call $skipSpace
+        (i32.add (local.get $p) (i32.const 1)) (local.get $end)))))
+    (local.get $p))
+
   ;; Parse link reference definitions off the front of a paragraph and drop the
   ;; text they consumed. Definitions may span lines, so this works on the
   ;; paragraph's contiguous content buffer.
   (func $resolveLinkDefs (param $r i32)
     (local $len i32)
     (local $off i32)
-    (local $k i32)
     (local $line i32)
     (local $blank i32)
     (local $base i32)
     (local $end i32)
     (local $pos i32)
     (local $q i32)
+    (local $t i32)
     (local $labelOff i32)
     (local $labelLen i32)
     (local $destOff i32)
     (local $destLen i32)
     (local $titleOff i32)
     (local $titleLen i32)
-    (local $hasTitle i32)
-    (local $beforeTitle i32)
     (local $def i32)
     (local $dst i32)
     (local $n i32)
@@ -336,133 +318,114 @@
     (local $lineLen i32)
     (local $pad i32)
     (local $rel i32)
+    ;; Every paragraph comes here: only an unpadded first line that starts
+    ;; with `[` can hold a definition.
     (if (i32.eqz (i32.load offset=$R.nLines (local.get $r))) (then (return)))
     (local.set $line (call $lineAt (local.get $r) (i32.const 0)))
-    (if (call $linePad (local.get $line)) (then (return)))
-    (if (i32.ne (i32.load8_u (call $lineBeg (local.get $line))) (i32.const "[")) (then (return)))
+    (if (i32.or (call $linePad (local.get $line))
+          (i32.ne (i32.load8_u (call $lineBeg (local.get $line))) (i32.const "[")))
+      (then (return)))
+    ;; A label closed on the first line must be followed by `:`. Rejecting
+    ;; `[text](...)` here avoids rebuilding the paragraph content.
+    (local.set $end (call $lineEndOf (local.get $line)))
+    (local.set $pos (call $scanLinkLabel (call $lineBeg (local.get $line)) (local.get $end)))
+    (if (i32.and (i32.ne (local.get $pos) (i32.const 0))
+          (i32.or (i32.ge_u (local.get $pos) (local.get $end))
+            (i32.ne (i32.load8_u (local.get $pos)) (i32.const ":"))))
+      (then (return)))
     (local.set $len (call $blockContent (local.get $r)))
-    (block $done
-      (loop $defs
-        (br_if $done (i32.ge_u (local.get $off) (local.get $len)))
-        (br_if $done (i32.ne
-          (i32.load8_u (call $contentAt (local.get $off)))
-          (i32.const "[")))
-        ;; Parse one definition. Failure leaves $k at zero and ends the scan.
-        (local.set $k (i32.const 0))
-        (local.set $hasTitle (i32.const 0))
-        (local.set $titleOff (i32.const 0))
-        (local.set $titleLen (i32.const 0))
-        (block $parsed
-          (local.set $base (call $contentAt (i32.const 0)))
-          (local.set $end (i32.add (local.get $base) (local.get $len)))
-          (local.set $pos (call $scanLinkLabel
-            (i32.add (local.get $base) (local.get $off)) (local.get $end)))
-          (br_if $parsed (i32.eqz (local.get $pos)))
+    ;; Parse one definition per iteration; the first failure ends the scan.
+    (loop $defs
+      (local.set $base (call $contentAt (i32.const 0)))
+      (local.set $end (i32.add (local.get $base) (local.get $len)))
+      (local.set $pos (call $scanLinkLabel
+        (i32.add (local.get $base) (local.get $off)) (local.get $end)))
+      (if (local.get $pos)
+        (then
           (local.set $labelOff (i32.add (local.get $off) (i32.const 1)))
           (local.set $labelLen (i32.sub
             (i32.sub (local.get $pos) (i32.add (local.get $base) (local.get $off)))
             (i32.const 2)))
-          (br_if $parsed (i32.ge_u
-            (call $skipWs (i32.add (local.get $base) (local.get $labelOff))
-              (i32.sub (local.get $pos) (i32.const 1)))
-            (i32.sub (local.get $pos) (i32.const 1))))
-          (br_if $parsed (i32.ge_u (local.get $pos) (local.get $end)))
-          (br_if $parsed (i32.ne (i32.load8_u (local.get $pos)) (i32.const ":")))
-          ;; spaces/tabs, at most one newline, then spaces/tabs
-          (local.set $pos
-            (call $skipSpace (i32.add (local.get $pos) (i32.const 1)) (local.get $end)))
-          (if (i32.and
-                (i32.lt_u (local.get $pos) (local.get $end))
-                (i32.eq (i32.load8_u (local.get $pos)) (i32.const 10)))
-            (then (local.set $pos
-              (call $skipSpace
-                (i32.add (local.get $pos) (i32.const 1)) (local.get $end)))))
-          (local.set $q (call $scanLinkDest (local.get $pos) (local.get $end)))
-          (br_if $parsed (i32.or
-            (i32.lt_s (local.get $q) (i32.const 0))
-            (i32.eq (local.get $q) (local.get $pos))))
-          (local.set $angle (i32.eq (i32.load8_u (local.get $pos)) (i32.const "<")))
-          (local.set $destOff (i32.add
-            (i32.sub (local.get $pos) (local.get $base)) (local.get $angle)))
-          (local.set $destLen (i32.sub
-            (i32.sub (local.get $q) (local.get $pos))
-            (i32.shl (local.get $angle) (i32.const 1))))
-          (local.set $beforeTitle (local.get $q))
-          (local.set $pos (call $skipSpace (local.get $q) (local.get $end)))
-          (if (i32.and
-                (i32.lt_u (local.get $pos) (local.get $end))
-                (i32.eq (i32.load8_u (local.get $pos)) (i32.const 10)))
-            (then (local.set $pos
-              (call $skipSpace
-                (i32.add (local.get $pos) (i32.const 1)) (local.get $end)))))
-          (if (i32.ne (local.get $pos) (local.get $beforeTitle))
-            (then
-              (local.set $q (call $scanLinkTitle (local.get $pos) (local.get $end)))
-              (if (local.get $q)
+          (block $parsed
+            (br_if $parsed (i32.ge_u
+              (call $skipWs (i32.add (local.get $base) (local.get $labelOff))
+                (i32.sub (local.get $pos) (i32.const 1)))
+              (i32.sub (local.get $pos) (i32.const 1))))
+            (br_if $parsed (i32.ge_u (local.get $pos) (local.get $end)))
+            (br_if $parsed (i32.ne (i32.load8_u (local.get $pos)) (i32.const ":")))
+            (local.set $pos (call $skipLineSpace
+              (i32.add (local.get $pos) (i32.const 1)) (local.get $end)))
+            (local.set $q (call $scanLinkDest (local.get $pos) (local.get $end)))
+            (br_if $parsed (i32.or
+              (i32.lt_s (local.get $q) (i32.const 0))
+              (i32.eq (local.get $q) (local.get $pos))))
+            (local.set $angle (i32.eq (i32.load8_u (local.get $pos)) (i32.const "<")))
+            (local.set $destOff (i32.add
+              (i32.sub (local.get $pos) (local.get $base)) (local.get $angle)))
+            (local.set $destLen (i32.sub
+              (i32.sub (local.get $q) (local.get $pos))
+              (i32.shl (local.get $angle) (i32.const 1))))
+            ;; An optional title ends at $t. Only spaces may follow on its line;
+            ;; otherwise the title is dropped and the destination must end it.
+            (local.set $titleLen (i32.const 0))
+            (local.set $t (local.get $q))
+            (local.set $pos (call $skipLineSpace (local.get $q) (local.get $end)))
+            (if (i32.ne (local.get $pos) (local.get $q))
+              (then
+                (local.set $t (call $scanLinkTitle (local.get $pos) (local.get $end)))
+                (if (local.get $t)
+                  (then
+                    (local.set $titleOff (i32.add
+                      (i32.sub (local.get $pos) (local.get $base)) (i32.const 1)))
+                    (local.set $titleLen (i32.sub
+                      (i32.sub (local.get $t) (local.get $pos)) (i32.const 2))))
+                  (else (local.set $t (local.get $q))))))
+            (loop $eol
+              (local.set $pos (call $skipSpace (local.get $t) (local.get $end)))
+              (if (i32.and (i32.lt_u (local.get $pos) (local.get $end))
+                    (i32.ne (i32.load8_u (local.get $pos)) (i32.const 10)))
                 (then
-                  (local.set $hasTitle (i32.const 1))
-                  (local.set $titleOff (i32.add
-                    (i32.sub (local.get $pos) (local.get $base)) (i32.const 1)))
-                  (local.set $titleLen (i32.sub
-                    (i32.sub (local.get $q) (local.get $pos)) (i32.const 2))))
-                (else (local.set $q (local.get $beforeTitle)))))
-            (else (local.set $q (local.get $beforeTitle))))
-          (local.set $pos (call $skipSpace (local.get $q) (local.get $end)))
-          (if (i32.eqz (i32.or
-                (i32.ge_u (local.get $pos) (local.get $end))
-                (i32.eq (i32.load8_u (local.get $pos)) (i32.const 10))))
-            (then
-              (br_if $parsed (i32.eqz (local.get $hasTitle)))
-              ;; Retry without the title.
-              (local.set $hasTitle (i32.const 0))
-              (local.set $titleLen (i32.const 0))
-              (local.set $pos (call $skipSpace (local.get $beforeTitle) (local.get $end)))
-              (br_if $parsed (i32.eqz (i32.or
-                (i32.ge_u (local.get $pos) (local.get $end))
-                (i32.eq (i32.load8_u (local.get $pos)) (i32.const 10)))))))
-          (if (i32.and
-                (i32.lt_u (local.get $pos) (local.get $end))
-                (i32.eq (i32.load8_u (local.get $pos)) (i32.const 10)))
-            (then (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-          (local.set $n
-            (i32.sub (local.get $pos) (i32.add (local.get $base) (local.get $off))))
-          ;; Reserving first means the scratch can move safely.
-          (call $ensureRec (i32.add (i32.const 64) (i32.add
-            (i32.mul (local.get $labelLen) (i32.const 3))
-            (i32.add (local.get $destLen) (local.get $titleLen)))))
-          (local.set $base (call $contentAt (i32.const 0)))
-          (local.set $def (call $recNew (enum.get $Blk.linkdef)))
-          (call $noteDefinition (local.get $def))
-          (global.set $rec (i32.add (local.get $def) (i32.const $R.labelBytes)))
-          (local.set $dst (global.get $rec))
-          (local.set $normalized (call $normalizeLabel
-            (i32.add (local.get $base) (local.get $labelOff))
-            (i32.add
-              (i32.add (local.get $base) (local.get $labelOff)) (local.get $labelLen))
-            (local.get $dst) (i32.const 0)))
-          (local.set $labelLen (i32.wrap_i64 (local.get $normalized)))
-          (local.set $dst (i32.add (local.get $dst) (local.get $labelLen)))
-          (memory.copy
-            (local.get $dst) (i32.add (local.get $base) (local.get $destOff))
-            (local.get $destLen))
-          (local.set $dst (i32.add (local.get $dst) (local.get $destLen)))
-          (memory.copy
-            (local.get $dst) (i32.add (local.get $base) (local.get $titleOff))
-            (local.get $titleLen))
-          (local.set $dst (i32.add (local.get $dst) (local.get $titleLen)))
-          (i32.store offset=8 (local.get $def) (local.get $destLen))
-          (i32.store offset=12 (local.get $def) (local.get $titleLen))
-          (i32.store offset=$R.labelLen (local.get $def) (local.get $labelLen))
-          (i32.store offset=$R.hash (local.get $def)
-            (i32.wrap_i64 (i64.shr_u (local.get $normalized) (i64.const 32))))
-          (local.set $dst
-            (i32.and (i32.add (local.get $dst) (i32.const 7)) (i32.const -8)))
-          (i32.store offset=4 (local.get $def) (i32.sub (local.get $dst) (local.get $def)))
-          (global.set $rec (local.get $dst))
-          (local.set $k (local.get $n)))
-        (br_if $done (i32.eqz (local.get $k)))
-        (local.set $off (i32.add (local.get $off) (local.get $k)))
-        (br $defs)))
+                  (br_if $parsed (i32.eq (local.get $t) (local.get $q)))
+                  (local.set $t (local.get $q))
+                  (local.set $titleLen (i32.const 0))
+                  (br $eol))))
+            (local.set $n (i32.sub
+              (i32.add (local.get $pos) (i32.lt_u (local.get $pos) (local.get $end)))
+              (i32.add (local.get $base) (local.get $off))))
+            ;; Reserving first means the scratch can move safely.
+            (call $ensureRec (i32.add (i32.const 64) (i32.add
+              (i32.mul (local.get $labelLen) (i32.const 3))
+              (i32.add (local.get $destLen) (local.get $titleLen)))))
+            (local.set $base (call $contentAt (i32.const 0)))
+            (local.set $def (call $recNew (enum.get $Blk.linkdef)))
+            (call $noteDefinition (local.get $def))
+            (local.set $dst (i32.add (local.get $def) (i32.const $R.labelBytes)))
+            (local.set $normalized (call $normalizeLabel
+              (i32.add (local.get $base) (local.get $labelOff))
+              (i32.add
+                (i32.add (local.get $base) (local.get $labelOff)) (local.get $labelLen))
+              (local.get $dst) (i32.const 0)))
+            (local.set $labelLen (i32.wrap_i64 (local.get $normalized)))
+            (local.set $dst (i32.add (local.get $dst) (local.get $labelLen)))
+            (memory.copy
+              (local.get $dst) (i32.add (local.get $base) (local.get $destOff))
+              (local.get $destLen))
+            (local.set $dst (i32.add (local.get $dst) (local.get $destLen)))
+            (memory.copy
+              (local.get $dst) (i32.add (local.get $base) (local.get $titleOff))
+              (local.get $titleLen))
+            (local.set $dst (i32.add (local.get $dst) (local.get $titleLen)))
+            (i32.store offset=8 (local.get $def) (local.get $destLen))
+            (i32.store offset=12 (local.get $def) (local.get $titleLen))
+            (i32.store offset=$R.labelLen (local.get $def) (local.get $labelLen))
+            (i32.store offset=$R.hash (local.get $def)
+              (i32.wrap_i64 (i64.shr_u (local.get $normalized) (i64.const 32))))
+            (local.set $dst
+              (i32.and (i32.add (local.get $dst) (i32.const 7)) (i32.const -8)))
+            (i32.store offset=4 (local.get $def) (i32.sub (local.get $dst) (local.get $def)))
+            (global.set $rec (local.get $dst))
+            (local.set $off (i32.add (local.get $off) (local.get $n)))
+            (br $defs)))))
     (if (local.get $off)
       (then
         (local.set $blank (i32.ge_u
@@ -503,22 +466,14 @@
                 (i32.add (local.get $acc) (local.get $lineLen)) (i32.const 1)))
             (local.set $lineIndex (i32.add (local.get $lineIndex) (i32.const 1)))
             (br $trimLines)))
-        (if (i32.ge_u (local.get $lineIndex) (local.get $lineCount))
-          (then (i32.store offset=$R.nLines (local.get $r) (i32.const 0)))
-          (else
-            (if (local.get $lineIndex)
-              (then
-                (memory.copy
-                  (call $lineAt (local.get $r) (i32.const 0))
-                  (call $lineAt (local.get $r) (local.get $lineIndex))
-                  (i32.mul
-                    (i32.sub (local.get $lineCount) (local.get $lineIndex))
-                    (i32.const $R.line)))
-                (i32.store offset=$R.nLines (local.get $r)
-                  (i32.sub (local.get $lineCount) (local.get $lineIndex)))))))
+        (local.set $lineCount (i32.sub (local.get $lineCount) (local.get $lineIndex)))
+        (memory.copy
+          (call $lineAt (local.get $r) (i32.const 0))
+          (call $lineAt (local.get $r) (local.get $lineIndex))
+          (i32.mul (local.get $lineCount) (i32.const $R.line)))
         ;; a paragraph made of nothing but definitions leaves no content
-        (if (local.get $blank)
-          (then (i32.store offset=$R.nLines (local.get $r) (i32.const 0)))))))
+        (i32.store offset=$R.nLines (local.get $r)
+          (select (i32.const 0) (local.get $lineCount) (local.get $blank))))))
 
   ;; Link definitions as they are appended so indexing need not walk unrelated
   ;; blocks twice. Record addresses do not move when scratch or memory grows.
@@ -535,7 +490,6 @@
     (local $r i32)
     (local $slots i32)
     (local $table i32)
-    (local $i i32)
     (local $slot i32)
     (global.set $recEnd (global.get $rec))
     (if (i32.eqz (global.get $defCount)) (then (return)))
@@ -554,28 +508,14 @@
     (block $filled
       (loop $l
         (br_if $filled (i32.eqz (local.get $r)))
-        ;; the high bits of a multiplicative mix pick the slot
-        (local.set $i (i32.shr_u
-          (i32.mul (i32.load offset=$R.hash (local.get $r)) (i32.const 0x9e3779b1))
-          (i32.clz (global.get $linkMask))))
-        (block $placed
-          (loop $probe
-            (local.set $slot (i32.load
-              (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))))
-            (if (i32.eqz (local.get $slot))
-              (then
-                (i32.store (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))
-                  (local.get $r))
-                (br $placed)))
-            ;; the first definition of a type wins; footnote labels carry a
-            ;; 0x01 prefix, which a link label can also start with
-            (br_if $placed (i32.and
-              (i32.eq (i32.load8_u (local.get $slot)) (i32.load8_u (local.get $r)))
-              (call $defLabelEq (local.get $slot)
-                (i32.add (local.get $r) (i32.const $R.labelBytes))
-                (i32.load offset=$R.labelLen (local.get $r)))))
-            (local.set $i (i32.and (i32.add (local.get $i) (i32.const 1)) (global.get $linkMask)))
-            (br $probe)))
+        ;; the first definition of a type wins
+        (local.set $slot (call $linkSlot
+          (i32.add (local.get $r) (i32.const $R.labelBytes))
+          (i32.load offset=$R.labelLen (local.get $r))
+          (i32.load offset=$R.hash (local.get $r))
+          (i32.load8_u (local.get $r))))
+        (if (i32.eqz (i32.load (local.get $slot)))
+          (then (i32.store (local.get $slot) (local.get $r))))
         (local.set $r (i32.load offset=$R.defNext (local.get $r)))
         (br $l)))
     (global.set $rec (i32.add (local.get $table) (i32.mul (local.get $slots) (i32.const 4))))
@@ -605,24 +545,24 @@
         (br $l)))
     (i32.const 1))
 
-  ;; find the definition of $type for a normalized label, or 0
-  (func $linkLookup
-    (param $p i32) (param $len i32) (param $hash i32) (param $type i32) (result i32)
+  ;; The table entry for a normalized label of $type: the entry holding its
+  ;; first definition, or the empty entry where that would go. Footnote labels
+  ;; carry a 0x01 prefix, which a link label can also start with.
+  (func $linkSlot (param $p i32) (param $len i32) (param $hash i32) (param $type i32) (result i32)
     (local $i i32)
+    (local $at i32)
     (local $slot i32)
-    (if (i32.eqz (global.get $linkHash)) (then (return (i32.const 0))))
-    (if (i32.eqz (local.get $len)) (then (return (i32.const 0))))
+    ;; the high bits of a multiplicative mix pick the first entry
     (local.set $i (i32.shr_u (i32.mul (local.get $hash) (i32.const 0x9e3779b1))
       (i32.clz (global.get $linkMask))))
-    (loop $probe
-      (local.set $slot (i32.load
-        (i32.add (global.get $linkHash) (i32.mul (local.get $i) (i32.const 4)))))
-      (if (i32.eqz (local.get $slot)) (then (return (i32.const 0))))
-      (if (i32.eq (i32.load8_u (local.get $slot)) (local.get $type))
-        (then
-          (if (call $defLabelEq (local.get $slot) (local.get $p) (local.get $len))
-            (then (return (local.get $slot))))))
-      (local.set $i (i32.and (i32.add (local.get $i) (i32.const 1)) (global.get $linkMask)))
-      (br $probe))
-    (i32.const 0))
+    (block $found
+      (loop $probe
+        (local.set $at (i32.add (global.get $linkHash) (i32.shl (local.get $i) (i32.const 2))))
+        (local.set $slot (i32.load (local.get $at)))
+        (br_if $found (i32.eqz (local.get $slot)))
+        (br_if $found (i32.and (i32.eq (i32.load8_u (local.get $slot)) (local.get $type))
+          (call $defLabelEq (local.get $slot) (local.get $p) (local.get $len))))
+        (local.set $i (i32.and (i32.add (local.get $i) (i32.const 1)) (global.get $linkMask)))
+        (br $probe)))
+    (local.get $at))
 )

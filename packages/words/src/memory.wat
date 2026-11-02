@@ -15,7 +15,7 @@
   (const $mem.syntaxLo $mem.markHi+16)
   (const $mem.escapeNibbles $mem.syntaxLo+16)
   (const $mem.entities $mem.escapeNibbles+16)
-  (const $mem.entitiesEnd $mem.entities+26624)
+  (const $mem.entitiesEnd $mem.entities+20544)
   (const $mem.punct $mem.entitiesEnd)
   (const $mem.punctEnd $mem.punct+1536)
   (const $mem.fold $mem.punctEnd)
@@ -28,6 +28,7 @@
   (const $mem.widthEnd $mem.width+3328)
   (const $mem.quoteBar $mem.widthEnd)
   (const $mem.bullet $mem.quoteBar+19)
+  ;; 16 spaces for indents, then byte constants ansi.wat splats (see its data)
   (const $mem.spaces $mem.bullet+12)
   (const $mem.sgr $mem.spaces+33)
   ;; Block analysis owns [$mem.container, $mem.containerEnd): 250 × 24-byte
@@ -54,6 +55,6 @@
   ;; ANSI table rendering caches measured cell widths in the otherwise unused
   ;; fixed-memory gap below the input. Inline rendering owns no bytes here.
   (const $mem.cellWidth $mem.itemIndent+256)
-  (const $mem.cellWidthSlots 4738)
+  (const $mem.cellWidthSlots 6258) ;; (65536 - $mem.cellWidth) / 4
   (const $mem.input 65536)
 )

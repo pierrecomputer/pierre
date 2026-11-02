@@ -136,14 +136,27 @@
     (v128.store (global.get $out) (local.get $v))
     (global.set $out (i32.add (global.get $out) (local.get $n))))
 
-  ;; Write pooled literals. A vector copy avoids bulk-memory setup for tags
-  ;; just larger than outSmall's eight-byte immediates; output has wide slack.
+  ;; Copy $n bytes to reserved output at $dst and return the end. Short copies
+  ;; use 16-byte vectors, which beat a bulk-memory call; they may read and
+  ;; write up to 15 bytes past the range, inside the source and output slack.
+  (func $copyAt (param $dst i32) (param $src i32) (param $n i32) (result i32)
+    (local $end i32)
+    (local.set $end (i32.add (local.get $dst) (local.get $n)))
+    (if (i32.gt_u (local.get $n) (i32.const 128))
+      (then
+        (memory.copy (local.get $dst) (local.get $src) (local.get $n))
+        (return (local.get $end))))
+    (loop $l
+      (v128.store (local.get $dst) (v128.load (local.get $src)))
+      (local.set $src (i32.add (local.get $src) (i32.const 16)))
+      (local.set $dst (i32.add (local.get $dst) (i32.const 16)))
+      (br_if $l (i32.lt_u (local.get $dst) (local.get $end))))
+    (local.get $end))
+
+  ;; Write pooled literals.
   (func $outRaw (param $ptr i32) (param $n i32)
     (call $ensureOut (local.get $n))
-    (if (i32.le_u (local.get $n) (i32.const 16))
-      (then (v128.store (global.get $out) (v128.load (local.get $ptr))))
-      (else (memory.copy (global.get $out) (local.get $ptr) (local.get $n))))
-    (global.set $out (i32.add (global.get $out) (local.get $n))))
+    (global.set $out (call $copyAt (global.get $out) (local.get $ptr) (local.get $n))))
 
   (func $outByte (param $c i32)
     (call $ensureOut (i32.const 1))
@@ -154,24 +167,34 @@
   (func $outCopy (param $lhs i32) (param $rhs i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
     (call $ensureOut (i32.sub (local.get $rhs) (local.get $lhs)))
-    (memory.copy (global.get $out) (local.get $lhs) (i32.sub (local.get $rhs) (local.get $lhs)))
-    (global.set $out (i32.add (global.get $out) (i32.sub (local.get $rhs) (local.get $lhs)))))
+    (global.set $out (call $copyAt (global.get $out) (local.get $lhs)
+      (i32.sub (local.get $rhs) (local.get $lhs)))))
 
-  ;; write $v in decimal
-  (func $outNum (param $v i32)
-    (local $p i32)
-    (call $ensureOut (i32.const 10))
-    (local.set $p (i32.const $mem.numbufEnd))
+  ;; write $v in decimal so that it ends right before $end; return its start
+  (func $digitsBefore (param $end i32) (param $v i32) (result i32)
     (loop $digit
-      (local.set $p (i32.sub (local.get $p) (i32.const 1)))
-      (i32.store8 (local.get $p)
+      (local.set $end (i32.sub (local.get $end) (i32.const 1)))
+      (i32.store8 (local.get $end)
         (i32.add (i32.const "0") (i32.rem_u (local.get $v) (i32.const 10))))
       (local.set $v (i32.div_u (local.get $v) (i32.const 10)))
       (br_if $digit (local.get $v)))
-    (memory.copy (global.get $out) (local.get $p)
-      (i32.sub (i32.const $mem.numbufEnd) (local.get $p)))
-    (global.set $out (i32.add (global.get $out)
-      (i32.sub (i32.const $mem.numbufEnd) (local.get $p)))))
+    (local.get $end))
+
+  ;; Write $v in decimal straight into the output: count its digits, then
+  ;; fill them backwards. Reading digits back with a wide load right after
+  ;; byte stores would stall store forwarding.
+  (func $outNum (param $v i32)
+    (local $p i32)
+    (local $t i32)
+    (call $ensureOut (i32.const 10))
+    (local.set $p (global.get $out))
+    (local.set $t (local.get $v))
+    (loop $count
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+      (local.set $t (i32.div_u (local.get $t) (i32.const 10)))
+      (br_if $count (local.get $t)))
+    (global.set $out (local.get $p))
+    (drop (call $digitsBefore (local.get $p) (local.get $v))))
 
   ;; Reserve, then copy [$lhs,$rhs) as escaped text.
   (func $outText (param $lhs i32) (param $rhs i32)
@@ -248,29 +271,23 @@
         ;; before returning to the long-span scanner.
         (loop $escape
           (local.set $c (i32.load8_u (local.get $lhs)))
-          (if (i32.lt_u (local.get $c) (i32.const "<"))
+          (if (i32.ge_u (local.get $c) (i32.const "<"))
             (then
-              (if (i32.eq (local.get $c) (i32.const 34))
-                (then
-                  (i64.store (local.get $dst) (local.get $quote))
-                  (local.set $dst (i32.add (local.get $dst) (i32.const 6))))
-                (else
-                  (if (i32.eq (local.get $c) (i32.const "&"))
-                    (then
-                      (i64.store (local.get $dst) (i64.const "&amp;"))
-                      (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
-                    (else
-                      ;; The remaining classified byte is NUL.
-                      (i32.store (local.get $dst) (i32.const "\ef\bf\bd"))
-                      (local.set $dst (i32.add (local.get $dst) (i32.const 3))))))))
+              ;; `>` is `<` plus two, and "&gt;" is "&lt;" with `l` lowered by five
+              (i32.store (local.get $dst) (i32.sub (i32.const "&lt;")
+                (i32.mul (i32.and (local.get $c) (i32.const 2)) (i32.const 0x280))))
+              (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
             (else
-              (if (i32.eq (local.get $c) (i32.const "<"))
+              (if (local.get $c)
                 (then
-                  (i32.store (local.get $dst) (i32.const "&lt;"))
-                  (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
+                  (i64.store (local.get $dst) (select (local.get $quote) (i64.const "&amp;")
+                    (i32.eq (local.get $c) (i32.const 34))))
+                  (local.set $dst (i32.add (local.get $dst)
+                    (i32.add (i32.const 5) (i32.eq (local.get $c) (i32.const 34))))))
                 (else
-                  (i32.store (local.get $dst) (i32.const "&gt;"))
-                  (local.set $dst (i32.add (local.get $dst) (i32.const 4)))))))
+                  ;; NUL is U+FFFD
+                  (i32.store (local.get $dst) (i32.const "\ef\bf\bd"))
+                  (local.set $dst (i32.add (local.get $dst) (i32.const 3)))))))
           (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
           (local.set $mask (i32.and (local.get $mask) (local.get $belowMask)))
           (if (local.get $mask)

@@ -18,8 +18,9 @@ const { parseWat } = await wabt();
  * - emit the HTML5 named character reference tables (`entity-table`)
  * - convert i32/i64.const string operands to integer literals
  */
-export function transformWat(url: string | URL, content?: string) {
-  if (!(url instanceof URL)) url = pathToFileURL(url);
+export function transformWat(input: string | URL, content?: string) {
+  // node:url's URL type is not the global URL under bun-types, so rewrap it
+  const url = input instanceof URL ? input : new URL(pathToFileURL(input).href);
   if (content === undefined) content = fs.readFileSync(url, 'utf-8');
   const enumMap = new Map<string, Record<string, number>>();
   const bitsetMap = new Map<
@@ -153,9 +154,9 @@ export function transformWat(url: string | URL, content?: string) {
     return `(i32.and (i32.load8_u offset=${table.base} ${expr.trim()}) (i32.const ${mask}))`;
   });
 
-  // (entity-table <base> <end>) - the HTML5 named character references, as a
-  // 4-byte pointer header and 32 length groups followed by the names, a packed
-  // 2-byte record per name, and the UTF-8 replacement bytes. See $entityLookup.
+  // (entity-table <base> <end>) - the HTML5 named character references: names
+  // grouped by length and sorted, then their code points. See buildEntityTable
+  // and $entityMatch.
   code = replaceForm(code, 'entity-table', (inner) => {
     const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
     if (m == null) throw new Error(`Malformed entity-table in ${url.pathname}`);
@@ -587,15 +588,6 @@ function mergeStrings(strings: string[]) {
   return blob;
 }
 
-/**
- * the HTML5 named character reference tables, laid out as
- *   [base+0]  recordsPtr u16, valuesPtr u16
- *   groups    one 8-byte record per name length 0..31:
- *             namesPtr u16 (first name of that length), firstIndex u16, count u16, pad u16
- *   records   2 bytes per name in (length, lexicographic) order:
- *             valueLength 3 bits, valueOffset 13 bits
- *   values    the UTF-8 replacement bytes
- */
 function unescapeEntity(value: string) {
   return value.replace(/\\(?:u[0-9a-fA-F]{4}|n|t|\\)/g, (m) =>
     m === '\\n'
@@ -621,67 +613,65 @@ function loadEntities() {
   return table;
 }
 
+/**
+ * the HTML5 named character reference tables, laid out as
+ *   [base+0]   cpLoPtr u16, cpHiPtr u16
+ *   [base+4]   the second code points of two-code-point values, u16 each
+ *   [base+20]  one 4-byte group per name length 0..32:
+ *              namesPtr u16 (first name of that length), firstIndex u16;
+ *              a group's count is the next group's firstIndex minus its own
+ *   names      in (length, lexicographic) order, without separators
+ *   cpLo       u16 per name: the low 16 bits of the first code point
+ *   cpHi       u8 per name: bit 0 is bit 16 of the first code point, bits 1-4
+ *              index the second code point (0 = none)
+ * Code points compress far better than UTF-8 strings with offsets.
+ */
 function buildEntityTable(base: number) {
   const table = loadEntities();
   const names = Object.keys(table).sort((a, b) =>
     a.length - b.length !== 0 ? a.length - b.length : a < b ? -1 : a > b ? 1 : 0
   );
-  const maxLen = names[names.length - 1].length;
-  if (maxLen > 31)
+  if (names[names.length - 1].length > 31)
     throw new Error(
       `entity name longer than 31 bytes: ${names[names.length - 1]}`
     );
-  const header = 4;
-  const groups = 32 * 8;
+  const second: number[] = [];
+  const points = names.map((name) => {
+    const cps = [...table[name]].map((c) => c.codePointAt(0)!);
+    if (cps.length === 2 && !second.includes(cps[1])) second.push(cps[1]);
+    return cps;
+  });
+  if (second.length > 8 || second.some((cp) => cp > 0xffff))
+    throw new Error('entity second code points exceed packed format');
+  const groups = 20;
   const nameBytes = names.reduce((n, s) => n + s.length, 0);
-  const namesPtr = base + header + groups;
-  const recordsPtr = namesPtr + nameBytes;
-  const values = [];
-  const seenValues = new Set();
-  for (const name of names) {
-    const key = Buffer.from(table[name], 'utf-8').toString('latin1');
-    if (!seenValues.has(key)) {
-      seenValues.add(key);
-      values.push(key);
-    }
-  }
-  const valueBlob = mergeStrings(values);
-  const valueOffset = new Map(
-    values.map((value) => [value, valueBlob.indexOf(value)])
-  );
-  const valuesPtr = recordsPtr + names.length * 2;
-  const bytes = new Uint8Array(
-    header + groups + nameBytes + names.length * 2 + valueBlob.length
-  );
+  const namesPtr = base + groups + 33 * 4;
+  const cpLoPtr = namesPtr + nameBytes;
+  const cpHiPtr = cpLoPtr + names.length * 2;
+  if (cpHiPtr + names.length > 0xffff)
+    throw new Error(`entity-table pointers exceed u16`);
+  const bytes = new Uint8Array(cpHiPtr + names.length - base);
   const dv = new DataView(bytes.buffer);
-  if (valuesPtr > 0xffff) throw new Error(`entity-table pointers exceed u16`);
-  dv.setUint16(0, recordsPtr, true);
-  dv.setUint16(2, valuesPtr, true);
-  let nameAt = 0;
+  dv.setUint16(0, cpLoPtr, true);
+  dv.setUint16(2, cpHiPtr, true);
+  second.forEach((cp, i) => dv.setUint16(4 + i * 2, cp, true));
+  let nameAt = namesPtr - base;
   let index = 0;
-  for (let len = 0; len < 32; len++) {
-    const group = header + len * 8;
-    const of = names.filter((n) => n.length === len);
-    dv.setUint16(group, namesPtr + nameAt, true);
-    dv.setUint16(group + 2, index, true);
-    dv.setUint16(group + 4, of.length, true);
-    for (const name of of) {
-      for (let i = 0; i < len; i++)
-        bytes[header + groups + nameAt + i] = name.charCodeAt(i);
-      nameAt += len;
-      const value = Buffer.from(table[name], 'utf-8').toString('latin1');
-      const offset = valueOffset.get(value)!;
-      if (offset > 0x1fff || value.length > 7)
-        throw new Error('entity replacement exceeds packed format');
-      const record = header + groups + nameBytes + index * 2;
-      dv.setUint16(record, offset | (value.length << 13), true);
+  for (let len = 0; len <= 32; len++) {
+    dv.setUint16(groups + len * 4, base + nameAt, true);
+    dv.setUint16(groups + len * 4 + 2, index, true);
+    for (const name of names.filter((n) => n.length === len)) {
+      for (let i = 0; i < len; i++) bytes[nameAt++] = name.charCodeAt(i);
+      const cps = points[index];
+      if (cps.length > 2 || cps[0] > 0x1ffff)
+        throw new Error(`entity ${name} exceeds packed format`);
+      dv.setUint16(cpLoPtr - base + index * 2, cps[0] & 0xffff, true);
+      bytes[cpHiPtr - base + index] =
+        (cps[0] >> 16) |
+        (cps.length === 2 ? (second.indexOf(cps[1]) + 1) << 1 : 0);
       index++;
     }
   }
-  bytes.set(
-    Buffer.from(valueBlob, 'latin1'),
-    header + groups + nameBytes + names.length * 2
-  );
   return { bytes, entries: names.length };
 }
 

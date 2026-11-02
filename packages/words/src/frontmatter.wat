@@ -7,11 +7,11 @@
   ;; closing `---` or `...` line. It is converted to JSON in the output buffer
   ;; so the host can hand it straight to JSON.parse; the practical subset is
   ;; block mappings and sequences, flow collections, quoted and plain scalars,
-  ;; block scalars, and comments.
+  ;; block scalars, and comments. `[` and `{` differ only in bit 5, as do `]`
+  ;; and `}`, so `c | 32` tests both.
   (global $ylBeg (mut i32) (i32.const 0))   ;; first non-space byte of the current line
   (global $ylEnd (mut i32) (i32.const 0))
-  (global $ylIndent (mut i32) (i32.const 0))
-  (global $ylValid (mut i32) (i32.const 0))
+  (global $ylIndent (mut i32) (i32.const 0)) ;; -1 when no content line is left
   (global $yNext (mut i32) (i32.const 0))   ;; start of the line after the current one
   (global $yEnd (mut i32) (i32.const 0))    ;; end of the frontmatter block
   (global $yDepth (mut i32) (i32.const 0))
@@ -30,145 +30,114 @@
   (func $frontmatterClose (param $p i32) (result i32)
     (local $e i32)
     (local $q i32)
-    (if (i32.gt_u (i32.add (local.get $p) (i32.const 3)) (global.get $eof))
-      (then (return (i32.const 0))))
-    (if (i32.ne (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)) (i32.const "---"))
-      (then (return (i32.const 0))))
-    (local.set $e (call $findLineEnd (local.get $p)))
-    (if (i32.lt_u (call $skipSpace (i32.add (local.get $p) (i32.const 3)) (local.get $e))
-          (local.get $e))
-      (then (return (i32.const 0))))
-    (block $done
-      (loop $l
-        (local.set $p (call $lineAfter (local.get $e)))
-        (br_if $done (i32.ge_u (local.get $p) (global.get $eof)))
-        (local.set $e (call $findLineEnd (local.get $p)))
-        (if (i32.and
-              (i32.ge_u (i32.sub (local.get $e) (local.get $p)) (i32.const 3))
-              (i32.ge_u (call $skipSpace (i32.add (local.get $p) (i32.const 3)) (local.get $e))
-                (local.get $e)))
-          (then
-            (local.set $q (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)))
-            (if (i32.or (i32.eq (local.get $q) (i32.const "---")) (i32.eq (local.get $q) (i32.const "...")))
-              (then (return (local.get $p))))))
-        (br $l)))
+    (local $later i32)
+    (loop $l
+      (local.set $e (call $findLineEnd (local.get $p)))
+      (local.set $q (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)))
+      ;; the opening line must be a fence, and the first later fence closes
+      (if (i32.eq (local.get $later)
+            (i32.and
+              (i32.and (i32.ge_u (i32.sub (local.get $e) (local.get $p)) (i32.const 3))
+                (i32.ge_u (call $skipSpace (i32.add (local.get $p) (i32.const 3)) (local.get $e)) (local.get $e)))
+              (i32.or (i32.eq (local.get $q) (i32.const "---"))
+                (i32.and (local.get $later) (i32.eq (local.get $q) (i32.const "..."))))))
+        (then (return (select (local.get $p) (i32.const 0) (local.get $later)))))
+      (local.set $later (i32.const 1))
+      (local.set $p (call $lineAfter (local.get $e)))
+      (br_if $l (i32.lt_u (local.get $p) (global.get $eof))))
     (i32.const 0))
 
   ;; load the next content line, skipping blanks and comments
   (func $yTakeLine
     (local $p i32)
     (local $e i32)
-    (global.set $ylValid (i32.const 0))
-    (block $done
-      (loop $l
-        (local.set $p (global.get $yNext))
-        (br_if $done (i32.ge_u (local.get $p) (global.get $yEnd)))
-        (local.set $e (call $findLineEnd (local.get $p)))
-        (if (i32.gt_u (local.get $e) (global.get $yEnd)) (then (local.set $e (global.get $yEnd))))
-        (global.set $yNext (call $lineAfter (local.get $e)))
-        (global.set $ylBeg (call $skipSpace (local.get $p) (local.get $e)))
-        (global.set $ylIndent (i32.sub (global.get $ylBeg) (local.get $p)))
-        (global.set $ylEnd (call $trimSpaceBack (local.get $e) (global.get $ylBeg)))
-        (br_if $l (i32.ge_u (global.get $ylBeg) (global.get $ylEnd)))
-        (br_if $l (i32.eq (i32.load8_u (global.get $ylBeg)) (i32.const "#")))
-        (global.set $ylValid (i32.const 1))
-        (br $done))))
+    (loop $l
+      (global.set $ylIndent (i32.const -1))
+      (local.set $p (global.get $yNext))
+      (if (i32.lt_u (local.get $p) (global.get $yEnd))
+        (then
+          (local.set $e (call $findLineEnd (local.get $p)))
+          (global.set $yNext (call $lineAfter (local.get $e)))
+          (global.set $ylBeg (call $skipSpace (local.get $p) (local.get $e)))
+          (global.set $ylEnd (call $trimSpaceBack (local.get $e) (global.get $ylBeg)))
+          (br_if $l (i32.ge_u (global.get $ylBeg) (global.get $ylEnd)))
+          (br_if $l (i32.eq (i32.load8_u (global.get $ylBeg)) (i32.const "#")))
+          (global.set $ylIndent (i32.sub (global.get $ylBeg) (local.get $p)))))))
 
   ;; A node whose first line is the current line. $parent is the indentation of
   ;; the enclosing collection, or -1 at the top level.
   (func $yParseNode (param $parent i32)
     (local $c i32)
-    (if (i32.eqz (global.get $ylValid)) (then (out.str "null") (return)))
-    (if (call $yIsSeqItem) (then (call $yParseSeq (global.get $ylIndent)) (return)))
+    (if (i32.lt_s (global.get $ylIndent) (i32.const 0)) (then (call $yNull) (return)))
+    (if (call $yIsSeqItem) (then (call $yParseBlock (global.get $ylIndent) (i32.const 0)) (return)))
     (local.set $c (i32.load8_u (global.get $ylBeg)))
     ;; flow collections and block scalars are values even when they hold `: `
     (if (i32.and
-          (i32.eqz (i32.or (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "{")))
+          (i32.eqz (i32.or (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
             (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const ">")))))
-          (i32.ne (call $yFindColon (global.get $ylBeg) (global.get $ylEnd)) (i32.const 0)))
-      (then (call $yParseMap (global.get $ylIndent)) (return)))
+          (i32.lt_u (call $yFind (global.get $ylBeg) (global.get $ylEnd) (i32.const ":")) (global.get $ylEnd)))
+      (then (call $yParseBlock (global.get $ylIndent) (i32.const 1)) (return)))
     (call $yInlineValue (global.get $ylBeg) (local.get $parent)))
 
+  ;; the current line starts with a `-` item marker
   (func $yIsSeqItem (result i32)
-    (if (i32.ne (i32.load8_u (global.get $ylBeg)) (i32.const "-")) (then (return (i32.const 0))))
-    (if (i32.eq (i32.add (global.get $ylBeg) (i32.const 1)) (global.get $ylEnd))
-      (then (return (i32.const 1))))
-    (call $isSpaceByte (i32.load8_u offset=1 (global.get $ylBeg))))
+    (i32.and (i32.eq (i32.load8_u (global.get $ylBeg)) (i32.const "-"))
+      (i32.or (i32.eq (i32.add (global.get $ylBeg) (i32.const 1)) (global.get $ylEnd))
+        (call $isSpaceByte (i32.load8_u offset=1 (global.get $ylBeg))))))
 
-  (func $yParseSeq (param $indent i32)
-    (local $first i32)
-    (local $rest i32)
-    (if (i32.gt_u (global.get $yDepth) (i32.const 32))
-      (then (out.str "null") (return)))
-    (global.set $yDepth (i32.add (global.get $yDepth) (i32.const 1)))
-    (call $outByte (i32.const "["))
-    (local.set $first (i32.const 1))
-    (block $done
-      (loop $l
-        (br_if $done (i32.eqz (global.get $ylValid)))
-        (br_if $done (i32.ne (global.get $ylIndent) (local.get $indent)))
-        (br_if $done (i32.eqz (call $yIsSeqItem)))
-        (if (local.get $first)
-          (then (local.set $first (i32.const 0)))
-          (else (call $outByte (i32.const ","))))
-        (local.set $rest (call $skipSpace
-          (i32.add (global.get $ylBeg) (i32.const 1)) (global.get $ylEnd)))
-        (if (i32.or (i32.ge_u (local.get $rest) (global.get $ylEnd))
-              (i32.eq (i32.load8_u (local.get $rest)) (i32.const "#")))
-          (then
-            ;; the item's content starts on the following lines
-            (call $yTakeLine)
-            (if (i32.and (global.get $ylValid) (i32.gt_u (global.get $ylIndent) (local.get $indent)))
-              (then (call $yParseNode (local.get $indent)))
-              (else (out.str "null"))))
-          (else
-            ;; The item is a node that starts here, in the column of $rest.
-            (global.set $ylIndent (i32.add (local.get $indent)
-              (i32.sub (local.get $rest) (global.get $ylBeg))))
-            (global.set $ylBeg (local.get $rest))
-            (call $yParseNode (local.get $indent))))
-        (br $l)))
-    (call $outByte (i32.const "]"))
-    (global.set $yDepth (i32.sub (global.get $yDepth) (i32.const 1))))
-
-  (func $yParseMap (param $indent i32)
+  ;; A block sequence ($map = 0) or mapping ($map = 1) whose entries sit at
+  ;; column $indent.
+  (func $yParseBlock (param $indent i32) (param $map i32)
     (local $first i32)
     (local $colon i32)
     (local $rest i32)
     (if (i32.gt_u (global.get $yDepth) (i32.const 32))
-      (then (out.str "null") (return)))
+      (then (call $yNull) (return)))
     (global.set $yDepth (i32.add (global.get $yDepth) (i32.const 1)))
-    (call $outByte (i32.const "{"))
+    (call $outByte (select (i32.const "{") (i32.const "[") (local.get $map)))
     (local.set $first (i32.const 1))
     (block $done
       (loop $l
-        (br_if $done (i32.eqz (global.get $ylValid)))
         (br_if $done (i32.ne (global.get $ylIndent) (local.get $indent)))
-        (br_if $done (call $yIsSeqItem))
-        (local.set $colon (call $yFindColon (global.get $ylBeg) (global.get $ylEnd)))
-        (br_if $done (i32.eqz (local.get $colon)))
+        (br_if $done (i32.eq (call $yIsSeqItem) (local.get $map)))
+        ;; a sequence item's content follows its `-` as a value follows `: `
+        (local.set $colon (global.get $ylBeg))
+        (if (local.get $map)
+          (then
+            (local.set $colon (call $yFind (global.get $ylBeg) (global.get $ylEnd) (i32.const ":")))
+            (br_if $done (i32.ge_u (local.get $colon) (global.get $ylEnd)))))
         (if (local.get $first)
           (then (local.set $first (i32.const 0)))
           (else (call $outByte (i32.const ","))))
-        (call $yString (global.get $ylBeg)
-          (call $trimSpaceBack (local.get $colon) (global.get $ylBeg)))
-        (call $outByte (i32.const ":"))
+        (if (local.get $map)
+          (then
+            (call $yString (global.get $ylBeg)
+              (call $trimSpaceBack (local.get $colon) (global.get $ylBeg)))
+            (call $outByte (i32.const ":"))))
         (local.set $rest (call $skipSpace
           (i32.add (local.get $colon) (i32.const 1)) (global.get $ylEnd)))
         (if (i32.or (i32.ge_u (local.get $rest) (global.get $ylEnd))
               (i32.eq (i32.load8_u (local.get $rest)) (i32.const "#")))
           (then
-            ;; The value starts on the following lines. A sequence may sit in
-            ;; the key's own column.
+            ;; The value starts on the following lines. A mapping's sequence
+            ;; may sit in the key's own column.
             (call $yTakeLine)
-            (if (i32.and (global.get $ylValid)
-                  (i32.or (i32.gt_u (global.get $ylIndent) (local.get $indent))
+            (if (i32.or (i32.gt_s (global.get $ylIndent) (local.get $indent))
+                  (i32.and (local.get $map)
                     (i32.and (i32.eq (global.get $ylIndent) (local.get $indent)) (call $yIsSeqItem))))
               (then (call $yParseNode (local.get $indent)))
-              (else (out.str "null"))))
-          (else (call $yInlineValue (local.get $rest) (local.get $indent))))
+              (else (call $yNull))))
+          (else
+            (if (local.get $map)
+              (then (call $yInlineValue (local.get $rest) (local.get $indent)))
+              (else
+                ;; The item is a node that starts here, in the column of $rest.
+                (global.set $ylIndent (i32.add (local.get $indent)
+                  (i32.sub (local.get $rest) (global.get $ylBeg))))
+                (global.set $ylBeg (local.get $rest))
+                (call $yParseNode (local.get $indent))))))
         (br $l)))
-    (call $outByte (i32.const "}"))
+    (call $outByte (select (i32.const "}") (i32.const "]") (local.get $map)))
     (global.set $yDepth (i32.sub (global.get $yDepth) (i32.const 1))))
 
   ;; Write the value that starts at $p on the current line, then load the next
@@ -181,142 +150,115 @@
     (local $s i32)
     (local $end i32)
     (local $n i32)
+    (local $block i32)
+    (local $flow i32)
     (local $fold i32)
     (local $chomp i32)
     (local $base i32)
     (local $first i32)
-    (local $string i32)
     (local.set $c (i32.load8_u (local.get $p)))
+    (local.set $first (i32.const 1))
+    (local.set $fold (i32.const 1))
+    (local.set $end (global.get $ylEnd))
+    (local.set $flow (i32.or (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
+      (call $yIsQuote (local.get $c))))
     (if (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const ">")))
       (then
         ;; Block scalar: chomping (`-` strip, `+` keep) and an indentation digit
         ;; may follow in either order.
+        (local.set $block (i32.const 1))
         (local.set $fold (i32.eq (local.get $c) (i32.const ">")))
         (local.set $chomp (i32.const 1))
         (local.set $base (i32.const -1))
-        (local.set $q (i32.add (local.get $p) (i32.const 1)))
-        (block $indicators
-          (loop $indicator
-            (br_if $indicators (i32.ge_u (local.get $q) (global.get $ylEnd)))
-            (local.set $c (i32.load8_u (local.get $q)))
-            (if (i32.eq (local.get $c) (i32.const "-")) (then (local.set $chomp (i32.const 0))))
-            (if (i32.eq (local.get $c) (i32.const "+")) (then (local.set $chomp (i32.const 2))))
-            (if (i32.le_u (i32.sub (local.get $c) (i32.const "1")) (i32.const 8))
-              (then (local.set $base (i32.add (i32.add (local.get $indent) (i32.const 1))
-                (i32.sub (local.get $c) (i32.const "1"))))))
-            (br_if $indicators (i32.eqz (i32.or (i32.or (i32.eq (local.get $c) (i32.const "-"))
-              (i32.eq (local.get $c) (i32.const "+")))
-              (i32.le_u (i32.sub (local.get $c) (i32.const "1")) (i32.const 8)))))
-            (local.set $q (i32.add (local.get $q) (i32.const 1)))
-            (br $indicator)))
-        (call $outByte (i32.const "\22"))
-        (local.set $first (i32.const 1))
-        ;; Scalar lines are raw, so read them straight from $yNext.
-        (block $scalarDone
-          (loop $scalar
-            (local.set $q (global.get $yNext))
-            (br_if $scalarDone (i32.ge_u (local.get $q) (global.get $yEnd)))
-            (local.set $e (call $findLineEnd (local.get $q)))
-            (if (i32.gt_u (local.get $e) (global.get $yEnd)) (then (local.set $e (global.get $yEnd))))
-            (local.set $s (call $skipSpace (local.get $q) (local.get $e)))
-            (if (i32.ge_u (local.get $s) (local.get $e))
-              (then
-                (global.set $yNext (call $lineAfter (local.get $e)))
-                (local.set $n (i32.add (local.get $n) (i32.const 1)))
-                (br $scalar)))
-            (br_if $scalarDone (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent)))
+        (local.set $q (local.get $p))
+        (loop $indicator
+          (local.set $q (i32.add (local.get $q) (i32.const 1)))
+          (if (i32.lt_u (local.get $q) (global.get $ylEnd))
+            (then
+              (local.set $c (i32.load8_u (local.get $q)))
+              (if (i32.eqz (i32.and (i32.sub (local.get $c) (i32.const "+")) (i32.const -3)))
+                (then (local.set $chomp (i32.sub (i32.const "-") (local.get $c))) (br $indicator)))
+              (if (i32.le_u (i32.sub (local.get $c) (i32.const "1")) (i32.const 8))
+                (then
+                  (local.set $base (i32.add (local.get $indent) (i32.sub (local.get $c) (i32.const "0"))))
+                  (br $indicator))))))
+        (call $outByte (i32.const "\22")))
+      (else
+        (if (i32.eqz (local.get $flow))
+          (then (local.set $end (call $yTrimComment (local.get $p) (global.get $ylEnd)))))))
+    ;; Later lines indented past $indent continue the scalar. Block scalar lines
+    ;; are raw from their indentation on; plain lines lose spaces and comments.
+    ;; Folded and plain line breaks become spaces, and blank lines between
+    ;; lines become line feeds.
+    (local.set $q (global.get $yNext))
+    (block $done
+      (loop $more
+        (br_if $done (i32.ge_u (local.get $q) (global.get $yEnd)))
+        ;; a comment on the first line ends a plain scalar there
+        (br_if $done (i32.lt_u (local.get $end) (global.get $ylEnd)))
+        (local.set $e (call $findLineEnd (local.get $q)))
+        (local.set $s (call $skipSpace (local.get $q) (local.get $e)))
+        (if (i32.lt_u (local.get $s) (local.get $e))
+          (then (br_if $done (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent))))
+          (else (local.set $n (i32.add (local.get $n) (i32.const 1)))))
+        ;; a flow collection or quoted scalar spans blank lines too
+        (if (i32.or (local.get $flow) (i32.ge_u (local.get $s) (local.get $e)))
+          (then
+            (if (local.get $flow) (then (local.set $end (local.get $e))))
+            (local.set $q (call $lineAfter (local.get $e)))
+            (br $more)))
+        (if (local.get $block)
+          (then
             (if (i32.lt_s (local.get $base) (i32.const 0))
               (then (local.set $base (i32.sub (local.get $s) (local.get $q)))))
-            (br_if $scalarDone (i32.lt_s (i32.sub (local.get $s) (local.get $q)) (local.get $base)))
-            (global.set $yNext (call $lineAfter (local.get $e)))
-            ;; Literal lines keep their breaks; folded lines join with a space
-            ;; unless blank lines separate them.
-            (if (i32.and (i32.and (local.get $fold) (i32.eqz (local.get $n))) (i32.eqz (local.get $first)))
-              (then (call $outByte (i32.const 32))))
-            (call $yNewlines (i32.add (local.get $n)
-              (i32.eqz (i32.or (local.get $fold) (local.get $first)))))
-            (local.set $n (i32.const 0))
-            (local.set $first (i32.const 0))
-            (call $yEscaped (i32.add (local.get $q) (local.get $base)) (local.get $e) (i32.const 0))
-            (br $scalar)))
-        (if (i32.eqz (local.get $first))
-          (then (call $yNewlines (select (i32.add (local.get $n) (i32.const 1))
-            (local.get $chomp) (i32.eq (local.get $chomp) (i32.const 2))))))
-        (call $outByte (i32.const "\22"))
-        (call $yTakeLine)
-        (return)))
-    (if (i32.or (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "{")))
-          (i32.or (i32.eq (local.get $c) (i32.const "\22")) (i32.eq (local.get $c) (i32.const "'"))))
-      (then
-        ;; Flow collections and quoted scalars may continue on blank or more
-        ;; indented lines.
-        (local.set $end (global.get $ylEnd))
-        (local.set $q (global.get $yNext))
-        (block $flowLines
-          (loop $lines
-            (br_if $flowLines (i32.ge_u (local.get $q) (global.get $yEnd)))
-            (local.set $e (call $findLineEnd (local.get $q)))
-            (if (i32.gt_u (local.get $e) (global.get $yEnd)) (then (local.set $e (global.get $yEnd))))
-            (local.set $s (call $skipSpace (local.get $q) (local.get $e)))
-            (br_if $flowLines (i32.and (i32.lt_u (local.get $s) (local.get $e))
-              (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent))))
-            (local.set $end (local.get $e))
-            (local.set $q (call $lineAfter (local.get $e)))
-            (br $lines)))
-        (if (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "{")))
-          (then
-            (local.set $q (call $yFlow (local.get $p) (local.get $end)
-              (select (i32.const "]") (i32.const "}") (i32.eq (local.get $c) (i32.const "["))))))
+            (br_if $done (i32.lt_s (i32.sub (local.get $s) (local.get $q)) (local.get $base)))
+            (local.set $s (i32.add (local.get $q) (local.get $base))))
           (else
-            (local.set $q (call $yQuoteEnd (local.get $p) (local.get $end)))
-            (call $outByte (i32.const "\22"))
-            (call $yEscaped (i32.add (local.get $p) (i32.const 1)) (local.get $q) (local.get $c))
-            (call $outByte (i32.const "\22"))))
-        (if (i32.gt_u (local.get $q) (global.get $ylEnd))
-          (then (global.set $yNext (call $lineAfter (call $findLineEnd (local.get $q))))))
-        (call $yTakeLine)
-        (return)))
-    (local.set $end (call $yTrimComment (local.get $p) (global.get $ylEnd)))
-    (if (i32.lt_u (local.get $end) (global.get $ylEnd))
-      (then
-        (call $yValue (local.get $p) (local.get $end))
-        (call $yTakeLine)
-        (return)))
-    ;; A plain scalar continues on more indented lines: each line break folds
-    ;; into a space, and blank lines between become line feeds.
-    (local.set $q (global.get $yNext))
-    (block $plainDone
-      (loop $plain
-        (br_if $plainDone (i32.ge_u (local.get $q) (global.get $yEnd)))
-        (local.set $e (call $findLineEnd (local.get $q)))
-        (if (i32.gt_u (local.get $e) (global.get $yEnd)) (then (local.set $e (global.get $yEnd))))
-        (local.set $s (call $skipSpace (local.get $q) (local.get $e)))
-        (if (i32.ge_u (local.get $s) (local.get $e))
-          (then
-            (local.set $n (i32.add (local.get $n) (i32.const 1)))
-            (local.set $q (call $lineAfter (local.get $e)))
-            (br $plain)))
-        (br_if $plainDone (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent)))
-        (br_if $plainDone (i32.eq (i32.load8_u (local.get $s)) (i32.const "#")))
-        (if (i32.eqz (local.get $string))
-          (then
-            (local.set $string (i32.const 1))
-            (call $outByte (i32.const "\22"))
-            (call $yEscaped (local.get $p) (local.get $end) (i32.const 0))))
-        (if (local.get $n) (then (call $yNewlines (local.get $n))) (else (call $outByte (i32.const 32))))
-        (local.set $n (i32.const 0))
+            (br_if $done (i32.eq (i32.load8_u (local.get $s)) (i32.const "#")))
+            ;; a plain scalar becomes a string once a second line joins it
+            (if (local.get $first)
+              (then
+                (call $outByte (i32.const "\22"))
+                (call $yEscaped (local.get $p) (local.get $end) (i32.const 0))
+                (local.set $first (i32.const 0))))))
         (local.set $q (call $lineAfter (local.get $e)))
         (global.set $yNext (local.get $q))
-        (local.set $e (call $trimSpaceBack (local.get $e) (local.get $s)))
-        (local.set $end (call $yTrimComment (local.get $s) (local.get $e)))
+        (if (i32.and (i32.and (local.get $fold) (i32.eqz (local.get $n))) (i32.eqz (local.get $first)))
+          (then (call $outByte (i32.const 32))))
+        (call $yNewlines (i32.add (local.get $n)
+          (i32.eqz (i32.or (local.get $fold) (local.get $first)))))
+        (local.set $n (i32.const 0))
+        (local.set $first (i32.const 0))
+        (local.set $end (local.get $e))
+        (if (i32.eqz (local.get $block))
+          (then (local.set $end (call $yTrimComment (local.get $s)
+            (local.tee $e (call $trimSpaceBack (local.get $e) (local.get $s)))))))
         (call $yEscaped (local.get $s) (local.get $end) (i32.const 0))
-        ;; a comment ends the scalar
-        (br_if $plainDone (i32.lt_u (local.get $end) (local.get $e)))
-        (br $plain)))
-    (if (local.get $string)
-      (then (call $outByte (i32.const "\22")))
-      (else (call $yValue (local.get $p) (global.get $ylEnd))))
+        ;; a comment ends a plain scalar
+        (br_if $done (i32.lt_u (local.get $end) (local.get $e)))
+        (br $more)))
+    (if (local.get $flow)
+      (then
+        (local.set $q (if (result i32) (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
+          (then (call $yFlow (local.get $p) (local.get $end)))
+          (else (call $yQuoted (local.get $p) (local.get $end)))))
+        (if (i32.gt_u (local.get $q) (global.get $ylEnd))
+          (then (global.set $yNext (call $lineAfter (call $findLineEnd (local.get $q)))))))
+      (else
+        (if (i32.and (local.get $first) (i32.eqz (local.get $block)))
+          (then (call $yValue (local.get $p) (global.get $ylEnd)))
+          (else
+            (if (i32.and (local.get $block) (i32.eqz (local.get $first)))
+              (then (call $yNewlines (select (i32.add (local.get $n) (i32.const 1))
+                (local.get $chomp) (i32.eq (local.get $chomp) (i32.const 2))))))
+            (call $outByte (i32.const "\22"))))))
     (call $yTakeLine))
+
+  (func $yIsQuote (param $c i32) (result i32)
+    (i32.or (i32.eq (local.get $c) (i32.const "\22")) (i32.eq (local.get $c) (i32.const "'"))))
+
+  (func $yNull
+    (out.str "null"))
 
   ;; write $n escaped line feeds
   (func $yNewlines (param $n i32)
@@ -340,55 +282,43 @@
               (i32.eq (i32.load8_u (local.get $p)) (i32.const "\5c")))
           (then (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $l)))
         (br_if $l (i32.ne (i32.load8_u (local.get $p)) (local.get $c)))
-        (br_if $done (i32.eq (local.get $c) (i32.const "\22")))
-        (br_if $done (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $end)))
-        (br_if $done (i32.ne (i32.load8_u offset=1 (local.get $p)) (i32.const "'")))
+        (br_if $done (i32.or (i32.eq (local.get $c) (i32.const "\22"))
+          (i32.or (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
+            (i32.ne (i32.load8_u offset=1 (local.get $p)) (i32.const "'")))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
 
-  ;; Drop a trailing ` #` comment from [$p, $end). A quoted scalar at $p may
-  ;; hold `#`.
-  (func $yTrimComment (param $p i32) (param $end i32) (result i32)
+  ;; The first separating $ch in [$p, $end), or $end: a `#` after a space or
+  ;; tab starts a comment, and a `:` before one or the end ends a key. A
+  ;; quoted scalar at $p may hold either.
+  (func $yFind (param $p i32) (param $end i32) (param $ch i32) (result i32)
     (local $q i32)
-    (local $c i32)
     (local.set $q (local.get $p))
     (if (i32.lt_u (local.get $p) (local.get $end))
       (then
-        (local.set $c (i32.load8_u (local.get $p)))
-        (if (i32.or (i32.eq (local.get $c) (i32.const "\22")) (i32.eq (local.get $c) (i32.const "'")))
+        (if (call $yIsQuote (i32.load8_u (local.get $p)))
           (then (local.set $q (call $yQuoteEnd (local.get $p) (local.get $end)))))))
     (block $done
       (loop $l
-        (local.set $q (call $findByte (local.get $q) (local.get $end) (i32.const "#")))
+        (local.set $q (call $findByte (local.get $q) (local.get $end) (local.get $ch)))
         (br_if $done (i32.ge_u (local.get $q) (local.get $end)))
-        (if (i32.and (i32.gt_u (local.get $q) (local.get $p))
-              (call $isSpaceByte (i32.load8_u (i32.sub (local.get $q) (i32.const 1)))))
-          (then (return (call $trimSpaceBack (local.get $q) (local.get $p)))))
+        (br_if $done (if (result i32) (i32.eq (local.get $ch) (i32.const "#"))
+          (then (i32.and (i32.gt_u (local.get $q) (local.get $p))
+            (call $isSpaceByte (i32.load8_u (i32.sub (local.get $q) (i32.const 1))))))
+          (else (i32.or (i32.eq (i32.add (local.get $q) (i32.const 1)) (local.get $end))
+            (call $isSpaceByte (i32.load8_u offset=1 (local.get $q)))))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))
-    (local.get $end))
+    (local.get $q))
 
-  ;; the position of the `: ` that separates a key from its value, or 0
-  (func $yFindColon (param $p i32) (param $end i32) (result i32)
-    (local $c i32)
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
-    (local.set $c (i32.load8_u (local.get $p)))
-    (if (i32.or (i32.eq (local.get $c) (i32.const "\22")) (i32.eq (local.get $c) (i32.const "'")))
-      (then
-        (local.set $p (call $yQuoteEnd (local.get $p) (local.get $end)))
-        (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))))
-    (block $done
-      (loop $l
-        (local.set $p (call $findByte (local.get $p) (local.get $end) (i32.const ":")))
-        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
-        (if (i32.or
-              (i32.eq (i32.add (local.get $p) (i32.const 1)) (local.get $end))
-              (call $isSpaceByte (i32.load8_u offset=1 (local.get $p))))
-          (then (return (local.get $p))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $l)))
-    (i32.const 0))
+  ;; [$p, $end) without a trailing ` #` comment
+  (func $yTrimComment (param $p i32) (param $end i32) (result i32)
+    (local $q i32)
+    (local.set $q (call $yFind (local.get $p) (local.get $end) (i32.const "#")))
+    (if (result i32) (i32.lt_u (local.get $q) (local.get $end))
+      (then (call $trimSpaceBack (local.get $q) (local.get $p)))
+      (else (local.get $end))))
 
   ;; A scalar or flow collection in [$p, $end), with YAML 1.2 core schema types.
   (func $yValue (param $p i32) (param $end i32)
@@ -399,123 +329,111 @@
     (local $frac i32)
     (local $exp i32)
     (local $v i64)
-    (local $shift i64)
     (local.set $end (call $yTrimComment (local.get $p) (local.get $end)))
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (out.str "null") (return)))
+    (if (i32.ge_u (local.get $p) (local.get $end)) (then (call $yNull) (return)))
     (local.set $c (i32.load8_u (local.get $p)))
-    (if (i32.or
-          (i32.eq (local.get $c) (i32.const "\22"))
-          (i32.eq (local.get $c) (i32.const "'")))
-      (then
-        (call $outByte (i32.const "\22"))
-        (call $yEscaped (i32.add (local.get $p) (i32.const 1))
-          (call $yQuoteEnd (local.get $p) (local.get $end)) (local.get $c))
-        (call $outByte (i32.const "\22"))
-        (return)))
-    (if (i32.eq (local.get $c) (i32.const "["))
-      (then (drop (call $yFlow (local.get $p) (local.get $end) (i32.const "]"))) (return)))
-    (if (i32.eq (local.get $c) (i32.const "{"))
-      (then (drop (call $yFlow (local.get $p) (local.get $end) (i32.const "}"))) (return)))
+    (if (call $yIsQuote (local.get $c))
+      (then (drop (call $yQuoted (local.get $p) (local.get $end))) (return)))
+    (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
+      (then (drop (call $yFlow (local.get $p) (local.get $end))) (return)))
     (local.set $n (i32.sub (local.get $end) (local.get $p)))
-    (block $plainDone
-      (if (i32.or (call $yWordIs (local.get $p) (local.get $n) (i64.const "null") (i32.const 4))
-            (i32.and (i32.eq (local.get $n) (i32.const 1)) (i32.eq (local.get $c) (i32.const "~"))))
-        (then (out.str "null") (br $plainDone)))
-      (if (call $yWordIs (local.get $p) (local.get $n) (i64.const "true") (i32.const 4))
-        (then (out.str "true") (br $plainDone)))
-      (if (call $yWordIs (local.get $p) (local.get $n) (i64.const "false") (i32.const 5))
-        (then (out.str "false") (br $plainDone)))
-      ;; JSON has no infinities or NaN; JSON.stringify writes them as null.
-      (local.set $q (i32.add (local.get $p)
-        (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "+")))))
-      (if (i32.and (i32.eq (i32.load8_u (local.get $q)) (i32.const "."))
-            (i32.eq (i32.sub (local.get $end) (local.get $q)) (i32.const 4)))
-        (then
-          (local.set $int (i32.and (i32.load offset=1 (local.get $q)) (i32.const 0xffffff)))
-          (if (i32.or
-                (call $yWordIs (i32.add (local.get $q) (i32.const 1)) (i32.const 3) (i64.const "inf") (i32.const 3))
-                (i32.and (i32.eq (local.get $q) (local.get $p))
-                  (i32.or (i32.or (i32.eq (local.get $int) (i32.const "nan")) (i32.eq (local.get $int) (i32.const "NaN")))
-                    (i32.eq (local.get $int) (i32.const "NAN")))))
-            (then (out.str "null") (br $plainDone)))))
-      ;; 0x and 0o integers, written in decimal when they fit 64 bits
-      (if (i32.and (i32.gt_u (local.get $n) (i32.const 2))
-            (i32.or (i32.eq (i32.load16_u (local.get $p)) (i32.const "0x"))
-              (i32.eq (i32.load16_u (local.get $p)) (i32.const "0o"))))
-        (then
-          (local.set $shift (select (i64.const 4) (i64.const 3)
-            (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "x"))))
-          (local.set $q (i32.add (local.get $p) (i32.const 2)))
-          (block $radixDone
-            (loop $radix
-              (br_if $radixDone (i32.ge_u (local.get $q) (local.get $end)))
-              (local.set $c (i32.load8_u (local.get $q)))
-              (local.set $int (select (i32.sub (local.get $c) (i32.const "0"))
-                (i32.add (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 10))
-                (call $isDigit (local.get $c))))
-              (br_if $radixDone (i32.or
-                (i32.ge_u (local.get $int) (select (i32.const 16) (i32.const 8) (i64.eq (local.get $shift) (i64.const 4))))
-                (i32.eqz (i64.eqz (i64.shr_u (local.get $v) (i64.sub (i64.const 64) (local.get $shift)))))))
-              (local.set $v (i64.or (i64.shl (local.get $v) (local.get $shift)) (i64.extend_i32_u (local.get $int))))
-              (local.set $q (i32.add (local.get $q) (i32.const 1)))
-              (br $radix)))
-          (if (i32.eq (local.get $q) (local.get $end))
-            (then
-              (call $ensureOut (i32.const 20))
-              (local.set $q (global.get $out))
-              (local.set $shift (local.get $v))
-              (loop $count
-                (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                (local.set $shift (i64.div_u (local.get $shift) (i64.const 10)))
-                (br_if $count (i64.ne (local.get $shift) (i64.const 0))))
-              (global.set $out (local.get $q))
-              (loop $digit
-                (local.set $q (i32.sub (local.get $q) (i32.const 1)))
-                (i64.store8 (local.get $q) (i64.add (i64.const "0") (i64.rem_u (local.get $v) (i64.const 10))))
-                (local.set $v (i64.div_u (local.get $v) (i64.const 10)))
-                (br_if $digit (i64.ne (local.get $v) (i64.const 0))))
-              (br $plainDone)))
-          (call $yString (local.get $p) (local.get $end))
-          (br $plainDone)))
-      ;; Decimal numbers: [-+] digits [. digits] [e [-+] digits], where either
-      ;; the integer or the fraction may be empty. JSON needs both and no `+`.
-      (local.set $q (call $ySkipDigits (local.get $q) (local.get $end)))
-      (local.set $int (i32.add (local.get $p)
-        (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "+")))))
-      (local.set $frac (local.get $q))
-      (if (i32.and (i32.lt_u (local.get $q) (local.get $end)) (i32.eq (i32.load8_u (local.get $q)) (i32.const ".")))
-        (then (local.set $q (call $ySkipDigits (i32.add (local.get $q) (i32.const 1)) (local.get $end)))))
-      (local.set $exp (local.get $q))
-      (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
-            (i32.eq (i32.or (i32.load8_u (local.get $q)) (i32.const 32)) (i32.const "e")))
-        (then
-          (local.set $q (i32.add (local.get $q) (i32.const 1)))
-          (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
-                (i32.or (i32.eq (i32.load8_u (local.get $q)) (i32.const "-"))
-                  (i32.eq (i32.load8_u (local.get $q)) (i32.const "+"))))
-            (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
-          (local.set $n (local.get $q))
-          (local.set $q (call $ySkipDigits (local.get $q) (local.get $end)))
-          (if (i32.eq (local.get $q) (local.get $n)) (then (local.set $q (i32.const 0))))))
-      (if (i32.and (i32.eq (local.get $q) (local.get $end))
-            (i32.gt_u (i32.sub (local.get $exp) (local.get $int))
-              (i32.ne (local.get $frac) (local.get $exp))))
-        (then
-          (if (i32.eq (local.get $c) (i32.const "-")) (then (call $outByte (i32.const "-"))))
-          ;; drop leading zeros but keep one integer digit
-          (block $zeros
-            (loop $zero
-              (br_if $zeros (i32.ge_u (i32.add (local.get $int) (i32.const 1)) (local.get $frac)))
-              (br_if $zeros (i32.ne (i32.load8_u (local.get $int)) (i32.const "0")))
-              (local.set $int (i32.add (local.get $int) (i32.const 1)))
-              (br $zero)))
-          (if (i32.eq (local.get $int) (local.get $frac)) (then (call $outByte (i32.const "0"))))
-          (call $outCopy (local.get $int) (local.get $frac))
-          (if (i32.gt_u (i32.sub (local.get $exp) (local.get $frac)) (i32.const 1))
-            (then (call $outCopy (local.get $frac) (local.get $exp))))
-          (call $outCopy (local.get $exp) (local.get $end))
-          (br $plainDone)))
-      (call $yString (local.get $p) (local.get $end))))
+    (if (i32.or (call $yWordIs (local.get $p) (local.get $n) (i64.const "null") (i32.const 4))
+          (i32.and (i32.eq (local.get $n) (i32.const 1)) (i32.eq (local.get $c) (i32.const "~"))))
+      (then (call $yNull) (return)))
+    (if (call $yWordIs (local.get $p) (local.get $n) (i64.const "true") (i32.const 4))
+      (then (out.str "true") (return)))
+    (if (call $yWordIs (local.get $p) (local.get $n) (i64.const "false") (i32.const 5))
+      (then (out.str "false") (return)))
+    ;; JSON has no infinities or NaN; JSON.stringify writes them as null.
+    (local.set $q (call $ySign (local.get $p) (local.get $end)))
+    (if (i32.and (i32.eq (i32.load8_u (local.get $q)) (i32.const "."))
+          (i32.eq (i32.sub (local.get $end) (local.get $q)) (i32.const 4)))
+      (then
+        (local.set $int (i32.and (i32.load offset=1 (local.get $q)) (i32.const 0xffffff)))
+        (if (i32.or
+              (call $yWordIs (i32.add (local.get $q) (i32.const 1)) (i32.const 3) (i64.const "inf") (i32.const 3))
+              (i32.and (i32.eq (local.get $q) (local.get $p))
+                (i32.or (i32.or (i32.eq (local.get $int) (i32.const "nan")) (i32.eq (local.get $int) (i32.const "NaN")))
+                  (i32.eq (local.get $int) (i32.const "NAN")))))
+          (then (call $yNull) (return)))))
+    ;; 0x and 0o integers, written in decimal when they fit 64 bits
+    (if (i32.and (i32.gt_u (local.get $n) (i32.const 2))
+          (i32.or (i32.eq (i32.load16_u (local.get $p)) (i32.const "0x"))
+            (i32.eq (i32.load16_u (local.get $p)) (i32.const "0o"))))
+      (then
+        ;; bits per digit
+        (local.set $n (i32.add (i32.const 3) (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "x"))))
+        (local.set $q (i32.add (local.get $p) (i32.const 2)))
+        (block $radixDone
+          (loop $radix
+            (br_if $radixDone (i32.ge_u (local.get $q) (local.get $end)))
+            (local.set $int (call $yHexDigit (i32.load8_u (local.get $q))))
+            (br_if $radixDone (i32.or (i32.shr_u (local.get $int) (local.get $n))
+              (i32.wrap_i64 (i64.shr_u (local.get $v) (i64.extend_i32_u (i32.sub (i32.const 64) (local.get $n)))))))
+            (local.set $v (i64.or (i64.shl (local.get $v) (i64.extend_i32_u (local.get $n)))
+              (i64.extend_i32_u (local.get $int))))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br $radix)))
+        (if (i32.lt_u (local.get $q) (local.get $end))
+          (then (call $yString (local.get $p) (local.get $end)) (return)))
+        ;; digits go right to left into reserved output, then move into place
+        (call $ensureOut (i32.const 20))
+        (local.set $n (i32.add (global.get $out) (i32.const 20)))
+        (local.set $q (local.get $n))
+        (loop $digit
+          (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+          (i64.store8 (local.get $q) (i64.add (i64.const "0") (i64.rem_u (local.get $v) (i64.const 10))))
+          (local.set $v (i64.div_u (local.get $v) (i64.const 10)))
+          (br_if $digit (i64.ne (local.get $v) (i64.const 0))))
+        (call $outCopy (local.get $q) (local.get $n))
+        (return)))
+    ;; Decimal numbers: [-+] digits [. digits] [e [-+] digits], where either
+    ;; the integer or the fraction may be empty. JSON needs both and no `+`.
+    (local.set $int (local.get $q))
+    (local.set $frac (call $ySkipDigits (local.get $q) (local.get $end)))
+    (local.set $q (local.get $frac))
+    (if (i32.and (i32.lt_u (local.get $q) (local.get $end)) (i32.eq (i32.load8_u (local.get $q)) (i32.const ".")))
+      (then (local.set $q (call $ySkipDigits (i32.add (local.get $q) (i32.const 1)) (local.get $end)))))
+    (local.set $exp (local.get $q))
+    (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
+          (i32.eq (i32.or (i32.load8_u (local.get $q)) (i32.const 32)) (i32.const "e")))
+      (then
+        (local.set $n (call $ySign (i32.add (local.get $q) (i32.const 1)) (local.get $end)))
+        (local.set $q (call $ySkipDigits (local.get $n) (local.get $end)))
+        ;; an exponent needs digits
+        (if (i32.eq (local.get $q) (local.get $n)) (then (local.set $q (i32.const 0))))))
+    (if (i32.and (i32.eq (local.get $q) (local.get $end))
+          (i32.gt_u (i32.sub (local.get $exp) (local.get $int))
+            (i32.ne (local.get $frac) (local.get $exp))))
+      (then
+        (if (i32.eq (local.get $c) (i32.const "-")) (then (call $outByte (i32.const "-"))))
+        ;; drop leading zeros but keep one integer digit
+        (block $zeros
+          (loop $zero
+            (br_if $zeros (i32.ge_u (i32.add (local.get $int) (i32.const 1)) (local.get $frac)))
+            (br_if $zeros (i32.ne (i32.load8_u (local.get $int)) (i32.const "0")))
+            (local.set $int (i32.add (local.get $int) (i32.const 1)))
+            (br $zero)))
+        (if (i32.eq (local.get $int) (local.get $frac)) (then (call $outByte (i32.const "0"))))
+        (call $outCopy (local.get $int) (local.get $frac))
+        (if (i32.gt_u (i32.sub (local.get $exp) (local.get $frac)) (i32.const 1))
+          (then (call $outCopy (local.get $frac) (local.get $exp))))
+        (call $outCopy (local.get $exp) (local.get $end))
+        (return)))
+    (call $yString (local.get $p) (local.get $end)))
+
+  ;; $p past one `-` or `+` before $end
+  (func $ySign (param $p i32) (param $end i32) (result i32)
+    (i32.add (local.get $p) (i32.and (i32.lt_u (local.get $p) (local.get $end))
+      (i32.eqz (i32.and (i32.sub (i32.load8_u (local.get $p)) (i32.const "+")) (i32.const -3))))))
+
+  ;; the value of hex digit $c, or a number above 15
+  (func $yHexDigit (param $c i32) (result i32)
+    (if (call $isDigit (local.get $c))
+      (then (return (i32.sub (local.get $c) (i32.const "0")))))
+    (local.set $c (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")))
+    (select (i32.add (local.get $c) (i32.const 10)) (i32.const 16)
+      (i32.le_u (local.get $c) (i32.const 5))))
 
   ;; The word $word of $n lowercase letters, in lowercase, uppercase, or with
   ;; only the first letter capitalized; YAML spells no other case.
@@ -547,7 +465,8 @@
   ;; is the one-pair mapping YAML says it is, and an unterminated collection
   ;; is closed. Line breaks are spaces, and `#` after a space starts a comment.
   ;; Returns the position after the collection.
-  (func $yFlow (param $p i32) (param $end i32) (param $close i32) (result i32)
+  (func $yFlow (param $p i32) (param $end i32) (result i32)
+    (local $close i32)
     (local $c i32)
     (local $seg i32)
     (local $q i32)
@@ -555,10 +474,13 @@
     (local $map i32)
     (local $n i32)
     (if (i32.gt_u (global.get $yDepth) (i32.const 32))
-      (then (out.str "null") (return (local.get $end))))
+      (then (call $yNull) (return (local.get $end))))
     (global.set $yDepth (i32.add (global.get $yDepth) (i32.const 1)))
-    (local.set $map (i32.eq (local.get $close) (i32.const "}")))
-    (call $outByte (i32.load8_u (local.get $p)))
+    (local.set $c (i32.load8_u (local.get $p)))
+    (call $outByte (local.get $c))
+    ;; `]` and `}` follow `[` and `{` two code points later
+    (local.set $close (i32.add (local.get $c) (i32.const 2)))
+    (local.set $map (i32.eq (local.get $c) (i32.const "{")))
     (local.set $p (i32.add (local.get $p) (i32.const 1)))
     (block $done
       (loop $l
@@ -578,9 +500,9 @@
             (br $l)))
         (if (local.get $n) (then (call $outByte (i32.const ","))))
         (local.set $n (i32.add (local.get $n) (i32.const 1)))
+        ;; an item takes at least one byte, so the loop advances
         (local.set $seg (call $yFlowItemEnd (local.get $p) (local.get $end)))
-        (if (i32.le_u (local.get $seg) (local.get $p))
-          (then (local.set $seg (i32.add (local.get $p) (i32.const 1)))))
+        (local.set $seg (i32.add (local.get $seg) (i32.eq (local.get $seg) (local.get $p))))
         (local.set $q (call $skipSpace (local.get $seg) (local.get $end)))
         (local.set $colon (i32.and (i32.lt_u (local.get $q) (local.get $end))
           (i32.eq (i32.load8_u (local.get $q)) (i32.const ":"))))
@@ -598,11 +520,9 @@
             (local.set $p (call $skipWs (i32.add (local.get $q) (i32.const 1)) (local.get $end)))
             (local.set $seg (call $yFlowItemEnd (local.get $p) (local.get $end))))
           (else (local.set $seg (local.get $p))))
-        (if (i32.le_u (local.get $seg) (local.get $p))
-          (then (out.str "null"))
-          (else
-            (call $yValue (local.get $p) (local.get $seg))
-            (local.set $p (local.get $seg))))
+        ;; an empty value is null
+        (call $yValue (local.get $p) (local.get $seg))
+        (local.set $p (local.get $seg))
         (if (i32.eqz (local.get $map)) (then (call $outByte (i32.const "}"))))
         (br $l)))
     ;; an unterminated collection still has to close, or the JSON is invalid
@@ -625,11 +545,12 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
+        ;; the item start counts as a space
         (local.set $prev (if (result i32) (i32.gt_u (local.get $p) (local.get $start))
           (then (i32.load8_u (i32.sub (local.get $p) (i32.const 1)))) (else (i32.const 32))))
-        (if (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "{")))
+        (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
           (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-        (if (i32.or (i32.eq (local.get $c) (i32.const "]")) (i32.eq (local.get $c) (i32.const "}")))
+        (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "}"))
           (then
             (br_if $done (i32.eqz (local.get $depth)))
             (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
@@ -645,17 +566,15 @@
               (then
                 (local.set $next (if (result i32) (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
                   (then (i32.load8_u offset=1 (local.get $p))) (else (i32.const 32))))
-                (br_if $done (i32.or (i32.or (call $isWhiteByte (local.get $next))
-                    (i32.or (i32.eq (local.get $next) (i32.const ",")) (i32.eq (local.get $next) (i32.const "]"))))
-                  (i32.or (i32.eq (local.get $next) (i32.const "}"))
-                    (i32.or (i32.eq (local.get $prev) (i32.const "\22")) (i32.eq (local.get $prev) (i32.const "'"))))))))))
-        (if (i32.and
-              (i32.or (i32.eq (local.get $c) (i32.const "\22")) (i32.eq (local.get $c) (i32.const "'")))
-              (i32.or (i32.eq (local.get $p) (local.get $start))
-                (i32.and (i32.ne (local.get $depth) (i32.const 0))
-                  (i32.or (call $isWhiteByte (local.get $prev))
-                    (i32.or (i32.or (i32.eq (local.get $prev) (i32.const "[")) (i32.eq (local.get $prev) (i32.const "{")))
-                      (i32.or (i32.eq (local.get $prev) (i32.const ",")) (i32.eq (local.get $prev) (i32.const ":"))))))))
+                (br_if $done (i32.or
+                  (i32.or (call $isWhiteByte (local.get $next)) (i32.eq (local.get $next) (i32.const ",")))
+                  (i32.or (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "}"))
+                    (call $yIsQuote (local.get $prev)))))))))
+        (if (i32.and (i32.and (call $yIsQuote (local.get $c))
+              (i32.or (i32.ne (local.get $depth) (i32.const 0)) (i32.eq (local.get $p) (local.get $start))))
+              (i32.or
+                (i32.or (call $isWhiteByte (local.get $prev)) (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "{")))
+                (i32.or (i32.eq (local.get $prev) (i32.const ",")) (i32.eq (local.get $prev) (i32.const ":")))))
           (then
             (local.set $p (call $yQuoteEnd (local.get $p) (local.get $end)))
             (br_if $done (i32.ge_u (local.get $p) (local.get $end)))))
@@ -676,15 +595,22 @@
       (then
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.and
-              (i32.or (i32.eq (local.get $c) (i32.const "\22")) (i32.eq (local.get $c) (i32.const "'")))
+              (call $yIsQuote (local.get $c))
               (i32.eq (call $yQuoteEnd (local.get $p) (local.get $end)) (i32.sub (local.get $end) (i32.const 1))))
-          (then
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (local.set $end (i32.sub (local.get $end) (i32.const 1))))
-          (else (local.set $c (i32.const 0))))))
+          (then (drop (call $yQuoted (local.get $p) (local.get $end))) (return)))))
     (call $outByte (i32.const "\22"))
-    (call $yEscaped (local.get $p) (local.get $end) (local.get $c))
+    (call $yEscaped (local.get $p) (local.get $end) (i32.const 0))
     (call $outByte (i32.const "\22")))
+
+  ;; Write the quoted scalar that opens at $p as a JSON string, and return the
+  ;; position of its closing quote, or $end.
+  (func $yQuoted (param $p i32) (param $end i32) (result i32)
+    (local $q i32)
+    (local.set $q (call $yQuoteEnd (local.get $p) (local.get $end)))
+    (call $outByte (i32.const "\22"))
+    (call $yEscaped (i32.add (local.get $p) (i32.const 1)) (local.get $q) (i32.load8_u (local.get $p)))
+    (call $outByte (i32.const "\22"))
+    (local.get $q))
 
   ;; Write [$p, $end) as JSON string content. $quote is the byte that quoted
   ;; the scalar, or 0: double-quoted text decodes YAML escapes, single-quoted
@@ -752,32 +678,25 @@
                       (local.set $n (i32.sub (call $skipWs (i32.add (local.get $p) (i32.const 1)) (local.get $end))
                         (local.get $p)))
                       (br $written)))
-                  ;; escapes that JSON spells the same way
-                  (if (i32.or (i32.or (i32.or (i32.eq (local.get $c) (i32.const "b")) (i32.eq (local.get $c) (i32.const "t")))
-                          (i32.or (i32.eq (local.get $c) (i32.const "n")) (i32.eq (local.get $c) (i32.const "f"))))
-                        (i32.or (i32.or (i32.eq (local.get $c) (i32.const "r")) (i32.eq (local.get $c) (i32.const "\22")))
-                          (i32.eq (local.get $c) (i32.const "\5c"))))
-                    (then
-                      (call $outByte (i32.const "\5c"))
-                      (call $outByte (local.get $c))
-                      (br $written)))
-                  (if (i32.or (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c) (i32.const " ")))
-                    (then (call $outByte (local.get $c)) (br $written)))
-                  (local.set $v (i32.const -1))
-                  (if (i32.eq (local.get $c) (i32.const 9)) (then (local.set $v (i32.const 9))))
-                  (if (i32.eq (local.get $c) (i32.const "0")) (then (local.set $v (i32.const 0))))
-                  (if (i32.eq (local.get $c) (i32.const "a")) (then (local.set $v (i32.const 7))))
-                  (if (i32.eq (local.get $c) (i32.const "v")) (then (local.set $v (i32.const 11))))
-                  (if (i32.eq (local.get $c) (i32.const "e")) (then (local.set $v (i32.const 27))))
-                  (if (i32.eq (local.get $c) (i32.const "N")) (then (local.set $v (i32.const 0x85))))
-                  (if (i32.eq (local.get $c) (i32.const "_")) (then (local.set $v (i32.const 0xa0))))
-                  (if (i32.eq (local.get $c) (i32.const "L")) (then (local.set $v (i32.const 0x2028))))
-                  (if (i32.eq (local.get $c) (i32.const "P")) (then (local.set $v (i32.const 0x2029))))
-                  ;; \xHH, \uHHHH and \UHHHHHHHH
-                  (local.set $i (select (i32.const 2)
-                    (select (i32.const 4) (select (i32.const 8) (i32.const 0) (i32.eq (local.get $c) (i32.const "U")))
-                      (i32.eq (local.get $c) (i32.const "u")))
-                    (i32.eq (local.get $c) (i32.const "x"))))
+                  ;; Lanes 0-6 are escapes that JSON spells the same way, 7-8
+                  ;; escapes it does not need, and 9-15 named control and
+                  ;; space characters.
+                  (local.set $i (i8x16.bitmask (i8x16.eq (i8x16.splat (local.get $c))
+                    (v128.const i8x16 0x62 0x74 0x6e 0x66 0x72 0x22 0x5c 0x2f 0x20 0x09 0x30 0x61 0x76 0x65 0x4e 0x5f))))
+                  (if (i32.and (local.get $i) (i32.const 0x7f)) (then (call $outByte (i32.const "\5c"))))
+                  (if (i32.and (local.get $i) (i32.const 0x1ff)) (then (call $outByte (local.get $c)) (br $written)))
+                  ;; Lanes 9-15 hold their value plus one. A miss has ctz 32, and
+                  ;; lane 32 reads as 0, so its value is -1.
+                  (local.set $v (i32.sub (i8x16.extract_lane_u 0 (i8x16.swizzle
+                    (v128.const i8x16 0 0 0 0 0 0 0 0 0 0x0a 0x01 0x08 0x0c 0x1c 0x86 0xa1)
+                    (i8x16.splat (i32.ctz (local.get $i))))) (i32.const 1)))
+                  ;; `\L` and `\P` are line and paragraph separators; `\x`, `\u` and
+                  ;; `\U` take two, four and eight hex digits
+                  (local.set $i (i8x16.bitmask (i8x16.eq (i8x16.splat (local.get $c))
+                    (v128.const i8x16 0x4c 0x50 0x78 0x75 0x55 0 0 0 0 0 0 0 0 0 0 0))))
+                  (if (i32.and (local.get $i) (i32.const 3))
+                    (then (local.set $v (i32.add (i32.const 0x2027) (local.get $i)))))
+                  (local.set $i (i32.and (i32.shr_u (local.get $i) (i32.const 1)) (i32.const 14)))
                   (if (i32.and (i32.ne (local.get $i) (i32.const 0))
                         (i32.le_u (i32.add (i32.add (local.get $p) (i32.const 2)) (local.get $i)) (local.get $end)))
                     (then
@@ -785,10 +704,7 @@
                       (local.set $i (i32.add (local.get $i) (i32.const 2)))
                       (block $hexDone
                         (loop $hex
-                          (local.set $c (i32.load8_u (i32.add (local.get $p) (local.get $n))))
-                          (local.set $d (select (i32.sub (local.get $c) (i32.const "0"))
-                            (i32.add (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 10))
-                            (call $isDigit (local.get $c))))
+                          (local.set $d (call $yHexDigit (i32.load8_u (i32.add (local.get $p) (local.get $n)))))
                           (if (i32.gt_u (local.get $d) (i32.const 15))
                             (then (local.set $v (i32.const -1)) (br $hexDone)))
                           (local.set $v (i32.or (i32.shl (local.get $v) (i32.const 4)) (local.get $d)))
@@ -820,9 +736,12 @@
 
   ;; write $v as a JSON \u escape
   (func $yOutU (param $v i32)
+    (local $i i32)
     (out.str "\5cu")
-    (call $outByte (i32.load8_u offset=$mem.hexdigits (i32.and (i32.shr_u (local.get $v) (i32.const 12)) (i32.const 15))))
-    (call $outByte (i32.load8_u offset=$mem.hexdigits (i32.and (i32.shr_u (local.get $v) (i32.const 8)) (i32.const 15))))
-    (call $outByte (i32.load8_u offset=$mem.hexdigits (i32.and (i32.shr_u (local.get $v) (i32.const 4)) (i32.const 15))))
-    (call $outByte (i32.load8_u offset=$mem.hexdigits (i32.and (local.get $v) (i32.const 15)))))
+    (local.set $i (i32.const 16))
+    (loop $digit
+      (local.set $i (i32.sub (local.get $i) (i32.const 4)))
+      (call $outByte (i32.load8_u offset=$mem.hexdigits
+        (i32.and (i32.shr_u (local.get $v) (local.get $i)) (i32.const 15))))
+      (br_if $digit (local.get $i))))
 )
