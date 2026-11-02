@@ -90,11 +90,14 @@ function capacityFrame(sample: {
 }
 
 export function WordsBenchmarks() {
+  const [metricIndex, setMetricIndex] = useState(0);
   const [scale, setScale] = useState(100);
   const [mode, setMode] = useState('highlight');
   const [memoryMode, setMemoryMode] = useState('highlight');
   const [footprintId, setFootprintId] = useState('base');
   const [methodOpen, setMethodOpen] = useState(false);
+  const suite = benchmark.packageRun;
+  const metric = suite.metrics[metricIndex];
   const browser = benchmark.browser.rows.find(
     (row) => row.scale === scale && row.mode === mode
   )!;
@@ -127,12 +130,11 @@ export function WordsBenchmarks() {
             id="words-benchmarks"
             className="text-2xl font-semibold tracking-tight"
           >
-            Streaming, memory, and download size.
+            Markdown rendering benchmarks
           </h2>
           <p className="text-muted-foreground text-pretty">
-            Words and Streamdown on the same Markdown. Production browser
-            builds, native incremental rendering, and results you can inspect
-            and reproduce.
+            Compare HTML throughput, React streaming time, and peak memory
+            across five Markdown files.
           </p>
         </div>
         <a
@@ -144,6 +146,77 @@ export function WordsBenchmarks() {
         </a>
       </div>
 
+      <div className="space-y-4 rounded-lg border p-5 sm:p-7">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-semibold tracking-tight">
+              Package benchmarks
+            </h3>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {date.format(new Date(suite.environment.date))} · Node{' '}
+              {suite.environment.node} · {suite.environment.cpu} ·{' '}
+              {suite.environment.memoryBytes / 1024 ** 3} GiB RAM
+            </p>
+          </div>
+          <label className="grid gap-1.5 text-xs">
+            <span className="text-muted-foreground">Measurement</span>
+            <ChartSelect
+              value={metricIndex}
+              onChange={(event) => setMetricIndex(Number(event.target.value))}
+            >
+              {suite.metrics.map(({ label }, index) => (
+                <option key={label} value={index}>
+                  {label}
+                </option>
+              ))}
+            </ChartSelect>
+          </label>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right text-sm tabular-nums">
+            <caption className="text-muted-foreground mb-2 text-left">
+              {metric.description}
+            </caption>
+            <thead>
+              <tr className="border-b">
+                <th scope="col" className="py-2 pr-4 text-left font-medium">
+                  Fixture
+                </th>
+                {metric.engines.map((engine) => (
+                  <th
+                    key={engine}
+                    scope="col"
+                    className="py-2 pl-4 font-medium"
+                  >
+                    {engine}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {metric.rows.map(({ fixture, values }) => (
+                <tr key={fixture} className="border-b last:border-0">
+                  <th
+                    scope="row"
+                    className="py-2 pr-4 text-left font-normal whitespace-nowrap"
+                  >
+                    {fixture}
+                  </th>
+                  {values.map((value, index) => (
+                    <td key={metric.engines[index]} className="py-2 pl-4">
+                      {value.toFixed(metric.decimals)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h3 className="text-xl font-semibold tracking-tight">
+        Browser measurements
+      </h3>
       <div className="grid min-w-0 gap-4 lg:grid-cols-3">
         <figure className={cardClass} aria-labelledby="words-update-chart">
           <figcaption className="mb-5 space-y-1.5">
@@ -154,7 +227,8 @@ export function WordsBenchmarks() {
               Streaming updates
             </h3>
             <p className="text-muted-foreground text-sm">
-              Source update latency, p95. Shorter is better.
+              Source update latency, p95. Recorded {measuredDate}. Shorter is
+              better.
             </p>
           </figcaption>
           <div className="mb-6 grid grid-cols-2 gap-2">
@@ -209,7 +283,8 @@ export function WordsBenchmarks() {
               Memory after streaming
             </h3>
             <p className="text-muted-foreground text-sm">
-              Additional settled JS heap. Shorter is better.
+              Additional settled JS heap. Recorded {measuredDate}. Shorter is
+              better.
             </p>
           </figcaption>
           <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
@@ -309,7 +384,7 @@ export function WordsBenchmarks() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Raw results
+            Raw browser results
           </a>
           {' · '}
           <a href="/words/benchmark.json" className="styled-link">
@@ -338,11 +413,10 @@ export function WordsBenchmarks() {
               Install the repository’s pinned toolchain and dependencies, then
               run these commands from its root. They measure HTML throughput,
               React stream replays in JSDOM, and process memory. The browser
-              charts above come from an earlier harness that has since been
-              removed; the raw results keep every run.
+              timing and heap charts use an earlier harness.
             </p>
             <pre className="bg-muted/50 overflow-x-auto rounded-md p-4 text-xs leading-6">
-              <code>{`moon run words:bench\nmoon run words:bench-stream\nmoon run words:bench-memory`}</code>
+              <code>{`moonx words:bench --ignore-ci-checks\nmoonx words:bench-stream --ignore-ci-checks\nmoonx words:bench-memory --ignore-ci-checks`}</code>
             </pre>
             <a href={methodologyUrl} className="styled-link inline-block">
               Setup, methodology, and output files ↗
