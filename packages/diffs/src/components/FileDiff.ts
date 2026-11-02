@@ -2259,6 +2259,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       : this.columnReconcilers.get(code)?.elementFor(key)?.content;
   }
 
+  /**
+   * @internal The document line where editing continues from an old-file line
+   * number: the line itself for context, the first line a change added for a
+   * deleted one, or the line after a deletion that added nothing. Undefined
+   * outside an edit session or outside every hunk.
+   */
+  public editLineFor(deletionLineNumber: number): number | undefined {
+    return this.editSession != null
+      ? this.hunksRenderer.editLineFor(deletionLineNumber)
+      : undefined;
+  }
+
   // The document lines whose rows the last render rebuilt; cleared on read.
   private takeRebuiltLines(): number[] {
     const keys = this.changedRowKeys;

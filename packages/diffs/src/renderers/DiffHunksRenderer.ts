@@ -373,6 +373,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
+   * The document line where editing continues from an old-file line number
+   * (a read-only row's `data-line`), or undefined outside every hunk.
+   */
+  public editLineFor(deletionLineNumber: number): number | undefined {
+    return this.requireSession().editLineFor(deletionLineNumber);
+  }
+
+  /**
    * Called when the editor detaches. Recomputes the hunks as a fresh diff of
    * the final text would, keeping context the user expanded, then leaves
    * edit mode. The rows stay until another diff renders. Returns whether the
