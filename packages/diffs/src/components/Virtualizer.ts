@@ -14,7 +14,7 @@ interface SubscribedInstance {
 }
 
 // A pending request to scroll a vertical span, such as a line, into view.
-interface SpanScrollRequest {
+export interface SpanScrollRequest {
   // Read again after every render pass, since edits and anchor fixes move it.
   resolveSpan(): { top: number; height: number } | undefined;
   align: ScrollLogicalPosition;
