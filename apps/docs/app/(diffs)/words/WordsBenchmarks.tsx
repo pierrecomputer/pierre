@@ -102,12 +102,14 @@ export function WordsBenchmarks() {
   const footprint = benchmark.footprint.rows.find(
     (row) => row.id === footprintId
   )!;
-  const measuredDate = new Intl.DateTimeFormat('en-US', {
+  const date = new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
     timeZone: 'UTC',
-  }).format(new Date(benchmark.provenance.measuredAt));
+  });
+  const measuredDate = date.format(new Date(benchmark.provenance.measuredAt));
+  const footprintDate = date.format(new Date(benchmark.footprint.measuredAt));
   const chromeVersion = /(?:Headless)?Chrome\/(\d+)/.exec(
     benchmark.environment.browserUserAgent
   )?.[1];
@@ -283,16 +285,18 @@ export function WordsBenchmarks() {
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded {measuredDate} · {benchmark.environment.cpu} ·{' '}
+          Streaming and memory recorded {measuredDate} ·{' '}
+          {benchmark.environment.cpu} ·{' '}
           {Math.round(benchmark.environment.totalMemoryBytes / 1024 ** 3)} GiB
           RAM · Chrome {chromeVersion} · React{' '}
           {benchmark.environment.dependencies.react} · Streamdown{' '}
-          {benchmark.environment.dependencies.streamdown}. Measurements use an
-          unpublished workspace build
+          {benchmark.environment.dependencies.streamdown}. These runs used an
+          earlier browser harness and an unpublished workspace build
           {benchmark.provenance.uncommittedWorkingTree
             ? ' with uncommitted changes'
             : ''}
-          ; the raw results identify the commit and built files.
+          ; the raw results identify the commit and built files. Download sizes
+          measured {footprintDate} on the current build.
         </p>
         <p>
           Both libraries use their native streaming paths. The repeated fixture
@@ -332,12 +336,13 @@ export function WordsBenchmarks() {
             <h3 className="font-medium">From a fresh checkout</h3>
             <p className="text-muted-foreground leading-relaxed">
               Install the repository’s pinned toolchain and dependencies, then
-              run these commands from its root. Setup installs the isolated
-              comparison tools and browser. Quick verifies the pipeline; full
-              records repeated timings, memory, and transfer sizes.
+              run these commands from its root. They measure HTML throughput,
+              React stream replays in JSDOM, and process memory. The browser
+              charts above come from an earlier harness that has since been
+              removed; the raw results keep every run.
             </p>
             <pre className="bg-muted/50 overflow-x-auto rounded-md p-4 text-xs leading-6">
-              <code>{`moon run words:bench-setup\nmoon run words:bench-quick\nmoon run words:bench-full`}</code>
+              <code>{`moon run words:bench\nmoon run words:bench-stream\nmoon run words:bench-memory`}</code>
             </pre>
             <a href={methodologyUrl} className="styled-link inline-block">
               Setup, methodology, and output files ↗
