@@ -16,7 +16,7 @@
     },
     "notes": [
       "The measurements predate the package rename to Words. The original raw evidence is copied without modification.",
-      "This is a reviewed historical measurement, not a benchmark of the currently checked-out build."
+      "This is a reviewed historical measurement, not a benchmark of the currently checked-out build. Download sizes were re-measured separately; see footprint.measuredAt."
     ]
   },
   "environment": {
@@ -366,43 +366,35 @@
     ]
   },
   "footprint": {
+    "measuredAt": "2026-11-02",
+    "head": "deb8e7b53f2bf09a6e3df54b3d5f3598d0a543be",
+    "runtime": "v24.19.0",
     "units": "gzip bytes",
     "bundler": "0.27.4",
     "rows": [
       {
         "id": "base",
         "label": "Base React renderer · initial load",
-        "wordsGzipBytes": 49685,
-        "streamdownGzipBytes": 158047,
-        "sourceFields": {
-          "wordsGzipBytes": "footprint.variants.pierreBase.initial.gzip",
-          "streamdownGzipBytes": "footprint.variants.streamdownBase.initial.gzip"
-        }
+        "wordsGzipBytes": 57915,
+        "streamdownGzipBytes": 158047
       },
       {
         "id": "highlight",
         "label": "TypeScript + two themes · loaded closure",
-        "wordsGzipBytes": 170669,
-        "streamdownGzipBytes": 239413,
-        "sourceFields": {
-          "wordsGzipBytes": "footprint.variants.pierreCode.configured.gzip",
-          "streamdownGzipBytes": "footprint.variants.streamdownCode.configured.gzip"
-        }
+        "wordsGzipBytes": 178968,
+        "streamdownGzipBytes": 239390
       }
     ],
     "css": {
-      "wordsGzipBytes": 1011,
-      "streamdownGzipBytes": 447,
-      "sourceFields": {
-        "wordsGzipBytes": "footprint.css.pierre.gzip",
-        "streamdownGzipBytes": "footprint.css.streamdown.gzip"
-      }
+      "wordsGzipBytes": 1229,
+      "streamdownGzipBytes": 447
     },
     "notes": [
       "Minified ES2022 browser ESM; React/React DOM external. Each JS file gzip level 9 independently.",
       "Configured code closure includes TypeScript, default light/dark themes, and highlighted-body lazy chunks.",
       "Pierre includes its monolithic grammar set; Streamdown lazily imports individual grammars.",
-      "CSS is separate; application-specific Streamdown Tailwind utility CSS is excluded."
+      "CSS is separate; application-specific Streamdown Tailwind utility CSS is excluded.",
+      "Re-measured on the committed build with the removed harness settings and its lockfile: esbuild 0.27.4, streamdown 2.7.1, @streamdown/code 2.0.0. Not part of the raw results file."
     ]
   },
   "stress": {
