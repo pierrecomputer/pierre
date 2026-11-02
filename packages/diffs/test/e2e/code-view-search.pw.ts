@@ -901,20 +901,19 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       await expect(row(101)).toBeInViewport();
       await expect(row(20)).not.toBeInViewport();
       if (edit) {
-        await page.evaluate(() => {
+        await page.evaluate(async () => {
           const editor = window.__codeView?.getEditor('item');
-          editor?.setSelections(
-            [
-              {
-                start: { line: 100, character: 1 },
-                end: { line: 100, character: 1 },
-                direction: 'none',
-              },
-            ],
-            { skipScrollAndFocus: true }
+          editor?.focus({
+            lineNumber: 101,
+            character: 1,
+            preventScroll: true,
+          });
+          // Flush deferred focus before capturing the viewport and selection.
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           );
-          editor?.focus({ preventScroll: true });
         });
+        await expect(root.locator('[contenteditable="true"]')).toBeFocused();
       } else {
         await root.focus();
       }
@@ -1039,20 +1038,21 @@ for (const kind of ['file', 'split', 'unified'] as const) {
         );
         await expect(row(line)).toBeInViewport();
         if (edit) {
-          await page.evaluate((line) => {
+          await page.evaluate(async (line) => {
             const editor = window.__codeView?.getEditor('item');
-            editor?.setSelections(
-              [
-                {
-                  start: { line: line - 1, character: 0 },
-                  end: { line: line - 1, character: 0 },
-                  direction: 'none',
-                },
-              ],
-              { skipScrollAndFocus: true }
+            editor?.focus({
+              lineNumber: line,
+              character: 0,
+              preventScroll: true,
+            });
+            // Flush deferred focus before opening the search panel.
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve())
+              )
             );
-            editor?.focus({ preventScroll: true });
           }, line);
+          await expect(root.locator('[contenteditable="true"]')).toBeFocused();
         } else await root.focus();
       };
       await prepare(500);

@@ -420,13 +420,6 @@ export interface EditorFocusOptions extends FocusOptions {
   offset?: number;
 }
 
-export interface EditorSelectionOptions {
-  /**
-   * Skip scrolling to and focusing the selection. Defaults to false.
-   * Collapsed lines are still revealed when this is true.
-   */
-  skipScrollAndFocus?: boolean;
-}
 
 // Wrap offsets persist across render-range syncs (see #resetCache), so
 // scrolling through a very large file could otherwise accumulate an entry per
@@ -1169,8 +1162,7 @@ export class Editor<
   }
 
   setSelections(
-    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[],
-    options?: EditorSelectionOptions
+    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[]
   ): void {
     const editSession = this.#editSession;
     if (editSession?.document == null) {
@@ -1212,9 +1204,7 @@ export class Editor<
     if (primarySelection !== undefined) {
       this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
     }
-    if (options?.skipScrollAndFocus !== true) {
-      this.#scrollToPrimaryCaret();
-    }
+    this.#scrollToPrimaryCaret();
   }
 
   setMarkers(markers: Marker[]): void {

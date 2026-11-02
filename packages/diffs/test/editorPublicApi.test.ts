@@ -1482,16 +1482,14 @@ describe('Editor.replaceSearchMatches', () => {
   test('remaps existing selections through replacements and restores them on undo', async () => {
     const fixture = await createEditorFixture('foo keep foo');
     try {
-      fixture.editor.setSelections(
-        [
-          {
-            start: { line: 0, character: 4 },
-            end: { line: 0, character: 8 },
-            direction: 'backward',
-          },
-        ],
-        { skipScrollAndFocus: true }
-      );
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 4 },
+          end: { line: 0, character: 8 },
+          direction: 'backward',
+        },
+      ]);
+      await wait(0);
       const before = fixture.editor.getViewState().selections;
       const params: SearchParams = {
         text: 'foo',
@@ -1569,26 +1567,23 @@ describe('Editor.replaceSearchMatches', () => {
 });
 
 describe('Editor.setSelections', () => {
-  test('can normalize selections without scrolling or taking focus', async () => {
-    const { cleanup, content, editor, file } =
+  test('normalizes selections and scrolls to and focuses the caret', async () => {
+    const { cleanup, content, editor } =
       await createEditorFixture('alpha\nbravo');
+    const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+    const focus = spyOn(content, 'focus');
     try {
       const outside = document.createElement('input');
       document.body.append(outside);
       outside.focus();
-      const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
-      const focus = spyOn(content, 'focus');
 
-      editor.setSelections(
-        [
-          {
-            start: { line: 1, character: 99 },
-            end: { line: 0, character: 2 },
-            direction: 'forward',
-          },
-        ],
-        { skipScrollAndFocus: true }
-      );
+      editor.setSelections([
+        {
+          start: { line: 1, character: 99 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ]);
       expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
@@ -1596,25 +1591,12 @@ describe('Editor.setSelections', () => {
           direction: -1,
         },
       ]);
-      file.rerender();
-      await wait(0);
-      expect(scroll).not.toHaveBeenCalled();
-      expect(focus).not.toHaveBeenCalled();
-      expect(document.activeElement).toBe(outside);
-
-      editor.setSelections([
-        {
-          start: { line: 0, character: 1 },
-          end: { line: 0, character: 3 },
-          direction: 'forward',
-        },
-      ]);
-      await wait(0);
+      await waitFor(() => focus.mock.calls.length > 0);
       expect(scroll).toHaveBeenCalled();
       expect(focus).toHaveBeenCalled();
+    } finally {
       scroll.mockRestore();
       focus.mockRestore();
-    } finally {
       cleanup();
     }
   });
