@@ -160,8 +160,9 @@ test.describe('CodeView edit session across an item unmount', () => {
     };
     await wheelUntil(600, false, null);
     await wheelUntil(-600, true, 2);
-    await twoFrames(page);
-    expect(await caretState()).toEqual({
+    // The caret comes back on a frame after the row renders; a slow machine
+    // takes a few.
+    await expect.poll(caretState).toEqual({
       mounted: true,
       focused: true,
       caretLine: '2',

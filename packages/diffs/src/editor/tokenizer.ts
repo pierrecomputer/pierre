@@ -274,6 +274,10 @@ export class EditorTokenizer {
     change: TextDocumentChange,
     renderRange?: RenderRange
   ): Map<number, HighlightedToken[]> {
+    // The document changed, so the window is no longer prepared: the next
+    // render's flush must finish whatever this budgeted pass leaves. The
+    // version alone cannot say so, since undo and redo restore old versions.
+    this.#prepared = undefined;
     return this.#tokenizer.tokenize(change, renderRange);
   }
 

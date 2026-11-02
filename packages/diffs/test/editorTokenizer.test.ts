@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test';
 import { type IGrammar, INITIAL, type StateStack } from 'shiki/textmate';
 
 import {
@@ -29,6 +37,26 @@ function getThemeStyle(colors: Record<string, string>): string {
 }
 
 describe('EditorTokenizer', () => {
+  // tokenize colors past the window under a time budget, so a loaded machine
+  // colors fewer lines in one call than a quiet one. The counts these tests
+  // assert are the quiet machine's answers: freeze the clock so the budget
+  // never trips. Tests that drive the budget install their own clock.
+  const realPerformanceNow = performance.now;
+  beforeEach(() => {
+    Object.defineProperty(performance, 'now', {
+      value: () => 0,
+      configurable: true,
+      writable: true,
+    });
+  });
+  afterEach(() => {
+    Object.defineProperty(performance, 'now', {
+      value: realPerformanceNow,
+      configurable: true,
+      writable: true,
+    });
+  });
+
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
     'window'
@@ -395,6 +423,99 @@ describe('EditorTokenizer', () => {
     expect(tokenizeLineCount).toBe(1);
     expect(tokenizer.getStringCommentRegexpRangesInLine(2)).toEqual([[0, 6]]);
     expect(tokenizeLineCount).toBe(1);
+    tokenizer.cleanUp();
+  });
+
+  test('an undo whose pass the budget cut short is finished by the render flush', () => {
+    // A block-comment grammar: a line's color depends on the state it is
+    // tokenized in (foreground 1 = comment, 0 = code).
+    const insideComment = {
+      equals: (other: StateStack) => other === insideComment,
+    } as unknown as StateStack;
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        const inside = ruleStack === insideComment;
+        const stillInside = inside
+          ? !lineText.includes('*/')
+          : lineText.includes('/*');
+        return {
+          tokens: new Uint32Array([0, inside ? 1 << 15 : 0]),
+          ruleStack: stillInside ? insideComment : INITIAL,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    const textDocument = new TextDocument(
+      'test.ts',
+      Array.from({ length: 20 }, (_, i) => `code ${i}`).join('\n'),
+      'typescript'
+    );
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({
+        getLanguage: () => grammar,
+        setTheme: () => ({
+          theme: { type: 'dark' },
+          colorMap: ['#code', '#comment'],
+        }),
+      }),
+      textDocument,
+      codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+    const renderRange = {
+      startingLine: 0,
+      totalLines: 20,
+      bufferBefore: 0,
+      bufferAfter: 0,
+    };
+    tokenizer.tokenize(
+      {
+        startLine: 0,
+        startCharacter: 0,
+        endCharacter: 0,
+        endLine: 19,
+        endedAtDocumentEnd: false,
+        previousLineCount: 20,
+        lineCount: 20,
+        lineDelta: 0,
+        changes: [],
+        changedLineRanges: [[0, 19]],
+      },
+      renderRange
+    );
+    // The render after the first pass records the window as prepared.
+    tokenizer.flush(renderRange);
+
+    // Opening a comment on line 0 recolors every line below it as comment.
+    const open = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: '/*',
+      },
+    ])!;
+    expect(tokenizer.tokenize(open, renderRange).size).toBe(20);
+
+    // Undo on a loaded machine: the budget trips after line 0, so the rest is
+    // still colored as comment when the render comes.
+    let now = 0;
+    Object.defineProperty(performance, 'now', {
+      value: () => (now += 2),
+      configurable: true,
+      writable: true,
+    });
+    const [undo] = textDocument.undo()!;
+    expect([...tokenizer.tokenize(undo, renderRange).keys()]).toEqual([0]);
+
+    // The document is back at the version the earlier flush prepared, but the
+    // render's flush must still finish recoloring the window.
+    expect([...tokenizer.flush(renderRange).keys()]).toEqual(
+      Array.from({ length: 19 }, (_, i) => i + 1)
+    );
     tokenizer.cleanUp();
   });
 

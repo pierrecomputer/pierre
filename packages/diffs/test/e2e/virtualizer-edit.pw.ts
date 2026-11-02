@@ -82,8 +82,9 @@ test.describe('Virtualizer edit session across a placeholder swap', () => {
     };
     await wheelUntil(600, async () => (await state()).placeholder);
     await wheelUntil(-600, () => showsLine(2));
-    await twoFrames(page);
-    expect(await state()).toEqual({
+    // The caret comes back on a frame after the row renders; a slow machine
+    // takes a few.
+    await expect.poll(state).toEqual({
       placeholder: false,
       focused: true,
       caretLine: '2',
