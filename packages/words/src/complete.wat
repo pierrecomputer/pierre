@@ -1,39 +1,133 @@
 (module
   (import "./memory.wat")
   (import "./scan.wat")
+  (import "./frontmatter.wat")
 
   ;; The original EOF locates a pending label even in rebuilt inline content.
   (global $completeClosedLabelEnd (mut i32) (i32.const 0))
+  ;; The line after the last blank line that completion scanned inside a fence,
+  ;; or 0. Completion keeps its state there, but the parser may have closed that
+  ;; fence already, so the render that follows reports no safe append boundary
+  ;; at or before this line.
+  (global $completeFenceBlank (mut i32) (i32.const 0))
+
+  ;; Skip bytes that cannot change the completion state. Nibble tables give
+  ;; each byte a group bit: 0 = LF CR, 1 = ) *, 2 = < >, 3 = [ \ ] _, 4 = `,
+  ;; 5 = ~. $mask selects the groups that matter in the current mode.
+  (func $completeSkip (param $p i32) (param $end i32) (param $mask i32) (result i32)
+    (local $m i32)
+    (local $w v128)
+    (local $lo v128)
+    (local $hi v128)
+    (local $sel v128)
+    (local.set $lo (v128.const i8x16 0x10 0 0 0 0 0 0 0 0 0x02 0x03 0x08 0x0c 0x09 0x24 0x08))
+    (local.set $hi (v128.const i8x16 0x01 0 0x02 0x04 0 0x08 0x10 0x20 0 0 0 0 0 0 0 0))
+    (local.set $sel (i8x16.splat (local.get $mask)))
+    (block $done
+      (loop $wide
+        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $m (i8x16.bitmask (i8x16.ne
+          (v128.and (local.get $sel) (v128.and
+            (i8x16.swizzle (local.get $lo) (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
+            (i8x16.swizzle (local.get $hi) (i8x16.shr_u (local.get $w) (i32.const 4)))))
+          (v128.const i64x2 0 0))))
+        (if (local.get $m)
+          (then
+            (local.set $p (i32.add (local.get $p) (call $firstBit (local.get $m))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
+
+  ;; Write the closers of delimiter stack entries [$bottom, $top) at $at,
+  ;; innermost first, and return the position after them.
+  (func $completeClosers (param $at i32) (param $stack i32) (param $bottom i32) (param $top i32) (result i32)
+    (local $e i32)
+    (local $n i32)
+    (block $done
+      (loop $l
+        (br_if $done (i32.le_u (local.get $top) (local.get $bottom)))
+        (local.set $top (i32.sub (local.get $top) (i32.const 1)))
+        (local.set $e (i32.add (local.get $stack) (i32.shl (local.get $top) (i32.const 3))))
+        (local.set $n (i32.load offset=4 (local.get $e)))
+        (memory.fill (local.get $at) (i32.load (local.get $e)) (local.get $n))
+        (local.set $at (i32.add (local.get $at) (local.get $n)))
+        (br $l)))
+    (local.get $at))
 
   ;; Complete the display copy of a streaming input. Fences and inline code
   ;; protect their contents; a bounded delimiter stack supplies only missing
   ;; closing markers. This does not alter the caller's original Markdown.
   (func (export "complete") (result i32)
-    (local $p i32) (local $end i32) (local $stack i32) (local $depth i32)
+    (local $p i32) (local $start i32) (local $end i32) (local $stack i32) (local $depth i32)
     (local $c i32) (local $n i32) (local $q i32) (local $prev i32) (local $next i32)
-    (local $fence i32) (local $fenceLen i32) (local $tick i32)
-    (local $line i32) (local $indent i32) (local $open i32) (local $url i32)
-    (local $image i32) (local $html i32) (local $canOpen i32) (local $canClose i32)
+    (local $fence i32) (local $fenceLen i32) (local $fenceCtx i32) (local $fenceCol i32)
+    (local $tick i32) (local $line i32) (local $ctx i32) (local $open i32) (local $openDepth i32)
+    (local $url i32) (local $image i32) (local $html i32) (local $canOpen i32) (local $canClose i32)
     (local $top i32) (local $remaining i32) (local $closeAt i32)
     (local.set $p (i32.const $mem.input))
-    (local.set $line (local.get $p))
     (local.set $end (i32.add (local.get $p) (i32.load (i32.const 2))))
+    (global.set $eof (local.get $end))
+    (global.set $completeFenceBlank (i32.const 0))
+    ;; Repair starts where the parser's markdown starts: after a byte order
+    ;; mark and, when that option is on, after the frontmatter block.
+    (if (i32.and (i32.ge_u (i32.sub (local.get $end) (local.get $p)) (i32.const 3))
+          (i32.eq (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)) (i32.const "\ef\bb\bf")))
+      (then (local.set $p (i32.add (local.get $p) (i32.const 3)))))
+    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 1))
+      (then
+        (local.set $q (call $frontmatterClose (local.get $p)))
+        (if (local.get $q)
+          (then (local.set $p (call $lineAfter (call $findLineEnd (local.get $q))))))))
+    (local.set $start (local.get $p))
+    (local.set $line (local.get $p))
     (local.set $stack (i32.add (local.get $end) (i32.const 4096)))
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
-        (if (i32.eq (local.get $c) (i32.const 10))
+        ;; A line ends at LF, or at a CR that no LF follows.
+        (if (i32.or (i32.eq (local.get $c) (i32.const 10))
+              (i32.and (i32.eq (local.get $c) (i32.const 13))
+                (i32.or (i32.eq (i32.add (local.get $p) (i32.const 1)) (local.get $end))
+                  (i32.ne (i32.load8_u offset=1 (local.get $p)) (i32.const 10)))))
           (then
-            (if (i32.and (i32.eqz (local.get $fence))
-                  (i32.ge_u (call $skipSpace (local.get $line) (local.get $p)) (local.get $p)))
+            (local.set $q (call $skipSpace (local.get $line) (local.get $p)))
+            (if (i32.or (i32.ge_u (local.get $q) (local.get $p))
+                  (i32.and (i32.eq (i32.add (local.get $q) (i32.const 1)) (local.get $p))
+                    (i32.eq (i32.load8_u (local.get $q)) (i32.const 13))))
               (then
-                (local.set $depth (i32.const 0)) (local.set $open (i32.const 0))
-                (local.set $url (i32.const 0)) (local.set $tick (i32.const 0))))
+                (if (local.get $fence)
+                  (then (global.set $completeFenceBlank (i32.add (local.get $p) (i32.const 1))))
+                  (else
+                    (local.set $depth (i32.const 0)) (local.set $open (i32.const 0))
+                    (local.set $url (i32.const 0)) (local.set $tick (i32.const 0))))))
             (local.set $line (i32.add (local.get $p) (i32.const 1)))
-            (local.set $html (i32.const 0))))
-        (if (i32.and (i32.and (i32.eqz (local.get $fence)) (i32.eqz (local.get $tick))) (i32.eq (local.get $c) (i32.const "\5c")))
-          (then (local.set $p (i32.add (local.get $p) (i32.const 2))) (br $scan)))
+            (local.set $html (i32.const 0))
+            ;; A fence in a quote ends at a line without `>`; one in a list item
+            ;; ends at a nonblank line indented less than the fence.
+            (if (local.get $fenceCtx)
+              (then
+                (local.set $q (call $skipSpace (local.get $line) (local.get $end)))
+                (if (i32.lt_u (local.get $q) (local.get $end))
+                  (then
+                    (local.set $c (i32.load8_u (local.get $q)))
+                    (if (if (result i32) (i32.eq (local.get $fenceCtx) (i32.const 1))
+                          (then (i32.ne (local.get $c) (i32.const ">")))
+                          (else (i32.and
+                            (i32.lt_u (i32.sub (local.get $q) (local.get $line)) (local.get $fenceCol))
+                            (i32.and (i32.ne (local.get $c) (i32.const 10)) (i32.ne (local.get $c) (i32.const 13))))))
+                      (then (local.set $fence (i32.const 0)) (local.set $fenceCtx (i32.const 0))))))))
+            (local.set $p (local.get $line))
+            (br $scan)))
+        ;; Only ASCII punctuation is escaped; `\` before a line end is a hard break.
+        (if (i32.and (i32.eqz (i32.or (local.get $fence) (local.get $tick)))
+              (i32.and (i32.eq (local.get $c) (i32.const "\5c"))
+                (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))))
+          (then
+            (if (call $isAsciiPunct (i32.load8_u offset=1 (local.get $p)))
+              (then (local.set $p (i32.add (local.get $p) (i32.const 2))) (br $scan)))))
         (if (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "~")))
           (then
             (local.set $q (local.get $p))
@@ -43,42 +137,86 @@
                 (br_if $runDone (i32.ne (i32.load8_u (local.get $q)) (local.get $c)))
                 (local.set $q (i32.add (local.get $q) (i32.const 1))) (br $run)))
             (local.set $n (i32.sub (local.get $q) (local.get $p)))
-            (local.set $indent (local.get $line))
-            (block $indentDone
-              (loop $spaces
-                (br_if $indentDone (i32.ge_u (local.get $indent) (local.get $p)))
-                ;; Quotes and list markers can precede a nested fence. This
-                ;; conservative prefix scan protects their code from repair.
-                (local.set $prev (i32.load8_u (local.get $indent)))
-                (br_if $indentDone (i32.eqz (i32.or (call $isSpaceByte (local.get $prev))
-                  (i32.or (call $isDigit (local.get $prev))
-                    (i32.or (i32.eq (local.get $prev) (i32.const ">"))
-                      (i32.or (i32.eq (local.get $prev) (i32.const "-"))
-                        (i32.or (i32.eq (local.get $prev) (i32.const "+"))
-                          (i32.or (i32.eq (local.get $prev) (i32.const "*"))
-                            (i32.or (i32.eq (local.get $prev) (i32.const "."))
-                              (i32.eq (local.get $prev) (i32.const ")")))))))))))
-                (local.set $indent (i32.add (local.get $indent) (i32.const 1))) (br $spaces)))
-            (if (i32.and (i32.eq (local.get $indent) (local.get $p))
-                  (i32.ge_u (local.get $n) (i32.const 3)))
+            (if (i32.ge_u (local.get $n) (i32.const 3))
               (then
-                (if (i32.eqz (local.get $fence))
-                  (then
-                    (local.set $fence (local.get $c)) (local.set $fenceLen (local.get $n))
-                    (local.set $depth (i32.const 0)) (local.set $open (i32.const 0))
-                    (local.set $url (i32.const 0)) (local.set $tick (i32.const 0)))
-                  (else
-                    (if (i32.and (i32.eq (local.get $fence) (local.get $c))
-                          (i32.ge_u (local.get $n) (local.get $fenceLen)))
+                ;; A fence starts its line after optional quote and list markers.
+                ;; $ctx is 1 after a quote marker, 2 after list markers only, and
+                ;; -1 when other text precedes the run.
+                (local.set $prev (local.get $line))
+                (local.set $ctx (i32.const 0))
+                (block $prefixDone
+                  (loop $prefix
+                    (local.set $prev (call $skipSpace (local.get $prev) (local.get $p)))
+                    (br_if $prefixDone (i32.ge_u (local.get $prev) (local.get $p)))
+                    (local.set $next (i32.load8_u (local.get $prev)))
+                    (if (i32.eq (local.get $next) (i32.const ">"))
                       (then
-                        (local.set $indent (call $skipSpace (local.get $q) (local.get $end)))
-                        (if (i32.or (i32.eq (local.get $indent) (local.get $end))
-                              (i32.eq (i32.load8_u (local.get $indent)) (i32.const 10)))
-                          (then (local.set $fence (i32.const 0))))))))
-                (local.set $p (local.get $q)) (br $scan)))
+                        (local.set $ctx (i32.const 1))
+                        (local.set $prev (i32.add (local.get $prev) (i32.const 1)))
+                        (br $prefix)))
+                    (local.set $next (local.get $prev))
+                    (block $marker
+                      (loop $digits
+                        (br_if $marker (i32.eqz (call $isDigit (i32.load8_u (local.get $next)))))
+                        (local.set $next (i32.add (local.get $next) (i32.const 1)))
+                        (br $digits)))
+                    (local.set $n (i32.load8_u (local.get $next)))
+                    (if (if (result i32) (i32.eq (local.get $next) (local.get $prev))
+                          (then (i32.or (i32.eq (local.get $n) (i32.const "-"))
+                            (i32.or (i32.eq (local.get $n) (i32.const "+")) (i32.eq (local.get $n) (i32.const "*")))))
+                          (else (i32.and (i32.le_u (i32.sub (local.get $next) (local.get $prev)) (i32.const 9))
+                            (i32.or (i32.eq (local.get $n) (i32.const ".")) (i32.eq (local.get $n) (i32.const ")"))))))
+                      (then
+                        (if (call $isSpaceByte (i32.load8_u offset=1 (local.get $next)))
+                          (then
+                            (if (i32.eqz (local.get $ctx)) (then (local.set $ctx (i32.const 2))))
+                            (local.set $prev (i32.add (local.get $next) (i32.const 1)))
+                            (br $prefix)))))
+                    (local.set $ctx (i32.const -1))))
+                (local.set $n (i32.sub (local.get $q) (local.get $p)))
+                (if (i32.ge_s (local.get $ctx) (i32.const 0))
+                  (then
+                    (if (local.get $fence)
+                      (then
+                        ;; A closer has the fence byte and length, then only
+                        ;; spaces; it cannot follow markers the opener lacked.
+                        (if (i32.and
+                              (i32.and (i32.eq (local.get $c) (local.get $fence))
+                                (i32.ge_u (local.get $n) (local.get $fenceLen)))
+                              (i32.or (i32.eqz (local.get $ctx))
+                                (i32.and (i32.eq (local.get $ctx) (i32.const 1))
+                                  (i32.eq (local.get $fenceCtx) (i32.const 1)))))
+                          (then
+                            (local.set $prev (call $skipSpace (local.get $q) (local.get $end)))
+                            (if (i32.or (i32.ge_u (local.get $prev) (local.get $end))
+                                  (i32.or (i32.eq (i32.load8_u (local.get $prev)) (i32.const 10))
+                                    (i32.eq (i32.load8_u (local.get $prev)) (i32.const 13))))
+                              (then
+                                (local.set $fence (i32.const 0)) (local.set $fenceCtx (i32.const 0))
+                                (local.set $p (local.get $q))
+                                (br $scan))))))
+                      (else
+                        ;; A backtick fence's info string has no backtick.
+                        (local.set $prev (call $findLineEnd (local.get $q)))
+                        (if (i32.or (i32.eq (local.get $c) (i32.const "~"))
+                              (i32.ge_u (call $findByte (local.get $q) (local.get $prev) (i32.const "`"))
+                                (local.get $prev)))
+                          (then
+                            (local.set $fence (local.get $c))
+                            (local.set $fenceLen (select (i32.const 255) (local.get $n)
+                              (i32.gt_u (local.get $n) (i32.const 255))))
+                            (local.set $fenceCtx (local.get $ctx))
+                            (local.set $fenceCol (i32.sub (local.get $p) (local.get $line)))
+                            (local.set $depth (i32.const 0)) (local.set $open (i32.const 0))
+                            (local.set $url (i32.const 0)) (local.set $tick (i32.const 0))
+                            (local.set $p (local.get $q))
+                            (br $scan)))))))))
+            (if (local.get $fence)
+              (then (local.set $p (local.get $q)) (br $scan)))
             (if (i32.eq (local.get $c) (i32.const "`"))
               (then
-                (if (i32.eqz (local.get $fence))
+                ;; Backticks are literal inside a link destination.
+                (if (i32.eqz (local.get $url))
                   (then
                     (if (i32.eqz (local.get $tick))
                       (then (local.set $tick (local.get $n)))
@@ -86,7 +224,24 @@
                         (then (local.set $tick (i32.const 0))))))))
                 (local.set $p (local.get $q)) (br $scan)))))
         (if (i32.or (local.get $fence) (local.get $tick))
-          (then (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $scan)))
+          (then
+            (local.set $p (call $completeSkip (i32.add (local.get $p) (i32.const 1))
+              (local.get $end) (i32.const 0x31)))
+            (br $scan)))
+        ;; Inside a link destination only its closing parenthesis matters.
+        (if (local.get $url)
+          (then
+            (if (i32.eq (local.get $c) (i32.const ")"))
+              (then
+                ;; Emphasis opened in a link's text cannot close outside it.
+                (if (i32.lt_u (local.get $openDepth) (local.get $depth))
+                  (then (local.set $depth (local.get $openDepth))))
+                (local.set $open (i32.const 0)) (local.set $url (i32.const 0))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (br $scan)))
+            (local.set $p (call $completeSkip (i32.add (local.get $p) (i32.const 1))
+              (local.get $end) (i32.const 0x3b)))
+            (br $scan)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "<"))
               (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end)))
           (then
@@ -97,8 +252,8 @@
         (if (i32.eq (local.get $c) (i32.const "["))
           (then
             (local.set $open (local.get $p))
-            (local.set $url (i32.const 0))
-            (local.set $image (i32.and (i32.gt_u (local.get $p) (i32.const $mem.input))
+            (local.set $openDepth (local.get $depth))
+            (local.set $image (i32.and (i32.gt_u (local.get $p) (local.get $start))
               (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "!"))))))
         (if (i32.and (i32.ne (local.get $open) (i32.const 0)) (i32.eq (local.get $c) (i32.const "]")))
           (then
@@ -117,10 +272,6 @@
                     (i32.store8 (i32.const 1)
                       (i32.or (i32.load8_u (i32.const 1)) (i32.const 4)))))
                 (local.set $open (i32.const 0))))))
-        (if (i32.and (i32.ne (local.get $url) (i32.const 0)) (i32.eq (local.get $c) (i32.const ")")))
-          (then (local.set $open (i32.const 0)) (local.set $url (i32.const 0))))
-        (if (local.get $url)
-          (then (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $scan)))
         ;; An unfinished HTML tag is discarded below. Its attributes must not
         ;; leave emphasis closers behind in the visible text before that tag.
         (if (i32.and (i32.eqz (local.get $html))
@@ -134,91 +285,115 @@
                 (br_if $marksDone (i32.ne (i32.load8_u (local.get $q)) (local.get $c)))
                 (local.set $q (i32.add (local.get $q) (i32.const 1))) (br $marks)))
             (local.set $n (i32.sub (local.get $q) (local.get $p)))
-            (local.set $prev (if (result i32) (i32.gt_u (local.get $p) (i32.const $mem.input))
+            ;; Only `~~` is repaired; a lone `~` is usually "about".
+            (if (i32.and (i32.eq (local.get $c) (i32.const "~")) (i32.ne (local.get $n) (i32.const 2)))
+              (then (local.set $p (local.get $q)) (br $scan)))
+            (local.set $prev (if (result i32) (i32.gt_u (local.get $p) (local.get $start))
               (then (i32.load8_u (i32.sub (local.get $p) (i32.const 1)))) (else (i32.const 32))))
             (local.set $next (if (result i32) (i32.lt_u (local.get $q) (local.get $end))
               (then (i32.load8_u (local.get $q))) (else (i32.const 32))))
             (local.set $canOpen (i32.eqz (call $isWhiteByte (local.get $next))))
-            (local.set $canClose (i32.and (i32.gt_u (local.get $p) (i32.const $mem.input))
+            (local.set $canClose (i32.and (i32.gt_u (local.get $p) (local.get $start))
               (i32.eqz (call $isWhiteByte (local.get $prev)))))
             ;; Intraword underscores and arithmetic asterisks stay literal.
             (if (i32.and (call $isAlnum (local.get $prev)) (call $isAlnum (local.get $next)))
               (then (local.set $canOpen (i32.const 0)) (local.set $canClose (i32.const 0))))
             (if (i32.and (local.get $canClose) (i32.gt_u (local.get $depth) (i32.const 0)))
               (then
-                (local.set $top (i32.add (local.get $stack) (i32.mul (i32.sub (local.get $depth) (i32.const 1)) (i32.const 8))))
+                (local.set $top (i32.add (local.get $stack) (i32.shl (i32.sub (local.get $depth) (i32.const 1)) (i32.const 3))))
                 (if (i32.eq (i32.load (local.get $top)) (local.get $c))
                   (then
                     (local.set $remaining (i32.load offset=4 (local.get $top)))
                     (if (i32.ge_u (local.get $n) (local.get $remaining))
-                      (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1))))
+                      (then
+                        (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+                        (if (i32.lt_u (local.get $depth) (local.get $openDepth))
+                          (then (local.set $openDepth (local.get $depth)))))
                       (else (i32.store offset=4 (local.get $top) (i32.sub (local.get $remaining) (local.get $n)))))
                     (local.set $p (local.get $q)) (br $scan)))))
             (if (i32.and (local.get $canOpen) (i32.and (i32.lt_u (local.get $depth) (i32.const 64)) (i32.le_u (local.get $n) (i32.const 3))))
               (then
-                (local.set $top (i32.add (local.get $stack) (i32.mul (local.get $depth) (i32.const 8))))
+                (local.set $top (i32.add (local.get $stack) (i32.shl (local.get $depth) (i32.const 3))))
                 (i32.store (local.get $top) (local.get $c))
                 (i32.store offset=4 (local.get $top) (local.get $n))
                 (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
             (local.set $p (local.get $q)) (br $scan)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $scan)))
+        (local.set $p (call $completeSkip (i32.add (local.get $p) (i32.const 1))
+          (local.get $end) (i32.const 0x3f)))
+        (br $scan)))
     (if (local.get $fence) (then (return (i32.sub (local.get $end) (i32.const $mem.input)))))
-    (if (local.get $html) (then (local.set $end (local.get $html))))
-    (if (i32.and (i32.ne (local.get $open) (i32.const 0)) (local.get $image))
-      (then (return (i32.sub (i32.sub (local.get $open) (i32.const 1)) (i32.const $mem.input)))))
-    (if (local.get $url) (then (local.set $end (local.get $url))))
-    (if (i32.eqz (local.get $url))
+    ;; An unfinished HTML tag is dropped with everything that started after it.
+    (if (local.get $html)
       (then
-        (if (i32.and (i32.ne (local.get $tick) (i32.const 0)) (i32.le_u (local.get $tick) (i32.const 255)))
-          (then
-            (memory.fill (local.get $end) (i32.const "`") (local.get $tick))
-            (local.set $end (i32.add (local.get $end) (local.get $tick)))))
-        (if (local.get $depth)
-          (then
-            ;; A closer after whitespace is literal Markdown. Insert synthetic
-            ;; emphasis closers before that whitespace so spaces between
-            ;; streamed words cannot remove and recreate their formatting.
-            (local.set $closeAt (local.get $end))
-            (block $contentEnd
-              (loop $trailingWhite
-                (br_if $contentEnd (i32.le_u (local.get $closeAt) (i32.const $mem.input)))
-                (local.set $c (call $utf8Before (local.get $closeAt) (i32.const $mem.input)))
-                (br_if $contentEnd (i32.eqz (call $isWhiteCp (local.get $c))))
-                (local.set $closeAt (i32.sub (local.get $closeAt)
-                  (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x80)) (then (i32.const 1))
-                    (else (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x800))
-                      (then (i32.const 2)) (else (i32.const 3)))))))
-                (br $trailingWhite)))
-            ;; Reserve all closers at once; even a long whitespace suffix is
-            ;; moved only once, independently of the bounded delimiter depth.
-            (local.set $q (local.get $depth))
-            (local.set $remaining (i32.const 0))
-            (loop $closingSize
-              (local.set $q (i32.sub (local.get $q) (i32.const 1)))
-              (local.set $top (i32.add (local.get $stack) (i32.mul (local.get $q) (i32.const 8))))
-              (local.set $remaining (i32.add (local.get $remaining) (i32.load offset=4 (local.get $top))))
-              (br_if $closingSize (local.get $q)))
-            (memory.copy (i32.add (local.get $closeAt) (local.get $remaining)) (local.get $closeAt)
-              (i32.sub (local.get $end) (local.get $closeAt)))
-            (local.set $end (i32.add (local.get $end) (local.get $remaining)))
-            (loop $closeMarks
-              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-              (local.set $top (i32.add (local.get $stack) (i32.mul (local.get $depth) (i32.const 8))))
-              (local.set $n (i32.load offset=4 (local.get $top)))
-              (memory.fill (local.get $closeAt) (i32.load (local.get $top)) (local.get $n))
-              (local.set $closeAt (i32.add (local.get $closeAt) (local.get $n)))
-              (br_if $closeMarks (local.get $depth)))))))
+        (local.set $end (local.get $html))
+        (local.set $tick (i32.const 0))
+        (local.set $url (i32.const 0))
+        (if (i32.gt_u (local.get $open) (local.get $html)) (then (local.set $open (i32.const 0))))))
+    ;; An unfinished image is dropped with what opened in its text. A link keeps
+    ;; its text and gets a placeholder destination in place of a partial one.
     (if (local.get $open)
       (then
-        (if (i32.eqz (local.get $url))
+        (if (local.get $image)
           (then
-            (i32.store16 (local.get $end) (i32.const "]("))
-            (local.set $end (i32.add (local.get $end) (i32.const 2)))))
+            (local.set $end (i32.sub (local.get $open) (i32.const 1)))
+            (if (i32.lt_u (local.get $openDepth) (local.get $depth))
+              (then (local.set $depth (local.get $openDepth))))
+            (local.set $tick (i32.const 0))
+            (local.set $open (i32.const 0)))
+          (else
+            (if (local.get $url) (then (local.set $end (i32.sub (local.get $url) (i32.const 2)))))))))
+    ;; Code ticks and the closers opened inside a pending link text go before
+    ;; trailing whitespace, so spaces between streamed words cannot remove and
+    ;; recreate their formatting. Ticks stay on the last line: after a line
+    ;; break they could start a fence.
+    (if (i32.gt_u (local.get $tick) (i32.const 255)) (then (local.set $tick (i32.const 0))))
+    (local.set $prev (select (local.get $openDepth) (i32.const 0) (local.get $open)))
+    (local.set $remaining (local.get $tick))
+    (local.set $q (local.get $depth))
+    (block $sized
+      (loop $size
+        (br_if $sized (i32.le_u (local.get $q) (local.get $prev)))
+        (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+        (local.set $remaining (i32.add (local.get $remaining)
+          (i32.load offset=4 (i32.add (local.get $stack) (i32.shl (local.get $q) (i32.const 3))))))
+        (br $size)))
+    (if (local.get $remaining)
+      (then
+        (local.set $closeAt (local.get $end))
+        (block $contentEnd
+          (loop $trailingWhite
+            (br_if $contentEnd (i32.le_u (local.get $closeAt) (local.get $start)))
+            (local.set $c (call $utf8Before (local.get $closeAt) (local.get $start)))
+            (br_if $contentEnd (i32.eqz (call $isWhiteCp (local.get $c))))
+            (local.set $closeAt (i32.sub (local.get $closeAt)
+              (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x80)) (then (i32.const 1))
+                (else (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x800))
+                  (then (i32.const 2)) (else (i32.const 3)))))))
+            (br $trailingWhite)))
+        (if (local.get $tick)
+          (then
+            (block $lineEnd
+              (loop $sameLine
+                (br_if $lineEnd (i32.ge_u (local.get $closeAt) (local.get $end)))
+                (local.set $c (i32.load8_u (local.get $closeAt)))
+                (br_if $lineEnd (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+                (local.set $closeAt (i32.add (local.get $closeAt) (i32.const 1)))
+                (br $sameLine)))))
+        ;; Move the whitespace once, however long it is.
+        (memory.copy (i32.add (local.get $closeAt) (local.get $remaining)) (local.get $closeAt)
+          (i32.sub (local.get $end) (local.get $closeAt)))
+        (local.set $end (i32.add (local.get $end) (local.get $remaining)))
+        (memory.fill (local.get $closeAt) (i32.const "`") (local.get $tick))
+        (drop (call $completeClosers (i32.add (local.get $closeAt) (local.get $tick))
+          (local.get $stack) (local.get $prev) (local.get $depth)))))
+    (if (local.get $open)
+      (then
         ;; The React layer renders this sentinel as text, never as a URL.
-        (i64.store (local.get $end) (i64.const "streamdo"))
-        (i64.store offset=8 (local.get $end) (i64.const "wn:incom"))
-        (i64.store offset=16 (local.get $end) (i64.const "plete-li"))
-        (i32.store offset=24 (local.get $end) (i32.const "nk)"))
-        (local.set $end (i32.add (local.get $end) (i32.const 27)))))
+        (i64.store (local.get $end) (i64.const "](stream"))
+        (i64.store offset=8 (local.get $end) (i64.const "down:inc"))
+        (i64.store offset=16 (local.get $end) (i64.const "omplete-"))
+        (i64.store offset=24 (local.get $end) (i64.const "link)"))
+        (local.set $end (call $completeClosers (i32.add (local.get $end) (i32.const 29))
+          (local.get $stack) (i32.const 0) (local.get $prev)))))
     (i32.sub (local.get $end) (i32.const $mem.input)))
 )

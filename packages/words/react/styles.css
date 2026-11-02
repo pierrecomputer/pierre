@@ -101,11 +101,16 @@
   tab-size: 2;
 }
 [data-markdown='code-block'] pre code {
+  display: block;
   padding: 0;
   background: transparent;
   border-radius: 0;
   font: inherit;
   white-space: pre;
+}
+/* Each 64-line group is its own layout block, so a streamed line only lays out its group. */
+[data-markdown='code-block'] [data-markdown='code-lines'] {
+  display: block;
 }
 [data-markdown='line-numbers'] {
   white-space: pre;
@@ -124,9 +129,19 @@
   opacity: 0.35;
   user-select: none;
 }
+/* Zero width: a moving caret must not change line widths, or a long code fence lays out all its lines again. */
 [data-markdown='caret'] {
   display: inline-block;
+  width: 0;
+  user-select: none;
   animation: markdown-caret 1s steps(2, start) infinite;
+}
+/* The glyph is CSS content, so the caret never adds text to blocks or copied code. */
+[data-markdown='caret']::after {
+  content: '\258d';
+}
+[data-markdown='caret'][data-shape='circle']::after {
+  content: '\25cf';
 }
 [data-markdown='img'] {
   max-width: 100%;

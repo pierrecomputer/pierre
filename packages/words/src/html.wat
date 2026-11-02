@@ -69,7 +69,6 @@
         (out.str "<h")
         (call $outByte (i32.add (i32.const "0") (local.get $lev)))
         (call $outByte (i32.const ">"))
-        (call $htmlTaskBox)
         (call $renderInline (local.get $r))
         (out.str "</h")
         (call $outByte (i32.add (i32.const "0") (local.get $lev)))
@@ -112,6 +111,7 @@
     (local $p i32)
     (local $e i32)
     (local $c i32)
+    (local $k i32)
     (call $cr)
     (out.str "<pre")
     (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (i32.const 0))
@@ -121,7 +121,10 @@
     (if (i32.gt_u (i32.load offset=12 (local.get $r)) (i32.load offset=8 (local.get $r)))
       (then
         (out.str "<code class=\22language-")
-        ;; The info string's first word, with entities and escapes resolved.
+        ;; The info string's first word, with entities and escapes resolved
+        ;; first, as cmark does: decoded whitespace is trimmed before the word
+        ;; and ends it after.
+        (local.set $line (global.get $out))
         (local.set $p (i32.load offset=8 (local.get $r)))
         (local.set $e (i32.load offset=12 (local.get $r)))
         (block $infoDone
@@ -147,8 +150,19 @@
                 (local.set $n (call $entityMatch (local.get $p) (local.get $e)))
                 (if (local.get $n)
                   (then
-                    (call $outText (global.get $entVal)
-                      (i32.add (global.get $entVal) (global.get $entLen)))
+                    (local.set $k (global.get $entVal))
+                    (local.set $c (i32.add (global.get $entVal) (global.get $entLen)))
+                    (if (i32.eq (global.get $out) (local.get $line))
+                      (then (local.set $k (call $skipWs (local.get $k) (local.get $c)))))
+                    (local.set $next (local.get $k))
+                    (block $cut
+                      (loop $decoded
+                        (br_if $cut (i32.ge_u (local.get $next) (local.get $c)))
+                        (br_if $cut (call $isWhiteByte (i32.load8_u (local.get $next))))
+                        (local.set $next (i32.add (local.get $next) (i32.const 1)))
+                        (br $decoded)))
+                    (call $outText (local.get $k) (local.get $next))
+                    (br_if $infoDone (i32.lt_u (local.get $next) (local.get $c)))
                     (local.set $p (i32.add (local.get $p) (local.get $n)))
                     (br $info)))))
             (if (i32.eq (local.get $c) (i32.const "\5c"))
@@ -159,7 +173,12 @@
             (call $outText (local.get $p) (i32.add (local.get $p) (i32.const 1)))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $info)))
-        (out.str "\22>"))
+        ;; an info string that decodes to whitespace has no language
+        (if (i32.eq (global.get $out) (local.get $line))
+          (then
+            (global.set $out (i32.sub (local.get $line) (i32.const 22)))
+            (out.str "<code>"))
+          (else (out.str "\22>"))))
       (else (out.str "<code>")))
     (local.set $n (i32.load offset=$R.nLines (local.get $r)))
     (block $done
@@ -205,6 +224,8 @@
     (local $n i32)
     (local $i i32)
     (local $line i32)
+    ;; skipped raw HTML leaves no line breaks behind
+    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (then (return)))
     (call $cr)
     (local.set $n (i32.load offset=$R.nLines (local.get $r)))
     (block $done
@@ -230,6 +251,14 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
         (local.set $q (call $findByte (local.get $p) (local.get $e) (i32.const "<")))
+        ;; NUL is U+FFFD, as in text
+        (local.set $tag (call $findByte (local.get $p) (local.get $q) (i32.const 0)))
+        (if (i32.lt_u (local.get $tag) (local.get $q))
+          (then
+            (call $outCopy (local.get $p) (local.get $tag))
+            (out.str "\ef\bf\bd")
+            (local.set $p (i32.add (local.get $tag) (i32.const 1)))
+            (br $l)))
         (call $outCopy (local.get $p) (local.get $q))
         (br_if $done (i32.ge_u (local.get $q) (local.get $e)))
         (local.set $tag (i32.add (local.get $q) (i32.const 1)))
@@ -417,7 +446,7 @@
     (if (local.get $image)
       (then
         (out.str "<img src=\22")
-        (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 8)) (i32.const 64)))
+        (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 9)) (i32.const 64)))
         (call $outHref (call $linkUrl) (call $linkUrlTo) (i32.const 3))
         (out.str "\22 alt=\22")
         (return)))
@@ -426,7 +455,7 @@
         (out.str "<a href=\22streamdown:incomplete-link\22>")
         (return)))
     (out.str "<a href=\22")
-    (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 8)) (i32.const 64)))
+    (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 9)) (i32.const 64)))
     (call $outHref (call $linkUrl) (call $linkUrlTo) (i32.const 3))
     ;; URL and title reservations each leave 64 bytes beyond their maximum
     ;; escaped text, enough for these attribute boundaries and the closing >.
@@ -455,7 +484,7 @@
   (func $htmlAutolink (param $kind i32)
     (out.str "<a href=\22")
     (if (local.get $kind) (then (out.str "mailto:")))
-    (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 8)) (i32.const 64)))
+    (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 9)) (i32.const 64)))
     (call $outHref (call $linkUrl) (call $linkUrlTo) (i32.const 1))
     (out.str "\22>")
     (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 12)) (i32.const 64)))
@@ -466,7 +495,7 @@
     (out.str "<a href=\22")
     (if (i32.eq (local.get $kind) (i32.const 1)) (then (out.str "http://")))
     (if (i32.eq (local.get $kind) (i32.const 2)) (then (out.str "mailto:")))
-    (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 8)) (i32.const 64)))
+    (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 9)) (i32.const 64)))
     (call $outHref (call $linkUrl) (call $linkUrlTo) (i32.const 0))
     (out.str "\22>")
     (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 6)) (i32.const 64)))

@@ -84,6 +84,32 @@ const docs = {
   ).join('\n\n'),
 };
 
+void test(
+  'growth past 2.5 GiB clamps to the wasm32 limit instead of trapping',
+  {
+    skip:
+      process.env.WORDS_HUGE !== '1' &&
+      'set WORDS_HUGE=1 to render 1 GiB of code into 4 GiB of memory',
+  },
+  () => {
+    // An open fence keeps the source as one span and `&` makes the output
+    // 1.8x the input: 3 GB in all, so 40000 pages cannot simply double.
+    const input = new Uint8Array(2 ** 30 - 2 ** 20);
+    const line = new TextEncoder().encode('a&&aaaaaa\n');
+    for (let i = 4; i < 4 + line.length * 64; i += line.length)
+      input.set(line, i);
+    for (let n = line.length * 64; 4 + n < input.length; n *= 2)
+      input.copyWithin(4 + n, 4, 4 + Math.min(n, input.length - 4 - n));
+    input.set(new TextEncoder().encode('```\n'));
+    input[input.length - 1] = 10;
+    const renderer = init(wasm);
+    renderer.memory.grow(40000 - renderer.pages);
+    renderer.bindMemory();
+    const output = renderer.render(input, 0, {}).output;
+    assert.ok(output.length > 1.7 * input.length, `${output.length} bytes`);
+  }
+);
+
 for (const [name, doc] of Object.entries(docs)) {
   for (const [label, mode] of [
     ['html', 0],

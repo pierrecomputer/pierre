@@ -48,7 +48,7 @@ export function createHighlightsPlugin(
           dispose();
           return null;
         }
-        code = code.replace(/\r\n?/g, '\n');
+        if (code.includes('\r')) code = code.replace(/\r\n?/g, '\n');
         let first = 0;
         const previousLineCount = lines.length;
         const previousContentLine = Math.max(

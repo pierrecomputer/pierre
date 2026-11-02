@@ -116,6 +116,25 @@ function expectFreshDom(
     JSON.stringify(source)
   ).toBe(true);
 }
+/** Record the length of each HTML string that template elements parse while `run` executes. */
+function parsedLengths(run: () => void): number[] {
+  const prototype = window.Element.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'innerHTML')!;
+  const parsed: number[] = [];
+  Object.defineProperty(prototype, 'innerHTML', {
+    ...descriptor,
+    set(value: string) {
+      if (this instanceof window.HTMLTemplateElement) parsed.push(value.length);
+      descriptor.set!.call(this, value);
+    },
+  });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(prototype, 'innerHTML', descriptor);
+  }
+  return parsed;
+}
 afterEach(async () => {
   if (root !== undefined) {
     await act(async () => {
@@ -272,6 +291,53 @@ describe('HTML rendering and the React wrapper', () => {
     expect(calls).toBe(3);
     expect(container.querySelector('p')).toBe(first);
   });
+  test('inline option objects and hook functions keep completed output', async () => {
+    const container = mountDOM();
+    root = createRoot(container);
+    let calls = 0;
+    let transforms = 0;
+    const render = async (value: string, hooks = ['p']): Promise<void> => {
+      await act(async () => {
+        root?.render(
+          <Markdown
+            controls={{ code: { download: false } }}
+            allowedElements={['p', 'a', 'strong']}
+            components={Object.fromEntries(
+              hooks.map((tag) => [
+                tag,
+                (html: string) => {
+                  calls++;
+                  return html.replace(`<${tag} `, `<${tag} class="v${calls}" `);
+                },
+              ])
+            )}
+            urlTransform={(url) => {
+              transforms++;
+              return url;
+            }}
+          >
+            {value}
+          </Markdown>
+        );
+      });
+    };
+    const source = Array.from(
+      { length: 20 },
+      (_, at) => `Paragraph ${at} [link](/x).\n\n`
+    ).join('');
+    await render(source + 'Tail');
+    const first = container.querySelector('p');
+    const before = [calls, transforms];
+    await render(source + 'Tail grows');
+    await render(source + 'Tail grows more');
+    expect(calls - before[0]).toBe(2);
+    expect(transforms).toBe(before[1]);
+    expect(container.querySelector('p')).toBe(first);
+    // The latest hook formats new output; a changed hook set reformats everything.
+    expect(container.querySelectorAll('p')[20].className).toBe(`v${calls}`);
+    await render(source + 'Tail grows more', ['p', 'a']);
+    expect(container.querySelectorAll('a[class]')).toHaveLength(20);
+  });
   test('hydration effects reuse the client formatting pass', async () => {
     let calls = 0;
     const components: Components = {
@@ -360,6 +426,10 @@ describe('HTML rendering and the React wrapper', () => {
       'data:text/html,bad',
       '//evil.test',
       '\\evil.test',
+      '/\\evil.test',
+      '\\/evil.test',
+      '\\\\evil.test',
+      '/\t/evil.test',
     ])
       expect(defaultUrlTransform(url)).toBeUndefined();
     for (const url of [
@@ -405,6 +475,49 @@ describe('HTML rendering and the React wrapper', () => {
       html('hello', { allowedElements: ['p'], disallowedElements: ['a'] })
     ).toThrow();
   });
+  test('filters and hooks reach nested elements of the same tag', () => {
+    const nested = '[x <https://evil.com>](https://ok.com)';
+    for (const unwrapDisallowed of [true, false]) {
+      const output = html(nested, {
+        disallowedElements: ['a'],
+        unwrapDisallowed,
+      });
+      expect(output).not.toContain('<a');
+      expect(output).not.toContain('href=');
+    }
+    const allowed = html('- a\n  - b\n\n> q\n> > r', {
+      allowedElements: ['p'],
+      unwrapDisallowed: true,
+    });
+    expect(allowed).not.toMatch(/<\/?(ul|li|blockquote)\b/);
+    expect(allowed).toContain('b');
+    expect(allowed).toContain('r');
+    const calls: Record<string, number> = { ul: 0, blockquote: 0, a: 0 };
+    const components = Object.fromEntries(
+      Object.keys(calls).map((tag) => [
+        tag,
+        (value: string) => {
+          calls[tag]++;
+          return value.replace(`<${tag} `, `<${tag} class="hooked" `);
+        },
+      ])
+    );
+    const hooked = html(`- a\n  - b\n\n> q\n> > r\n\n${nested}`, {
+      components,
+    });
+    expect(calls).toEqual({ ul: 2, blockquote: 2, a: 2 });
+    expect(hooked.match(/class="hooked"/g)).toHaveLength(6);
+  });
+  test('idPrefix rewrites only generated footnote links', () => {
+    const output = html('[a](#fnord) [b](#fn-details) note[^1]\n\n[^1]: x', {
+      idPrefix: 'm-',
+    });
+    expect(output).toContain('href="#fnord"');
+    expect(output).toContain('href="#fn-details"');
+    expect(output).toContain('href="#m-fn-1" id="m-fnref-1"');
+    expect(output).toContain('id="m-fn-1"');
+    expect(output).toContain('href="#m-fnref-1"');
+  });
   test('highlights through HTML output and falls back for unknown languages', () => {
     const plugins = {
       code: createHighlightsPlugin({
@@ -440,6 +553,29 @@ describe('HTML rendering and the React wrapper', () => {
         `[id="${reference.getAttribute('href')!.slice(1)}"]`
       )
     ).not.toBeNull();
+  });
+  test('hydration keeps server text visible and fades only later text', async () => {
+    const element = (value: string) => (
+      <Markdown animated={{ duration: 10_000 }} isAnimating>
+        {value}
+      </Markdown>
+    );
+    const source = 'First paragraph.\n\nSecond';
+    const container = mountDOM(renderToString(element(source)));
+    await act(async () => {
+      root = hydrateRoot(container, element(source));
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+    await act(async () => {
+      root?.render(element(source + ' grows'));
+    });
+    expect(
+      Array.from(
+        container.querySelectorAll('[data-markdown="token"]'),
+        (node) => node.textContent
+      )
+    ).toEqual([' grows']);
   });
   test('preserves completed DOM blocks and only formats the changing suffix', async () => {
     const container = mountDOM();
@@ -508,6 +644,42 @@ describe('HTML rendering and the React wrapper', () => {
     );
     expect(container.querySelector('p')).toBe(paragraph);
     expect(container.querySelector('code')).toBe(code);
+  });
+  test('revokes a code download URL only after the download started', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    const { createObjectURL, revokeObjectURL } = URL;
+    const timeout = globalThis.setTimeout;
+    const anchor = window.HTMLAnchorElement.prototype;
+    const click = anchor.click;
+    const revoked: string[] = [];
+    const timers: (() => void)[] = [];
+    let downloads = 0;
+    URL.createObjectURL = () => 'blob:code';
+    URL.revokeObjectURL = (url) => revoked.push(url);
+    globalThis.setTimeout = ((callback: () => void) => {
+      timers.push(callback);
+      return 0;
+    }) as unknown as typeof setTimeout;
+    anchor.click = function () {
+      downloads++;
+    };
+    try {
+      renderer.connect();
+      renderer.update('```ts\nlet x = 1;\n```', true);
+      container
+        .querySelector<HTMLButtonElement>('[data-code-action="download"]')!
+        .click();
+      expect(downloads).toBe(1);
+      expect(revoked).toEqual([]);
+      for (const timer of timers) timer();
+      expect(revoked).toEqual(['blob:code']);
+    } finally {
+      renderer.disconnect();
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+      globalThis.setTimeout = timeout;
+      anchor.click = click;
+    }
   });
   test('releases the live highlighter at completion, replacement and unmount', async () => {
     const container = mountDOM();
@@ -884,6 +1056,12 @@ describe('native DOM token fades', () => {
     expect(container.querySelector('code')).toBe(code);
     expect(code?.querySelector('[data-markdown="token"]')).toBe(first);
   });
+  test('text edits keep line breaks when the previous run ends inside a fade', async () => {
+    await render('a\n*b*\nc\n', true, 10_000);
+    const source = 'a\nZb*\nc\n**d**\ne `f`';
+    const container = await render(source, true, 10_000);
+    expect(container.querySelector('p')?.textContent).toBe('a\nZb*\nc\nd\ne f');
+  });
 });
 
 describe('direct HTML sessions', () => {
@@ -978,9 +1156,9 @@ describe('direct HTML sessions', () => {
       expect(
         [...container.querySelectorAll('p')].map((node) => node.textContent)
       ).toEqual(['First', 'Tail grows', 'Next']);
-      expect(
-        container.querySelector('[data-markdown="caret"]')?.textContent
-      ).toBe('●');
+      const caret = container.querySelector('[data-markdown="caret"]');
+      expect(caret?.getAttribute('data-shape')).toBe('circle');
+      expect(caret?.parentNode).toBe(container.querySelectorAll('p')[2]);
     } finally {
       renderer.disconnect();
     }
@@ -1034,13 +1212,15 @@ describe('direct HTML sessions', () => {
         const fresh = createHtmlRenderer({ controls: false });
         expected.innerHTML = fresh.render(value, true, true).html;
         fresh.dispose();
-        const actual = document.createDocumentFragment();
-        for (const child of container.childNodes)
-          if (child.nodeType !== 8) actual.append(child.cloneNode(true));
-        actual.normalize();
+        const actual = document.createElement('template');
+        actual.innerHTML = container.innerHTML.replace(
+          /<!--markdown(?:-code)?-->/g,
+          ''
+        );
+        actual.content.normalize();
         expected.content.normalize();
         expect(
-          actual.isEqualNode(expected.content),
+          actual.content.isEqualNode(expected.content),
           JSON.stringify(value)
         ).toBe(true);
       }
@@ -1094,9 +1274,275 @@ describe('direct HTML sessions', () => {
     expect(container.querySelectorAll('p')).toHaveLength(2);
     renderer.disconnect();
   });
+  test('places the caret after the last text inside the last block', () => {
+    const host = mountDOM();
+    for (const [source, parent, text] of [
+      ['Hello', 'p', 'Hello'],
+      ['- one\n- two', 'li', 'two'],
+      ['> quote', 'p', 'quote'],
+      ['| a |\n|---|\n| b |', 'td', 'b'],
+      ['```ts\nlet x = 1;', 'code-lines', 'let x = 1;'],
+      ['```\na\n\n', 'code-lines', 'a\n'],
+      ['Note[^1]\n\n[^1]: Detail\n\nLast', 'p', 'Last'],
+    ]) {
+      const container = document.createElement('div');
+      host.append(container);
+      const renderer = createDomRenderer(container);
+      renderer.update(source.slice(0, -1), true, true, false, 'block');
+      renderer.update(source, true, true, false, 'circle');
+      const carets = container.querySelectorAll('[data-markdown="caret"]');
+      expect(carets, source).toHaveLength(1);
+      const caret = carets[0];
+      expect(caret.getAttribute('data-shape')).toBe('circle');
+      expect(caret.textContent).toBe('');
+      expect(
+        caret.parentElement!.getAttribute('data-markdown') ??
+          caret.parentElement!.tagName.toLowerCase(),
+        source
+      ).toBe(parent);
+      let previous = '';
+      for (
+        let node = caret.previousSibling;
+        node !== null;
+        node = node.previousSibling
+      )
+        if (node.nodeType !== 8) previous = (node.textContent ?? '') + previous;
+      expect(previous.endsWith(text), source).toBe(true);
+      expect(container.lastElementChild).not.toBe(caret);
+      renderer.update(source, true, true);
+      expect(container.querySelector('[data-markdown="caret"]')).toBeNull();
+      expectFreshDom(container, source, {});
+    }
+  });
+  test('documents with link definitions patch only their changing tail', () => {
+    const container = mountDOM();
+    let fences = 0;
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    const options = {
+      controls: false,
+      plugins: {
+        code: {
+          ...plugin,
+          highlight(code: Parameters<typeof plugin.highlight>[0]) {
+            fences++;
+            return plugin.highlight(code);
+          },
+        },
+      },
+    };
+    const renderer = createDomRenderer(container, options);
+    const body = Array.from(
+      { length: 24 },
+      (_, at) =>
+        `Paragraph ${at} with **bold** text.\n\n` +
+        (at % 6 === 0 ? `\`\`\`ts\nconst n${at} = ${at};\n\`\`\`\n\n` : '')
+    ).join('');
+    const source = 'See [ref][r].\n\n[r]: https://example.com\n\n' + body;
+    const start = source.indexOf('Paragraph');
+    renderer.update(source.slice(0, start), true, true);
+    const parsed = parsedLengths(() => {
+      for (let end = start + 32; end < source.length; end += 32)
+        renderer.update(source.slice(0, end), true, true);
+    });
+    renderer.update(source, true, true);
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.com'
+    );
+    // Before, each update parsed the whole document and highlighted every fence.
+    const total = container.innerHTML.length;
+    expect(fences).toBeLessThanOrEqual(4);
+    expect(Math.max(...parsed)).toBeLessThan(total / 4);
+    expect(parsed.reduce((sum, count) => sum + count, 0)).toBeLessThan(
+      total * 3
+    );
+    expectFreshDom(container, source, options);
+    renderer.disconnect();
+  });
 });
 
 describe('incremental streaming', () => {
+  test('appends to an empty code line keep the trailing line break last', async () => {
+    const host = mountDOM();
+    const options = { controls: false, lineNumbers: false };
+    for (const [first, second, code] of [
+      ['```\n\n', '```\n\nx', '\nx\n'],
+      [
+        '- item\n\n  ```ts\n  ',
+        '- item\n\n  ```ts\n  const x = 1;',
+        'const x = 1;\n',
+      ],
+      ['> ```\n> ', '> ```\n> code', 'code\n'],
+    ])
+      for (const active of [true, false]) {
+        const container = document.createElement('div');
+        host.append(container);
+        const renderer = createDomRenderer(container, options);
+        renderer.update(first, true, active);
+        renderer.update(second, true, active);
+        expect(container.querySelector('pre code')?.textContent, second).toBe(
+          code
+        );
+        renderer.disconnect();
+      }
+    root = createRoot(host);
+    for (const value of ['```\n\n', '```\n\nx'])
+      await act(async () => {
+        root?.render(
+          <Markdown mode="static" controls={false} lineNumbers={false}>
+            {value}
+          </Markdown>
+        );
+      });
+    expect(host.querySelector('pre code')?.textContent).toBe('\nx\n');
+  });
+  test('long fences stream into 64-line groups and keep earlier groups', () => {
+    const host = mountDOM();
+    for (const plugins of [
+      undefined,
+      { code: createHighlightsPlugin({ theme: pierreLight }) },
+    ]) {
+      const options = { controls: false, plugins };
+      const container = document.createElement('div');
+      host.append(container);
+      const renderer = createDomRenderer(container, options);
+      const code = Array.from(
+        { length: 150 },
+        (_, line) => `const value${line} = ${line};\n`
+      ).join('');
+      const source = 'Intro\n\n```ts\n' + code;
+      let first: ChildNode | null = null;
+      for (let end = 7; end <= source.length; end += 23) {
+        renderer.update(source.slice(0, end), true, true);
+        const group = container.querySelector('code > [data-markdown]');
+        if (end > source.length / 2) {
+          first ??= group!.firstChild;
+          expect(group!.firstChild).toBe(first);
+        }
+      }
+      renderer.update(source, true, true);
+      const groups = container.querySelectorAll('code > [data-markdown]');
+      expect(
+        Array.from(groups, (node) => node.getAttribute('data-markdown'))
+      ).toEqual(['code-lines', 'code-lines', 'code-lines']);
+      expect(
+        Array.from(groups, (node) => node.textContent.split('\n').length - 1)
+      ).toEqual([64, 64, 22]);
+      expect(container.querySelector('code')!.textContent).toBe(code);
+      const numbers = container.querySelectorAll(
+        '[data-markdown="line-numbers"] > [data-markdown="code-lines"]'
+      );
+      expect(
+        Array.from(numbers, (node) => node.textContent.split('\n')[0])
+      ).toEqual(['1', '65', '129']);
+      expect(
+        container.querySelector('[data-markdown="line-numbers"]')!.textContent
+      ).toBe(Array.from({ length: 150 }, (_, line) => line + 1).join('\n'));
+      expectFreshDom(container, source, options);
+      renderer.disconnect();
+    }
+    expect(html('```\n' + 'x\n'.repeat(65) + '```')).toContain(
+      `<span data-markdown="code-lines">${'x\n'.repeat(64)}</span><span data-markdown="code-lines">x\n</span>`
+    );
+  });
+  test('a closed fence before an open fence in one list keeps one live highlighter', () => {
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    let sessions = 0;
+    let highlights = 0;
+    const options = {
+      plugins: {
+        code: {
+          highlight(code: Parameters<typeof plugin.highlight>[0]) {
+            highlights++;
+            return plugin.highlight(code);
+          },
+          createSession() {
+            sessions++;
+            return plugin.createSession!();
+          },
+        },
+      },
+    };
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, options);
+    let source =
+      '1. Install\n\n   ```sh\n   npm i\n   ```\n\n2. Use\n\n   ```ts\n';
+    renderer.update(source, true, true);
+    for (let line = 0; line < 60; line++) {
+      source += `   const value${line} = ${line};\n`;
+      renderer.update(source, true, true);
+    }
+    expect(sessions).toBe(1);
+    expect(highlights).toBe(1);
+    expectFreshDom(container, source, options);
+    renderer.disconnect();
+  });
+  test('open fences in containers and plain fences parse only their changed lines', () => {
+    const host = mountDOM();
+    for (const [prefix, indent, plugins] of [
+      [
+        '- item\n\n  ```ts\n',
+        '  ',
+        { code: createHighlightsPlugin({ theme: pierreLight }) },
+      ],
+      [
+        '> ```ts\n',
+        '> ',
+        { code: createHighlightsPlugin({ theme: pierreLight }) },
+      ],
+      ['Intro\n\n```ts\n', '', undefined],
+      ['- item\n\n  ```ts\n', '  ', undefined],
+      // Footnotes render after the open fence and hold another fence.
+      [
+        'See[^1].\n\n[^1]: Note\n\n    ```py\n    x = 1\n    ```\n\n```ts\n',
+        '',
+        { code: createHighlightsPlugin({ theme: pierreLight }) },
+      ],
+    ] as const) {
+      const options = { controls: false, plugins };
+      const container = document.createElement('div');
+      host.append(container);
+      const renderer = createDomRenderer(container, options);
+      let source =
+        prefix +
+        Array.from(
+          { length: 300 },
+          (_, line) => `${indent}const value${line} = ${line};\n`
+        ).join('') +
+        indent +
+        'const current = ';
+      // With footnotes every update resets; the first one moves earlier blocks into completed HTML.
+      renderer.update(source.slice(0, -1), true, true);
+      renderer.update(source, true, true);
+      const code = container.querySelector('code')!;
+      const settled = code.firstChild!.firstChild;
+      const fullLength = container.innerHTML.length;
+      const parsed = parsedLengths(() => {
+        for (const chunk of ['1', '2;\n', indent + 'next', '();\n', indent]) {
+          source += chunk;
+          renderer.update(source, true, true);
+          expect(container.querySelector('code')).toBe(code);
+          expect(code.firstChild!.firstChild).toBe(settled);
+        }
+      });
+      expect(Math.max(...parsed), prefix).toBeLessThan(fullLength / 20);
+      expectFreshDom(container, source, options);
+      renderer.disconnect();
+    }
+  });
+  test('the live code path updates code attributes when a language appears', () => {
+    const options = {
+      plugins: { code: createHighlightsPlugin({ theme: pierreLight }) },
+    };
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, options);
+    renderer.update('```', true, true);
+    renderer.update('```text\nhello', true, true);
+    expect(container.querySelector('pre code')?.className).toBe(
+      'language-text'
+    );
+    expectFreshDom(container, '```text\nhello', options);
+    renderer.disconnect();
+  });
   test('changed-line HTML reconstructs fresh highlighting and keeps older lazy strings', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();

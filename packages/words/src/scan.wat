@@ -109,41 +109,63 @@
             (i32.eq (local.get $cp) (i32.const 0x205f))
             (i32.eq (local.get $cp) (i32.const 0x3000)))))))
 
-  ;; decode the UTF-8 sequence at $p, which must be inside [.., $end).
-  ;; Malformed bytes decode to themselves, which only matters for the flanking
-  ;; rules, where any such byte behaves like an ordinary character.
+  ;; The end of the sequence $utf8At decoded last.
+  (global $utf8Next (mut i32) (i32.const 0))
+
+  ;; Decode the UTF-8 sequence at $p, which must be inside [.., $end), and set
+  ;; $utf8Next past it. NUL and each maximal ill-formed subpart decode to
+  ;; U+FFFD, as a host's UTF-8 decoder would replace them.
   (func $utf8At (param $p i32) (param $end i32) (result i32)
     (local $c i32)
     (local $n i32)
     (local $cp i32)
+    (local $lo i32)
+    (local $hi i32)
     (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
     (local.set $c (i32.load8_u (local.get $p)))
-    (if (i32.lt_u (local.get $c) (i32.const 0x80)) (then (return (local.get $c))))
-    (if (i32.lt_u (local.get $c) (i32.const 0xe0))
-      (then
-        (local.set $n (i32.const 1))
-        (local.set $cp (i32.and (local.get $c) (i32.const 0x1f))))
-      (else (if (i32.lt_u (local.get $c) (i32.const 0xf0))
-        (then
-          (local.set $n (i32.const 2))
-          (local.set $cp (i32.and (local.get $c) (i32.const 0x0f))))
-        (else
-          (local.set $n (i32.const 3))
-          (local.set $cp (i32.and (local.get $c) (i32.const 0x07)))))))
-    (if (i32.ge_u (i32.add (local.get $p) (local.get $n)) (local.get $end))
+    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+    (global.set $utf8Next (local.get $p))
+    (if (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 0x7f))
       (then (return (local.get $c))))
-    (loop $tail
-      (local.set $p (i32.add (local.get $p) (i32.const 1)))
-      (local.set $c (i32.load8_u (local.get $p)))
-      (if (i32.ne (i32.and (local.get $c) (i32.const 0xc0)) (i32.const 0x80))
-        (then (return (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))))
-      (local.set $cp (i32.or (i32.shl (local.get $cp) (i32.const 6))
-        (i32.and (local.get $c) (i32.const 0x3f))))
-      (local.set $n (i32.sub (local.get $n) (i32.const 1)))
-      (br_if $tail (local.get $n)))
-    (local.get $cp))
+    ;; the continuation count and the valid range of the second byte
+    (local.set $lo (i32.const 0x80))
+    (local.set $hi (i32.const 0xbf))
+    (block $bad
+      (br_if $bad (i32.lt_u (local.get $c) (i32.const 0xc2)))
+      (if (i32.lt_u (local.get $c) (i32.const 0xe0))
+        (then
+          (local.set $n (i32.const 1))
+          (local.set $cp (i32.and (local.get $c) (i32.const 0x1f))))
+        (else (if (i32.lt_u (local.get $c) (i32.const 0xf0))
+          (then
+            (local.set $n (i32.const 2))
+            (local.set $cp (i32.and (local.get $c) (i32.const 0x0f)))
+            (if (i32.eq (local.get $c) (i32.const 0xe0)) (then (local.set $lo (i32.const 0xa0))))
+            (if (i32.eq (local.get $c) (i32.const 0xed)) (then (local.set $hi (i32.const 0x9f)))))
+          (else
+            (br_if $bad (i32.gt_u (local.get $c) (i32.const 0xf4)))
+            (local.set $n (i32.const 3))
+            (local.set $cp (i32.and (local.get $c) (i32.const 0x07)))
+            (if (i32.eq (local.get $c) (i32.const 0xf0)) (then (local.set $lo (i32.const 0x90))))
+            (if (i32.eq (local.get $c) (i32.const 0xf4)) (then (local.set $hi (i32.const 0x8f))))))))
+      (loop $tail
+        (br_if $bad (i32.ge_u (local.get $p) (local.get $end)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $bad (i32.gt_u (i32.sub (local.get $c) (local.get $lo))
+          (i32.sub (local.get $hi) (local.get $lo))))
+        (local.set $cp (i32.or (i32.shl (local.get $cp) (i32.const 6))
+          (i32.and (local.get $c) (i32.const 0x3f))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (local.set $lo (i32.const 0x80))
+        (local.set $hi (i32.const 0xbf))
+        (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+        (br_if $tail (local.get $n)))
+      (global.set $utf8Next (local.get $p))
+      (return (local.get $cp)))
+    (global.set $utf8Next (local.get $p))
+    (i32.const 0xfffd))
 
-  ;; decode the UTF-8 sequence that ends at $p, i.e. the character before it
+  ;; decode the character that ends at $p
   (func $utf8Before (param $p i32) (param $start i32) (result i32)
     (local $q i32)
     (local $c i32)
@@ -158,7 +180,10 @@
         (br_if $found (i32.ge_u (i32.sub (local.get $p) (local.get $q)) (i32.const 4)))
         (local.set $q (i32.sub (local.get $q) (i32.const 1)))
         (br $back)))
-    (call $utf8At (local.get $q) (local.get $p)))
+    (local.set $c (call $utf8At (local.get $q) (local.get $p)))
+    ;; a sequence ending early leaves stray continuation bytes before $p
+    (select (local.get $c) (i32.const 0xfffd)
+      (i32.eq (global.get $utf8Next) (local.get $p))))
 
   ;; Classify syntax and literal HTML-escaping bytes together so inline analysis
   ;; can prove whether its unmarked gaps need escaping. Reuse candidates after

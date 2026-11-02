@@ -18,6 +18,12 @@
   (global $fnTotal (mut i32) (i32.const 0))
   (global $fnUsed (mut i32) (i32.const 0))
 
+  ;; The FNV-1a offset basis of label hashes. The host sets a random one so
+  ;; crafted labels cannot be made to share a slot of the reference table.
+  (global $hashSeed (mut i32) (i32.const 0x811c9dc5))
+  (func (export "seed") (param $seed i32)
+    (global.set $hashSeed (local.get $seed)))
+
   ;; the number of bytes in the UTF-8 sequence starting with $c
   (func $utf8Width (param $c i32) (result i32)
     (if (i32.lt_u (local.get $c) (i32.const 0xc0)) (then (return (i32.const 1))))
@@ -50,7 +56,7 @@
     (local $foldMulti i32)
     (local.set $p (local.get $src))
     (local.set $out (local.get $dst))
-    (local.set $h (i32.const 0x811c9dc5))
+    (local.set $h (global.get $hashSeed))
     (if (local.get $prefix)
       (then
         (i32.store8 (local.get $out) (local.get $prefix))
@@ -73,7 +79,7 @@
             (local.set $h (i32.mul
               (i32.xor (local.get $h) (i32.const 32)) (i32.const 16777619)))))
         (local.set $space (i32.const 0))
-        (if (i32.lt_u (local.get $c) (i32.const 0x80))
+        (if (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 0x7f))
           (then
             (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
               (then (local.set $c (i32.add (local.get $c) (i32.const 32)))))
@@ -83,16 +89,12 @@
               (i32.xor (local.get $h) (local.get $c)) (i32.const 16777619)))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $l)))
+        ;; NUL and ill-formed bytes become U+FFFD, so the output is at most
+        ;; three times the input (the fold of U+0390 is six bytes).
         (local.set $q (local.get $out))
         (local.set $foldCp (call $utf8At (local.get $p) (local.get $end)))
+        (local.set $p (global.get $utf8Next))
         (block $folded
-          (if (i32.lt_u (local.get $foldCp) (i32.const 0x80))
-            (then
-              (if (i32.le_u (i32.sub (local.get $foldCp) (i32.const 0x41)) (i32.const 25))
-                (then (local.set $foldCp (i32.add (local.get $foldCp) (i32.const 32)))))
-              (i32.store8 (local.get $out) (local.get $foldCp))
-              (local.set $foldLen (i32.const 1))
-              (br $folded)))
           ;; Most non-ASCII folds map to one code point.
           (local.set $foldHeader (i32.load (i32.const $mem.fold)))
           (local.set $foldHi (i32.and (local.get $foldHeader) (i32.const 0xffff)))
@@ -163,16 +165,17 @@
               (i32.const 16777619)))
             (local.set $q (i32.add (local.get $q) (i32.const 1)))
             (br $hash)))
-        (local.set $p (i32.add (local.get $p) (call $utf8Width (local.get $c))))
         (br $l)))
     (i64.or
       (i64.extend_i32_u (i32.sub (local.get $out) (local.get $dst)))
       (i64.shl (i64.extend_i32_u (local.get $h)) (i64.const 32))))
 
-  ;; a link label starting at `[`; returns the position past `]`, or 0
+  ;; A link label starting at `[`; returns the position past `]`, or 0. The
+  ;; label holds at most 999 characters, counted as a UTF-8 decoder would.
   (func $scanLinkLabel (param $p i32) (param $end i32) (result i32)
     (local $q i32)
     (local $c i32)
+    (local $n i32)
     (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
     (if (i32.ne (i32.load8_u (local.get $p)) (i32.const "[")) (then (return (i32.const 0))))
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
@@ -182,15 +185,21 @@
         (local.set $c (i32.load8_u (local.get $q)))
         (if (i32.eq (local.get $c) (i32.const "[")) (then (return (i32.const 0))))
         (br_if $done (i32.eq (local.get $c) (i32.const "]")))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (if (i32.eq (local.get $c) (i32.const "\5c"))
           (then
-            (local.set $q (i32.add (local.get $q) (i32.const 1)))
             (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
                   (call $isAsciiPunct (i32.load8_u (local.get $q))))
-              (then (local.set $q (i32.add (local.get $q) (i32.const 1))))))
-          (else (local.set $q (i32.add (local.get $q) (i32.const 1)))))
-        (if (i32.gt_u (i32.sub (local.get $q) (local.get $p)) (i32.const 1001))
-          (then (return (i32.const 0))))
+              (then
+                (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                (local.set $n (i32.add (local.get $n) (i32.const 1))))))
+          (else
+            (if (i32.ge_u (local.get $c) (i32.const 0x80))
+              (then
+                (drop (call $utf8At (i32.sub (local.get $q) (i32.const 1)) (local.get $end)))
+                (local.set $q (global.get $utf8Next))))))
+        (local.set $n (i32.add (local.get $n) (i32.const 1)))
+        (if (i32.gt_u (local.get $n) (i32.const 999)) (then (return (i32.const 0))))
         (br $l)))
     (i32.add (local.get $q) (i32.const 1)))
 
@@ -225,6 +234,12 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $i) (local.get $end)))
         (local.set $c (i32.load8_u (local.get $i)))
+        ;; most bytes are past `)` and are neither `\` nor DEL
+        (if (i32.and (i32.gt_u (local.get $c) (i32.const ")"))
+              (i32.and (i32.ne (local.get $c) (i32.const "\5c")) (i32.ne (local.get $c) (i32.const 127))))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $l)))
         (if (i32.eq (local.get $c) (i32.const "\5c"))
           (then
             (if (i32.and (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))
@@ -244,7 +259,9 @@
             (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $l)))
-        (if (i32.le_u (local.get $c) (i32.const 32))
+        ;; ASCII controls and space end it; NUL stands for U+FFFD
+        (if (i32.or (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 32))
+              (i32.eq (local.get $c) (i32.const 127)))
           (then
             (if (i32.eq (local.get $i) (local.get $p)) (then (return (i32.const -1))))
             (br $done)))
@@ -537,7 +554,10 @@
     (block $filled
       (loop $l
         (br_if $filled (i32.eqz (local.get $r)))
-        (local.set $i (i32.and (i32.load offset=$R.hash (local.get $r)) (global.get $linkMask)))
+        ;; the high bits of a multiplicative mix pick the slot
+        (local.set $i (i32.shr_u
+          (i32.mul (i32.load offset=$R.hash (local.get $r)) (i32.const 0x9e3779b1))
+          (i32.clz (global.get $linkMask))))
         (block $placed
           (loop $probe
             (local.set $slot (i32.load
@@ -547,10 +567,13 @@
                 (i32.store (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))
                   (local.get $r))
                 (br $placed)))
-            ;; the first definition wins
-            (br_if $placed (call $defLabelEq (local.get $slot)
-              (i32.add (local.get $r) (i32.const $R.labelBytes))
-              (i32.load offset=$R.labelLen (local.get $r))))
+            ;; the first definition of a type wins; footnote labels carry a
+            ;; 0x01 prefix, which a link label can also start with
+            (br_if $placed (i32.and
+              (i32.eq (i32.load8_u (local.get $slot)) (i32.load8_u (local.get $r)))
+              (call $defLabelEq (local.get $slot)
+                (i32.add (local.get $r) (i32.const $R.labelBytes))
+                (i32.load offset=$R.labelLen (local.get $r)))))
             (local.set $i (i32.and (i32.add (local.get $i) (i32.const 1)) (global.get $linkMask)))
             (br $probe)))
         (local.set $r (i32.load offset=$R.defNext (local.get $r)))
@@ -589,7 +612,8 @@
     (local $slot i32)
     (if (i32.eqz (global.get $linkHash)) (then (return (i32.const 0))))
     (if (i32.eqz (local.get $len)) (then (return (i32.const 0))))
-    (local.set $i (i32.and (local.get $hash) (global.get $linkMask)))
+    (local.set $i (i32.shr_u (i32.mul (local.get $hash) (i32.const 0x9e3779b1))
+      (i32.clz (global.get $linkMask))))
     (loop $probe
       (local.set $slot (i32.load
         (i32.add (global.get $linkHash) (i32.mul (local.get $i) (i32.const 4)))))

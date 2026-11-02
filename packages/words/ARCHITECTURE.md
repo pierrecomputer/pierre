@@ -146,6 +146,8 @@ The session returns:
 Repeated input with unchanged options returns the same result. Edits,
 completion-option changes, suffix BOMs, and global definitions reset the cache.
 Definitions can affect earlier output, so they require a full-document path.
+Wasm reports the boundary's output offset and UTF-16 lengths, so the session
+slices completed HTML without a second render.
 
 `complete.wat` repairs a display copy of unfinished syntax. The HTML session
 omits raw source HTML. `html/render.ts` applies URL validation, element filters,
@@ -156,9 +158,11 @@ unfinished link but keeps its anchor.
 the mutable suffix. Updates parse new HTML and preserve matching nodes. Resets
 and skipped revisions reconcile the full completed prefix.
 
-For a supported open code fence, a second comment marks the final content line.
-The renderer updates only the changed lines. Other cases use the normal HTML
-path. The Markdown parser still reparses the mutable source suffix.
+For the last open code fence, a second comment marks the final content line. The
+renderer updates only the changed lines, also inside lists and quotes and
+without a highlighter. Code lines are grouped in blocks of 64, so the browser
+lays out only the last group. Other cases use the normal HTML path. The Markdown
+parser still reparses the mutable source suffix.
 
 Completed fences use direct HTML from Highlights. An open fence retains one live
 tokenizer and cached line strings. The plugin releases the tokenizer when the
@@ -178,8 +182,9 @@ strings, and DOM updates, with no Markdown node API.
   to 15 bytes beyond their range. Discard all matches outside the range.
 - Each render must reset its document state so one instance can serve many
   documents.
-- Limits are 250 container levels, 999 characters per link label, nine digits
-  per ordered-list start, 255 characters per code fence, and 1 GiB of input.
+- Limits are 250 container levels, 999 characters per link or footnote label,
+  nine digits per ordered-list start, 255 characters per code fence, 255
+  backticks per code span, 256 open brackets per leaf, and 1,073,610,752 bytes
+  (2^30 − 128 KiB) of input.
 
-See [AGENTS.md](./AGENTS.md) for implementation traps and test guidance. The
-[benchmark guide](./benchmark/README.md) covers performance measurements.
+The [benchmark guide](./benchmark/README.md) covers performance measurements.

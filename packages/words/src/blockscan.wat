@@ -120,6 +120,11 @@
     (global.set $indent (i32.sub (local.get $firstCol) (local.get $column)))
     (global.set $blank (i32.ge_u (local.get $first) (local.get $end))))
 
+  ;; Where the last failed thematic-break scan stopped. A later scan from an
+  ;; earlier byte of the same line would fail there too, so each container
+  ;; marker need not rescan the line. Positions only grow during a render.
+  (global $hrKill (mut i32) (i32.const 0))
+
   ;; three or more matching `-`, `_` or `*`, with spaces and tabs allowed
   ;; between and after them
   (func $scanThematicBreak (param $p i32) (result i32)
@@ -128,6 +133,7 @@
     (local $count i32)
     (local $i i32)
     (if (i32.ge_u (local.get $p) (global.get $lineEnd)) (then (return (i32.const 0))))
+    (if (i32.lt_u (local.get $p) (global.get $hrKill)) (then (return (i32.const 0))))
     (local.set $c (i32.load8_u (local.get $p)))
     (if (i32.eqz (i32.or
           (i32.eq (local.get $c) (i32.const "*"))
@@ -141,11 +147,14 @@
         (local.set $nc (i32.load8_u (local.get $i)))
         (if (i32.eq (local.get $nc) (local.get $c))
           (then (local.set $count (i32.add (local.get $count) (i32.const 1))))
-          (else (if (i32.eqz (call $isSpaceByte (local.get $nc)))
-            (then (return (i32.const 0))))))
+          (else (br_if $done (i32.eqz (call $isSpaceByte (local.get $nc))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))
-    (if (i32.lt_u (local.get $count) (i32.const 3)) (then (return (i32.const 0))))
+    (if (i32.or (i32.lt_u (local.get $count) (i32.const 3))
+          (i32.lt_u (local.get $i) (global.get $lineEnd)))
+      (then
+        (global.set $hrKill (local.get $i))
+        (return (i32.const 0))))
     (i32.sub (local.get $i) (local.get $p)))
 
   ;; one to six `#` followed by spaces, tabs, or the end of the line;
@@ -259,21 +268,31 @@
     (global.set $lmStart (local.get $start))
     (i32.sub (local.get $q) (local.get $p)))
 
-  ;; a GFM footnote definition, `[^label]:`; returns the bytes to consume
+  ;; a GFM footnote definition, `[^label]:` with at most 999 label characters,
+  ;; counted like a link label; returns the bytes to consume
   (func $scanFootnoteDef (param $p i32) (result i32)
     (local $q i32)
     (local $c i32)
+    (local $n i32)
     (if (i32.gt_u (i32.add (local.get $p) (i32.const 4)) (global.get $lineEnd))
       (then (return (i32.const 0))))
     (if (i32.ne (i32.load16_u (local.get $p)) (i32.const "[^")) (then (return (i32.const 0))))
     (local.set $q (i32.add (local.get $p) (i32.const 2)))
     (block $found
       (loop $l
-        (if (i32.ge_u (local.get $q) (global.get $lineEnd)) (then (return (i32.const 0))))
+        (if (i32.or (i32.ge_u (local.get $q) (global.get $lineEnd))
+              (i32.gt_u (local.get $n) (i32.const 999)))
+          (then (return (i32.const 0))))
         (local.set $c (i32.load8_u (local.get $q)))
         (if (i32.eq (local.get $c) (i32.const "[")) (then (return (i32.const 0))))
         (br_if $found (i32.eq (local.get $c) (i32.const "]")))
         (if (call $isWhiteByte (local.get $c)) (then (return (i32.const 0))))
+        (local.set $n (i32.add (local.get $n) (i32.const 1)))
+        (if (i32.ge_u (local.get $c) (i32.const 0x80))
+          (then
+            (drop (call $utf8At (local.get $q) (global.get $lineEnd)))
+            (local.set $q (global.get $utf8Next))
+            (br $l)))
         (if (i32.eq (local.get $c) (i32.const "\5c"))
           (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))

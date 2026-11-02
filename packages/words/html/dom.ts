@@ -118,7 +118,8 @@ function createFades(root: HTMLElement) {
       }
     },
     append(parent: Node, value: string, before: Node | null): void {
-      const previous = before?.previousSibling ?? parent.lastChild;
+      const previous =
+        before === null ? parent.lastChild : before.previousSibling;
       const animateHere =
         enabled() &&
         value.trim() !== '' &&
@@ -170,24 +171,30 @@ function patchChildren(
         previous += end.textContent ?? '';
         end = end.nextSibling;
       }
+      const append = value.startsWith(previous);
       const lineAppend =
+        !append &&
         previous.endsWith('\n') &&
         value.endsWith('\n') &&
         value.slice(0, -1).startsWith(previous.slice(0, -1));
-      if (current !== end && (value.startsWith(previous) || lineAppend)) {
+      if (current !== end && (append || lineAppend)) {
         actual = current!;
-        const suffix = lineAppend
-          ? value.slice(previous.length - 1, -1)
-          : value.slice(previous.length);
+        const suffix = append
+          ? value.slice(previous.length)
+          : value.slice(previous.length - 1, -1);
         if (suffix !== '') {
           let before = end;
           if (lineAppend) {
-            const last = end?.previousSibling ?? parent.lastChild;
-            if (last?.nodeType === 3)
+            // Insert before the run's final LF, split out of its text node or fade span.
+            let last = end === null ? parent.lastChild : end.previousSibling;
+            while (last !== null && last.nodeType === 1) last = last.lastChild;
+            if (last !== null) {
+              const text = last as Text;
               before =
-                (last as Text).data.length === 1
-                  ? last
-                  : (last as Text).splitText((last as Text).data.length - 1);
+                text.length === 1 ? text : text.splitText(text.length - 1);
+              if (before.parentNode !== parent)
+                parent.insertBefore(before, end);
+            }
           }
           fades.append(parent, suffix, before);
         }
@@ -261,7 +268,7 @@ function patchChildren(
   return firstPending;
 }
 
-/** Locate only the final code line; earlier highlighted lines stay outside subsequent patches. */
+/** Locate only the final code line in the last line group; earlier lines stay outside subsequent patches. */
 function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
   let before = code.firstChild;
   for (let node = code.lastChild; node !== null; node = node.previousSibling) {
@@ -284,6 +291,19 @@ function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
   return marker;
 }
 
+const blockTags =
+  /^(?:BLOCKQUOTE|DIV|H[1-6]|LI|OL|P|PRE|SECTION|TABLE|TBODY|TD|TH|THEAD|TR|UL)$/;
+
+/** Compare code controls by the buttons they produce, so inline objects stay equal. */
+const controlFlags = (controls: HtmlOptions['controls']): number => {
+  const code = typeof controls === 'object' ? controls.code : controls;
+  return code === false
+    ? 0
+    : typeof code === 'object'
+      ? (code.copy === false ? 0 : 1) | (code.download === false ? 0 : 2)
+      : 3;
+};
+
 /** Own an opaque HTML region. React or another framework only supplies source and options. */
 export function createDomRenderer(
   root: HTMLElement,
@@ -294,25 +314,25 @@ export function createDomRenderer(
   const checkpoint = document.createComment('markdown');
   const template = document.createElement('template');
   const tail = document.createElement('template');
+  const caret = document.createElement('span');
   const fades = createFades(root);
   let revision = 0;
-  let previousPending: string | undefined;
   let initialized = false;
   let previousCaret: 'block' | 'circle' | undefined;
   let codeState:
     | {
-        block: Element;
         code: Element;
         marker: Comment;
         line: number;
-        index: number;
-        language: string;
+        key: number;
         numbers: Element | null;
-        numberLength: number;
+        numberCount: number;
       }
     | undefined;
   root.dataset.markdown = 'root';
   root.insertBefore(checkpoint, root.firstChild);
+  caret.dataset.markdown = 'caret';
+  caret.setAttribute('aria-hidden', 'true');
 
   const click = (event: Event): void => {
     const target = event.target as Element | null;
@@ -340,7 +360,8 @@ export function createDomRenderer(
       const language = block?.getAttribute('data-language') ?? 'txt';
       link.download = `code.${/^[a-z0-9]+$/i.test(language) ? language : 'txt'}`;
       link.click();
-      URL.revokeObjectURL(url);
+      // Some browsers cancel a download whose URL is revoked during the click.
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
     }
   };
 
@@ -354,16 +375,39 @@ export function createDomRenderer(
       formatter.dispose();
       root.removeEventListener('click', click);
     },
+    /**
+     * Reformat completed output only when an option changes by value, so
+     * inline option objects are cheap. New hook and `urlTransform` functions
+     * format later output; a changed set of hook names reformats everything.
+     */
     configure(next: HtmlOptions): void {
+      if (next === options) return;
+      const hooks = (value: HtmlOptions['components']): string =>
+        Object.keys(value ?? {})
+          .filter((tag) => value?.[tag] !== undefined)
+          .join(' ');
+      let reset = false;
       const keys = new Set([...Object.keys(options), ...Object.keys(next)]);
-      if (
-        [...keys].every(
-          (key) =>
-            options[key as keyof HtmlOptions] === next[key as keyof HtmlOptions]
-        )
-      )
-        return;
-      formatter.configure(next);
+      for (const key of keys as Set<keyof HtmlOptions>) {
+        const previous = options[key];
+        const value = next[key];
+        reset ||= !(
+          previous === value ||
+          (key === 'controls'
+            ? controlFlags(previous as HtmlOptions['controls']) ===
+              controlFlags(value as HtmlOptions['controls'])
+            : key === 'components'
+              ? hooks(previous as HtmlOptions['components']) ===
+                hooks(value as HtmlOptions['components'])
+              : key === 'urlTransform'
+                ? (previous === undefined) === (value === undefined)
+                : Array.isArray(previous) &&
+                  Array.isArray(value) &&
+                  previous.length === value.length &&
+                  previous.every((tag, at) => tag === value[at]))
+        );
+      }
+      formatter.configure(next, reset);
       options = next;
     },
     update(
@@ -371,7 +415,7 @@ export function createDomRenderer(
       incomplete: boolean,
       active = false,
       animated: boolean | AnimateOptions = false,
-      caret?: 'block' | 'circle'
+      shape?: 'block' | 'circle'
     ): void {
       root.toggleAttribute('data-streaming', active);
       const update = formatter.render(source, incomplete, active);
@@ -380,128 +424,197 @@ export function createDomRenderer(
         !initialized ||
         (changed && (update.reset || update.revision !== revision + 1));
       fades.update(active, animated);
-      if (!changed && caret === previousCaret) return;
+      const nextCaret = active ? shape : undefined;
+      if (!changed && nextCaret === previousCaret) return;
+      // The caret lives inside the last text block, so patches never see it.
+      caret.remove();
       const codeUpdate = update.code;
       if (
-        !reset &&
         changed &&
+        !reset &&
         codeUpdate !== undefined &&
         codeState !== undefined &&
-        caret === previousCaret &&
         update.addition === '' &&
-        codeState.block === checkpoint.nextSibling &&
-        codeState.marker.parentNode === codeState.code &&
-        codeState.index === codeUpdate.index &&
-        codeState.language === codeUpdate.language &&
+        codeState.key === codeUpdate.key &&
+        codeState.marker.isConnected &&
         (codeUpdate.firstLine === codeUpdate.lineCount ||
           codeUpdate.firstLine === codeState.line) &&
         (codeUpdate.numbers === undefined) === (codeState.numbers === null) &&
-        (codeUpdate.numbers?.length ?? 0) >= codeState.numberLength
+        (codeUpdate.numbers ?? 0) >= codeState.numberCount
       ) {
         if (codeUpdate.firstLine < codeUpdate.lineCount) {
-          // Balanced per-line HTML lets the browser parse just the changed lines.
-          template.innerHTML = codeUpdate.html.slice(
-            0,
-            codeUpdate.lastLineOffset
-          );
+          // Balanced per-line HTML lets the browser parse just the changed
+          // lines. Lines fill the last 64-line group, then open new groups.
+          const { html, lastLineOffset } = codeUpdate;
           const marker = document.createComment('markdown-code');
-          const fragment = template.content;
-          fragment.append(marker);
-          tail.innerHTML = codeUpdate.html.slice(codeUpdate.lastLineOffset);
-          fragment.append(tail.content);
-          const first = codeState.marker.nextSibling;
+          let group = codeState.marker.parentNode as Element | null;
+          let first = codeState.marker.nextSibling;
           codeState.marker.remove();
-          patchChildren(codeState.code, fragment, first, fades, -1, marker);
+          for (let start = 0, line = codeUpdate.firstLine; ; ) {
+            let end = start;
+            let left = 64 - (line % 64);
+            for (; left > 0; left--) {
+              const at = html.indexOf('\n', end);
+              if (at < 0) break;
+              end = at + 1;
+            }
+            if (left > 0) end = html.length;
+            if (group === null) {
+              if (start === end) break;
+              group = document.createElement('span');
+              group.setAttribute('data-markdown', 'code-lines');
+              codeState.code.append(group);
+              first = null;
+            }
+            const at =
+              lastLineOffset >= start &&
+              (lastLineOffset < end || end === html.length)
+                ? lastLineOffset
+                : -1;
+            template.innerHTML = html.slice(start, at < 0 ? end : at);
+            const fragment = template.content;
+            if (at >= 0) {
+              fragment.append(marker);
+              tail.innerHTML = html.slice(at, end);
+              fragment.append(tail.content);
+            }
+            patchChildren(
+              group,
+              fragment,
+              first,
+              fades,
+              -1,
+              at < 0 ? undefined : marker
+            );
+            if (end === html.length) break;
+            line += 64 - (line % 64);
+            start = end;
+            group = null;
+          }
           codeState.marker = marker;
           codeState.line = codeUpdate.lastLine;
         }
-        const numberAddition =
-          codeUpdate.numbers?.slice(codeState.numberLength) ?? '';
-        if (numberAddition !== '' && codeState.numbers !== null) {
-          const text = codeState.numbers.lastChild;
-          if (text?.nodeType === 3) (text as Text).appendData(numberAddition);
-          else
-            codeState.numbers.append(document.createTextNode(numberAddition));
-          codeState.numberLength += numberAddition.length;
+        const count = codeUpdate.numbers ?? 0;
+        if (codeState.numbers !== null && count > codeState.numberCount) {
+          let group = codeState.numbers.lastElementChild!;
+          const append = (text: string): void => {
+            const last = group.lastChild;
+            if (last?.nodeType === 3) (last as Text).appendData(text);
+            else group.append(text);
+          };
+          let text = '';
+          for (let line = codeState.numberCount + 1; line <= count; line++) {
+            if (line % 64 !== 1) {
+              text += '\n' + line;
+              continue;
+            }
+            append(text + '\n');
+            group = document.createElement('span');
+            group.setAttribute('data-markdown', 'code-lines');
+            codeState.numbers.append(group);
+            text = String(line);
+          }
+          append(text);
+          codeState.numberCount = count;
         }
-        revision = update.revision;
-        previousPending = undefined;
-        fades.finish();
-        return;
-      }
-      const pending =
-        update.pending +
-        (active && caret !== undefined
-          ? `<span data-markdown="caret" data-shape="${caret}" aria-hidden="true">${caret === 'block' ? '▍' : '●'}</span>`
-          : '');
-      if (!changed && pending === previousPending) return;
-      // Initial HTML and skipped formatter results need the full prefix. Normal
-      // deliveries consume only their addition, without scanning settled HTML.
-      codeState?.marker.remove();
-      codeState = undefined;
-      if (reset) {
-        if (checkpoint.parentNode !== null) root.removeChild(checkpoint);
-        root.insertBefore(checkpoint, root.firstChild);
-      }
-      template.innerHTML = reset
-        ? update.stable
-        : changed
-          ? update.addition
-          : '';
-      const fragment = template.content;
-      const count = fragment.childNodes.length;
-      tail.innerHTML = pending;
-      const incomingCode =
-        codeUpdate === undefined
-          ? null
-          : tail.content.querySelector('pre code');
-      // Mark the generated line boundary before insertion can wrap multiline text in fades.
-      const codeMarker =
-        incomingCode === null || codeUpdate === undefined
-          ? undefined
-          : markLastCodeLine(
-              incomingCode,
-              codeUpdate.lastLine < codeUpdate.lineCount - 1
-            );
-      fragment.append(tail.content);
-      const firstPending = patchChildren(
-        root,
-        fragment,
-        checkpoint.nextSibling,
-        fades,
-        count,
-        codeMarker,
-        initialized && reset
-      );
-      if (checkpoint.nextSibling !== firstPending)
-        root.insertBefore(checkpoint, firstPending);
-      revision = update.revision;
-      previousPending = pending;
-      previousCaret = caret;
-      if (codeUpdate !== undefined && codeMarker !== undefined) {
-        const block = checkpoint.nextSibling;
-        const code =
-          block?.nodeType === 1
-            ? (block as Element).querySelector('pre code')
-            : null;
-        if (code !== null) {
+      } else if (changed) {
+        // Initial HTML and skipped formatter results need the full prefix. Normal
+        // deliveries consume only their addition, without scanning settled HTML.
+        codeState?.marker.remove();
+        codeState = undefined;
+        if (reset) {
+          if (checkpoint.parentNode !== null) root.removeChild(checkpoint);
+          root.insertBefore(checkpoint, root.firstChild);
+        }
+        template.innerHTML = reset ? update.stable : update.addition;
+        const fragment = template.content;
+        const count = fragment.childNodes.length;
+        tail.innerHTML = update.pending;
+        // Only the open fence block is incomplete; footnotes after it may hold other fences.
+        const incomingCode =
+          codeUpdate === undefined
+            ? null
+            : tail.content.querySelector('[data-incomplete] > pre > code');
+        // Mark the generated line boundary before insertion can wrap multiline text in fades.
+        const codeMarker =
+          incomingCode === null || codeUpdate === undefined
+            ? undefined
+            : markLastCodeLine(
+                incomingCode.lastElementChild ?? incomingCode,
+                codeUpdate.lastLine < codeUpdate.lineCount - 1
+              );
+        fragment.append(tail.content);
+        const firstPending = patchChildren(
+          root,
+          fragment,
+          checkpoint.nextSibling,
+          fades,
+          count,
+          codeMarker,
+          initialized && reset
+        );
+        if (checkpoint.nextSibling !== firstPending)
+          root.insertBefore(checkpoint, firstPending);
+        if (codeUpdate !== undefined && codeMarker?.parentNode != null) {
+          const code = codeMarker.parentNode.parentNode as Element;
+          const numbers = code.previousElementSibling;
           codeState = {
-            block: block as Element,
             code,
             marker: codeMarker,
             line: codeUpdate.lastLine,
-            index: codeUpdate.index,
-            language: codeUpdate.language,
-            numbers: (block as Element).querySelector(
-              '[data-markdown="line-numbers"]'
-            ),
-            numberLength: codeUpdate.numbers?.length ?? 0,
+            key: codeUpdate.key,
+            numbers:
+              numbers?.getAttribute('data-markdown') === 'line-numbers'
+                ? numbers
+                : null,
+            numberCount: codeUpdate.numbers ?? 0,
           };
         }
+        if (!initialized) {
+          initialized = true;
+          fades.tree(root);
+        }
       }
-      if (!initialized) {
-        initialized = true;
-        fades.tree(root);
+      revision = update.revision;
+      previousCaret = nextCaret;
+      if (nextCaret !== undefined) {
+        caret.dataset.shape = nextCaret;
+        // Place the caret after the last text, inside the deepest last block,
+        // and before the final LF of a code fence. Its glyph is CSS content,
+        // so block and code text stay unchanged for copy and hooks.
+        let parent: Node = root;
+        let before: Node | null = null;
+        for (let node = root.lastChild; node !== null; ) {
+          if (
+            node.nodeType === 8 ||
+            (node.nodeType === 3 && (node as Text).data.trim() === '') ||
+            (node.nodeType === 1 &&
+              (node as Element).hasAttribute('data-footnotes'))
+          ) {
+            node = node.previousSibling;
+            continue;
+          }
+          if (node.nodeType !== 1 || !blockTags.test(node.nodeName)) {
+            before = node.nextSibling;
+            break;
+          }
+          parent = node;
+          if (node.nodeName === 'PRE') {
+            const code = (node as Element).lastElementChild;
+            parent = code?.lastElementChild ?? code ?? node;
+            let last = parent.lastChild;
+            while (last?.nodeType === 1 && last.lastChild !== null)
+              last = last.lastChild;
+            if (last?.nodeType === 3 && (last as Text).data.endsWith('\n')) {
+              const text = last as Text;
+              before = text.length > 1 ? text.splitText(text.length - 1) : text;
+              parent = before.parentNode!;
+            }
+            break;
+          }
+          node = node.lastChild;
+        }
+        parent.insertBefore(caret, before);
       }
       fades.finish();
     },

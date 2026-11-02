@@ -191,6 +191,12 @@
     (if (i32.ne (i32.load8_u (local.get $p)) (i32.const ">")) (then (return (i32.const 0))))
     (i32.add (local.get $p) (i32.const 1)))
 
+  ;; Bits for the constructs whose closer is known to be absent from the rest
+  ;; of the inline content: comment 1, processing instruction 2, CDATA 4,
+  ;; declaration 8. A later opener of the same kind searches a suffix of the
+  ;; failed range, so it fails at once. The inline scan clears this per leaf.
+  (global $htmlNoClose (mut i32) (i32.const 0))
+
   ;; A complete raw HTML construct starting at `<`, or 0. Handles tags,
   ;; comments, processing instructions, declarations and CDATA.
   (func $scanHtmlAny (param $p i32) (param $end i32) (result i32)
@@ -206,27 +212,30 @@
         (if (i32.eq (i32.load16_u offset=2 (local.get $p)) (i32.const "--"))
           (then
             ;; `<!-->` and `<!--->` are comments in their own right
-            (if (i32.eq (i32.load8_u offset=4 (local.get $p)) (i32.const ">"))
+            (if (i32.and
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 4)) (local.get $end))
+                  (i32.eq (i32.load8_u offset=4 (local.get $p)) (i32.const ">")))
               (then (return (i32.add (local.get $p) (i32.const 5)))))
             (if (i32.and
                   (i32.le_u (i32.add (local.get $p) (i32.const 6)) (local.get $end))
                   (i32.eq (i32.load16_u offset=4 (local.get $p)) (i32.const "->")))
               (then (return (i32.add (local.get $p) (i32.const 6)))))
-            ;; `--` may appear inside a comment unless followed by `>`.
+            (if (i32.and (global.get $htmlNoClose) (i32.const 1)) (then (return (i32.const 0))))
+            ;; The comment ends at the first `-->`.
             (local.set $p (i32.add (local.get $p) (i32.const 4)))
             (loop $comment
               (local.set $p (call $findByte (local.get $p) (local.get $end) (i32.const "-")))
-              (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
-                (then (return (i32.const 0))))
+              (if (i32.ge_u (i32.add (local.get $p) (i32.const 2)) (local.get $end))
+                (then
+                  (global.set $htmlNoClose (i32.or (global.get $htmlNoClose) (i32.const 1)))
+                  (return (i32.const 0))))
               (if (i32.ne (i32.load8_u offset=1 (local.get $p)) (i32.const "-"))
                 (then
                   (local.set $p (i32.add (local.get $p) (i32.const 2)))
                   (br $comment)))
-              (if (i32.ge_u (i32.add (local.get $p) (i32.const 2)) (local.get $end))
-                (then (return (i32.const 0))))
               (if (i32.eq (i32.load8_u offset=2 (local.get $p)) (i32.const ">"))
                 (then (return (i32.add (local.get $p) (i32.const 3)))))
-              (local.set $p (i32.add (local.get $p) (i32.const 3)))
+              (local.set $p (i32.add (local.get $p) (i32.const 1)))
               (br $comment))))
         (if (i32.eq (i32.load8_u offset=2 (local.get $p)) (i32.const "["))
           (then
@@ -236,16 +245,20 @@
               (then (return (i32.const 0))))
             (if (i32.ne (i32.load16_u offset=7 (local.get $p)) (i32.const "A["))
               (then (return (i32.const 0))))
+            (if (i32.and (global.get $htmlNoClose) (i32.const 4)) (then (return (i32.const 0))))
             (local.set $p (i32.add (local.get $p) (i32.const 9)))
             (loop $cdata
               (local.set $p (call $findByte (local.get $p) (local.get $end) (i32.const "]")))
               (if (i32.gt_u (i32.add (local.get $p) (i32.const 3)) (local.get $end))
-                (then (return (i32.const 0))))
+                (then
+                  (global.set $htmlNoClose (i32.or (global.get $htmlNoClose) (i32.const 4)))
+                  (return (i32.const 0))))
               (if (i32.eq (i32.load16_u offset=1 (local.get $p)) (i32.const "]>"))
                 (then (return (i32.add (local.get $p) (i32.const 3)))))
               (local.set $p (i32.add (local.get $p) (i32.const 1)))
               (br $cdata))))
         ;; declaration: `<!` letter+ [^>]* `>`
+        (if (i32.and (global.get $htmlNoClose) (i32.const 8)) (then (return (i32.const 0))))
         (local.set $p (i32.add (local.get $p) (i32.const 2)))
         (local.set $q (local.get $p))
         (block $declNameDone
@@ -256,15 +269,21 @@
             (br $declName)))
         (if (i32.eq (local.get $q) (local.get $p)) (then (return (i32.const 0))))
         (local.set $q (call $findByte (local.get $q) (local.get $end) (i32.const ">")))
-        (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
+        (if (i32.ge_u (local.get $q) (local.get $end))
+          (then
+            (global.set $htmlNoClose (i32.or (global.get $htmlNoClose) (i32.const 8)))
+            (return (i32.const 0))))
         (return (i32.add (local.get $q) (i32.const 1)))))
     (if (i32.eq (local.get $c) (i32.const "?"))
       (then
+        (if (i32.and (global.get $htmlNoClose) (i32.const 2)) (then (return (i32.const 0))))
         (local.set $p (i32.add (local.get $p) (i32.const 2)))
         (loop $pi
           (local.set $p (call $findByte (local.get $p) (local.get $end) (i32.const "?")))
           (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
-            (then (return (i32.const 0))))
+            (then
+              (global.set $htmlNoClose (i32.or (global.get $htmlNoClose) (i32.const 2)))
+              (return (i32.const 0))))
           (if (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const ">"))
             (then (return (i32.add (local.get $p) (i32.const 2)))))
           (local.set $p (i32.add (local.get $p) (i32.const 1)))

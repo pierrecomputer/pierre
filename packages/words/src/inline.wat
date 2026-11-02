@@ -79,7 +79,9 @@
   (global $delimHead (mut i32) (i32.const -1))
   (global $delimTail (mut i32) (i32.const -1))
   (global $bracketSp (mut i32) (i32.const 0))
+  (global $bracketLo (mut i32) (i32.const 0))
   (global $scannedBackticks (mut i32) (i32.const 0))
+  (global $tickTop (mut i32) (i32.const 0))
   (global $lastMarkEnd (mut i32) (i32.const 0))
   (global $literalNeedsEscape (mut i32) (i32.const 0))
 
@@ -159,10 +161,11 @@
     (global.set $delimHead (i32.const -1))
     (global.set $delimTail (i32.const -1))
     (global.set $bracketSp (i32.const 0))
-    ;; The memo is read only after a scan has reached EOF. That scan overwrites
-    ;; every run length relevant at any later position; stale absent lengths
-    ;; can only cause another failed scan, so retaining them is safe.
+    (global.set $bracketLo (i32.const 0))
     (global.set $scannedBackticks (i32.const 0))
+    (global.set $tickTop (i32.const 0))
+    (global.set $htmlNoClose (i32.const 0))
+    (global.set $wwwRejectBefore (i32.const 0))
     (global.set $lastMarkEnd (i32.const 0))
     (local.set $end (global.get $contentLen))
     (block $done
@@ -404,16 +407,22 @@
       (i32.add (local.get $p) (local.get $n)))
     (local.get $i))
 
-  ;; the position just past a run of exactly $n backticks, or 0
+  ;; The position just past a run of exactly $n backticks, or 0. Runs longer
+  ;; than 255 never pair. $mem.tickMemo holds, per run length, the start of
+  ;; the latest such run seen in this leaf; entries above $tickTop, the
+  ;; longest run seen, are stale. Until a scan reaches EOF, each scan covers a
+  ;; later range, so stores only raise entries. That scan leaves each entry at
+  ;; its length's last run, so a later scan for a length whose last run starts
+  ;; before it fails without scanning, and further stores could only lower it.
   (func $scanToClosingBackticks (param $p i32) (param $end i32) (param $n i32) (result i32)
     (local $base i32)
     (local $ticks i32)
-    (local $memo i32)
     (local.set $base (call $contentAt (i32.const 0)))
-    (if (i32.gt_u (local.get $n) (i32.const 64)) (then (return (i32.const 0))))
-    (local.set $memo (i32.add (i32.const $mem.tickMemo) (i32.mul (local.get $n) (i32.const 4))))
+    (if (i32.gt_u (local.get $n) (i32.const 255)) (then (return (i32.const 0))))
     (if (i32.and (global.get $scannedBackticks)
-          (i32.le_u (i32.load (local.get $memo)) (local.get $p)))
+          (i32.or (i32.gt_u (local.get $n) (global.get $tickTop))
+            (i32.le_u (i32.load (i32.add (i32.const $mem.tickMemo)
+              (i32.mul (local.get $n) (i32.const 4)))) (local.get $p))))
       (then (return (i32.const 0))))
     (block $eof
       (loop $l
@@ -431,10 +440,18 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (local.set $ticks (i32.add (local.get $ticks) (i32.const 1)))
             (br $c)))
-        (if (i32.le_u (local.get $ticks) (i32.const 64))
-          (then (i32.store
-            (i32.add (i32.const $mem.tickMemo) (i32.mul (local.get $ticks) (i32.const 4)))
-            (i32.sub (local.get $p) (local.get $ticks)))))
+        (if (i32.and (i32.le_u (local.get $ticks) (i32.const 255))
+              (i32.eqz (global.get $scannedBackticks)))
+          (then
+            (block $fresh
+              (loop $clear
+                (br_if $fresh (i32.le_u (local.get $ticks) (global.get $tickTop)))
+                (global.set $tickTop (i32.add (global.get $tickTop) (i32.const 1)))
+                (i32.store (i32.add (i32.const $mem.tickMemo)
+                  (i32.mul (global.get $tickTop) (i32.const 4))) (i32.const 0))
+                (br $clear)))
+            (i32.store (i32.add (i32.const $mem.tickMemo) (i32.mul (local.get $ticks) (i32.const 4)))
+              (i32.sub (local.get $p) (local.get $ticks)))))
         (if (i32.eq (local.get $ticks) (local.get $n)) (then (return (local.get $p))))
         (br $l)))
     (global.set $scannedBackticks (i32.const 1))
@@ -751,8 +768,11 @@
         (return (local.get $next))))
     (local.get $closer))
 
+  ;; The bracket stack is a ring of the newest 256 open brackets. Brackets
+  ;; below $bracketLo were dropped when it was full and stay literal text.
   (func $bracketAt (param $i i32) (result i32)
-    (i32.add (i32.const $mem.bracket) (i32.mul (local.get $i) (i32.const $B.size))))
+    (i32.add (i32.const $mem.bracket)
+      (i32.mul (i32.and (local.get $i) (i32.const 255)) (i32.const $B.size))))
 
   (func $pushBracket (param $p i32) (param $image i32) (result i32)
     (local $i i32)
@@ -762,7 +782,8 @@
     (local.set $i (call $markNew (enum.get $Mk.bracket) (local.get $p) (local.get $end)))
     (if (local.get $image)
       (then (i32.store8 offset=$M.flags (call $slotAt (local.get $i)) (i32.const $MF.image))))
-    (if (i32.ge_u (global.get $bracketSp) (i32.const 255)) (then (return (local.get $end))))
+    (if (i32.eq (i32.sub (global.get $bracketSp) (global.get $bracketLo)) (i32.const 256))
+      (then (global.set $bracketLo (i32.add (global.get $bracketLo) (i32.const 1)))))
     (if (global.get $bracketSp)
       (then (i32.store8 offset=10
         (call $bracketAt (i32.sub (global.get $bracketSp) (i32.const 1))) (i32.const 1))))
@@ -801,6 +822,11 @@
     (local $pending i32)
     (local.set $initial (i32.add (local.get $p) (i32.const 1)))
     (if (i32.eqz (global.get $bracketSp)) (then (return (local.get $initial))))
+    (if (i32.eq (global.get $bracketSp) (global.get $bracketLo))
+      (then
+        (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
+        (global.set $bracketLo (global.get $bracketSp))
+        (return (local.get $initial))))
     (local.set $b (call $bracketAt (i32.sub (global.get $bracketSp) (i32.const 1))))
     (local.set $image (i32.load8_u offset=8 (local.get $b)))
     (local.set $bottom
@@ -930,17 +956,20 @@
         (select (i32.const $MF.image) (i32.const 0) (local.get $image)))))
     (call $processEmphasis (local.get $bottom) (local.get $delimBottom))
     (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
-    ;; a link may not contain another link: every bracket still open below this
-    ;; one can no longer become one
+    ;; A link may not contain another link: every bracket still open below this
+    ;; one can no longer become one. Those below an inactive `[` already are.
     (if (i32.eqz (local.get $image))
       (then
-        (local.set $n (i32.const 0))
+        (local.set $n (global.get $bracketSp))
         (block $done
           (loop $l
-            (br_if $done (i32.ge_u (local.get $n) (global.get $bracketSp)))
-            (if (i32.eqz (i32.load8_u offset=8 (call $bracketAt (local.get $n))))
-              (then (i32.store8 offset=9 (call $bracketAt (local.get $n)) (i32.const 0))))
-            (local.set $n (i32.add (local.get $n) (i32.const 1)))
+            (br_if $done (i32.le_u (local.get $n) (global.get $bracketLo)))
+            (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+            (local.set $b (call $bracketAt (local.get $n)))
+            (if (i32.eqz (i32.load8_u offset=8 (local.get $b)))
+              (then
+                (br_if $done (i32.eqz (i32.load8_u offset=9 (local.get $b))))
+                (i32.store8 offset=9 (local.get $b) (i32.const 0))))
             (br $l)))))
     (local.get $q))
 
@@ -950,7 +979,9 @@
     (local $tmp i32)
     (local $len i32)
     (local $normalized i64)
-    (if (i32.ge_u (local.get $b) (local.get $e)) (then (return (i32.const 0))))
+    ;; with no definitions there is nothing to normalize the text for
+    (if (i32.or (i32.eqz (global.get $linkHash)) (i32.ge_u (local.get $b) (local.get $e)))
+      (then (return (i32.const 0))))
     (call $ensureScratch (i32.add
       (i32.add (global.get $markOff) (i32.mul (i32.add (global.get $nSlots) (i32.const 2))
         (i32.const $M.size)))
@@ -1011,7 +1042,9 @@
         (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
         (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $q))))
         (br_if $body (i32.eq (local.get $c) (i32.const ">")))
-        (if (i32.or (i32.le_u (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const "<")))
+        ;; no ASCII controls, space or `<`; NUL stands for U+FFFD
+        (if (i32.or (i32.lt_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 32))
+              (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const 127))))
           (then (return (i32.const 0))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))

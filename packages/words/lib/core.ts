@@ -1,5 +1,6 @@
 import type {
   AnsiOptions,
+  Frontmatter,
   HtmlSessionOptions,
   HtmlUpdate,
   RenderOptions,
@@ -7,6 +8,7 @@ import type {
 
 export type {
   AnsiOptions,
+  Frontmatter,
   HtmlSessionOptions,
   HtmlUpdate,
   RenderOptions,
@@ -15,11 +17,16 @@ export type {
 export type { Renderer };
 
 type Input = string | Uint8Array | ArrayBuffer;
-type Options = AnsiOptions & RenderOptions;
+/** `boundary` makes Wasm measure the session's safe boundary in UTF-16 units. */
+type Options = AnsiOptions & RenderOptions & { boundary?: boolean };
 
 const enc = new TextEncoder();
-const dec = new TextDecoder();
+// Keep a leading U+FEFF so string lengths match the UTF-16 counts from Wasm.
+const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
+// Line records keep 30-bit end addresses and the input starts after the first
+// 64 KiB page. Another 64 KiB stays free for the closers completion appends.
+const maxInput = 2 ** 30 - 2 * pageSize;
 
 class Renderer {
   memory: WebAssembly.Memory;
@@ -34,6 +41,11 @@ class Renderer {
     this.memory = instance.exports.memory as WebAssembly.Memory;
     this.wasmRender = instance.exports.render as () => void;
     this.wasmComplete = instance.exports.complete as () => number;
+    // A random label hash seed, so crafted reference labels cannot share a
+    // slot. Math.random suffices and avoids ~2 MiB of webcrypto setup in Node.
+    (instance.exports.seed as (seed: number) => void)(
+      (Math.random() * 2 ** 32) >>> 0
+    );
     this.bindMemory();
   }
 
@@ -51,13 +63,16 @@ class Renderer {
     }
     let inputLength;
     if (typeof input === 'string') {
-      this.grow(input.length * 3 + 8192);
-      inputLength = enc.encodeInto(
+      this.grow(Math.min(input.length * 3, maxInput + 1) + 8192);
+      const { read, written } = enc.encodeInto(
         input,
-        this.buffer.subarray(pageSize)
-      ).written;
+        this.buffer.subarray(pageSize, pageSize + maxInput + 1)
+      );
+      if (read < input.length || written > maxInput) throw tooLarge();
+      inputLength = written;
     } else {
       if (input instanceof ArrayBuffer) input = new Uint8Array(input);
+      if (input.length > maxInput) throw tooLarge();
       // growing detaches the old buffer, so copy an aliasing input first
       if (input.buffer === this.memory.buffer) input = input.slice();
       this.grow(input.length + 8192);
@@ -68,7 +83,8 @@ class Renderer {
     this.dv.setUint8(
       1,
       (options?.frontmatter === true ? 1 : 0) |
-        (options?.skipHtml === true ? 2 : 0)
+        (options?.skipHtml === true ? 2 : 0) |
+        (options?.boundary === true ? 8 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
     if (options?.incomplete === true) {
@@ -121,15 +137,18 @@ class Renderer {
 
 let shared: Renderer;
 
+const tooLarge = () =>
+  new RangeError(`input exceeds ${maxInput} bytes of UTF-8`);
+
 export function init(wasmModule: WebAssembly.Module): Renderer {
   return (shared = new Renderer(wasmModule));
 }
 
 export function renderToHtml(input: Input): Uint8Array;
-export function renderToHtml<T = Record<string, any>>(
+export function renderToHtml<T = Frontmatter>(
   input: Input,
   options: RenderOptions & { frontmatter: true }
-): [T, Uint8Array];
+): [T | null, Uint8Array];
 export function renderToHtml(input: Input, options?: RenderOptions): Uint8Array;
 export function renderToHtml(
   input: Input,
@@ -168,8 +187,10 @@ export function createHtmlSession(): {
         result != null
       )
         return result;
+      // startsWith takes a slow path for two-byte and rope strings in V8.
       let reset =
-        !input.startsWith(previous) ||
+        input.length < previous.length ||
+        input.slice(0, previous.length) !== previous ||
         incomplete !== options?.incomplete ||
         definitions;
       if (offset !== 0 && input.charCodeAt(offset) === 0xfeff) reset = true;
@@ -177,37 +198,28 @@ export function createHtmlSession(): {
         stable = '';
         offset = 0;
       }
-      let tail = input.slice(offset);
-      let rendered = shared.render(tail, 0, {
+      const renderOptions = {
         skipHtml: true,
         incomplete: options?.incomplete,
-      });
+        boundary: true,
+      };
+      let tail = input.slice(offset);
+      let rendered = shared.render(tail, 0, renderOptions);
       if (offset !== 0 && shared.dv.getUint8(30) !== 0) {
         stable = '';
         offset = 0;
         reset = true;
         tail = input;
-        rendered = shared.render(tail, 0, {
-          skipHtml: true,
-          incomplete: options?.incomplete,
-        });
+        rendered = shared.render(tail, 0, renderOptions);
       }
       const html = dec.decode(rendered.output);
-      const boundary = shared.dv.getUint32(26, true);
       definitions = shared.dv.getUint8(30) !== 0;
-      const completed = definitions
-        ? 0
-        : dec.decode(shared.buffer.subarray(pageSize, pageSize + boundary))
-            .length;
+      // Wasm measures the source and HTML before the boundary in UTF-16 units.
+      const completed = definitions ? 0 : shared.dv.getUint32(36, true);
       let pending = html;
       let addition = '';
       if (completed > 0 && completed <= tail.length) {
-        addition = dec.decode(
-          shared.render(tail.slice(0, completed), 0, {
-            skipHtml: true,
-            incomplete: options?.incomplete,
-          }).output
-        );
+        addition = html.slice(0, shared.dv.getUint32(40, true));
         stable += addition;
         offset += completed;
         pending = html.slice(addition.length);

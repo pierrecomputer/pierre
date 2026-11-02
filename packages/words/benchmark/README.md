@@ -29,13 +29,13 @@ Throughput is input MiB per second. Higher is better.
 
 | Fixture                          | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
 | -------------------------------- | ------------: | ------------: | ----------: | ----------: |
-| `tiny.md` (1.3 KiB)              |         273.5 |         139.5 |       101.9 |        13.2 |
-| `assistant-review.md` (5.4 KiB)  |         350.6 |         202.0 |       159.5 |        21.9 |
-| `assistant-explain.md` (6.0 KiB) |         406.6 |         216.9 |       173.4 |        31.3 |
-| `simd.md` (39.0 KiB)             |         316.5 |         179.7 |       125.4 |        20.8 |
-| `gfm-spec.md` (211.3 KiB)        |         301.6 |         163.1 |       118.3 |        28.8 |
+| `tiny.md` (1.3 KiB)              |         262.3 |         138.6 |       100.0 |        13.0 |
+| `assistant-review.md` (5.4 KiB)  |         449.9 |         199.8 |       178.7 |        21.9 |
+| `assistant-explain.md` (6.0 KiB) |         526.2 |         213.8 |       192.6 |        32.0 |
+| `simd.md` (39.0 KiB)             |         384.4 |         181.4 |       137.1 |        21.3 |
+| `gfm-spec.md` (211.3 KiB)        |         371.0 |         164.8 |       127.4 |        29.4 |
 
-> These results are from **2026-10-31**. The run used Node 24.11.0 on an Apple
+> These results are from **2026-11-02**. The run used Node 24.19.0 on an Apple
 > M4 Pro with 48GB RAM.
 
 ## Streaming
@@ -45,11 +45,11 @@ Streamdown time divided by the Words time.
 
 | Fixture                | Chunks | @pierre/words/react | streamdown | Speedup |
 | ---------------------- | -----: | ------------------: | ---------: | ------: |
-| `tiny.md`              |      6 |                6.78 |       7.96 |   1.17× |
-| `assistant-review.md`  |     22 |               12.46 |      36.01 |   2.89× |
-| `assistant-explain.md` |     24 |                7.45 |      12.60 |   1.69× |
-| `simd.md`              |    156 |               46.87 |     196.46 |   4.19× |
-| `gfm-spec.md`          |    844 |              290.34 |    4364.69 |  15.03× |
+| `tiny.md`              |      6 |                3.98 |       8.20 |   2.06× |
+| `assistant-review.md`  |     22 |               11.83 |      35.43 |   3.00× |
+| `assistant-explain.md` |     24 |                6.72 |      11.58 |   1.72× |
+| `simd.md`              |    156 |               45.58 |     187.74 |   4.12× |
+| `gfm-spec.md`          |    844 |              305.55 |    4758.29 |  15.57× |
 
 Both engines use production React. Each replay creates one React root, then
 supplies cumulative Markdown prefixes to the same component. `flushSync` commits
@@ -74,26 +74,26 @@ are not browser latency measurements.
 ## Memory usage
 
 Median peak RSS growth in MiB. Lower is better. Each process subtracts its own
-peak RSS before engine import, which is mostly Node itself (75.8 to 79.7 MiB).
+peak RSS before engine import, which is mostly Node itself (78.7 to 82.4 MiB).
 Each entry uses five fresh Node processes, for 150 processes in total. HTML and
 React results have separate tables because React processes also include JSDOM
 and the React runtime.
 
 | Fixture → HTML         | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
 | ---------------------- | ------------: | ------------: | ----------: | ----------: |
-| `tiny.md`              |           3.2 |           0.9 |         7.7 |         6.1 |
-| `assistant-review.md`  |           3.1 |           0.9 |         7.7 |         6.0 |
-| `assistant-explain.md` |           3.2 |           0.9 |         7.8 |         5.7 |
-| `simd.md`              |           4.1 |           1.3 |        11.6 |         8.6 |
-| `gfm-spec.md`          |           8.3 |           2.5 |        20.2 |        17.7 |
+| `tiny.md`              |           3.2 |           0.9 |         9.8 |         6.1 |
+| `assistant-review.md`  |           3.1 |           0.9 |         9.9 |         6.0 |
+| `assistant-explain.md` |           3.1 |           1.0 |         9.8 |         5.9 |
+| `simd.md`              |           4.0 |           1.3 |        13.3 |         8.4 |
+| `gfm-spec.md`          |           6.7 |           2.5 |        19.5 |        17.1 |
 
 | Fixture → React stream | @pierre/words/react | streamdown |
 | ---------------------- | ------------------: | ---------: |
-| `tiny.md`              |                76.3 |       85.9 |
-| `assistant-review.md`  |                85.8 |      121.0 |
-| `assistant-explain.md` |                76.5 |       93.3 |
-| `simd.md`              |               109.9 |      146.0 |
-| `gfm-spec.md`          |               173.0 |      325.3 |
+| `tiny.md`              |                69.7 |       82.3 |
+| `assistant-review.md`  |                83.3 |      120.1 |
+| `assistant-explain.md` |                73.6 |       92.8 |
+| `simd.md`              |               109.0 |      141.4 |
+| `gfm-spec.md`          |               199.9 |      331.0 |
 
 Samples run in sequence, with a different engine first each round. Build work
 occurs outside these processes. Growth covers engine import through the first

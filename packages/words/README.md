@@ -50,7 +50,8 @@ const [meta, output] = renderToHtml('---\ntitle: Hello\n---\n# Hello', {
 ```
 
 `renderToAnsi()` accepts `width` for the terminal wrap column. Its default is
-`0`, which lets the terminal wrap the text.
+`0`, which lets the terminal wrap the text. Control characters in the input
+print as U+FFFD, so a document cannot send terminal escape sequences.
 
 `renderToHtml()` preserves raw HTML by default. Sanitize output from untrusted
 Markdown before insertion into a page. `skipHtml` alone is not a sanitizer.
@@ -92,8 +93,8 @@ incomplete images. Use `mode="static"` for normal Markdown semantics, or
 `parseIncompleteMarkdown={false}` to disable completion. Completion does not
 provide full Remend compatibility.
 
-Fades require `styles.css` and an active stream. The duration is in
-milliseconds. Reduced motion and a zero duration disable fades.
+Fades and the caret require `styles.css`. Fades also need an active stream. The
+duration is in milliseconds. Reduced motion and a zero duration disable fades.
 
 HTML hooks receive and return strings, not React elements:
 

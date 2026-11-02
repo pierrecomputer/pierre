@@ -53,6 +53,27 @@ void test('HTML additions reconstruct output through appends, repeated inputs, a
   }
 });
 
+void test('only inputs that extend the previous one reuse its prefix', () => {
+  const session = createHtmlSession();
+  session.render('é **a**\n\nb');
+  for (const [input, reset] of [
+    ['é **x**\n\nb', true],
+    ['é **x**\n\n', true],
+    ['é **x**\n\nb😀', false],
+  ] as const) {
+    const update = session.render(input);
+    assert.equal(update.reset, reset, input);
+    assert.equal(update.html, full(input), input);
+  }
+  // appends build rope strings
+  let rope = 'é\n\n';
+  for (const chunk of ['a', ' *b', '*\n\n', 'c']) {
+    rope += chunk;
+    const update = session.render(rope);
+    assert.equal(update.html, full(rope), rope);
+  }
+});
+
 void test('ordinary paragraph runs keep append boundaries through table conversion', () => {
   const source =
     'Alpha.\nBeta.\nGamma.\n\nBefore.\nMore.\nA | B\n' +
@@ -118,6 +139,128 @@ void test('synthetic emphasis closers preserve whitespace, nesting, and inline c
       full(completed),
       JSON.stringify(source)
     );
+});
+
+/** Stream every prefix and compare each update with a fresh full render. */
+const streamMatches = (source: string, incomplete: boolean) => {
+  const session = createHtmlSession();
+  let stable = '';
+  for (let end = 0; end <= source.length; end++) {
+    const input = source.slice(0, end);
+    const update = session.render(input, { incomplete });
+    stable = (update.reset ? '' : stable) + update.addition;
+    assert.equal(update.stable, stable, JSON.stringify(input));
+    assert.equal(
+      update.html,
+      full(input, { incomplete }),
+      JSON.stringify({ input, incomplete })
+    );
+  }
+};
+
+void test('CR and CRLF blank lines end inline repair like LF ones', () => {
+  for (const [source, expected] of [
+    ['**a\r\n\r\nb', '<p>**a</p>\n<p>b</p>\n'],
+    ['_a\r\n\r\nb _c_', '<p>_a</p>\n<p>b <em>c</em></p>\n'],
+    ['[a\r\n\r\nb', '<p>[a</p>\n<p>b</p>\n'],
+    ['*a\r\rb', '<p>*a</p>\n<p>b</p>\n'],
+    [
+      '```\r\nx\r\n```\r\n\r\n*b',
+      '<pre><code>x\n</code></pre>\n<p><em>b</em></p>\n',
+    ],
+  ]) {
+    assert.equal(full(source, { incomplete: true }), expected, source);
+    streamMatches(source, true);
+  }
+});
+
+void test('only blank lines are append boundaries for inline repair', () => {
+  for (const source of [
+    '`\n***\n\nmore',
+    '\t*g\n---\nx',
+    '*a\n#\nb\n\nc',
+    '`a\n===\n\n*b',
+  ]) {
+    streamMatches(source, true);
+    streamMatches(source, false);
+  }
+});
+
+void test('emphasis around unfinished links and images closes outside them', () => {
+  for (const [source, completed] of [
+    ['1. **[React', '1. **[React](streamdown:incomplete-link)**'],
+    ['1. **[React](https://', '1. **[React](streamdown:incomplete-link)**'],
+    ['[**a](http', '[**a**](streamdown:incomplete-link)'],
+    ['**bold ![alt', '**bold** '],
+    ['**x ![a](http://y', '**x** '],
+    ['[a](b`c) more *x', '[a](b`c) more *x*'],
+    ['[a](http://x/[y', '[a](streamdown:incomplete-link)'],
+    ['[a](u) *[b*', '[a](u) *[b*](streamdown:incomplete-link)'],
+    ['<b [a', ''],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(completed),
+      JSON.stringify(source)
+    );
+  }
+});
+
+void test('repair follows the parser on fences, escapes, and tildes', () => {
+  for (const [source, completed] of [
+    // not fences: a backtick info string, text before the run
+    ['```a```\n\n*b', '```a```\n\n*b*'],
+    ['2024 ```\n\n*b', '2024 ```\n\n*b*'],
+    // a fence in a quote ends with the quote
+    ['> ```\n> code\n\n*b', '> ```\n> code\n\n*b*'],
+    ['- ```\n  code\n\n*b', '- ```\n  code\n\n*b*'],
+    // a closing fence may end in CR
+    ['```\r\nx\r\n```\r\n*b', '```\r\nx\r\n```\r\n*b*'],
+    // `\` before a line end is a hard break, not an escape
+    ['*a\\\n\nb', '*a\\\n\nb'],
+    ['foo\\\n```\ncode *x', 'foo\\\n```\ncode *x'],
+    ['![a\\\n\nfoo', '![a\\\n\nfoo'],
+    // a lone `~` is not strikethrough
+    ['It takes ~5 min to build.', 'It takes ~5 min to build.'],
+    ['~~del', '~~del~~'],
+    // code ticks stay on the last line, where they cannot start a fence
+    ['x ```a\n', 'x ```a```\n'],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(completed),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
+});
+
+void test('sessions match full renders across BOMs, CRs, and astral text', () => {
+  for (const source of [
+    '﻿**a\n\nb',
+    '﻿[\n\n',
+    '`\n\r\na',
+    '*_\n\r\n`',
+    '<b>```ts\n\r\n x',
+    'a\n\n﻿b *c\n\nd',
+    '😀 **x\n\n𝔸 `y\r\n\r\n[z\r\r😀',
+    '<v>\n```\n\n[',
+  ]) {
+    streamMatches(source, true);
+    streamMatches(source, false);
+  }
+  // two-update repros: a reused prefix must equal a fresh render
+  for (const [first, second] of [
+    ['`\n\r\n', '`\n\r\na'],
+    ['*_\n\r\n', '*_\n\r\n`'],
+    ['<b>```ts\n\r\n', '<b>```ts\n\r\n '],
+  ]) {
+    const session = createHtmlSession();
+    session.render(first, { incomplete: true });
+    const update = session.render(second, { incomplete: true });
+    assert.equal(update.html, full(second, { incomplete: true }), second);
+    assert.ok(!update.stable.includes('<pre'), second);
+  }
 });
 
 void test('unfinished HTML attributes do not repair emphasis in preceding blocks', () => {

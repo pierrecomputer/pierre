@@ -40,17 +40,23 @@
   ;; grows stays logarithmic in the output size
   (func $growPages (param $min i32)
     (local $pages i32)
+    (local $need i32)
     (local $want i32)
     (local.set $pages (memory.size))
-    (if (i32.le_u (local.get $min) (i32.mul (local.get $pages) (i32.const 65536)))
-      (then (return)))
-    (local.set $want (i32.shr_u (i32.add (local.get $min) (i32.const 65535)) (i32.const 16)))
-    (if (i32.lt_u (local.get $want) (i32.shl (local.get $pages) (i32.const 1)))
-      (then (local.set $want (i32.shl (local.get $pages) (i32.const 1)))))
-    ;; a failed grow (past the wasm32 4 GB ceiling) traps on purpose: the host
-    ;; sees a RuntimeError and the instance stays reusable
+    ;; whole pages, without overflow near the 4 GiB ceiling
+    (local.set $need (i32.add (i32.shr_u (local.get $min) (i32.const 16))
+      (i32.ne (i32.and (local.get $min) (i32.const 0xffff)) (i32.const 0))))
+    (if (i32.le_u (local.get $need) (local.get $pages)) (then (return)))
+    (local.set $want (i32.shl (local.get $pages) (i32.const 1)))
+    (if (i32.gt_u (local.get $want) (i32.const 65536)) (then (local.set $want (i32.const 65536))))
+    (if (i32.lt_u (local.get $want) (local.get $need)) (then (local.set $want (local.get $need))))
+    ;; The host may allow less than the doubled size, so retry with the exact
+    ;; need. A failed grow traps on purpose: the host sees a RuntimeError and
+    ;; the instance stays reusable.
     (if (i32.eq (memory.grow (i32.sub (local.get $want) (local.get $pages))) (i32.const -1))
-      (then (unreachable))))
+      (then
+        (if (i32.eq (memory.grow (i32.sub (local.get $need) (local.get $pages))) (i32.const -1))
+          (then (unreachable))))))
 
   ;; move the scratch back to the top of memory and recompute the ceiling
   (func $rebase (param $old i32)
