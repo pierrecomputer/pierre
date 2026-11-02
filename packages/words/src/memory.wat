@@ -15,8 +15,10 @@
   (const $mem.syntaxLo $mem.markHi+16)
   (const $mem.escapeNibbles $mem.syntaxLo+16)
   (const $mem.entities $mem.escapeNibbles+16)
-  (const $mem.entitiesEnd $mem.entities+20544)
-  (const $mem.punct $mem.entitiesEnd)
+  (const $mem.entitiesEnd $mem.entities+16424)
+  ;; 2-way cache of recent named-reference lookups (128 sets x 32 bytes), see $entityMatch
+  (const $mem.entityCache $mem.entitiesEnd)
+  (const $mem.punct $mem.entityCache+4096)
   (const $mem.punctEnd $mem.punct+1536)
   (const $mem.fold $mem.punctEnd)
   (const $mem.foldEnd $mem.fold+3328)
@@ -55,6 +57,6 @@
   ;; ANSI table rendering caches measured cell widths in the otherwise unused
   ;; fixed-memory gap below the input. Inline rendering owns no bytes here.
   (const $mem.cellWidth $mem.itemIndent+256)
-  (const $mem.cellWidthSlots 6258) ;; (65536 - $mem.cellWidth) / 4
+  (const $mem.cellWidthSlots 6264) ;; (65536 - $mem.cellWidth) / 4
   (const $mem.input 65536)
 )

@@ -1294,3 +1294,53 @@ void test('email autolinks take underscore runs into the local part', () => {
     '<p>x <a href="mailto:foo@bar.com">mailto:foo@bar.com</a></p>\n'
   );
 });
+
+void test('named references decode from the table and its lookup cache', async () => {
+  const { readFileSync } = await import('node:fs');
+  const table = new Map<string, string>();
+  for (const line of readFileSync(
+    new URL('../src/entities.txt', import.meta.url),
+    'utf-8'
+  ).split('\n')) {
+    if (line === '' || line.startsWith('# ')) continue;
+    const i = line.indexOf(' ');
+    table.set(
+      line.slice(0, i),
+      line
+        .slice(i + 1)
+        .replace(/\\(?:u[0-9a-fA-F]{4}|n|t|\\)/g, (m) =>
+          m === '\\n'
+            ? '\n'
+            : m === '\\t'
+              ? '\t'
+              : m === '\\\\'
+                ? '\\'
+                : String.fromCharCode(parseInt(m.slice(2), 16))
+        )
+    );
+  }
+  const refs: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+  };
+  const escape = (s: string) => s.replace(/[&<>"]/g, (c) => refs[c]);
+  const names = [...table.keys()];
+  const source = names.map((n) => `&${n};`).join(' ');
+  const expected = `<p>${names.map((n) => escape(table.get(n)!)).join(' ')}</p>\n`;
+  // the second render answers short names from the cache
+  assert.equal(html(source), expected);
+  assert.equal(html(source), expected);
+  // near misses: a suffix, a dropped last byte, and flipped case
+  for (const n of names) {
+    for (const miss of [
+      `${n}x`,
+      n.slice(0, -1),
+      n[0] === n[0].toLowerCase() ? n.toUpperCase() : n.toLowerCase(),
+    ]) {
+      if (miss === '' || table.has(miss)) continue;
+      assert.equal(html(`&${miss};`), `<p>&amp;${miss};</p>\n`, miss);
+    }
+  }
+});
