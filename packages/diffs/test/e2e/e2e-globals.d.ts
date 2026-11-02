@@ -106,6 +106,7 @@ interface Window {
     root: HTMLElement;
     ids: string[];
     getHost(id: string): HTMLElement | undefined;
+    getEditor(id: string): E2EEditor | undefined;
   };
 
   // Interaction logs populated by fixture callbacks.

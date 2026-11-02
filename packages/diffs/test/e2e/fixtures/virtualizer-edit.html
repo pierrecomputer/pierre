@@ -38,6 +38,7 @@
       virtualizer.setup(root);
       const ids = ['first', 'second', 'third', 'fourth'];
       const hosts = {};
+      const editors = {};
       for (const id of ids) {
         const host = document.createElement('div');
         host.dataset.host = id;
@@ -58,9 +59,15 @@
           fileContainer: host,
           forceRender: true,
         });
-        new Editor('file').edit(file);
+        editors[id] = new Editor('file');
+        editors[id].edit(file);
       }
-      window.__virtualizerEdit = { root, ids, getHost: (id) => hosts[id] };
+      window.__virtualizerEdit = {
+        root,
+        ids,
+        getHost: (id) => hosts[id],
+        getEditor: (id) => editors[id],
+      };
       window.__virtualizerEditReady = true;
     </script>
   </body>

@@ -2124,9 +2124,13 @@ export class Editor<
           // syncing the native Selection, so a DOM-driven or refocus
           // selectionchange whose range still belongs to the editor must not
           // overwrite the remapped #selections before the user returns to type.
+          // While a host DOM write has the editor waiting to put its caret
+          // back, the native selection is the browser's reaction to rows
+          // coming and going, not the user's; the restore places the caret.
           if (
             this.#shouldIgnoreSelectionChange ||
             this.#suppressNativeSelectionSync ||
+            this.#replacementFocusRequest != null ||
             shadowRoot == null ||
             !this.#contentHasFocus
           ) {
@@ -2352,6 +2356,10 @@ export class Editor<
         'pointerdown',
         (e) => {
           this.#canMountSelectionAction = true;
+          // A press on the content takes over from a pending focus restore:
+          // the user, not the host's last DOM write, now says where the
+          // caret goes.
+          this.#replacementFocusRequest = undefined;
           // Any pointer press — mouse, touch, or pen — moves off the select-all
           // selection, so let selectionchange sync #selections from the new
           // native selection again. This must run before the mouse-only guard
