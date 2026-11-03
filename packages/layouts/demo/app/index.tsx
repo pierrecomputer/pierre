@@ -186,8 +186,11 @@ export default function App(): JSX.Element {
               </button>
             );
           })}
+        </nav>
+        <div className="app-header-end">
           <button
             type="button"
+            className="app-action"
             onClick={() => {
               // A new terminal is a tab beside the terminal that shows.
               const target =
@@ -207,8 +210,6 @@ export default function App(): JSX.Element {
           >
             New terminal
           </button>
-        </nav>
-        <div className="app-header-end">
           <label className="app-check">
             <input
               type="checkbox"
