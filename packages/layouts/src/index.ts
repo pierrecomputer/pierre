@@ -6,6 +6,8 @@ export {
   hasVisiblePane,
   replaceNode,
   setPaneHidden,
+  shownPanes,
+  stackOf,
   swapPanes,
   validateLayout,
   visibleTree,
@@ -15,6 +17,7 @@ export { naryTree } from './models/n-ary';
 export { LayoutStore, type LayoutStoreOptions } from './store';
 export type {
   ChildExtent,
+  ChildSize,
   CornerGeometry,
   Direction,
   Edge,
@@ -26,6 +29,7 @@ export type {
   Rect,
   SeparatorGeometry,
   SplitNode,
+  StackNode,
   TreeModel,
 } from './types';
 export { computeCSSLayout } from './css-layout';

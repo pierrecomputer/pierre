@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   binaryTree,
+  type ChildSize,
   computeCSSLayout,
   computeLayout,
   fromBinaryLayout,
@@ -63,14 +64,14 @@ const column = (
 const ids = (node: LayoutNode): string[] => getPanes(node).map(({ id }) => id);
 
 /** Expect numbers close to the expected ones, one by one. */
-function near(actual: readonly number[], expected: readonly number[]): void {
+function near(actual: readonly ChildSize[], expected: readonly number[]): void {
   expect(actual).toHaveLength(expected.length);
   actual.forEach((value, index) =>
-    expect(value).toBeCloseTo(expected[index], 9)
+    expect(value as number).toBeCloseTo(expected[index], 9)
   );
 }
 
-const sizesOf = (node: LayoutNode | null): readonly number[] =>
+const sizesOf = (node: LayoutNode | null): readonly ChildSize[] =>
   node?.type === 'split' ? node.sizes : [];
 
 let sequence = 0;
@@ -860,5 +861,137 @@ describe('stacks', () => {
       JSON.stringify({ ...JSON.parse(store.serialize()), version: 2 })
     );
     expect(other.getSnapshot().root).toEqual(after);
+  });
+});
+
+describe('sizes in pixels and maximum sizes', () => {
+  // A sidebar of 240 px, an editor, and a preview of at most 300 px.
+  const sidebar: PaneNode = { type: 'pane', id: 'sidebar', minWidth: 100 };
+  const editor: PaneNode = { type: 'pane', id: 'editor', minWidth: 200 };
+  const preview: PaneNode = {
+    type: 'pane',
+    id: 'preview',
+    minWidth: 100,
+    maxWidth: 300,
+  };
+  const tree: SplitNode = {
+    type: 'split',
+    id: 'row',
+    direction: 'horizontal',
+    sizes: [{ px: 240 }, 2, 1],
+    children: [sidebar, editor, preview],
+  };
+  const widths = (width: number): number[] =>
+    computeLayout(tree, width, 400, 0).panes.map(({ rect }) => rect.width);
+
+  test('a split accepts a size in pixels for a child, and a pane a maximum size', () => {
+    validateLayout(tree);
+    for (const sizes of [
+      [{ px: -1 }, 1],
+      [{ px: 1, weight: 2 }, 1],
+      ['1', 1],
+    ])
+      expect(() =>
+        validateLayout({ ...tree, sizes, children: [sidebar, editor] } as never)
+      ).toThrow();
+    expect(() => validateLayout({ ...preview, maxWidth: -1 })).toThrow();
+  });
+
+  test('a child with a size in pixels keeps it, and the others share the rest', () => {
+    near(widths(2000), [240, 1460, 300]);
+    near(widths(1200), [240, 660, 300]);
+    near(widths(800), [240, 373.3333333333, 186.6666666667]);
+    // The weighted children reach their minimums first, then the sidebar shrinks.
+    near(widths(540), [240, 200, 100]);
+    near(widths(500), [200, 200, 100]);
+    near(widths(400), [100, 200, 100]);
+    // Below the sum of the minimums, each child gets a part of its minimum.
+    near(widths(300), [75, 150, 75]);
+  });
+
+  test('weighted children grow past their maximums when all have reached them', () => {
+    const capped: SplitNode = {
+      ...tree,
+      sizes: [1, 1],
+      children: [preview, { ...preview, id: 'other', maxWidth: 100 }],
+    };
+    const at = (width: number): number[] =>
+      computeLayout(capped, width, 400, 0).panes.map(({ rect }) => rect.width);
+    near(at(400), [300, 100]);
+    near(at(600), [400, 200]);
+  });
+
+  test('the preferred place of a separator counts sizes in pixels', () => {
+    const css = computeCSSLayout(tree, 0);
+    // The preferred place of a separator counts 240 px against 1000 px of
+    // weighted space.
+    expect(css.separators[0].value).toBeCloseTo(240 / 1240, 9);
+  });
+
+  test('a stack takes the largest minimum and the smallest maximum of its panes', () => {
+    const tabs = {
+      type: 'stack' as const,
+      id: 's',
+      active: 'a',
+      children: [
+        { type: 'pane' as const, id: 'a', minWidth: 100, maxWidth: 500 },
+        { type: 'pane' as const, id: 'b', minWidth: 150, maxWidth: 400 },
+      ],
+    };
+    const split: SplitNode = {
+      type: 'split',
+      id: 'r',
+      direction: 'horizontal',
+      sizes: [1, 1],
+      children: [tabs, pane('c')],
+    };
+    near(
+      computeLayout(split, 1200, 400, 0).panes.map(({ rect }) => rect.width),
+      [400, 800]
+    );
+  });
+
+  test('operations keep sizes in pixels', () => {
+    // An n-ary split of a child in pixels gives each half of its pixels.
+    const split = naryTree.split(tree, 'sidebar', pane('x'), 'right', nextId);
+    expect(sizesOf(split)).toEqual([{ px: 120 }, { px: 120 }, 2, 1]);
+    // A close of a child in pixels gives its space to the weighted children.
+    expect(sizesOf(naryTree.remove(tree, 'sidebar'))).toEqual([2, 1]);
+    // A close of a weighted child gives its weight to the nearest weighted
+    // child, and none to a child in pixels.
+    expect(sizesOf(naryTree.remove(tree, 'editor'))).toEqual([{ px: 240 }, 3]);
+    // A split that joins its parent in a place in pixels shares those pixels.
+    const nested = naryTree.normalize(
+      {
+        ...tree,
+        sizes: [{ px: 300 }, 1],
+        children: [
+          {
+            type: 'split',
+            id: 'inner',
+            direction: 'horizontal',
+            sizes: [1, 2],
+            children: [pane('a'), pane('b')],
+          },
+          pane('c'),
+        ],
+      },
+      nextId
+    );
+    expect(sizesOf(nested)).toEqual([{ px: 100 }, { px: 200 }, 1]);
+    // The binary model nests a row of three; the place of the rest takes the
+    // weights of its children.
+    const binary = binaryTree.normalize(tree, nextId);
+    expect(sizesOf(binary)).toEqual([{ px: 240 }, 3]);
+  });
+
+  test('sizes in pixels save, restore, and change with setSizes', () => {
+    const store = new LayoutStore(tree, { model: naryTree });
+    store.setSizes({ row: [{ px: 300 }, 1, 1] });
+    const saved = store.serialize();
+    const other = new LayoutStore(root, { model: naryTree });
+    other.restore(saved);
+    expect(sizesOf(other.getSnapshot().root)).toEqual([{ px: 300 }, 1, 1]);
+    expect(() => store.setSizes({ row: [{ px: -5 }, 1, 1] })).toThrow();
   });
 });

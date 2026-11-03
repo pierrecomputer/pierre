@@ -10,7 +10,7 @@ import {
   paneAt,
   separatorOffset,
 } from '../src/gestures';
-import type { LayoutNode } from '../src/types';
+import type { ChildSize, LayoutNode } from '../src/types';
 
 const root: LayoutNode = {
   type: 'split',
@@ -51,15 +51,21 @@ const row: LayoutNode = {
 const rowSeparators = computeLayout(row, 1024, 600, 8).separators;
 const beforeC = rowSeparators.filter(({ id }) => id === 'row:2');
 
-/** Expect numbers close to the expected ones, one by one. */
+/**
+ * Expect sizes close to the expected ones, one by one. A size in pixels is
+ * written `{ px }` in both lists.
+ */
 function near(
-  actual: readonly number[] | undefined,
-  expected: readonly number[]
+  actual: readonly ChildSize[] | undefined,
+  expected: readonly ChildSize[]
 ): void {
   expect(actual).toHaveLength(expected.length);
-  actual?.forEach((value, index) =>
-    expect(value).toBeCloseTo(expected[index], 9)
-  );
+  const value = (size: ChildSize): number =>
+    typeof size === 'number' ? size : size.px;
+  actual?.forEach((size, index) => {
+    expect(typeof size).toBe(typeof expected[index]);
+    expect(value(size)).toBeCloseTo(value(expected[index]), 9);
+  });
 }
 
 describe('gestures', () => {
@@ -124,5 +130,50 @@ describe('gestures', () => {
       ['separator:outer', { x: 500, y: 0, width: 8, height: 608 }],
     ]);
     expect(getExitEdges(boxes, 1008, 608)).toEqual({ files: 'left' });
+  });
+});
+
+describe('gestures with sizes in pixels and maximums', () => {
+  const tree: LayoutNode = {
+    type: 'split',
+    id: 'row',
+    direction: 'horizontal',
+    sizes: [{ px: 240 }, 2, 1],
+    children: [
+      { type: 'pane', id: 'sidebar', minWidth: 100 },
+      { type: 'pane', id: 'editor', minWidth: 200 },
+      { type: 'pane', id: 'preview', minWidth: 100, maxWidth: 300 },
+    ],
+  };
+  const separators = computeLayout(tree, 1200, 400, 0).separators;
+  const first = separators.filter(({ id }) => id === 'row:1');
+  const second = separators.filter(({ id }) => id === 'row:2');
+
+  test('a drag beside a child in pixels gives it a new size in pixels', () => {
+    // The editor and the preview keep their pixel sizes: 600 and 300.
+    near(dragSizes(first, 60, 0).row, [{ px: 300 }, 2, 1]);
+    // The editor grows to 720 px; the weighted children share their weight
+    // of 3 by their pixel sizes.
+    near(dragSizes(first, -60, 0).row, [
+      { px: 180 },
+      (720 / 1020) * 3,
+      (300 / 1020) * 3,
+    ]);
+  });
+
+  test('a drag stops where the child that grows reaches its maximum', () => {
+    // The preview has 300 px, its maximum, so the separator cannot move left.
+    expect(moveSeparator(second[0].children, 2, -100)).toEqual([240, 660, 300]);
+    const narrow = computeLayout(tree, 1000, 400, 0).separators.filter(
+      ({ id }) => id === 'row:2'
+    )[0];
+    // At 1000 px the preview has 253.33 px; it can grow by 46.67 px.
+    const moved = moveSeparator(narrow.children, 2, -100);
+    expect(moved[2]).toBeCloseTo(300, 9);
+    expect(moved[1]).toBeCloseTo(460, 6);
+  });
+
+  test('the offset of a separator follows sizes in pixels', () => {
+    expect(separatorOffset(first[0], [{ px: 300 }, 2, 1])).toBeCloseTo(60, 9);
   });
 });

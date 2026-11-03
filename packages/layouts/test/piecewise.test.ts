@@ -14,7 +14,7 @@ import {
   size,
   toCSS,
 } from '../src/piecewise';
-import type { LayoutNode } from '../src/types';
+import type { LayoutNode, PaneNode } from '../src/types';
 
 // A small seeded generator, so that a failure repeats.
 function random(seed: number): () => number {
@@ -52,6 +52,63 @@ function randomTree(
     // Some weights are extreme, so that a child holds its minimum size.
     sizes: counts.map(() => (next() < 0.2 ? 0.001 : next() + 0.001)),
     children: counts.map((childPanes) => randomTree(next, childPanes, ids)),
+  };
+}
+
+/**
+ * A tree like `randomTree`, with sizes in pixels, maximum sizes, and stacks:
+ * some panes become stacks of two or three panes, some children of a split
+ * get a size in pixels, and some panes get a maximum size.
+ */
+function richTree(
+  next: () => number,
+  panes: number,
+  ids = { n: 0 }
+): LayoutNode {
+  const leaf = (): PaneNode => {
+    const minWidth = Math.round(20 + next() * 300);
+    const minHeight = Math.round(20 + next() * 200);
+    return {
+      type: 'pane',
+      id: `p${ids.n++}`,
+      minWidth,
+      minHeight,
+      ...(next() < 0.3
+        ? { maxWidth: minWidth + Math.round(next() * 400) }
+        : {}),
+      ...(next() < 0.3
+        ? { maxHeight: minHeight + Math.round(next() * 300) }
+        : {}),
+    };
+  };
+  if (panes === 1) {
+    if (next() < 0.25) {
+      const tabs = Array.from({ length: 2 + Math.floor(next() * 2) }, leaf);
+      return {
+        type: 'stack',
+        id: `t${ids.n++}`,
+        active: tabs[Math.floor(next() * tabs.length)].id,
+        children: tabs,
+      };
+    }
+    return leaf();
+  }
+  const count = Math.min(panes, 2 + Math.floor(next() * 3));
+  const counts = Array.from({ length: count }, () => 1);
+  for (let extra = panes - count; extra > 0; extra--)
+    counts[Math.floor(next() * count)]++;
+  return {
+    type: 'split',
+    id: `s${ids.n++}`,
+    direction: next() < 0.5 ? 'horizontal' : 'vertical',
+    sizes: counts.map(() =>
+      next() < 0.3
+        ? { px: Math.round(next() * 600) }
+        : next() < 0.2
+          ? 0.001
+          : next() + 0.001
+    ),
+    children: counts.map((childPanes) => richTree(next, childPanes, ids)),
   };
 }
 
@@ -148,6 +205,56 @@ describe('piecewise', () => {
           expect(
             Math.abs(evaluateCSS(value.height, height) - rect.height)
           ).toBeLessThan(0.01);
+        }
+      }
+    }
+  });
+
+  test('sizes in pixels, maximums, and stacks give the boxes of computeLayout at every size', () => {
+    const next = random(13);
+    for (let tree = 0; tree < 200; tree++) {
+      const root = richTree(next, 1 + Math.floor(next() * 20));
+      const gap = next() < 0.2 ? 0 : Math.round(next() * 16);
+      const css = computeCSSLayout(root, gap);
+      const panes = new Map(
+        css.panes
+          .filter(({ hidden }) => !hidden)
+          .map(({ pane, rect }) => [pane.id, rect])
+      );
+      const separators = new Map(
+        css.separators.map(({ id, rect }) => [id, rect])
+      );
+      for (let sample = 0; sample < 20; sample++) {
+        const width = next() < 0.3 ? next() * 100 : next() * 4000;
+        const height = next() < 0.3 ? next() * 100 : next() * 3000;
+        const pixels = computeLayout(root, width, height, gap);
+        expect(pixels.panes.length).toBe(panes.size);
+        const boxes = [
+          ...pixels.panes.map(({ pane, rect }) => ({
+            rect,
+            css: panes.get(pane.id),
+          })),
+          ...pixels.separators.map(({ id, rect }) => ({
+            rect,
+            css: separators.get(id),
+          })),
+        ];
+        for (const { rect, css: value } of boxes) {
+          if (value === undefined) throw new Error('missing box');
+          expect(
+            Math.abs(evaluateCSS(value.left, width) - rect.x)
+          ).toBeLessThan(0.01);
+          expect(
+            Math.abs(evaluateCSS(value.width, width) - rect.width)
+          ).toBeLessThan(0.01);
+          expect(
+            Math.abs(evaluateCSS(value.top, height) - rect.y)
+          ).toBeLessThan(0.01);
+          expect(
+            Math.abs(evaluateCSS(value.height, height) - rect.height)
+          ).toBeLessThan(0.01);
+          expect(rect.width).toBeGreaterThanOrEqual(-1e-6);
+          expect(rect.height).toBeGreaterThanOrEqual(-1e-6);
         }
       }
     }

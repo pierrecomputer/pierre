@@ -73,39 +73,43 @@ test('panes and the zoom change at once when their animations are off', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  // Count the running animations of the layout in the next frame.
-  const animationsInNextFrame = () =>
-    page.evaluate(
-      () =>
-        new Promise<number>((resolve) => {
-          requestAnimationFrame(() =>
-            resolve(
-              document
-                .querySelector('.pierre-layout')
-                ?.getAnimations({ subtree: true })
-                .filter((animation) => animation.id === 'pierre-layout-flip')
-                .length ?? 0
-            )
-          );
-        })
-    );
-  const toggle = (name: string) =>
-    page.getByRole('button', { name, exact: true }).click();
+  // Click a button and count the running animations of the layout in the
+  // next task. React commits the store change in a microtask after the
+  // click, and the view starts its FLIP animations in a layout effect. A
+  // count in the next frame can come after a 240 ms animation ends on a busy
+  // machine; the next task comes before.
+  const clickAndCount = (name: string) =>
+    page.evaluate(async (label) => {
+      const button = [...document.querySelectorAll('button')].find(
+        (element) =>
+          element.getAttribute('aria-label') === label ||
+          (!element.hasAttribute('aria-label') &&
+            element.textContent?.trim() === label)
+      );
+      if (button === undefined) throw new Error(`Missing button: ${label}`);
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return (
+        document
+          .querySelector('.pierre-layout')
+          ?.getAnimations({ subtree: true })
+          .filter((animation) => animation.id === 'pierre-layout-flip')
+          .length ?? 0
+      );
+    }, name);
 
-  await toggle('Files');
-  expect(await animationsInNextFrame()).toBeGreaterThan(0);
+  expect(await clickAndCount('Files')).toBeGreaterThan(0);
+  await expect(host(page, 'files')).toHaveAttribute('data-pane-hidden', 'true');
 
   await page.getByLabel('Animate panes').uncheck();
   await page.waitForTimeout(400);
-  await toggle('Files');
-  expect(await animationsInNextFrame()).toBe(0);
+  expect(await clickAndCount('Files')).toBe(0);
   await expect(host(page, 'files')).toHaveAttribute(
     'data-pane-hidden',
     'false'
   );
 
-  await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
-  expect(await animationsInNextFrame()).toBeGreaterThan(0);
+  expect(await clickAndCount('Zoom Editor')).toBeGreaterThan(0);
   await page.waitForTimeout(400);
   await page
     .getByRole('button', { name: 'Restore Editor', exact: true })
@@ -113,8 +117,7 @@ test('panes and the zoom change at once when their animations are off', async ({
   await page.waitForTimeout(400);
 
   await page.getByLabel('Animate zoom').uncheck();
-  await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
-  expect(await animationsInNextFrame()).toBe(0);
+  expect(await clickAndCount('Zoom Editor')).toBe(0);
   await expect(host(page, 'editor')).toHaveAttribute('data-zoomed', 'true');
 });
 
@@ -147,6 +150,9 @@ test('each pane host is its own compositor layer only when paneLayers asks for i
 test('a separator drag changes only the panes beside it in the n-ary model', async ({
   page,
 }) => {
+  // A wide window, so that the binary model leaves the editor above its
+  // minimum size: it nests the sidebars, and its nested splits take weights.
+  await page.setViewportSize({ width: 1440, height: 900 });
   const width = async (id: string): Promise<number> =>
     (await host(page, id).boundingBox())?.width ?? 0;
   // The first separator is the one between the sessions and the agent chat.

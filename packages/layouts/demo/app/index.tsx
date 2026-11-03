@@ -41,11 +41,14 @@ const LABELS: Record<string, string> = {
 
 // Every pane of the app, in place. A toggle hides a place or shows it again.
 // The binary model nests the row as sessions | (agent | (tools | files)).
+// The sessions and the files are sidebars: they keep their widths in pixels
+// when the window changes size, and the agent chat and the tools share the
+// rest. The files grow to 360 px at most.
 const TEMPLATE: LayoutNode = {
   type: 'split',
   id: 'app-row',
   direction: 'horizontal',
-  sizes: [0.16, 0.4, 0.29, 0.15],
+  sizes: [{ px: 240 }, 0.58, 0.42, { px: 220 }],
   children: [
     { type: 'pane', id: 'sessions', minWidth: 200, minHeight: 160 },
     {
@@ -80,7 +83,13 @@ const TEMPLATE: LayoutNode = {
         },
       ],
     },
-    { type: 'pane', id: 'files', minWidth: 180, minHeight: 160 },
+    {
+      type: 'pane',
+      id: 'files',
+      minWidth: 180,
+      maxWidth: 360,
+      minHeight: 160,
+    },
   ],
 };
 

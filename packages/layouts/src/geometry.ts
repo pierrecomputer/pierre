@@ -1,4 +1,5 @@
-import { hasVisiblePane, shownPane } from './model';
+import { type ChildSpec, divideSpace } from './divide';
+import { hasVisiblePane, isFixed, shownPane } from './model';
 import type {
   ChildExtent,
   LayoutGeometry,
@@ -55,6 +56,74 @@ function minimumSize(
 }
 
 /**
+ * The largest sizes of a subtree: the sum of the maximums of the children
+ * along a split, with its gaps, and the smallest maximum across it. A size is
+ * `Infinity` when nothing limits it, and never below the minimum size.
+ */
+export function getMaximumSize(
+  node: LayoutNode,
+  gap: number
+): { width: number; height: number } {
+  return maximumSize(node, gap) ?? { width: Infinity, height: Infinity };
+}
+
+function maximumSize(
+  node: LayoutNode,
+  gap: number
+): { width: number; height: number } | null {
+  const minimum = minimumSize(node, gap);
+  if (minimum === null) return null;
+  const atLeast = (size: { width: number; height: number }) => ({
+    width: Math.max(minimum.width, size.width),
+    height: Math.max(minimum.height, size.height),
+  });
+  if (node.type === 'pane')
+    return atLeast({
+      width: node.maxWidth ?? Infinity,
+      height: node.maxHeight ?? Infinity,
+    });
+  const sizes = node.children
+    .map((child) => maximumSize(child, gap))
+    .filter((size) => size !== null);
+  const least = (key: 'width' | 'height'): number =>
+    Math.min(...sizes.map((size) => size[key]));
+  // A stack takes the smallest maximum of its visible panes, whichever pane
+  // is active.
+  if (node.type === 'stack')
+    return atLeast({ width: least('width'), height: least('height') });
+  const gaps = gap * (sizes.length - 1);
+  const sum = (key: 'width' | 'height'): number =>
+    sizes.reduce((total, size) => total + size[key], 0) + gaps;
+  return atLeast(
+    node.direction === 'horizontal'
+      ? { width: sum('width'), height: least('height') }
+      : { width: least('width'), height: sum('height') }
+  );
+}
+
+/**
+ * How some children of a split take space along its axis (see `divide`): a
+ * size in pixels or a weight, a minimum, and a maximum.
+ */
+export function childSpecs(
+  split: SplitNode,
+  indexes: readonly number[],
+  gap: number
+): ChildSpec[] {
+  const axis = split.direction === 'horizontal' ? 'width' : 'height';
+  return indexes.map((index) => {
+    const child = split.children[index];
+    const size = split.sizes[index];
+    return {
+      px: isFixed(size) ? size.px : undefined,
+      weight: isFixed(size) ? 1 : size,
+      min: getMinimumSize(child, gap)[axis],
+      max: getMaximumSize(child, gap)[axis],
+    };
+  });
+}
+
+/**
  * The ID of the separator before a child of a split: the ID of the split and
  * the index of the child. A split keeps the IDs of its separators when the
  * tree changes inside a child, for example when a new split wraps a pane, so
@@ -71,60 +140,25 @@ export function visibleChildren(split: SplitNode): number[] {
 }
 
 /**
- * Divide `available` pixels among children with weights and minimum sizes.
- * Each child gets its share of the weights, unless that share is below its
- * minimum size: then it gets its minimum, and the other children share the
- * rest by weight. When the minimum sizes do not fit, each child gets a part in
- * proportion to its minimum size. The last child gets the rest, so that the
- * sizes add up to `available`.
- *
- * Child i gets max(min(mᵢ, A·mᵢ/M), sᵢ·λ), where A is the space, sᵢ the share
- * of the child's weight, mᵢ its minimum, and M the sum of the minimums. λ is
- * minₖ (A − Pₖ) / Sₖ: for each k, the k children with the lowest mᵢ/sᵢ share
- * by weight, Sₖ is the sum of their shares, and Pₖ is the sum of the minimums
- * of the others. `computeCSSLayout` builds the same function of the container
- * size.
+ * Divide `available` pixels among children with weights and minimum sizes
+ * (see `divide`): each child gets its share of the weights, unless that share
+ * is below its minimum size; then it gets its minimum, and the other children
+ * share the rest by weight. When the minimum sizes do not fit, each child gets
+ * a part in proportion to its minimum size.
  */
 export function shareSpace(
   available: number,
   weights: readonly number[],
   mins: readonly number[]
 ): number[] {
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  const shares = weights.map((weight) => weight / total);
-  const minimum = mins.reduce((sum, value) => sum + value, 0);
-  let lambda = available;
-  let pinned = minimum;
-  let free = 0;
-  for (const index of byFreeOrder(shares, mins).slice(0, -1)) {
-    pinned -= mins[index];
-    free += shares[index];
-    lambda = Math.min(lambda, (available - pinned) / free);
-  }
-  const sizes = shares.map((share, index) =>
-    Math.max(
-      minimum === 0
-        ? 0
-        : Math.min(mins[index], (available * mins[index]) / minimum),
-      share * lambda
-    )
+  return divideSpace(
+    available,
+    weights.map((weight, index) => ({
+      weight,
+      min: mins[index],
+      max: Infinity,
+    }))
   );
-  sizes[sizes.length - 1] =
-    available - sizes.slice(0, -1).reduce((sum, size) => sum + size, 0);
-  return sizes;
-}
-
-/**
- * The children in the order in which they reach a size above their minimum as
- * the space grows: by minimum size over share, lowest first.
- */
-export function byFreeOrder(
-  shares: readonly number[],
-  mins: readonly number[]
-): number[] {
-  return shares
-    .map((_, index) => index)
-    .sort((a, b) => mins[a] / shares[a] - mins[b] / shares[b]);
 }
 
 /**
@@ -167,19 +201,13 @@ export function computeLayout(
     const size = horizontal ? rect.width : rect.height;
     const actualGap = Math.min(gap, size / (visible.length - 1));
     const available = Math.max(0, size - actualGap * (visible.length - 1));
-    const mins = visible.map((index) => {
-      const minimum = getMinimumSize(node.children[index], gap);
-      return horizontal ? minimum.width : minimum.height;
-    });
-    const sizes = shareSpace(
-      available,
-      visible.map((index) => node.sizes[index]),
-      mins
-    );
+    const specs = childSpecs(node, visible, gap);
+    const sizes = divideSpace(available, specs);
     const children: ChildExtent[] = visible.map((index, order) => ({
       index,
       size: sizes[order],
-      min: mins[order],
+      min: specs[order].min,
+      max: specs[order].max,
     }));
     // The start of each child along the axis of the split.
     const starts: number[] = [];

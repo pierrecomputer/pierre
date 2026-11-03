@@ -85,8 +85,8 @@ content, its state, and its scroll position, but takes no space, and its sibling
 takes its box. `store.setHidden(id, false)` shows it again in its place, also
 after other panes moved, and focuses it. The last visible pane stays visible.
 The hidden flag is part of the pane node, so `serialize()` keeps it. A hidden
-pane host has `data-collapsed="true"` and receives `PANE_VISIBILITY_EVENT` when
-it hides or shows.
+pane host has `data-pane-hidden="true"` and receives `PANE_VISIBILITY_EVENT`
+when it hides or shows.
 
 ```tsx
 <Layout
@@ -102,10 +102,33 @@ it hides or shows.
 The layout fills its parent; give that parent a definite height. Pane IDs and
 split IDs share one namespace and must be unique, non-empty strings. Horizontal
 splits arrange their children left to right; vertical splits arrange them top to
-bottom. A split has two or more children, and `sizes` holds one positive weight
-for each child. The visible children share the space of the split, without its
-separators, in proportion to their weights. A child whose share is below its
-minimum size gets its minimum, and the others share the rest.
+bottom. A split has two or more children, and `sizes` holds one size for each
+child: a positive weight, or a size in pixels such as `{ px: 240 }`. A child
+with a size in pixels keeps it when the container changes size, as a sidebar
+does. The other visible children share the rest of the space of the split,
+without its separators, in proportion to their weights. A child whose share is
+below its minimum size gets its minimum, and the others share the rest. A pane
+can also have `maxWidth` and `maxHeight`: it grows to them at most, while
+another weighted child can take the space. When the space shrinks, the weighted
+children shrink to their minimum sizes first, then the children with sizes in
+pixels.
+
+```ts
+const root: LayoutNode = {
+  type: 'split',
+  id: 'workspace',
+  direction: 'horizontal',
+  sizes: [{ px: 240 }, 1, { px: 300 }],
+  children: [
+    { type: 'pane', id: 'files', minWidth: 160 },
+    { type: 'pane', id: 'editor', minWidth: 320 },
+    { type: 'pane', id: 'chat', minWidth: 240, maxWidth: 560 },
+  ],
+};
+```
+
+A drag of a separator gives a child with a size in pixels its new size in
+pixels, and the weighted children new weights.
 
 The React view generates CSS container-unit expressions from the split tree. The
 browser resolves panel bounds, gaps, and minimum-size constraints during
@@ -160,6 +183,32 @@ useEffect(() => {
 }, []);
 ```
 
+## Tabs
+
+A `stack` node holds two or more panes in one place, with tabs, and the ID of
+its `active` pane. Only the active pane shows. The other panes keep their
+content, their state, and their scroll position, with
+`content-visibility: hidden`, and receive `PANE_VISIBILITY_EVENT`. Each pane
+keeps its own host, so a pane that moves into or out of a stack keeps its
+content. Each pane of a stack has the box of the stack, and the stack takes the
+largest minimum size and the smallest maximum size of its panes, so a change of
+tab moves no other box and starts no animation.
+
+```ts
+store.addTab('terminal', { type: 'pane', id: 'server' }); // A stack in place of the terminal.
+store.activate('terminal');
+store.moveToStack('logs', 'terminal'); // Into the stack, after the terminal.
+store.moveToStack('logs', 'server', 0); // A new place among the tabs.
+```
+
+The header of a pane in a stack holds the tabs of the stack, with the WAI-ARIA
+tabs pattern: Left and Right arrows move to the previous or the next tab, Home
+and End to the first or the last, and the tab with the focus shows. Delete
+closes the focused tab. The host of each pane is its tab panel. A split or a
+move beside a pane of a stack goes beside the whole stack. A close or a hide of
+the active tab shows the nearest tab. A stack of one pane gives way to that
+pane. A zoom of a tab zooms its stack, and a change of tab keeps the zoom.
+
 ## Model and state
 
 ```ts
@@ -168,14 +217,16 @@ store.move('terminal', 'files', 'right');
 store.focusPane('editor');
 store.toggleZoom();
 store.close('terminal');
-store.setSizes({ workspace: [0.3, 0.7] });
+store.setSizes({ workspace: [{ px: 300 }, 0.7] });
 
 const saved = store.serialize();
 store.restore(saved);
 ```
 
-The saved form has version 2. `restore` also accepts version 1, where each split
-had `ratio`, `first`, and `second`; `fromBinaryLayout` converts such a tree.
+The saved form has version 3, with stacks and sizes in pixels. `restore` also
+accepts version 2, which has the same form without them, and version 1, where
+each split had `ratio`, `first`, and `second`; `fromBinaryLayout` converts such
+a tree.
 
 ### Tree models
 
@@ -249,7 +300,7 @@ Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
 element's old box (FLIP), so the compositor runs them and pane content lays out
 once; continuous container resizing has no easing. This is an initial web
 implementation, not a claim of matching native CoreAnimation's per-frame
-performance. Cross-window dragging, overlay sidebars, tab groups, and docking
+performance. Cross-window dragging, overlay sidebars, and drag and drop of tabs
 are future work.
 
 ## References

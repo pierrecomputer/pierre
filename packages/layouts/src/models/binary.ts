@@ -1,5 +1,27 @@
-import { removePane, sameNodes, validateLayout, wrapPane } from '../model';
-import type { LayoutNode, TreeModel } from '../types';
+import {
+  isFixed,
+  removePane,
+  sameNodes,
+  validateLayout,
+  wrapPane,
+} from '../model';
+import type { ChildSize, LayoutNode, TreeModel } from '../types';
+
+/**
+ * The size of a new split that takes the place of several children: the sum
+ * of their weights, or of their sizes in pixels when they all have one.
+ */
+function restSize(sizes: readonly ChildSize[]): ChildSize {
+  const weights = sizes.filter((size) => !isFixed(size)) as number[];
+  if (weights.length > 0)
+    return weights.reduce((sum, weight) => sum + weight, 0);
+  return {
+    px: sizes.reduce<number>(
+      (sum, size) => sum + (isFixed(size) ? size.px : 0),
+      0
+    ),
+  };
+}
 
 /**
  * The prototype's model. Each split has two children, and a split can hold a
@@ -41,7 +63,7 @@ export const binaryTree: TreeModel = {
       return {
         ...node,
         children: [children[0], rest],
-        sizes: [size, sizes.reduce((sum, value) => sum + value, 0)],
+        sizes: [size, restSize(sizes)],
       };
     };
     return nest(root);

@@ -14,6 +14,7 @@ import {
 } from './model';
 import { binaryTree } from './models/binary';
 import type {
+  ChildSize,
   Edge,
   LayoutNode,
   LayoutState,
@@ -245,7 +246,7 @@ export class LayoutStore {
    * Set the sizes of splits, by split ID: one positive weight for each child
    * of the split, as in `SplitNode.sizes`.
    */
-  setSizes(sizes: Readonly<Record<string, readonly number[]>>): void {
+  setSizes(sizes: Readonly<Record<string, readonly ChildSize[]>>): void {
     let root = this.state.root;
     for (const [id, values] of Object.entries(sizes)) {
       root = replaceNode(root, id, (node) =>
