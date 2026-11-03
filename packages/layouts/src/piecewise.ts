@@ -129,6 +129,59 @@ export function max(f: Piecewise, g: Piecewise): Piecewise {
   return envelope(f, g, -1);
 }
 
+/**
+ * A function from its values at knots in ascending order, the first at 0, and
+ * its slope after the last knot.
+ */
+export function fromPoints(
+  xs: readonly number[],
+  ys: readonly number[],
+  slope: number
+): Piecewise {
+  return simplify([...xs], [...ys], slope);
+}
+
+/**
+ * `outer(inner(x))`. Between the knots of `inner`, the result is linear until
+ * `inner` crosses a knot of `outer`, so the knots of the result are the knots
+ * of `inner` and those crossings.
+ */
+export function compose(outer: Piecewise, inner: Piecewise): Piecewise {
+  const xs: number[] = [];
+  const last = inner.xs.length - 1;
+  for (let index = 0; index <= last; index++) {
+    const x0 = inner.xs[index];
+    const y0 = inner.ys[index];
+    xs.push(x0);
+    if (index < last) {
+      const x1 = inner.xs[index + 1];
+      const y1 = inner.ys[index + 1];
+      for (const knot of outer.xs)
+        if ((knot - y0) * (knot - y1) < 0)
+          xs.push(x0 + ((knot - y0) * (x1 - x0)) / (y1 - y0));
+    } else if (inner.slope !== 0) {
+      for (const knot of outer.xs) {
+        const x = x0 + (knot - y0) / inner.slope;
+        if (x > x0) xs.push(x);
+      }
+    }
+  }
+  const knots = union(xs, []);
+  // After the last knot, `inner` is linear, and `outer` is on its last
+  // segment when `inner` grows, or on its first when `inner` falls.
+  const outerSlope =
+    inner.slope > 0
+      ? outer.slope
+      : inner.slope < 0
+        ? (slopes(outer)[0] ?? outer.slope)
+        : 0;
+  return simplify(
+    knots,
+    knots.map((x) => evaluate(outer, evaluate(inner, x))),
+    outerSlope * inner.slope
+  );
+}
+
 /** CSS `clamp(lower, value, upper)`: the upper bound wins over the lower. */
 export function clamp(
   lower: Piecewise,

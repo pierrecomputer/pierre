@@ -1,12 +1,9 @@
-import {
-  byFreeOrder,
-  getMinimumSize,
-  separatorId,
-  visibleChildren,
-} from './geometry';
-import { shownPane } from './model';
+import { divide } from './divide';
+import { childSpecs, separatorId, visibleChildren } from './geometry';
+import { isFixed, shownPane } from './model';
 import {
   add,
+  compose,
   constant,
   max,
   min,
@@ -15,7 +12,13 @@ import {
   size,
   toCSS,
 } from './piecewise';
-import type { LayoutNode, PaneNode, SplitNode, StackNode } from './types';
+import type {
+  ChildSize,
+  LayoutNode,
+  PaneNode,
+  SplitNode,
+  StackNode,
+} from './types';
 
 export interface CSSRect {
   left: string;
@@ -48,7 +51,9 @@ export interface CSSSeparator {
   /**
    * The preferred place of the separator in the split, from 0 to 1: the
    * weights of the visible children before it over those of all visible
-   * children.
+   * children. A child with a size in pixels counts with that size against
+   * `PREFERRED_FLEX_PX` of space for the weighted children, because its share
+   * depends on the size of the container.
    */
   value: number;
   rect: CSSRect;
@@ -110,35 +115,24 @@ const toRect = (box: Box): CSSRect => ({
   height: toCSS(box.height, '100cqh'),
 });
 
-/** `shareSpace` of geometry.ts, as a function of the container size. */
-function shareSpace(
-  available: Piecewise,
-  weights: readonly number[],
-  mins: readonly number[]
-): Piecewise[] {
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  const shares = weights.map((weight) => weight / total);
-  const minimum = mins.reduce((sum, value) => sum + value, 0);
-  let lambda = available;
-  let pinned = minimum;
-  let free = 0;
-  for (const index of byFreeOrder(shares, mins).slice(0, -1)) {
-    pinned -= mins[index];
-    free += shares[index];
-    lambda = min(lambda, scale(add(available, constant(-pinned)), 1 / free));
-  }
-  const sizes = shares.map((share, index) =>
-    max(
-      minimum === 0
-        ? constant(0)
-        : min(constant(mins[index]), scale(available, mins[index] / minimum)),
-      scale(lambda, share)
-    )
+// The space of the weighted children of a split, for the preferred place of
+// a separator in a split with sizes in pixels.
+const PREFERRED_FLEX_PX = 1000;
+
+/**
+ * The length that each child would take in a split with `PREFERRED_FLEX_PX`
+ * of space for the weighted children. With weights only, these are the
+ * weights.
+ */
+function preferredLengths(sizes: readonly ChildSize[]): number[] {
+  if (!sizes.some(isFixed)) return sizes as number[];
+  const total = sizes.reduce<number>(
+    (sum, size) => sum + (isFixed(size) ? 0 : size),
+    0
   );
-  sizes[sizes.length - 1] = sizes
-    .slice(0, -1)
-    .reduce((rest, size) => add(rest, scale(size, -1)), available);
-  return sizes;
+  return sizes.map((size) =>
+    isFixed(size) ? size.px : (size / total) * PREFERRED_FLEX_PX
+  );
 }
 
 /**
@@ -180,9 +174,11 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     }
     const all = node.children.map((_, index) => index);
     const visible = hidden ? all : visibleChildren(node);
-    const shown = divide(node, visible, box);
+    const shown = placeChildren(node, visible, box);
     if (!hidden) {
-      const weights = visible.map((index) => node.sizes[index]);
+      const weights = preferredLengths(
+        visible.map((index) => node.sizes[index])
+      );
       const total = weights.reduce((sum, weight) => sum + weight, 0);
       let before = 0;
       visible.forEach((index, order) => {
@@ -200,7 +196,7 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     }
     // A hidden child keeps the box that it would have if it were visible.
     const wouldHave =
-      visible.length === all.length ? shown : divide(node, all, box);
+      visible.length === all.length ? shown : placeChildren(node, all, box);
     node.children.forEach((child, index) => {
       const order = visible.indexOf(index);
       visit(
@@ -212,9 +208,9 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   }
   /**
    * The boxes of some children of a split, in order, and of the separators
-   * between them. The children share the box of the split with `shareSpace`.
+   * between them. The children share the box of the split with `divide`.
    */
-  function divide(
+  function placeChildren(
     node: SplitNode,
     indexes: readonly number[],
     box: Box
@@ -230,11 +226,15 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
       constant(0),
       add(box[axis], scale(actualGap, -separatorCount))
     );
-    const sizes = shareSpace(
-      available,
-      indexes.map((index) => node.sizes[index]),
-      indexes.map((index) => getMinimumSize(node.children[index], gap)[axis])
+    // Each child's size is a function of the space of the split, and that
+    // space is a function of the container size.
+    const sizes = divide(childSpecs(node, indexes, gap)).map((share) =>
+      compose(share, available)
     );
+    // The last child gets the rest, so that the sizes add up to the space.
+    sizes[sizes.length - 1] = sizes
+      .slice(0, -1)
+      .reduce((rest, value) => add(rest, scale(value, -1)), available);
     const boxes: Box[] = [];
     const handles: Box[] = [];
     let start = box[position];

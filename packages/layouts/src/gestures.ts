@@ -1,6 +1,9 @@
+import { divideSpace } from './divide';
 import { getExitEdge } from './geometry';
+import { isFixed } from './model';
 import type {
   ChildExtent,
+  ChildSize,
   Edge,
   LayoutGeometry,
   Rect,
@@ -24,9 +27,10 @@ const orderOf = (separator: SeparatorGeometry): number =>
 /**
  * The pixel sizes of the visible children of a split after a separator moved
  * by `delta` pixels. The children on the side that the separator moves into
- * shrink, the nearest first, each down to its minimum size. The child on the
- * other side of the separator grows by the same amount. So a move changes only
- * the two children beside the separator, until one reaches its minimum size.
+ * shrink, the nearest first, each down to its minimum size. The children on
+ * the other side grow by the same amount, the nearest first, each up to its
+ * maximum size. So a move changes only the two children beside the
+ * separator, until one reaches its minimum or its maximum size.
  */
 export function moveSeparator(
   children: readonly ChildExtent[],
@@ -34,42 +38,64 @@ export function moveSeparator(
   delta: number
 ): number[] {
   const sizes = children.map(({ size }) => size);
-  const shrinking =
-    delta < 0
-      ? sizes.map((_, index) => order - 1 - index).filter((index) => index >= 0)
-      : sizes
-          .map((_, index) => order + index)
-          .filter((index) => index < sizes.length);
-  let remaining = Math.abs(delta);
+  const before = sizes
+    .map((_, index) => order - 1 - index)
+    .filter((index) => index >= 0);
+  const after = sizes
+    .map((_, index) => order + index)
+    .filter((index) => index < sizes.length);
+  const [shrinking, growing] = delta < 0 ? [before, after] : [after, before];
+  const room = (indexes: number[], limit: (index: number) => number): number =>
+    indexes.reduce((total, index) => total + Math.max(0, limit(index)), 0);
+  const distance = Math.min(
+    Math.abs(delta),
+    room(shrinking, (index) => sizes[index] - children[index].min),
+    room(growing, (index) => children[index].max - sizes[index])
+  );
+  let shrink = distance;
   for (const index of shrinking) {
     const taken = Math.min(
-      remaining,
+      shrink,
       Math.max(0, sizes[index] - children[index].min)
     );
     sizes[index] -= taken;
-    remaining -= taken;
+    shrink -= taken;
   }
-  sizes[delta < 0 ? order : order - 1] += Math.abs(delta) - remaining;
+  let grow = distance;
+  for (const index of growing) {
+    const given = Math.min(
+      grow,
+      Math.max(0, children[index].max - sizes[index])
+    );
+    sizes[index] += given;
+    grow -= given;
+  }
   return sizes;
 }
 
 /**
- * The sizes of a split, as weights, from the pixel sizes of its visible
- * children. The visible children keep the sum of their weights, and hidden
- * children keep theirs.
+ * The sizes of a split from the pixel sizes of its visible children. A child
+ * with a size in pixels takes its new size. The weighted visible children
+ * keep the sum of their weights and share it by their pixel sizes. Hidden
+ * children keep their sizes.
  */
 function toWeights(
   separator: SeparatorGeometry,
   pixels: readonly number[]
-): number[] {
+): ChildSize[] {
   const { split, children } = separator;
   const sizes = [...split.sizes];
-  const space = sum(pixels);
-  if (space <= 0) return sizes;
-  const weight = sum(children.map(({ index }) => split.sizes[index]));
+  const weighted = children
+    .map(({ index }, order) => ({ index, order }))
+    .filter(({ index }) => !isFixed(split.sizes[index]));
+  const space = sum(weighted.map(({ order }) => pixels[order]));
+  const weight = sum(weighted.map(({ index }) => split.sizes[index] as number));
   children.forEach(({ index }, order) => {
-    // A weight stays positive when a child has no minimum size.
-    sizes[index] = (Math.max(pixels[order], space * 0.001) / space) * weight;
+    const size = split.sizes[index];
+    if (isFixed(size)) sizes[index] = { px: pixels[order] };
+    else if (space > 0)
+      // A weight stays positive when a child has no minimum size.
+      sizes[index] = (Math.max(pixels[order], space * 0.001) / space) * weight;
   });
   return sizes;
 }
@@ -82,8 +108,8 @@ export function dragSizes(
   separators: readonly SeparatorGeometry[],
   dx: number,
   dy: number
-): Record<string, number[]> {
-  const sizes: Record<string, number[]> = {};
+): Record<string, ChildSize[]> {
+  const sizes: Record<string, ChildSize[]> = {};
   for (const separator of separators) {
     const delta = separator.split.direction === 'horizontal' ? dx : dy;
     sizes[separator.split.id] = toWeights(
@@ -104,8 +130,8 @@ export function keySizes(
   separators: readonly SeparatorGeometry[],
   key: string,
   shift: boolean
-): Record<string, number[]> | null {
-  const sizes: Record<string, number[]> = {};
+): Record<string, ChildSize[]> | null {
+  const sizes: Record<string, ChildSize[]> = {};
   for (const separator of separators) {
     const horizontal = separator.split.direction === 'horizontal';
     const order = orderOf(separator);
@@ -140,18 +166,27 @@ export function keySizes(
  */
 export function separatorOffset(
   separator: SeparatorGeometry,
-  sizes: readonly number[]
+  sizes: readonly ChildSize[]
 ): number {
   const order = orderOf(separator);
-  const weights = separator.children.map(({ index }) => sizes[index]);
-  const space = sum(separator.children.map(({ size }) => size));
-  const before = sum(
-    separator.children.slice(0, order).map(({ size }) => size)
+  const { children } = separator;
+  const space = sum(children.map(({ size }) => size));
+  const next = divideSpace(
+    space,
+    children.map(({ index, min, max }) => {
+      const size = sizes[index];
+      return {
+        px: isFixed(size) ? size.px : undefined,
+        weight: isFixed(size) ? 1 : size,
+        min,
+        max,
+      };
+    })
   );
-  const total = sum(weights);
-  return total > 0
-    ? (sum(weights.slice(0, order)) / total) * space - before
-    : 0;
+  return (
+    sum(next.slice(0, order)) -
+    sum(children.slice(0, order).map(({ size }) => size))
+  );
 }
 
 /** The pane under a point of the layout, other than the pane that moves. */

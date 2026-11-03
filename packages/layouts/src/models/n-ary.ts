@@ -1,5 +1,6 @@
 import {
   directionOf,
+  halfOf,
   joinChildren,
   parentOf,
   removePane,
@@ -55,7 +56,7 @@ export const naryTree: TreeModel = {
     if (parent === null || parent.direction !== directionOf(edge))
       return wrapPane(root, targetId, pane, nextId(), edge);
     const index = parent.children.findIndex(({ id }) => id === targetId);
-    const half = parent.sizes[index] / 2;
+    const half = halfOf(parent.sizes[index]);
     const at = edge === 'left' || edge === 'top' ? index : index + 1;
     return replaceNode(root, parent.id, () => ({
       ...parent,

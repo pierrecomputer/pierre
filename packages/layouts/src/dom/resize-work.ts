@@ -1,7 +1,7 @@
 import { separatorOffset } from '../gestures';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
-import type { SeparatorGeometry } from '../types';
+import type { ChildSize, SeparatorGeometry } from '../types';
 import { paneHosts } from './panes';
 
 /**
@@ -23,7 +23,7 @@ export interface ResizeWork {
     root: HTMLElement,
     strategy: ResizeStrategy,
     separators: readonly SeparatorGeometry[],
-    sizes: Record<string, number[]>,
+    sizes: Record<string, ChildSize[]>,
     corners: readonly { id: string; separatorIds: readonly string[] }[]
   ): void;
   /** End the work. Call it while the gesture is active, so that the last sizes do not animate. */
@@ -42,7 +42,7 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
   let strategy: ResizeStrategy = 'live';
   let root: HTMLElement | null = null;
   let frame: number | null = null;
-  let pending: Record<string, number[]> | null = null;
+  let pending: Record<string, ChildSize[]> | null = null;
   let moved: HTMLElement[] = [];
   let frozen: HTMLElement[] = [];
   let pause: ReturnType<typeof setTimeout> | null = null;
@@ -51,7 +51,7 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
   /** Move the dragged separators, and the corners that they join, with a transform. */
   function preview(
     separators: readonly SeparatorGeometry[],
-    sizes: Record<string, number[]>,
+    sizes: Record<string, ChildSize[]>,
     corners: readonly { id: string; separatorIds: readonly string[] }[]
   ): void {
     if (root === null) return;

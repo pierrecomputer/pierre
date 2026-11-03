@@ -7,6 +7,13 @@ export interface PaneNode {
   readonly minWidth?: number;
   readonly minHeight?: number;
   /**
+   * The largest size of the pane while other panes can take the space. When
+   * every pane that shares the space of a split has its maximum size, they
+   * grow past it, so that the layout has no empty space.
+   */
+  readonly maxWidth?: number;
+  readonly maxHeight?: number;
+  /**
    * A hidden pane keeps its place in the tree, its content, and its state, but
    * takes no space and does not render.
    */
@@ -29,6 +36,14 @@ export interface StackNode {
 }
 
 /**
+ * The size of a child in its split: a positive weight, for a child that
+ * shares the space of the split with the other weighted children, or a fixed
+ * size in pixels, for a child that keeps its size when the split changes
+ * size, such as a sidebar.
+ */
+export type ChildSize = number | { readonly px: number };
+
+/**
  * A row (`horizontal`) or a column (`vertical`) of two or more children. The
  * tree model of the store sets the other rules of the shape (see `TreeModel`).
  */
@@ -39,12 +54,15 @@ export interface SplitNode {
   /** Left to right in a row, top to bottom in a column. */
   readonly children: readonly LayoutNode[];
   /**
-   * The preferred size of each child, as a positive weight in the order of
-   * `children`. The visible children share the space of the split, without
-   * its separators, in proportion to their weights. A hidden child keeps its
-   * weight for when it shows again.
+   * The preferred size of each child, in the order of `children`: a weight or
+   * a size in pixels (see `ChildSize`). A child with a size in pixels keeps
+   * it. The other visible children share the rest of the space of the split,
+   * without its separators, in proportion to their weights. When the space
+   * shrinks, the weighted children shrink to their minimum sizes first, then
+   * the children with sizes in pixels. A hidden child keeps its size for when
+   * it shows again.
    */
-  readonly sizes: readonly number[];
+  readonly sizes: readonly ChildSize[];
 }
 
 export type LayoutNode = PaneNode | StackNode | SplitNode;
@@ -101,6 +119,8 @@ export interface ChildExtent {
   readonly index: number;
   readonly size: number;
   readonly min: number;
+  /** The maximum size, or `Infinity`. */
+  readonly max: number;
 }
 
 export interface SeparatorGeometry {

@@ -46,6 +46,7 @@ import {
 import { shownPanes, stackOf } from '../model';
 import type { LayoutStore } from '../store';
 import type {
+  ChildSize,
   Edge,
   LayoutGeometry,
   LayoutNode,
@@ -123,7 +124,7 @@ interface ResizeGesture {
   x: number;
   y: number;
   separators: readonly SeparatorGeometry[];
-  originalSizes: Record<string, readonly number[]>;
+  originalSizes: Record<string, readonly ChildSize[]>;
 }
 
 interface MoveGesture {

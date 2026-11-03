@@ -1,4 +1,5 @@
 import type {
+  ChildSize,
   Direction,
   Edge,
   LayoutNode,
@@ -6,6 +7,25 @@ import type {
   SplitNode,
   StackNode,
 } from './types';
+
+/** True for a child size in pixels, false for a weight. */
+export const isFixed = (size: ChildSize): size is { readonly px: number } =>
+  typeof size === 'object';
+
+/** True when a value is a weight or a size in pixels that a split accepts. */
+function isChildSize(size: unknown): size is ChildSize {
+  if (typeof size === 'number') return Number.isFinite(size) && size > 0;
+  if (size === null || typeof size !== 'object') return false;
+  const keys = Object.keys(size);
+  const px = (size as { px?: unknown }).px;
+  return (
+    keys.length === 1 &&
+    keys[0] === 'px' &&
+    typeof px === 'number' &&
+    Number.isFinite(px) &&
+    px >= 0
+  );
+}
 
 /**
  * Reject malformed trees before they can create ambiguous pane identity or
@@ -33,6 +53,11 @@ export function validateLayout(root: LayoutNode): void {
           throw new Error('Pane minimum sizes must be finite and non-negative');
         }
       }
+      for (const size of [node.maxWidth, node.maxHeight]) {
+        if (size !== undefined && (Number.isNaN(size) || size < 0)) {
+          throw new Error('Pane maximum sizes must be non-negative');
+        }
+      }
       if (node.hidden !== undefined && typeof node.hidden !== 'boolean') {
         throw new Error('Pane hidden must be a boolean');
       }
@@ -58,9 +83,11 @@ export function validateLayout(root: LayoutNode): void {
       if (
         !Array.isArray(node.sizes) ||
         node.sizes.length !== node.children.length ||
-        !node.sizes.every((size) => Number.isFinite(size) && size > 0)
+        !node.sizes.every(isChildSize)
       ) {
-        throw new Error('A split needs a positive size for each child');
+        throw new Error(
+          'A split needs a positive weight or a size in pixels for each child'
+        );
       }
       node.children.forEach(visit);
     } else {
@@ -147,7 +174,7 @@ export function visibleTree(node: LayoutNode): LayoutNode | null {
   if (node.type === 'pane') return node.hidden === true ? null : node;
   if (node.type === 'stack') return hasVisiblePane(node) ? node : null;
   const children: LayoutNode[] = [];
-  const sizes: number[] = [];
+  const sizes: ChildSize[] = [];
   node.children.forEach((child, index) => {
     const visible = visibleTree(child);
     if (visible === null) return;
@@ -356,10 +383,10 @@ export function removePane(
   if (root.type === 'pane') return root.id === id ? null : root;
   if (root.type === 'stack') return removeTab(root, id);
   const children: LayoutNode[] = [];
-  const sizes: number[] = [];
+  const sizes: ChildSize[] = [];
   // The place of the removed child among the children that stay, its size,
   // and whether it took space.
-  let removed: { at: number; size: number; visible: boolean } | null = null;
+  let removed: { at: number; size: ChildSize; visible: boolean } | null = null;
   for (let index = 0; index < root.children.length; index++) {
     const child = root.children[index];
     const next = removePane(child, id, join);
@@ -376,17 +403,18 @@ export function removePane(
   }
   if (removed === null && sameNodes(children, root.children)) return root;
   if (children.length === 0) return null;
-  if (removed?.visible === true) {
-    const visible = children.map(hasVisiblePane);
-    const before = visible.slice(0, removed.at).lastIndexOf(true);
-    const after = visible.indexOf(true, removed.at);
-    const heir =
-      before !== -1
-        ? before
-        : after !== -1
-          ? after
-          : Math.max(0, removed.at - 1);
-    sizes[heir] += removed.size;
+  // A child with a size in pixels gives its space to the weighted children
+  // as a group. A weighted child gives its weight to the nearest weighted
+  // child that takes space.
+  const size = removed?.size;
+  if (removed?.visible === true && typeof size === 'number') {
+    const heirs = children.map(
+      (child, index) => hasVisiblePane(child) && !isFixed(sizes[index])
+    );
+    const before = heirs.slice(0, removed.at).lastIndexOf(true);
+    const after = heirs.indexOf(true, removed.at);
+    const heir = before !== -1 ? before : after;
+    if (heir !== -1) sizes[heir] = (sizes[heir] as number) + size;
   }
   if (children.length === 1) return children[0];
   return join
@@ -418,19 +446,16 @@ function removeTab(stack: StackNode, id: string): LayoutNode | null {
 export function joinChildren(
   direction: Direction,
   children: readonly LayoutNode[],
-  sizes: readonly number[]
-): { children: LayoutNode[]; sizes: number[] } {
-  const joined: { children: LayoutNode[]; sizes: number[] } = {
+  sizes: readonly ChildSize[]
+): { children: LayoutNode[]; sizes: ChildSize[] } {
+  const joined: { children: LayoutNode[]; sizes: ChildSize[] } = {
     children: [],
     sizes: [],
   };
   children.forEach((child, index) => {
     if (child.type === 'split' && child.direction === direction) {
-      const total = child.sizes.reduce((sum, size) => sum + size, 0);
       joined.children.push(...child.children);
-      joined.sizes.push(
-        ...child.sizes.map((size) => (sizes[index] * size) / total)
-      );
+      joined.sizes.push(...shareSlot(sizes[index], child.sizes));
     } else {
       joined.children.push(child);
       joined.sizes.push(sizes[index]);
@@ -438,6 +463,32 @@ export function joinChildren(
   });
   return joined;
 }
+
+/**
+ * The sizes of the children of a split that joins its parent in the place
+ * of one child. Sizes in pixels stay. In a weighted place, the weighted
+ * children share its weight. In a place in pixels, the weighted children
+ * take sizes in pixels from what the others leave of it. The separators of
+ * the joined children are not counted, so such a place grows by their gaps.
+ */
+function shareSlot(slot: ChildSize, sizes: readonly ChildSize[]): ChildSize[] {
+  const weights = sizes.filter((size) => !isFixed(size)) as number[];
+  const total = weights.reduce((sum, size) => sum + size, 0);
+  if (!isFixed(slot))
+    return sizes.map((size) => (isFixed(size) ? size : (slot * size) / total));
+  const pixels = sizes.reduce<number>(
+    (sum, size) => sum + (isFixed(size) ? size.px : 0),
+    0
+  );
+  const rest = Math.max(0, slot.px - pixels);
+  return sizes.map((size) =>
+    isFixed(size) ? size : { px: (rest * size) / total }
+  );
+}
+
+/** Half of a child size: half of its weight, or of its size in pixels. */
+export const halfOf = (size: ChildSize): ChildSize =>
+  isFixed(size) ? { px: size.px / 2 } : size / 2;
 
 export function swapPanes(
   root: LayoutNode,
