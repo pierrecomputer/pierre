@@ -21,19 +21,22 @@ import { PANE_VISIBILITY_EVENT } from '../dom/panes';
 export type OverlayEdge = 'left' | 'right' | 'top' | 'bottom';
 
 /**
- * How a modal makes the rest of the page inert. Experimental, for the
- * comparison of `explore-overlays-boundary`:
+ * How a modal keeps the user in it. Experimental, for the comparison of
+ * `explore-overlays-boundary`:
  *
- * - `dialog`: `showModal()`. The browser makes every element outside the
- *   dialog inert, so Chromium updates the style of the whole document.
- * - `dialog-hide-covered` (the default): the panes that the modal covers stop
- *   rendering first, then `showModal()`. Only the content that the user can
- *   see gets a new style.
- * - `popover`: a `manual` popover with `role="dialog"`, `aria-modal`, and a
- *   focus trap, and `aria-hidden` on each element outside it, which takes the
- *   page out of the accessibility tree with no new style. The covered panes
- *   stop rendering. Nothing becomes inert: a script can still focus an
- *   element in a pane, and the browser's find in page still finds its text.
+ * - `popover` (the default): a `manual` popover with `role="dialog"`,
+ *   `aria-modal`, and a focus trap. Each element outside it gets
+ *   `aria-hidden`, which takes the page out of the accessibility tree with no
+ *   new style, and its backdrop takes the pointer. The covered panes stop
+ *   rendering. Nothing becomes inert: a script can still focus an element in
+ *   a pane, and the browser's find in page still finds its text.
+ * - `dialog-hide-covered`: the panes that the modal covers stop rendering
+ *   first, then `showModal()`. The browser makes the page inert, and Chromium
+ *   then gives each element that renders a new style: about 280 ms at 16
+ *   panes of real content, at the open and again at the close.
+ * - `dialog`: `showModal()` with every pane rendering, the reference.
+ *
+ * A `<dialog>` closes with no exit animation (see `closesAtOnce`).
  */
 export type ModalStrategy = 'dialog' | 'dialog-hide-covered' | 'popover';
 
@@ -324,12 +327,6 @@ function hideOutside(element: HTMLElement): () => void {
   };
 }
 
-// Chromium can keep an element in the top layer after it closes, for the
-// length of an animation of `overlay`. Elsewhere, a `<dialog>` that has closed
-// shows no exit animation.
-const keepsTopLayer = (): boolean =>
-  typeof CSS !== 'undefined' && CSS.supports('overlay', 'auto');
-
 interface OverlayBehavior {
   /** Put the element in the top layer, and move the focus into it. */
   show(): void;
@@ -337,8 +334,14 @@ interface OverlayBehavior {
   hide(): void;
   /** Undo the effects of `show()` that end when the close starts. */
   release?(): void;
-  /** Keyframes of the entry. The exit plays them backwards. */
-  keyframes: { element: Keyframe[]; backdrop?: Keyframe[] };
+  /** Keyframes of the entry. The exit plays the entry backwards. */
+  keyframes: Keyframe[];
+  /** The element and the keyframes of a backdrop's entry, if any. */
+  backdrop?(): {
+    target: Element;
+    pseudoElement?: string;
+    keyframes: Keyframe[];
+  } | null;
   /** Whether the overlay hides every pane: an opaque backdrop. */
   coversAll: boolean;
   /** Whether the panes that the overlay covers stop rendering. */
@@ -350,12 +353,13 @@ interface OverlayBehavior {
    */
   hidesAllFirst: boolean;
   /**
-   * Leave the top layer at the start of the exit, and keep the box with an
-   * animation of `overlay`. A modal `<dialog>` needs this: while it is modal,
-   * the page is inert, and the panes that show again would get a new style
-   * twice, once for the inert page and once when it closes.
+   * Leave the top layer when the close starts, with no exit animation. A
+   * modal `<dialog>` needs this: while it is modal, the page is inert, and
+   * panes that show again during an exit would get a new style twice, once
+   * for the inert page and once when it closes. An animation that keeps a
+   * closed `<dialog>` in the top layer (`overlay`) runs on the main thread.
    */
-  hidesBeforeExit: boolean;
+  closesAtOnce: boolean;
   /** The inset sides of the overlay: all four, or three for a drawer. */
   edge: OverlayEdge | null;
   /** The element that gets the focus back when the overlay closes. */
@@ -373,6 +377,7 @@ class Overlay {
   private observer: ResizeObserver | null = null;
   private cover: OverlayCover = NO_COVER;
   private readonly hidden = new Set<HTMLElement>();
+  private entry: Animation[] = [];
   private exit: Animation[] = [];
   private shown = false;
   private duration: number | null = null;
@@ -411,7 +416,7 @@ class Overlay {
         this.hide(host);
     this.behavior.show();
     this.shown = true;
-    this.animate(false);
+    this.entry = this.animate();
     // Read the boxes after the browser lays them out, in the same frame: a
     // read now would force that layout in this task.
     this.observer = new ResizeObserver(() => this.update());
@@ -430,20 +435,26 @@ class Overlay {
     this.hidden.clear();
     this.report(NO_COVER);
     this.behavior.release?.();
-    let keep = false;
-    if (this.behavior.hidesBeforeExit) {
-      this.leaveTopLayer();
-      keep = keepsTopLayer();
-    }
+    if (this.behavior.closesAtOnce) this.leaveTopLayer();
     this.restoreFocus();
-    const exit =
-      !this.behavior.hidesBeforeExit || keep ? this.animate(true, keep) : [];
+    // The exit plays the entry backwards from where it is, also when the
+    // entry has not ended.
+    const entry = this.entry;
+    this.entry = [];
+    if (this.behavior.closesAtOnce)
+      for (const animation of entry) animation.cancel();
+    else for (const animation of entry) animation.reverse();
+    const exit = this.behavior.closesAtOnce ? [] : entry;
     if (exit.length === 0) {
       this.finish();
       return;
     }
     this.exit = exit;
-    void Promise.all(exit.map(({ finished }) => finished)).then(
+    // Wait for `ready`, so that `finished` is the promise of the reversed
+    // play, not the one of the entry.
+    void Promise.all(
+      exit.map((animation) => animation.ready.then(() => animation.finished))
+    ).then(
       () => {
         if (this.exit === exit) this.finish();
       },
@@ -515,9 +526,10 @@ class Overlay {
   }
 
   private finish(): void {
-    const exit = this.exit;
+    const animations = [...this.entry, ...this.exit];
+    this.entry = [];
     this.exit = [];
-    for (const animation of exit) animation.cancel();
+    for (const animation of animations) animation.cancel();
     this.leaveTopLayer();
     this.opened = false;
   }
@@ -540,32 +552,22 @@ class Overlay {
       target.focus({ preventScroll: true });
   }
 
-  /**
-   * Play the entry, or the exit backwards. With `keep`, the exit holds the
-   * closed element's box and its place in the top layer until it ends.
-   */
-  private animate(backwards: boolean, keep = false): Animation[] {
+  /** Play the entry of the overlay and its backdrop, with transforms and opacity. */
+  private animate(): Animation[] {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return [];
-    const hold = keep ? { display: 'block', overlay: 'auto' } : {};
-    const { element, backdrop } = this.behavior.keyframes;
     const timing: KeyframeAnimationOptions = {
       id: ANIMATION_ID,
       duration: this.duration ?? DEFAULT_DURATION_MS,
       easing: EASING,
-      direction: backwards ? 'reverse' : 'normal',
     };
-    const animations = [
-      this.element.animate(
-        element.map((frame) => ({ ...frame, ...hold })),
-        timing
-      ),
-    ];
-    if (backdrop !== undefined)
+    const animations = [this.element.animate(this.behavior.keyframes, timing)];
+    const backdrop = this.behavior.backdrop?.();
+    if (backdrop != null)
       animations.push(
-        this.element.animate(
-          backdrop.map((frame) => ({ ...frame, ...hold })),
-          { ...timing, pseudoElement: '::backdrop' }
-        )
+        backdrop.target.animate(backdrop.keyframes, {
+          ...timing,
+          pseudoElement: backdrop.pseudoElement,
+        })
       );
     return animations;
   }
@@ -615,6 +617,22 @@ function closeOnEscape(element: HTMLElement, overlay: Overlay): () => void {
 }
 
 /**
+ * The backdrop of a popover modal: an empty element in the top layer, under
+ * the modal. In Chromium, the `::backdrop` of a popover lets the pointer
+ * through to the page, so this element takes the pointer, and it keeps the
+ * focus where it is on a press.
+ */
+function createShield(element: HTMLElement, opaque: boolean): HTMLElement {
+  const shield = element.ownerDocument.createElement('div');
+  shield.className = 'pierre-modal-shield';
+  shield.dataset.backdrop = opaque ? 'opaque' : 'translucent';
+  shield.popover = 'manual';
+  shield.addEventListener('mousedown', (event) => event.preventDefault());
+  element.ownerDocument.body.append(shield);
+  return shield;
+}
+
+/**
  * A modal over the workspace. With a `dialog` strategy, the element is a
  * `<dialog>`: the browser moves the focus into it, keeps the focus there, and
  * makes the rest of the page inert. Escape closes the modal, and the focus
@@ -624,7 +642,7 @@ export function createModal(
   element: HTMLElement,
   options: ModalOptions
 ): OverlayHandle {
-  const strategy = options.strategy ?? 'dialog-hide-covered';
+  const strategy = options.strategy ?? 'popover';
   const opaque = options.backdrop === 'opaque';
   const dialog =
     strategy === 'popover'
@@ -644,20 +662,29 @@ export function createModal(
 
   let untrap: (() => void) | null = null;
   let unhide: (() => void) | null = null;
+  let shield: HTMLElement | null = null;
+  const fade = [{ opacity: 0 }, { opacity: 1 }];
   const overlay = new Overlay(element, options, {
     show() {
       if (dialog !== null) {
         dialog.showModal();
         return;
       }
+      shield = createShield(element, opaque);
+      shield.showPopover();
       element.showPopover();
       unhide = hideOutside(element);
       focusFirst(element);
       untrap = trapFocus(element);
     },
     hide() {
-      if (dialog !== null) dialog.close();
-      else element.hidePopover();
+      if (dialog !== null) {
+        dialog.close();
+        return;
+      }
+      element.hidePopover();
+      shield?.remove();
+      shield = null;
     },
     release() {
       untrap?.();
@@ -665,13 +692,16 @@ export function createModal(
       untrap = null;
       unhide = null;
     },
-    keyframes: {
-      element: [
-        { opacity: 0, transform: 'scale(0.98)' },
-        { opacity: 1, transform: 'none' },
-      ],
-      backdrop: [{ opacity: 0 }, { opacity: 1 }],
-    },
+    keyframes: [
+      { opacity: 0, transform: 'scale(0.98)' },
+      { opacity: 1, transform: 'none' },
+    ],
+    backdrop: () =>
+      dialog !== null
+        ? { target: dialog, pseudoElement: '::backdrop', keyframes: fade }
+        : shield !== null
+          ? { target: shield, keyframes: fade }
+          : null,
     coversAll: opaque,
     // With the `dialog` strategy, every pane keeps rendering: it is the
     // reference for the comparison.
@@ -679,7 +709,7 @@ export function createModal(
     // A popover makes nothing inert, so the covered panes can stop rendering
     // after the first layout, when the modal's box is known.
     hidesAllFirst: strategy === 'dialog-hide-covered',
-    hidesBeforeExit: dialog !== null,
+    closesAtOnce: dialog !== null,
     edge: null,
     returnFocus: (opener) => opener,
   });
@@ -732,13 +762,11 @@ export function createDrawer(
     },
     hide: () => element.hidePopover(),
     release: () => trigger?.setAttribute('aria-expanded', 'false'),
-    keyframes: {
-      element: [{ transform: DRAWER_FROM[edge] }, { transform: 'none' }],
-    },
+    keyframes: [{ transform: DRAWER_FROM[edge] }, { transform: 'none' }],
     coversAll: false,
     hidesCovered: true,
     hidesAllFirst: false,
-    hidesBeforeExit: false,
+    closesAtOnce: false,
     edge,
     returnFocus: (opener) => trigger ?? opener,
   });

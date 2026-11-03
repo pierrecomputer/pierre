@@ -96,13 +96,13 @@ const paneLayers: boolean | { minPanes: number } | undefined =
       : requestedLayers !== null && /^\d+$/.test(requestedLayers)
         ? { minPanes: Number(requestedLayers) }
         : undefined;
-// The modal strategy: `dialog`, `dialog-hide-covered` (the default), or
-// `popover`; and `backdrop=opaque` for a backdrop that hides the page.
+// The modal strategy: `popover` (the default), `dialog-hide-covered`, or
+// `dialog`; and `backdrop=opaque` for a backdrop that hides the page.
 const requestedModal = params.get('modal');
 const modalStrategy =
-  requestedModal === 'dialog' || requestedModal === 'popover'
+  requestedModal === 'dialog' || requestedModal === 'dialog-hide-covered'
     ? requestedModal
-    : 'dialog-hide-covered';
+    : 'popover';
 const backdrop = params.get('backdrop') === 'opaque' ? 'opaque' : 'translucent';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));

@@ -120,14 +120,15 @@ function useOverlay(
 }
 
 /**
- * A modal over the workspace. With the default strategy it is a `<dialog>`
- * that `showModal()` opens, after the panes that it covers stop rendering.
- * Import `@pierre/layouts/overlays.css` for its base styles.
+ * A modal over the workspace: a `manual` popover with `role="dialog"` and
+ * `aria-modal` by default, which keeps the focus and hides the rest of the
+ * page from assistive technology (see `ModalStrategy`). Import
+ * `@pierre/layouts/overlays.css` for its base styles.
  */
 export function Modal(props: ModalProps): JSX.Element {
   const {
     backdrop = 'translucent',
-    experimentalStrategy = 'dialog-hide-covered',
+    experimentalStrategy = 'popover',
     label,
     labelledBy,
     className,

@@ -73,8 +73,8 @@ output to a pane, `busy(ms)` to block the main thread, `mountOverlays()` to
 render the closed modal and drawer, and `setOverlay(overlay, open)` to open or
 close one of them through the app's state.
 
-`?modal=` selects the strategy of the modal: `dialog-hide-covered` (the
-default), `dialog`, or `popover`. `?backdrop=opaque` gives it a backdrop that
+`?modal=` selects the strategy of the modal: `popover` (the default),
+`dialog-hide-covered`, or `dialog`. `?backdrop=opaque` gives it a backdrop that
 hides the page, so that every pane stops rendering.
 
 `?layers=` sets the `paneLayers` option: `on`, `off`, or a number of visible
