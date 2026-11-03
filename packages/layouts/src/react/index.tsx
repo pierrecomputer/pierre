@@ -67,6 +67,11 @@ const ALL_PANE_ACTIONS: readonly PaneAction[] = ['move', 'zoom', 'close'];
 
 export interface LayoutProps {
   store: LayoutStore;
+  /**
+   * The content of a pane. It runs again when the pane node changes, except
+   * for a change of `hidden` alone: a hide or a show does not render the
+   * content, which receives `PANE_VISIBILITY_EVENT` instead.
+   */
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
   /**
@@ -136,20 +141,41 @@ interface MoveGesture {
 const shownPanes = (node: LayoutNode): PaneNode[] =>
   getPanes(node).filter(({ hidden }) => hidden !== true);
 
+interface PaneBodyProps {
+  pane: PaneNode;
+  renderPane: (pane: PaneNode) => ReactNode;
+}
+
+/**
+ * True when a pane's content can keep its last render. A hide or a show
+ * replaces the pane node with a copy that differs only in `hidden`; the
+ * content does not need to render for that, because the host stops or starts
+ * its rendering and sends `PANE_VISIBILITY_EVENT`.
+ */
+function sameContentProps(a: PaneBodyProps, b: PaneBodyProps): boolean {
+  if (a.renderPane !== b.renderPane) return false;
+  if (a.pane === b.pane) return true;
+  const { hidden: _a, ...before } = a.pane;
+  const { hidden: _b, ...after } = b.pane;
+  const keys = Object.keys(before) as (keyof typeof before)[];
+  return (
+    keys.length === Object.keys(after).length &&
+    keys.every((key) => before[key] === after[key])
+  );
+}
+
 /**
  * The app's content of one pane. It renders only when its pane node or the
  * app's `renderPane` changes: focus, zoom, and size changes keep the pane
- * node, because the store keeps the identity of unchanged nodes.
+ * node, because the store keeps the identity of unchanged nodes, and a hide or
+ * a show changes only `hidden` (see `sameContentProps`).
  */
 const PaneBody = memo(function PaneBody({
   pane,
   renderPane,
-}: {
-  pane: PaneNode;
-  renderPane: (pane: PaneNode) => ReactNode;
-}): JSX.Element {
+}: PaneBodyProps): JSX.Element {
   return <div className="pierre-layout-content">{renderPane(pane)}</div>;
-});
+}, sameContentProps);
 
 // The box of a zoomed pane and of the focus indicator while a pane is zoomed.
 const FULL_SIZE: CSSProperties = {
