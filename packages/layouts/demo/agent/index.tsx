@@ -318,7 +318,8 @@ function Shell(): JSX.Element {
 /** The content of one pane of the agent view. */
 export default function AgentPane({ id }: { id: string }): JSX.Element {
   if (id === 'files') return <Files />;
-  if (id === 'agent') return <Chat />;
+  // The agent chat and its other tabs, such as `agent-review`.
+  if (id === 'agent' || id.startsWith('agent-')) return <Chat />;
   if (id === 'editor') return <SourceEditor />;
   return <Shell />;
 }

@@ -333,6 +333,37 @@ export const CHECKS: Check[] = [
     evaluate: atMost('hidden-append', 4, 'heavy', 'paints', 0),
   },
   {
+    id: 'hidden-tab-append-no-layout',
+    rule: 'hidden-content',
+    description:
+      'Output in a tab that does not show causes no layout (16 heavy panes).',
+    limit: '0 ms',
+    evaluate: atMost('hidden-tab-append', 16, 'heavy', 'layoutMs', 0),
+  },
+  {
+    id: 'hidden-tab-append-no-paint',
+    rule: 'hidden-content',
+    description:
+      'Output in a tab that does not show causes no paint (16 heavy panes).',
+    limit: '0 paints',
+    evaluate: atMost('hidden-tab-append', 16, 'heavy', 'paints', 0),
+  },
+  {
+    id: 'tab-switch-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A change of tab renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('tab-switch', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'tab-switch-no-content-resize',
+    rule: 'independence-from-content',
+    description:
+      'A change of tab gives no pane content a new size (16 heavy panes).',
+    limit: '0 callbacks',
+    evaluate: atMost('tab-switch', 16, 'heavy', 'contentResizeCallbacks', 0),
+  },
+  {
     id: 'zoom-covered-panes-no-raster',
     rule: 'hidden-content',
     description:
@@ -400,7 +431,7 @@ export const CHECKS: Check[] = [
   },
   // An operation on one pane marks no element inside another pane for layout.
   // A pane host that a zoom hides or shows may count once; its content not.
-  ...['zoom', 'restore', 'focus', 'append'].map(
+  ...['zoom', 'restore', 'focus', 'append', 'tab-switch'].map(
     (scenario): Check => ({
       id: `${scenario}-no-layout-outside-target`,
       rule: 'independence-of-layers',
@@ -413,7 +444,7 @@ export const CHECKS: Check[] = [
       },
     })
   ),
-  ...['zoom', 'focus', 'split'].map(
+  ...['zoom', 'focus', 'split', 'tab-switch'].map(
     (scenario): Check => ({
       id: `${scenario}-time-independent-of-panes`,
       rule: 'scale',

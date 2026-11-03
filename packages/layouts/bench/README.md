@@ -87,22 +87,24 @@ isolate the content area.
 
 ## Scenarios
 
-| ID                 | Operation                                                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `idle`             | Nothing. Shows the cost of the harness itself.                                                                                                        |
-| `zoom`             | Click the zoom button of the first pane.                                                                                                              |
-| `restore`          | Click the restore button of the zoomed first pane.                                                                                                    |
-| `zoom-busy`        | Zoom, then block the main thread for 200 ms during the animation.                                                                                     |
-| `focus`            | Click the content of the second pane.                                                                                                                 |
-| `resize`           | Drag the root separator 160 px in 16 pointer moves.                                                                                                   |
-| `split`            | Add a pane to the right of the first pane.                                                                                                            |
-| `close`            | Click the close button of the second pane.                                                                                                            |
-| `move`             | Move the first pane to the left of the last pane.                                                                                                     |
-| `append`           | Append a message to the agent chat pane once per frame, 10 times.                                                                                     |
-| `hidden-append`    | Zoom the first pane, then append to the covered agent chat pane 10 times.                                                                             |
-| `hide`             | Hide the second pane with `store.setHidden`.                                                                                                          |
-| `container-resize` | Narrow the viewport from 1440 px to 1200 px.                                                                                                          |
-| `repeat`           | Not timed. Measures memory before and after 20 zooms and restores of the first pane and 20 hides and shows of the second pane. See [Memory](#memory). |
+| ID                  | Operation                                                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`              | Nothing. Shows the cost of the harness itself.                                                                                                        |
+| `zoom`              | Click the zoom button of the first pane.                                                                                                              |
+| `restore`           | Click the restore button of the zoomed first pane.                                                                                                    |
+| `zoom-busy`         | Zoom, then block the main thread for 200 ms during the animation.                                                                                     |
+| `focus`             | Click the content of the second pane.                                                                                                                 |
+| `resize`            | Drag the root separator 160 px in 16 pointer moves.                                                                                                   |
+| `split`             | Add a pane to the right of the first pane.                                                                                                            |
+| `close`             | Click the close button of the second pane.                                                                                                            |
+| `move`              | Move the first pane to the left of the last pane.                                                                                                     |
+| `append`            | Append a message to the agent chat pane once per frame, 10 times.                                                                                     |
+| `hidden-append`     | Zoom the first pane, then append to the covered agent chat pane 10 times.                                                                             |
+| `hide`              | Hide the second pane with `store.setHidden`.                                                                                                          |
+| `tab-switch`        | Add a tab beside the second pane, then click the tab of the second pane to show it again.                                                             |
+| `hidden-tab-append` | Add a tab beside the agent chat pane, then append to the chat, which does not show, 10 times.                                                         |
+| `container-resize`  | Narrow the viewport from 1440 px to 1200 px.                                                                                                          |
+| `repeat`            | Not timed. Measures memory before and after 20 zooms and restores of the first pane and 20 hides and shows of the second pane. See [Memory](#memory). |
 
 Each run loads a fresh page, runs the scenario's setup, waits two frames and 150
 ms, and then traces the operation until the layout settles. With real content,

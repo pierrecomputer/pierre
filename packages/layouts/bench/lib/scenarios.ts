@@ -78,6 +78,35 @@ async function inPageTask(
   );
 }
 
+// Real components finish async work after their first render. A tab that a
+// setup adds waits for it, as the run does for the first page (see the bench).
+const NEW_REAL_TAB_SETTLE_MS = 1500;
+
+/**
+ * Add a tab beside a pane, so that the pane is in a stack and the new tab
+ * shows. The new tab gets the content kind that follows the last pane.
+ */
+async function addTab(
+  page: Page,
+  params: Params,
+  target: string,
+  id: string
+): Promise<void> {
+  await page.evaluate(
+    ({ target, id }) =>
+      window.__layoutsBench.store.addTab(target, {
+        type: 'pane',
+        id,
+        minWidth: 48,
+        minHeight: 48,
+      }),
+    { target, id }
+  );
+  await page.waitForTimeout(
+    params.content === 'real' ? NEW_REAL_TAB_SETTLE_MS : ANIMATION_SETTLE_MS
+  );
+}
+
 export async function zoomFirstPane(page: Page): Promise<void> {
   await page.evaluate(() => window.__layoutsBench.store.toggleZoom('p0'));
   await page.waitForTimeout(ANIMATION_SETTLE_MS);
@@ -224,6 +253,31 @@ export const SCENARIOS: Scenario[] = [
       await inPageTask(page, 'hide');
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
     },
+  },
+  {
+    id: 'tab-switch',
+    description:
+      'Add a tab beside the second pane, then click the tab of the second pane to show it again.',
+    target: 'p1',
+    async setup(page, params) {
+      await addTab(page, params, 'p1', 't1');
+      return center(page, '[data-layout-pane="t1"] [data-layout-tab="p1"]');
+    },
+    async run(page, _params, point) {
+      await page.mouse.click(point!.x, point!.y);
+      await page.waitForTimeout(IDLE_SETTLE_MS);
+    },
+  },
+  {
+    id: 'hidden-tab-append',
+    description: `Add a tab beside the agent chat pane, then append a message to the chat, which does not show, ${APPEND_STEPS} times.`,
+    steps: APPEND_STEPS,
+    target: APPEND_PANE,
+    async setup(page, params) {
+      await addTab(page, params, APPEND_PANE, 't3');
+      return undefined;
+    },
+    run: (page) => appendEachFrame(page, APPEND_PANE),
   },
   {
     id: 'container-resize',

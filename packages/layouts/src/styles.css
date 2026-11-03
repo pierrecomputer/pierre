@@ -52,8 +52,11 @@
    transform` also makes a layer, but Chromium then keeps the raster scale of a
    scale animation after it ends: after a move or a restore, a pane kept up to
    3 times its tiles. The 2D transform of a covered pane replaces this one, so
-   a covered host is not a layer and keeps no tiles. */
-.pierre-layout[data-pane-layers='true'] > .pierre-layout-pane {
+   a covered host is not a layer and keeps no tiles. A host that does not show,
+   such as a tab that is not active, is not a layer either, so a stack has one
+   layer whatever the number of its tabs. */
+.pierre-layout[data-pane-layers='true']
+  > .pierre-layout-pane:not([data-pane-hidden='true']) {
   transform: translateZ(0);
 }
 
@@ -93,10 +96,11 @@
   z-index: 2;
 }
 
-/* A hidden pane (store.setHidden) keeps its content mounted, with its state
-   and scroll position, but takes no space: the view gives it the box that it
-   would have, and it does not render or take input. */
-.pierre-layout-pane[data-collapsed='true'] {
+/* A hidden pane (store.setHidden) and a tab that is not active keep their
+   content mounted, with its state and scroll position, but do not show: the
+   view gives each the box that it would have, and it does not render or take
+   input. */
+.pierre-layout-pane[data-pane-hidden='true'] {
   content-visibility: hidden;
   visibility: hidden;
   pointer-events: none;
@@ -160,6 +164,46 @@
 .pierre-layout-header .pierre-layout-grip {
   touch-action: none;
   cursor: grab;
+}
+
+/* The tabs of a stack take the place of the title. */
+.pierre-layout-tabs {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pierre-layout-header .pierre-layout-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 160px;
+  padding: 2px 4px 2px 8px;
+}
+
+.pierre-layout-header .pierre-layout-tab[aria-selected='true'] {
+  background: var(--layout-tab-selected, #eef2f8);
+  box-shadow: inset 0 -2px 0 var(--layout-accent);
+}
+
+.pierre-layout-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pierre-layout-tab-close {
+  padding: 0 3px;
+  border-radius: 3px;
+  opacity: 0.6;
+}
+
+.pierre-layout-tab-close:hover {
+  background: var(--layout-border);
+  opacity: 1;
 }
 
 .pierre-layout-content {

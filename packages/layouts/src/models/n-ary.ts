@@ -4,7 +4,7 @@ import {
   parentOf,
   removePane,
   replaceNode,
-  requirePane,
+  requireSlot,
   sameNodes,
   validateLayout,
   wrapPane,
@@ -24,7 +24,7 @@ export const naryTree: TreeModel = {
   validate(root) {
     validateLayout(root);
     const visit = (node: LayoutNode, parent: Direction | null): void => {
-      if (node.type === 'pane') return;
+      if (node.type !== 'split') return;
       if (node.direction === parent)
         throw new Error(
           'A split of the n-ary model cannot hold a split of the same direction'
@@ -35,7 +35,7 @@ export const naryTree: TreeModel = {
   },
   normalize(root) {
     const flatten = (node: LayoutNode): LayoutNode => {
-      if (node.type === 'pane') return node;
+      if (node.type !== 'split') return node;
       const joined = joinChildren(
         node.direction,
         node.children.map(flatten),
@@ -50,7 +50,7 @@ export const naryTree: TreeModel = {
   // In a split of the edge's direction, the new pane goes beside the target
   // and takes half of its size.
   split(root, targetId, pane, edge, nextId) {
-    requirePane(root, targetId);
+    requireSlot(root, targetId);
     const parent = parentOf(root, targetId);
     if (parent === null || parent.direction !== directionOf(edge))
       return wrapPane(root, targetId, pane, nextId(), edge);

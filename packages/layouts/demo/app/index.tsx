@@ -20,19 +20,26 @@ import { ResizeSelect, type ResizeStrategy } from '../resize-select';
 import { Sessions, useSessions } from './sessions';
 import './app.css';
 
-const PANES = [
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'agent', label: 'Agent' },
-  { id: 'editor', label: 'Editor' },
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'files', label: 'Files' },
+// The header toggles. Each toggle hides or shows the panes of one place:
+// the agent chat and the terminal have tabs.
+const PLACES = [
+  { label: 'Sessions', ids: ['sessions'] },
+  { label: 'Agent', ids: ['agent', 'agent-review'] },
+  { label: 'Editor', ids: ['editor'] },
+  { label: 'Terminal', ids: ['terminal', 'terminal-server'] },
+  { label: 'Files', ids: ['files'] },
 ] as const;
 
-const LABELS: Record<string, string> = Object.fromEntries(
-  PANES.map(({ id, label }) => [id, label])
-);
+const LABELS: Record<string, string> = {
+  sessions: 'Sessions',
+  'agent-review': 'Review',
+  editor: 'Editor',
+  terminal: 'Terminal',
+  'terminal-server': 'Dev server',
+  files: 'Files',
+};
 
-// Every pane of the app, in place. A toggle hides a pane or shows it again.
+// Every pane of the app, in place. A toggle hides a place or shows it again.
 // The binary model nests the row as sessions | (agent | (tools | files)).
 const TEMPLATE: LayoutNode = {
   type: 'split',
@@ -41,7 +48,15 @@ const TEMPLATE: LayoutNode = {
   sizes: [0.16, 0.4, 0.29, 0.15],
   children: [
     { type: 'pane', id: 'sessions', minWidth: 200, minHeight: 160 },
-    { type: 'pane', id: 'agent', minWidth: 320, minHeight: 200 },
+    {
+      type: 'stack',
+      id: 'app-agent',
+      active: 'agent',
+      children: [
+        { type: 'pane', id: 'agent', minWidth: 320, minHeight: 200 },
+        { type: 'pane', id: 'agent-review', minWidth: 320, minHeight: 200 },
+      ],
+    },
     {
       type: 'split',
       id: 'app-tools',
@@ -49,21 +64,42 @@ const TEMPLATE: LayoutNode = {
       sizes: [0.62, 0.38],
       children: [
         { type: 'pane', id: 'editor', minWidth: 260, minHeight: 140 },
-        { type: 'pane', id: 'terminal', minWidth: 260, minHeight: 100 },
+        {
+          type: 'stack',
+          id: 'app-terminal',
+          active: 'terminal',
+          children: [
+            { type: 'pane', id: 'terminal', minWidth: 260, minHeight: 100 },
+            {
+              type: 'pane',
+              id: 'terminal-server',
+              minWidth: 260,
+              minHeight: 100,
+            },
+          ],
+        },
       ],
     },
     { type: 'pane', id: 'files', minWidth: 180, minHeight: 160 },
   ],
 };
 
-// Sessions is a fixed sidebar; the agent chat can move but always stays; the
-// tools can move, and their close button hides them.
+let nextTerminal = 1;
+
+// Sessions is a fixed sidebar; the main agent chat can move but always
+// stays; the tools and the other tabs can move, and their close button hides
+// them.
 const paneActions = (pane: PaneNode): readonly PaneAction[] =>
   pane.id === 'sessions'
     ? []
     : pane.id === 'agent'
       ? ['move', 'zoom']
       : ['move', 'zoom', 'close'];
+
+/** Show the panes of a place again; its first pane is the active tab. */
+function showPlace(ids: readonly string[]): void {
+  for (const id of [...ids].reverse()) store.setHidden(id, false);
+}
 
 // The n-ary model: a drag of a separator changes only the panes beside it.
 const store = new LayoutStore(TEMPLATE, { model: naryTree });
@@ -94,6 +130,9 @@ export default function App(): JSX.Element {
       .filter(({ hidden }) => hidden !== true)
       .map(({ id }) => id)
   );
+  const placesShown = PLACES.filter(({ ids }) =>
+    ids.some((id) => visible.has(id))
+  ).length;
   const activeTitle =
     sessions.find(({ id }) => id === active)?.title ?? 'Agent';
 
@@ -117,20 +156,44 @@ export default function App(): JSX.Element {
           Layouts <span>app</span>
         </a>
         <nav className="app-toggles" aria-label="Panes">
-          {PANES.map(({ id, label }) => {
-            const shown = visible.has(id);
+          {PLACES.map(({ label, ids }) => {
+            const shown = ids.some((id) => visible.has(id));
             return (
               <button
-                key={id}
+                key={label}
                 type="button"
                 aria-pressed={shown}
-                disabled={shown && visible.size === 1}
-                onClick={() => store.setHidden(id, shown)}
+                disabled={shown && placesShown === 1}
+                onClick={() => {
+                  if (!shown) showPlace(ids);
+                  else for (const id of ids) store.setHidden(id, true);
+                }}
               >
                 {label}
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => {
+              // A new terminal is a tab beside the terminal that shows.
+              const target =
+                getPanes(state.root).find(
+                  (pane) =>
+                    pane.id.startsWith('terminal') && pane.hidden !== true
+                )?.id ?? 'editor';
+              const id = `terminal-${nextTerminal}`;
+              LABELS[id] = `Terminal ${++nextTerminal}`;
+              store.addTab(target, {
+                type: 'pane',
+                id,
+                minWidth: 260,
+                minHeight: 100,
+              });
+            }}
+          >
+            New terminal
+          </button>
         </nav>
         <div className="app-header-end">
           <label className="app-check">

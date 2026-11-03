@@ -17,7 +17,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout } from '../css-layout';
+import { computeCSSLayout, type CSSLayout } from '../css-layout';
 import {
   animateFromBoxes,
   cancelFlipAnimations,
@@ -26,9 +26,10 @@ import {
 } from '../dom/flip';
 import {
   focusPane,
+  focusTab,
   focusZoomedPane,
   hideCoveredAfterAnimation,
-  notifyCollapsed,
+  notifyHidden,
   readPixelGeometry,
   separatorIdsAt,
   setCoveredHidden,
@@ -42,7 +43,7 @@ import {
   keySizes,
   paneAt,
 } from '../gestures';
-import { getPanes } from '../model';
+import { shownPanes, stackOf } from '../model';
 import type { LayoutStore } from '../store';
 import type {
   Edge,
@@ -51,6 +52,7 @@ import type {
   PaneNode,
   Rect,
   SeparatorGeometry,
+  StackNode,
 } from '../types';
 
 export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
@@ -132,9 +134,57 @@ interface MoveGesture {
   paneId: string;
 }
 
-/** The panes of a subtree that take space. */
-const shownPanes = (node: LayoutNode): PaneNode[] =>
-  getPanes(node).filter(({ hidden }) => hidden !== true);
+// The compiled CSS of each tree, by gap. The view reads it before a change,
+// to find whether any box moves, and when it renders the change.
+const cssLayouts = new WeakMap<LayoutNode, Map<number, CSSLayout>>();
+
+function cssLayoutOf(root: LayoutNode, gap: number): CSSLayout {
+  let byGap = cssLayouts.get(root);
+  if (byGap === undefined) {
+    byGap = new Map();
+    cssLayouts.set(root, byGap);
+  }
+  let layout = byGap.get(gap);
+  if (layout === undefined) {
+    layout = computeCSSLayout(root, gap);
+    byGap.set(gap, layout);
+  }
+  return layout;
+}
+
+/**
+ * Whether a tree change moves or resizes an element that shows in both
+ * trees. A change of tab, or a change inside a hidden pane, moves nothing,
+ * so it needs no FLIP animation and no read of boxes.
+ */
+function boxesMove(before: CSSLayout, after: CSSLayout): boolean {
+  const shown = (layout: CSSLayout): Map<string, string> =>
+    new Map(
+      layout.panes
+        .filter(({ hidden }) => !hidden)
+        .map(({ pane, rect }) => [pane.id, JSON.stringify(rect)])
+    );
+  const panesBefore = shown(before);
+  for (const [id, rect] of shown(after)) {
+    const old = panesBefore.get(id);
+    if (old !== undefined && old !== rect) return true;
+  }
+  const key = (layout: CSSLayout): string =>
+    JSON.stringify([
+      layout.separators.map(({ id, rect }) => [id, rect]),
+      layout.corners.map(({ id, left, top }) => [id, left, top]),
+    ]);
+  return key(before) !== key(after);
+}
+
+/** The node that a zoom of a pane fills the layout with: its stack, or the pane. */
+const zoomKey = (root: LayoutNode, zoomedPane: string | null): string | null =>
+  zoomedPane === null ? null : (stackOf(root, zoomedPane)?.id ?? zoomedPane);
+
+// IDs of the tab of a pane in the header of a host. Each host of a stack
+// renders the tabs of the stack, so a tab ID names the host too.
+const tabIdOf = (prefix: string, host: string, tab: string): string =>
+  `${prefix}-tab-${encodeURIComponent(host)}~${encodeURIComponent(tab)}`;
 
 /**
  * The app's content of one pane. It renders only when its pane node or the
@@ -207,21 +257,31 @@ export function Layout({
         const next = store.getSnapshot();
         const zoom = next.zoomedPane;
         // Only a tree or zoom change moves elements. A focus change reads no
-        // boxes: the focus indicator shows on the new pane at once.
-        const treeChanges = next.root !== previous.root;
-        const zoomChanges = zoom !== previous.zoomedPane;
-        const moves = treeChanges || zoomChanges;
-        // Each kind of change in this update must allow animation.
-        const allowed =
-          (!treeChanges || animateLayout) && (!zoomChanges || animateZoom);
+        // boxes: the focus indicator shows on the new pane at once. A change
+        // of tab in a zoomed stack is not a zoom change: the stack stays.
+        const zoomChanges =
+          zoomKey(next.root, zoom) !==
+          zoomKey(previous.root, previous.zoomedPane);
+        const rootChanges = next.root !== previous.root;
         // A pointer resize follows the pointer with no animation.
-        const animate =
+        const animatable =
           element !== null &&
-          moves &&
-          allowed &&
+          (rootChanges || zoomChanges) &&
+          (!rootChanges || animateLayout) &&
+          (!zoomChanges || animateZoom) &&
           gesture.current?.type !== 'resize' &&
           !matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const zoomStarts = zoom !== previous.zoomedPane && zoom !== null;
+        // A tree change animates when a box that shows before and after it
+        // moves. A change of tab moves none. The check compares the compiled
+        // CSS of both trees, which the render needs anyway.
+        const animate =
+          animatable &&
+          (zoomChanges ||
+            boxesMove(
+              cssLayoutOf(previous.root, gap),
+              cssLayoutOf(next.root, gap)
+            ));
+        const zoomStarts = zoomChanges && zoom !== null;
         if (element !== null && (animate || zoomStarts)) {
           // Layout is clean here, before React applies the change, so these reads are cheap.
           const boxes = readBoxes(element);
@@ -235,14 +295,13 @@ export function Layout({
         }
         // Show the covered panes before React commits a zoom change, so
         // that they render during the next animation.
-        if (element !== null && zoom !== previous.zoomedPane)
-          setCoveredHidden(element, null);
+        if (element !== null && zoomChanges) setCoveredHidden(element, null);
         previous = next;
         listener();
       });
       return unsubscribe;
     },
-    [store, animateLayout, animateZoom]
+    [store, animateLayout, animateZoom, gap]
   );
   const state = useSyncExternalStore(
     subscribe,
@@ -252,7 +311,7 @@ export function Layout({
   // The store keeps the tree on focus and zoom changes, so this runs only when
   // the tree or the gap changes.
   const geometry = useMemo(
-    () => computeCSSLayout(state.root, gap),
+    () => cssLayoutOf(state.root, gap),
     [state.root, gap]
   );
   // Style objects keep their identity while the tree does, so a focus or zoom
@@ -288,6 +347,12 @@ export function Layout({
     ({ pane }) => pane.id === (state.zoomedPane ?? state.focusedPane)
   );
   const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
+  // A pane can close while another pane would still show: another visible
+  // pane, or another visible tab of its stack.
+  const closable = (pane: PaneNode, stack: StackNode | null): boolean =>
+    visibleCount > 1 ||
+    (stack?.children.some((tab) => tab.id !== pane.id && tab.hidden !== true) ??
+      false);
   const layered =
     typeof paneLayers === 'boolean'
       ? paneLayers
@@ -295,19 +360,31 @@ export function Layout({
   const actionsOf = (pane: PaneNode): readonly PaneAction[] =>
     typeof paneActions === 'function' ? paneActions(pane) : paneActions;
 
-  // Tell the content of a pane that store.setHidden hides or shows. A hidden
-  // pane keeps its content mounted, so the content can pause its own work.
-  const collapsedBefore = useRef<ReadonlySet<string> | null>(null);
+  // Tell the content of a pane that stops or starts showing: store.setHidden
+  // hides or shows it, or its tab changes. The content stays mounted, so it
+  // can pause its own work.
+  const hiddenBefore = useRef<ReadonlySet<string> | null>(null);
   useEffect(() => {
-    const collapsed = new Set(
+    const hidden = new Set(
       geometry.panes.filter(({ hidden }) => hidden).map(({ pane }) => pane.id)
     );
-    const before = collapsedBefore.current;
-    collapsedBefore.current = collapsed;
+    const before = hiddenBefore.current;
+    hiddenBefore.current = hidden;
     const element = rootRef.current;
     if (before !== null && element !== null)
-      notifyCollapsed(element, before, collapsed);
+      notifyHidden(element, before, hidden);
   }, [geometry]);
+
+  // A tab that the user selects is in the header of the host that shows next.
+  // Its host takes no input until React commits the change, so the focus
+  // moves to it here, before the browser paints.
+  const tabToFocus = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const element = rootRef.current;
+    const id = tabToFocus.current;
+    tabToFocus.current = null;
+    if (element !== null && id !== null) focusTab(element, id);
+  }, [state]);
 
   // After React commits a store change, animate each moved element from its old box.
   useLayoutEffect(() => {
@@ -419,12 +496,58 @@ export function Layout({
     };
   }
 
+  function selectTab(id: string): void {
+    tabToFocus.current = id;
+    store.activate(id);
+  }
+
+  /**
+   * The keys of the tab list, from the APG tabs pattern: arrows move to the
+   * next or the previous tab, and Home and End to the first or the last. The
+   * tab that gets the focus shows. Delete closes the focused tab.
+   */
+  function tabKey(
+    event: KeyboardEvent<HTMLElement>,
+    tabs: readonly PaneNode[],
+    tab: PaneNode,
+    stack: StackNode
+  ): void {
+    const at = tabs.indexOf(tab);
+    const next =
+      event.key === 'ArrowRight'
+        ? tabs[(at + 1) % tabs.length]
+        : event.key === 'ArrowLeft'
+          ? tabs[(at - 1 + tabs.length) % tabs.length]
+          : event.key === 'Home'
+            ? tabs[0]
+            : event.key === 'End'
+              ? tabs[tabs.length - 1]
+              : null;
+    if (next !== null) {
+      event.preventDefault();
+      if (next.id !== tab.id) selectTab(next.id);
+    } else if (
+      event.key === 'Delete' &&
+      actionsOf(tab).includes('close') &&
+      closable(tab, stack)
+    ) {
+      event.preventDefault();
+      closePane(tab);
+    }
+  }
+
   function closePane(pane: PaneNode): void {
+    // A tab that closes from the tab list gives the focus to the tab that
+    // shows next, as the APG tabs pattern does.
+    const fromTab = document.activeElement?.getAttribute('role') === 'tab';
     if (onPaneClose !== undefined) onPaneClose(pane);
     else store.close(pane.id);
     requestAnimationFrame(() => {
       const element = rootRef.current;
-      if (element !== null) focusPane(element, store.getSnapshot().focusedPane);
+      if (element === null) return;
+      const focused = store.getSnapshot().focusedPane;
+      if (fromTab) focusTab(element, focused);
+      else focusPane(element, focused);
     });
   }
 
@@ -518,12 +641,14 @@ export function Layout({
         }
       }}
     >
-      {paneHosts.map(({ pane, hidden: collapsed }) => {
+      {paneHosts.map(({ pane, hidden: notShown, stack }) => {
         const covered =
-          !collapsed &&
+          !notShown &&
           state.zoomedPane !== null &&
           state.zoomedPane !== pane.id;
-        const hidden = collapsed || covered;
+        const hidden = notShown || covered;
+        const tabs = stack?.children.filter((tab) => tab.hidden !== true) ?? [];
+        const tabbed = tabs.length > 0;
         const zoomed = state.zoomedPane === pane.id;
         const actions = actionsOf(pane);
         const edge = exitEdges[pane.id] ?? 'left';
@@ -546,12 +671,17 @@ export function Layout({
             data-layout-flip={`pane:${pane.id}`}
             className="pierre-layout-pane"
             tabIndex={hidden ? -1 : 0}
-            aria-label={getPaneTitle(pane)}
+            // The host of a tab is its tab panel, named by its tab.
+            role={tabbed ? 'tabpanel' : undefined}
+            aria-label={tabbed ? undefined : getPaneTitle(pane)}
+            aria-labelledby={
+              tabbed ? tabIdOf(prefix, pane.id, pane.id) : undefined
+            }
             aria-hidden={hidden}
             // A covered pane becomes inert when its content stops rendering,
             // at the end of the zoom animation (setCoveredHidden).
-            inert={collapsed}
-            data-collapsed={collapsed}
+            inert={notShown}
+            data-pane-hidden={notShown}
             data-focused={state.focusedPane === pane.id}
             data-zoomed={zoomed}
             data-moving={dragging === pane.id}
@@ -584,9 +714,59 @@ export function Layout({
                     ⠿
                   </button>
                 )}
-                <span className="pierre-layout-title">
-                  {getPaneTitle(pane)}
-                </span>
+                {tabbed && stack !== null ? (
+                  <div
+                    role="tablist"
+                    className="pierre-layout-tabs"
+                    aria-label={`Tabs of ${getPaneTitle(pane)}`}
+                  >
+                    {tabs.map((tab) => {
+                      const selected = tab.id === pane.id;
+                      const title = getPaneTitle(tab);
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          id={tabIdOf(prefix, pane.id, tab.id)}
+                          className="pierre-layout-tab"
+                          aria-selected={selected}
+                          aria-controls={`${prefix}-${encodeURIComponent(tab.id)}`}
+                          tabIndex={selected ? 0 : -1}
+                          data-layout-tab={tab.id}
+                          onClick={() => {
+                            if (!selected) selectTab(tab.id);
+                          }}
+                          onKeyDown={(event) => tabKey(event, tabs, tab, stack)}
+                        >
+                          <span className="pierre-layout-tab-title">
+                            {title}
+                          </span>
+                          {actionsOf(tab).includes('close') &&
+                            closable(tab, stack) && (
+                              // A pointer shortcut: Delete on the tab and the
+                              // header's close button do the same.
+                              <span
+                                className="pierre-layout-tab-close"
+                                aria-hidden="true"
+                                title={`Close ${title}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  closePane(tab);
+                                }}
+                              >
+                                ×
+                              </span>
+                            )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="pierre-layout-title">
+                    {getPaneTitle(pane)}
+                  </span>
+                )}
                 {actions.includes('zoom') && (
                   <button
                     type="button"
@@ -601,7 +781,7 @@ export function Layout({
                   <button
                     type="button"
                     aria-label={`Close ${getPaneTitle(pane)}`}
-                    disabled={visibleCount === 1}
+                    disabled={!closable(pane, stack)}
                     onClick={() => closePane(pane)}
                   >
                     ×
