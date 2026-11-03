@@ -995,3 +995,79 @@ describe('sizes in pixels and maximum sizes', () => {
     expect(() => store.setSizes({ row: [{ px: -5 }, 1, 1] })).toThrow();
   });
 });
+
+describe('collapsed panes', () => {
+  // An editor above a terminal that collapses to its 38 px header.
+  const tools: SplitNode = {
+    type: 'split',
+    id: 'tools',
+    direction: 'vertical',
+    sizes: [0.6, 0.4],
+    children: [
+      { type: 'pane', id: 'editor', minHeight: 140 },
+      { type: 'pane', id: 'terminal', minHeight: 100, collapsedSize: 38 },
+    ],
+  };
+  const heights = (tree: LayoutNode, height: number): number[] =>
+    computeLayout(tree, 600, height, 8).panes.map(({ rect }) => rect.height);
+
+  test('a collapsed pane takes its collapsed size, and keeps its size in the split', () => {
+    const store = new LayoutStore(tools);
+    store.setCollapsed('terminal', true);
+    const collapsed = store.getSnapshot().root;
+    near(heights(collapsed, 608), [562, 38]);
+    expect(sizesOf(collapsed)).toEqual([0.6, 0.4]);
+    // Its minimum size along the split is its collapsed size: below the sum
+    // of the minimums (140 + 38), each pane gets a part of its minimum.
+    expect(
+      computeLayout(collapsed, 600, 150, 8).panes[1].rect.height
+    ).toBeCloseTo((38 * 142) / 178, 9);
+    const css = computeCSSLayout(collapsed);
+    expect(css.panes.map(({ collapsed }) => collapsed)).toEqual([false, true]);
+    store.setCollapsed('terminal', false);
+    near(heights(store.getSnapshot().root, 608), [360, 240]);
+  });
+
+  test('a tab collapses its stack, and the root does not collapse', () => {
+    const store = new LayoutStore(tools);
+    store.addTab('terminal', pane('server'));
+    store.setCollapsed('server', true);
+    const root = store.getSnapshot().root;
+    expect(root).toMatchObject({
+      children: [
+        { id: 'editor' },
+        { type: 'stack', collapsed: true, collapsedSize: 38 },
+      ],
+    });
+    near(heights(root, 608), [562, 38]);
+    // The last tab of a stack takes its collapse.
+    store.close('server');
+    expect(store.getSnapshot().root).toMatchObject({
+      children: [
+        { id: 'editor' },
+        { type: 'pane', id: 'terminal', collapsed: true, collapsedSize: 38 },
+      ],
+    });
+    // A pane alone in the layout fills it.
+    const alone = new LayoutStore(pane('only'));
+    alone.setCollapsed('only', true);
+    expect(alone.getSnapshot().root).toEqual(pane('only'));
+  });
+
+  test('collapse is validated, saved, and restored', () => {
+    expect(() =>
+      validateLayout({
+        type: 'stack',
+        id: 's',
+        active: 'a',
+        children: [{ ...pane('a'), collapsed: true }, pane('b')],
+      })
+    ).toThrow();
+    expect(() => validateLayout({ ...pane('a'), collapsedSize: -1 })).toThrow();
+    const store = new LayoutStore(tools);
+    store.setCollapsed('terminal', true);
+    const other = new LayoutStore(root);
+    other.restore(store.serialize());
+    expect(other.getSnapshot().root).toEqual(store.getSnapshot().root);
+  });
+});

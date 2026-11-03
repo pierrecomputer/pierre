@@ -93,8 +93,15 @@ const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
 // Build a balanced tree that alternates the split direction at each depth.
 function buildTree(ids: readonly string[], depth = 0): LayoutNode {
+  // A pane collapses to its header: 36 px and the borders.
   if (ids.length === 1)
-    return { type: 'pane', id: ids[0], minWidth: 48, minHeight: 48 };
+    return {
+      type: 'pane',
+      id: ids[0],
+      minWidth: 48,
+      minHeight: 48,
+      collapsedSize: 38,
+    };
   const middle = Math.ceil(ids.length / 2);
   return {
     type: 'split',

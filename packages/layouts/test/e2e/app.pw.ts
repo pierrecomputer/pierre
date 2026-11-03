@@ -54,8 +54,12 @@ test('the close button of a tool hides it, and each pane has its own buttons', a
   await expect(
     host(page, 'agent').getByRole('button', { name: /^Drag / })
   ).toHaveCount(1);
-  for (const id of ['editor', 'terminal', 'files'])
+  for (const id of ['editor', 'files'])
     await expect(host(page, id).locator('header > button')).toHaveCount(3);
+  // The terminal also has a collapse button.
+  await expect(host(page, 'terminal').locator('header > button')).toHaveCount(
+    4
+  );
 
   await page.getByRole('button', { name: 'Close Files', exact: true }).click();
   await expect(host(page, 'files')).toHaveAttribute('data-pane-hidden', 'true');

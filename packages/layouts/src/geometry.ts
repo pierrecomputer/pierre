@@ -1,5 +1,5 @@
 import { type ChildSpec, divideSpace } from './divide';
-import { hasVisiblePane, isFixed, shownPane } from './model';
+import { collapsedSizeOf, hasVisiblePane, isFixed, shownPane } from './model';
 import type {
   ChildExtent,
   LayoutGeometry,
@@ -34,17 +34,20 @@ function minimumSize(
           width: node.minWidth ?? DEFAULT_MIN_WIDTH,
           height: node.minHeight ?? DEFAULT_MIN_HEIGHT,
         };
-  const sizes = node.children
-    .map((child) => minimumSize(child, gap))
-    .filter((size) => size !== null);
-  if (sizes.length === 0) return null;
-  // A stack takes the minimum size of its largest visible pane, whichever
-  // pane is active, so a change of tab moves no other box.
-  if (node.type === 'stack')
+  if (node.type === 'stack') {
+    const sizes = node.children
+      .map((child) => minimumSize(child, gap))
+      .filter((size) => size !== null);
+    if (sizes.length === 0) return null;
+    // A stack takes the minimum size of its largest visible pane, whichever
+    // pane is active, so a change of tab moves no other box.
     return {
       width: Math.max(...sizes.map(({ width }) => width)),
       height: Math.max(...sizes.map(({ height }) => height)),
     };
+  }
+  const sizes = alongSplit(node, (child) => minimumSize(child, gap));
+  if (sizes.length === 0) return null;
   const gaps = gap * (sizes.length - 1);
   const sum = (key: 'width' | 'height'): number =>
     sizes.reduce((total, size) => total + size[key], 0);
@@ -82,9 +85,12 @@ function maximumSize(
       width: node.maxWidth ?? Infinity,
       height: node.maxHeight ?? Infinity,
     });
-  const sizes = node.children
-    .map((child) => maximumSize(child, gap))
-    .filter((size) => size !== null);
+  const sizes =
+    node.type === 'stack'
+      ? node.children
+          .map((child) => maximumSize(child, gap))
+          .filter((size) => size !== null)
+      : alongSplit(node, (child) => maximumSize(child, gap));
   const least = (key: 'width' | 'height'): number =>
     Math.min(...sizes.map((size) => size[key]));
   // A stack takes the smallest maximum of its visible panes, whichever pane
@@ -102,6 +108,23 @@ function maximumSize(
 }
 
 /**
+ * A size of each visible child of a split, from `measure`. A collapsed child
+ * takes its collapsed size along the split, whatever its content needs.
+ */
+function alongSplit(
+  split: SplitNode,
+  measure: (child: LayoutNode) => { width: number; height: number } | null
+): { width: number; height: number }[] {
+  const axis = split.direction === 'horizontal' ? 'width' : 'height';
+  return split.children.flatMap((child) => {
+    const size = measure(child);
+    if (size === null) return [];
+    const collapsed = collapsedSizeOf(child);
+    return [collapsed === null ? size : { ...size, [axis]: collapsed }];
+  });
+}
+
+/**
  * How some children of a split take space along its axis (see `divide`): a
  * size in pixels or a weight, a minimum, and a maximum.
  */
@@ -114,6 +137,11 @@ export function childSpecs(
   return indexes.map((index) => {
     const child = split.children[index];
     const size = split.sizes[index];
+    // A collapsed child keeps its collapsed size, and its own size waits in
+    // `sizes` for when it expands.
+    const collapsed = collapsedSizeOf(child);
+    if (collapsed !== null)
+      return { px: collapsed, weight: 1, min: collapsed, max: collapsed };
     return {
       px: isFixed(size) ? size.px : undefined,
       weight: isFixed(size) ? 1 : size,

@@ -99,6 +99,24 @@ export function notifyHidden(
   }
 }
 
+/**
+ * Make the content of each collapsed pane inert, and the content of the
+ * other panes not. A style rule gives that content `content-visibility:
+ * hidden` (`data-collapsed` on the host).
+ */
+export function setCollapsedContent(
+  root: HTMLElement,
+  collapsed: ReadonlySet<string>
+): void {
+  for (const host of paneHosts(root)) {
+    const content = host.querySelector<HTMLElement>(
+      ':scope > .pierre-layout-pane-inner > .pierre-layout-content'
+    );
+    const inert = collapsed.has(host.dataset.layoutPane ?? '');
+    if (content !== null && content.inert !== inert) content.inert = inert;
+  }
+}
+
 /** Focus a pane host. */
 export function focusPane(root: HTMLElement, id: string): void {
   paneHosts(root)

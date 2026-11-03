@@ -4,8 +4,10 @@ import {
   type BinaryLayoutNode,
   fromBinaryLayout,
   getPanes,
+  parentOf,
   replaceNode,
   sameNodes,
+  setNodeCollapsed,
   setPaneHidden,
   shownPanes,
   slotOf,
@@ -216,6 +218,19 @@ export class LayoutStore {
       root,
       focusedPane: hidden ? this.focusAfterLeaving(id, root) : id,
     });
+  }
+
+  /**
+   * Collapse a pane to its `collapsedSize` along its split, or expand it to
+   * its size in the split again. A pane of a stack collapses its stack. The
+   * pane at the root fills the layout, so it does not collapse.
+   */
+  setCollapsed(id: string, collapsed: boolean): void {
+    this.requirePane(id);
+    const slot = slotOf(this.state.root, id);
+    if (parentOf(this.state.root, slot) === null) return;
+    const root = setNodeCollapsed(this.state.root, slot, collapsed);
+    if (root !== this.state.root) this.commit({ ...this.state, root });
   }
 
   /**

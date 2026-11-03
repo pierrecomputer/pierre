@@ -349,6 +349,13 @@ export const CHECKS: Check[] = [
     evaluate: atMost('hidden-tab-append', 16, 'heavy', 'paints', 0),
   },
   {
+    id: 'collapse-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A collapse renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('collapse', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
     id: 'tab-switch-no-content-render',
     rule: 'independence-from-content',
     description: 'A change of tab renders no pane content (16 heavy panes).',

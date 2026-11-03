@@ -61,3 +61,54 @@ test('a drag stops where a pane reaches its maximum size', async ({ page }) => {
   await dragBefore(page, (await separators.count()) - 1, -300);
   expect(await width(page, 'files')).toBeCloseTo(360, 0);
 });
+
+test('the terminal collapses to its header and expands with its content', async ({
+  page,
+}) => {
+  const terminal = page.locator('[data-layout-pane="terminal"]');
+  const content = terminal.locator('.pierre-layout-content');
+  await terminal
+    .locator('.agent-terminal')
+    .evaluate((element) => element.setAttribute('data-kept', 'yes'));
+  const before = await terminal.boundingBox();
+  const editor = await page
+    .locator('[data-layout-pane="editor"]')
+    .boundingBox();
+
+  const collapse = terminal.getByRole('button', { name: 'Collapse Terminal' });
+  await collapse.click();
+  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+  await expect(collapse).toHaveAttribute('aria-pressed', 'true');
+  expect((await terminal.boundingBox())?.height).toBeCloseTo(38, 0);
+  // The editor takes the space; the content of the terminal stops rendering.
+  expect(
+    (await page.locator('[data-layout-pane="editor"]').boundingBox())?.height
+  ).toBeGreaterThan((editor?.height ?? 0) + 100);
+  expect(
+    await content.evaluate(
+      (element) => getComputedStyle(element).contentVisibility
+    )
+  ).toBe('hidden');
+  await expect(content).toHaveAttribute('inert', '');
+  // The tabs of the collapsed stack still change.
+  await terminal.getByRole('tab', { name: 'Dev server' }).click();
+  await expect(
+    page.locator('[data-layout-pane="terminal-server"]')
+  ).toHaveAttribute('data-collapsed', 'true');
+  await page
+    .locator('[data-layout-pane="terminal-server"]')
+    .getByRole('tab', { name: 'Terminal' })
+    .click();
+
+  await terminal.getByRole('button', { name: 'Collapse Terminal' }).click();
+  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
+  await expect(content).not.toHaveAttribute('inert', '');
+  expect((await terminal.boundingBox())?.height).toBeCloseTo(
+    before?.height ?? 0,
+    0
+  );
+  await expect(terminal.locator('.agent-terminal')).toHaveAttribute(
+    'data-kept',
+    'yes'
+  );
+});

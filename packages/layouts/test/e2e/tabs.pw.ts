@@ -66,7 +66,7 @@ test('the tabs of a stack follow the APG tabs pattern', async ({ page }) => {
   // Tab leaves the tab list for the controls of the header.
   await page.keyboard.press('Tab');
   await expect(
-    host(page, 'terminal').getByRole('button', { name: 'Zoom Terminal' })
+    host(page, 'terminal').getByRole('button', { name: 'Collapse Terminal' })
   ).toBeFocused();
 });
 
