@@ -437,24 +437,24 @@ class Overlay {
     this.behavior.release?.();
     if (this.behavior.closesAtOnce) this.leaveTopLayer();
     this.restoreFocus();
-    // The exit plays the entry backwards from where it is, also when the
-    // entry has not ended.
+    // The exit plays the entry backwards from where the entry is, with a new
+    // animation: in the bench, Chromium ran an entry that had finished and
+    // that `reverse()` turned around on the main thread.
     const entry = this.entry;
     this.entry = [];
-    if (this.behavior.closesAtOnce)
-      for (const animation of entry) animation.cancel();
-    else for (const animation of entry) animation.reverse();
-    const exit = this.behavior.closesAtOnce ? [] : entry;
+    const duration = this.duration ?? DEFAULT_DURATION_MS;
+    const elapsed =
+      entry.length > 0 ? Number(entry[0].currentTime ?? duration) : duration;
+    for (const animation of entry) animation.cancel();
+    const exit = this.behavior.closesAtOnce ? [] : this.animate(true);
+    for (const animation of exit)
+      animation.currentTime = duration - Math.min(elapsed, duration);
     if (exit.length === 0) {
       this.finish();
       return;
     }
     this.exit = exit;
-    // Wait for `ready`, so that `finished` is the promise of the reversed
-    // play, not the one of the entry.
-    void Promise.all(
-      exit.map((animation) => animation.ready.then(() => animation.finished))
-    ).then(
+    void Promise.all(exit.map(({ finished }) => finished)).then(
       () => {
         if (this.exit === exit) this.finish();
       },
@@ -552,13 +552,17 @@ class Overlay {
       target.focus({ preventScroll: true });
   }
 
-  /** Play the entry of the overlay and its backdrop, with transforms and opacity. */
-  private animate(): Animation[] {
+  /**
+   * Play the entry of the overlay and its backdrop, or the exit backwards,
+   * with transforms and opacity.
+   */
+  private animate(backwards = false): Animation[] {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return [];
     const timing: KeyframeAnimationOptions = {
       id: ANIMATION_ID,
       duration: this.duration ?? DEFAULT_DURATION_MS,
       easing: EASING,
+      direction: backwards ? 'reverse' : 'normal',
     };
     const animations = [this.element.animate(this.behavior.keyframes, timing)];
     const backdrop = this.behavior.backdrop?.();
