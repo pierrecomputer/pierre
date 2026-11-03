@@ -81,23 +81,29 @@ for (const strategy of STRATEGIES) {
     });
 
     if (strategy === 'popover') {
-      test('the panes around a popover modal leave the accessibility tree', async ({
+      test('the page around a popover modal leaves the accessibility tree', async ({
         page,
       }) => {
-        // Chromium keeps the page in its tree for `aria-modal`, so the
-        // layout root gets `aria-hidden`. The panes are not inert: this is
-        // the accessibility cost of the popover strategy.
+        // Chromium keeps the page in its tree for `aria-modal`, so each
+        // element outside the modal gets `aria-hidden`. The panes are not
+        // inert: this is the accessibility cost of the popover strategy.
         await pressButton(page, 'Review changes');
         await expect(
           page.getByRole('dialog', { name: 'Review changes' })
         ).toBeVisible();
         expect(await exposedPaneRegions(page)).toEqual([]);
-        await expect(page.locator('.pierre-layout')).toHaveAttribute(
+        await expect(page.locator('.app-main')).toHaveAttribute(
           'aria-hidden',
           'true'
         );
+        // A role query skips hidden elements, so select the button by CSS.
+        await expect(
+          page.locator('.app-overlay-buttons > button', {
+            hasText: 'Activity',
+          })
+        ).toHaveAttribute('aria-hidden', 'true');
         await page.keyboard.press('Escape');
-        await expect(page.locator('.pierre-layout')).not.toHaveAttribute(
+        await expect(page.locator('.app-main')).not.toHaveAttribute(
           'aria-hidden'
         );
       });

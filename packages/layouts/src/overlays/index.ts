@@ -30,10 +30,10 @@ export type OverlayEdge = 'left' | 'right' | 'top' | 'bottom';
  *   rendering first, then `showModal()`. Only the content that the user can
  *   see gets a new style.
  * - `popover`: a `manual` popover with `role="dialog"`, `aria-modal`, and a
- *   focus trap, and `aria-hidden` on the layout root, which takes the panes
- *   out of the accessibility tree with no new style. The covered panes stop
- *   rendering. Nothing becomes inert: a script can still focus an element in
- *   a pane, and the app hides its own elements outside the layout.
+ *   focus trap, and `aria-hidden` on each element outside it, which takes the
+ *   page out of the accessibility tree with no new style. The covered panes
+ *   stop rendering. Nothing becomes inert: a script can still focus an
+ *   element in a pane, and the browser's find in page still finds its text.
  */
 export type ModalStrategy = 'dialog' | 'dialog-hide-covered' | 'popover';
 
@@ -243,12 +243,16 @@ function tabbablesOf(element: HTMLElement): HTMLElement[] {
   );
 }
 
-/** Focus the `autofocus` element, the first element that takes Tab, or the overlay. */
+/**
+ * Focus the `autofocus` element, the first element that takes Tab, or the
+ * overlay. The overlay has just shown, so this skips the visibility check of
+ * `tabbablesOf`, which would force a style update.
+ */
 function focusFirst(element: HTMLElement): void {
   const target =
     element.querySelector<HTMLElement>('[autofocus]') ??
-    tabbablesOf(element)[0];
-  if (target !== undefined) {
+    element.querySelector<HTMLElement>(TABBABLE);
+  if (target !== null) {
     target.focus();
     return;
   }
@@ -290,6 +294,36 @@ function trapFocus(element: HTMLElement): () => void {
   };
 }
 
+/**
+ * Take every element outside an overlay out of the accessibility tree: the
+ * siblings of the overlay and of each of its ancestors get `aria-hidden`.
+ * Unlike `inert`, an attribute gives no element a new style, unless a style
+ * rule selects it. Returns the function that removes the attributes.
+ */
+function hideOutside(element: HTMLElement): () => void {
+  const hidden: Element[] = [];
+  for (
+    let node: Element = element;
+    node.parentElement !== null && node !== document.body;
+    node = node.parentElement
+  ) {
+    for (const sibling of node.parentElement.children) {
+      if (
+        sibling === node ||
+        sibling.hasAttribute('aria-hidden') ||
+        sibling instanceof HTMLScriptElement ||
+        sibling instanceof HTMLStyleElement
+      )
+        continue;
+      sibling.setAttribute('aria-hidden', 'true');
+      hidden.push(sibling);
+    }
+  }
+  return () => {
+    for (const sibling of hidden) sibling.removeAttribute('aria-hidden');
+  };
+}
+
 // Chromium can keep an element in the top layer after it closes, for the
 // length of an animation of `overlay`. Elsewhere, a `<dialog>` that has closed
 // shows no exit animation.
@@ -298,11 +332,11 @@ const keepsTopLayer = (): boolean =>
 
 interface OverlayBehavior {
   /** Put the element in the top layer, and move the focus into it. */
-  show(root: HTMLElement): void;
+  show(): void;
   /** Take the element out of the top layer. */
   hide(): void;
   /** Undo the effects of `show()` that end when the close starts. */
-  release?(root: HTMLElement): void;
+  release?(): void;
   /** Keyframes of the entry. The exit plays them backwards. */
   keyframes: { element: Keyframe[]; backdrop?: Keyframe[] };
   /** Whether the overlay hides every pane: an opaque backdrop. */
@@ -375,7 +409,7 @@ class Overlay {
     if (this.behavior.hidesAllFirst)
       for (const host of paneHostsOf(root).filter(rendersAlready))
         this.hide(host);
-    this.behavior.show(root);
+    this.behavior.show();
     this.shown = true;
     this.animate(false);
     // Read the boxes after the browser lays them out, in the same frame: a
@@ -395,7 +429,7 @@ class Overlay {
     for (const host of this.hidden) uncoverHost(host, this);
     this.hidden.clear();
     this.report(NO_COVER);
-    if (this.root !== null) this.behavior.release?.(this.root);
+    this.behavior.release?.();
     let keep = false;
     if (this.behavior.hidesBeforeExit) {
       this.leaveTopLayer();
@@ -426,7 +460,7 @@ class Overlay {
     for (const host of this.hidden) uncoverHost(host, this);
     this.hidden.clear();
     this.report(NO_COVER);
-    if (this.root !== null) this.behavior.release?.(this.root);
+    this.behavior.release?.();
     this.restoreFocus();
     this.finish();
   }
@@ -609,17 +643,15 @@ export function createModal(
   }
 
   let untrap: (() => void) | null = null;
-  // The `aria-hidden` value of the layout root before a popover modal opened.
-  let rootHidden: string | null = null;
+  let unhide: (() => void) | null = null;
   const overlay = new Overlay(element, options, {
-    show(root) {
+    show() {
       if (dialog !== null) {
         dialog.showModal();
         return;
       }
       element.showPopover();
-      rootHidden = root.getAttribute('aria-hidden');
-      root.setAttribute('aria-hidden', 'true');
+      unhide = hideOutside(element);
       focusFirst(element);
       untrap = trapFocus(element);
     },
@@ -627,12 +659,11 @@ export function createModal(
       if (dialog !== null) dialog.close();
       else element.hidePopover();
     },
-    release(root) {
-      if (untrap === null) return;
-      untrap();
+    release() {
+      untrap?.();
+      unhide?.();
       untrap = null;
-      if (rootHidden === null) root.removeAttribute('aria-hidden');
-      else root.setAttribute('aria-hidden', rootHidden);
+      unhide = null;
     },
     keyframes: {
       element: [

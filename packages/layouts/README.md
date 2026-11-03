@@ -217,8 +217,8 @@ const trigger = useRef<HTMLButtonElement>(null);
 - `experimentalStrategy` selects how the modal makes the page inert, for the
   comparison of the overlay exploration: `dialog-hide-covered` (the default),
   `dialog` (no pane stops rendering), or `popover` (a `manual` popover with a
-  focus trap, `aria-modal`, and `aria-hidden` on the layout root; nothing
-  becomes inert).
+  focus trap, `aria-modal`, and `aria-hidden` on each element outside it;
+  nothing becomes inert).
 - The overlays' size comes from CSS. `--layout-workspace-width` and
   `--layout-workspace-height` on the overlay hold the workspace's size, and
   `--layout-drawer-size` sets the depth of a drawer (360 px by default).
