@@ -71,6 +71,8 @@ async function inPageTask(
           setTimeout(() => bench.busy(200), 16);
         } else if (operation === 'hide') {
           bench.store.setHidden('p1', true);
+        } else if (operation === 'show') {
+          bench.store.setHidden('p1', false);
         }
       }, 0);
     },
@@ -222,6 +224,22 @@ export const SCENARIOS: Scenario[] = [
       'Hide the second pane with store.setHidden. It keeps its content mounted.',
     async run(page) {
       await inPageTask(page, 'hide');
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
+  },
+  {
+    id: 'show',
+    description:
+      'Show the second pane again after store.setHidden hid it. Its content stayed mounted.',
+    async setup(page) {
+      await page.evaluate(() =>
+        window.__layoutsBench.store.setHidden('p1', true)
+      );
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+      return undefined;
+    },
+    async run(page) {
+      await inPageTask(page, 'show');
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
     },
   },

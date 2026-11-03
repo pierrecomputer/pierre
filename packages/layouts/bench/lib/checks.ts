@@ -163,7 +163,32 @@ const GESTURE_FRAME_BUDGET_MS: Record<number, number> = { 4: 2, 16: 3 };
 
 const CONTENT_WEIGHTS: readonly ContentWeight[] = ['light', 'heavy', 'real'];
 
-const DISCRETE = ['zoom', 'restore', 'split', 'close', 'move', 'focus', 'hide'];
+const DISCRETE = [
+  'zoom',
+  'restore',
+  'split',
+  'close',
+  'move',
+  'focus',
+  'hide',
+  'show',
+];
+
+// The most content renders of any record of a scenario, at 4 and 16 panes
+// and each content weight: a check that holds at every parameter set.
+function noRenderInAnyRecord(scenario: string): Check['evaluate'] {
+  return (find) => {
+    const renders = [4, 16].flatMap((panes) =>
+      CONTENT_WEIGHTS.flatMap((content) => {
+        const record = find(scenario, panes, content);
+        return record === undefined ? [] : [record.median.contentRenders];
+      })
+    );
+    if (renders.length === 0) return null;
+    const value = Math.max(...renders);
+    return { value, pass: value === 0 };
+  };
+}
 
 export const CHECKS: Check[] = [
   {
@@ -269,17 +294,15 @@ export const CHECKS: Check[] = [
     description:
       'A hide renders no pane content (the most renders of any hide record: 4 and 16 panes, each content weight).',
     limit: '0 renders',
-    evaluate: (find) => {
-      const renders = [4, 16].flatMap((panes) =>
-        CONTENT_WEIGHTS.flatMap((content) => {
-          const record = find('hide', panes, content);
-          return record === undefined ? [] : [record.median.contentRenders];
-        })
-      );
-      if (renders.length === 0) return null;
-      const value = Math.max(...renders);
-      return { value, pass: value === 0 };
-    },
+    evaluate: noRenderInAnyRecord('hide'),
+  },
+  {
+    id: 'show-no-content-render',
+    rule: 'independence-from-content',
+    description:
+      'A show of a hidden pane renders no pane content (the most renders of any show record: 4 and 16 panes, each content weight).',
+    limit: '0 renders',
+    evaluate: noRenderInAnyRecord('show'),
   },
   {
     id: 'zoom-one-content-resize',
