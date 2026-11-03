@@ -1,0 +1,47 @@
+html {
+  color-scheme: light;
+  background: white;
+  color: #171717;
+}
+body {
+  margin: 0;
+  font:
+    16px/1.75 Arial,
+    sans-serif;
+}
+main {
+  width: 900px;
+  margin: 32px auto;
+}
+/* Give both renderers the same block spacing and full-height code blocks. */
+#preview p {
+  margin: 0 0 20px;
+}
+#preview [data-markdown='code-block'],
+#preview [data-streamdown='code-block'] {
+  margin: 20px 0;
+  border: 1px solid #ddd;
+}
+#preview [data-markdown='code-header'],
+#preview [data-streamdown='code-block-header'] {
+  display: none;
+}
+#preview pre {
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  max-height: none !important;
+  font: 13px/1.7 monospace;
+  white-space: pre;
+}
+#preview code {
+  font: inherit;
+}
+/* Streamdown's row layout and token colors normally come from Tailwind. */
+#preview [data-streamdown='code-block-body'] pre code > span {
+  display: block;
+}
+#preview [data-streamdown='code-block-body'] pre code > span > span {
+  color: var(--sdm-c, inherit);
+  background-color: var(--sdm-tbg, transparent);
+}
