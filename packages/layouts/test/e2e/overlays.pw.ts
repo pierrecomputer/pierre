@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
 // The modal strategies of `createModal`. The `/app` demo takes `?modal=`.
-const STRATEGIES = ['dialog-hide-covered', 'dialog', 'popover'] as const;
+const STRATEGIES = ['popover', 'dialog-hide-covered', 'dialog'] as const;
 const PANES = ['sessions', 'agent', 'editor', 'terminal', 'files'];
 
 const host = (page: Page, id: string): Locator =>
@@ -67,6 +67,24 @@ for (const strategy of STRATEGIES) {
       await page.keyboard.press('Escape');
       await expect(modal).toBeHidden();
       await expect(trigger).toBeFocused();
+    });
+
+    test('a pointer outside the modal does not reach the panes', async ({
+      page,
+    }) => {
+      // The agent pane's zoom button is outside the modal's box.
+      const zoom = host(page, 'agent').getByRole('button', { name: /^Zoom / });
+      const box = await zoom.boundingBox();
+      await pressButton(page, 'Review changes');
+      const modal = page.getByRole('dialog', { name: 'Review changes' });
+      await expect(modal).toBeVisible();
+      await page.mouse.click(
+        (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        (box?.y ?? 0) + (box?.height ?? 0) / 2
+      );
+      await expect(modal).toBeVisible();
+      await expect(host(page, 'agent')).toHaveAttribute('data-zoomed', 'false');
+      expect(await focusPlace(modal)).toBe('inside');
     });
 
     test('the close button closes the modal and returns the focus', async ({
@@ -225,17 +243,45 @@ test('overlays animate in and out on the compositor', async ({ page }) => {
       selector
     );
 
+  // The exit plays the entry backwards from where it is, so let the entry
+  // end first.
   await pressButton(page, 'Review changes');
   expect(await animations('.pierre-modal')).toContain('running');
+  await expect.poll(() => animations('.pierre-modal')).toEqual([]);
   await page.keyboard.press('Escape');
-  // Chromium keeps the closed `<dialog>` in the top layer during the exit.
-  expect(await animations('.pierre-modal')).toContain('running');
+  // A reversed animation that had finished shows in `getAnimations()` when
+  // its pending play starts, which can take more than one frame.
+  await expect
+    .poll(() => animations('.pierre-modal'), { intervals: [16] })
+    .toContain('running');
   await expect(page.locator('.pierre-modal')).toBeHidden();
   expect(await animations('.pierre-modal')).toEqual([]);
 
   await pressButton(page, 'Activity');
   expect(await animations('.pierre-drawer')).toContain('running');
+  await expect.poll(() => animations('.pierre-drawer')).toEqual([]);
   await page.keyboard.press('Escape');
   await expect(page.locator('.pierre-drawer')).toBeHidden();
   expect(await animations('.pierre-drawer')).toEqual([]);
+});
+
+test('a <dialog> modal closes at once, with no exit animation', async ({
+  page,
+}) => {
+  await load(page, '?modal=dialog-hide-covered');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await pressButton(page, 'Review changes');
+  const modal = page.getByRole('dialog', { name: 'Review changes' });
+  await expect(modal).toBeVisible();
+  await page.keyboard.press('Escape');
+  // The modal leaves the top layer in the same task as the Escape key.
+  expect(
+    await page.evaluate(() => {
+      const dialog = document.querySelector('dialog.pierre-modal');
+      return {
+        open: dialog?.matches(':modal') ?? true,
+        animations: dialog?.getAnimations().length ?? -1,
+      };
+    })
+  ).toEqual({ open: false, animations: 0 });
 });

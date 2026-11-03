@@ -4,14 +4,14 @@ import type { ModalStrategy } from '../../src/overlays';
 import { Drawer, Modal } from '../../src/react/overlays';
 import '../../src/overlays.css';
 
-// `?modal=dialog|dialog-hide-covered|popover` and `?backdrop=opaque` select
+// `?modal=popover|dialog-hide-covered|dialog` and `?backdrop=opaque` select
 // the variant of the modal, for the comparison and its e2e tests.
 const params = new URLSearchParams(location.search);
 const requestedStrategy = params.get('modal');
 const STRATEGY: ModalStrategy =
-  requestedStrategy === 'dialog' || requestedStrategy === 'popover'
+  requestedStrategy === 'dialog' || requestedStrategy === 'dialog-hide-covered'
     ? requestedStrategy
-    : 'dialog-hide-covered';
+    : 'popover';
 const BACKDROP = params.get('backdrop') === 'opaque' ? 'opaque' : 'translucent';
 
 const CHANGES = [

@@ -189,10 +189,11 @@ const trigger = useRef<HTMLButtonElement>(null);
 </div>
 ```
 
-- The modal is a `<dialog>` that `showModal()` opens: the browser moves the
-  focus into it, keeps the focus there, and makes the rest of the page inert.
-  Escape closes it, and the focus returns to the element that opened it.
-  `backdrop="opaque"` hides the page behind the modal.
+- The modal is a `manual` popover with `role="dialog"` and `aria-modal`. The
+  focus moves into it and stays there, each element outside it gets
+  `aria-hidden`, and its backdrop takes the pointer. Escape closes it, and the
+  focus returns to the element that opened it. `backdrop="opaque"` hides the
+  page behind the modal. Render the modal outside the layout.
 - The drawer is a non-modal `manual` popover with `role="dialog"`. The focus
   moves into it when it opens, Escape inside it closes it, and the focus returns
   to `trigger`, which gets `aria-expanded`. Render the drawer right after its
@@ -201,30 +202,31 @@ const trigger = useRef<HTMLButtonElement>(null);
   open: its host gets `data-overlay-covered`, `content-visibility: hidden`, and
   `inert`, and receives `PANE_VISIBILITY_EVENT`. With an opaque backdrop, every
   pane stops rendering.
-- Before `showModal()`, the modal stops every pane from rendering, and after the
-  first layout it shows the panes that it does not cover. In Chromium, a modal
-  dialog makes the whole document inert, which gives each element a new style:
-  this way, only the content that the user can see gets one.
+- The modal does not use `showModal()`. In Chromium, a modal `<dialog>` makes
+  the whole document inert, which gives each element that renders a new style:
+  about 280 ms at 16 panes of real content, when it opens and again when it
+  closes. `aria-hidden` gives no element a new style, unless an app style rule
+  selects it. Unlike `inert`, it leaves the panes open to a script's `focus()`
+  and to the browser's find in page.
 - The layout root receives `OVERLAY_COVER_EVENT` with the panes that an overlay
   covers (`covered`) and crosses (`overlapped`) when it opens, when the
   workspace changes size, and when it closes. `onCoverChange` gives the same
   value. A native view in a pane, such as an Electron view, paints over DOM
   overlays, so the app hides it there.
 - Both overlays animate their entry and exit with transforms and opacity on the
-  compositor, and not at all with `prefers-reduced-motion: reduce`. A closed
-  `<dialog>` keeps its exit animation only where `overlay` can keep it in the
-  top layer (Chromium); elsewhere it closes at once.
-- `experimentalStrategy` selects how the modal makes the page inert, for the
-  comparison of the overlay exploration: `dialog-hide-covered` (the default),
-  `dialog` (no pane stops rendering), or `popover` (a `manual` popover with a
-  focus trap, `aria-modal`, and `aria-hidden` on each element outside it;
-  nothing becomes inert).
+  compositor, and not at all with `prefers-reduced-motion: reduce`.
+- `experimentalStrategy` selects how the modal keeps the user in it, for the
+  comparison of the overlay exploration: `popover` (the default),
+  `dialog-hide-covered` (the covered panes stop rendering, then `showModal()`),
+  or `dialog` (`showModal()` alone). A `<dialog>` closes with no exit animation:
+  an animation that keeps it in the top layer after it closes runs on the main
+  thread.
 - The overlays' size comes from CSS. `--layout-workspace-width` and
   `--layout-workspace-height` on the overlay hold the workspace's size, and
   `--layout-drawer-size` sets the depth of a drawer (360 px by default).
 
 The `/app` demo has a modal ("Review changes") and a drawer ("Activity"). Its
-URL takes `?modal=dialog|dialog-hide-covered|popover` and `?backdrop=opaque`.
+URL takes `?modal=popover|dialog-hide-covered|dialog` and `?backdrop=opaque`.
 
 ## Model and state
 

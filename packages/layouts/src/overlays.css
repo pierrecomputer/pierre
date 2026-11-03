@@ -18,12 +18,24 @@
   box-shadow: 0 16px 48px rgb(15 20 28 / 24%);
 }
 
-.pierre-modal::backdrop {
+/* The backdrop of a `<dialog>` modal, and the shield under a popover modal:
+   Chromium lets the pointer through the `::backdrop` of a popover. */
+dialog.pierre-modal::backdrop,
+.pierre-modal-shield {
   background: var(--layout-backdrop, rgb(15 20 28 / 40%));
 }
 
+.pierre-modal-shield {
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 /* An opaque backdrop hides the page, so no pane renders under it. */
-.pierre-modal[data-backdrop='opaque']::backdrop {
+dialog.pierre-modal[data-backdrop='opaque']::backdrop,
+.pierre-modal-shield[data-backdrop='opaque'] {
   background: var(--layout-backdrop-opaque, #eef1f5);
 }
 
