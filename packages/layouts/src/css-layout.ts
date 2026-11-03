@@ -4,6 +4,7 @@ import {
   separatorId,
   visibleChildren,
 } from './geometry';
+import { shownPane } from './model';
 import {
   add,
   constant,
@@ -14,7 +15,7 @@ import {
   size,
   toCSS,
 } from './piecewise';
-import type { LayoutNode, PaneNode, SplitNode } from './types';
+import type { LayoutNode, PaneNode, SplitNode, StackNode } from './types';
 
 export interface CSSRect {
   left: string;
@@ -27,10 +28,13 @@ export interface CSSPane {
   pane: PaneNode;
   rect: CSSRect;
   /**
-   * The pane, or a split above it, holds only hidden panes. Its rect is the
-   * box that it would have if it were visible, so it shows again in place.
+   * The pane does not show: it is hidden, a split above it holds only hidden
+   * panes, or it is a pane of a stack that is not active. Its rect is the box
+   * that it would have if it showed, so it shows again in place.
    */
   hidden: boolean;
+  /** The stack that holds the pane, or null. */
+  stack: StackNode | null;
 }
 
 export interface CSSSeparator {
@@ -71,7 +75,7 @@ function boundarySeparators(
   node: LayoutNode,
   edge: 'left' | 'right' | 'top' | 'bottom'
 ): string[] {
-  if (node.type === 'pane') return [];
+  if (node.type !== 'split') return [];
   const visible = visibleChildren(node);
   if (visible.length === 1)
     return boundarySeparators(node.children[visible[0]], edge);
@@ -156,7 +160,22 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
         pane: node,
         rect: toRect(box),
         hidden: hidden || node.hidden === true,
+        stack: null,
       });
+      return;
+    }
+    // Each pane of a stack has the box of the stack, so a change of tab
+    // changes no value of a box.
+    if (node.type === 'stack') {
+      const shown = shownPane(node);
+      const rect = toRect(box);
+      for (const child of node.children)
+        panes.push({
+          pane: child,
+          rect,
+          hidden: hidden || child !== shown,
+          stack: node,
+        });
       return;
     }
     const all = node.children.map((_, index) => index);

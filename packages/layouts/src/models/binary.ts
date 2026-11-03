@@ -13,7 +13,7 @@ export const binaryTree: TreeModel = {
   validate(root) {
     validateLayout(root);
     const visit = (node: LayoutNode): void => {
-      if (node.type === 'pane') return;
+      if (node.type !== 'split') return;
       if (node.children.length !== 2)
         throw new Error('A split of the binary model needs two children');
       node.children.forEach(visit);
@@ -24,7 +24,7 @@ export const binaryTree: TreeModel = {
     // A split of more than two children keeps its first child, and a new
     // split of the same direction takes the others.
     const nest = (node: LayoutNode): LayoutNode => {
-      if (node.type === 'pane') return node;
+      if (node.type !== 'split') return node;
       const children = node.children.map(nest);
       if (children.length === 2)
         return sameNodes(children, node.children)

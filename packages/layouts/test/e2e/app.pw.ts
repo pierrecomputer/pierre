@@ -3,7 +3,8 @@ import { expect, type Page, test } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/app');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(5);
+  // Five places; the agent chat and the terminal have two tabs each.
+  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
 });
 
 const host = (page: Page, id: string) =>
@@ -20,7 +21,7 @@ test('a hidden pane keeps its content and shows again in its place', async ({
     .evaluate((element) => element.setAttribute('data-kept', 'yes'));
 
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
   await expect(terminal).toHaveAttribute('inert', '');
   expect(
     await terminal.evaluate(
@@ -32,7 +33,7 @@ test('a hidden pane keeps its content and shows again in its place', async ({
   expect(editor?.height).toBeGreaterThan((before?.height ?? 0) + 100);
 
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
+  await expect(terminal).toHaveAttribute('data-pane-hidden', 'false');
   await expect(terminal.locator('.agent-terminal')).toHaveAttribute(
     'data-kept',
     'yes'
@@ -44,7 +45,9 @@ test('a hidden pane keeps its content and shows again in its place', async ({
 test('the close button of a tool hides it, and each pane has its own buttons', async ({
   page,
 }) => {
-  await expect(host(page, 'sessions').locator('header button')).toHaveCount(0);
+  await expect(host(page, 'sessions').locator('header > button')).toHaveCount(
+    0
+  );
   await expect(
     host(page, 'agent').getByRole('button', { name: /^Close / })
   ).toHaveCount(0);
@@ -52,15 +55,18 @@ test('the close button of a tool hides it, and each pane has its own buttons', a
     host(page, 'agent').getByRole('button', { name: /^Drag / })
   ).toHaveCount(1);
   for (const id of ['editor', 'terminal', 'files'])
-    await expect(host(page, id).locator('header button')).toHaveCount(3);
+    await expect(host(page, id).locator('header > button')).toHaveCount(3);
 
   await page.getByRole('button', { name: 'Close Files', exact: true }).click();
-  await expect(host(page, 'files')).toHaveAttribute('data-collapsed', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-pane-hidden', 'true');
   await expect(
     page.getByRole('button', { name: 'Files', exact: true })
   ).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Files', exact: true }).click();
-  await expect(host(page, 'files')).toHaveAttribute('data-collapsed', 'false');
+  await expect(host(page, 'files')).toHaveAttribute(
+    'data-pane-hidden',
+    'false'
+  );
 });
 
 test('panes and the zoom change at once when their animations are off', async ({
@@ -93,7 +99,10 @@ test('panes and the zoom change at once when their animations are off', async ({
   await page.waitForTimeout(400);
   await toggle('Files');
   expect(await animationsInNextFrame()).toBe(0);
-  await expect(host(page, 'files')).toHaveAttribute('data-collapsed', 'false');
+  await expect(host(page, 'files')).toHaveAttribute(
+    'data-pane-hidden',
+    'false'
+  );
 
   await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
   expect(await animationsInNextFrame()).toBeGreaterThan(0);

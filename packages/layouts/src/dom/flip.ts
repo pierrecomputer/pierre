@@ -10,8 +10,9 @@ import type { Rect } from '../types';
 
 // Elements that animate a layout change carry this attribute with a stable key.
 export const FLIP_ATTRIBUTE = 'data-layout-flip';
-// A hidden pane does not render, so it neither gives nor takes a FLIP box.
-const FLIP_SELECTOR = `[${FLIP_ATTRIBUTE}]:not([data-collapsed='true'])`;
+// A pane that does not show (hidden, or a tab that is not active) does not
+// render, so it neither gives nor takes a FLIP box.
+const FLIP_SELECTOR = `[${FLIP_ATTRIBUTE}]:not([data-pane-hidden='true'])`;
 const DEFAULT_DURATION_MS = 240;
 // The ID of the layout's own animations, so that it never touches animations in pane content.
 const FLIP_ANIMATION_ID = 'pierre-layout-flip';

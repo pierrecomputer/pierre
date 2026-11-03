@@ -206,7 +206,8 @@ function Playground(): JSX.Element {
   );
   const [message, setMessage] = useState('Ready to rearrange.');
   const [target, setTarget] = useState('2');
-  const [edge, setEdge] = useState<Edge>('right');
+  // An edge, or `tabs` to move the focused pane into the target's tabs.
+  const [edge, setEdge] = useState<Edge | 'tabs'>('right');
   // Experimental: how a pointer resize applies its sizes, to compare how each feels.
   const [resize, setResize] = useState<ResizeStrategy>('live');
   const panes = getPanes(state.root);
@@ -215,12 +216,16 @@ function Playground(): JSX.Element {
     ? target
     : otherPanes[0]?.id;
 
-  function addPane(direction: Edge): void {
+  function newId(): string {
     let id: string;
     do {
       id = String(nextPane++);
     } while (panes.some((node) => node.id === id));
-    store.split(state.focusedPane, pane(id), direction);
+    return id;
+  }
+
+  function addPane(direction: Edge): void {
+    store.split(state.focusedPane, pane(newId()), direction);
   }
 
   return (
@@ -254,6 +259,12 @@ function Playground(): JSX.Element {
           </button>
           <button type="button" onClick={() => addPane('bottom')}>
             Split down
+          </button>
+          <button
+            type="button"
+            onClick={() => store.addTab(state.focusedPane, pane(newId()))}
+          >
+            Add tab
           </button>
           <button type="button" onClick={() => store.toggleZoom()}>
             {state.zoomedPane === null ? 'Zoom focused' : 'Restore layout'}
@@ -326,12 +337,13 @@ function Playground(): JSX.Element {
         <select
           aria-label="Move direction"
           value={edge}
-          onChange={(event) => setEdge(event.target.value as Edge)}
+          onChange={(event) => setEdge(event.target.value as Edge | 'tabs')}
         >
           <option value="left">left of</option>
           <option value="right">right of</option>
           <option value="top">above</option>
           <option value="bottom">below</option>
+          <option value="tabs">into the tabs of</option>
         </select>
         <select
           aria-label="Move target"
@@ -349,8 +361,10 @@ function Playground(): JSX.Element {
           type="button"
           disabled={actualTarget === undefined}
           onClick={() => {
-            if (actualTarget !== undefined)
-              store.move(state.focusedPane, actualTarget, edge);
+            if (actualTarget === undefined) return;
+            if (edge === 'tabs')
+              store.moveToStack(state.focusedPane, actualTarget);
+            else store.move(state.focusedPane, actualTarget, edge);
           }}
         >
           Move

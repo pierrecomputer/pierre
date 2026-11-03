@@ -480,7 +480,7 @@ describe('store', () => {
     expect(store.getSnapshot()).toBe(before);
     store.toggleZoom('editor');
     const saved = store.serialize();
-    expect(JSON.parse(saved).version).toBe(2);
+    expect(JSON.parse(saved).version).toBe(3);
     store.close('editor');
     store.restore(saved);
     expect(store.getSnapshot().zoomedPane).toBe('editor');
@@ -612,5 +612,253 @@ describe('store', () => {
     const store = new LayoutStore({ ...root, id: 'layout-split-1' });
     store.split('editor', { type: 'pane', id: 'new' });
     validateLayout(store.getSnapshot().root);
+  });
+});
+
+const stack = (id: string, active: string, children: PaneNode[]) => ({
+  type: 'stack' as const,
+  id,
+  active,
+  children,
+});
+
+describe('stacks', () => {
+  test('a stack holds two or more panes, and its active pane is one of them', () => {
+    validateLayout(stack('s', 'b', [pane('a'), pane('b')]));
+    expect(() => validateLayout(stack('s', 'a', [pane('a')]))).toThrow();
+    expect(() =>
+      validateLayout(stack('s', 'c', [pane('a'), pane('b')]))
+    ).toThrow();
+    expect(() =>
+      validateLayout({
+        type: 'stack',
+        id: 's',
+        active: 'a',
+        children: [pane('a'), row('r', [1, 1], [pane('b'), pane('c')])],
+      } as unknown as LayoutNode)
+    ).toThrow();
+  });
+
+  test('a new tab makes a stack in the place of its target, and shows', () => {
+    for (const model of [binaryTree, naryTree]) {
+      const store = new LayoutStore(root, { model });
+      store.addTab('terminal', pane('logs'));
+      const next = store.getSnapshot();
+      expect(next.focusedPane).toBe('logs');
+      const inner = next.root.type === 'split' ? next.root.children[1] : null;
+      if (inner?.type !== 'split') throw new Error('Expected split');
+      expect(inner.sizes).toEqual([0.7, 0.3]);
+      expect(inner.children[1]).toMatchObject({
+        type: 'stack',
+        active: 'logs',
+      });
+      expect(ids(inner.children[1])).toEqual(['terminal', 'logs']);
+      // A second tab goes after its target.
+      store.addTab('terminal', pane('build'));
+      expect(ids(store.getSnapshot().root)).toEqual([
+        'files',
+        'editor',
+        'terminal',
+        'build',
+        'logs',
+      ]);
+      store.addTab('logs', pane('first'), 0);
+      expect(ids(store.getSnapshot().root).slice(2)).toEqual([
+        'first',
+        'terminal',
+        'build',
+        'logs',
+      ]);
+    }
+  });
+
+  test('each pane of a stack has the box of the stack, and only the active pane shows', () => {
+    const tree = row(
+      'r',
+      [1, 1],
+      [
+        pane('a'),
+        stack('s', 'c', [
+          { type: 'pane', id: 'b', minWidth: 300 },
+          { type: 'pane', id: 'c', minWidth: 100 },
+        ]),
+      ]
+    );
+    const css = computeCSSLayout(tree);
+    const b = css.panes.find(({ pane }) => pane.id === 'b');
+    const c = css.panes.find(({ pane }) => pane.id === 'c');
+    expect(b?.rect).toEqual(c!.rect);
+    expect(b?.hidden).toBe(true);
+    expect(c?.hidden).toBe(false);
+    expect(c?.stack?.id).toBe('s');
+    // The stack takes the minimum size of its largest pane, whichever shows.
+    const pixels = computeLayout(tree, 500, 300, 8);
+    expect(pixels.panes.map(({ pane }) => pane.id)).toEqual(['a', 'c']);
+    expect(pixels.panes[1].rect.width).toBeCloseTo(300, 9);
+    // A change of tab changes no box.
+    const other = computeCSSLayout(
+      row(
+        'r',
+        [1, 1],
+        [
+          pane('a'),
+          { ...(tree.children[1] as ReturnType<typeof stack>), active: 'b' },
+        ]
+      )
+    );
+    expect(other.panes.map(({ rect }) => rect)).toEqual(
+      css.panes.map(({ rect }) => rect)
+    );
+    expect(other.separators.map(({ rect }) => rect)).toEqual(
+      css.separators.map(({ rect }) => rect)
+    );
+  });
+
+  test('activate shows a tab, and the zoom of its stack follows it', () => {
+    const store = new LayoutStore(
+      row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])])
+    );
+    const before = store.getSnapshot().root;
+    store.toggleZoom('b');
+    store.activate('c');
+    const next = store.getSnapshot();
+    expect(next.zoomedPane).toBe('c');
+    expect(next.focusedPane).toBe('c');
+    // The split and the panes keep their identity.
+    expect(next.root.type === 'split' && next.root.children[0]).toBe(
+      before.type === 'split' && before.children[0]
+    );
+    expect(() => store.activate('a')).toThrow();
+    // A zoom of a pane that does not show makes it active.
+    store.toggleZoom('c');
+    store.toggleZoom('b');
+    expect(store.getSnapshot().root).toMatchObject({
+      children: [{ id: 'a' }, { id: 's', active: 'b' }],
+    });
+  });
+
+  test('a close shows the nearest tab, and a stack of one pane gives way to it', () => {
+    for (const model of [binaryTree, naryTree]) {
+      const store = new LayoutStore(
+        row(
+          'r',
+          [0.25, 0.75],
+          [pane('a'), stack('s', 'c', [pane('b'), pane('c'), pane('d')])]
+        ),
+        { model }
+      );
+      store.close('c');
+      expect(store.getSnapshot().root).toMatchObject({
+        sizes: [0.25, 0.75],
+        children: [{ id: 'a' }, { id: 's', active: 'd' }],
+      });
+      store.close('d');
+      expect(store.getSnapshot().root).toMatchObject({
+        sizes: [0.25, 0.75],
+        children: [{ id: 'a' }, { type: 'pane', id: 'b' }],
+      });
+    }
+  });
+
+  test('a split or a move beside a tab goes beside its stack', () => {
+    for (const model of [binaryTree, naryTree]) {
+      const store = new LayoutStore(
+        row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])]),
+        { model }
+      );
+      store.split('c', pane('x'), 'bottom');
+      const split = store.getSnapshot().root;
+      if (split.type !== 'split') throw new Error('Expected split');
+      expect(split.children[1]).toMatchObject({
+        type: 'split',
+        direction: 'vertical',
+        children: [{ id: 's' }, { id: 'x' }],
+      });
+      // A tab that moves leaves its stack; the last tab takes its place.
+      store.move('c', 'a', 'left');
+      expect(ids(store.getSnapshot().root)).toEqual(['c', 'a', 'b', 'x']);
+      expect(getPanes(store.getSnapshot().root)).toHaveLength(4);
+      model.validate(store.getSnapshot().root);
+    }
+  });
+
+  test('moveToStack moves a pane into a stack, or changes the order of tabs', () => {
+    for (const model of [binaryTree, naryTree]) {
+      const store = new LayoutStore(
+        row(
+          'r',
+          [1, 1, 1],
+          [pane('a'), stack('s', 'b', [pane('b'), pane('c')]), pane('d')]
+        ),
+        { model: naryTree }
+      );
+      store.setModel(model);
+      store.moveToStack('d', 'b');
+      expect(ids(store.getSnapshot().root)).toEqual(['a', 'b', 'd', 'c']);
+      expect(store.getSnapshot().focusedPane).toBe('d');
+      const stackId = store.getSnapshot().root.type === 'split' ? 's' : '';
+      store.moveToStack('b', 'c');
+      expect(ids(store.getSnapshot().root)).toEqual(['a', 'd', 'c', 'b']);
+      // A move inside one stack keeps the stack.
+      expect(JSON.stringify(store.getSnapshot().root)).toContain(
+        `"id":"${stackId}"`
+      );
+      store.moveToStack('a', 'c', 0);
+      const tree = store.getSnapshot().root;
+      expect(ids(tree)).toEqual(['a', 'd', 'c', 'b']);
+      expect(tree.type).toBe('stack');
+      model.validate(tree);
+    }
+  });
+
+  test('a hidden tab leaves its stack and shows again as the active tab', () => {
+    const store = new LayoutStore(
+      row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])])
+    );
+    store.setHidden('b', true);
+    expect(store.getSnapshot().root).toMatchObject({
+      children: [{ id: 'a' }, { id: 's', active: 'c' }],
+    });
+    store.setHidden('c', true);
+    // A stack of hidden panes takes no space.
+    expect(
+      computeLayout(store.getSnapshot().root, 400, 200, 8).panes.map(
+        ({ pane }) => pane.id
+      )
+    ).toEqual(['a']);
+    store.setHidden('b', false);
+    expect(store.getSnapshot().root).toMatchObject({
+      children: [{ id: 'a' }, { id: 's', active: 'b' }],
+    });
+    expect(store.getSnapshot().focusedPane).toBe('b');
+  });
+
+  test('stacks save and restore with version 3, and keep their identity', () => {
+    const tree = row(
+      'r',
+      [1, 1],
+      [pane('a'), stack('s', 'c', [pane('b'), pane('c')])]
+    );
+    const store = new LayoutStore(tree);
+    const saved = store.serialize();
+    expect(JSON.parse(saved).version).toBe(3);
+    const other = new LayoutStore(root);
+    other.restore(saved);
+    expect(other.getSnapshot().root).toEqual(store.getSnapshot().root);
+    // A change outside the stack keeps the stack node.
+    const before = store.getSnapshot().root;
+    store.setSizes({ r: [2, 1] });
+    const after = store.getSnapshot().root;
+    expect(after.type === 'split' && after.children[1]).toBe(
+      before.type === 'split' && before.children[1]
+    );
+    expect(Object.isFrozen(after.type === 'split' && after.children[1])).toBe(
+      true
+    );
+    // A layout of version 2 restores as it is.
+    other.restore(
+      JSON.stringify({ ...JSON.parse(store.serialize()), version: 2 })
+    );
+    expect(other.getSnapshot().root).toEqual(after);
   });
 });

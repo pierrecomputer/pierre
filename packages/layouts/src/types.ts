@@ -14,6 +14,21 @@ export interface PaneNode {
 }
 
 /**
+ * Two or more panes in one place, with tabs. One pane shows at a time: the
+ * active pane. The others keep their content and their state, and do not
+ * render. The stack takes the minimum size of its largest pane, so a change
+ * of the active pane changes no other box.
+ */
+export interface StackNode {
+  readonly type: 'stack';
+  readonly id: string;
+  /** The panes in the order of their tabs. */
+  readonly children: readonly PaneNode[];
+  /** The ID of the pane that shows. */
+  readonly active: string;
+}
+
+/**
  * A row (`horizontal`) or a column (`vertical`) of two or more children. The
  * tree model of the store sets the other rules of the shape (see `TreeModel`).
  */
@@ -32,7 +47,7 @@ export interface SplitNode {
   readonly sizes: readonly number[];
 }
 
-export type LayoutNode = PaneNode | SplitNode;
+export type LayoutNode = PaneNode | StackNode | SplitNode;
 
 /**
  * The rules of the tree's shape, and how a split and a close change it. The
@@ -47,7 +62,10 @@ export interface TreeModel {
    * identity. `nextId` names each new split.
    */
   normalize(root: LayoutNode, nextId: () => string): LayoutNode;
-  /** Put a pane at one edge of a target pane. `nextId` names a new split. */
+  /**
+   * Put a pane at one edge of a target: a pane outside a stack, or a stack.
+   * `nextId` names a new split.
+   */
   split(
     root: LayoutNode,
     targetId: string,

@@ -1,4 +1,4 @@
-import { hasVisiblePane } from './model';
+import { hasVisiblePane, shownPane } from './model';
 import type {
   ChildExtent,
   LayoutGeometry,
@@ -37,6 +37,13 @@ function minimumSize(
     .map((child) => minimumSize(child, gap))
     .filter((size) => size !== null);
   if (sizes.length === 0) return null;
+  // A stack takes the minimum size of its largest visible pane, whichever
+  // pane is active, so a change of tab moves no other box.
+  if (node.type === 'stack')
+    return {
+      width: Math.max(...sizes.map(({ width }) => width)),
+      height: Math.max(...sizes.map(({ height }) => height)),
+    };
   const gaps = gap * (sizes.length - 1);
   const sum = (key: 'width' | 'height'): number =>
     sizes.reduce((total, size) => total + size[key], 0);
@@ -144,6 +151,11 @@ export function computeLayout(
   function visit(node: LayoutNode, rect: Rect): void {
     if (node.type === 'pane') {
       panes.push({ pane: node, rect });
+      return;
+    }
+    if (node.type === 'stack') {
+      const shown = shownPane(node);
+      if (shown !== null) panes.push({ pane: shown, rect });
       return;
     }
     const visible = visibleChildren(node);

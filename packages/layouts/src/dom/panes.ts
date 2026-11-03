@@ -13,7 +13,8 @@ import { flipAnimations } from './flip';
 /**
  * The event that a pane host receives when its content stops or starts
  * rendering. `detail.hidden` is true when the zoom animation of another pane
- * ends, or when the pane is hidden, and false before the pane shows again.
+ * ends, when the pane is hidden, or when another tab of its stack becomes
+ * active, and false before the pane shows again.
  */
 export const PANE_VISIBILITY_EVENT = 'pierre-layout-visibility';
 export type PaneVisibilityEvent = CustomEvent<{ hidden: boolean }>;
@@ -46,8 +47,8 @@ export function setCoveredHidden(
   zoomedPane: string | null
 ): void {
   for (const host of paneHosts(root)) {
-    // A hidden pane does not render whatever the zoom.
-    if (host.dataset.collapsed === 'true') continue;
+    // A pane that does not show does not render whatever the zoom.
+    if (host.dataset.paneHidden === 'true') continue;
     const hidden =
       zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
     if ((host.dataset.hidden === 'true') === hidden) continue;
@@ -83,8 +84,11 @@ export function hideCoveredAfterAnimation(
   });
 }
 
-/** Send `PANE_VISIBILITY_EVENT` to each pane that `store.setHidden` hid or showed. */
-export function notifyCollapsed(
+/**
+ * Send `PANE_VISIBILITY_EVENT` to each pane that stopped or started showing:
+ * `store.setHidden` hid or showed it, or its tab became inactive or active.
+ */
+export function notifyHidden(
   root: HTMLElement,
   before: ReadonlySet<string>,
   after: ReadonlySet<string>
@@ -99,6 +103,16 @@ export function notifyCollapsed(
 export function focusPane(root: HTMLElement, id: string): void {
   paneHosts(root)
     .find((host) => host.dataset.layoutPane === id)
+    ?.focus();
+}
+
+/** Focus the tab of a pane in the header of the pane's own host. */
+export function focusTab(root: HTMLElement, id: string): void {
+  paneHosts(root)
+    .find((host) => host.dataset.layoutPane === id)
+    ?.querySelector<HTMLElement>(
+      `[data-layout-tab="${CSS.escape(id)}"][aria-selected="true"]`
+    )
     ?.focus();
 }
 
