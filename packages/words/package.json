@@ -37,6 +37,8 @@
   },
   "devDependencies": {
     "@pierre/highlights": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@streamdown/code": "catalog:",
     "@types/bun": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",

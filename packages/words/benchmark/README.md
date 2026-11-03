@@ -1,7 +1,9 @@
 # Words benchmarks
 
-These benchmarks compare HTML output, React stream updates, and memory use. All
-modes use the five Markdown files in [`fixtures`](./fixtures).
+These benchmarks compare HTML output, React stream updates, memory use, and
+browser rendering. The Node modes use the five Markdown files in
+[`fixtures`](./fixtures). The browser mode uses the repeated document from
+[`fixtures/index.ts`](./fixtures/index.ts), which the `/words` demo also uses.
 
 ## Run
 
@@ -11,17 +13,25 @@ Install workspace dependencies with `pnpm install`. Then run:
 moonx words:bench --ignore-ci-checks
 moonx words:bench-stream --ignore-ci-checks
 moonx words:bench-memory --ignore-ci-checks
+moonx words:bench-browser --ignore-ci-checks
 ```
 
 - `bench`: HTML strings against md4x (native), md4x (wasm), and markdown-it.
 - `bench-stream`: React streams against streamdown in JSDOM.
 - `bench-memory`: memory use for all HTML engines and both React engines.
+- `bench-browser`: React streams against streamdown in Chromium, and download
+  size. These results feed the charts on the `/words` page.
 
 Add `-- --quick` to either timing task for a quick check. Use `-- --samples 1`
 for a quick memory check. Add `--fixture tiny.md` to select one input, or
 `--json /tmp/words.json` to save raw samples and environment data. Use a
 separate JSON file for each mode. Memory also accepts `--mode html` or
 `--mode stream`. Both stream comparisons accept `--chunk-size 256`.
+
+`bench-browser` uses the Chromium build that Playwright pins. Install it once
+with `pnpm --filter @pierre/words exec playwright install chromium`. Add
+`-- --quick` for a short check with one run. Add `-- --docs` to write
+`apps/docs/public/words/benchmark.json` and `benchmark-raw.json`.
 
 ## HTML generation
 
@@ -69,7 +79,7 @@ checks that streamed text matches a fresh render from the same engine.
 
 JSDOM measures synchronous parse, React, and DOM work. It does not measure
 browser layout, paint, frame rate, or asynchronous animation work. These results
-are not browser latency measurements.
+are not browser latency measurements. See [Browser](#browser) for those.
 
 ## Memory usage
 
@@ -99,6 +109,62 @@ Samples run in sequence, with a different engine first each round. Build work
 occurs outside these processes. Growth covers engine import through the first
 HTML call or complete stream replay. It includes module load, native
 allocations, Wasm, and allocator capacity. It is not an allocation count.
+
+## Browser
+
+Median of each run's 95th percentile, from three runs in fresh Chromium
+processes. Update and frame times are in ms. Heap growth is in MB. Lower is
+better.
+
+| Document           | Words update | Streamdown update | Words frame | Streamdown frame | Words heap | Streamdown heap |
+| ------------------ | -----------: | ----------------: | ----------: | ---------------: | ---------: | --------------: |
+| 1× plain           |          0.4 |               1.1 |         9.1 |              9.2 |        0.6 |             3.1 |
+| 1× highlighting    |          1.7 |               2.2 |         9.2 |              9.1 |        0.7 |             3.9 |
+| 1× fades           |          1.5 |               4.7 |         9.3 |              9.2 |        0.9 |             6.0 |
+| 100× plain         |          1.7 |              25.6 |         9.3 |             16.7 |        3.6 |           126.0 |
+| 100× highlighting  |          2.2 |              25.2 |         9.9 |             16.7 |        6.0 |           142.3 |
+| 100× fades         |         13.2 |              44.7 |        16.8 |             91.6 |        8.2 |           237.3 |
+| 1000× highlighting |          4.1 |             228.9 |       141.6 |            291.6 |       51.2 |          1397.9 |
+| 1000× fades        |        208.3 |         timed out |       234.1 |                — |       67.3 |               — |
+
+The 1× document has 8,524 characters: 100 paragraphs and one TypeScript code
+block with 40 lines. Larger documents repeat it. Fades include highlighting. The
+1000× rows are single runs, stopped after 180 seconds.
+
+Each library gets a production page built with `Bun.build`. Each run opens a new
+browser with a 1280 × 960 viewport. The page first renders a short warmup
+document, so startup and the first grammar load are not measured. Then it mounts
+an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
+267 updates.
+
+- Update time runs from the state update to the layout effect of the parent
+  component, after both renderers have written the DOM. It does not include
+  paint.
+- Frame time is the interval between `requestAnimationFrame` callbacks during
+  playback. This display runs at 120 Hz.
+- Heap growth is the V8 heap after two forced garbage collections, from the
+  warmed empty renderer to the settled document. It does not include native DOM,
+  Wasm, or graphics memory.
+- Words uses `@pierre/words/highlights` with the Pierre themes. Streamdown uses
+  `@streamdown/code` with its default themes. Fades last 180 ms. Words fades
+  each delivered chunk, including code. Streamdown fades prose words.
+- A run counts only if the page has no errors, every update commits, the
+  paragraph and code block counts are correct, every code block is highlighted,
+  and both libraries show the same text.
+
+| Download, gzip KB              | @pierre/words | streamdown |
+| ------------------------------ | ------------: | ---------: |
+| Base React renderer            |          50.4 |      165.3 |
+| With TypeScript and two themes |         254.4 |      244.9 |
+| CSS                            |           1.2 |        0.4 |
+
+Download size uses minified `Bun.build` output with React external. Each JS file
+is gzipped at level 9. The base row counts static imports only. The second row
+adds the chunks that Streamdown loads on demand for TypeScript, its two themes,
+and highlighted code. Words keeps all grammars in one file.
+
+> Measured on **2026-11-03** at commit `43311732` with uncommitted changes, Bun
+> 1.4.0, and Chromium 134.0.6998.35 on an Apple M4 Pro with 48 GiB RAM.
 
 ## Sampling
 

@@ -63,6 +63,9 @@ catalogs:
     '@radix-ui/react-use-controllable-state':
       specifier: 1.2.2
       version: 1.2.2
+    '@streamdown/code':
+      specifier: 2.0.0
+      version: 2.0.0
     '@tailwindcss/postcss':
       specifier: 4.1.13
       version: 4.1.13
@@ -883,6 +886,12 @@ importers:
       '@pierre/highlights':
         specifier: workspace:*
         version: link:../highlights
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.51.1
+      '@streamdown/code':
+        specifier: 'catalog:'
+        version: 2.0.0(react@19.2.7)
       '@types/bun':
         specifier: 'catalog:'
         version: 1.4.0
@@ -2972,6 +2981,12 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@streamdown/code@2.0.0':
+    resolution: {integrity: sha512-sSyX/9gOOcivbP7204+sfAam+gotxjUNV+T4EuN3aa6i5x1LaqtB6Ln/Mxzd1XGvm0vNApO4oKLZs+7gzFI1kQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      react: 19.2.7
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
@@ -8794,6 +8809,11 @@ snapshots:
   '@sindresorhus/merge-streams@2.3.0': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@streamdown/code@2.0.0(react@19.2.7)':
+    dependencies:
+      react: 19.2.7
+      shiki: 4.4.1
 
   '@swc/helpers@0.5.23':
     dependencies:

@@ -73,6 +73,7 @@ catalog:
   '@shikijs/engine-javascript': '4.4.1'
   '@shikijs/themes': '4.4.1'
   '@shikijs/transformers': '4.4.1'
+  '@streamdown/code': '2.0.0'
   '@tailwindcss/postcss': '4.1.13'
   '@tsdown/css': '0.22.14'
   '@types/bun': '1.4.0'

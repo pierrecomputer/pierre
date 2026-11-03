@@ -38,9 +38,11 @@ export function loadFixtures(filter?: string) {
   return fixtures;
 }
 
-export function environment() {
+export function environment(
+  names = ['md4x', 'markdown-it', 'streamdown', 'react', 'jsdom']
+) {
   const versions: Record<string, string> = {};
-  for (const name of ['md4x', 'markdown-it', 'streamdown', 'react', 'jsdom']) {
+  for (const name of names) {
     try {
       let directory = dirname(fileURLToPath(import.meta.resolve(name)));
       for (;;) {
@@ -109,6 +111,11 @@ export function median(values: number[]): number {
     : sorted[middle];
 }
 
+// Nearest-rank 95th percentile.
+export function p95(values: number[]): number {
+  return [...values].sort((a, b) => a - b)[Math.ceil(values.length * 0.95) - 1];
+}
+
 export let lastResult: unknown;
 
 export function measure(
@@ -167,9 +174,7 @@ export function measure(
   }
   return states.map(({ samples, iterations }) => ({
     medianMs: median(samples),
-    p95Ms: [...samples].sort((a, b) => a - b)[
-      Math.ceil(samples.length * 0.95) - 1
-    ],
+    p95Ms: p95(samples),
     iterations,
     samplesMs: samples,
   }));
