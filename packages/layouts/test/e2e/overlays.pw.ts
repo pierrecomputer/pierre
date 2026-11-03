@@ -249,8 +249,7 @@ test('overlays animate in and out on the compositor', async ({ page }) => {
   expect(await animations('.pierre-modal')).toContain('running');
   await expect.poll(() => animations('.pierre-modal')).toEqual([]);
   await page.keyboard.press('Escape');
-  // A reversed animation that had finished shows in `getAnimations()` when
-  // its pending play starts, which can take more than one frame.
+  // The exit starts after the Escape key, in one of the next frames.
   await expect
     .poll(() => animations('.pierre-modal'), { intervals: [16] })
     .toContain('running');
