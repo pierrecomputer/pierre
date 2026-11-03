@@ -2,6 +2,7 @@ import {
   type JSX,
   useCallback,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -17,6 +18,7 @@ import { Layout, type PaneAction } from '../../src/react';
 import AgentPane from '../agent';
 import { ModelSelect } from '../model-select';
 import { ResizeSelect, type ResizeStrategy } from '../resize-select';
+import { AppOverlays } from './overlays';
 import { Sessions, useSessions } from './sessions';
 import './app.css';
 
@@ -89,6 +91,7 @@ export default function App(): JSX.Element {
   const [animateLayout, setAnimateLayout] = useState(true);
   const [animateZoom, setAnimateZoom] = useState(true);
   const [layers, setLayers] = useState<'on' | 'off' | 'auto'>('auto');
+  const workspace = useRef<HTMLElement>(null);
   const visible = new Set(
     getPanes(state.root)
       .filter(({ hidden }) => hidden !== true)
@@ -133,6 +136,7 @@ export default function App(): JSX.Element {
           })}
         </nav>
         <div className="app-header-end">
+          <AppOverlays workspace={workspace} />
           <label className="app-check">
             <input
               type="checkbox"
@@ -177,7 +181,7 @@ export default function App(): JSX.Element {
           <a href="/">Playground</a>
         </div>
       </header>
-      <main className="app-main">
+      <main className="app-main" ref={workspace}>
         <Layout
           store={store}
           renderPane={renderPane}

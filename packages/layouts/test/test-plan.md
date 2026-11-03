@@ -34,7 +34,7 @@ The status column records the result for the revision in the heading.
 | B12 | Restore rejects malformed saved state.                                                                                                   | `unit`                                       | pass    |
 | B13 | Escape or a pointer cancel during a drag restores the state before the drag.                                                             | `e2e` Escape cancellation                    | pass    |
 | B14 | A pane can keep a fixed size in pixels when the container changes size, for example a 240 px file tree.                                  | none; the model has weights only             | fail    |
-| B15 | Overlays: a modal overlay and a slide-in menu open over the workspace and close back to the element that opened them.                    | none; not built                              | n/a     |
+| B15 | Overlays: a modal overlay and a slide-in menu open over the workspace and close back to the element that opened them.                    | `e2e` overlays                               | pass    |
 | B16 | During a size animation, pane content keeps its shape: text and icons do not stretch.                                                    | manual: zoom a pane in the demo's agent view | fail    |
 | B17 | A drag of a separator changes only the panes beside it, until one reaches its minimum size; then the next pane on that side changes.     | `unit`, `e2e` n-ary separator drag           | partial |
 
