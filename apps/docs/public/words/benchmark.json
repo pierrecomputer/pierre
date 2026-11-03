@@ -236,6 +236,8 @@
         "label": "HTML throughput",
         "description": "Median HTML throughput in MiB/s. Higher is better.",
         "decimals": 1,
+        "unit": "MiB/s",
+        "higherIsBetter": true,
         "engines": [
           "Words",
           "md4x (native)",
@@ -294,6 +296,7 @@
         "label": "React stream replay",
         "description": "Median ms per complete React replay in JSDOM, with chunks of up to 256 UTF-16 code units. Lower is better.",
         "decimals": 2,
+        "unit": "ms",
         "engines": [
           "Words React",
           "Streamdown"
@@ -340,6 +343,7 @@
         "label": "HTML memory",
         "description": "Median peak RSS growth in MiB through the first HTML render, relative to each process before engine import. Five processes per engine and fixture. Lower is better.",
         "decimals": 1,
+        "unit": "MiB",
         "engines": [
           "Words",
           "md4x (native)",
@@ -398,6 +402,7 @@
         "label": "React stream memory",
         "description": "Median peak RSS growth in MiB through a complete JSDOM replay, relative to each process before engine import. Five processes per engine and fixture. Lower is better.",
         "decimals": 1,
+        "unit": "MiB",
         "engines": [
           "Words React",
           "Streamdown"

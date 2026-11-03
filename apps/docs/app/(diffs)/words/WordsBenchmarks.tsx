@@ -92,8 +92,21 @@ export function WordsBenchmarks() {
   const [memoryMode, setMemoryMode] = useState('highlight');
   const [footprintId, setFootprintId] = useState('base');
   const [methodOpen, setMethodOpen] = useState(false);
+  const [fixture, setFixture] = useState('gfm-spec.md');
   const suite = benchmark.packageRun;
   const metric = suite.metrics[metricIndex];
+  const versions: Record<string, string> = suite.environment.versions;
+  // Best result first, like the highlights chart.
+  const results = metric.engines
+    .map((engine, index) => ({
+      engine,
+      value: metric.rows.find((row) => row.fixture === fixture)!.values[index],
+      version: versions[engine.split(' ')[0].toLowerCase()],
+    }))
+    .sort((a, b) =>
+      metric.higherIsBetter === true ? b.value - a.value : a.value - b.value
+    );
+  const maximum = Math.max(...results.map(({ value }) => value));
   const run = benchmark.browser;
   const browser = run.rows.find(
     (row) => row.scale === scale && row.mode === mode
@@ -139,10 +152,13 @@ export function WordsBenchmarks() {
         </a>
       </div>
 
-      <div className="space-y-4 rounded-lg border p-5 sm:p-7">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-semibold tracking-tight">
+      <figure className={cardClass} aria-labelledby="words-package-chart">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <figcaption>
+            <h3
+              id="words-package-chart"
+              className="text-xl font-semibold tracking-tight"
+            >
               Package benchmarks
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
@@ -150,62 +166,83 @@ export function WordsBenchmarks() {
               {suite.environment.node} · {suite.environment.cpu} ·{' '}
               {suite.environment.memoryBytes / 1024 ** 3} GiB RAM
             </p>
-          </div>
-          <label className="grid gap-1.5 text-xs">
-            <span className="text-muted-foreground">Measurement</span>
-            <ChartSelect
-              value={metricIndex}
-              onChange={(event) => setMetricIndex(Number(event.target.value))}
-            >
-              {suite.metrics.map(({ label }, index) => (
-                <option key={label} value={index}>
-                  {label}
-                </option>
-              ))}
-            </ChartSelect>
-          </label>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-sm tabular-nums">
-            <caption className="text-muted-foreground mb-2 text-left">
-              {metric.description}
-            </caption>
-            <thead>
-              <tr className="border-b">
-                <th scope="col" className="py-2 pr-4 text-left font-medium">
-                  Fixture
-                </th>
-                {metric.engines.map((engine) => (
-                  <th
-                    key={engine}
-                    scope="col"
-                    className="py-2 pl-4 font-medium"
-                  >
-                    {engine}
-                  </th>
+          </figcaption>
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
+            <label className="grid min-w-0 gap-1.5 text-xs">
+              <span className="text-muted-foreground">Measurement</span>
+              <ChartSelect
+                value={metricIndex}
+                onChange={(event) => setMetricIndex(Number(event.target.value))}
+              >
+                {suite.metrics.map(({ label }, index) => (
+                  <option key={label} value={index}>
+                    {label}
+                  </option>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {metric.rows.map(({ fixture, values }) => (
-                <tr key={fixture} className="border-b last:border-0">
-                  <th
-                    scope="row"
-                    className="py-2 pr-4 text-left font-normal whitespace-nowrap"
-                  >
-                    {fixture}
-                  </th>
-                  {values.map((value, index) => (
-                    <td key={metric.engines[index]} className="py-2 pl-4">
-                      {value.toFixed(metric.decimals)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </ChartSelect>
+            </label>
+            <label className="grid min-w-0 gap-1.5 text-xs">
+              <span className="text-muted-foreground">Fixture</span>
+              <ChartSelect
+                value={fixture}
+                onChange={(event) => setFixture(event.target.value)}
+              >
+                {metric.rows.map((row) => (
+                  <option key={row.fixture} value={row.fixture}>
+                    {row.fixture}
+                  </option>
+                ))}
+              </ChartSelect>
+            </label>
+          </div>
         </div>
-      </div>
+        <p
+          id="words-package-caption"
+          className="text-muted-foreground mb-5 text-sm"
+        >
+          <strong>{fixture}</strong> · {metric.description}
+        </p>
+        <dl
+          aria-labelledby="words-package-caption"
+          aria-live="polite"
+          className="space-y-5 tabular-nums sm:space-y-6"
+        >
+          {results.map(({ engine, value, version }) => {
+            const words = engine.startsWith('Words');
+            return (
+              <div
+                key={engine}
+                className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_10rem]"
+              >
+                <dt className="text-muted-foreground col-start-1 row-start-2 flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs leading-tight">
+                  <span className="text-foreground text-sm font-medium">
+                    {engine}
+                  </span>
+                  {version}
+                </dt>
+                <dd className="contents">
+                  <div className="col-start-1 row-start-1">
+                    <BenchmarkBar
+                      value={value}
+                      maximum={maximum}
+                      highlighted={words}
+                      scaleFloor={6}
+                    />
+                  </div>
+                  <span
+                    className={`col-start-2 row-span-2 row-start-1 self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
+                  >
+                    {value.toFixed(metric.decimals)}
+                    <span className="text-muted-foreground ml-1 text-sm font-normal">
+                      {metric.unit}
+                    </span>
+                  </span>
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      </figure>
 
       <h3 className="text-xl font-semibold tracking-tight">
         Browser measurements
