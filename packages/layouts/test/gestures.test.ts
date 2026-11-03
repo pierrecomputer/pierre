@@ -9,6 +9,8 @@ import {
   moveSeparator,
   paneAt,
   separatorOffset,
+  tabBoundaryAt,
+  tabMoveIndex,
 } from '../src/gestures';
 import type { ChildSize, LayoutNode } from '../src/types';
 
@@ -175,5 +177,42 @@ describe('gestures with sizes in pixels and maximums', () => {
 
   test('the offset of a separator follows sizes in pixels', () => {
     expect(separatorOffset(first[0], [{ px: 300 }, 2, 1])).toBeCloseTo(60, 9);
+  });
+});
+
+describe('tab reordering', () => {
+  const edges = [
+    { left: 0, right: 100 },
+    { left: 100, right: 160 },
+    { left: 160, right: 300 },
+  ];
+
+  test('the boundary is the number of tab middles before the pointer', () => {
+    expect(tabBoundaryAt(edges, -10)).toBe(0);
+    expect(tabBoundaryAt(edges, 49)).toBe(0);
+    expect(tabBoundaryAt(edges, 51)).toBe(1);
+    expect(tabBoundaryAt(edges, 140)).toBe(2);
+    expect(tabBoundaryAt(edges, 400)).toBe(3);
+  });
+
+  test('a boundary beside the tab moves nothing, and others give an index among the other tabs', () => {
+    const order = ['a', 'b', 'c'];
+    expect(tabMoveIndex(order, order, 'b', 1)).toBeNull();
+    expect(tabMoveIndex(order, order, 'b', 2)).toBeNull();
+    expect(tabMoveIndex(order, order, 'b', 0)).toBe(0);
+    expect(tabMoveIndex(order, order, 'b', 3)).toBe(2);
+    expect(tabMoveIndex(order, order, 'a', 3)).toBe(2);
+    expect(tabMoveIndex(order, order, 'c', 1)).toBe(1);
+  });
+
+  test('hidden tabs keep their places among the others', () => {
+    // `x` is hidden between `a` and `b`; the list shows a, b, c.
+    const order = ['a', 'x', 'b', 'c'];
+    const visible = ['a', 'b', 'c'];
+    // Before `b`: after the hidden `x`.
+    expect(tabMoveIndex(order, visible, 'c', 1)).toBe(2);
+    // After the last visible tab.
+    expect(tabMoveIndex(order, visible, 'a', 3)).toBe(3);
+    expect(tabMoveIndex(order, visible, 'missing', 0)).toBeNull();
   });
 });

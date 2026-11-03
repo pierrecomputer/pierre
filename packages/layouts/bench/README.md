@@ -103,6 +103,7 @@ isolate the content area.
 | `hide`              | Hide the second pane with `store.setHidden`.                                                                                                          |
 | `collapse`          | Collapse the second pane to its header with `store.setCollapsed`.                                                                                     |
 | `tab-switch`        | Add a tab beside the second pane, then click the tab of the second pane to show it again.                                                             |
+| `tab-drag`          | Add a tab beside the second pane, then drag the new tab before the tab of the second pane in 16 pointer moves, one per frame, and drop it.            |
 | `hidden-tab-append` | Add a tab beside the agent chat pane, then append to the chat, which does not show, 10 times.                                                         |
 | `container-resize`  | Narrow the viewport from 1440 px to 1200 px.                                                                                                          |
 | `repeat`            | Not timed. Measures memory before and after 20 zooms and restores of the first pane and 20 hides and shows of the second pane. See [Memory](#memory). |

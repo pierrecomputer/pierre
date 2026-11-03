@@ -356,6 +356,29 @@ export const CHECKS: Check[] = [
     evaluate: atMost('collapse', 16, 'heavy', 'contentRenders', 0),
   },
   {
+    id: 'tab-drag-main-thread-per-step-4',
+    rule: 'time',
+    description:
+      'A tab drag uses at most 2 ms of main-thread time per pointer move (4 light panes).',
+    limit: '2 ms',
+    evaluate: atMost('tab-drag', 4, 'light', 'mainThreadMs', 2, true),
+  },
+  {
+    id: 'tab-drag-main-thread-per-step-16',
+    rule: 'time',
+    description:
+      'A tab drag uses at most 3 ms of main-thread time per pointer move (16 light panes).',
+    limit: '3 ms',
+    evaluate: atMost('tab-drag', 16, 'light', 'mainThreadMs', 3, true),
+  },
+  {
+    id: 'tab-drag-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A tab drag renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('tab-drag', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
     id: 'tab-switch-no-content-render',
     rule: 'independence-from-content',
     description: 'A change of tab renders no pane content (16 heavy panes).',

@@ -1071,3 +1071,53 @@ describe('collapsed panes', () => {
     expect(other.getSnapshot().root).toEqual(store.getSnapshot().root);
   });
 });
+
+describe('tab order', () => {
+  const tabs = (active: string) => ({
+    type: 'stack' as const,
+    id: 's',
+    active,
+    children: [pane('a'), pane('b'), pane('c')],
+  });
+  const tree = (active = 'a'): SplitNode => ({
+    type: 'split',
+    id: 'r',
+    direction: 'horizontal',
+    sizes: [1, 1],
+    children: [pane('x'), tabs(active)],
+  });
+
+  test('moveTab puts a tab at an index among the other tabs, shows it, and focuses it', () => {
+    for (const model of [binaryTree, naryTree]) {
+      const store = new LayoutStore(tree(), { model });
+      const before = store.getSnapshot().root;
+      store.moveTab('c', 0);
+      const next = store.getSnapshot();
+      expect(ids(next.root)).toEqual(['x', 'c', 'a', 'b']);
+      expect(next.root).toMatchObject({
+        children: [{ id: 'x' }, { id: 's', active: 'c' }],
+      });
+      expect(next.focusedPane).toBe('c');
+      // The other nodes keep their identity.
+      expect(next.root.type === 'split' && next.root.children[0]).toBe(
+        before.type === 'split' && before.children[0]
+      );
+      // An index past the end puts the tab last.
+      store.moveTab('c', 99);
+      expect(ids(store.getSnapshot().root)).toEqual(['x', 'a', 'b', 'c']);
+    }
+  });
+
+  test('moveTab keeps the zoom of the stack, and does nothing in place', () => {
+    const store = new LayoutStore(tree('b'));
+    store.toggleZoom('b');
+    store.moveTab('b', 2);
+    expect(store.getSnapshot().zoomedPane).toBe('b');
+    expect(ids(store.getSnapshot().root)).toEqual(['x', 'a', 'c', 'b']);
+    const same = store.getSnapshot();
+    store.moveTab('b', 2);
+    expect(store.getSnapshot()).toBe(same);
+    expect(() => store.moveTab('x', 0)).toThrow();
+    expect(() => store.moveTab('missing', 0)).toThrow();
+  });
+});

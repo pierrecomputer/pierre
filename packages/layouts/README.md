@@ -199,15 +199,26 @@ store.addTab('terminal', { type: 'pane', id: 'server' }); // A stack in place of
 store.activate('terminal');
 store.moveToStack('logs', 'terminal'); // Into the stack, after the terminal.
 store.moveToStack('logs', 'server', 0); // A new place among the tabs.
+store.moveTab('logs', 2); // Third among the tabs of its stack.
 ```
+
+The tabs take their colors from `--layout-tab-color`,
+`--layout-tab-hover-color`, `--layout-tab-hover-background`,
+`--layout-tab-selected-color`, `--layout-tab-accent` (the underline of the
+selected tab), and `--layout-tab-close-hover-background`.
 
 The header of a pane in a stack holds the tabs of the stack, with the WAI-ARIA
 tabs pattern: Left and Right arrows move to the previous or the next tab, Home
 and End to the first or the last, and the tab with the focus shows. Delete
-closes the focused tab. The host of each pane is its tab panel. A split or a
-move beside a pane of a stack goes beside the whole stack. A close or a hide of
-the active tab shows the nearest tab. A stack of one pane gives way to that
-pane. A zoom of a tab zooms its stack, and a change of tab keeps the zoom.
+closes the focused tab. Ctrl+Shift+PageUp and Ctrl+Shift+PageDown move the
+focused tab before the previous tab or after the next one, as Firefox, Chrome,
+and VS Code move their tabs; on a Mac keyboard without these keys, add Fn to the
+Up and Down arrows. A pointer drag in the tab bar moves a tab, and a marker
+shows where it goes. Escape cancels the drag. A drag between stacks is future
+work. The host of each pane is its tab panel. A split or a move beside a pane of
+a stack goes beside the whole stack. A close or a hide of the active tab shows
+the nearest tab. A stack of one pane gives way to that pane. A zoom of a tab
+zooms its stack, and a change of tab keeps the zoom.
 
 ## Collapsed panes
 
