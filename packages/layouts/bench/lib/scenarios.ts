@@ -12,6 +12,8 @@ export interface Params {
 interface Point {
   x: number;
   y: number;
+  /** Where a drag ends along x, for a scenario that drags. */
+  toX?: number;
 }
 
 /**
@@ -37,6 +39,7 @@ export interface Scenario {
 const ANIMATION_SETTLE_MS = 450;
 const IDLE_SETTLE_MS = 150;
 const RESIZE_STEPS = 16;
+const TAB_DRAG_STEPS = 16;
 const APPEND_STEPS = 10;
 // The fourth pane holds an agent chat in heavy content, so an append adds a message.
 const APPEND_PANE = 'p3';
@@ -276,6 +279,35 @@ export const SCENARIOS: Scenario[] = [
     },
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
+      await page.waitForTimeout(IDLE_SETTLE_MS);
+    },
+  },
+  {
+    id: 'tab-drag',
+    description: `Add a tab beside the second pane, then drag the new tab before the tab of the second pane in ${TAB_DRAG_STEPS} pointer moves, one per frame, and drop it.`,
+    steps: TAB_DRAG_STEPS,
+    target: 't1',
+    async setup(page, params) {
+      await addTab(page, params, 'p1', 't1');
+      const from = await center(
+        page,
+        '[data-layout-pane="t1"] [data-layout-tab="t1"]'
+      );
+      const to = await page
+        .locator('[data-layout-pane="t1"] [data-layout-tab="p1"]')
+        .boundingBox();
+      if (to === null) throw new Error('Missing tab');
+      return { ...from, toX: to.x + 4 };
+    },
+    async run(page, params, point) {
+      const { x, y, toX = x } = point!;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      for (let step = 1; step <= TAB_DRAG_STEPS; step++) {
+        await page.mouse.move(x + ((toX - x) * step) / TAB_DRAG_STEPS, y);
+        await page.waitForTimeout(params.frameMs);
+      }
+      await page.mouse.up();
       await page.waitForTimeout(IDLE_SETTLE_MS);
     },
   },

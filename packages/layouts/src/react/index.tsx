@@ -37,12 +37,21 @@ import {
 } from '../dom/panes';
 import { createResizeWork, type ResizeStrategy } from '../dom/resize-work';
 import {
+  boundaryOffset,
+  clearTabDrop,
+  readTabEdges,
+  showTabDrop,
+  type TabEdges,
+} from '../dom/tab-drag';
+import {
   dragSizes,
   dropTarget,
   type DropTarget,
   getExitEdges,
   keySizes,
   paneAt,
+  tabBoundaryAt,
+  tabMoveIndex,
 } from '../gestures';
 import { shownPanes, stackOf } from '../model';
 import type { LayoutStore } from '../store';
@@ -143,6 +152,23 @@ interface MoveGesture {
   x: number;
   y: number;
   paneId: string;
+}
+
+/** A drag of a tab to a new place in its tab list. */
+interface TabGesture {
+  type: 'tab';
+  pointerId: number;
+  x: number;
+  y: number;
+  paneId: string;
+  tab: HTMLElement;
+  tablist: HTMLElement;
+  /** The IDs of the visible tabs, in order. */
+  visible: readonly string[];
+  /** The tab edges, read when the pointer has moved far enough to drag. */
+  edges: TabEdges[] | null;
+  /** The boundary of the list where the tab would go. */
+  boundary: number | null;
 }
 
 // The compiled CSS of each tree, by gap. The view reads it before a change,
@@ -275,7 +301,7 @@ export function Layout({
   experimentalSizeAnimation = 'counter-scale',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
-  const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
+  const gesture = useRef<ResizeGesture | MoveGesture | TabGesture | null>(null);
   const [resizing, setResizing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropTarget | null>(null);
@@ -571,9 +597,32 @@ export function Layout({
   }
 
   /**
+   * Move a tab to a boundary of its tab list (see `tabMoveIndex`). The tab
+   * keeps the focus.
+   */
+  function moveTabTo(
+    stack: StackNode,
+    visible: readonly string[],
+    id: string,
+    boundary: number
+  ): void {
+    const index = tabMoveIndex(
+      stack.children.map((pane) => pane.id),
+      visible,
+      id,
+      boundary
+    );
+    if (index === null) return;
+    tabToFocus.current = id;
+    store.moveTab(id, index);
+  }
+
+  /**
    * The keys of the tab list, from the APG tabs pattern: arrows move to the
    * next or the previous tab, and Home and End to the first or the last. The
-   * tab that gets the focus shows. Delete closes the focused tab.
+   * tab that gets the focus shows. Delete closes the focused tab. Ctrl+Shift
+   * with PageUp or PageDown moves the focused tab before the previous tab or
+   * after the next one, as Firefox, Chrome, and VS Code move their tabs.
    */
   function tabKey(
     event: KeyboardEvent<HTMLElement>,
@@ -582,6 +631,23 @@ export function Layout({
     stack: StackNode
   ): void {
     const at = tabs.indexOf(tab);
+    if (
+      event.ctrlKey &&
+      event.shiftKey &&
+      (event.key === 'PageUp' || event.key === 'PageDown')
+    ) {
+      // The browser does not move its own tab for a key that the page uses.
+      event.preventDefault();
+      const boundary = event.key === 'PageUp' ? at - 1 : at + 2;
+      if (boundary >= 0 && boundary <= tabs.length)
+        moveTabTo(
+          stack,
+          tabs.map((pane) => pane.id),
+          tab.id,
+          boundary
+        );
+      return;
+    }
     const next =
       event.key === 'ArrowRight'
         ? tabs[(at + 1) % tabs.length]
@@ -620,10 +686,66 @@ export function Layout({
     });
   }
 
+  /**
+   * Start a possible drag of a tab. It becomes a drag when the pointer moves
+   * 4 px; a press without a move stays a click. A press on the close mark is
+   * a click.
+   */
+  function startTabDrag(
+    event: PointerEvent<HTMLElement>,
+    id: string,
+    tabs: readonly PaneNode[]
+  ): void {
+    const tablist = event.currentTarget.parentElement;
+    if (
+      event.button !== 0 ||
+      tabs.length < 2 ||
+      tablist === null ||
+      (event.target as Element).closest('.pierre-layout-tab-close') !== null
+    )
+      return;
+    gesture.current = {
+      type: 'tab',
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      paneId: id,
+      tab: event.currentTarget,
+      tablist,
+      visible: tabs.map((tab) => tab.id),
+      edges: null,
+      boundary: null,
+    };
+  }
+
+  /**
+   * Follow a tab drag: show where the tab would go. The tab edges are read
+   * once, when the drag starts, so a move writes one transform and reads
+   * nothing.
+   */
+  function dragTab(active: TabGesture, event: PointerEvent): void {
+    if (active.edges === null) {
+      if (Math.hypot(event.clientX - active.x, event.clientY - active.y) < 4)
+        return;
+      active.edges = readTabEdges(active.tablist);
+      try {
+        active.tab.setPointerCapture(active.pointerId);
+      } catch {
+        // The pointer is no longer active; the next event ends the gesture.
+      }
+      active.tab.dataset.dragging = 'true';
+    }
+    const x = event.clientX - active.tablist.getBoundingClientRect().left;
+    active.boundary = tabBoundaryAt(active.edges, x);
+    showTabDrop(active.tablist, boundaryOffset(active.edges, active.boundary));
+  }
+
   function pointerMove(event: PointerEvent<HTMLDivElement>): void {
     const active = gesture.current;
     if (active === null || active.pointerId !== event.pointerId) return;
-    if (active.type === 'resize') {
+    if (active.type === 'tab') {
+      dragTab(active, event);
+    } else if (active.type === 'resize') {
       const element = rootRef.current;
       if (element === null) return;
       resizeWork.apply(
@@ -663,6 +785,14 @@ export function Layout({
       return;
     if (active.type === 'resize') resizeWork.end(cancel);
     gesture.current = null;
+    if (active.type === 'tab') {
+      clearTabDrop(active.tablist);
+      delete active.tab.dataset.dragging;
+      const stack = stackOf(store.getSnapshot().root, active.paneId);
+      if (!cancel && active.boundary !== null && stack !== null)
+        moveTabTo(stack, active.visible, active.paneId, active.boundary);
+      return;
+    }
     if (active.type === 'resize' && cancel)
       store.setSizes(active.originalSizes);
     if (active.type === 'move' && !cancel && dropRef.current !== null) {
@@ -806,6 +936,9 @@ export function Layout({
                           aria-controls={`${prefix}-${encodeURIComponent(tab.id)}`}
                           tabIndex={selected ? 0 : -1}
                           data-layout-tab={tab.id}
+                          onPointerDown={(event) =>
+                            startTabDrag(event, tab.id, tabs)
+                          }
                           onClick={() => {
                             if (!selected) selectTab(tab.id);
                           }}

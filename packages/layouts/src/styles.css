@@ -175,27 +175,52 @@
   cursor: grab;
 }
 
-/* The tabs of a stack take the place of the title. */
+/* The tabs of a stack take the place of the title. They fill the height of
+   the header, so the underline of the selected tab meets the border of the
+   pane, and their text is centered as the title's is. A selection changes
+   colors only, so nothing moves. Themes set the `--layout-tab-*` colors. */
 .pierre-layout-tabs {
+  position: relative;
   display: flex;
   flex: 1;
-  gap: 2px;
+  align-self: stretch;
   min-width: 0;
+  margin: -4px 0;
   overflow: hidden;
 }
 
 .pierre-layout-header .pierre-layout-tab {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 160px;
-  padding: 2px 4px 2px 8px;
+  min-width: 48px;
+  max-width: 180px;
+  /* The right padding holds the close mark, so the mark takes no width from
+     the title when it shows. */
+  padding: 0 22px 0 10px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--layout-tab-color, #6b7586);
+}
+
+.pierre-layout-header .pierre-layout-tab:hover {
+  background: var(--layout-tab-hover-background, rgb(41 49 61 / 5%));
+  color: var(--layout-tab-hover-color, #29313d);
 }
 
 .pierre-layout-header .pierre-layout-tab[aria-selected='true'] {
-  background: var(--layout-tab-selected, #eef2f8);
-  box-shadow: inset 0 -2px 0 var(--layout-accent);
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--layout-tab-accent, var(--layout-accent));
+  color: var(--layout-tab-selected-color, #29313d);
+}
+
+.pierre-layout-header .pierre-layout-tab:focus {
+  outline: none;
+}
+
+.pierre-layout-header .pierre-layout-tab:focus-visible {
+  outline: 2px solid var(--layout-accent);
+  outline-offset: -2px;
 }
 
 .pierre-layout-tab-title {
@@ -204,15 +229,45 @@
   white-space: nowrap;
 }
 
+/* The close mark shows on the selected tab and on the tab under the pointer. */
 .pierre-layout-tab-close {
-  padding: 0 3px;
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
   border-radius: 3px;
-  opacity: 0.6;
+  line-height: 16px;
+  text-align: center;
+  visibility: hidden;
+}
+
+.pierre-layout-tab:hover > .pierre-layout-tab-close,
+.pierre-layout-tab[aria-selected='true'] > .pierre-layout-tab-close {
+  visibility: visible;
 }
 
 .pierre-layout-tab-close:hover {
-  background: var(--layout-border);
-  opacity: 1;
+  background: var(--layout-tab-close-hover-background, rgb(41 49 61 / 10%));
+}
+
+/* Where a tab that the pointer drags goes. The view moves it with a
+   transform from the left edge of the tab list. */
+.pierre-layout-tab-drop {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--layout-accent);
+  pointer-events: none;
+}
+
+.pierre-layout-tab[data-dragging='true'] {
+  opacity: 0.6;
 }
 
 .pierre-layout-content {

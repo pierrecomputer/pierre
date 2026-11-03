@@ -4,6 +4,7 @@ import {
   type BinaryLayoutNode,
   fromBinaryLayout,
   getPanes,
+  moveTabTo,
   parentOf,
   replaceNode,
   sameNodes,
@@ -150,14 +151,12 @@ export class LayoutStore {
     let root: LayoutNode;
     if (stack !== null && stack === stackOf(current, targetId)) {
       // Keep the stack, and put the source at its new place among the tabs.
-      const tabs = stack.children.filter(({ id }) => id !== sourceId);
-      const at = index ?? tabs.findIndex(({ id }) => id === targetId) + 1;
-      tabs.splice(Math.min(tabs.length, Math.max(0, at)), 0, source);
-      root = replaceNode(current, stack.id, () => ({
-        ...stack,
-        children: tabs,
-        active: sourceId,
-      }));
+      const others = stack.children.filter(({ id }) => id !== sourceId);
+      root = moveTabTo(
+        current,
+        sourceId,
+        index ?? others.findIndex(({ id }) => id === targetId) + 1
+      );
     } else {
       const remaining = this.model.remove(current, sourceId);
       if (remaining === null) return;
@@ -170,6 +169,28 @@ export class LayoutStore {
       );
     }
     this.commit({ root, focusedPane: sourceId, zoomedPane: null });
+  }
+
+  /**
+   * Move a pane to `index` among the tabs of its stack: the index in the
+   * order of the other tabs, hidden ones included, from 0 to their number.
+   * The pane shows and keeps the focus, and the zoom of its stack.
+   */
+  moveTab(id: string, index: number): void {
+    this.requirePane(id);
+    const root = moveTabTo(this.state.root, id, index);
+    if (root === this.state.root) return;
+    const zoomed = this.state.zoomedPane;
+    const stack = stackOf(root, id);
+    this.commit({
+      root,
+      focusedPane: id,
+      zoomedPane:
+        zoomed !== null &&
+        stack?.children.some((pane) => pane.id === zoomed) === true
+          ? id
+          : zoomed,
+    });
   }
 
   split(targetId: string, pane: PaneNode, edge: Edge = 'right'): void {

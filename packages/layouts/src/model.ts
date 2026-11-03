@@ -277,6 +277,29 @@ export function activatePane(root: LayoutNode, id: string): LayoutNode {
 }
 
 /**
+ * Move a pane of a stack to `index` among the panes of its stack: the index
+ * in the order of the other panes, hidden ones included, from 0 to their
+ * number. The pane becomes the active pane.
+ */
+export function moveTabTo(
+  root: LayoutNode,
+  id: string,
+  index: number
+): LayoutNode {
+  const stack = stackOf(root, id);
+  if (stack === null) throw new Error(`Pane not in a stack: ${id}`);
+  const tabs = stack.children.filter((child) => child.id !== id);
+  const pane = stack.children.find((child) => child.id === id) as PaneNode;
+  tabs.splice(clampIndex(index, tabs.length, tabs.length), 0, pane);
+  if (sameNodes(tabs, stack.children) && stack.active === id) return root;
+  return replaceNode(root, stack.id, () => ({
+    ...stack,
+    children: tabs,
+    active: id,
+  }));
+}
+
+/**
  * Add a pane to the stack of a target pane, at `index` among its tabs, or
  * after the target. A target that is not in a stack gets a new stack with
  * `stackId`, in its place. The new pane is the active pane.

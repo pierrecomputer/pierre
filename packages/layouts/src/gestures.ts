@@ -189,6 +189,41 @@ export function separatorOffset(
   );
 }
 
+/**
+ * The tab boundary nearest to a point in a tab list: the number of tabs whose
+ * middle is before the point, from 0 (before the first tab) to the number of
+ * tabs (after the last).
+ */
+export function tabBoundaryAt(
+  edges: readonly { left: number; right: number }[],
+  x: number
+): number {
+  return edges.filter(({ left, right }) => (left + right) / 2 < x).length;
+}
+
+/**
+ * The index for `store.moveTab` of a tab that moves to a boundary of its tab
+ * list, or null when the tab stays in place. `visible` holds the IDs of the
+ * tabs that the list shows, in order; `order` holds the IDs of all the panes
+ * of the stack, hidden ones included. The tab goes before the visible tab at
+ * the boundary, or after the last visible tab.
+ */
+export function tabMoveIndex(
+  order: readonly string[],
+  visible: readonly string[],
+  id: string,
+  boundary: number
+): number | null {
+  const at = visible.indexOf(id);
+  if (at === -1 || boundary === at || boundary === at + 1) return null;
+  const shown = visible.filter((other) => other !== id);
+  const others = order.filter((other) => other !== id);
+  const place = boundary > at ? boundary - 1 : boundary;
+  return place < shown.length
+    ? others.indexOf(shown[place])
+    : others.indexOf(shown[shown.length - 1]) + 1;
+}
+
 /** The pane under a point of the layout, other than the pane that moves. */
 export function paneAt(
   geometry: LayoutGeometry,

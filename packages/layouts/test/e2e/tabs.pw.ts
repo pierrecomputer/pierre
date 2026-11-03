@@ -127,11 +127,20 @@ test('a change of tab keeps content state and moves no other pane', async ({
 test('a tab closes from its close mark or with Delete, and new tabs show', async ({
   page,
 }) => {
+  // The close mark shows on the selected tab, and on another tab only under
+  // the pointer.
+  const server = tabsOf(page, 'terminal').getByRole('tab', {
+    name: 'Dev server',
+  });
+  await expect(
+    tabsOf(page, 'terminal')
+      .getByRole('tab', { name: 'Terminal' })
+      .locator('.pierre-layout-tab-close')
+  ).toBeVisible();
+  await expect(server.locator('.pierre-layout-tab-close')).toBeHidden();
+  await server.hover();
   // The app hides a tab that closes, so it can show again.
-  await tabsOf(page, 'terminal')
-    .getByRole('tab', { name: 'Dev server' })
-    .locator('.pierre-layout-tab-close')
-    .click();
+  await server.locator('.pierre-layout-tab-close').click();
   await expect(host(page, 'terminal-server')).toHaveAttribute(
     'data-pane-hidden',
     'true'
@@ -208,4 +217,96 @@ test('a tab that does not show is not a compositor layer', async ({ page }) => {
     .click();
   expect(await layered('terminal')).toBe(false);
   expect(await layered('terminal-server')).toBe(true);
+});
+
+/** The accessible names of the tabs in the tab list of a pane's host. */
+const tabNames = (page: Page, id: string) =>
+  tabsOf(page, id)
+    .getByRole('tab')
+    .evaluateAll((tabs) =>
+      tabs.map(
+        (tab) =>
+          tab.querySelector('.pierre-layout-tab-title')?.textContent ?? ''
+      )
+    );
+
+test('a pointer drag in the tab bar reorders the tabs and shows the drop place', async ({
+  page,
+}) => {
+  const tabs = tabsOf(page, 'terminal');
+  const from = await tabs
+    .getByRole('tab', { name: 'Dev server' })
+    .boundingBox();
+  const to = await tabs.getByRole('tab', { name: 'Terminal' }).boundingBox();
+  if (from === null || to === null) throw new Error('Missing tab');
+  const y = from.y + from.height / 2;
+  await page.mouse.move(from.x + from.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 4, y, { steps: 6 });
+  // The marker shows at the left edge of the first tab.
+  const marker = tabs.locator('.pierre-layout-tab-drop');
+  await expect(marker).toHaveCount(1);
+  const box = await marker.boundingBox();
+  expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - to.x)).toBeLessThan(
+    2
+  );
+  await page.mouse.up();
+  await expect(marker).toHaveCount(0);
+  expect(await tabNames(page, 'terminal-server')).toEqual([
+    'Dev server',
+    'Terminal',
+  ]);
+  await expect(host(page, 'terminal-server')).toHaveAttribute(
+    'data-pane-hidden',
+    'false'
+  );
+  await expect(
+    tabsOf(page, 'terminal-server').getByRole('tab', { name: 'Dev server' })
+  ).toBeFocused();
+});
+
+test('a drag that ends in place, or that Escape cancels, keeps the order', async ({
+  page,
+}) => {
+  const tabs = tabsOf(page, 'terminal');
+  const from = await tabs.getByRole('tab', { name: 'Terminal' }).boundingBox();
+  const to = await tabs.getByRole('tab', { name: 'Dev server' }).boundingBox();
+  if (from === null || to === null) throw new Error('Missing tab');
+  const y = from.y + from.height / 2;
+  await page.mouse.move(from.x + from.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width - 2, y, { steps: 6 });
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  expect(await tabNames(page, 'terminal')).toEqual(['Terminal', 'Dev server']);
+  await expect(tabs.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+});
+
+test('Ctrl+Shift+PageUp and PageDown move the focused tab, which keeps the focus', async ({
+  page,
+}) => {
+  const server = () =>
+    tabsOf(page, 'terminal-server').getByRole('tab', { name: 'Dev server' });
+  await tabsOf(page, 'terminal')
+    .getByRole('tab', { name: 'Dev server' })
+    .click();
+  await expect(server()).toBeFocused();
+  await page.keyboard.press('Control+Shift+PageUp');
+  expect(await tabNames(page, 'terminal-server')).toEqual([
+    'Dev server',
+    'Terminal',
+  ]);
+  await expect(server()).toBeFocused();
+  // At the first place, PageUp does nothing.
+  await page.keyboard.press('Control+Shift+PageUp');
+  expect(await tabNames(page, 'terminal-server')).toEqual([
+    'Dev server',
+    'Terminal',
+  ]);
+  await page.keyboard.press('Control+Shift+PageDown');
+  expect(await tabNames(page, 'terminal-server')).toEqual([
+    'Terminal',
+    'Dev server',
+  ]);
+  await expect(server()).toBeFocused();
 });
