@@ -10,8 +10,26 @@ import type { Rect } from '../types';
 
 // Elements that animate a layout change carry this attribute with a stable key.
 export const FLIP_ATTRIBUTE = 'data-layout-flip';
-// A hidden pane does not render, so it neither gives nor takes a FLIP box.
-const FLIP_SELECTOR = `[${FLIP_ATTRIBUTE}]:not([data-collapsed='true'])`;
+/**
+ * The elements that animate a layout change. They are children of the root,
+ * so this does not walk the pane content, as a query of the subtree would,
+ * and it does not find the elements of a layout inside a pane. A hidden pane
+ * does not render, so it neither gives nor takes a FLIP box.
+ */
+function flipElements(root: HTMLElement): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  const { children } = root;
+  for (let index = 0; index < children.length; index++) {
+    const child = children[index];
+    if (
+      child instanceof HTMLElement &&
+      child.hasAttribute(FLIP_ATTRIBUTE) &&
+      child.getAttribute('data-collapsed') !== 'true'
+    )
+      elements.push(child);
+  }
+  return elements;
+}
 const DEFAULT_DURATION_MS = 240;
 // The ID of the layout's own animations, so that it never touches animations in pane content.
 const FLIP_ANIMATION_ID = 'pierre-layout-flip';
@@ -43,7 +61,7 @@ export function finishFlipAnimations(root: HTMLElement): void {
 export function readBoxes(root: HTMLElement): Map<string, Rect> {
   const bounds = root.getBoundingClientRect();
   const boxes = new Map<string, Rect>();
-  for (const element of root.querySelectorAll<HTMLElement>(FLIP_SELECTOR)) {
+  for (const element of flipElements(root)) {
     const key = element.getAttribute(FLIP_ATTRIBUTE) ?? '';
     // The focus indicator shares the key of its pane and comes after it. Keep
     // the box of the pane, so that both elements animate from it.
@@ -84,7 +102,7 @@ export function animateFromBoxes(
   // style, and a read after it would force another layout.
   const plans: { element: HTMLElement; start: DOMMatrix; end: DOMMatrix }[] =
     [];
-  for (const element of root.querySelectorAll<HTMLElement>(FLIP_SELECTOR)) {
+  for (const element of flipElements(root)) {
     const from = before.get(element.getAttribute(FLIP_ATTRIBUTE) ?? '');
     // A new element has no old box. It appears in place.
     if (from === undefined) continue;
