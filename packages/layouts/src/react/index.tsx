@@ -74,6 +74,12 @@ const ALL_PANE_ACTIONS: readonly PaneAction[] = ['move', 'zoom', 'close'];
 
 export interface LayoutProps {
   store: LayoutStore;
+  /**
+   * The content of a pane. It runs again when the pane node changes, except
+   * for a change of `hidden`, `collapsed`, or `collapsedSize` alone: the
+   * content of a pane that hides, shows, collapses, or expands does not
+   * render, and receives `PANE_VISIBILITY_EVENT` instead.
+   */
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
   /**
@@ -191,20 +197,51 @@ const zoomKey = (root: LayoutNode, zoomedPane: string | null): string | null =>
 const tabIdOf = (prefix: string, host: string, tab: string): string =>
   `${prefix}-tab-${encodeURIComponent(host)}~${encodeURIComponent(tab)}`;
 
+interface PaneBodyProps {
+  pane: PaneNode;
+  renderPane: (pane: PaneNode) => ReactNode;
+}
+
+// Properties of a pane node that change where and whether its content shows,
+// not the content. A hide, a show, a collapse, or an expand replaces the pane
+// node with a copy that differs only in these.
+const LAYOUT_ONLY_KEYS = new Set<string>([
+  'hidden',
+  'collapsed',
+  'collapsedSize',
+]);
+
+/**
+ * True when a pane's content can keep its last render: the same `renderPane`,
+ * and a pane node that is the same, or differs only in `LAYOUT_ONLY_KEYS`.
+ * The host stops or starts the rendering of the content and sends
+ * `PANE_VISIBILITY_EVENT`, so the content does not need to render for these.
+ */
+function sameContentProps(a: PaneBodyProps, b: PaneBodyProps): boolean {
+  if (a.renderPane !== b.renderPane) return false;
+  if (a.pane === b.pane) return true;
+  const keys = (pane: PaneNode): string[] =>
+    Object.keys(pane).filter((key) => !LAYOUT_ONLY_KEYS.has(key));
+  const before = keys(a.pane);
+  const record = (pane: PaneNode) => pane as unknown as Record<string, unknown>;
+  return (
+    before.length === keys(b.pane).length &&
+    before.every((key) => record(a.pane)[key] === record(b.pane)[key])
+  );
+}
+
 /**
  * The app's content of one pane. It renders only when its pane node or the
  * app's `renderPane` changes: focus, zoom, and size changes keep the pane
- * node, because the store keeps the identity of unchanged nodes.
+ * node, because the store keeps the identity of unchanged nodes, and a hide,
+ * a show, a collapse, or an expand changes only `LAYOUT_ONLY_KEYS`.
  */
 const PaneBody = memo(function PaneBody({
   pane,
   renderPane,
-}: {
-  pane: PaneNode;
-  renderPane: (pane: PaneNode) => ReactNode;
-}): JSX.Element {
+}: PaneBodyProps): JSX.Element {
   return <div className="pierre-layout-content">{renderPane(pane)}</div>;
-});
+}, sameContentProps);
 
 // The box of a zoomed pane and of the focus indicator while a pane is zoomed.
 const FULL_SIZE: CSSProperties = {
