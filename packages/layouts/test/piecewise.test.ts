@@ -56,9 +56,10 @@ function randomTree(
 }
 
 /**
- * A tree like `randomTree`, with sizes in pixels, maximum sizes, and stacks:
- * some panes become stacks of two or three panes, some children of a split
- * get a size in pixels, and some panes get a maximum size.
+ * A tree like `randomTree`, with sizes in pixels, maximum sizes, stacks, and
+ * collapse: some panes become stacks of two or three panes, some children of
+ * a split get a size in pixels, some panes get a maximum size, and some panes
+ * and stacks collapse.
  */
 function richTree(
   next: () => number,
@@ -82,6 +83,10 @@ function richTree(
     };
   };
   if (panes === 1) {
+    const collapse =
+      next() < 0.15
+        ? { collapsed: true, collapsedSize: Math.round(next() * 60) }
+        : {};
     if (next() < 0.25) {
       const tabs = Array.from({ length: 2 + Math.floor(next() * 2) }, leaf);
       return {
@@ -89,9 +94,10 @@ function richTree(
         id: `t${ids.n++}`,
         active: tabs[Math.floor(next() * tabs.length)].id,
         children: tabs,
+        ...collapse,
       };
     }
-    return leaf();
+    return { ...leaf(), ...collapse };
   }
   const count = Math.min(panes, 2 + Math.floor(next() * 3));
   const counts = Array.from({ length: count }, () => 1);
@@ -210,7 +216,7 @@ describe('piecewise', () => {
     }
   });
 
-  test('sizes in pixels, maximums, and stacks give the boxes of computeLayout at every size', () => {
+  test('sizes in pixels, maximums, stacks, and collapse give the boxes of computeLayout at every size', () => {
     const next = random(13);
     for (let tree = 0; tree < 200; tree++) {
       const root = richTree(next, 1 + Math.floor(next() * 20));

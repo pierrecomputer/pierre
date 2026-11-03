@@ -106,6 +106,15 @@
   pointer-events: none;
 }
 
+/* A collapsed pane (store.setCollapsed) shows its header only. Its content
+   keeps its DOM, its state, and its scroll position, and skips its style,
+   layout, and paint. */
+.pierre-layout-pane[data-collapsed='true']
+  > .pierre-layout-pane-inner
+  > .pierre-layout-content {
+  content-visibility: hidden;
+}
+
 /* A pane under a zoomed pane skips the style, layout, and paint of its
    content. The content keeps its DOM, its state, and its scroll position. The
    property is on the host: a scroller with it reads scrollTop 0 while hidden. */

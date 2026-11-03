@@ -67,10 +67,12 @@ const TEMPLATE: LayoutNode = {
       sizes: [0.62, 0.38],
       children: [
         { type: 'pane', id: 'editor', minWidth: 260, minHeight: 140 },
+        // The terminal collapses to its header: 36 px and the borders.
         {
           type: 'stack',
           id: 'app-terminal',
           active: 'terminal',
+          collapsedSize: 38,
           children: [
             { type: 'pane', id: 'terminal', minWidth: 260, minHeight: 100 },
             {
@@ -97,13 +99,15 @@ let nextTerminal = 1;
 
 // Sessions is a fixed sidebar; the main agent chat can move but always
 // stays; the tools and the other tabs can move, and their close button hides
-// them.
+// them. The terminal can also collapse to its header.
 const paneActions = (pane: PaneNode): readonly PaneAction[] =>
   pane.id === 'sessions'
     ? []
     : pane.id === 'agent'
       ? ['move', 'zoom']
-      : ['move', 'zoom', 'close'];
+      : pane.id.startsWith('terminal')
+        ? ['move', 'collapse', 'zoom', 'close']
+        : ['move', 'zoom', 'close'];
 
 /** Show the panes of a place again; its first pane is the active tab. */
 function showPlace(ids: readonly string[]): void {

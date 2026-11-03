@@ -71,6 +71,8 @@ async function inPageTask(
           setTimeout(() => bench.busy(200), 16);
         } else if (operation === 'hide') {
           bench.store.setHidden('p1', true);
+        } else if (operation === 'collapse') {
+          bench.store.setCollapsed('p1', true);
         }
       }, 0);
     },
@@ -251,6 +253,15 @@ export const SCENARIOS: Scenario[] = [
       'Hide the second pane with store.setHidden. It keeps its content mounted.',
     async run(page) {
       await inPageTask(page, 'hide');
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
+  },
+  {
+    id: 'collapse',
+    description:
+      'Collapse the second pane to its header with store.setCollapsed. Its content stops rendering.',
+    async run(page) {
+      await inPageTask(page, 'collapse');
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
     },
   },

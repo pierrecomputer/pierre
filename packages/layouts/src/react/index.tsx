@@ -32,6 +32,7 @@ import {
   notifyHidden,
   readPixelGeometry,
   separatorIdsAt,
+  setCollapsedContent,
   setCoveredHidden,
 } from '../dom/panes';
 import { createResizeWork, type ResizeStrategy } from '../dom/resize-work';
@@ -59,8 +60,11 @@ import type {
 export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
 export type { ResizeStrategy } from '../dom/resize-work';
 
-/** A button in a pane header: drag to move, zoom, or close. */
-export type PaneAction = 'move' | 'zoom' | 'close';
+/**
+ * A button in a pane header: drag to move, zoom, close, or collapse. The
+ * collapse button is not in the default actions.
+ */
+export type PaneAction = 'move' | 'zoom' | 'close' | 'collapse';
 
 // Pane layers save compositing time from about 6 visible panes, and cost
 // tile memory below that.
@@ -364,17 +368,44 @@ export function Layout({
   // Tell the content of a pane that stops or starts showing: store.setHidden
   // hides or shows it, or its tab changes. The content stays mounted, so it
   // can pause its own work.
+  // A collapsed pane that is not zoomed shows its header only, and its
+  // content does not render, so it counts as hidden here.
   const hiddenBefore = useRef<ReadonlySet<string> | null>(null);
   useEffect(() => {
     const hidden = new Set(
-      geometry.panes.filter(({ hidden }) => hidden).map(({ pane }) => pane.id)
+      geometry.panes
+        .filter(
+          ({ pane, hidden, collapsed }) =>
+            hidden || (collapsed && pane.id !== state.zoomedPane)
+        )
+        .map(({ pane }) => pane.id)
     );
     const before = hiddenBefore.current;
     hiddenBefore.current = hidden;
     const element = rootRef.current;
     if (before !== null && element !== null)
       notifyHidden(element, before, hidden);
-  }, [geometry]);
+  }, [geometry, state.zoomedPane]);
+
+  // The content of a collapsed pane is inert. The view sets it on the DOM, in
+  // the same style update as the `content-visibility` of the content, so the
+  // content does not render again for either change. The key changes only
+  // when a pane collapses or expands, so a drag does no work here.
+  const collapsedKey = JSON.stringify(
+    geometry.panes
+      .filter(
+        ({ pane, collapsed }) => collapsed && pane.id !== state.zoomedPane
+      )
+      .map(({ pane }) => pane.id)
+  );
+  useLayoutEffect(() => {
+    const element = rootRef.current;
+    if (element !== null)
+      setCollapsedContent(
+        element,
+        new Set(JSON.parse(collapsedKey) as string[])
+      );
+  }, [collapsedKey]);
 
   // A tab that the user selects is in the header of the host that shows next.
   // Its host takes no input until React commits the change, so the focus
@@ -642,7 +673,7 @@ export function Layout({
         }
       }}
     >
-      {paneHosts.map(({ pane, hidden: notShown, stack }) => {
+      {paneHosts.map(({ pane, hidden: notShown, stack, collapsed }) => {
         const covered =
           !notShown &&
           state.zoomedPane !== null &&
@@ -651,6 +682,8 @@ export function Layout({
         const tabs = stack?.children.filter((tab) => tab.hidden !== true) ?? [];
         const tabbed = tabs.length > 0;
         const zoomed = state.zoomedPane === pane.id;
+        // A zoomed pane shows its content, also when it is collapsed.
+        const folded = collapsed && !zoomed;
         const actions = actionsOf(pane);
         const edge = exitEdges[pane.id] ?? 'left';
         // A covered pane keeps its geometry and moves past an edge with a
@@ -683,6 +716,7 @@ export function Layout({
             // at the end of the zoom animation (setCoveredHidden).
             inert={notShown}
             data-pane-hidden={notShown}
+            data-collapsed={folded}
             data-focused={state.focusedPane === pane.id}
             data-zoomed={zoomed}
             data-moving={dragging === pane.id}
@@ -767,6 +801,16 @@ export function Layout({
                   <span className="pierre-layout-title">
                     {getPaneTitle(pane)}
                   </span>
+                )}
+                {actions.includes('collapse') && (
+                  <button
+                    type="button"
+                    aria-label={`Collapse ${getPaneTitle(pane)}`}
+                    aria-pressed={collapsed}
+                    onClick={() => store.setCollapsed(pane.id, !collapsed)}
+                  >
+                    {collapsed ? '▸' : '▾'}
+                  </button>
                 )}
                 {actions.includes('zoom') && (
                   <button

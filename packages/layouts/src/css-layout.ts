@@ -1,6 +1,6 @@
 import { divide } from './divide';
 import { childSpecs, separatorId, visibleChildren } from './geometry';
-import { isFixed, shownPane } from './model';
+import { collapsedSizeOf, isFixed, shownPane } from './model';
 import {
   add,
   compose,
@@ -38,6 +38,11 @@ export interface CSSPane {
   hidden: boolean;
   /** The stack that holds the pane, or null. */
   stack: StackNode | null;
+  /**
+   * The pane, or its stack, is collapsed in a split: it takes its collapsed
+   * size, and its content does not render.
+   */
+  collapsed: boolean;
 }
 
 export interface CSSSeparator {
@@ -149,12 +154,15 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   const panes: CSSPane[] = [];
   const separators: (Omit<CSSSeparator, 'rect'> & { box: Box })[] = [];
   function visit(node: LayoutNode, box: Box, hidden: boolean): void {
+    // The root fills the container, so it does not collapse.
+    const collapsed = node !== root && collapsedSizeOf(node) !== null;
     if (node.type === 'pane') {
       panes.push({
         pane: node,
         rect: toRect(box),
         hidden: hidden || node.hidden === true,
         stack: null,
+        collapsed,
       });
       return;
     }
@@ -169,6 +177,7 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
           rect,
           hidden: hidden || child !== shown,
           stack: node,
+          collapsed,
         });
       return;
     }

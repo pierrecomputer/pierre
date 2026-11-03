@@ -18,6 +18,15 @@ export interface PaneNode {
    * takes no space and does not render.
    */
   readonly hidden?: boolean;
+  /**
+   * A collapsed pane takes `collapsedSize` pixels along its split, for example
+   * the height of its header, and its content does not render. It keeps its
+   * size in the split for when it expands again. A pane of a stack does not
+   * collapse on its own: its stack collapses.
+   */
+  readonly collapsed?: boolean;
+  /** The size of the pane along its split when it is collapsed. 0 by default. */
+  readonly collapsedSize?: number;
 }
 
 /**
@@ -33,6 +42,10 @@ export interface StackNode {
   readonly children: readonly PaneNode[];
   /** The ID of the pane that shows. */
   readonly active: string;
+  /** A collapsed stack takes `collapsedSize` pixels along its split. */
+  readonly collapsed?: boolean;
+  /** The size of the stack along its split when it is collapsed. 0 by default. */
+  readonly collapsedSize?: number;
 }
 
 /**

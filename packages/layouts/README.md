@@ -209,6 +209,29 @@ move beside a pane of a stack goes beside the whole stack. A close or a hide of
 the active tab shows the nearest tab. A stack of one pane gives way to that
 pane. A zoom of a tab zooms its stack, and a change of tab keeps the zoom.
 
+## Collapsed panes
+
+`store.setCollapsed(id, true)` collapses a pane to its `collapsedSize` along its
+split, 0 px by default, for example the 38 px of its header and borders. Its
+content keeps its DOM, its state, and its scroll position, but is inert and has
+`content-visibility: hidden`, so it does not render. The pane keeps its size in
+the split, and `store.setCollapsed(id, false)` gives it back. A pane of a stack
+collapses its stack. The pane at the root fills the layout, so it does not
+collapse. The collapsed state is part of the node, so `serialize()` keeps it. A
+collapsed pane host has `data-collapsed="true"` and receives
+`PANE_VISIBILITY_EVENT`. The `collapse` pane action adds a collapse button to
+the header; it is not in the default actions.
+
+```ts
+const terminal: PaneNode = {
+  type: 'pane',
+  id: 'terminal',
+  minHeight: 100,
+  collapsedSize: 38,
+};
+store.setCollapsed('terminal', true);
+```
+
 ## Model and state
 
 ```ts
@@ -223,10 +246,10 @@ const saved = store.serialize();
 store.restore(saved);
 ```
 
-The saved form has version 3, with stacks and sizes in pixels. `restore` also
-accepts version 2, which has the same form without them, and version 1, where
-each split had `ratio`, `first`, and `second`; `fromBinaryLayout` converts such
-a tree.
+The saved form has version 3, with stacks, sizes in pixels, maximum sizes, and
+collapsed panes. `restore` also accepts version 2, which has the same form
+without them, and version 1, where each split had `ratio`, `first`, and
+`second`; `fromBinaryLayout` converts such a tree.
 
 ### Tree models
 

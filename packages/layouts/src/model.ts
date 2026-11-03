@@ -61,6 +61,7 @@ export function validateLayout(root: LayoutNode): void {
       if (node.hidden !== undefined && typeof node.hidden !== 'boolean') {
         throw new Error('Pane hidden must be a boolean');
       }
+      validateCollapse(node);
     } else if (node.type === 'stack') {
       if (
         !Array.isArray(node.children) ||
@@ -73,6 +74,12 @@ export function validateLayout(root: LayoutNode): void {
       if (!node.children.some(({ id }) => id === node.active)) {
         throw new Error('The active pane of a stack must be one of its panes');
       }
+      if (node.children.some(({ collapsed }) => collapsed !== undefined)) {
+        throw new Error(
+          'A pane of a stack does not collapse: collapse the stack'
+        );
+      }
+      validateCollapse(node);
     } else if (node.type === 'split') {
       if (node.direction !== 'horizontal' && node.direction !== 'vertical') {
         throw new Error('Split direction must be horizontal or vertical');
@@ -98,6 +105,41 @@ export function validateLayout(root: LayoutNode): void {
   if (!hasVisiblePane(root)) {
     throw new Error('A layout needs at least one visible pane');
   }
+}
+
+function validateCollapse(node: PaneNode | StackNode): void {
+  if (node.collapsed !== undefined && typeof node.collapsed !== 'boolean')
+    throw new Error('Collapsed must be a boolean');
+  const size = node.collapsedSize;
+  if (size !== undefined && (!Number.isFinite(size) || size < 0))
+    throw new Error('A collapsed size must be finite and non-negative');
+}
+
+/**
+ * The size along its split of a collapsed pane or stack, or null for a node
+ * that is not collapsed.
+ */
+export function collapsedSizeOf(node: LayoutNode): number | null {
+  return node.type !== 'split' && node.collapsed === true
+    ? (node.collapsedSize ?? 0)
+    : null;
+}
+
+/** Collapse a pane or a stack, or expand it, in place. */
+export function setNodeCollapsed(
+  root: LayoutNode,
+  id: string,
+  collapsed: boolean
+): LayoutNode {
+  const next = replaceNode(root, id, (node) => {
+    if (node.type === 'split') throw new Error(`Pane not found: ${id}`);
+    if ((node.collapsed === true) === collapsed) return node;
+    if (collapsed) return { ...node, collapsed: true };
+    const { collapsed: _collapsed, ...expanded } = node;
+    return expanded;
+  });
+  validateLayout(next);
+  return next;
 }
 
 export function getPanes(root: LayoutNode): PaneNode[] {
@@ -251,13 +293,17 @@ export function addToStack(
     throw new Error(`Pane not found: ${targetId}`);
   const stack = target.type === 'stack' ? target : stackOf(root, targetId);
   if (stack === null) {
-    const tabs = [target as PaneNode];
+    // A collapsed target gives its collapse to the new stack.
+    const { collapsed, collapsedSize, ...shown } = target as PaneNode;
+    const tabs: PaneNode[] = [shown];
     tabs.splice(clampIndex(index, 1, 1), 0, pane);
     return replaceNode(root, targetId, () => ({
       type: 'stack',
       id: stackId,
       children: tabs,
       active: pane.id,
+      ...(collapsed === true ? { collapsed } : {}),
+      ...(collapsedSize === undefined ? {} : { collapsedSize }),
     }));
   }
   const after =
@@ -430,7 +476,16 @@ function removeTab(stack: StackNode, id: string): LayoutNode | null {
   if (!stack.children.some((child) => child.id === id)) return stack;
   const children = stack.children.filter((child) => child.id !== id);
   if (children.length === 0) return null;
-  if (children.length === 1) return children[0];
+  if (children.length === 1) {
+    // The last pane takes the collapse of its stack.
+    const [last] = children;
+    if (stack.collapsed !== true) return last;
+    return {
+      ...last,
+      collapsed: true,
+      collapsedSize: stack.collapsedSize ?? last.collapsedSize ?? 0,
+    };
+  }
   const active =
     stack.active === id
       ? (nearestVisible(stack.children, id) ?? children[0].id)
