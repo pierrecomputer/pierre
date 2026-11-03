@@ -1,6 +1,6 @@
 {
   "name": "@pierre/diffs",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "license": "apache-2.0",
   "files": [
     "dist",
