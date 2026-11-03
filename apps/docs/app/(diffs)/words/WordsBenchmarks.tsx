@@ -79,13 +79,9 @@ function Comparison({
 }
 
 // Incomplete capacity runs have no comparable percentile to display.
-function capacityFrame(sample: {
-  status: string;
-  frameP95Milliseconds?: number;
-}) {
-  return sample.status === 'completed' &&
-    sample.frameP95Milliseconds !== undefined
-    ? `${decimal.format(sample.frameP95Milliseconds)} ms`
+function capacityFrame(sample: { status: string; frameP95Ms?: number }) {
+  return sample.status === 'completed' && sample.frameP95Ms !== undefined
+    ? `${decimal.format(sample.frameP95Ms)} ms`
     : 'Timed out';
 }
 
@@ -98,24 +94,21 @@ export function WordsBenchmarks() {
   const [methodOpen, setMethodOpen] = useState(false);
   const suite = benchmark.packageRun;
   const metric = suite.metrics[metricIndex];
-  const browser = benchmark.browser.rows.find(
+  const run = benchmark.browser;
+  const browser = run.rows.find(
     (row) => row.scale === scale && row.mode === mode
   )!;
-  const memory = benchmark.memory.rows.find((row) => row.mode === memoryMode)!;
-  const footprint = benchmark.footprint.rows.find(
-    (row) => row.id === footprintId
+  const memory = run.rows.find(
+    (row) => row.scale === 100 && row.mode === memoryMode
   )!;
+  const footprint = run.download[footprintId === 'base' ? 'base' : 'highlight'];
   const date = new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
     timeZone: 'UTC',
   });
-  const measuredDate = date.format(new Date(benchmark.provenance.measuredAt));
-  const footprintDate = date.format(new Date(benchmark.footprint.measuredAt));
-  const chromeVersion = /(?:Headless)?Chrome\/(\d+)/.exec(
-    benchmark.environment.browserUserAgent
-  )?.[1];
+  const measuredDate = date.format(new Date(run.date));
   const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-5 sm:p-7`;
 
   return (
@@ -260,17 +253,16 @@ export function WordsBenchmarks() {
           </div>
           <div aria-live="polite" aria-atomic="true">
             <Comparison
-              words={browser.words.updateP95Milliseconds}
-              streamdown={browser.streamdown.updateP95Milliseconds}
+              words={browser.words.updateP95Ms}
+              streamdown={browser.streamdown.updateP95Ms}
               unit="ms"
             />
           </div>
           <p className="text-muted-foreground mt-6 border-t pt-4 text-xs leading-relaxed">
-            Frame p95: {decimal.format(browser.words.frameP95Milliseconds)} ms
-            for Words, {decimal.format(browser.streamdown.frameP95Milliseconds)}{' '}
-            ms for Streamdown. Median of {browser.words.runs} runs,{' '}
-            {browser.updates} updates each. Update latency excludes following
-            paint.
+            Frame p95: {decimal.format(browser.words.frameP95Ms)} ms for Words,{' '}
+            {decimal.format(browser.streamdown.frameP95Ms)} ms for Streamdown.
+            Median of {browser.words.runs} runs, {browser.updates} updates each.
+            Update latency excludes following paint.
           </p>
         </figure>
 
@@ -296,22 +288,25 @@ export function WordsBenchmarks() {
               value={memoryMode}
               onChange={(event) => setMemoryMode(event.target.value)}
             >
-              <option value="highlight">Syntax highlighting</option>
-              <option value="animated">Highlighting + fades</option>
+              {modes.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
             </ChartSelect>
           </label>
           <div aria-live="polite" aria-atomic="true">
             <Comparison
-              words={memory.words.additionalHeapBytes}
-              streamdown={memory.streamdown.additionalHeapBytes}
+              words={memory.words.heapBytes}
+              streamdown={memory.streamdown.heapBytes}
               divisor={1e6}
               unit="MB"
             />
           </div>
           <p className="text-muted-foreground mt-6 border-t pt-4 text-xs leading-relaxed">
-            Median of {memory.words.runs} separate samples after explicit
-            garbage collection, relative to a warmed empty renderer. Excludes
-            native DOM, Wasm, and graphics memory.
+            Median of {memory.words.runs} runs. V8 heap after forced garbage
+            collection, relative to a warmed empty renderer. Excludes native
+            DOM, Wasm, and graphics memory.
           </p>
         </figure>
 
@@ -342,41 +337,33 @@ export function WordsBenchmarks() {
           </label>
           <div aria-live="polite" aria-atomic="true">
             <Comparison
-              words={footprint.wordsGzipBytes}
-              streamdown={footprint.streamdownGzipBytes}
+              words={footprint.words}
+              streamdown={footprint.streamdown}
               divisor={1000}
               unit="KB"
             />
           </div>
           <p className="text-muted-foreground mt-6 border-t pt-4 text-xs leading-relaxed">
             React is external. CSS is separate:{' '}
-            {decimal.format(benchmark.footprint.css.wordsGzipBytes / 1000)} KB
-            for Words,{' '}
-            {decimal.format(benchmark.footprint.css.streamdownGzipBytes / 1000)}{' '}
-            KB for Streamdown. Grammar and theme coverage differ.
+            {decimal.format(run.download.css.words / 1000)} KB for Words,{' '}
+            {decimal.format(run.download.css.streamdown / 1000)} KB for
+            Streamdown. Grammar and theme coverage differ.
           </p>
         </figure>
       </div>
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Streaming and memory recorded {measuredDate} ·{' '}
-          {benchmark.environment.cpu} ·{' '}
-          {Math.round(benchmark.environment.totalMemoryBytes / 1024 ** 3)} GiB
-          RAM · Chrome {chromeVersion} · React{' '}
-          {benchmark.environment.dependencies.react} · Streamdown{' '}
-          {benchmark.environment.dependencies.streamdown}. These runs used an
-          earlier browser harness and an unpublished workspace build
-          {benchmark.provenance.uncommittedWorkingTree
-            ? ' with uncommitted changes'
-            : ''}
-          ; the raw results identify the commit and built files. Download sizes
-          measured {footprintDate} on the current build.
+          Recorded {measuredDate} at commit {run.commit.slice(0, 8)}
+          {run.dirty ? ' with uncommitted changes' : ''} · {run.cpu} ·{' '}
+          {Math.round(run.memoryBytes / 1024 ** 3)} GiB RAM · Chromium{' '}
+          {run.chrome} · React {run.versions.react} · Streamdown{' '}
+          {run.versions.streamdown}.
         </p>
         <p>
           Both libraries use their native streaming paths. The repeated fixture
           includes identical TypeScript fences; unique code and other languages
-          may behave differently. Small documents remain near a 60 Hz frame
+          may behave differently. Small documents stay near the display frame
           interval for both renderers.{' '}
           <a
             href="/words/benchmark-raw.json"
@@ -412,11 +399,11 @@ export function WordsBenchmarks() {
             <p className="text-muted-foreground leading-relaxed">
               Install the repository’s pinned toolchain and dependencies, then
               run these commands from its root. They measure HTML throughput,
-              React stream replays in JSDOM, and process memory. The browser
-              timing and heap charts use an earlier harness.
+              React stream replays in JSDOM, process memory, and the browser
+              charts above.
             </p>
             <pre className="bg-muted/50 overflow-x-auto rounded-md p-4 text-xs leading-6">
-              <code>{`moonx words:bench --ignore-ci-checks\nmoonx words:bench-stream --ignore-ci-checks\nmoonx words:bench-memory --ignore-ci-checks`}</code>
+              <code>{`moonx words:bench --ignore-ci-checks\nmoonx words:bench-stream --ignore-ci-checks\nmoonx words:bench-memory --ignore-ci-checks\nmoonx words:bench-browser --ignore-ci-checks`}</code>
             </pre>
             <a href={methodologyUrl} className="styled-link inline-block">
               Setup, methodology, and output files ↗
@@ -426,18 +413,18 @@ export function WordsBenchmarks() {
             <h3 className="font-medium">What these charts cover</h3>
             <p className="text-muted-foreground leading-relaxed">
               Timing uses {browser.updates} commit-paced deliveries, waiting{' '}
-              {benchmark.browser.metadata.requestedIntervalMs} ms after each
-              commit, in a {benchmark.browser.metadata.viewport.width} ×{' '}
-              {benchmark.browser.metadata.viewport.height} viewport without
-              auto-scrolling. Code controls and line numbers are disabled. Each
-              value is the median of three runs’ p95 update times. Startup and
-              first grammar loading are warmed before measurement. Memory is
-              measured separately.
+              {run.settings.intervalMs} ms after each commit, in a{' '}
+              {run.settings.viewport.width} × {run.settings.viewport.height}{' '}
+              viewport without auto-scrolling. Code controls and line numbers
+              are disabled. Each value is the median of {run.settings.runs}{' '}
+              fresh-browser runs’ p95 update times. Startup and first grammar
+              loading are warmed before measurement. Heap is sampled in the same
+              runs, before and after playback.
             </p>
             <p className="text-muted-foreground leading-relaxed">
               The 8.53 MB capacity diagnostic still stutters in both libraries.
               These single runs are excluded from the charts above. Playback
-              stops after {benchmark.stress.metadata.timeout / 1000} seconds.
+              stops after {run.settings.stressTimeoutMs / 1000} seconds.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs tabular-nums">
@@ -458,7 +445,7 @@ export function WordsBenchmarks() {
                   </tr>
                 </thead>
                 <tbody>
-                  {benchmark.stress.rows.map((row) => (
+                  {run.stress.map((row) => (
                     <tr key={row.mode} className="border-b">
                       <th scope="row" className="py-2 pr-3 font-normal">
                         {row.mode === 'animated'

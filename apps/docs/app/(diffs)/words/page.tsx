@@ -6,9 +6,9 @@ import { Header } from '@/components/Header';
 import { pageMetadata } from '@/lib/page-metadata';
 import benchmark from '@/public/words/benchmark.json';
 
-const baseRenderer = benchmark.footprint.rows.find(({ id }) => id === 'base')!;
+const { base } = benchmark.browser.download;
 const baseRendererSavings = Math.round(
-  (1 - baseRenderer.wordsGzipBytes / baseRenderer.streamdownGzipBytes) * 100
+  (1 - base.words / base.streamdown) * 100
 );
 
 export const metadata = pageMetadata({

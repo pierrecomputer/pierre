@@ -72,6 +72,14 @@ tasks:
       cache: false
       runInCI: 'skip'
 
+  bench-browser:
+    command: 'bun benchmark/browser/bench.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
   gen-spec:
     command: 'node scripts/gen-spec.ts'
     options:
