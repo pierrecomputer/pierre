@@ -3,7 +3,10 @@ import type { Element as HASTElement } from 'hast';
 
 import { TextDocument } from '../src/editor/textDocument';
 import { DiffModel } from '../src/model/DiffModel';
-import { LineDiffRangeCache } from '../src/rows/lineDiffRanges';
+import {
+  LineDiffRangeCache,
+  lineDiffRangesFor,
+} from '../src/rows/lineDiffRanges';
 import { markRow } from '../src/rows/markRow';
 import { RowSource } from '../src/rows/RowSource';
 import type { HighlightedToken, ThemedToken } from '../src/types';
@@ -169,6 +172,41 @@ describe('LineDiffRangeCache', () => {
     expect(
       new LineDiffRangeCache('none', 1000).get(0, 'a', 'b').addition
     ).toEqual([]);
+  });
+});
+
+describe('lineDiffRangesFor', () => {
+  test('gives each side of a pair its marks and other lines none', () => {
+    const diff = parseDiffFromFile(
+      { name: 'a.ts', contents: makeLines(5, { 3: 'const a = 1;' }).join('') },
+      {
+        name: 'a.ts',
+        contents: makeLines(6, { 3: 'const b = 1;', 6: 'extra' }).join(''),
+      }
+    );
+    const model = DiffModel.fromDiff(diff);
+    const cache = new LineDiffRangeCache('word', 1000);
+    expect(lineDiffRangesFor(model, 'deletions', 2, cache)).toEqual([[6, 7]]);
+    expect(lineDiffRangesFor(model, 'additions', 2, cache)).toEqual([[6, 7]]);
+    // Context and an addition with no old partner have nothing to mark.
+    expect(lineDiffRangesFor(model, 'additions', 0, cache)).toEqual([]);
+    expect(lineDiffRangesFor(model, 'additions', 5, cache)).toEqual([]);
+  });
+
+  test('marks the rows of a rendered diff the way the components do', () => {
+    const diff = parseDiffFromFile(
+      { name: 'a.ts', contents: makeLines(3, { 2: 'const a = 1;' }).join('') },
+      { name: 'a.ts', contents: makeLines(3, { 2: 'const b = 1;' }).join('') }
+    );
+    const model = DiffModel.fromDiff(diff);
+    const cache = new LineDiffRangeCache('word', 1000);
+    const additions = diff.additionLines.map((text, line) =>
+      markRow(baseRow(text), lineDiffRangesFor(model, 'additions', line, cache))
+    );
+    expect(hastToHtml([additions[0]])).not.toContain('data-diff-span');
+    expect(hastToHtml([additions[1]])).toContain(
+      '<span data-diff-span=""><span style="color:#123;">b</span></span>'
+    );
   });
 });
 

@@ -2,7 +2,7 @@ import type { Element as HASTElement, Properties } from 'hast';
 
 import type { DiffModel } from '../model/DiffModel';
 import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
-import { LineDiffRangeCache } from '../rows/lineDiffRanges';
+import { LineDiffRangeCache, lineDiffRangesFor } from '../rows/lineDiffRanges';
 import { markRow } from '../rows/markRow';
 import type { RowSource } from '../rows/RowSource';
 import type {
@@ -850,33 +850,6 @@ export class DiffLayout<LAnnotation = undefined> {
     return result;
   }
 
-  // The marks on one side of a changed line's pair, or none when the line
-  // has no partner.
-  #rangesFor(
-    model: DiffModel,
-    side: 'deletions' | 'additions',
-    lineIndex: number
-  ): readonly LineDiffRange[] {
-    const partner = model.pairFor(side, lineIndex);
-    if (partner == null) {
-      return NO_RANGES;
-    }
-    const { deletionLines, additionLines } = model.diff;
-    const ranges =
-      side === 'deletions'
-        ? this.#ranges.get(
-            lineIndex,
-            deletionLines[lineIndex],
-            additionLines[partner]
-          )
-        : this.#ranges.get(
-            partner,
-            deletionLines[partner],
-            additionLines[lineIndex]
-          );
-    return side === 'deletions' ? ranges.deletion : ranges.addition;
-  }
-
   // Adds a separator row to one column. Returns whether a row was added.
   #pushSeparator(
     column: Column,
@@ -999,7 +972,7 @@ export class DiffLayout<LAnnotation = undefined> {
         ? rows.additionRow(model, row.lineIndex)
         : rows.deletionRow(model, row.lineIndex);
     const ranges = row.marked
-      ? this.#rangesFor(model, row.side, row.lineIndex)
+      ? lineDiffRangesFor(model, row.side, row.lineIndex, this.#ranges)
       : NO_RANGES;
     const content = this.#line(
       base,

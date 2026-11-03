@@ -1,8 +1,13 @@
+import type { DiffModel } from '../model/DiffModel';
+import type { DiffSide } from '../model/types';
 import type { LineDiffTypes } from '../types';
 import {
   computeLineDiffRanges,
+  type LineDiffRange,
   type LineDiffRanges,
 } from '../utils/computeLineDiffRanges';
+
+const NO_SIDE_RANGES: readonly LineDiffRange[] = Object.freeze([]);
 
 interface CachedPair {
   deletionText: string;
@@ -44,4 +49,28 @@ export class LineDiffRangeCache {
     this.#pairs.set(deletionIndex, { deletionText, additionText, ranges });
     return ranges;
   }
+}
+
+/**
+ * The word diff marks on one side of a changed line: the ranges of its text
+ * that differ from its partner's, or none when the line has no partner.
+ * `ranges` remembers each pair's answer, so asking again for a line costs
+ * nothing while its texts stand. `markRow` turns the ranges into spans.
+ */
+export function lineDiffRangesFor(
+  model: DiffModel,
+  side: DiffSide,
+  lineIndex: number,
+  ranges: LineDiffRangeCache
+): readonly LineDiffRange[] {
+  const partner = model.pairFor(side, lineIndex);
+  if (partner == null) {
+    return NO_SIDE_RANGES;
+  }
+  const { deletionLines, additionLines } = model.diff;
+  const pair =
+    side === 'deletions'
+      ? ranges.get(lineIndex, deletionLines[lineIndex], additionLines[partner])
+      : ranges.get(partner, deletionLines[partner], additionLines[lineIndex]);
+  return side === 'deletions' ? pair.deletion : pair.addition;
 }
