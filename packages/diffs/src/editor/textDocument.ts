@@ -59,6 +59,22 @@ export interface TextDocumentChange {
   ][];
 }
 
+/**
+ * Whether a change moved lines: it added or removed a line break somewhere,
+ * even when a batch did both and the line count came out the same. Rows below
+ * such an edit show other lines afterwards.
+ */
+export function changeMovesLines(change: TextDocumentChange): boolean {
+  return (
+    change.lineDelta !== 0 ||
+    change.changes.some(
+      (edit) =>
+        edit.range.start.line !== edit.range.end.line ||
+        edit.text.includes('\n')
+    )
+  );
+}
+
 // Metadata-less replay results include the resolved edits so Editor can remap
 // its live selections without storing a snapshot on the history entry.
 type TextDocumentHistoryResult<EType extends EditorType, LAnnotation> = [

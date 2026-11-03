@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { DirectionNone } from '../src/editor/selection';
-import { TextDocument } from '../src/editor/textDocument';
+import { changeMovesLines, TextDocument } from '../src/editor/textDocument';
 import type { EditorSelection, TextEdit } from '../src/editor/types';
 import type { DiffLineAnnotation } from '../src/types';
 
@@ -57,6 +57,50 @@ function redoAll(d: ReturnType<typeof doc>) {
     d.redo();
   }
 }
+
+describe('changeMovesLines', () => {
+  const applied = (edits: TextEdit[]) => {
+    const document = new TextDocument(
+      'test.ts',
+      Array.from({ length: 10 }, (_, line) => `line ${line}`).join('\n'),
+      'typescript'
+    );
+    const change = document.applyEdits(edits);
+    if (change == null) throw new Error('the edits applied nothing');
+    return change;
+  };
+  const at = (line: number, character: number) => ({ line, character });
+
+  test('typing on a line does not move lines', () => {
+    expect(
+      changeMovesLines(
+        applied([{ range: { start: at(2, 0), end: at(2, 0) }, newText: 'x' }])
+      )
+    ).toBe(false);
+  });
+
+  test('a break added or removed moves lines', () => {
+    expect(
+      changeMovesLines(
+        applied([{ range: { start: at(2, 0), end: at(2, 0) }, newText: '\n' }])
+      )
+    ).toBe(true);
+    expect(
+      changeMovesLines(
+        applied([{ range: { start: at(2, 6), end: at(3, 0) }, newText: '' }])
+      )
+    ).toBe(true);
+  });
+
+  test('a batch that adds a line and removes another moves lines', () => {
+    const change = applied([
+      { range: { start: at(1, 0), end: at(1, 0) }, newText: 'new\n' },
+      { range: { start: at(8, 0), end: at(9, 0) }, newText: '' },
+    ]);
+    expect(change.lineDelta).toBe(0);
+    expect(changeMovesLines(change)).toBe(true);
+  });
+});
 
 describe('TextDocument', () => {
   test('lang and lineCount', () => {

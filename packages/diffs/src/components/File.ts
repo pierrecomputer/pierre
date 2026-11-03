@@ -747,15 +747,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     // the host's frame renders: rows move when the line count changes, or
     // when a batch removed lines and added others at the same count. A plain
     // file renders either way.
-    this.renderChange(lineDelta !== 0 || removedLineIds.length > 0);
+    const rowsMoved = lineDelta !== 0 || removedLineIds.length > 0;
+    this.renderChange(rowsMoved);
     // Nothing was on screen, or a render callback ended the session.
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
     }
-    // A patched row keeps its selection marks. After a line-count change the
-    // rows that moved still carry theirs but show other lines, so the marks
-    // are drawn again from the selection state.
-    if (lineDelta !== 0) {
+    // A patched row keeps its selection marks.
+    if (rowsMoved) {
       this.interactionManager.setSelectionDirty();
     }
     return { rebuiltLines: this.takeRebuiltLines() };

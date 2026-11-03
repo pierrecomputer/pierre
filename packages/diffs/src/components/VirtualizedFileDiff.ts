@@ -1,5 +1,9 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
-import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
+import {
+  changeMovesLines,
+  type TextDocument,
+  type TextDocumentChange,
+} from '../editor/textDocument';
 import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   BaseDiffOptions,
@@ -624,7 +628,7 @@ export class VirtualizedFileDiff<
   ): ApplyChangeResult {
     // CodeView anchors scroll to what is on screen before the lines move, so
     // its next frame keeps it in place.
-    if (change.lineDelta !== 0) {
+    if (changeMovesLines(change)) {
       this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
     }
     return super.applyChange(document, change, options);

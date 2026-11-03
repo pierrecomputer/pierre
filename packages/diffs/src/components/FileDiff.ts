@@ -2179,20 +2179,15 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     // the host's frame renders: rows move, appear or change type when the
     // line count or the hunks change, or when a batch removed lines and added
     // others at the same count. A plain diff renders either way.
-    this.renderChange(
-      lineDelta !== 0 ||
-        removedLineIds.length > 0 ||
-        regionsChanged ||
-        hunksChanged
-    );
+    const rowsMoved =
+      lineDelta !== 0 || removedLineIds.length > 0 || regionsChanged;
+    this.renderChange(rowsMoved || hunksChanged);
     // Nothing was on screen, or a render callback ended the session.
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
     }
-    // A patched row keeps its selection marks. After a structural change the
-    // rows that moved still carry theirs but show other lines, so the marks
-    // are drawn again from the selection state.
-    if (lineDelta !== 0 || regionsChanged) {
+    // A patched row keeps its selection marks.
+    if (rowsMoved) {
       this.interactionManager.setSelectionDirty();
     }
     return { rebuiltLines: this.takeRebuiltLines() };
