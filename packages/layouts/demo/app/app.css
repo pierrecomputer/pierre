@@ -12,7 +12,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   height: 48px;
   padding: 0 12px;
   border-bottom: 1px solid #dce1e8;
@@ -74,10 +74,28 @@
   outline-offset: 1px;
 }
 
+.app-action {
+  padding: 5px 12px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #29313d;
+  white-space: nowrap;
+}
+
+.app-action:hover {
+  background: #f6f8fa;
+}
+
+.app-action:focus-visible {
+  outline: 2px solid var(--layout-accent, #5489ed);
+  outline-offset: 1px;
+}
+
 .app-header-end {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .app-check {
@@ -96,6 +114,9 @@
 }
 
 .app-resize select {
+  /* The options of the resize strategy are long; a select as wide as them
+     pushes the header past the window. */
+  max-width: 140px;
   padding: 4px 6px;
   border: 1px solid #dce1e8;
   border-radius: 6px;
