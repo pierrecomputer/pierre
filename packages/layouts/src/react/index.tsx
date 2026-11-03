@@ -323,6 +323,8 @@ export function Layout({
 
   // Tell the content of a pane that store.setHidden hides or shows. A hidden
   // pane keeps its content mounted, so the content can pause its own work.
+  // Most tree changes, such as each pointer move of a resize, hide no pane,
+  // so the DOM is read only when the set of hidden panes changes.
   const collapsedBefore = useRef<ReadonlySet<string> | null>(null);
   useEffect(() => {
     const collapsed = new Set(
@@ -331,8 +333,11 @@ export function Layout({
     const before = collapsedBefore.current;
     collapsedBefore.current = collapsed;
     const element = rootRef.current;
-    if (before !== null && element !== null)
-      notifyCollapsed(element, before, collapsed);
+    if (before === null || element === null) return;
+    const changed =
+      before.size !== collapsed.size ||
+      [...collapsed].some((id) => !before.has(id));
+    if (changed) notifyCollapsed(element, before, collapsed);
   }, [geometry]);
 
   // After React commits a store change, animate each moved element from its old box.
