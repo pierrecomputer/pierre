@@ -69,7 +69,13 @@ editor or a terminal does real work in such a callback, so the count shows the
 work that a layout operation pushes into content.
 
 `window.__layoutsBench` exposes the store, the counters, `append(id)` to add
-output to a pane, and `busy(ms)` to block the main thread.
+output to a pane, `busy(ms)` to block the main thread, `mountOverlays()` to
+render the closed modal and drawer, and `setOverlay(overlay, open)` to open or
+close one of them through the app's state.
+
+`?modal=` selects the strategy of the modal: `dialog-hide-covered` (the
+default), `dialog`, or `popover`. `?backdrop=opaque` gives it a backdrop that
+hides the page, so that every pane stops rendering.
 
 `?layers=` sets the `paneLayers` option: `on`, `off`, or a number of visible
 panes from which each pane host is its own compositor layer. Without it, the
@@ -102,6 +108,10 @@ isolate the content area.
 | `hidden-append`    | Zoom the first pane, then append to the covered agent chat pane 10 times.                                                                             |
 | `hide`             | Hide the second pane with `store.setHidden`.                                                                                                          |
 | `container-resize` | Narrow the viewport from 1440 px to 1200 px.                                                                                                          |
+| `modal-open`       | Open a modal of 640 by 420 px over the workspace.                                                                                                     |
+| `modal-close`      | Close the open modal.                                                                                                                                 |
+| `drawer-open`      | Open a drawer of 360 px from the right edge of the workspace.                                                                                         |
+| `drawer-close`     | Close the open drawer.                                                                                                                                |
 | `repeat`           | Not timed. Measures memory before and after 20 zooms and restores of the first pane and 20 hides and shows of the second pane. See [Memory](#memory). |
 
 Each run loads a fresh page, runs the scenario's setup, waits two frames and 150
