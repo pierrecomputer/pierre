@@ -154,7 +154,14 @@ const REPEAT_TILE_GROWTH_MB = 5;
 // Chromium stores tiles of 64 by 64 pixels and larger; a smaller difference is not a tile.
 const COVERED_TILE_LIMIT_MB = 0.5;
 
-const DISCRETE = ['zoom', 'restore', 'split', 'close', 'move', 'focus'];
+// The time budgets of the intent, with light pane content. The values are
+// milliseconds of main-thread time on the reference machine (Apple M5 Pro,
+// headless Chromium 134); on another machine, compare the values between runs.
+const REFERENCE_MACHINE = 'on the reference machine';
+const OPERATION_BUDGET_MS = 10;
+const GESTURE_FRAME_BUDGET_MS: Record<number, number> = { 4: 2, 16: 3 };
+
+const DISCRETE = ['zoom', 'restore', 'split', 'close', 'move', 'focus', 'hide'];
 
 export const CHECKS: Check[] = [
   {
@@ -200,23 +207,39 @@ export const CHECKS: Check[] = [
     limit: '0 animations',
     evaluate: atMost('split', 4, 'light', 'animationsNotComposited', 0),
   },
-  ...DISCRETE.map(
-    (scenario): Check => ({
-      id: `${scenario}-main-thread-budget`,
+  ...DISCRETE.flatMap((scenario) =>
+    [4, 16].map(
+      (panes): Check => ({
+        id: `${scenario}-main-thread-budget-${panes}`,
+        rule: 'time',
+        description: `A ${scenario} uses at most ${OPERATION_BUDGET_MS} ms of main-thread time (${panes} light panes, ${REFERENCE_MACHINE}).`,
+        limit: `${OPERATION_BUDGET_MS} ms`,
+        evaluate: atMost(
+          scenario,
+          panes,
+          'light',
+          'mainThreadMs',
+          OPERATION_BUDGET_MS
+        ),
+      })
+    )
+  ),
+  ...[4, 16].map(
+    (panes): Check => ({
+      id: `resize-main-thread-per-step-${panes}`,
       rule: 'time',
-      description: `A ${scenario} uses at most 4 ms of main-thread time (4 light panes).`,
-      limit: '4 ms',
-      evaluate: atMost(scenario, 4, 'light', 'mainThreadMs', 4),
+      description: `A resize drag uses at most ${GESTURE_FRAME_BUDGET_MS[panes]} ms of main-thread time per pointer move (${panes} light panes, ${REFERENCE_MACHINE}).`,
+      limit: `${GESTURE_FRAME_BUDGET_MS[panes]} ms`,
+      evaluate: atMost(
+        'resize',
+        panes,
+        'light',
+        'mainThreadMs',
+        GESTURE_FRAME_BUDGET_MS[panes],
+        true
+      ),
     })
   ),
-  {
-    id: 'resize-main-thread-per-step',
-    rule: 'time',
-    description:
-      'A resize drag uses at most 2 ms of main-thread time per pointer move (4 light panes).',
-    limit: '2 ms',
-    evaluate: atMost('resize', 4, 'light', 'mainThreadMs', 2, true),
-  },
   {
     id: 'focus-no-content-render',
     rule: 'independence-from-content',
