@@ -245,6 +245,10 @@ function computeFileTreeViewLayoutState({
   };
 }
 
+// Accessible name for the built-in search input when the caller doesn't pass
+// `searchAriaLabel`. The placeholder alone is not a reliable name because it
+// disappears as soon as the user types.
+const DEFAULT_SEARCH_ARIA_LABEL = 'Search files';
 const TOUCH_LONG_PRESS_DELAY = 400;
 const TOUCH_LONG_PRESS_MOVE_THRESHOLD = 10;
 const DRAG_EDGE_SCROLL_THRESHOLD = 40;
@@ -1234,6 +1238,7 @@ export function FileTreeView({
   overscan = FILE_TREE_DEFAULT_OVERSCAN,
   renamingEnabled = false,
   renderRowDecoration,
+  searchAriaLabel = DEFAULT_SEARCH_ARIA_LABEL,
   searchBlurBehavior = 'close',
   searchEnabled = false,
   searchFakeFocus = false,
@@ -3761,7 +3766,7 @@ export function FileTreeView({
             ref={searchInputRef}
             aria-activedescendant={activeDescendantId}
             aria-controls={treeDomId}
-            aria-label="Search files"
+            aria-label={searchAriaLabel}
             placeholder="Search…"
             data-file-tree-search-input
             data-file-tree-search-input-fake-focus={

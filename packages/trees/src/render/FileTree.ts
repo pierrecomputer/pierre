@@ -183,6 +183,7 @@ export class FileTree
   readonly #onSelectionChange: FileTreeSelectionChangeListener | undefined;
   readonly #renderRowDecoration: FileTreeRowDecorationRenderer | undefined;
   readonly #renamingEnabled: boolean;
+  readonly #searchAriaLabel: string | undefined;
   readonly #searchBlurBehavior: FileTreeOptions['searchBlurBehavior'];
   readonly #searchEnabled: boolean;
   readonly #searchFakeFocus: boolean;
@@ -225,6 +226,7 @@ export class FileTree
       renderRowDecoration,
       renaming,
       search,
+      searchAriaLabel,
       searchBlurBehavior,
       searchFakeFocus,
       stickyFolders,
@@ -240,6 +242,7 @@ export class FileTree
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
     this.#renamingEnabled = renaming != null && renaming !== false;
+    this.#searchAriaLabel = searchAriaLabel;
     this.#searchBlurBehavior = searchBlurBehavior;
     this.#searchEnabled = search === true;
     this.#searchFakeFocus = searchFakeFocus === true;
@@ -584,6 +587,7 @@ export class FileTree
       instanceId: this.#id,
       renamingEnabled: this.#renamingEnabled,
       renderRowDecoration: this.#renderRowDecoration,
+      searchAriaLabel: this.#searchAriaLabel,
       searchBlurBehavior: this.#searchBlurBehavior,
       searchEnabled: this.#searchEnabled,
       searchFakeFocus: this.#searchFakeFocus,
@@ -873,6 +877,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     renderRowDecoration,
     renaming,
     search,
+    searchAriaLabel,
     searchBlurBehavior,
     searchFakeFocus,
     stickyFolders,
@@ -921,6 +926,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       overscan,
       renamingEnabled: renaming != null && renaming !== false,
       renderRowDecoration,
+      searchAriaLabel,
       searchBlurBehavior,
       searchEnabled: search === true,
       searchFakeFocus: searchFakeFocus === true,

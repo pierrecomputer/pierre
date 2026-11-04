@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
 import { flushDom, installDom } from './helpers/dom';
-import { loadFileTree, loadFileTreeController } from './helpers/loadFileTree';
+import {
+  loadFileTree,
+  loadFileTreeController,
+  loadPreloadFileTree,
+} from './helpers/loadFileTree';
 
 const FILES = [
   'README.md',
@@ -738,37 +742,89 @@ describe('file-tree search', () => {
       cleanup();
     }
   });
-  test('search input has an accessible name that does not rely on its placeholder', async () => {
+  // Renders a searchable tree and returns its built-in search input so the
+  // accessible-name tests below can share one setup path.
+  async function renderSearchInput(
+    dom: JSDOM,
+    options: { id: string; searchAriaLabel?: string }
+  ): Promise<{
+    cleanUpTree: () => void;
+    searchInput: HTMLInputElement | null | undefined;
+  }> {
+    const FileTree = await loadFileTree();
+    const mount = dom.window.document.createElement('div');
+    dom.window.document.body.appendChild(mount);
+
+    const fileTree = new FileTree({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: FILES,
+      search: true,
+      initialVisibleRowCount: 220 / 30,
+      ...options,
+    });
+
+    fileTree.render({ containerWrapper: mount });
+    await flushDom();
+
+    const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+    return {
+      cleanUpTree: () => fileTree.cleanUp(),
+      searchInput: shadowRoot?.querySelector<HTMLInputElement>(
+        'input[data-file-tree-search-input]'
+      ),
+    };
+  }
+
+  test('search input has a default accessible name that does not rely on its placeholder', async () => {
     const { cleanup, dom } = installDom();
     try {
-      const FileTree = await loadFileTree();
-      const mount = dom.window.document.createElement('div');
-      dom.window.document.body.appendChild(mount);
-
-      const fileTree = new FileTree({
-        flattenEmptyDirectories: false,
-        id: 'pst-search-accessible-name-test',
-        initialExpansion: 'open',
-        paths: FILES,
-        search: true,
-        initialVisibleRowCount: 220 / 30,
+      const { cleanUpTree, searchInput } = await renderSearchInput(dom, {
+        id: 'pst-search-default-aria-label-test',
       });
-
-      fileTree.render({ containerWrapper: mount });
-      await flushDom();
-
-      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
-      const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
-        'input[data-file-tree-search-input]'
-      );
       expect(searchInput).not.toBeNull();
       // Screen readers should not have to fall back to the placeholder text,
       // which disappears once the user starts typing.
       expect(searchInput?.getAttribute('aria-label')).toBe('Search files');
-
-      fileTree.cleanUp();
+      expect(searchInput?.getAttribute('placeholder')).toBe('Search…');
+      cleanUpTree();
     } finally {
       cleanup();
     }
+  });
+
+  test('searchAriaLabel overrides the search input accessible name', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { cleanUpTree, searchInput } = await renderSearchInput(dom, {
+        id: 'pst-search-custom-aria-label-test',
+        searchAriaLabel: 'Buscar archivos',
+      });
+      expect(searchInput?.getAttribute('aria-label')).toBe('Buscar archivos');
+      cleanUpTree();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('preloadFileTree renders the search input accessible name into SSR html', async () => {
+    const preloadFileTree = await loadPreloadFileTree();
+
+    const defaultPayload = preloadFileTree({
+      id: 'pst-search-ssr-default-aria-label-test',
+      paths: FILES,
+      search: true,
+    });
+    expect(defaultPayload.shadowHtml).toContain('aria-label="Search files"');
+
+    const customPayload = preloadFileTree({
+      id: 'pst-search-ssr-custom-aria-label-test',
+      paths: FILES,
+      search: true,
+      searchAriaLabel: 'Search repository files',
+    });
+    expect(customPayload.shadowHtml).toContain(
+      'aria-label="Search repository files"'
+    );
   });
 });

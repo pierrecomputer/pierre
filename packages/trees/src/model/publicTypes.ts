@@ -240,6 +240,11 @@ type FileTreeOptionSurface = FileTreeRenderOptions & {
   onSelectionChange?: FileTreeSelectionChangeListener;
   renderRowDecoration?: FileTreeRowDecorationRenderer;
   search?: boolean;
+  // Accessible name for the built-in search input, exposed as its
+  // `aria-label`. Defaults to `'Search files'`. Without it, screen readers
+  // fall back to the placeholder text, which disappears once the user types.
+  // Set it to translate the label or describe what the tree contains.
+  searchAriaLabel?: string;
   // When `true`, renders the search input with a synthetic focus ring so the
   // input looks focused even though no browser focus is attached. The ring is
   // dismissed automatically on the first real interaction with the input
