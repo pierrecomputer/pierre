@@ -79,6 +79,8 @@ async function inPageTask(
         } else if (operation === 'overlay') {
           const [overlay, open] = arg as ['modal' | 'drawer', boolean];
           bench.setOverlay(overlay, open);
+        } else if (operation === 'show') {
+          bench.store.setHidden('p1', false);
         }
       }, 0);
     },
@@ -360,6 +362,22 @@ export const SCENARIOS: Scenario[] = [
       return undefined;
     },
     run: (page) => appendEachFrame(page, APPEND_PANE),
+  },
+  {
+    id: 'show',
+    description:
+      'Show the second pane again after store.setHidden hid it. Its content stayed mounted.',
+    async setup(page) {
+      await page.evaluate(() =>
+        window.__layoutsBench.store.setHidden('p1', true)
+      );
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+      return undefined;
+    },
+    async run(page) {
+      await inPageTask(page, 'show');
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
   },
   {
     id: 'container-resize',

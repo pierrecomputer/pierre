@@ -53,7 +53,7 @@ import {
   tabBoundaryAt,
   tabMoveIndex,
 } from '../gestures';
-import { shownPanes, stackOf } from '../model';
+import { getPanes, shownPanes, stackOf } from '../model';
 import type { LayoutStore } from '../store';
 import type {
   ChildSize,
@@ -257,6 +257,23 @@ function sameContentProps(a: PaneBodyProps, b: PaneBodyProps): boolean {
 }
 
 /**
+ * The FLIP keys of the panes that show in `after` and that `store.setHidden`
+ * hid in `before`, so that they grow into their place.
+ */
+function shownAgain(before: LayoutNode, after: LayoutNode): Set<string> {
+  const hidden = new Set(
+    getPanes(before)
+      .filter((pane) => pane.hidden === true)
+      .map(({ id }) => id)
+  );
+  return new Set(
+    shownPanes(after)
+      .filter(({ id }) => hidden.has(id))
+      .map(({ id }) => `pane:${id}`)
+  );
+}
+
+/**
  * The app's content of one pane. It renders only when its pane node or the
  * app's `renderPane` changes: focus, zoom, and size changes keep the pane
  * node, because the store keeps the identity of unchanged nodes, and a hide,
@@ -311,6 +328,9 @@ export function Layout({
 
   // Boxes before a store change, for the FLIP animation after React commits it.
   const boxesBefore = useRef<Map<string, Rect> | null>(null);
+  // The tree of the last commit. The DOM shows it until React commits the
+  // next tree, which can hold more than one store change.
+  const committedRoot = useRef<LayoutNode | null>(null);
   const animateLayout = animateOptions?.layout !== false;
   const animateZoom = animateOptions?.zoom !== false;
   // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
@@ -433,6 +453,8 @@ export function Layout({
   // can pause its own work.
   // A collapsed pane that is not zoomed shows its header only, and its
   // content does not render, so it counts as hidden here.
+  // Most tree changes, such as each pointer move of a resize, hide no pane,
+  // so the DOM is read only when the set of hidden panes changes.
   const hiddenBefore = useRef<ReadonlySet<string> | null>(null);
   useEffect(() => {
     const hidden = new Set(
@@ -446,8 +468,10 @@ export function Layout({
     const before = hiddenBefore.current;
     hiddenBefore.current = hidden;
     const element = rootRef.current;
-    if (before !== null && element !== null)
-      notifyHidden(element, before, hidden);
+    if (before === null || element === null) return;
+    const changed =
+      before.size !== hidden.size || [...hidden].some((id) => !before.has(id));
+    if (changed) notifyHidden(element, before, hidden);
   }, [geometry, state.zoomedPane]);
 
   // The content of a collapsed pane is inert. The view sets it on the DOM, in
@@ -482,15 +506,23 @@ export function Layout({
   }, [state]);
 
   // After React commits a store change, animate each moved element from its old box.
+  // A pane that shows again grows into its place. The panes that show again
+  // come from the last committed tree, not from one store change: an app
+  // can show the panes of a stack with one call each before React commits.
   useLayoutEffect(() => {
     const element = rootRef.current;
     const before = boxesBefore.current;
+    const committed = committedRoot.current;
     boxesBefore.current = null;
+    committedRoot.current = state.root;
     if (element !== null && before !== null)
       animateFromBoxes(
         element,
         before,
-        experimentalSizeAnimation === 'counter-scale'
+        experimentalSizeAnimation === 'counter-scale',
+        committed === null || committed === state.root
+          ? new Set()
+          : shownAgain(committed, state.root)
       );
   }, [state, experimentalSizeAnimation]);
 

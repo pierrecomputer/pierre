@@ -46,9 +46,22 @@ function slopes(f: Piecewise): number[] {
   return result;
 }
 
+/**
+ * The knots of two functions, in ascending order, without knots closer than
+ * EPSILON to the knot before them. A merge of the two sorted lists, because
+ * the compiler calls this for each operation on each box edge.
+ */
 function union(a: readonly number[], b: readonly number[]): number[] {
-  const all = [...a, ...b].sort((x, y) => x - y);
-  return all.filter((x, index) => index === 0 || x - all[index - 1] > EPSILON);
+  const result: number[] = [];
+  let previous = 0;
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    const x = j >= b.length || (i < a.length && a[i] <= b[j]) ? a[i++] : b[j++];
+    if (i + j === 1 || x - previous > EPSILON) result.push(x);
+    previous = x;
+  }
+  return result;
 }
 
 /** Drop knots where the slope does not change. */
@@ -71,7 +84,24 @@ function simplify(xs: number[], ys: number[], slope: number): Piecewise {
   return { xs: keptX, ys: keptY, slope };
 }
 
+// A constant has one knot at 0, which every function has, so a sum with a
+// constant keeps the knots of the other function, and its values at them.
+const isConstant = (f: Piecewise): boolean =>
+  f.xs.length === 1 && f.slope === 0;
+
 export function add(f: Piecewise, g: Piecewise): Piecewise {
+  if (isConstant(g))
+    return simplify(
+      f.xs as number[],
+      f.ys.map((y) => y + g.ys[0]),
+      f.slope
+    );
+  if (isConstant(f))
+    return simplify(
+      g.xs as number[],
+      g.ys.map((y) => f.ys[0] + y),
+      g.slope
+    );
   const xs = union(f.xs, g.xs);
   return simplify(
     xs,
@@ -81,6 +111,7 @@ export function add(f: Piecewise, g: Piecewise): Piecewise {
 }
 
 export function scale(f: Piecewise, factor: number): Piecewise {
+  if (factor === 1) return f;
   return {
     xs: f.xs,
     ys: f.ys.map((y) => y * factor),
@@ -91,34 +122,39 @@ export function scale(f: Piecewise, factor: number): Piecewise {
 /** The lower (`sign` 1) or upper (`sign` -1) envelope of two functions. */
 function envelope(f: Piecewise, g: Piecewise, sign: 1 | -1): Piecewise {
   const knots = union(f.xs, g.xs);
-  const difference = (x: number): number =>
-    sign * (evaluate(f, x) - evaluate(g, x));
+  // The values of both functions at each knot, read once.
+  const fv = knots.map((x) => evaluate(f, x));
+  const gv = knots.map((x) => evaluate(g, x));
+  const pick = (a: number, b: number): number =>
+    sign === 1 ? Math.min(a, b) : Math.max(a, b);
   const xs: number[] = [];
+  const ys: number[] = [];
   for (let index = 0; index < knots.length; index++) {
     const x = knots[index];
     xs.push(x);
-    const d = difference(x);
+    ys.push(pick(fv[index], gv[index]));
+    const d = sign * (fv[index] - gv[index]);
     // A crossing between two knots, or after the last knot.
-    const next = knots[index + 1];
-    if (next !== undefined) {
-      const e = difference(next);
+    let crossing: number | null = null;
+    if (index + 1 < knots.length) {
+      const e = sign * (fv[index + 1] - gv[index + 1]);
       if ((d > EPSILON && e < -EPSILON) || (d < -EPSILON && e > EPSILON))
-        xs.push(x + ((next - x) * d) / (d - e));
+        crossing = x + ((knots[index + 1] - x) * d) / (d - e);
     } else {
       const rate = sign * (f.slope - g.slope);
       if ((d > EPSILON && rate < 0) || (d < -EPSILON && rate > 0))
-        xs.push(x - d / rate);
+        crossing = x - d / rate;
+    }
+    if (crossing !== null) {
+      xs.push(crossing);
+      ys.push(pick(evaluate(f, crossing), evaluate(g, crossing)));
     }
   }
-  const pick = (x: number): number =>
-    sign === 1
-      ? Math.min(evaluate(f, x), evaluate(g, x))
-      : Math.max(evaluate(f, x), evaluate(g, x));
   // After the last knot, the lower (or upper) function stays below (above).
   const end = xs[xs.length - 1] + 1;
   const slope =
     sign * (evaluate(f, end) - evaluate(g, end)) <= 0 ? f.slope : g.slope;
-  return simplify(xs, xs.map(pick), slope);
+  return simplify(xs, ys, slope);
 }
 
 export function min(f: Piecewise, g: Piecewise): Piecewise {
@@ -197,7 +233,10 @@ export function clamp(
 }
 
 // Eight significant digits keep a box within 0.0001 px on a 10,000 px container.
-const format = (value: number): string => String(Number(value.toPrecision(8)));
+const format = (value: number): string =>
+  Number.isInteger(value) && Math.abs(value) < 1e8
+    ? String(value)
+    : String(Number(value.toPrecision(8)));
 
 /**
  * Write `f` as one CSS value of the container size `unit` (`100cqw`):
@@ -205,6 +244,25 @@ const format = (value: number): string => String(Number(value.toPrecision(8)));
  * slope after knot xᵢ. Each knot adds one hinge term, which is 0 below it.
  */
 export function toCSS(f: Piecewise, unit: string): string {
+  // Sibling boxes share the edges that their split does not divide, so the
+  // compiler writes the same function more than once.
+  let cache = cssCache.get(unit);
+  if (cache === undefined) {
+    cache = new WeakMap();
+    cssCache.set(unit, cache);
+  }
+  let css = cache.get(f);
+  if (css === undefined) {
+    css = writeCSS(f, unit);
+    cache.set(f, css);
+  }
+  return css;
+}
+
+// The CSS value of each function object, for each unit.
+const cssCache = new Map<string, WeakMap<Piecewise, string>>();
+
+function writeCSS(f: Piecewise, unit: string): string {
   const rates = slopes(f);
   const terms: string[] = [];
   if (Math.abs(rates[0]) > EPSILON)

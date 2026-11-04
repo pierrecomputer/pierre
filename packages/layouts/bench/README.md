@@ -107,6 +107,7 @@ isolate the content area.
 | `append`            | Append a message to the agent chat pane once per frame, 10 times.                                                                                     |
 | `hidden-append`     | Zoom the first pane, then append to the covered agent chat pane 10 times.                                                                             |
 | `hide`              | Hide the second pane with `store.setHidden`.                                                                                                          |
+| `show`              | Show the second pane again with `store.setHidden`, after a hide that the trace does not measure.                                                      |
 | `collapse`          | Collapse the second pane to its header with `store.setCollapsed`.                                                                                     |
 | `tab-switch`        | Add a tab beside the second pane, then click the tab of the second pane to show it again.                                                             |
 | `tab-drag`          | Add a tab beside the second pane, then drag the new tab before the tab of the second pane in 16 pointer moves, one per frame, and drop it.            |
@@ -242,6 +243,15 @@ minified bytes and the wire bytes after gzip (level 9, for reference), brotli
 one or more checks on the medians. The run prints a table of the checks, and the
 report holds them. A check that compares two parameter sets, for example heavy
 over light content, passes when the ratio is at most 1.25.
+
+The `time` checks compare main-thread time with the time budgets of the intent,
+with light content at 4 and 16 panes: 2 ms per pointer move of a resize drag at
+4 panes and 3 ms at 16 panes, and 10 ms for each discrete operation (`focus`,
+`split`, `close`, `hide`, `show`, `zoom`, `restore`, and `move`). The limits
+hold on the reference machine, an Apple M5 Pro with headless Chromium 134. On
+another machine, the report keeps the values, but compare them only between runs
+on that machine. `zoom-busy` has no budget check, because its fixture runs 200
+ms of script on purpose.
 
 ## Report
 
