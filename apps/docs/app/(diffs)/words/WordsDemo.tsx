@@ -240,7 +240,7 @@ function WordsExample({
     !repair ? '  parseIncompleteMarkdown={false}' : '',
     "  animated={{ animation: 'fadeIn', duration: " + fadeDuration + ' }}',
     highlight ? '  plugins={plugins}' : '',
-    lineNumbers ? '  lineNumbers' : '',
+    lineNumbers ? '' : '  lineNumbers={false}',
     custom
       ? "  components={{\n    a: (html) => html.replace('<a ', '<a class=\"your-link\" '),\n  }}"
       : '',
@@ -447,7 +447,8 @@ function WordsExample({
               aria-busy={isStreaming}
             >
               <Markdown
-                isAnimating={isStreaming}
+                // A paused stream is still unfinished, so it keeps its repairs.
+                isAnimating={cursor < source.length}
                 animated={{ animation: 'fadeIn', duration: fadeDuration }}
                 parseIncompleteMarkdown={repair}
                 components={custom ? overrides : undefined}

@@ -42,6 +42,10 @@ UTF-8 input
 - Table generators supply HTML entities, Unicode data, and HTML tag names.
 - Character constants pack ASCII bytes into integers.
 
+The passes that `@pierre/highlights` also needs live in
+[`@pierre/wat-tools`](../wat-tools/index.ts). Its final pass also avoids two
+JavaScriptCore miscompiles, so Bun and Safari run the optimizing tier safely.
+
 Enum order is part of the ABI. Constant definitions live in
 [`memory.wat`](./src/memory.wat) and [`types.wat`](./src/types.wat).
 
@@ -149,10 +153,11 @@ Definitions can affect earlier output, so they require a full-document path.
 Wasm reports the boundary's output offset and UTF-16 lengths, so the session
 slices completed HTML without a second render.
 
-`complete.wat` repairs a display copy of unfinished syntax. The HTML session
-omits raw source HTML. `html/render.ts` applies URL validation, element filters,
-code plugins, and trusted HTML hooks. It removes the destination of an
-unfinished link but keeps its anchor.
+`complete.wat` repairs a display copy of unfinished syntax. An unfinished link
+renders as an anchor with no destination. The HTML session omits raw source
+HTML. `html/render.ts` applies URL validation, element filters, code plugins,
+and trusted HTML hooks. React requests repairs only while the stream is active,
+so finished text renders from its source.
 
 `html/dom.ts` owns native DOM nodes. A comment separates completed content from
 the mutable suffix. Updates parse new HTML and preserve matching nodes. Resets

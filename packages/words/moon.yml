@@ -14,6 +14,7 @@ tasks:
       - 'src/**/*'
       - 'lib/**/*'
       - 'scripts/build.ts'
+      - '/packages/wat-tools/index.ts'
       - 'react/**/*'
       - 'html/**/*'
       # The docs demo imports this source; invalidate downstream builds too.
@@ -29,14 +30,11 @@ tasks:
     deps:
       - 'build'
 
-  # Node covers exhaustive core replay. Bun's optimizing Wasm tier produces
-  # intermittent baseline-parser mismatches too; disable that tier for React
-  # tests until the runtime issue is resolved.
+  # Node covers exhaustive core replay.
   test:
     script:
       'node test/index.ts && node test/index.ts --spec && node --test
-      test/stream_test.ts test/stress_test.ts && BUN_JSC_useOMGJIT=false bun
-      test test/react_test.tsx'
+      test/stream_test.ts test/stress_test.ts && bun test test/react_test.tsx'
     deps:
       - 'build'
     options:

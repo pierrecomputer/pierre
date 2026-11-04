@@ -5,7 +5,10 @@
       [0]             render mode (u8): 0 = html, 1 = ansi
       [1]             option flags (u8): bit 0 = frontmatter, bit 1 = skip raw HTML,
                       bit 2 = repair a delivery-ending closed link label,
-                      bit 3 = measure the boundary in UTF-16 units
+                      bit 3 = session render: measure the boundary in UTF-16
+                      units and mark an open fence,
+                      bit 4 = completion appended a pending link destination,
+                      bit 5 = ansi input is bytes and may hold invalid UTF-8
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
@@ -104,6 +107,8 @@
     (if (i32.eq (i32.and (i32.load (i32.const $mem.input)) (i32.const 0xffffff)) (i32.const "\ef\bb\bf"))
       (then (global.set $src (i32.const $mem.input+3))))
     (global.set $wrap (i32.load (i32.const 22)))
+    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 32))
+      (then (call $ansiScrubInput)))
     (i64.store (i32.const 14) (i64.const 0))
     (local.set $start (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
     (global.set $out (local.get $start))

@@ -2,6 +2,7 @@
   (import "./memory.wat")
   (import "./scan.wat")
   (import "./frontmatter.wat")
+  (import "./blockscan.wat")
 
   ;; The original EOF locates a pending label even in rebuilt inline content.
   (global $completeClosedLabelEnd (mut i32) (i32.const 0))
@@ -27,6 +28,63 @@
         (br $l)))
     (local.get $at))
 
+  ;; Whether inline state cannot continue from the line at $line to the line
+  ;; at $next, because a block ends or starts between them. A wrong yes leaves
+  ;; an opener literal until the stream closes it. A wrong no writes closers
+  ;; into a block that cannot use them, so unclear cases answer yes.
+  (func $completeBlockEnds (param $line i32) (param $next i32) (result i32)
+    (local $q i32) (local $end i32) (local $n i32) (local $quotes i32) (local $pipe i32)
+    ;; The ended line, after its markers: empty, or a heading.
+    (local.set $end (call $findLineEnd (local.get $line)))
+    (global.set $lineEnd (local.get $end))
+    (local.set $q (local.get $line))
+    (loop $prefix
+      (local.set $q (call $skipSpace (local.get $q) (local.get $end)))
+      (if (i32.lt_u (local.get $q) (local.get $end))
+        (then
+          (if (i32.eq (i32.load8_u (local.get $q)) (i32.const ">"))
+            (then
+              (local.set $quotes (i32.add (local.get $quotes) (i32.const 1)))
+              (local.set $q (i32.add (local.get $q) (i32.const 1)))
+              (br $prefix)))
+          (local.set $n (call $parseListMarker (local.get $q) (i32.const 0)))
+          (if (local.get $n)
+            (then
+              (local.set $q (i32.add (local.get $q) (local.get $n)))
+              (br $prefix))))))
+    (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 1))))
+    (if (call $scanAtxStart (local.get $q)) (then (return (i32.const 1))))
+    (local.set $pipe (i32.lt_u (call $findByte (local.get $q) (local.get $end) (i32.const "|")) (local.get $end)))
+    ;; The next line: a deeper quote, a block that interrupts a paragraph, or a table row.
+    (local.set $end (call $findLineEnd (local.get $next)))
+    (global.set $lineEnd (local.get $end))
+    (local.set $q (local.get $next))
+    (loop $quote
+      (local.set $q (call $skipSpace (local.get $q) (local.get $end)))
+      (if (i32.lt_u (local.get $q) (local.get $end))
+        (then
+          (if (i32.eq (i32.load8_u (local.get $q)) (i32.const ">"))
+            (then
+              (local.set $quotes (i32.sub (local.get $quotes) (i32.const 1)))
+              (local.set $q (i32.add (local.get $q) (i32.const 1)))
+              (br $quote))))))
+    (if (i32.lt_s (local.get $quotes) (i32.const 0)) (then (return (i32.const 1))))
+    (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
+    (if (i32.or (i32.or (call $parseListMarker (local.get $q) (i32.const 0))
+            (call $scanAtxStart (local.get $q)))
+          (i32.or (call $scanThematicBreak (local.get $q))
+            (call $scanHtmlStart (local.get $q) (i32.const 0))))
+      (then (return (i32.const 1))))
+    ;; A setext underline.
+    (local.set $n (i32.load8_u (local.get $q)))
+    (if (i32.or (i32.eq (local.get $n) (i32.const "=")) (i32.eq (local.get $n) (i32.const "-")))
+      (then
+        (if (i32.ge_u (call $skipSpace (call $runEnd (local.get $q) (local.get $end) (local.get $n)) (local.get $end))
+              (local.get $end))
+          (then (return (i32.const 1))))))
+    (i32.and (local.get $pipe)
+      (i32.lt_u (call $findByte (local.get $q) (local.get $end) (i32.const "|")) (local.get $end))))
+
   ;; Complete the display copy of a streaming input. Fences and inline code
   ;; protect their contents; a bounded delimiter stack supplies only missing
   ;; closing markers. This does not alter the caller's original Markdown.
@@ -36,13 +94,14 @@
     (local $fence i32) (local $fenceLen i32) (local $fenceCtx i32) (local $fenceCol i32)
     (local $tick i32) (local $line i32) (local $ctx i32) (local $open i32) (local $openDepth i32)
     (local $url i32) (local $image i32) (local $html i32) (local $canOpen i32)
-    (local $top i32) (local $remaining i32) (local $closeAt i32)
+    (local $top i32) (local $remaining i32) (local $closeAt i32) (local $openEnd i32)
     (local $m i32) (local $blk i32) (local $bits i64) (local $hits i64) (local $mm i64)
     (local $w v128) (local $lo v128) (local $hi v128) (local $sel v128) (local $pack v128)
     (local.set $p (i32.const $mem.input))
     (local.set $end (i32.add (local.get $p) (i32.load (i32.const 2))))
     (global.set $eof (local.get $end))
     (global.set $completeFenceBlank (i32.const 0))
+    (global.set $hrKill (i32.const 0))
     ;; Repair starts where the parser's markdown starts: after a byte order
     ;; mark and, when that option is on, after the frontmatter block.
     (if (i32.and (i32.ge_u (i32.sub (local.get $end) (local.get $p)) (i32.const 3))
@@ -296,7 +355,8 @@
                     (local.set $top (i32.add (local.get $stack) (i32.shl (local.get $depth) (i32.const 3))))
                     (i32.store (local.get $top) (local.get $c))
                     (i32.store offset=4 (local.get $top) (local.get $n))
-                    (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+                    (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
+                    (local.set $openEnd (local.get $q))))
                 (local.set $p (local.get $q)) (br $scan)))
             (br $next))
           ;; A blank line ends inline state outside a fence. The line end stops
@@ -313,6 +373,13 @@
               (if (local.get $fence)
                 (then (global.set $completeFenceBlank (i32.add (local.get $p) (i32.const 1))))
                 (else
+                  (local.set $depth (i32.const 0)) (local.set $open (i32.const 0))
+                  (local.set $url (i32.const 0)) (local.set $tick (i32.const 0))))))
+          ;; Inline state also ends where a block ends without a blank line.
+          (if (i32.or (i32.or (local.get $depth) (local.get $tick)) (i32.or (local.get $open) (local.get $url)))
+            (then
+              (if (call $completeBlockEnds (local.get $line) (i32.add (local.get $p) (i32.const 1)))
+                (then
                   (local.set $depth (i32.const 0)) (local.set $open (i32.const 0))
                   (local.set $url (i32.const 0)) (local.set $tick (i32.const 0))))))
           (local.set $line (i32.add (local.get $p) (i32.const 1)))
@@ -370,7 +437,7 @@
         (local.set $remaining (i32.add (local.get $remaining)
           (i32.load offset=4 (i32.add (local.get $stack) (i32.shl (local.get $q) (i32.const 3))))))
         (br $size)))
-    (if (local.get $remaining)
+    (if (i32.or (local.get $remaining) (local.get $open))
       (then
         (local.set $closeAt (local.get $end))
         (block $contentEnd
@@ -383,6 +450,12 @@
                 (else (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x800))
                   (then (i32.const 2)) (else (i32.const 3)))))))
             (br $trailingWhite)))
+        ;; A closing tick run would join a run that ends the content.
+        (if (i32.and (i32.ne (local.get $tick) (i32.const 0))
+              (i32.eq (i32.load8_u (i32.sub (local.get $closeAt) (i32.const 1))) (i32.const "`")))
+          (then
+            (local.set $remaining (i32.sub (local.get $remaining) (local.get $tick)))
+            (local.set $tick (i32.const 0))))
         (if (local.get $tick)
           (then
             (block $lineEnd
@@ -391,17 +464,51 @@
                 (local.set $c (i32.load8_u (local.get $closeAt)))
                 (br_if $lineEnd (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
                 (local.set $closeAt (i32.add (local.get $closeAt) (i32.const 1)))
-                (br $sameLine)))))
+                (br $sameLine))))
+          (else
+            ;; An unescaped final `\` would escape what follows it, and it has
+            ;; nothing to escape yet. $n is 1 for it, and the closers replace it.
+            (local.set $q (local.get $closeAt))
+            (loop $slashes
+              (if (i32.and (i32.gt_u (local.get $q) (local.get $start))
+                    (i32.eq (i32.load8_u (i32.sub (local.get $q) (i32.const 1))) (i32.const "\5c")))
+                (then
+                  (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+                  (br $slashes))))
+            (local.set $n (i32.and (i32.sub (local.get $closeAt) (local.get $q)) (i32.const 1)))))
+        (if (i32.eqz (local.get $tick))
+          (then
+            ;; Closers right after their opener would only double it as text.
+            (if (i32.eq (i32.sub (local.get $closeAt) (local.get $n)) (local.get $openEnd))
+              (then
+                (local.set $depth (local.get $prev))
+                (local.set $remaining (i32.const 0))))
+            ;; A lone `~` is not a closer, but one that ends the content joins the next.
+            (if (i32.gt_u (local.get $depth) (local.get $prev))
+              (then
+                (local.set $top (i32.add (local.get $stack) (i32.shl (i32.sub (local.get $depth) (i32.const 1)) (i32.const 3))))
+                (if (i32.and (i32.eq (i32.load (local.get $top)) (i32.const "~"))
+                      (i32.eq (i32.load8_u (i32.sub (local.get $closeAt) (i32.const 1))) (i32.const "~")))
+                  (then
+                    (i32.store offset=4 (local.get $top) (i32.const 1))
+                    (local.set $remaining (i32.sub (local.get $remaining) (i32.const 1))))))))
+          (else (local.set $n (i32.const 0))))
+        ;; With nothing after it to protect, the `\` stays as text.
+        (if (i32.eqz (i32.or (local.get $remaining) (local.get $open)))
+          (then (local.set $n (i32.const 0))))
         ;; Move the whitespace once, however long it is.
-        (memory.copy (i32.add (local.get $closeAt) (local.get $remaining)) (local.get $closeAt)
-          (i32.sub (local.get $end) (local.get $closeAt)))
-        (local.set $end (i32.add (local.get $end) (local.get $remaining)))
+        (memory.copy (i32.sub (i32.add (local.get $closeAt) (local.get $remaining)) (local.get $n))
+          (local.get $closeAt) (i32.sub (local.get $end) (local.get $closeAt)))
+        (local.set $end (i32.sub (i32.add (local.get $end) (local.get $remaining)) (local.get $n)))
+        (local.set $closeAt (i32.sub (local.get $closeAt) (local.get $n)))
         (memory.fill (local.get $closeAt) (i32.const "`") (local.get $tick))
         (drop (call $completeClosers (i32.add (local.get $closeAt) (local.get $tick))
           (local.get $stack) (local.get $prev) (local.get $depth)))))
     (if (local.get $open)
       (then
-        ;; The React layer renders this sentinel as text, never as a URL.
+        ;; $htmlLinkOpen recognizes this destination and writes no URL. Bit 4 says
+        ;; that this input holds it; the host resets option flags before every render.
+        (i32.store8 (i32.const 1) (i32.or (i32.load8_u (i32.const 1)) (i32.const 16)))
         (i64.store (local.get $end) (i64.const "](stream"))
         (i64.store offset=8 (local.get $end) (i64.const "down:inc"))
         (i64.store offset=16 (local.get $end) (i64.const "omplete-"))

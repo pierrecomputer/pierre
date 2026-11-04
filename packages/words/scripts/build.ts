@@ -1,12 +1,24 @@
 #!/usr/bin/env node
 
-import binaryen from 'binaryen';
+import type { BitsetMap, EnumMap } from '@pierre/wat-tools';
+import {
+  checkDataSegments,
+  dataSegment,
+  expandBitsetGets,
+  expandBitsets,
+  expandEnumGetsAndStrings,
+  expandEnums,
+  flattenWat,
+  optimizeWasm,
+  packLe,
+  parseWatString,
+  replaceForm,
+  resolveConsts,
+  wat2wasm,
+} from '@pierre/wat-tools';
 import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import wabt from 'wabt';
-
-const { parseWat } = await wabt();
 
 /**
  * transform the given wat file, to support:
@@ -22,137 +34,13 @@ export function transformWat(input: string | URL, content?: string) {
   // node:url's URL type is not the global URL under bun-types, so rewrap it
   const url = input instanceof URL ? input : new URL(pathToFileURL(input).href);
   if (content === undefined) content = fs.readFileSync(url, 'utf-8');
-  const enumMap = new Map<string, Record<string, number>>();
-  const bitsetMap = new Map<
-    string,
-    { base: number; bits: Record<string, number> }
-  >();
-  const imports: string[] = [];
-  const seen = new Set([url.href]);
-  const flatten = (moduleUrl: URL, source: string): string =>
-    source.replace(/\(\s*import\s+"(\.+\/.+\.wat)"\s*\)/g, (_, path) => {
-      const importUrl = new URL(path, moduleUrl);
-      if (seen.has(importUrl.href)) return '';
-      seen.add(importUrl.href);
-      return flatten(importUrl, fs.readFileSync(importUrl, 'utf-8')).replace(
-        /^\s*\(\s*module\s+([\s\S]+)\s*\)\s*$/,
-        '$1'
-      );
-    });
-  // comment lines are anchored as whole lines ((?:;;[^\n]*\n\s*)*) - an
-  // ambiguous (;;.+\s+)* here backtracks exponentially on comment blocks
-  // with trailing whitespace
-  let code = flatten(url, content)
-    .replace(/(?:;;[^\n]*\n\s*)*\(\s*import +".+" +\( *func.+\)/g, (i) => {
-      imports.push(i);
-      return '';
-    })
-    .replace(/\s*\(\s*enum\s+(\$\w+)\s+([^)]+)\s*\)/g, (_, key, members) => {
-      if (enumMap.has(key)) throw new Error(`Duplicate enum ${key}`);
-      let i = 0;
-      enumMap.set(
-        key,
-        Object.fromEntries(
-          members
-            .split(/\s+/g)
-            .map((l: string) => l.trim())
-            .filter((l: string) => Boolean(l) && /^"[\w.]+"$/.test(l))
-            .map((l: string) => [JSON.parse(l), i++])
-        )
-      );
-      return '';
-    });
-
-  // (const $mem.name <int|$other>[+-<int>]) - named memory addresses, declared
-  // once in src/memory.wat and substituted everywhere, so a region only ever
-  // moves in one place. A reference may carry the same +/- bias (`$mem.x-1`),
-  // which is why const names must not contain `-`.
-  const constExprs = new Map<string, { value: string; bias: number }>();
-  code = code.replace(
-    /\s*\(\s*const\s+(\$[\w.]+)\s+(\$[\w.]+|\d+)([+-]\d+)?\s*\)/g,
-    (_, name, value, bias) => {
-      if (constExprs.has(name))
-        throw new Error(`Duplicate const ${name} in ${url.pathname}`);
-      constExprs.set(name, { value, bias: bias != null ? Number(bias) : 0 });
-      return '';
-    }
-  );
-  const constMap = new Map<string, number>();
-  const resolveConst = (name: string, pending: Set<string>): number => {
-    if (constMap.has(name)) return constMap.get(name)!;
-    const expr = constExprs.get(name);
-    if (expr == null)
-      throw new Error(`Const '${name}' is undefined in ${url.pathname}`);
-    if (pending.has(name))
-      throw new Error(`Const '${name}' is cyclic in ${url.pathname}`);
-    pending.add(name);
-    const base = /^\d+$/.test(expr.value)
-      ? Number(expr.value)
-      : resolveConst(expr.value, pending);
-    constMap.set(name, base + expr.bias);
-    return base + expr.bias;
-  };
-  for (const name of constExprs.keys()) resolveConst(name, new Set());
-  code = code.replace(/(\$[\w.]+)([+-]\d+)?/g, (all, name, bias) =>
-    constMap.has(name) ? String(constMap.get(name)! + Number(bias ?? 0)) : all
-  );
-  const stray = code.match(/\$mem\.[\w.]+/);
-  if (stray != null)
-    throw new Error(`Const '${stray[0]}' is undefined in ${url.pathname}`);
-
-  // (bitset $Name $Enum <base> (pred "member" ...) ...) - one byte per enum
-  // member, one bit per predicate, emitted as a data segment at <base>. Turns a
-  // long eq-ladder into a load+and whose cost does not grow with the set size.
-  code = replaceForm(code, 'bitset', (raw) => {
-    const inner = raw.replace(/;;[^\n]*/g, ''); // comments may sit between members
-    const head = inner.match(/^\s*(\$\w+)\s+(\$\w+)\s+(\d+)/);
-    if (head == null) throw new Error(`Malformed bitset in ${url.pathname}`);
-    const [, name, enumKey, baseStr] = head;
-    if (bitsetMap.has(name)) throw new Error(`Duplicate bitset ${name}`);
-    const members = enumMap.get(enumKey);
-    if (members == null)
-      throw new Error(
-        `Bitset '${name}' references unknown enum '${enumKey}' in ${url.pathname}`
-      );
-    const base = Number(baseStr);
-    const bytes = new Uint8Array(Object.keys(members).length);
-    const bits: Record<string, number> = {};
-    let bit = 0;
-    for (const [, pred, list] of inner.matchAll(
-      /\((\w+)((?:\s+"[\w.]+")+)\s*\)/g
-    )) {
-      if (bit > 7)
-        throw new Error(
-          `Bitset '${name}' has more than 8 predicates in ${url.pathname}`
-        );
-      bits[pred] = 1 << bit++;
-      for (const q of list.match(/"[\w.]+"/g) ?? []) {
-        const member = JSON.parse(q);
-        if (members[member] === undefined) {
-          throw new Error(
-            `Bitset '${name}.${pred}': '${member}' is not in enum '${enumKey}' in ${url.pathname}`
-          );
-        }
-        bytes[members[member]] |= bits[pred];
-      }
-    }
-    bitsetMap.set(name, { base, bits });
-    return `;; ${name}: ${Object.keys(bits).join(', ')}\n  ${dataSegment(base, bytes)}`;
-  });
-
-  // (bitset.get $Name.pred <expr>) -> (i32.and (i32.load8_u offset=base <expr>) (i32.const mask))
-  code = replaceForm(code, 'bitset.get', (inner) => {
-    const m = inner.match(/^\s*(\$\w+)\.(\w+)\s+([\s\S]+)$/);
-    if (m == null) throw new Error(`Malformed bitset.get in ${url.pathname}`);
-    const [, name, pred, expr] = m;
-    const table = bitsetMap.get(name);
-    const mask = table?.bits[pred];
-    if (table == null || mask === undefined)
-      throw new Error(
-        `Bitset '${name}.${pred}' is undefined in ${url.pathname}`
-      );
-    return `(i32.and (i32.load8_u offset=${table.base} ${expr.trim()}) (i32.const ${mask}))`;
-  });
+  const enumMap: EnumMap = new Map();
+  const bitsetMap: BitsetMap = new Map();
+  let code = expandEnums(flattenWat(url, content).code, enumMap);
+  const resolved = resolveConsts(code, url.pathname);
+  code = expandBitsets(resolved.code, enumMap, bitsetMap, url.pathname);
+  const constMap = resolved.constMap;
+  code = expandBitsetGets(code, bitsetMap, url.pathname);
 
   // (entity-table <base> <end>) - the HTML5 named character references:
   // front-coded sorted names, then their code points. See buildEntityTable
@@ -422,7 +310,7 @@ export function transformWat(input: string | URL, content?: string) {
   // pooled data segment emitted by (string-pool ...).
   const pool: string[] = [];
   code = replaceForm(code, 'out.str', (inner) => {
-    const text = parseWatString(inner.trim(), url);
+    const text = parseWatString(inner.trim(), url.pathname);
     if (text.length === 0) return '(nop)';
     if (text.length <= 8)
       return `(call $outSmall (i64.const ${packLe(text)}) (i32.const ${text.length}))`;
@@ -456,34 +344,8 @@ export function transformWat(input: string | URL, content?: string) {
   if (code.includes(' POOL:'))
     throw new Error('(out.str ...) used without a (string-pool ...) segment');
 
-  code = code
-    .replace(
-      /(\(\s*)enum\.get\s+(\$\w+)\.([\w.]+)/g,
-      (_, prefix, key, memberName) => {
-        const i = enumMap.get(key)?.[memberName];
-        if (i === undefined)
-          throw new Error(
-            `Enum '${key}.${memberName}' is undefined in ${url.pathname}`
-          );
-        return prefix + 'i32.const ' + i;
-      }
-    )
-    .replace(/i(32|64)\.const\s+("(?:[^"\\]|\\.)*")/g, (_, bits, str) => {
-      const chars = parseWatString(str, url);
-      if (chars.length > Number(bits) / 8) {
-        throw new Error(
-          `Could not convert '${chars}' to i${bits} in ${url.pathname}`
-        );
-      }
-      return `i${bits}.const ${packLe(chars)}`;
-    });
-  checkDataSegments(code, url.pathname);
-  if (imports.length !== 0) {
-    code = code.replace(
-      /^\s*\(\s*module(\s+)/,
-      `(module\n${imports.map((i) => '  ' + i).join('\n')}$1`
-    );
-  }
+  code = expandEnumGetsAndStrings(code, enumMap, url.pathname);
+  checkDataSegments(code, url.pathname, 65536);
   return { code, enumMap, bitsetMap, constMap, poolSize };
 }
 
@@ -504,48 +366,6 @@ const WIDE_RANGES =
   '1F6D0-1F6D2,1F6D5-1F6D8,1F6DC-1F6DF,1F6EB-1F6EC,1F6F4-1F6FC,1F7E0-1F7EB,1F7F0,' +
   '1F90C-1F93A,1F93C-1F945,1F947-1F9FF,1FA70-1FA7C,1FA80-1FA8A,1FA8E-1FAC6,1FAC8,' +
   '1FACD-1FADC,1FADF-1FAEA,1FAEF-1FAF8,20000-2FFFD,30000-3FFFD';
-
-/** little-endian integer literal for up to 8 latin-1 characters */
-function packLe(chars: string) {
-  let hex = '';
-  for (const c of chars) {
-    const b = c.charCodeAt(0);
-    if (b > 0xff) throw new Error(`'${chars}' is not a byte string`);
-    hex = b.toString(16).padStart(2, '0') + hex;
-  }
-  return '0x' + ((hex ?? '') !== '' ? hex : '00');
-}
-
-/** decode a wat string literal (\xx, \n, \t, \r, \", \\) into latin-1 characters */
-function parseWatString(raw: string, url: URL) {
-  if (!raw.startsWith('"') || !raw.endsWith('"') || raw.length < 2) {
-    throw new Error(`Expected a string literal, got ${raw} in ${url.pathname}`);
-  }
-  let out = '';
-  for (let i = 1; i < raw.length - 1; i++) {
-    const c = raw[i];
-    if (c !== '\\') {
-      out += c;
-      continue;
-    }
-    const n = raw[++i];
-    if (n === 'n') out += '\n';
-    else if (n === 't') out += '\t';
-    else if (n === 'r') out += '\r';
-    else if (n === '"' || n === '\\' || n === "'") out += n;
-    else if (/[0-9a-fA-F]/.test(n) && /[0-9a-fA-F]/.test(raw[i + 1])) {
-      out += String.fromCharCode(parseInt(n + raw[++i], 16));
-    } else throw new Error(`Bad escape in ${raw} (${url.pathname})`);
-  }
-  return out;
-}
-
-/** a data segment, with every byte escaped so the wat text stays 7-bit clean */
-function dataSegment(base: number, bytes: Uint8Array) {
-  let out = '';
-  for (const b of bytes) out += '\\' + b.toString(16).padStart(2, '0');
-  return `(data (i32.const ${base}) "${out}")`;
-}
 
 /**
  * concatenate the strings, dropping any that is already a substring of another
@@ -675,152 +495,6 @@ function buildEntityTable(base: number) {
   return { bytes, entries: n };
 }
 
-/**
- * find every `(head ...)` form and replace it with `fn(innerText)`.
- * scans parens so nested forms and string operands survive.
- */
-function replaceForm(
-  code: string,
-  head: string,
-  fn: (inner: string) => string
-) {
-  const open = new RegExp(
-    `\\(\\s*${head.replace(/[.$]/g, '\\$&')}(?=[\\s(])`,
-    'g'
-  );
-  let out = '';
-  let last = 0;
-  let m;
-  while ((m = open.exec(code)) != null) {
-    let depth = 0,
-      i = m.index,
-      inStr = false,
-      inComment = false;
-    for (; i < code.length; i++) {
-      const c = code[i];
-      if (inComment) {
-        if (c === '\n') inComment = false;
-        continue;
-      }
-      if (inStr) {
-        if (c === '\\') i++;
-        else if (c === '"') inStr = false;
-        continue;
-      }
-      if (c === '"') inStr = true;
-      else if (c === ';' && code[i + 1] === ';') inComment = true;
-      else if (c === '(') depth++;
-      else if (c === ')' && --depth === 0) break;
-    }
-    if (depth !== 0)
-      throw new Error(`Unterminated (${head} ...) form at offset ${m.index}`);
-    out += code.slice(last, m.index) + fn(code.slice(m.index + m[0].length, i));
-    last = i + 1;
-    open.lastIndex = last;
-  }
-  return out + code.slice(last);
-}
-
-/**
- * assert the static tables of src/memory.wat still tile page 1: every data
- * segment must stay inside it and no two may overlap. A mistyped address in
- * the layout would otherwise corrupt another table silently.
- */
-function checkDataSegments(code: string, path: string) {
-  const segments = [];
-  const open = /\(\s*data\s+\(\s*i32\.const\s+(\d+)\s*\)/g;
-  let m;
-  while ((m = open.exec(code)) != null) {
-    let depth = 1,
-      i = m.index + m[0].length,
-      inStr = false,
-      inComment = false,
-      length = 0;
-    for (; i < code.length && Boolean(depth); i++) {
-      const c = code[i];
-      if (inComment) {
-        if (c === '\n') inComment = false;
-      } else if (inStr) {
-        if (c === '\\') {
-          i += /[0-9a-fA-F]{2}/.test(code.slice(i + 1, i + 3)) ? 2 : 1;
-          length++;
-        } else if (c === '"') inStr = false;
-        else length++;
-      } else if (c === '"') inStr = true;
-      else if (c === ';' && code[i + 1] === ';') inComment = true;
-      else if (c === '(') depth++;
-      else if (c === ')') depth--;
-    }
-    segments.push({ base: Number(m[1]), end: Number(m[1]) + length });
-    open.lastIndex = i;
-  }
-  segments.sort((a, b) => a.base - b.base);
-  for (const [i, seg] of segments.entries()) {
-    if (seg.end > 65536)
-      throw new Error(
-        `data segment [${seg.base}:${seg.end}) overflows page 1 in ${path}`
-      );
-    const next = segments[i + 1];
-    if (next != null && next.base < seg.end) {
-      throw new Error(
-        `data segments [${seg.base}:${seg.end}) and [${next.base}:${next.end}) overlap in ${path}`
-      );
-    }
-  }
-}
-
-/**
- * convert the given wat text to wasm binary
- */
-export function wat2wasm(
-  filename: string,
-  text: string,
-  options?: Record<string, boolean>
-) {
-  const wasmModule = parseWat(
-    filename,
-    text,
-    options ?? { bulk_memory: true, simd: true }
-  );
-  try {
-    return wasmModule.toBinary({}).buffer;
-  } finally {
-    wasmModule.destroy();
-  }
-}
-
-/**
- * optimize a wasm binary with binaryen (`wasm-opt -O3 --shrink-level=1`) and
- * use Binaryen's optimized Stack IR writer for the final encoding. The pipeline
- * runs three times: re-reading an optimized binary lets the next pass fold
- * patterns the previous one exposed.
- */
-export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
-  binaryen.setOptimizeLevel(3);
-  binaryen.setShrinkLevel(1);
-  binaryen.setGenerateStackIR(true);
-  binaryen.setOptimizeStackIR(true);
-  for (let pass = 0; pass < 3; pass++) {
-    const wasmModule = binaryen.readBinary(wasmBytes);
-    try {
-      // must match the features `wat2wasm` compiles with, so binaryen never emits an
-      // instruction the target runtimes cannot execute
-      wasmModule.setFeatures(
-        binaryen.Features.BulkMemory |
-          binaryen.Features.BulkMemoryOpt |
-          binaryen.Features.SIMD128
-      );
-      if (wasmModule.validate() === 0)
-        throw new Error('binaryen rejected the module');
-      wasmModule.optimize();
-      wasmBytes = wasmModule.emitBinary();
-    } finally {
-      wasmModule.dispose();
-    }
-  }
-  return wasmBytes;
-}
-
 // Build md.wasm when this script is executed directly.
 if (
   Boolean(process.argv[1]) &&
@@ -839,7 +513,10 @@ if (
       new URL('../dist/md.wasm', moduleUrl).pathname,
       code
     );
-    const wasmBytes = optimizeWasm(rawBytes);
+    const wasmBytes = optimizeWasm(rawBytes, {
+      filename: 'md.wat',
+      shrinkLevel: 1,
+    });
     fs.writeFileSync(new URL('../dist/md.wasm', moduleUrl), wasmBytes);
     fs.writeFileSync(
       new URL('../dist/md.wasm.mjs', moduleUrl),

@@ -915,6 +915,42 @@
         (if (local.get $cut) (then (call $ansiEol)))
         (br $l))))
 
+  ;; Bytes input may hold invalid UTF-8, and a stray 0x9B is CSI on a terminal
+  ;; with 8-bit controls. Each bad byte becomes SUB, a control that every output
+  ;; path writes as U+FFFD. The input is our copy, and strings are always valid.
+  (func $ansiScrubInput
+    (local $p i32) (local $q i32) (local $c i32) (local $n i32) (local $lo i32) (local $hi i32)
+    (local.set $p (i32.const $mem.input))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $p) (global.get $eof)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $l (i32.lt_u (local.get $c) (i32.const 0x80)))
+        (block $bad
+          (br_if $bad (i32.ge_u (i32.sub (local.get $c) (i32.const 0xc2)) (i32.const 0x33)))
+          ;; The first continuation byte has a narrower range after these leads,
+          ;; which excludes overlong forms, surrogates and values above U+10FFFF.
+          (local.set $lo (select (i32.const 0xa0) (select (i32.const 0x90) (i32.const 0x80)
+            (i32.eq (local.get $c) (i32.const 0xf0))) (i32.eq (local.get $c) (i32.const 0xe0))))
+          (local.set $hi (select (i32.const 0x9f) (select (i32.const 0x8f) (i32.const 0xbf)
+            (i32.eq (local.get $c) (i32.const 0xf4))) (i32.eq (local.get $c) (i32.const 0xed))))
+          (local.set $n (i32.add (i32.add (i32.const 1) (i32.ge_u (local.get $c) (i32.const 0xe0)))
+            (i32.ge_u (local.get $c) (i32.const 0xf0))))
+          (local.set $q (local.get $p))
+          ;; The NUL sentinel after the input ends a truncated sequence.
+          (loop $cont
+            (br_if $bad (i32.gt_u (i32.sub (i32.load8_u (local.get $q)) (local.get $lo))
+              (i32.sub (local.get $hi) (local.get $lo))))
+            (local.set $lo (i32.const 0x80))
+            (local.set $hi (i32.const 0xbf))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br_if $cont (local.tee $n (i32.sub (local.get $n) (i32.const 1)))))
+          (local.set $p (local.get $q))
+          (br $l))
+        (i32.store8 (i32.sub (local.get $p) (i32.const 1)) (i32.const 0x1a))
+        (br $l))))
+
   ;; commit the space a previous word held back, before anything that would
   ;; otherwise be written on the far side of it; the line can end at that space
   (func $ansiFlushSpace

@@ -33,6 +33,9 @@
       "path": "packages/trees/tsconfig.json"
     },
     {
+      "path": "packages/wat-tools/tsconfig.json"
+    },
+    {
       "path": "packages/words/tsconfig.json"
     }
   ]

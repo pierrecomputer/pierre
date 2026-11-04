@@ -135,7 +135,8 @@
     (local $k i32)
     (call $cr)
     (out.str "<pre")
-    (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (i32.const 0))
+    ;; Only sessions mark an open fence.
+    (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 8)) (i32.const 0))
           (i32.eq (local.get $r) (global.get $incompleteCodeRec)))
       (then (out.str " data-markdown-incomplete")))
     (if (i32.gt_u (i32.load offset=12 (local.get $r)) (i32.load offset=8 (local.get $r)))
@@ -448,15 +449,26 @@
         (call $htmlLinkText (global.get $linkTitleBeg) (global.get $linkTitleEnd) (i32.const 3)))))
 
   (func $htmlLinkOpen (param $image i32)
+    (local $url i32)
     (if (local.get $image)
       (then
         (out.str "<img src=\22")
         (call $htmlUrl (i32.const 3))
         (out.str "\22 alt=\22")
         (return)))
-    (if (global.get $linkPending)
+    ;; No destination yet: an inert anchor around the label. Without bit 4 the
+    ;; source wrote this URL itself.
+    (local.set $url (i32.add (call $linkBase) (global.get $linkUrlBeg)))
+    (if (i32.or (global.get $linkPending)
+          (if (result i32) (i32.and (i32.shr_u (i32.load8_u (i32.const 1)) (i32.const 4))
+                (i32.eq (i32.sub (global.get $linkUrlEnd) (global.get $linkUrlBeg)) (i32.const 26)))
+            (then (i32.and (i32.and (i64.eq (i64.load (local.get $url)) (i64.const "streamdo"))
+                (i64.eq (i64.load offset=8 (local.get $url)) (i64.const "wn:incom")))
+              (i32.and (i64.eq (i64.load offset=16 (local.get $url)) (i64.const "plete-li"))
+                (i32.eq (i32.load16_u offset=24 (local.get $url)) (i32.const "nk")))))
+            (else (i32.const 0))))
       (then
-        (out.str "<a href=\22streamdown:incomplete-link\22>")
+        (out.str "<a data-markdown-incomplete>")
         (return)))
     (out.str "<a href=\22")
     (call $htmlUrl (i32.const 3))

@@ -76,8 +76,9 @@ export function Markdown({
     urlTransform,
     idPrefix: idPrefix ?? `${id}-`,
   };
-  const incomplete = mode === 'streaming' && parseIncompleteMarkdown;
   const active = mode === 'streaming' && isAnimating;
+  // Completion guesses what the stream will send, so finished text never uses it.
+  const incomplete = active && parseIncompleteMarkdown;
   const [initial] = useState(() => {
     const initial = createHtmlRenderer(options);
     try {

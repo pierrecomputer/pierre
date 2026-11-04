@@ -108,7 +108,7 @@ export function escapeHtml(value: string): string {
 
 /** Decode only entities emitted by our renderer; never reinterpret decoded markup. */
 export function decodeHtml(value: string): string {
-  return value.replace(/&(amp|lt|gt|quot|#39);/g, (_, name: string) =>
+  return value.replace(/&(amp|lt|gt|quot|#39|#x27);/g, (_, name: string) =>
     name === 'amp'
       ? '&'
       : name === 'lt'
@@ -119,6 +119,13 @@ export function decodeHtml(value: string): string {
             ? '"'
             : "'"
   );
+}
+
+/** Application hooks run from untyped code, and a non-string would print as text. */
+function hookHtml(html: unknown): string {
+  if (typeof html !== 'string')
+    throw new TypeError('HTML hooks must return strings');
+  return html;
 }
 
 /** Reject navigation schemes and ambiguous network paths before browser HTML parsing. */
@@ -198,11 +205,9 @@ function mapElements(
     }
     if (match[1] !== '' && (isVoid || open.length === 0)) piece += match[0];
     else {
-      const replacement = transform(
-        match[1] === '' ? match[0] : open.pop()! + piece + match[0]
+      const replacement = hookHtml(
+        transform(match[1] === '' ? match[0] : open.pop()! + piece + match[0])
       );
-      if (typeof replacement !== 'string')
-        throw new TypeError('HTML hooks must return strings');
       piece = match[1] === '' ? piece + replacement : replacement;
     }
     if (open.length === 0) result += piece;
@@ -238,22 +243,20 @@ function decorate(html: string, options: HtmlOptions): string {
     /<([a-z][a-z0-9]*)([^>]*)>/g,
     (_, tag: string, attributes: string) => {
       if (voidTags.has(tag)) attributes = attributes.replace(/\s*\/$/, '');
-      let pending = false;
+      // Wasm marks a pending link with this attribute instead of a destination.
+      const pending = tag === 'a' && attributes === ' data-markdown-incomplete';
+      if (pending) attributes = '';
       let invalidImage = false;
       const footnote = tag === 'a' && attributes.includes(' data-footnote-');
       attributes = attributes.replace(
         / (href|src)="([^"]*)"/g,
         (_attribute, key: 'href' | 'src', value: string) => {
-          let url = decodeHtml(value);
-          if (url === 'streamdown:incomplete-link') {
-            pending = true;
-            return '';
-          }
+          const decoded = decodeHtml(value);
           const transformed =
             options.urlTransform === undefined
-              ? url
-              : options.urlTransform(url, key);
-          url =
+              ? decoded
+              : options.urlTransform(decoded, key);
+          let url =
             transformed == null ? '' : (defaultUrlTransform(transformed) ?? '');
           if (url === '' && transformed !== '') {
             invalidImage ||= tag === 'img';
@@ -371,7 +374,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             : renderer.language.includes(language)
         );
         if (custom !== undefined)
-          return custom.render({ code, language, isIncomplete });
+          return hookHtml(custom.render({ code, language, isIncomplete }));
         const plugin = options.plugins?.code;
         // Only a different open fence replaces the live highlighter.
         if (isIncomplete) {
@@ -427,7 +430,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         // Fenced code is protected before applying the inline-code hook.
         html = html.replace(
           /<pre\b[^>]*>[\s\S]*?<\/pre>|<code\b[^>]*>[\s\S]*?<\/code>/g,
-          (element) => (element.startsWith('<pre') ? element : render(element))
+          (element) =>
+            element.startsWith('<pre') ? element : hookHtml(render(element))
         );
       } else if (
         tag === 'code' &&
@@ -668,8 +672,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               same++;
             let depth = 0;
             anyTag.lastIndex = cut;
+            // Identical HTML does not show that the last block has closed.
             for (
-              let match = anyTag.exec(raw);
+              let match = same < raw.length ? anyTag.exec(raw) : null;
               match !== null && anyTag.lastIndex < same;
               match = anyTag.exec(raw)
             ) {
