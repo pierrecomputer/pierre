@@ -18,17 +18,17 @@ The number in parentheses is the speedup over `diff@9.0.0`.
 
 | API / input                       |   Size | diff@9.0.0 |       @pierre/patches |
 | --------------------------------- | -----: | ---------: | --------------------: |
-| `createTwoFilesPatch`             | 779 KB |   208 MB/s | **2871 MB/s (13.8×)** |
-| `createTwoFilesPatch` (divergent) | 244 KB |  3.32 MB/s |  **185 MB/s (55.5×)** |
-| `diffLines`                       | 779 KB |   223 MB/s | **2993 MB/s (13.4×)** |
-| `diffWordsWithSpace`              | 154 KB |  31.7 MB/s |  **522 MB/s (16.5×)** |
-| `diffWordsWithSpace` (Unicode)    |  94 KB |  40.5 MB/s |  **358 MB/s (8.84×)** |
-| `diffChars`                       |  51 KB |  55.8 MB/s | **1428 MB/s (25.6×)** |
-| `diffChars` (Unicode)             |  24 KB |  20.5 MB/s |  **379 MB/s (18.5×)** |
-| `diffWordsWithSpace` (per line)   | 213 KB |  42.7 MB/s |  **266 MB/s (6.22×)** |
-| `diffChars` (per line)            | 213 KB |  10.3 MB/s |  **182 MB/s (17.6×)** |
+| `createTwoFilesPatch`             | 779 KB |   202 MB/s | **2878 MB/s (14.2×)** |
+| `createTwoFilesPatch` (divergent) | 244 KB |  3.24 MB/s |  **184 MB/s (56.8×)** |
+| `diffLines`                       | 779 KB |   217 MB/s | **2976 MB/s (13.7×)** |
+| `diffWordsWithSpace`              | 154 KB |  31.4 MB/s |  **516 MB/s (16.4×)** |
+| `diffWordsWithSpace` (Unicode)    |  94 KB |  40.3 MB/s |  **355 MB/s (8.81×)** |
+| `diffChars`                       |  51 KB |  55.6 MB/s | **1550 MB/s (27.9×)** |
+| `diffChars` (Unicode)             |  24 KB |  20.3 MB/s |  **380 MB/s (18.7×)** |
+| `diffWordsWithSpace` (per line)   | 213 KB |  41.8 MB/s |  **259 MB/s (6.20×)** |
+| `diffChars` (per line)            | 213 KB |  10.1 MB/s |  **183 MB/s (18.1×)** |
 
-> Measured on 2026-10-15 with Bun 1.4.0 on a 14-core Apple M4 Pro with 48 GB RAM
+> Measured on 2026-11-04 with Bun 1.4.0 on a 14-core Apple M4 Pro with 48 GB RAM
 > (macOS arm64).
 
 ## Memory Usage
@@ -38,17 +38,17 @@ garbage collector off. For @pierre/patches, this includes the wasm memory.
 
 | API / input                       |   Size | diff@9.0.0 | @pierre/patches |
 | --------------------------------- | -----: | ---------: | --------------: |
-| `createTwoFilesPatch`             | 779 KB |    6.61 MB |     **1.48 MB** |
-| `createTwoFilesPatch` (divergent) | 244 KB |    77.8 MB |     **3.39 MB** |
-| `diffLines`                       | 779 KB |    5.53 MB |     **1.38 MB** |
-| `diffWordsWithSpace`              | 154 KB |    5.33 MB |     **1.78 MB** |
-| `diffWordsWithSpace` (Unicode)    |  94 KB |    2.67 MB |     **1.55 MB** |
-| `diffChars`                       |  51 KB |    2.84 MB |     **0.56 MB** |
-| `diffChars` (Unicode)             |  24 KB |    1.80 MB |     **0.25 MB** |
-| `diffWordsWithSpace` (per line)   | 213 KB |    8.73 MB |     **0.75 MB** |
-| `diffChars` (per line)            | 213 KB |    31.4 MB |     **1.06 MB** |
+| `createTwoFilesPatch`             | 779 KB |    6.95 MB |     **1.56 MB** |
+| `createTwoFilesPatch` (divergent) | 244 KB |    77.8 MB |     **3.47 MB** |
+| `diffLines`                       | 779 KB |    5.75 MB |     **1.44 MB** |
+| `diffWordsWithSpace`              | 154 KB |    5.28 MB |     **1.84 MB** |
+| `diffWordsWithSpace` (Unicode)    |  94 KB |    2.66 MB |     **1.61 MB** |
+| `diffChars`                       |  51 KB |    2.94 MB |     **0.63 MB** |
+| `diffChars` (Unicode)             |  24 KB |    1.80 MB |     **0.34 MB** |
+| `diffWordsWithSpace` (per line)   | 213 KB |    8.73 MB |     **0.81 MB** |
+| `diffChars` (per line)            | 213 KB |    30.3 MB |     **1.11 MB** |
 
-> Measured on 2026-10-15 with Bun 1.4.0 on a 14-core Apple M4 Pro with 48 GB RAM
+> Measured on 2026-11-04 with Bun 1.4.0 on a 14-core Apple M4 Pro with 48 GB RAM
 > (macOS arm64).
 
 jsdiff makes garbage that the garbage collector must clean up after each call.
@@ -67,6 +67,8 @@ highlights.
 For throughput, each function gets 5 warmup calls, then runs until 1.2 seconds
 pass or 2,000 calls are done. Throughput is the input size divided by the median
 time per call (1 MB = 1,024² bytes).
+
+The tables show the median of 3 benchmark runs.
 
 For memory, [`memory.ts`](./memory.ts) runs in a new Bun process with
 `BUN_JSC_useGC=0`. After 5 warmup calls, it measures how much the RSS grows in
