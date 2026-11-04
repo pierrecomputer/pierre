@@ -25,7 +25,7 @@ export type PaneVisibilityEvent = CustomEvent<{ hidden: boolean }>;
 export function paneHosts(root: HTMLElement): HTMLElement[] {
   return Array.from(root.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.dataset.layoutPane !== undefined
+      child instanceof HTMLElement && child.hasAttribute('data-layout-pane')
   );
 }
 
@@ -47,20 +47,21 @@ export function setCoveredHidden(
 ): void {
   for (const host of paneHosts(root)) {
     // A hidden pane does not render whatever the zoom.
-    if (host.dataset.collapsed === 'true') continue;
+    if (host.getAttribute('data-collapsed') === 'true') continue;
     const hidden =
-      zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
-    if ((host.dataset.hidden === 'true') === hidden) continue;
+      zoomedPane !== null &&
+      host.getAttribute('data-layout-pane') !== zoomedPane;
+    if ((host.getAttribute('data-hidden') === 'true') === hidden) continue;
     // `inert` is inherited, so on a pane whose content renders it lays out
     // all of that content again (about 200 ms for 15 panes of real content).
     // It changes with `content-visibility` in one style update, so the
     // content does not render for either change.
     if (hidden) {
-      host.dataset.hidden = 'true';
+      host.setAttribute('data-hidden', 'true');
       host.inert = true;
     } else {
       host.inert = false;
-      delete host.dataset.hidden;
+      host.removeAttribute('data-hidden');
     }
     notify(host, hidden);
   }
@@ -90,7 +91,7 @@ export function notifyCollapsed(
   after: ReadonlySet<string>
 ): void {
   for (const host of paneHosts(root)) {
-    const id = host.dataset.layoutPane ?? '';
+    const id = host.getAttribute('data-layout-pane') ?? '';
     if (after.has(id) !== before.has(id)) notify(host, after.has(id));
   }
 }
@@ -98,7 +99,7 @@ export function notifyCollapsed(
 /** Focus a pane host. */
 export function focusPane(root: HTMLElement, id: string): void {
   paneHosts(root)
-    .find((host) => host.dataset.layoutPane === id)
+    .find((host) => host.getAttribute('data-layout-pane') === id)
     ?.focus();
 }
 
@@ -110,7 +111,7 @@ export function focusZoomedPane(root: HTMLElement, id: string): void {
   const active = paneHosts(root).find((host) =>
     host.contains(document.activeElement)
   );
-  if (active?.dataset.layoutPane !== id) focusPane(root, id);
+  if (active?.getAttribute('data-layout-pane') !== id) focusPane(root, id);
 }
 
 /**
