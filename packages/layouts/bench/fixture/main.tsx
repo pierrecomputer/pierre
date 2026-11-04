@@ -1,4 +1,4 @@
-import { type JSX, useEffect } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import {
@@ -18,6 +18,7 @@ import {
   PaneContent,
   resetCounters,
 } from './content';
+import { BenchOverlays, type OverlayState } from './overlays';
 import './style.css';
 
 /** The page API that the benchmark scenarios drive through `page.evaluate`. */
@@ -35,6 +36,13 @@ export interface LayoutsBench {
   resetCounters(): void;
   append(id: string): void;
   busy(milliseconds: number): void;
+  /**
+   * Mount the modal and the drawer, closed. The promise resolves when their
+   * handles exist, so that their first render is not in a trace.
+   */
+  mountOverlays(): Promise<void>;
+  /** Open or close an overlay, as an app's state change does. */
+  setOverlay(overlay: keyof OverlayState, open: boolean): void;
 }
 
 declare global {
@@ -88,6 +96,14 @@ const paneLayers: boolean | { minPanes: number } | undefined =
       : requestedLayers !== null && /^\d+$/.test(requestedLayers)
         ? { minPanes: Number(requestedLayers) }
         : undefined;
+// The modal strategy: `popover` (the default), `dialog-hide-covered`, or
+// `dialog`; and `backdrop=opaque` for a backdrop that hides the page.
+const requestedModal = params.get('modal');
+const modalStrategy =
+  requestedModal === 'dialog' || requestedModal === 'dialog-hide-covered'
+    ? requestedModal
+    : 'popover';
+const backdrop = params.get('backdrop') === 'opaque' ? 'opaque' : 'translucent';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
@@ -172,28 +188,60 @@ window.__layoutsBench = {
       // Block the main thread, as a long task in the app would.
     }
   },
+  // The Bench component replaces these when it mounts.
+  mountOverlays: () => Promise.resolve(),
+  setOverlay() {},
 };
 
+const nextFrames = (): Promise<void> =>
+  new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  );
+
 function Bench(): JSX.Element {
+  const workspace = useRef<HTMLDivElement>(null);
+  const [overlaysMounted, setOverlaysMounted] = useState(false);
+  const [overlays, setOverlays] = useState<OverlayState>({
+    modal: false,
+    drawer: false,
+  });
   useEffect(() => {
+    const bench = window.__layoutsBench;
+    bench.mountOverlays = async () => {
+      setOverlaysMounted(true);
+      await nextFrames();
+    };
+    bench.setOverlay = (overlay, open) =>
+      setOverlays((state) => ({ ...state, [overlay]: open }));
     // Ready after two frames, so that the first layout and paint are complete.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        window.__layoutsBench.ready = true;
-      })
-    );
+    void nextFrames().then(() => {
+      bench.ready = true;
+    });
   }, []);
   return (
-    <div className="bench-workspace">
-      <Layout
-        store={store}
-        renderPane={renderPane}
-        getPaneTitle={title}
-        label="Benchmark workspace"
-        experimentalResize={resize}
-        paneLayers={paneLayers}
-      />
-    </div>
+    <>
+      <div className="bench-workspace" ref={workspace}>
+        <Layout
+          store={store}
+          renderPane={renderPane}
+          getPaneTitle={title}
+          label="Benchmark workspace"
+          experimentalResize={resize}
+          paneLayers={paneLayers}
+        />
+      </div>
+      {overlaysMounted && (
+        <BenchOverlays
+          workspace={workspace}
+          state={overlays}
+          onClose={(overlay) =>
+            setOverlays((state) => ({ ...state, [overlay]: false }))
+          }
+          strategy={modalStrategy}
+          backdrop={backdrop}
+        />
+      )}
+    </>
   );
 }
 

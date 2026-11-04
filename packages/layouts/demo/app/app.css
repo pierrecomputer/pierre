@@ -285,3 +285,134 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Overlays */
+
+.app-overlay-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.app-overlay-buttons > button {
+  padding: 5px 10px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #29313d;
+}
+
+.app-overlay-buttons > button[aria-expanded='true'] {
+  background: #e8eefc;
+}
+
+.app-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #dce1e8;
+}
+
+.app-overlay-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.app-overlay-header button {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+}
+
+.app-overlay-buttons button:focus-visible,
+.app-overlay-header button:focus-visible,
+.app-overlay-footer button:focus-visible,
+.app-review-message input:focus-visible {
+  outline: 2px solid var(--layout-accent, #5489ed);
+  outline-offset: 1px;
+}
+
+.app-review {
+  width: 640px;
+  font-size: 13px;
+}
+
+.app-review > p {
+  margin: 12px 16px;
+}
+
+.app-review-files {
+  margin: 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.app-review-files li {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-review-files span {
+  color: #3b8a5a;
+}
+
+.app-review-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 16px;
+  color: #6b7586;
+}
+
+.app-review-message input {
+  padding: 6px 8px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+}
+
+.app-overlay-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #dce1e8;
+}
+
+.app-overlay-footer button {
+  padding: 6px 12px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.app-overlay-footer .app-primary {
+  border-color: #29313d;
+  background: #29313d;
+  color: #fff;
+}
+
+.app-activity {
+  font-size: 13px;
+}
+
+.app-activity-list {
+  margin: 0;
+  padding: 8px 16px;
+  list-style: none;
+}
+
+.app-activity-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-activity-list time {
+  color: #8b95a5;
+  font-variant-numeric: tabular-nums;
+}

@@ -76,6 +76,9 @@ async function inPageTask(
           bench.store.setHidden('p1', true);
         } else if (operation === 'collapse') {
           bench.store.setCollapsed('p1', true);
+        } else if (operation === 'overlay') {
+          const [overlay, open] = arg as ['modal' | 'drawer', boolean];
+          bench.setOverlay(overlay, open);
         }
       }, 0);
     },
@@ -110,6 +113,42 @@ async function addTab(
   await page.waitForTimeout(
     params.content === 'real' ? NEW_REAL_TAB_SETTLE_MS : ANIMATION_SETTLE_MS
   );
+}
+
+/**
+ * Mount the fixture's overlays before the trace, and open one of them when
+ * the scenario closes it. Their first render is then not in the trace.
+ */
+async function prepareOverlay(
+  page: Page,
+  open?: 'modal' | 'drawer'
+): Promise<undefined> {
+  await page.evaluate(() => window.__layoutsBench.mountOverlays());
+  if (open !== undefined) {
+    await page.evaluate(
+      (overlay) => window.__layoutsBench.setOverlay(overlay, true),
+      open
+    );
+    await page.waitForTimeout(ANIMATION_SETTLE_MS);
+  }
+  return undefined;
+}
+
+// An open or a close of each overlay, in a page task.
+function overlayScenario(overlay: 'modal' | 'drawer', open: boolean): Scenario {
+  const name =
+    overlay === 'modal'
+      ? 'a modal over the workspace'
+      : 'a drawer from the right edge of the workspace';
+  return {
+    id: `${overlay}-${open ? 'open' : 'close'}`,
+    description: `${open ? 'Open' : 'Close'} ${name}.`,
+    setup: (page) => prepareOverlay(page, open ? undefined : overlay),
+    async run(page) {
+      await inPageTask(page, 'overlay', [overlay, open]);
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
+  };
 }
 
 export async function zoomFirstPane(page: Page): Promise<void> {
@@ -330,6 +369,10 @@ export const SCENARIOS: Scenario[] = [
       await page.waitForTimeout(IDLE_SETTLE_MS);
     },
   },
+  overlayScenario('modal', true),
+  overlayScenario('modal', false),
+  overlayScenario('drawer', true),
+  overlayScenario('drawer', false),
 ];
 
 /** Operations in each half of the repeat scenario. */
