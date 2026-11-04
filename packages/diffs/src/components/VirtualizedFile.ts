@@ -18,6 +18,7 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 import { areFileTargetsEqual } from '../utils/areFileTargetsEqual';
+import { areGhostTextRowsEqual } from '../utils/areGhostTextRowsEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import {
@@ -52,8 +53,10 @@ interface FileLayoutCache {
   // Measured height for the file-level annotation row. Starts at 0 so
   // unmeasured annotations behave like all other unmeasured annotations.
   fileAnnotationHeight: number;
-  // Ghost text rows folded into `heights` (zero-based line -> row count), so an
-  // entry can be corrected when the editor's ghost text changes or goes away.
+  // The editor's ghost text rows (zero-based line -> row count) as of the
+  // last layout pass. Heights count these, not the editor's current rows, so
+  // positions move only inside a pass, after the host has anchored its
+  // scroll.
   ghostTextRows: ReadonlyMap<number, number>;
 }
 
@@ -184,27 +187,38 @@ export class VirtualizedFile<
   }
 
   // Every line is exactly one line height tall, so positions can be multiplied
-  // instead of walked: no wrapping, no line annotations, and nothing cached (in
-  // such files the cache only fills because of ghost text rows).
+  // instead of walked: no wrapping, no line annotations, nothing measured and
+  // no ghost text below any line.
   private hasUniformLineHeights(): boolean {
     const { overflow = 'scroll' } = this.options;
     return (
       overflow === 'scroll' &&
       !this.hasLineAnnotations() &&
-      this.cache.heights.size === 0
+      this.cache.heights.size === 0 &&
+      this.cache.ghostTextRows.size === 0
     );
   }
 
-  // Get the height for a line, using cached value if available.
-  // If not cached and hasMetadataLine is true, adds lineHeight for the
-  // metadata.
+  // The editor's ghost text rows below lines right now (zero-based line ->
+  // row count). They sit in a margin that measuring a row never includes.
+  private currentGhostTextRows(): ReadonlyMap<number, number> {
+    return this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS;
+  }
+
+  // The line's height: measured if it was, else the default (twice the line
+  // height when a metadata row hangs under it), plus the ghost text rows
+  // below it as of the last layout pass.
   public getLineHeight(lineIndex: number, hasMetadataLine = false): number {
-    const cached = this.cache.heights.get(lineIndex);
-    if (cached != null) {
-      return cached;
+    const { cache } = this;
+    const cached = cache.heights.get(lineIndex);
+    if (cache.ghostTextRows.size === 0) {
+      return cached ?? this.metrics.lineHeight * (hasMetadataLine ? 2 : 1);
     }
-    const multiplier = hasMetadataLine ? 2 : 1;
-    return this.metrics.lineHeight * multiplier;
+    const { lineHeight } = this.metrics;
+    return (
+      (cached ?? lineHeight * (hasMetadataLine ? 2 : 1)) +
+      (cache.ghostTextRows.get(lineIndex) ?? 0) * lineHeight
+    );
   }
 
   override setOptions(
@@ -248,8 +262,8 @@ export class VirtualizedFile<
   }
 
   // Drops what was measured from the DOM: line heights, the ghost rows
-  // folded into them and the file annotation's height. The next renders
-  // measure again.
+  // last seen and the file annotation's height. The next renders measure
+  // again.
   private resetMeasurements(): void {
     this.cache.fileAnnotationHeight = 0;
     if (this.cache.heights.size > 0) {
@@ -278,43 +292,6 @@ export class VirtualizedFile<
     }
   }
 
-  // Fold the ghost text rows the editor is showing below lines into the height
-  // cache (zero-based line -> row count). Ghost text sits in a margin below the
-  // row, which measuring never includes, so the rows are added here on top of
-  // the line's own height, and removed again when the ghost text changes or
-  // goes away, even for rows that are not rendered right now.
-  private applyGhostTextRows(
-    ghostTextRows: ReadonlyMap<number, number>
-  ): boolean {
-    const { heights, ghostTextRows: previous } = this.cache;
-    if (previous === ghostTextRows) {
-      return false;
-    }
-    const { lineHeight } = this.metrics;
-    let changed = false;
-    for (const lineIndex of new Set([
-      ...previous.keys(),
-      ...ghostTextRows.keys(),
-    ])) {
-      const previousRows = previous.get(lineIndex) ?? 0;
-      const rows = ghostTextRows.get(lineIndex) ?? 0;
-      if (rows === previousRows) {
-        continue;
-      }
-      const ownHeight =
-        (heights.get(lineIndex) ?? lineHeight) - previousRows * lineHeight;
-      const height = ownHeight + rows * lineHeight;
-      if (height === lineHeight) {
-        heights.delete(lineIndex);
-      } else {
-        heights.set(lineIndex, height);
-      }
-      changed = true;
-    }
-    this.cache.ghostTextRows = ghostTextRows;
-    return changed;
-  }
-
   // Measure rendered lines and update height cache.
   // Called after render to reconcile estimated vs actual heights.
   public reconcileHeights(): boolean {
@@ -328,9 +305,11 @@ export class VirtualizedFile<
     }
     const { overflow = 'scroll' } = this.options;
     this.top = this.getVirtualizedTop();
-    const ghostTextRows =
-      this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS;
-    hasHeightChange = this.applyGhostTextRows(ghostTextRows);
+    const ghostTextRows = this.currentGhostTextRows();
+    if (!areGhostTextRowsEqual(ghostTextRows, this.cache.ghostTextRows)) {
+      hasHeightChange = true;
+    }
+    this.cache.ghostTextRows = ghostTextRows;
     const measureAllRows =
       overflow !== 'scroll' ||
       this.lineAnnotations.length > 0 ||
@@ -383,17 +362,13 @@ export class VirtualizedFile<
       if (lineIndexAttr == null) continue;
 
       const lineIndex = Number(lineIndexAttr);
-      const ghostHeight = (ghostTextRows.get(lineIndex) ?? 0) * lineHeight;
       const cachedHeight = this.cache.heights.get(lineIndex);
-      // With no annotations or wrapping, only stale custom measurements need
-      // DOM reads. Ghost rows already have known heights from the editor.
-      if (
-        !measureAllRows &&
-        (cachedHeight == null || cachedHeight === lineHeight + ghostHeight)
-      ) {
+      // With no annotations or wrapping, only lines measured before can have
+      // changed, so only those need DOM reads.
+      if (!measureAllRows && cachedHeight == null) {
         continue;
       }
-      let measuredHeight = line.getBoundingClientRect().height + ghostHeight;
+      let measuredHeight = line.getBoundingClientRect().height;
       let hasMetadata = false;
 
       // Annotations or noNewline metadata increase the size of their attached line
@@ -409,8 +384,7 @@ export class VirtualizedFile<
           line.nextElementSibling.getBoundingClientRect().height;
       }
 
-      const expectedHeight = this.getLineHeight(lineIndex, hasMetadata);
-
+      const expectedHeight = cachedHeight ?? lineHeight * (hasMetadata ? 2 : 1);
       if (measuredHeight === expectedHeight) {
         continue;
       }
@@ -729,8 +703,8 @@ export class VirtualizedFile<
 
   override cleanUp(recycle = false): void {
     // The editor's own cleanUp has already cleared its ghost text rows without
-    // asking for a layout pass. Mark the layout dirty so a pooled item drops the
-    // folded rows on its next pass instead of keeping phantom height.
+    // asking for a layout pass. Mark the layout dirty so a pooled item drops
+    // them on its next pass instead of keeping phantom height.
     const hadGhostTextRows = this.cache.ghostTextRows.size > 0;
     if (hadGhostTextRows) {
       this.layoutDirty = true;
@@ -777,9 +751,8 @@ export class VirtualizedFile<
       this.layoutDirty = false;
       return;
     }
-    this.applyGhostTextRows(
-      this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
-    );
+    // The heights summed below include the ghost text rows as they are now.
+    this.cache.ghostTextRows = this.currentGhostTextRows();
 
     const { disableFileHeader = false, collapsed = false } = this.options;
     const { lineHeight } = this.metrics;
@@ -879,8 +852,8 @@ export class VirtualizedFile<
   }
 
   // The editor changed the ghost text rows it shows below lines. Ask the
-  // virtualizer for a layout pass, which folds them in (see
-  // applyGhostTextRows). Layout state only changes inside that pass.
+  // virtualizer for a layout pass, which sums the heights again with the new
+  // rows. Layout state only changes inside that pass.
   public syncGhostTextRows(): void {
     const codeView = this.getAdvancedVirtualizer();
     if (codeView != null) {
@@ -893,12 +866,22 @@ export class VirtualizedFile<
   }
 
   // A line-count change also moves the rows below and the file's height, so
-  // the layout caches are invalidated with the render. Either way the render
-  // itself runs in the virtualizer's frame.
-  protected override renderChange(structural: boolean): void {
+  // the measurements from the edit's line down are dropped (those lines show
+  // other text now) and the layout caches are invalidated with the render.
+  // Either way the render itself runs in the virtualizer's frame.
+  protected override renderChange(
+    structural: boolean,
+    startLine: number
+  ): void {
     if (!structural) {
       this.rerender();
       return;
+    }
+    const { heights } = this.cache;
+    for (const lineIndex of heights.keys()) {
+      if (lineIndex >= startLine) {
+        heights.delete(lineIndex);
+      }
     }
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.invalidateLayout({

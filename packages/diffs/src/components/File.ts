@@ -748,7 +748,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     // when a batch removed lines and added others at the same count. A plain
     // file renders either way.
     const rowsMoved = lineDelta !== 0 || removedLineIds.length > 0;
-    this.renderChange(rowsMoved);
+    this.renderChange(rowsMoved, change.startLine);
     // Nothing was on screen, or a render callback ended the session.
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
@@ -761,8 +761,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   // Renders the rows after the model changed. `structural` is true when the
-  // line count changed, which moves every row below the edit.
-  protected renderChange(_structural: boolean): void {
+  // line count changed, which moves every row from `startLine`, the first
+  // line the change touched, down.
+  protected renderChange(_structural: boolean, _startLine: number): void {
     if (this.fileContainer == null) {
       return;
     }

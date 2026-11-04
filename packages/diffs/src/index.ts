@@ -56,6 +56,7 @@ export * from './utils/areDiffRenderOptionsEqual';
 export * from './utils/areDiffTargetsEqual';
 export * from './utils/areFileRenderOptionsEqual';
 export * from './utils/areFilesEqual';
+export * from './utils/areGhostTextRowsEqual';
 export * from './utils/areHunkDataEqual';
 export * from './utils/areLineAnnotationsEqual';
 export * from './utils/areObjectsEqual';
