@@ -39,6 +39,13 @@ const FLIP_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 // scale is not linear, so it is sampled: 16 steps keep the content within a
 // fraction of a pixel of its own size.
 const COUNTER_SCALE_STEPS = 16;
+// The inverse of a scale near 0, as at the start of a pane that grows from a
+// line, has no useful bound. The host shows almost nothing then, so the inner
+// scale stops at this value, which no rearrangement of the bench reaches.
+const MAX_COUNTER_SCALE = 8;
+// The width or height that a pane that shows again starts from. Not 0: a
+// matrix with a scale of 0 cannot interpolate, so its animation would jump.
+const GROWTH_START_PX = 1;
 
 /** The layout's running FLIP animations; animations in pane content are not included. */
 export function flipAnimations(root: HTMLElement): Animation[] {
@@ -84,35 +91,115 @@ function durationOf(root: HTMLElement): number {
   return value.trim().endsWith('ms') ? parsed : parsed * 1000;
 }
 
+// The line between two edges that met, the one edge that exists, or a fallback.
+function meet(low: number, high: number, fallback: number): number {
+  if (low > -Infinity && high < Infinity) return (low + high) / 2;
+  if (low > -Infinity) return low;
+  if (high < Infinity) return high;
+  return fallback;
+}
+
+const clamp = (value: number, low: number, high: number): number =>
+  Math.min(Math.max(value, low), high);
+
+// True when two boxes share an area, not only an edge.
+const overlap = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.width - 0.5 &&
+  b.x < a.x + a.width - 0.5 &&
+  a.y < b.y + b.height - 0.5 &&
+  b.y < a.y + a.height - 0.5;
+
+/**
+ * The start box of a pane that shows again: one pixel wide or high, on the
+ * line where the panes beside it met before it showed, so that it grows while
+ * they move away, in reverse of a hide. The panes that give it their space
+ * tell the axis: panes at its left or right after the change, or above or
+ * below it.
+ */
+function growthStart(
+  key: string,
+  to: Rect,
+  before: ReadonlyMap<string, Rect>,
+  after: ReadonlyMap<string, Rect>
+): Rect {
+  let left = -Infinity;
+  let right = Infinity;
+  let top = -Infinity;
+  let bottom = Infinity;
+  for (const [other, from] of before) {
+    const end = after.get(other);
+    if (other === key || !other.startsWith('pane:') || end === undefined)
+      continue;
+    if (!overlap(from, to)) continue;
+    if (end.x + end.width <= to.x + 0.5)
+      left = Math.max(left, from.x + from.width);
+    else if (end.x >= to.x + to.width - 0.5) right = Math.min(right, from.x);
+    else if (end.y + end.height <= to.y + 0.5)
+      top = Math.max(top, from.y + from.height);
+    else if (end.y >= to.y + to.height - 0.5) bottom = Math.min(bottom, from.y);
+  }
+  if (left > -Infinity || right < Infinity) {
+    const x = meet(left, right, to.x + to.width / 2);
+    return {
+      x: clamp(x, to.x, to.x + to.width - GROWTH_START_PX),
+      y: to.y,
+      width: GROWTH_START_PX,
+      height: to.height,
+    };
+  }
+  const y = meet(top, bottom, to.y + to.height / 2);
+  return {
+    x: to.x,
+    y: clamp(y, to.y, to.y + to.height - GROWTH_START_PX),
+    width: to.width,
+    height: GROWTH_START_PX,
+  };
+}
+
 /**
  * FLIP: each element already has its final geometry. Animate it from its old box
  * with a transform only. `transform-origin` is `0 0` on these elements. With
  * `counterScale`, the inner wrapper of a pane host gets the inverse of the
  * host's scale on each frame, so its header and content keep their shape and
- * the frame reveals or clips them, instead of stretching them.
+ * the frame reveals or clips them, instead of stretching them. `growing` holds
+ * the keys of panes that show again: they grow from a line (see `growthStart`).
  */
 export function animateFromBoxes(
   root: HTMLElement,
   before: ReadonlyMap<string, Rect>,
-  counterScale: boolean
+  counterScale: boolean,
+  growing: ReadonlySet<string> = new Set()
 ): void {
   const duration = durationOf(root);
   const bounds = root.getBoundingClientRect();
   // Read every box before the first animation starts: a new animation dirties
   // style, and a read after it would force another layout.
+  const elements = flipElements(root).map((element) => {
+    const box = element.getBoundingClientRect();
+    return {
+      element,
+      key: element.getAttribute(FLIP_ATTRIBUTE) ?? '',
+      to: {
+        x: box.left - bounds.left,
+        y: box.top - bounds.top,
+        width: box.width,
+        height: box.height,
+      },
+    };
+  });
+  // The box of each key after the change. The focus indicator comes after its
+  // pane, so the pane's box is kept.
+  const after = new Map<string, Rect>();
+  for (const { key, to } of elements) if (!after.has(key)) after.set(key, to);
   const plans: { element: HTMLElement; start: DOMMatrix; end: DOMMatrix }[] =
     [];
-  for (const element of flipElements(root)) {
-    const from = before.get(element.getAttribute(FLIP_ATTRIBUTE) ?? '');
-    // A new element has no old box. It appears in place.
+  for (const { element, key, to } of elements) {
+    // A new element has no old box, and appears in place. A pane that shows
+    // again has none either, and grows into its place.
+    const from =
+      before.get(key) ??
+      (growing.has(key) ? growthStart(key, to, before, after) : undefined);
     if (from === undefined) continue;
-    const box = element.getBoundingClientRect();
-    const to = {
-      x: box.left - bounds.left,
-      y: box.top - bounds.top,
-      width: box.width,
-      height: box.height,
-    };
     if (
       Math.abs(from.x - to.x) < 0.5 &&
       Math.abs(from.y - to.y) < 0.5 &&
@@ -158,7 +245,7 @@ export function animateFromBoxes(
       const y = start.d + (end.d - start.d) * progress;
       frames.push({
         offset: progress,
-        transform: `scale(${end.a / x}, ${end.d / y})`,
+        transform: `scale(${Math.min(end.a / x, MAX_COUNTER_SCALE)}, ${Math.min(end.d / y, MAX_COUNTER_SCALE)})`,
       });
     }
     inner.animate(frames, timing);
