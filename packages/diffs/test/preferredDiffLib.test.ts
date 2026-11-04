@@ -143,6 +143,54 @@ test('parseDiffFromFile falls back to jsdiff when the selected library fails', (
   }
 });
 
+test('preloadDiffHTML falls back to jsdiff when inline highlights fail', async () => {
+  const lib = diffLibs['@pierre/patches'];
+  const failure = () => {
+    throw new Error('blocked');
+  };
+  const patch = spyOn(lib, 'createTwoFilesPatch').mockImplementation(failure);
+  const chars = spyOn(lib, 'diffChars').mockImplementation(failure);
+  const words = spyOn(lib, 'diffWordsWithSpace').mockImplementation(failure);
+  const log = spyOn(console, 'error').mockImplementation(() => {});
+  const twoLines = (value: string) => ({
+    name: 'value.ts',
+    contents: `const a = "${value}";\nconst b = "${value}";\n`,
+  });
+  try {
+    for (const [lineDiffType, spy] of [
+      ['char', chars],
+      ['word', words],
+      ['word-alt', words],
+      ['word-line', words],
+    ] as const) {
+      const options = { theme: 'pierre-dark', lineDiffType } as const;
+      const expected = await preloadDiffHTML({
+        oldFile: twoLines('before'),
+        newFile: twoLines('after'),
+        options,
+      });
+      spy.mockClear();
+      log.mockClear();
+      const html = await preloadDiffHTML({
+        oldFile: twoLines('before'),
+        newFile: twoLines('after'),
+        options: {
+          ...options,
+          parseDiffOptions: { preferredDiffLib: '@pierre/patches' },
+        },
+      });
+      expect(html).toBe(expected);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledTimes(2);
+    }
+  } finally {
+    patch.mockRestore();
+    chars.mockRestore();
+    words.mockRestore();
+    log.mockRestore();
+  }
+});
+
 test('FileDiff keeps parsed hunks and highlights with a new library', async () => {
   const { cleanup } = installDom();
   const instance = new FileDiff({ theme: 'pierre-dark', lineDiffType: 'char' });

@@ -41,13 +41,31 @@ export class LineDiffRangeCache {
     ) {
       return cached.ranges;
     }
-    const ranges = computeLineDiffRanges(
-      deletionText,
-      additionText,
-      this.lineDiffType,
-      this.maxLineDiffLength,
-      this.preferredDiffLib
-    );
+    let ranges: LineDiffRanges;
+    try {
+      ranges = computeLineDiffRanges(
+        deletionText,
+        additionText,
+        this.lineDiffType,
+        this.maxLineDiffLength,
+        this.preferredDiffLib
+      );
+    } catch (error) {
+      // WARNING: Wasm can fail on locked-down pages or without enough memory.
+      // Keep jsdiff for this cache so each new line does not retry the failure.
+      if (this.preferredDiffLib === 'jsdiff') {
+        throw error;
+      }
+      console.error(error);
+      this.preferredDiffLib = 'jsdiff';
+      ranges = computeLineDiffRanges(
+        deletionText,
+        additionText,
+        this.lineDiffType,
+        this.maxLineDiffLength,
+        this.preferredDiffLib
+      );
+    }
     this.#pairs.set(deletionIndex, { deletionText, additionText, ranges });
     return ranges;
   }

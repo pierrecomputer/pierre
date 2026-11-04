@@ -117,7 +117,8 @@ Views that compute diffs accept the same `ParseDiffOptions` through
 `parseDiffOptions` (under `options` in React). This configures file-pair parsing
 and edit recomputation; it does not rewrite supplied `fileDiff` metadata.
 Without a worker pool, `preferredDiffLib` also selects the library for inline
-change highlights.
+change highlights. If `@pierre/patches` fails, these highlights log the error
+and use `jsdiff`.
 
 An optional fourth `throwOnError` parameter (default: `false`) controls error
 handling. When `true`, parsing errors throw exceptions; when `false`, errors are

@@ -11,7 +11,8 @@ import {
 } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
-import type { FileContents } from '../src/types';
+import type { DiffLib, FileContents } from '../src/types';
+import { diffLibs } from '../src/utils/diffLibs';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 import { createInitializedManager } from './workerPoolHarness';
@@ -37,10 +38,10 @@ const smallFile: FileContents = {
   cacheKey: 'main-thread:small',
 };
 
-async function createFixture() {
+async function createFixture(preferredDiffLib?: DiffLib) {
   const dom = installDom();
   const { manager, worker } = await createInitializedManager(
-    { theme: 'pierre-dark' },
+    { theme: 'pierre-dark', preferredDiffLib },
     { mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS }
   );
   const container = document.createElement('div');
@@ -316,28 +317,49 @@ test('DiffHunksRenderer ignores a refresh canceled by a render options change', 
   }
 });
 
-test('FileDiff shares a main-thread highlight with the pool cache', async () => {
-  const { manager, container, cleanup } = await createFixture();
-  const instance = new FileDiff({ theme: 'pierre-dark' }, manager);
-  const fileDiff = parseDiffFromFile(
-    { ...smallFile, cacheKey: 'main-thread:shared-old' },
-    {
-      ...smallFile,
-      contents: 'const alpha = 10;\nconst beta = 2;\n',
-      cacheKey: 'main-thread:shared-new',
-    }
-  );
-  try {
-    instance.render({ fileDiff, fileContainer: container });
-
-    expect(manager.getDiffResultCache(fileDiff)?.options).toEqual(
-      manager.getDiffRenderOptions()
+test.each(['@pierre/patches', 'jsdiff'] as const)(
+  'FileDiff uses the pool %s library and shares its main-thread highlight',
+  async (preferredDiffLib) => {
+    const { manager, container, cleanup } =
+      await createFixture(preferredDiffLib);
+    const otherLib =
+      preferredDiffLib === 'jsdiff' ? '@pierre/patches' : 'jsdiff';
+    const instance = new FileDiff(
+      {
+        theme: 'pierre-dark',
+        parseDiffOptions: { preferredDiffLib: otherLib },
+      },
+      manager
     );
-  } finally {
-    instance.cleanUp();
-    cleanup();
+    const selectedWords = spyOn(
+      diffLibs[preferredDiffLib],
+      'diffWordsWithSpace'
+    );
+    const otherWords = spyOn(diffLibs[otherLib], 'diffWordsWithSpace');
+    const fileDiff = parseDiffFromFile(
+      { ...smallFile, cacheKey: 'main-thread:shared-old' },
+      {
+        ...smallFile,
+        contents: 'const alpha = 10;\nconst beta = 2;\n',
+        cacheKey: 'main-thread:shared-new',
+      }
+    );
+    try {
+      instance.render({ fileDiff, fileContainer: container });
+
+      expect(selectedWords).toHaveBeenCalled();
+      expect(otherWords).not.toHaveBeenCalled();
+      expect(manager.getDiffResultCache(fileDiff)?.options).toEqual(
+        manager.getDiffRenderOptions()
+      );
+    } finally {
+      instance.cleanUp();
+      selectedWords.mockRestore();
+      otherWords.mockRestore();
+      cleanup();
+    }
   }
-});
+);
 
 test('File keeps annotations with the rendered file after the highlighter is recreated', async () => {
   const { manager, container, cleanup } = await createFixture();

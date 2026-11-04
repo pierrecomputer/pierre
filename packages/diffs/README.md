@@ -47,8 +47,8 @@ highlights, like `lineDiffType`. Supplied patch hunks stay unchanged until an
 edit requires a new diff. Changing the library does not recompute a parsed diff:
 both libraries give the same output.
 
-If `@pierre/patches` fails to compute a file diff, for example on a page that
-blocks WebAssembly, `parseDiffFromFile` logs the error and uses `jsdiff`.
+If `@pierre/patches` fails, for example on a page that blocks WebAssembly, file
+diffs and word or character highlights log the error and use `jsdiff`.
 
 `parseDiffFromFile(oldFile, newFile, { preferredDiffLib: '@pierre/patches' })`
 also accepts the option.
