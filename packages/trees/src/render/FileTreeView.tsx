@@ -130,6 +130,49 @@ function getFileTreeRowAriaLabel(row: FileTreeVisibleRow): string {
   return flattenedSegments.map((segment) => segment.name).join(' / ');
 }
 
+// Text a screen reader should hear for a row decoration. A row's `aria-label`
+// replaces its contents as the accessible name, so decorations are otherwise
+// never announced. Prefers the decoration's `title` (the tooltip sighted users
+// see) and falls back to its visible `text`. Icon-only decorations without a
+// title have nothing meaningful to announce.
+function getRowDecorationAccessibleText(
+  decoration: FileTreeRowDecoration | null
+): string | null {
+  if (decoration == null) {
+    return null;
+  }
+
+  const title = decoration.title?.trim() ?? '';
+  if (title !== '') {
+    return title;
+  }
+
+  if ('text' in decoration) {
+    const text = decoration.text.trim();
+    return text === '' ? null : text;
+  }
+
+  return null;
+}
+
+// Accessible name for a tree row: the row's name followed by its custom
+// decoration and built-in git status, e.g. "index.ts, Git status: modified".
+function getFileTreeRowAccessibleName(
+  row: FileTreeVisibleRow,
+  customDecoration: FileTreeRowDecoration | null,
+  gitDecoration: FileTreeRowDecoration | null
+): string {
+  const parts = [getFileTreeRowAriaLabel(row)];
+  for (const decoration of [customDecoration, gitDecoration]) {
+    const text = getRowDecorationAccessibleText(decoration);
+    if (text != null) {
+      parts.push(text);
+    }
+  }
+
+  return parts.join(', ');
+}
+
 type FileTreeViewLayoutState = {
   snapshot: FileTreeLayoutSnapshot<FileTreeVisibleRow>;
   // Rows rendered inside the sticky overlay. Usually equal to
@@ -1083,7 +1126,11 @@ function renderStyledRow(
     showDecorativeActionAffordance,
   });
   const attributeProps = computeFileTreeRowElementAttributes({
-    ariaLabel: getFileTreeRowAriaLabel(row),
+    ariaLabel: getFileTreeRowAccessibleName(
+      row,
+      customDecoration,
+      gitDecoration
+    ),
     domId: row.isFocused
       ? getFileTreeFocusedRowDomId(instanceId, targetPath, isParked)
       : undefined,

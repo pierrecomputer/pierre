@@ -639,4 +639,69 @@ describe('file-tree git status', () => {
       cleanup();
     }
   });
+  test('row accessible names include custom decorations and git status', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [{ path: 'src/index.ts', status: 'modified' }],
+        initialExpansion: 'open',
+        paths: FILES,
+        renderRowDecoration: ({ item }) => {
+          if (item.path === 'README.md') {
+            return { text: '+12 -3', title: '12 added, 3 removed' };
+          }
+          if (item.path === 'package.json') {
+            // No title: the visible text is the only thing to announce.
+            return { text: '2' };
+          }
+          if (item.path === 'test/index.test.ts') {
+            // Icon without a title: nothing meaningful to announce.
+            return { icon: 'file-tree-icon-dot' };
+          }
+          return null;
+        },
+        initialVisibleRowCount: 360 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const getAriaLabel = (path: string) =>
+        getItemButton(shadowRoot, dom, path).getAttribute('aria-label');
+
+      expect(getAriaLabel('README.md')).toBe('README.md, 12 added, 3 removed');
+      expect(getAriaLabel('package.json')).toBe('package.json, 2');
+      expect(getAriaLabel('src/index.ts')).toBe(
+        'index.ts, Git status: modified'
+      );
+      expect(getAriaLabel('src/')).toBe('src, Contains git status items');
+      expect(getAriaLabel('test/index.test.ts')).toBe('index.test.ts');
+      expect(getAriaLabel('src/utils/worker.ts')).toBe('worker.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('preloadFileTree renders git status into row accessible names', async () => {
+    const { preloadFileTree } = await import('../src/render/FileTree');
+    const payload = preloadFileTree({
+      flattenEmptyDirectories: false,
+      gitStatus: [{ path: 'src/index.ts', status: 'added' }],
+      id: 'pst-git-status-ssr-aria-label',
+      initialExpansion: 'open',
+      paths: FILES,
+      initialVisibleRowCount: 180 / 30,
+    });
+
+    expect(payload.shadowHtml).toContain(
+      'aria-label="index.ts, Git status: added"'
+    );
+  });
 });
