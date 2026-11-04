@@ -3,7 +3,7 @@ export interface AnimateOptions {
   duration?: number;
 }
 
-/** A trusted application hook receives and returns generated HTML, not a node tree. */
+/** Hooks that take and return the HTML of generated elements. These are trusted code. */
 export type Components = Partial<Record<string, (html: string) => string>>;
 
 export interface CodeOptions {
@@ -12,17 +12,17 @@ export interface CodeOptions {
   isIncomplete: boolean;
 }
 
-/** HTML before firstLine is unchanged; html replaces the remaining zero-based lines. */
+/** Changed lines of a code block. Lines before `firstLine` did not change. */
 export interface CodeHighlightUpdate {
-  /** Earliest changed zero-based line; equal to lineCount when unchanged. */
+  /** First changed line, zero-based. Equals `lineCount` when nothing changed. */
   firstLine: number;
   /** Total lines, including an empty final line after a trailing LF. */
   lineCount: number;
-  /** Balanced inline HTML per line, joined by LF outside elements without a leading LF. */
+  /** Lines from `firstLine` on, joined by LF. Each line is balanced inline HTML. */
   html: string;
-  /** Offset in html before its final content line, excluding a trailing empty line. */
+  /** Offset in `html` of the last line with content. */
   lastLineOffset: number;
-  /** Complete highlighted HTML, assembled only when requested. */
+  /** All lines as HTML, built on first read. */
   readonly fullHtml: string;
 }
 
@@ -33,7 +33,7 @@ export interface CodeHighlighterSession {
 }
 
 export interface CodeHighlighterPlugin {
-  /** Return escaped HTML for the inside of a code element. */
+  /** Return escaped HTML for the inside of `<code>`, or null for plain text. */
   highlight(options: CodeOptions): string | null;
   createSession?(): CodeHighlighterSession;
 }

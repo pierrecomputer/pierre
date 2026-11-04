@@ -7,8 +7,6 @@ browser rendering. The Node modes use the five Markdown files in
 
 ## Run
 
-Install workspace dependencies with `pnpm install`. Then run:
-
 ```sh
 moonx words:bench --ignore-ci-checks
 moonx words:bench-stream --ignore-ci-checks
@@ -17,25 +15,29 @@ moonx words:bench-browser --ignore-ci-checks
 ```
 
 - `bench`: HTML strings against md4x (native), md4x (wasm), and markdown-it.
-- `bench-stream`: React streams against streamdown in JSDOM.
-- `bench-memory`: memory use for all HTML engines and both React engines.
-- `bench-browser`: React streams against streamdown in Chromium, and download
+- `bench-stream`: React streams against Streamdown in JSDOM.
+- `bench-memory`: memory use of all HTML engines and both React engines.
+- `bench-browser`: React streams against Streamdown in Chromium, and download
   size. These results feed the charts on the `/words` page.
 
-Add `-- --quick` to either timing task for a quick check. Use `-- --samples 1`
-for a quick memory check. Add `--fixture tiny.md` to select one input, or
-`--json /tmp/words.json` to save raw samples and environment data. Use a
-separate JSON file for each mode. Memory also accepts `--mode html` or
-`--mode stream`. Both stream comparisons accept `--chunk-size 256`.
+Pass options after `--`:
+
+| Option              | Tasks                 | Purpose                                                                   |
+| ------------------- | --------------------- | ------------------------------------------------------------------------- |
+| `--quick`           | timing, browser       | Short check that the scripts work. Do not compare these numbers.          |
+| `--samples 1`       | memory                | Short check that the script works.                                        |
+| `--fixture tiny.md` | bench, stream, memory | Use one input.                                                            |
+| `--chunk-size 256`  | stream, memory        | UTF-16 code units per chunk.                                              |
+| `--mode html`       | memory                | Run only `html` or `stream`.                                              |
+| `--json out.json`   | all                   | Save raw samples and environment data. Use a separate file for each task. |
+| `--docs`            | browser               | Write `apps/docs/public/words/benchmark.json` and `benchmark-raw.json`.   |
 
 `bench-browser` uses the Chromium build that Playwright pins. Install it once
-with `pnpm --filter @pierre/words exec playwright install chromium`. Add
-`-- --quick` for a short check with one run. Add `-- --docs` to write
-`apps/docs/public/words/benchmark.json` and `benchmark-raw.json`.
+with `pnpm --filter @pierre/words exec playwright install chromium`.
 
 ## HTML generation
 
-Throughput is input MiB per second. Higher is better.
+Input MiB per second. Higher is better.
 
 | Fixture                          | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
 | -------------------------------- | ------------: | ------------: | ----------: | ----------: |
@@ -61,33 +63,32 @@ Streamdown time divided by the Words time.
 | `simd.md`              |    156 |               45.25 |     181.71 |   4.02× |
 | `gfm-spec.md`          |    844 |              281.06 |    4385.23 |  15.60× |
 
-Both engines use production React. Each replay creates one React root, then
-supplies cumulative Markdown prefixes to the same component. `flushSync` commits
-every update. Streamdown retains its block memoization between chunks. Words
-retains its HTML session and DOM nodes.
+Each replay creates one production React root and passes growing Markdown
+prefixes to the same component, with `flushSync` after every update. Streamdown
+keeps its block memoization between chunks, and Words keeps its HTML session and
+DOM nodes.
 
-Chunks contain up to 256 UTF-16 code units. A chunk extends by one unit when
-necessary to keep a surrogate pair intact. Each prefix uses `mode="streaming"`
-and `isAnimating={true}`. One final commit supplies the full document with
-`isAnimating={false}`. Both engines retain their default incomplete-Markdown
+Chunks hold up to 256 UTF-16 code units, plus one more if needed to keep a
+surrogate pair together. Each prefix uses `mode="streaming"` and
+`isAnimating={true}`. A final commit passes the full document with
+`isAnimating={false}`. Both engines use their default incomplete-Markdown
 support.
 
-Controls and line numbers are off. The suite adds no syntax, math, diagram, or
-animation plugins. The measured time includes mount and the final commit.
-Unmount occurs outside the measured interval. Before measurement, the script
-checks that streamed text matches a fresh render from the same engine.
+Controls and line numbers are off, and there are no syntax, math, diagram, or
+animation plugins. The time includes mount and the final commit, but not
+unmount. Before measuring, the script checks that streamed text matches a fresh
+render from the same engine.
 
 JSDOM measures synchronous parse, React, and DOM work. It does not measure
-browser layout, paint, frame rate, or asynchronous animation work. These results
-are not browser latency measurements. See [Browser](#browser) for those.
+layout, paint, frame rate, or asynchronous animation, so see [Browser](#browser)
+for those.
 
 ## Memory usage
 
 Median peak RSS growth in MiB. Lower is better. Each process subtracts its own
-peak RSS before engine import, which is mostly Node itself (75.8 to 79.5 MiB).
-Each entry uses five fresh Node processes, for 150 processes in total. HTML and
-React results have separate tables because React processes also include JSDOM
-and the React runtime.
+peak RSS before the engine import, which is mostly Node itself (75.8 to 79.5
+MiB). Each entry uses five fresh Node processes, for 150 in total. React
+processes also include JSDOM and the React runtime, so React has its own table.
 
 | Fixture → HTML         | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
 | ---------------------- | ------------: | ------------: | ----------: | ----------: |
@@ -105,15 +106,15 @@ and the React runtime.
 | `simd.md`              |               109.6 |      145.5 |
 | `gfm-spec.md`          |               201.4 |      328.9 |
 
-Samples run in sequence, with a different engine first each round. Build work
-occurs outside these processes. Growth covers engine import through the first
-HTML call or complete stream replay. It includes module load, native
-allocations, Wasm, and allocator capacity. It is not an allocation count.
+Samples run in sequence, with a different engine first each round. Growth covers
+engine import through the first HTML call or complete stream replay. It includes
+module load, native allocations, Wasm, and allocator capacity. It is not an
+allocation count.
 
 ## Browser
 
 Median of each run's 95th percentile, from three runs in fresh Chromium
-processes. Update and frame times are in ms. Heap growth is in MB. Lower is
+processes. Update and frame times are in ms, and heap growth is in MB. Lower is
 better.
 
 | Document           | Words update | Streamdown update | Words frame | Streamdown frame | Words heap | Streamdown heap |
@@ -133,13 +134,12 @@ block with 40 lines. Larger documents repeat it. Fades include highlighting. The
 
 Each library gets a production page built with `Bun.build`. Each run opens a new
 browser with a 1280 × 960 viewport. The page first renders a short warmup
-document, so startup and the first grammar load are not measured. Then it mounts
+document, so startup and the first grammar load are not measured. It then mounts
 an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 267 updates.
 
-- Update time runs from the state update to the layout effect of the parent
-  component, after both renderers have written the DOM. It does not include
-  paint.
+- Update time runs from the state update to the parent's layout effect, after
+  both renderers have written the DOM. It does not include paint.
 - Frame time is the interval between `requestAnimationFrame` callbacks during
   playback. This display runs at 120 Hz.
 - Heap growth is the V8 heap after two forced garbage collections, from the
@@ -158,8 +158,8 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 | With TypeScript and two themes |         254.4 |      244.9 |
 | CSS                            |           1.2 |        0.4 |
 
-Download size uses minified `Bun.build` output with React external. Each JS file
-is gzipped at level 9. The base row counts static imports only. The second row
+Download size uses minified `Bun.build` output with React external, with each JS
+file gzipped at level 9. The base row counts static imports only. The second row
 adds the chunks that Streamdown loads on demand for TypeScript, its two themes,
 and highlighted code. Words keeps all grammars in one file.
 
@@ -169,14 +169,11 @@ and highlighted code. Words keeps all grammars in one file.
 ## Sampling
 
 The timing tasks use [`shared.ts`](./shared.ts). Each case has a 200 ms warmup,
-a 1.5-second measurement budget, and at least 20 samples. The engine order
-changes each round. HTML samples average calls in batches of approximately 5 ms.
-Each stream sample is one complete replay. Cleanup counts toward the budget but
-not the measured call time.
+a 1.5-second budget, and at least 20 samples, and the engine order changes each
+round. HTML samples average calls in batches of about 5 ms. Each stream sample
+is one complete replay. Cleanup counts toward the budget but not the measured
+time.
 
-The tables use median times. JSON includes p95 and every sample. The p95 value
-is the time at or below which 95% of measurements fall.
-
-`--quick` reduces the warmup and measurement budgets to 20 ms and 50 ms, with at
-least three measurement samples. Use quick results only to check that the
-scripts work. Run the full modes in sequence on an idle machine for comparisons.
+The tables use medians. The JSON also has p95 and every sample. `--quick` cuts
+the warmup and budget to 20 ms and 50 ms, with at least three samples. For
+comparisons, run the full tasks in sequence on an idle machine.

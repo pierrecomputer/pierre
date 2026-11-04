@@ -14,6 +14,7 @@ export default defineConfig([
       react: 'react/react.tsx',
       highlights: 'react/highlights.ts',
       html: 'html/index.ts',
+      // Only for the docs typecheck, through its project reference. Not published.
       'benchmark/fixtures/index': 'benchmark/fixtures/index.ts',
     },
     clean: false,

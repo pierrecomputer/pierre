@@ -18,7 +18,6 @@ const modes = [
 
 const decimal = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
-// Reserve space for an inset chevron while keeping the native picker and keyboard behavior.
 function ChartSelect({ children, ...props }: ComponentProps<'select'>) {
   return (
     <span className="relative block min-w-0">
@@ -37,7 +36,6 @@ function ChartSelect({ children, ...props }: ComponentProps<'select'>) {
   );
 }
 
-// Every comparison shares a zero-based linear scale and keeps the values in text.
 function Comparison({
   words,
   streamdown,
@@ -78,7 +76,6 @@ function Comparison({
   );
 }
 
-// Incomplete capacity runs have no comparable percentile to display.
 function capacityFrame(sample: { status: string; frameP95Ms?: number }) {
   return sample.status === 'completed' && sample.frameP95Ms !== undefined
     ? `${decimal.format(sample.frameP95Ms)} ms`
@@ -428,7 +425,7 @@ export function WordsBenchmarks() {
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
       >
         <summary className="cursor-pointer text-sm font-medium">
-          Run the benchmarks. See the tradeoffs.
+          How we measure
         </summary>
         <div className="mt-5 grid min-w-0 gap-8 text-sm md:grid-cols-2">
           <div className="min-w-0 space-y-3">

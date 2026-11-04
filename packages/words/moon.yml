@@ -30,18 +30,15 @@ tasks:
     deps:
       - 'build'
 
-  # Node covers exhaustive core replay.
   test:
-    script:
-      'node test/index.ts && node test/index.ts --spec && node --test
-      test/stream_test.ts test/stress_test.ts && bun test test/react_test.tsx'
+    script: 'node --test test/*_test.ts && bun test test/react_test.tsx'
     deps:
       - 'build'
     options:
       merge: 'replace'
 
   test-spec:
-    command: 'node test/index.ts --spec'
+    command: 'node --test test/spec_test.ts'
     deps:
       - 'build'
 

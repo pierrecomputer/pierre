@@ -17,337 +17,7 @@ import {
   wat2wasm,
 } from '@pierre/wat-tools';
 import * as fs from 'node:fs';
-import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
-
-/**
- * transform the given wat file, to support:
- * - import other wat files
- * - define enums (`enum`, `enum.get`)
- * - define named memory addresses (`const`, see src/memory.wat)
- * - define bit-per-predicate lookup tables over an enum (`bitset`, `bitset.get`)
- * - intern output string literals into one pooled data segment (`out.str`, `string-pool`)
- * - emit the HTML5 named character reference tables (`entity-table`)
- * - convert i32/i64.const string operands to integer literals
- */
-export function transformWat(input: string | URL, content?: string) {
-  // node:url's URL type is not the global URL under bun-types, so rewrap it
-  const url = input instanceof URL ? input : new URL(pathToFileURL(input).href);
-  if (content === undefined) content = fs.readFileSync(url, 'utf-8');
-  const enumMap: EnumMap = new Map();
-  const bitsetMap: BitsetMap = new Map();
-  let code = expandEnums(flattenWat(url, content).code, enumMap);
-  const resolved = resolveConsts(code, url.pathname);
-  code = expandBitsets(resolved.code, enumMap, bitsetMap, url.pathname);
-  const constMap = resolved.constMap;
-  code = expandBitsetGets(code, bitsetMap, url.pathname);
-
-  // (entity-table <base> <end>) - the HTML5 named character references:
-  // front-coded sorted names, then their code points. See buildEntityTable
-  // and $entityMatch.
-  code = replaceForm(code, 'entity-table', (inner) => {
-    const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
-    if (m == null) throw new Error(`Malformed entity-table in ${url.pathname}`);
-    const [base, end] = [Number(m[1]), Number(m[2])];
-    const { bytes, entries } = buildEntityTable(base);
-    if (base + bytes.length > end) {
-      throw new Error(
-        `entity-table needs ${bytes.length} bytes, [${base}:${end}) has ${end - base}`
-      );
-    }
-    return `;; ${entries} HTML5 named character references (${bytes.length} bytes)\n  ${dataSegment(base, bytes)}`;
-  });
-
-  // (unicode-punct-table <base> <end>) - the code point ranges >= U+0080 in the
-  // Unicode P (punctuation) and S (symbol) general categories, which CommonMark
-  // calls "Unicode punctuation characters". Emitted as a u32 range count
-  // followed by sorted u32 values with a 21-bit start and 11-bit span; see
-  // $isPunctCp in src/scan.wat.
-  code = replaceForm(code, 'unicode-punct-table', (inner) => {
-    const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
-    if (m == null)
-      throw new Error(`Malformed unicode-punct-table in ${url.pathname}`);
-    const [base, end] = [Number(m[1]), Number(m[2])];
-    const ranges = [];
-    let start = -1;
-    for (let cp = 0x80; cp <= 0x10ffff; cp++) {
-      const ok =
-        cp >= 0xd800 && cp <= 0xdfff
-          ? false
-          : /[\p{P}\p{S}]/u.test(String.fromCodePoint(cp));
-      if (ok) {
-        if (start < 0) start = cp;
-      } else if (start >= 0) {
-        ranges.push([start, cp - 1]);
-        start = -1;
-      }
-    }
-    const bytes = new Uint8Array(4 + ranges.length * 4);
-    const dv = new DataView(bytes.buffer);
-    dv.setUint32(0, ranges.length, true);
-    ranges.forEach(([lo, hi], i) => {
-      if (lo > 0x1fffff || hi - lo > 0x7ff) {
-        throw new Error(
-          `unicode-punct-table range exceeds packed format: ${lo}-${hi}`
-        );
-      }
-      dv.setUint32(4 + i * 4, lo + (hi - lo) * 0x200000, true);
-    });
-    if (base + bytes.length > end) {
-      throw new Error(
-        `unicode-punct-table needs ${bytes.length} bytes, [${base}:${end}) has ${end - base}`
-      );
-    }
-    return `;; ${ranges.length} Unicode P|S ranges (${bytes.length} bytes)\n  ${dataSegment(base, bytes)}`;
-  });
-
-  // (word-table <base> <end> "name" ...) - a set of lowercase ASCII words as one
-  // packed u16 group per length through the longest word (relative names
-  // offset:9 + count:7), followed by the names grouped by length and sorted.
-  // See $wordLookup in src/htmlscan.wat.
-  code = replaceForm(code, 'word-table', (raw) => {
-    const inner = raw.replace(/;;[^\n]*/g, '');
-    const head = inner.match(/^\s*(\d+)\s+(\d+)/);
-    if (head == null)
-      throw new Error(`Malformed word-table in ${url.pathname}`);
-    const [base, end] = [Number(head[1]), Number(head[2])];
-    const words = (inner.match(/"[\w-]+"/g) ?? []).map((w) => JSON.parse(w));
-    words.sort((a, b) =>
-      a.length - b.length !== 0
-        ? a.length - b.length
-        : a < b
-          ? -1
-          : a > b
-            ? 1
-            : 0
-    );
-    if (words.some((w) => w.length > 31))
-      throw new Error(`word-table entry longer than 31 bytes`);
-    if (new Set(words).size !== words.length)
-      throw new Error(`duplicate word-table entry`);
-    const maxLen = Math.max(...words.map((w) => w.length));
-    const groups = (maxLen + 1) * 2;
-    const nameBytes = words.reduce((n, w) => n + w.length, 0);
-    const bytes = new Uint8Array(groups + nameBytes);
-    const dv = new DataView(bytes.buffer);
-    let at = 0;
-    for (let len = 0; len <= maxLen; len++) {
-      const of = words.filter((w) => w.length === len);
-      const names = groups + at;
-      if (names > 0x1ff || of.length > 0x7f)
-        throw new Error(`word-table group exceeds packed format`);
-      dv.setUint16(len * 2, names | (of.length << 9), true);
-      for (const w of of) {
-        for (let i = 0; i < len; i++) bytes[groups + at + i] = w.charCodeAt(i);
-        at += len;
-      }
-    }
-    if (base + bytes.length > end) {
-      throw new Error(
-        `word-table needs ${bytes.length} bytes, [${base}:${end}) has ${end - base}`
-      );
-    }
-    return `;; ${words.length} words through length ${maxLen} (${bytes.length} bytes)\n  ${dataSegment(base, bytes)}`;
-  });
-
-  // (unicode-fold-table <base> <end>) - full Unicode case folding for code
-  // points >= U+0041, used to normalize link labels. A packed u16 run count +
-  // u16 multi count is followed by 8-byte runs: a 21-bit start + 11-bit span,
-  // then signed delta:24 + stride:8. Multi-code-point folds point into a UTF-8 blob.
-  code = replaceForm(code, 'unicode-fold-table', (inner) => {
-    const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
-    if (m == null)
-      throw new Error(`Malformed unicode-fold-table in ${url.pathname}`);
-    const [base, end] = [Number(m[1]), Number(m[2])];
-    // toLowerCase().toUpperCase().toLowerCase() reproduces the full case fold:
-    // the round trip is what turns U+1E9E into "ss" and U+03C2 into U+03C3
-    const fold = (cp: number) => {
-      const s = String.fromCodePoint(cp);
-      return s.toLowerCase().toUpperCase().toLowerCase();
-    };
-    const runs: { lo: number; hi: number; delta: number; stride: number }[] =
-      [];
-    const multi: [number, string][] = [];
-    for (let cp = 0x41; cp <= 0x2ffff; cp++) {
-      if (cp >= 0xd800 && cp <= 0xdfff) continue;
-      const f = fold(cp);
-      if (f === String.fromCodePoint(cp)) continue;
-      const points = [...f];
-      if (points.length > 1) {
-        multi.push([cp, f]);
-        continue;
-      }
-      const delta = points[0].codePointAt(0)! - cp;
-      const last = runs[runs.length - 1];
-      if (last != null && last.delta === delta && cp - last.hi === last.stride)
-        last.hi = cp;
-      else if (
-        last != null &&
-        last.delta === delta &&
-        last.lo === last.hi &&
-        cp - last.hi <= 2
-      ) {
-        last.stride = cp - last.hi;
-        last.hi = cp;
-      } else runs.push({ lo: cp, hi: cp, delta, stride: 1 });
-    }
-    if (
-      runs.some(
-        (r) =>
-          r.lo > 0x1fffff ||
-          r.hi - r.lo > 0x7ff ||
-          r.delta < -0x800000 ||
-          r.delta > 0x7fffff ||
-          (r.stride !== 1 && r.stride !== 2)
-      )
-    ) {
-      throw new Error(`unicode-fold-table run exceeds packed format`);
-    }
-    const blob = multi.map(([, f]) => Buffer.from(f, 'utf-8'));
-    const blobLen = blob.reduce((n, b) => n + b.length, 0);
-    const header = 4;
-    const bytes = new Uint8Array(
-      header + runs.length * 8 + multi.length * 8 + blobLen
-    );
-    const dv = new DataView(bytes.buffer);
-    const runsPtr = base + header;
-    const multiPtr = runsPtr + runs.length * 8;
-    const blobPtr = multiPtr + multi.length * 8;
-    dv.setUint16(0, runs.length, true);
-    dv.setUint16(2, multi.length, true);
-    runs.forEach((r, i) => {
-      dv.setUint32(header + i * 8, r.lo + (r.hi - r.lo) * 0x200000, true);
-      dv.setUint32(
-        header + i * 8 + 4,
-        (r.stride << 24) | (r.delta & 0xffffff),
-        true
-      );
-    });
-    let at = 0;
-    multi.forEach(([cp], i) => {
-      const off = header + runs.length * 8 + i * 8;
-      dv.setUint32(off, cp, true);
-      dv.setUint16(off + 4, blobPtr + at, true);
-      bytes[off + 6] = blob[i].length;
-      bytes.set(blob[i], header + runs.length * 8 + multi.length * 8 + at);
-      at += blob[i].length;
-    });
-    if (base + bytes.length > end) {
-      throw new Error(
-        `unicode-fold-table needs ${bytes.length} bytes, [${base}:${end}) has ${end - base}`
-      );
-    }
-    return `;; ${runs.length} fold runs + ${multi.length} multi-character folds (${bytes.length} bytes)\n  ${dataSegment(
-      base,
-      bytes
-    )}`;
-  });
-
-  // (unicode-width-table <base> <end>) - the terminal display width tables:
-  // the code points that occupy no cell (combining marks, format characters,
-  // conjoining jamo) and the East Asian Wide and Fullwidth ones that occupy
-  // two. Zero-width ranges use one u32 (lo:21 + span:11); wide ranges use
-  // [lo:u32, span:u16]. See $displayWidth in src/ansi.wat.
-  code = replaceForm(code, 'unicode-width-table', (inner) => {
-    const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
-    if (m == null)
-      throw new Error(`Malformed unicode-width-table in ${url.pathname}`);
-    const [base, end] = [Number(m[1]), Number(m[2])];
-    const zero = [];
-    let start = -1;
-    for (let cp = 0; cp <= 0x10ffff; cp++) {
-      const ok =
-        cp >= 0xd800 && cp <= 0xdfff
-          ? false
-          : cp !== 0xad &&
-            (/[\p{Mn}\p{Me}\p{Cf}]/u.test(String.fromCodePoint(cp)) ||
-              (cp >= 0x1160 && cp <= 0x11ff));
-      if (ok) {
-        if (start < 0) start = cp;
-      } else if (start >= 0) {
-        zero.push([start, cp - 1]);
-        start = -1;
-      }
-    }
-    const wide = WIDE_RANGES.split(',').map((r) => {
-      const [lo, hi] = r.split('-');
-      return [parseInt(lo, 16), parseInt(hi ?? lo, 16)];
-    });
-    const bytes = new Uint8Array(16 + zero.length * 4 + wide.length * 6);
-    const dv = new DataView(bytes.buffer);
-    dv.setUint32(0, zero.length, true);
-    dv.setUint32(4, wide.length, true);
-    dv.setUint32(8, base + 16, true);
-    dv.setUint32(12, base + 16 + zero.length * 4, true);
-    zero.forEach(([lo, hi], i) => {
-      if (lo > 0x1fffff || hi - lo > 0x7ff) {
-        throw new Error(
-          `unicode-width-table zero-width range is too wide: ${lo}-${hi}`
-        );
-      }
-      dv.setUint32(16 + i * 4, lo + (hi - lo) * 0x200000, true);
-    });
-    wide.forEach(([lo, hi], i) => {
-      if (hi - lo > 0xffff)
-        throw new Error(`unicode-width-table range is too wide: ${lo}-${hi}`);
-      const off = 16 + zero.length * 4 + i * 6;
-      dv.setUint32(off, lo, true);
-      dv.setUint16(off + 4, hi - lo, true);
-    });
-    if (base + bytes.length > end) {
-      throw new Error(
-        `unicode-width-table needs ${bytes.length} bytes, [${base}:${end}) has ${end - base}`
-      );
-    }
-    return `;; ${zero.length} zero-width and ${wide.length} wide ranges (${bytes.length} bytes)\n  ${dataSegment(
-      base,
-      bytes
-    )}`;
-  });
-
-  // (out.str "...") -> a call writing the literal to the output buffer. Short
-  // literals become one immediate store; longer ones are interned into the
-  // pooled data segment emitted by (string-pool ...).
-  const pool: string[] = [];
-  code = replaceForm(code, 'out.str', (inner) => {
-    const text = parseWatString(inner.trim(), url.pathname);
-    if (text.length === 0) return '(nop)';
-    if (text.length <= 8)
-      return `(call $outSmall (i64.const ${packLe(text)}) (i32.const ${text.length}))`;
-    if (text.length <= 16)
-      return `(call $outWide (v128.const i64x2 ${packLe(text.slice(0, 8))} ${packLe(text.slice(8))}) (i32.const ${text.length}))`;
-    pool.push(text);
-    return `(call $outRaw (i32.const  POOL:${pool.length - 1} ) (i32.const ${text.length}))`;
-  });
-  let poolBlob = '';
-  let poolBase = 0;
-  code = replaceForm(code, 'string-pool', (inner) => {
-    const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
-    if (m == null) throw new Error(`Malformed string-pool in ${url.pathname}`);
-    const [base, end] = [Number(m[1]), Number(m[2])];
-    poolBase = base;
-    poolBlob = mergeStrings([...new Set(pool)]);
-    if (base + poolBlob.length > end) {
-      throw new Error(
-        `string-pool needs ${poolBlob.length} bytes, [${base}:${end}) has ${end - base}`
-      );
-    }
-    return `;; string pool (${poolBlob.length} bytes)\n  ${dataSegment(base, Buffer.from(poolBlob, 'latin1'))}`;
-  });
-  const poolSize = poolBlob.length;
-  code = code.replace(/ POOL:(\d+) /g, (_, i) => {
-    const at = poolBlob.indexOf(pool[Number(i)]);
-    if (at < 0)
-      throw new Error(`string pool lost ${JSON.stringify(pool[Number(i)])}`);
-    return String(poolBase + at);
-  });
-  if (code.includes(' POOL:'))
-    throw new Error('(out.str ...) used without a (string-pool ...) segment');
-
-  code = expandEnumGetsAndStrings(code, enumMap, url.pathname);
-  checkDataSegments(code, url.pathname, 65536);
-  return { code, enumMap, bitsetMap, constMap, poolSize };
-}
 
 // East Asian Wide and Fullwidth code points (EastAsianWidth.txt, EAW in {W, F}).
 const WIDE_RANGES =
@@ -367,94 +37,92 @@ const WIDE_RANGES =
   '1F90C-1F93A,1F93C-1F945,1F947-1F9FF,1FA70-1FA7C,1FA80-1FA8A,1FA8E-1FAC6,1FAC8,' +
   '1FACD-1FADC,1FADF-1FAEA,1FAEF-1FAF8,20000-2FFFD,30000-3FFFD';
 
-/**
- * concatenate the strings, dropping any that is already a substring of another
- * and overlapping the rest greedily by longest common suffix/prefix
- */
-function mergeStrings(strings: string[]) {
-  const rest = strings
-    .filter(
-      (s, i) =>
-        !strings.some(
-          (o, j) => i !== j && o.includes(s) && (o.length > s.length || j < i)
-        )
-    )
-    .sort((a, b) => b.length - a.length);
-  let blob = '';
-  while (rest.length !== 0) {
-    let best = 0;
-    let overlap = -1;
-    for (let i = 0; i < rest.length; i++) {
-      if (blob.includes(rest[i])) {
-        best = i;
-        overlap = rest[i].length;
-        break;
-      }
-      for (
-        let n = Math.min(blob.length, rest[i].length - 1);
-        n > overlap;
-        n--
-      ) {
-        if (blob.endsWith(rest[i].slice(0, n))) {
-          best = i;
-          overlap = n;
-          break;
-        }
-      }
+const start = performance.now();
+const source = new URL('../src/md.wat', import.meta.url);
+const path = source.pathname;
+const enumMap: EnumMap = new Map();
+const bitsetMap: BitsetMap = new Map();
+let code = expandEnums(
+  flattenWat(source, fs.readFileSync(source, 'utf-8')).code,
+  enumMap
+);
+code = resolveConsts(code, path).code;
+code = expandBitsets(code, enumMap, bitsetMap, path);
+code = expandBitsetGets(code, bitsetMap, path);
+
+/** Expand `(name <base> <end> ...)` forms into data segments that must fit [base, end). */
+function table(
+  name: string,
+  build: (base: number, inner: string) => Uint8Array
+): void {
+  code = replaceForm(code, name, (inner) => {
+    const m = inner.match(/^\s*(\d+)\s+(\d+)/);
+    if (m == null) throw new Error(`Malformed ${name} in ${path}`);
+    const [base, end] = [Number(m[1]), Number(m[2])];
+    const bytes = build(base, inner);
+    if (base + bytes.length > end) {
+      throw new Error(
+        `${name} needs ${bytes.length} bytes, [${base}:${end}) has ${end - base}`
+      );
     }
-    const pick = rest.splice(best, 1)[0];
-    if (!blob.includes(pick)) blob += pick.slice(Math.max(overlap, 0));
+    return dataSegment(base, bytes);
+  });
+}
+
+/** Ranges of code points from `first` that pass `test`, without surrogates. */
+function codePointRanges(
+  first: number,
+  test: (char: string, cp: number) => boolean
+) {
+  const ranges: [number, number][] = [];
+  let open = -1;
+  for (let cp = first; cp <= 0x10ffff; cp++) {
+    if ((cp < 0xd800 || cp > 0xdfff) && test(String.fromCodePoint(cp), cp)) {
+      if (open < 0) open = cp;
+    } else if (open >= 0) {
+      ranges.push([open, cp - 1]);
+      open = -1;
+    }
   }
-  return blob;
+  return ranges;
 }
 
-function unescapeEntity(value: string) {
-  return value.replace(/\\(?:u[0-9a-fA-F]{4}|n|t|\\)/g, (m) =>
-    m === '\\n'
-      ? '\n'
-      : m === '\\t'
-        ? '\t'
-        : m === '\\\\'
-          ? '\\'
-          : String.fromCharCode(parseInt(m.slice(2), 16))
-  );
-}
-
-function loadEntities() {
-  const table: Record<string, string> = {};
+// HTML5 named character references, read by $entityMatch:
+//   [base+0]   values pointer u16, name count u16
+//   [base+4]   second code points of two-code-point values, u16 each
+//   [base+20]  u16 per block of 64 names: where its first name starts
+//   names      sorted by byte and front-coded. Each name is a byte below '0'
+//              with the length it shares with the previous name (0 at a block
+//              start), then its other bytes. A 0 byte and 0x7f end the list.
+//   values     three planes of one byte per name: bits 0-7 of the first code
+//              point, bits 8-15, then bit 16 in bit 0 and the 1-based index of
+//              the second code point in bits 1-4 (0 = none)
+table('entity-table', (base) => {
+  const entities: Record<string, string> = {};
   for (const line of fs
     .readFileSync(new URL('../src/entities.txt', import.meta.url), 'utf-8')
     .split('\n')) {
-    if ((line ?? '') === '' || line.startsWith('# ')) continue;
+    if (line === '' || line.startsWith('# ')) continue;
     const i = line.indexOf(' ');
     if (i < 0) throw new Error(`malformed entity: ${line}`);
-    table[line.slice(0, i)] = unescapeEntity(line.slice(i + 1));
+    entities[line.slice(0, i)] = line
+      .slice(i + 1)
+      .replace(/\\(?:u[0-9a-fA-F]{4}|n|t|\\)/g, (m) =>
+        m === '\\n'
+          ? '\n'
+          : m === '\\t'
+            ? '\t'
+            : m === '\\\\'
+              ? '\\'
+              : String.fromCharCode(parseInt(m.slice(2), 16))
+      );
   }
-  return table;
-}
-
-/**
- * the HTML5 named character reference tables, laid out as
- *   [base+0]   valuesPtr u16, name count u16
- *   [base+4]   the second code points of two-code-point values, u16 each
- *   [base+20]  u16 per block of 64 names: where its first name starts
- *   names      sorted by byte, front-coded: per name, a byte below '0' with
- *              how many leading bytes it shares with the previous name (0 at
- *              each block start), then its other bytes. A 0 byte and 0x7f end
- *              the list as a name that sorts after every key.
- *   values     three planes, one byte per name each: bits 0-7 and 8-15 of the
- *              first code point, then bit 16 in bit 0 and the 1-based index of
- *              the second code point in bits 1-4 (0 = none)
- * Front coding and byte planes compress far better than fixed-width names.
- */
-function buildEntityTable(base: number) {
-  const table = loadEntities();
-  const names = Object.keys(table).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const names = Object.keys(entities).sort();
+  const n = names.length;
   const second: number[] = [];
   const stream: number[] = [];
   const blocks: number[] = [];
-  const blockStart = base + 20 + Math.ceil(names.length / 64) * 2;
-  const n = names.length;
+  const blockStart = base + 20 + Math.ceil(n / 64) * 2;
   const values = new Uint8Array(n * 3);
   let prev = '';
   names.forEach((name, i) => {
@@ -466,7 +134,7 @@ function buildEntityTable(base: number) {
     stream.push(shared);
     for (let j = shared; j < name.length; j++) stream.push(name.charCodeAt(j));
     prev = name;
-    const cps = [...table[name]].map((c) => c.codePointAt(0)!);
+    const cps = [...entities[name]].map((c) => c.codePointAt(0)!);
     if (cps.length === 2 && !second.includes(cps[1])) second.push(cps[1]);
     if (
       cps.length > 2 ||
@@ -492,55 +160,252 @@ function buildEntityTable(base: number) {
   blocks.forEach((at, i) => dv.setUint16(20 + i * 2, at, true));
   bytes.set(stream, blockStart - base);
   bytes.set(values, valuesPtr - base);
-  return { bytes, entries: n };
-}
+  return bytes;
+});
 
-// Build md.wasm when this script is executed directly.
-if (
-  Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
-  const start = performance.now();
-  const moduleUrl = import.meta.url;
-  try {
-    const outputUrl = new URL('../dist/', moduleUrl);
-    // Remove obsolete chunks before writing the core files that tsdown preserves.
-    fs.rmSync(outputUrl, { recursive: true, force: true });
-    fs.mkdirSync(outputUrl, { recursive: true });
-    const { code } = transformWat(new URL('../src/md.wat', moduleUrl));
-    fs.writeFileSync(new URL('../dist/md.wat', moduleUrl), code, 'utf-8');
-    const rawBytes = wat2wasm(
-      new URL('../dist/md.wasm', moduleUrl).pathname,
-      code
+// Unicode P and S code points from U+0080, which CommonMark calls punctuation,
+// read by $isPunctCp: a u32 range count, then sorted lo:21 + span:11 ranges.
+table('unicode-punct-table', () => {
+  const ranges = codePointRanges(0x80, (char) => /[\p{P}\p{S}]/u.test(char));
+  const bytes = new Uint8Array(4 + ranges.length * 4);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(0, ranges.length, true);
+  ranges.forEach(([lo, hi], i) => {
+    if (lo > 0x1fffff || hi - lo > 0x7ff) {
+      throw new Error(
+        `unicode-punct-table range exceeds packed format: ${lo}-${hi}`
+      );
+    }
+    dv.setUint32(4 + i * 4, lo + (hi - lo) * 0x200000, true);
+  });
+  return bytes;
+});
+
+// (word-table <base> <end> "name" ...): a set of lowercase ASCII words, read by
+// $wordLookup. One u16 per length through the longest word (relative names
+// offset:9 + count:7), then the names, grouped by length and sorted.
+table('word-table', (_, inner) => {
+  const words: string[] = (inner.match(/"[\w-]+"/g) ?? [])
+    .map((w) => JSON.parse(w))
+    .sort((a, b) =>
+      a.length !== b.length ? a.length - b.length : a < b ? -1 : a > b ? 1 : 0
     );
-    const wasmBytes = optimizeWasm(rawBytes, {
-      filename: 'md.wat',
-      shrinkLevel: 1,
-    });
-    fs.writeFileSync(new URL('../dist/md.wasm', moduleUrl), wasmBytes);
-    fs.writeFileSync(
-      new URL('../dist/md.wasm.mjs', moduleUrl),
-      `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
-        `const b = new Uint8Array(s.length);\n` +
-        `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
-        `export default b;\n`,
-      'utf-8'
-    );
-    const meta = {
-      'md.wasm': wasmBytes.length,
-      'md.wasm.gz': gzipSync(wasmBytes, { level: 9 }).length,
-    };
-    fs.writeFileSync(
-      new URL('../dist/meta.json', moduleUrl),
-      JSON.stringify(meta) + '\n'
-    );
-    console.log(
-      `Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${meta['md.wasm']} bytes, gzipped: ${
-        meta['md.wasm.gz']
-      } bytes, -O3)`
-    );
-  } catch (error) {
-    console.error(error instanceof Error ? error.stack : error);
-    process.exit(1);
+  if (words.some((w) => w.length > 31))
+    throw new Error(`word-table entry longer than 31 bytes`);
+  if (new Set(words).size !== words.length)
+    throw new Error(`duplicate word-table entry`);
+  const maxLen = Math.max(...words.map((w) => w.length));
+  const groups = (maxLen + 1) * 2;
+  const bytes = new Uint8Array(
+    groups + words.reduce((n, w) => n + w.length, 0)
+  );
+  const dv = new DataView(bytes.buffer);
+  let at = 0;
+  for (let len = 0; len <= maxLen; len++) {
+    const of = words.filter((w) => w.length === len);
+    const names = groups + at;
+    if (names > 0x1ff || of.length > 0x7f)
+      throw new Error(`word-table group exceeds packed format`);
+    dv.setUint16(len * 2, names | (of.length << 9), true);
+    for (const w of of) {
+      for (let i = 0; i < len; i++) bytes[groups + at + i] = w.charCodeAt(i);
+      at += len;
+    }
   }
-}
+  return bytes;
+});
+
+// Full Unicode case folding from U+0041, used to normalize link labels: a u16
+// run count and u16 multi count, then 8-byte runs (start:21 + span:11, then
+// signed delta:24 + stride:8). Multi-code-point folds point into a UTF-8 blob.
+table('unicode-fold-table', (base) => {
+  const runs: { lo: number; hi: number; delta: number; stride: number }[] = [];
+  const multi: [number, string][] = [];
+  for (let cp = 0x41; cp <= 0x2ffff; cp++) {
+    if (cp >= 0xd800 && cp <= 0xdfff) continue;
+    const char = String.fromCodePoint(cp);
+    // This round trip gives the full fold: U+1E9E becomes "ss", U+03C2 becomes U+03C3.
+    const fold = char.toLowerCase().toUpperCase().toLowerCase();
+    if (fold === char) continue;
+    const points = [...fold];
+    if (points.length > 1) {
+      multi.push([cp, fold]);
+      continue;
+    }
+    const delta = points[0].codePointAt(0)! - cp;
+    const last = runs[runs.length - 1];
+    if (last != null && last.delta === delta && cp - last.hi === last.stride)
+      last.hi = cp;
+    else if (
+      last != null &&
+      last.delta === delta &&
+      last.lo === last.hi &&
+      cp - last.hi <= 2
+    ) {
+      last.stride = cp - last.hi;
+      last.hi = cp;
+    } else runs.push({ lo: cp, hi: cp, delta, stride: 1 });
+  }
+  if (
+    runs.some(
+      (r) =>
+        r.lo > 0x1fffff ||
+        r.hi - r.lo > 0x7ff ||
+        r.delta < -0x800000 ||
+        r.delta > 0x7fffff ||
+        (r.stride !== 1 && r.stride !== 2)
+    )
+  ) {
+    throw new Error(`unicode-fold-table run exceeds packed format`);
+  }
+  const blob = multi.map(([, f]) => Buffer.from(f, 'utf-8'));
+  const blobLen = blob.reduce((n, b) => n + b.length, 0);
+  const header = 4;
+  const bytes = new Uint8Array(
+    header + runs.length * 8 + multi.length * 8 + blobLen
+  );
+  const dv = new DataView(bytes.buffer);
+  const blobPtr = base + header + runs.length * 8 + multi.length * 8;
+  dv.setUint16(0, runs.length, true);
+  dv.setUint16(2, multi.length, true);
+  runs.forEach((r, i) => {
+    dv.setUint32(header + i * 8, r.lo + (r.hi - r.lo) * 0x200000, true);
+    dv.setUint32(
+      header + i * 8 + 4,
+      (r.stride << 24) | (r.delta & 0xffffff),
+      true
+    );
+  });
+  let at = 0;
+  multi.forEach(([cp], i) => {
+    const off = header + runs.length * 8 + i * 8;
+    dv.setUint32(off, cp, true);
+    dv.setUint16(off + 4, blobPtr + at, true);
+    bytes[off + 6] = blob[i].length;
+    bytes.set(blob[i], header + runs.length * 8 + multi.length * 8 + at);
+    at += blob[i].length;
+  });
+  return bytes;
+});
+
+// Terminal display widths, read by $displayWidth: code points that take no cell
+// (combining marks, format characters, conjoining jamo) as lo:21 + span:11, and
+// wide ones as [lo:u32, span:u16].
+table('unicode-width-table', (base) => {
+  const zero = codePointRanges(
+    0,
+    (char, cp) =>
+      cp !== 0xad &&
+      (/[\p{Mn}\p{Me}\p{Cf}]/u.test(char) || (cp >= 0x1160 && cp <= 0x11ff))
+  );
+  const wide = WIDE_RANGES.split(',').map((r) => {
+    const [lo, hi] = r.split('-');
+    return [parseInt(lo, 16), parseInt(hi ?? lo, 16)];
+  });
+  const bytes = new Uint8Array(16 + zero.length * 4 + wide.length * 6);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(0, zero.length, true);
+  dv.setUint32(4, wide.length, true);
+  dv.setUint32(8, base + 16, true);
+  dv.setUint32(12, base + 16 + zero.length * 4, true);
+  zero.forEach(([lo, hi], i) => {
+    if (lo > 0x1fffff || hi - lo > 0x7ff) {
+      throw new Error(
+        `unicode-width-table zero-width range is too wide: ${lo}-${hi}`
+      );
+    }
+    dv.setUint32(16 + i * 4, lo + (hi - lo) * 0x200000, true);
+  });
+  wide.forEach(([lo, hi], i) => {
+    if (hi - lo > 0xffff)
+      throw new Error(`unicode-width-table range is too wide: ${lo}-${hi}`);
+    const off = 16 + zero.length * 4 + i * 6;
+    dv.setUint32(off, lo, true);
+    dv.setUint16(off + 4, hi - lo, true);
+  });
+  return bytes;
+});
+
+// (out.str "...") writes a literal to the output. Short literals become one
+// immediate store. Longer ones go in the string pool.
+const pool: string[] = [];
+code = replaceForm(code, 'out.str', (inner) => {
+  const text = parseWatString(inner.trim(), path);
+  if (text.length <= 8)
+    return `(call $outSmall (i64.const ${packLe(text)}) (i32.const ${text.length}))`;
+  if (text.length <= 16)
+    return `(call $outWide (v128.const i64x2 ${packLe(text.slice(0, 8))} ${packLe(text.slice(8))}) (i32.const ${text.length}))`;
+  pool.push(text);
+  return `(call $outRaw (i32.const  POOL:${pool.length - 1} ) (i32.const ${text.length}))`;
+});
+
+// Drop strings that another string contains, then overlap the rest greedily by
+// their longest common suffix and prefix.
+let poolBlob = '';
+let poolBase = 0;
+table('string-pool', (base) => {
+  const unique = [...new Set(pool)];
+  const rest = unique
+    .filter(
+      (s, i) =>
+        !unique.some(
+          (o, j) => i !== j && o.includes(s) && (o.length > s.length || j < i)
+        )
+    )
+    .sort((a, b) => b.length - a.length);
+  while (rest.length !== 0) {
+    let best = 0;
+    let overlap = -1;
+    for (let i = 0; i < rest.length; i++) {
+      if (poolBlob.includes(rest[i])) {
+        best = i;
+        overlap = rest[i].length;
+        break;
+      }
+      for (
+        let n = Math.min(poolBlob.length, rest[i].length - 1);
+        n > overlap;
+        n--
+      ) {
+        if (poolBlob.endsWith(rest[i].slice(0, n))) {
+          best = i;
+          overlap = n;
+          break;
+        }
+      }
+    }
+    const pick = rest.splice(best, 1)[0];
+    if (!poolBlob.includes(pick)) poolBlob += pick.slice(Math.max(overlap, 0));
+  }
+  poolBase = base;
+  return Buffer.from(poolBlob, 'latin1');
+});
+code = code.replace(/ POOL:(\d+) /g, (_, i) => {
+  const at = poolBlob.indexOf(pool[Number(i)]);
+  if (at < 0)
+    throw new Error(`string pool lost ${JSON.stringify(pool[Number(i)])}`);
+  return String(poolBase + at);
+});
+
+code = expandEnumGetsAndStrings(code, enumMap, path);
+checkDataSegments(code, path, 65536);
+const wasmBytes = optimizeWasm(wat2wasm(path, code), {
+  filename: 'md.wat',
+  shrinkLevel: 1,
+});
+
+// tsdown runs next with `clean: false`, so remove old chunks here.
+const dist = new URL('../dist/', import.meta.url);
+fs.rmSync(dist, { recursive: true, force: true });
+fs.mkdirSync(dist, { recursive: true });
+fs.writeFileSync(new URL('md.wasm', dist), wasmBytes);
+fs.writeFileSync(
+  new URL('md.wasm.mjs', dist),
+  `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
+    `const b = new Uint8Array(s.length);\n` +
+    `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
+    `export default b;\n`
+);
+console.log(
+  `Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${wasmBytes.length} bytes, gzipped: ${gzipSync(wasmBytes, { level: 9 }).length} bytes)`
+);

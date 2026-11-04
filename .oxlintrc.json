@@ -74,12 +74,6 @@
   },
   "overrides": [
     {
-      "files": ["packages/words/**/*.mjs"],
-      "rules": {
-        "typescript/strict-boolean-expressions": "off"
-      }
-    },
-    {
       "files": [
         "packages/trees/src/render/**/*.tsx",
         "packages/trees/src/components/**/*.tsx"

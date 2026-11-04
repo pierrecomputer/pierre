@@ -172,4 +172,3 @@ allowBuilds:
   'keytar': true
   'msw': true
   'sharp': true
-  'esbuild': true

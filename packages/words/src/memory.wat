@@ -1,5 +1,4 @@
 (module
-  (const $mem.control 0)
   (const $mem.numbuf 48)
   (const $mem.numbufEnd 64)
   (const $mem.hexdigits 64)
@@ -40,10 +39,8 @@
   (const $mem.container $mem.sgr+8)
   (const $mem.containerEnd $mem.container+6000)
   (const $mem.opener $mem.container+1024)
-  (const $mem.openerEnd $mem.opener+128)
   (const $mem.tickMemo $mem.opener+128)
   (const $mem.bracket $mem.opener+1152)
-  (const $mem.bracketEnd $mem.bracket+3072)
   (const $mem.column $mem.containerEnd)
   (const $mem.columnEnd $mem.column+1024)
   (const $mem.align $mem.columnEnd)

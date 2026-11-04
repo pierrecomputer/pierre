@@ -2,14 +2,13 @@
 export interface RenderOptions extends HtmlSessionOptions {
   skipHtml?: boolean;
   /**
-   * Parse a leading YAML frontmatter block (`---` … `---`) instead of treating
-   * it as markdown. Changes the return value to `[meta, output]`, where `meta`
-   * is the parsed document or `null` when the input has no frontmatter.
+   * Parse a leading YAML frontmatter block. The return value becomes
+   * `[meta, output]`, where `meta` is `null` when the input has no frontmatter.
    */
   frontmatter?: boolean;
 }
 
-/** A parsed YAML frontmatter document: usually a mapping, but any JSON value. */
+/** Parsed YAML frontmatter: usually a mapping, but any JSON value. */
 export type Frontmatter =
   | { [key: string]: Frontmatter }
   | Frontmatter[]
@@ -20,25 +19,28 @@ export type Frontmatter =
 
 /** Options for the terminal renderer. */
 export interface AnsiOptions {
-  /** Wrap text at this column. Zero, the default, leaves the terminal to wrap. */
+  /** Wrap text at this column. With 0, the default, the terminal wraps it. */
   width?: number;
 }
 
 /** Options for incremental HTML rendering. */
 export interface HtmlSessionOptions {
-  /** Complete common unfinished inline syntax in the display copy of the input. */
+  /** Complete common unfinished inline syntax. */
   incomplete?: boolean;
 }
 
-/** Direct HTML output; only a completed prefix and mutable suffix are retained. */
+/** The result of one session render. */
 export interface HtmlUpdate {
-  /** Complete output, assembled lazily when read. */
+  /** Full output, built on first read. */
   html: string;
+  /** HTML of completed blocks. */
   stable: string;
-  /** Newly completed HTML since the preceding revision; resets replace the prefix. */
+  /** HTML completed since the previous revision. */
   addition: string;
+  /** HTML that can still change. */
   pending: string;
+  /** The previous `stable` is no longer valid. */
   reset: boolean;
-  /** Increasing output version. Use full stable HTML if a revision was skipped. */
+  /** Output version. After a skipped revision, use `stable` instead of `addition`. */
   revision: number;
 }

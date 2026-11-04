@@ -33,7 +33,7 @@ const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 const subscribe = (): (() => void) => () => {};
 
-/** React owns one opaque container; the framework-independent renderer owns its HTML. */
+/** React owns the container, and `createDomRenderer` owns its content. */
 export function Markdown({
   children = '',
   mode = 'streaming',

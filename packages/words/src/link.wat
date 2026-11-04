@@ -24,13 +24,6 @@
   (func (export "seed") (param $seed i32)
     (global.set $hashSeed (local.get $seed)))
 
-  ;; the number of bytes in the UTF-8 sequence starting with $c
-  (func $utf8Width (param $c i32) (result i32)
-    (if (i32.lt_u (local.get $c) (i32.const 0xc0)) (then (return (i32.const 1))))
-    (if (i32.lt_u (local.get $c) (i32.const 0xe0)) (then (return (i32.const 2))))
-    (if (i32.lt_u (local.get $c) (i32.const 0xf0)) (then (return (i32.const 3))))
-    (i32.const 4))
-
   ;; The last of $n sorted 8-byte fold entries at $at whose low 21 bits are at
   ;; most $cp, or the entry before $at when there is none.
   (func $foldFind (param $at i32) (param $n i32) (param $cp i32) (result i32)
