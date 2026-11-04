@@ -39,10 +39,13 @@ const FLIP_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 // scale is not linear, so it is sampled: 16 steps keep the content within a
 // fraction of a pixel of its own size.
 const COUNTER_SCALE_STEPS = 16;
-// The inverse of a scale near 0, as at the start of a pane that grows from a
-// line, has no useful bound. The host shows almost nothing then, so the inner
-// scale stops at this value, which no rearrangement of the bench reaches.
-const MAX_COUNTER_SCALE = 8;
+// The inverse scale of the content of a pane that grows from a line has no
+// useful bound near the start, and the compositor builds the content at that
+// scale: a cap of 8 made the commit of each show wait about 10 ms with real
+// content at 16 panes. The pane is narrow until it reaches half its size, in
+// the first two frames, so its content is narrower than its own size then.
+// Other animations keep the exact inverse, so that text keeps its shape.
+const MAX_GROWTH_COUNTER_SCALE = 2;
 // The width or height that a pane that shows again starts from. Not 0: a
 // matrix with a scale of 0 cannot interpolate, so its animation would jump.
 const GROWTH_START_PX = 1;
@@ -191,14 +194,17 @@ export function animateFromBoxes(
   // pane, so the pane's box is kept.
   const after = new Map<string, Rect>();
   for (const { key, to } of elements) if (!after.has(key)) after.set(key, to);
-  const plans: { element: HTMLElement; start: DOMMatrix; end: DOMMatrix }[] =
-    [];
+  const plans: {
+    element: HTMLElement;
+    start: DOMMatrix;
+    end: DOMMatrix;
+    grows: boolean;
+  }[] = [];
   for (const { element, key, to } of elements) {
     // A new element has no old box, and appears in place. A pane that shows
     // again has none either, and grows into its place.
-    const from =
-      before.get(key) ??
-      (growing.has(key) ? growthStart(key, to, before, after) : undefined);
+    const grows = !before.has(key) && growing.has(key);
+    const from = grows ? growthStart(key, to, before, after) : before.get(key);
     if (from === undefined) continue;
     if (
       Math.abs(from.x - to.x) < 0.5 &&
@@ -220,14 +226,14 @@ export function animateFromBoxes(
       from.x - (to.x - end.e),
       from.y - (to.y - end.f),
     ]);
-    plans.push({ element, start, end });
+    plans.push({ element, start, end, grows });
   }
   const timing: KeyframeAnimationOptions = {
     duration,
     easing: FLIP_EASING,
     id: FLIP_ANIMATION_ID,
   };
-  for (const { element, start, end } of plans) {
+  for (const { element, start, end, grows } of plans) {
     element.animate(
       [{ transform: start.toString() }, { transform: end.toString() }],
       timing
@@ -238,6 +244,7 @@ export function animateFromBoxes(
     if (inner === null || (start.a === end.a && start.d === end.d)) continue;
     // Both animations share the timing, so at each eased progress the host's
     // scale is the linear mix of its keyframes, and the inner scale undoes it.
+    const cap = grows ? MAX_GROWTH_COUNTER_SCALE : Infinity;
     const frames: Keyframe[] = [];
     for (let step = 0; step <= COUNTER_SCALE_STEPS; step++) {
       const progress = step / COUNTER_SCALE_STEPS;
@@ -245,7 +252,7 @@ export function animateFromBoxes(
       const y = start.d + (end.d - start.d) * progress;
       frames.push({
         offset: progress,
-        transform: `scale(${Math.min(end.a / x, MAX_COUNTER_SCALE)}, ${Math.min(end.d / y, MAX_COUNTER_SCALE)})`,
+        transform: `scale(${Math.min(end.a / x, cap)}, ${Math.min(end.d / y, cap)})`,
       });
     }
     inner.animate(frames, timing);
