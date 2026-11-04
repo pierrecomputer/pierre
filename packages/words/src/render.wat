@@ -104,7 +104,9 @@
                     (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
                     (br_if $bodyDone (i32.eqz (local.get $depth))))
                   (else (local.set $depth (i32.add (local.get $depth) (i32.const 1))))))
-              (else (call $renderBlock (local.get $r))))
+              ;; A nested definition's blocks render under its own number.
+              (else (if (i32.eq (local.get $depth) (i32.const 1))
+                (then (call $renderBlock (local.get $r))))))
             (local.set $r (i32.add (local.get $r) (i32.load offset=4 (local.get $r))))
             (br $body)))
         (if (global.get $mode)

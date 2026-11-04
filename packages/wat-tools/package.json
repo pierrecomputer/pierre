@@ -1,0 +1,14 @@
+{
+  "name": "@pierre/wat-tools",
+  "version": "0.0.1",
+  "private": true,
+  "license": "apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "binaryen": "catalog:",
+    "wabt": "catalog:"
+  }
+}

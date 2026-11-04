@@ -33,12 +33,11 @@
     "prepublishOnly": "moon run highlights:prepublish"
   },
   "devDependencies": {
-    "binaryen": "catalog:",
+    "@pierre/wat-tools": "workspace:*",
     "shiki": "catalog:",
     "tree-sitter-highlight": "catalog:",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "wabt": "catalog:"
+    "typescript": "catalog:"
   },
   "meta": {
     "highlights.wasm": 332924,

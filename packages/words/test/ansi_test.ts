@@ -343,3 +343,43 @@ void test('a list marker takes the style it sits in', () => {
   // the quote opens inside the item, so its bar follows a marker it must not dim
   assert.match(ansi('1. > q'), /^1\. \x1b\[38;5;240m/);
 });
+
+void test('invalid UTF-8 from bytes input cannot reach the terminal', () => {
+  const bytes = (...parts: (string | number)[]) =>
+    Uint8Array.from(
+      parts.flatMap((part) =>
+        typeof part === 'number' ? [part] : [...Buffer.from(part)]
+      )
+    );
+  const raw = (input: Uint8Array, options?: { width?: number }) =>
+    Buffer.from(renderToAnsi(input, options)).toString('latin1');
+  const fffd = '\xef\xbf\xbd';
+  // A stray C1 control in text, wrapped text, code and an autolink.
+  for (const options of [undefined, { width: 80 }])
+    assert.equal(raw(bytes('a', 0x9b, '31mb'), options), `a${fffd}31mb\n`);
+  assert.ok(raw(bytes('```\n', 0x9b, '31m\n```')).includes(`${fffd}31m`));
+  assert.ok(!raw(bytes('```\n', 0x9b, '31m\n```')).includes('\x9b'));
+  // Overlong forms, surrogates, bytes above U+10FFFF and truncated sequences.
+  for (const invalid of [
+    [0xc0, 0x9b],
+    [0xc1, 0x9b],
+    [0xe0, 0x80, 0x9b],
+    [0xed, 0xa0, 0x9b],
+    [0xf0, 0x80, 0x80, 0x9b],
+    [0xf4, 0x90, 0x80, 0x9b],
+    [0xf5, 0x9b],
+    [0xe2, 0x82],
+    [0xf0, 0x9f, 0x98],
+  ]) {
+    const output = raw(bytes('a', ...invalid, 'b'));
+    assert.ok(output.includes(fffd), invalid.join());
+    assert.ok(!output.includes('\x9b'), invalid.join());
+  }
+  // Valid sequences hold bytes in the same range, and stay as they are.
+  const valid = 'é € ’ 😀 \u{10ffff} \ud7ff \ue000';
+  assert.equal(ansi(Buffer.from(valid)), ansi(valid));
+  assert.equal(
+    ansi(new TextEncoder().encode(`\`\`\`\n${valid}\n\`\`\``)),
+    ansi(`\`\`\`\n${valid}\n\`\`\``)
+  );
+});

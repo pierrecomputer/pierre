@@ -19,6 +19,7 @@ const files = [
   'api_test.ts',
   'fuzz_test.ts',
   'grow_test.ts',
+  'wasm_test.ts',
 ].map((f) => fileURLToPath(new URL(f, import.meta.url)));
 
 const unit = spawnSync(process.execPath, ['--test', ...files], {

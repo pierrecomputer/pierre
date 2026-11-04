@@ -6,16 +6,31 @@ import {
   createHtmlSession,
   type HtmlSessionOptions,
   type HtmlUpdate,
+  init,
   renderToHtml,
 } from '../dist/index.js';
 
 const decoder = new TextDecoder();
 /** Render independently of the append cache, with the same source-HTML policy. */
 const full = (source: string, options?: HtmlSessionOptions) =>
-  decoder.decode(renderToHtml(source, { ...options, skipHtml: true }));
+  decoder.decode(
+    renderToHtml(source, {
+      ...options,
+      skipHtml: true,
+      boundary: true,
+    } as HtmlSessionOptions)
+  );
 const links = (html: string) => [
-  ...html.matchAll(/<a href="([^"]*)"[^>]*>(.*?)<\/a>/gs),
+  ...html.matchAll(
+    /<a (?:href="([^"]*)"|data-markdown-incomplete)[^>]*>(.*?)<\/a>/gs
+  ),
 ];
+/** A source that writes the completion's placeholder, rendered as a pending link. */
+const fullPending = (source: string) =>
+  full(source).replaceAll(
+    '<a href="streamdown:incomplete-link">',
+    '<a data-markdown-incomplete>'
+  );
 
 void test('HTML additions reconstruct output through appends, repeated inputs, and resets', () => {
   const session = createHtmlSession();
@@ -136,7 +151,7 @@ void test('synthetic emphasis closers preserve whitespace, nesting, and inline c
   ])
     assert.equal(
       full(source, { incomplete: true }),
-      full(completed),
+      fullPending(completed),
       JSON.stringify(source)
     );
 });
@@ -200,7 +215,7 @@ void test('emphasis around unfinished links and images closes outside them', () 
   ]) {
     assert.equal(
       full(source, { incomplete: true }),
-      full(completed),
+      fullPending(completed),
       JSON.stringify(source)
     );
   }
@@ -292,7 +307,7 @@ void test('a delivery-ending label keeps its incomplete link across the ] bounda
     const { html } = session.render(source, { incomplete: true });
     assert.equal(
       html,
-      `<p>See <a href="streamdown:incomplete-link">${source.startsWith('See [link') ? 'link' : 'l'}</a></p>\n`
+      `<p>See <a data-markdown-incomplete>${source.startsWith('See [link') ? 'link' : 'l'}</a></p>\n`
     );
   }
   assert.equal(
@@ -338,7 +353,7 @@ void test('trailing labels keep UTF-8, nested formatting, and synthetic outer em
     const html = full(source, { incomplete: true });
     assert.equal(
       html,
-      `<p>See <a href="streamdown:incomplete-link">${expected}</a></p>\n`
+      `<p>See <a data-markdown-incomplete>${expected}</a></p>\n`
     );
   }
   for (const delimiter of ['*', '**', '_', '__', '~~']) {
@@ -350,7 +365,7 @@ void test('trailing labels keep UTF-8, nested formatting, and synthetic outer em
     );
     const unresolved = `${delimiter}See [new]`;
     const html = full(unresolved, { incomplete: true });
-    assert.equal(links(html)[0][1], 'streamdown:incomplete-link');
+    assert.equal(links(html)[0][1], undefined);
     assert.equal(links(html)[0][2], 'new');
     assert.match(html, /^<p><(?:em|strong|del)>See /, unresolved);
   }
@@ -364,6 +379,128 @@ void test('completion flags never change authored sentinel URLs or static bracke
   assert.equal(full(authored), expected);
   assert.equal(full(authored, { incomplete: true }), expected);
   assert.equal(full('See [pending]'), '<p>See [pending]</p>\n');
+});
+
+void test('internal streaming markers stay out of other APIs', () => {
+  const plain = (source: string, options?: HtmlSessionOptions) =>
+    decoder.decode(renderToHtml(source, options));
+  assert.equal(
+    plain('```\nfoo', { skipHtml: true } as HtmlSessionOptions),
+    '<pre><code>foo\n</code></pre>\n'
+  );
+  assert.equal(
+    createHtmlSession().render('```\nfoo').html,
+    '<pre data-markdown-incomplete><code>foo\n</code></pre>\n'
+  );
+  for (const source of ['[a', '[a]', '[a](htt'])
+    for (const html of [
+      plain(source, { incomplete: true }),
+      createHtmlSession().render(source, { incomplete: true }).html,
+    ])
+      assert.equal(html, '<p><a data-markdown-incomplete>a</a></p>\n');
+  // A source that writes the same URL keeps it when no link is pending.
+  assert.equal(
+    plain('[a](streamdown:incomplete-link)'),
+    '<p><a href="streamdown:incomplete-link">a</a></p>\n'
+  );
+});
+
+void test('inline state ends with its block, without a blank line', () => {
+  for (const [source, expected] of [
+    ['- **kwargs\n- next', '- \\*\\*kwargs\n- next'],
+    ['1. `a\n2. b', '1. \\`a\n2. b'],
+    ['1. *a\n2) b', '1. \\*a\n2) b'],
+    ['# *a\nfoo', '# \\*a\nfoo'],
+    ['- # *a\nfoo', '- # \\*a\nfoo'],
+    ['> *a\n>\n> b', '> \\*a\n>\n> b'],
+    ['> *a\n> > b', '> \\*a\n> > b'],
+    ['*a\n> b', '\\*a\n> b'],
+    ['*a\n# b', '\\*a\n# b'],
+    ['*a\n---\nb', '\\*a\n---\nb'],
+    ['*a\n===\nb', '\\*a\n===\nb'],
+    ['*a\n--\nb', '\\*a\n--\nb'],
+    ['*a\n* * *\nb', '\\*a\n* * *\nb'],
+    ['[l\n- b', '\\[l\n- b'],
+    ['# *a\r\nfoo', '# \\*a\r\nfoo'],
+    ['| *a | b |\n|---|---|\n| c | d |', '| \\*a | b |\n|---|---|\n| c | d |'],
+    ['| a |\n|---|\n| *b |\n| c |', '| a |\n|---|\n| \\*b |\n| c |'],
+  ])
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(expected),
+      JSON.stringify(source)
+    );
+  // A paragraph continues over these lines, so its closers still come last.
+  for (const [source, completed] of [
+    ['*a\nb', '*a\nb*'],
+    ['> *a\n> b', '> *a\n> b*'],
+    ['> > *a\n> b', '> > *a\n> b*'],
+    ['- *a\n  b', '- *a\n  b*'],
+    ['**a\n**b', '**a\n**b****'],
+    ['`a\nb', '`a\nb`'],
+  ])
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(completed),
+      JSON.stringify(source)
+    );
+});
+
+void test('closers that could not close are not appended', () => {
+  for (const [source, completed] of [
+    // A closing tick run would join the run that ends the content.
+    ['foo `', 'foo `'],
+    ['foo ``', 'foo ``'],
+    ['a ```', 'a ```'],
+    ['``', '``'],
+    ['foo ` ', 'foo ` '],
+    ['``a`', '``a`'],
+    ['*`', '*`*'],
+    // A final backslash would escape the closer, and has nothing to escape yet.
+    ['*a\\', '*a*'],
+    ['**a\\', '**a**'],
+    ['~~a\\', '~~a~~'],
+    ['*a\\\n', '*a*\n'],
+    ['*a\\\\', '*a\\\\*'],
+    ['`a\\', '`a\\`'],
+    // Closers right after their opener would double it as text.
+    ['_\\', '_\\'],
+    ['**\\', '**\\'],
+    ['*\\ ', '*\\ '],
+    ['*\u00a0', '*\u00a0'],
+    // A lone `~` that ends the content joins the closing `~`.
+    ['~~a~', '~~a~~'],
+  ])
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(completed),
+      JSON.stringify(source)
+    );
+  assert.equal(
+    full('[a\\', { incomplete: true }),
+    '<p><a data-markdown-incomplete>a</a></p>\n'
+  );
+});
+
+void test('a render that throws leaves the session unchanged', () => {
+  const renderer = init(
+    new WebAssembly.Module(
+      readFileSync(new URL('../dist/md.wasm', import.meta.url))
+    )
+  );
+  const session = createHtmlSession();
+  const first = session.render('one\n\ntwo\n\nth');
+  assert.equal(first.stable, '<p>one</p>\n<p>two</p>\n');
+  const render = renderer.render;
+  renderer.render = () => {
+    throw new RangeError('too large');
+  };
+  assert.throws(() => session.render('replacement'), RangeError);
+  renderer.render = render;
+  const next = session.render('one\n\ntwo\n\nthree\n\n');
+  assert.equal(next.reset, false);
+  assert.equal(next.addition, '<p>three</p>\n');
+  assert.equal(next.html, '<p>one</p>\n<p>two</p>\n<p>three</p>\n');
 });
 
 void test('closed-label repair never changes code, raw blocks, or reference destinations', () => {
@@ -389,9 +526,7 @@ void test('only the final source label is repaired in rebuilt blocks and table c
   ]) {
     const html = full(source, { incomplete: true });
     assert.ok(
-      html.includes(
-        `${beforeLink}<a href="streamdown:incomplete-link">new</a>`
-      ),
+      html.includes(`${beforeLink}<a data-markdown-incomplete>new</a>`),
       source
     );
     assert.equal(links(html).length, 1, source);

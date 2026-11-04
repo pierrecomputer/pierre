@@ -1344,3 +1344,11 @@ void test('named references decode from the table and its lookup cache', async (
     }
   }
 });
+
+void test('a nested footnote definition renders only under its own number', () => {
+  const both = html('[^a][^b]\n\n[^a]: x\n\n    [^b]: y');
+  assert.equal(both.match(/<p>y /g)?.length, 1);
+  assert.match(both, /<li id="fn-1">\n<p>x <a[^>]*>↩<\/a><\/p>\n<\/li>/);
+  assert.match(both, /<li id="fn-2">\n<p>y /);
+  assert.ok(!html('[^a]\n\n[^a]: x\n\n    [^b]: y').includes('y'));
+});

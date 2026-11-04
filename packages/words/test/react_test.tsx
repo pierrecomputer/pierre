@@ -198,18 +198,39 @@ describe('streaming display completion', () => {
     ['**bold *and italic', 'em'],
   ]) {
     test(`completes ${JSON.stringify(source)}`, () => {
-      expect(html(source)).toContain(`<${marker}`);
-      expect(html(source, { mode: 'static' })).not.toContain(`<${marker}`);
+      expect(html(source, { isAnimating: true })).toContain(`<${marker}`);
+      expect(html(source)).not.toContain(`<${marker}`);
+      expect(html(source, { mode: 'static', isAnimating: true })).not.toContain(
+        `<${marker}`
+      );
     });
   }
   test('repairs partial links as text, then enables the completed destination', () => {
-    expect(html('[Hello](https://exam')).not.toContain('href=');
-    expect(html('[Hello](https://exam')).toContain('Hello');
-    expect(html('[Hello')).not.toContain('[Hello');
-    expect(html('[Hello](https://example.com)')).toContain(
+    const streaming = { isAnimating: true };
+    expect(html('[Hello](https://exam', streaming)).not.toContain('href=');
+    expect(html('[Hello](https://exam', streaming)).toContain('Hello');
+    expect(html('[Hello', streaming)).not.toContain('[Hello');
+    expect(html('[Hello](https://example.com)', streaming)).toContain(
       'href="https://example.com"'
     );
-    expect(html('![unfinished](https://exam')).not.toContain('<img');
+    expect(html('![unfinished](https://exam', streaming)).not.toContain('<img');
+  });
+  test('finished text keeps its source, without streaming repairs', () => {
+    for (const source of [
+      'The first item is arr[0]',
+      'See [docs]',
+      'Use *args in Python',
+      'x <y and z',
+      '- **kwargs\n- next',
+      '![alt',
+    ]) {
+      expect(html(source, { idPrefix: 'a' })).toBe(
+        html(source, { idPrefix: 'a', mode: 'static' })
+      );
+      expect(html(source, { idPrefix: 'a', isAnimating: true })).not.toBe(
+        html(source, { idPrefix: 'a' })
+      );
+    }
   });
   test('protects code, escaped delimiters, intraword names, and complete formatting', () => {
     for (const source of [
@@ -257,9 +278,9 @@ describe('streaming display completion', () => {
     );
   });
   test('completion is opt-out and static mode preserves exact Markdown behavior', () => {
-    expect(html('**hello', { parseIncompleteMarkdown: false })).toContain(
-      '**hello'
-    );
+    expect(
+      html('**hello', { isAnimating: true, parseIncompleteMarkdown: false })
+    ).toContain('**hello');
     expect(
       html('**hello', { mode: 'static', isAnimating: true, caret: 'block' })
     ).not.toContain('data-markdown="caret"');
@@ -267,6 +288,47 @@ describe('streaming display completion', () => {
 });
 
 describe('HTML rendering and the React wrapper', () => {
+  test('URLs with an apostrophe keep it through the navigation policy', () => {
+    const seen: string[] = [];
+    const urlTransform = (url: string): string => (seen.push(url), url);
+    const render = (source: string): string =>
+      createHtmlRenderer({ urlTransform }).render(source, false).html;
+    expect(render("[a](http://x/it's)")).toContain('href="http://x/it&#39;s"');
+    expect(render("![a](it's.png)")).toContain('src="it&#39;s.png"');
+    expect(render("https://x.com/Murphy's_law")).toContain(
+      'href="https://x.com/Murphy&#39;s_law"'
+    );
+    expect(seen[0]).toBe("http://x/it's");
+    expect(render('[a](http://x/it&#x27;s)')).toContain(
+      'href="http://x/it&#39;s"'
+    );
+  });
+  test('every string hook rejects a non-string result', () => {
+    const bad = (() => undefined) as unknown as (html: string) => string;
+    for (const [source, options] of [
+      ['a `b` c', { components: { inlineCode: bad } }],
+      ['*a*', { components: { em: bad } }],
+      [
+        '```x\ny\n```',
+        { plugins: { renderers: [{ language: 'x', render: bad }] } },
+      ],
+    ] as [string, HtmlOptions][])
+      expect(() => createHtmlRenderer(options).render(source, false)).toThrow(
+        'HTML hooks must return strings'
+      );
+  });
+  test('whitespace chunks do not commit the open block when definitions force resets', () => {
+    const source =
+      '[r]: /url\n\nFirst [r] paragraph.\n\nSecond paragraph goes on and on.';
+    const renderer = createHtmlRenderer({});
+    let resets = 0;
+    for (let end = 1; end <= source.length; end++)
+      if (renderer.render(source.slice(0, end), true, true).reset) resets++;
+    expect(resets).toBe(1);
+    expect(renderer.render(source, false).html).toBe(
+      createHtmlRenderer({}).render(source, false).html
+    );
+  });
   test('formats initial content once and reuses its caches for appends', async () => {
     const container = mountDOM();
     root = createRoot(container);

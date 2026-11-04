@@ -74,7 +74,7 @@ renderer updates its native DOM nodes.
 | --------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `children`                              | Full Markdown string.                                                                         |
 | `mode`                                  | `streaming` (default) or `static`.                                                            |
-| `parseIncompleteMarkdown`               | Complete unfinished syntax. Default: `true`.                                                  |
+| `parseIncompleteMarkdown`               | Complete unfinished syntax while the stream is active. Default: `true`.                       |
 | `isAnimating`                           | Mark the stream as active. Default: `false`.                                                  |
 | `animated`                              | Fade in new text. Use `true` or `{ animation: 'fadeIn', duration: 180 }`. Default: `false`.   |
 | `caret`                                 | Show a `block` or `circle` caret while the stream is active.                                  |
@@ -88,8 +88,10 @@ renderer updates its native DOM nodes.
 | `urlTransform`                          | Transform link and image URLs before validation.                                              |
 | `onAnimationStart`, `onAnimationEnd`    | Callbacks for stream activity.                                                                |
 
-The default mode completes common unfinished emphasis, code, and links. It hides
-incomplete images. Use `mode="static"` for normal Markdown semantics, or
+While `isAnimating` is true, the default mode completes common unfinished
+emphasis, code, and links, and hides incomplete images. Finished text renders
+with normal Markdown semantics, so set `isAnimating` for as long as text
+arrives. Use `mode="static"` for content that never streams, or
 `parseIncompleteMarkdown={false}` to disable completion. Completion does not
 provide full Remend compatibility.
 
@@ -142,7 +144,9 @@ session.render('First paragraph.\n\nSecond paragraph.');
 
 `html` contains the full output. `stable` contains completed blocks, and
 `pending` contains the mutable suffix. Pass `{ incomplete: true }` as the second
-argument to complete unfinished syntax.
+argument to complete unfinished syntax. A link without its destination yet
+renders as `<a data-markdown-incomplete>`, with no `href`. The session also
+marks an open code fence with `<pre data-markdown-incomplete>`.
 
 Append updates reuse completed blocks. Edits, completion-option changes, and
 global link or footnote definitions can require a full render. A long open

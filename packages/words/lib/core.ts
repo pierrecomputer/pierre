@@ -84,7 +84,8 @@ class Renderer {
       1,
       (options?.frontmatter === true ? 1 : 0) |
         (options?.skipHtml === true ? 2 : 0) |
-        (options?.boundary === true ? 8 : 0)
+        (options?.boundary === true ? 8 : 0) |
+        (mode === 1 && typeof input !== 'string' ? 32 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
     if (options?.incomplete === true) {
@@ -194,20 +195,19 @@ export function createHtmlSession(): {
         incomplete !== options?.incomplete ||
         definitions;
       if (offset !== 0 && input.charCodeAt(offset) === 0xfeff) reset = true;
-      if (reset) {
-        stable = '';
-        offset = 0;
-      }
+      // A render can throw, so session state changes only after it succeeds.
+      let nextStable = reset ? '' : stable;
+      let nextOffset = reset ? 0 : offset;
       const renderOptions = {
         skipHtml: true,
         incomplete: options?.incomplete,
         boundary: true,
       };
-      let tail = input.slice(offset);
+      let tail = input.slice(nextOffset);
       let rendered = shared.render(tail, 0, renderOptions);
-      if (offset !== 0 && shared.dv.getUint8(30) !== 0) {
-        stable = '';
-        offset = 0;
+      if (nextOffset !== 0 && shared.dv.getUint8(30) !== 0) {
+        nextStable = '';
+        nextOffset = 0;
         reset = true;
         tail = input;
         rendered = shared.render(tail, 0, renderOptions);
@@ -220,10 +220,12 @@ export function createHtmlSession(): {
       let addition = '';
       if (completed > 0 && completed <= tail.length) {
         addition = html.slice(0, shared.dv.getUint32(40, true));
-        stable += addition;
-        offset += completed;
+        nextStable += addition;
+        nextOffset += completed;
         pending = html.slice(addition.length);
       }
+      stable = nextStable;
+      offset = nextOffset;
       previous = input;
       incomplete = options?.incomplete;
       const completedHtml = stable;

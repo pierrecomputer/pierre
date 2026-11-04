@@ -24,6 +24,7 @@ tasks:
       - 'themes/index.ts'
       - 'themes/*.json'
       - 'scripts/build.ts'
+      - '/packages/wat-tools/index.ts'
       - 'tsdown.config.ts'
       - 'tsconfig.json'
     outputs:
