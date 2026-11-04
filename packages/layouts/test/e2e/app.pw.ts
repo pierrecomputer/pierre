@@ -41,6 +41,67 @@ test('a hidden pane keeps its content and shows again in its place', async ({
   expect(after?.height).toBeCloseTo(before?.height ?? 0, 0);
 });
 
+test('a pane that shows again grows into its place while the panes beside it move', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const terminal = host(page, 'terminal');
+  // The layout's own animations; pane content can run others.
+  const finishLayoutAnimations = () =>
+    page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((animation) => animation.id === 'pierre-layout-flip')
+          .map((animation) => animation.finished)
+      )
+    );
+  await page.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+  await finishLayoutAnimations();
+
+  // Show the terminal, hold the layout's animations at their middle, and read
+  // its height there and at the end. It sits below the editor, so it grows in
+  // height. React renders the click's update in a microtask.
+  const [middle, end] = await terminal.evaluate(async (element) => {
+    Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.app-toggles button')
+    )
+      .find((button) => button.textContent === 'Terminal')
+      ?.click();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const animations = document
+      .getAnimations()
+      .filter((animation) => animation.id === 'pierre-layout-flip');
+    for (const animation of animations) {
+      animation.pause();
+      animation.currentTime =
+        Number(animation.effect?.getTiming().duration ?? 0) / 2;
+    }
+    const height = element.getBoundingClientRect().height;
+    for (const animation of animations) animation.finish();
+    return [height, element.getBoundingClientRect().height];
+  });
+  expect(middle).toBeGreaterThan(1);
+  expect(middle).toBeLessThan(end - 1);
+
+  // With reduced motion, the pane shows at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+  const running = await terminal.evaluate(async (element) => {
+    Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.app-toggles button')
+    )
+      .find((button) => button.textContent === 'Terminal')
+      ?.click();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    return element.getAnimations().length;
+  });
+  expect(running).toBe(0);
+  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
+});
+
 test('the close button of a tool hides it, and each pane has its own buttons', async ({
   page,
 }) => {

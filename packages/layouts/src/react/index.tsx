@@ -141,6 +141,23 @@ interface MoveGesture {
 const shownPanes = (node: LayoutNode): PaneNode[] =>
   getPanes(node).filter(({ hidden }) => hidden !== true);
 
+/**
+ * The FLIP keys of the panes that a tree change shows again after
+ * `store.setHidden` hid them, so that they grow into their place.
+ */
+function shownAgain(before: LayoutNode, after: LayoutNode): Set<string> {
+  const hidden = new Set(
+    getPanes(before)
+      .filter((pane) => pane.hidden === true)
+      .map(({ id }) => id)
+  );
+  return new Set(
+    shownPanes(after)
+      .filter(({ id }) => hidden.has(id))
+      .map(({ id }) => `pane:${id}`)
+  );
+}
+
 interface PaneBodyProps {
   pane: PaneNode;
   renderPane: (pane: PaneNode) => ReactNode;
@@ -219,6 +236,8 @@ export function Layout({
 
   // Boxes before a store change, for the FLIP animation after React commits it.
   const boxesBefore = useRef<Map<string, Rect> | null>(null);
+  // The panes that the same change shows again (see `shownAgain`).
+  const growing = useRef<ReadonlySet<string>>(new Set());
   const animateLayout = animateOptions?.layout !== false;
   const animateZoom = animateOptions?.zoom !== false;
   // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
@@ -258,6 +277,10 @@ export function Layout({
           // Stop running animations; the new animation starts from the current boxes.
           cancelFlipAnimations(element);
           boxesBefore.current = animate ? boxes : null;
+          growing.current =
+            animate && treeChanges
+              ? shownAgain(previous.root, next.root)
+              : new Set();
         }
         // Show the covered panes before React commits a zoom change, so
         // that they render during the next animation.
@@ -349,7 +372,8 @@ export function Layout({
       animateFromBoxes(
         element,
         before,
-        experimentalSizeAnimation === 'counter-scale'
+        experimentalSizeAnimation === 'counter-scale',
+        growing.current
       );
   }, [state, experimentalSizeAnimation]);
 
