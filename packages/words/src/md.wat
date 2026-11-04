@@ -15,9 +15,7 @@
       [14:18)         frontmatter JSON start (u32 LE, 0 when absent)
       [18:22)         frontmatter JSON length (u32 LE)
       [22:26)         ansi wrap width (u32 LE, 0 = no wrapping)
-      [26:30)         safe append boundary (input byte offset)
       [30]            document contains global definitions
-      [32:36)         output byte offset of the safe append boundary
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch
@@ -94,11 +92,11 @@
     (local $blockStart i32)
     (local $blockEnd i32)
     (local $fenceBlank i32)
+    (local $safeEnd i32)
     ;; complete() runs right before this render, so its note belongs to this input
     (local.set $fenceBlank (global.get $completeFenceBlank))
     (global.set $completeFenceBlank (i32.const 0))
     (global.set $boundaryRec (i32.const 0))
-    (i32.store (i32.const 26) (i32.const 0))
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
@@ -240,8 +238,7 @@
         ;; a blank line at document depth is a safe append boundary
         (if (i32.gt_u (local.get $blockStart) (local.get $fenceBlank))
           (then
-            (i32.store (i32.const 26)
-              (i32.sub (local.get $blockStart) (i32.const $mem.input)))
+            (local.set $safeEnd (i32.sub (local.get $blockStart) (i32.const $mem.input)))
             (global.set $boundaryRec (global.get $rec))))
         (br $blockLine)))
     ;; Preserve the specific leaf closed by EOF so nested/footnote code blocks
@@ -265,13 +262,12 @@
     (call $renderBlocks)
     (i32.store (i32.const 6) (global.get $outBase))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (global.get $outBase)))
-    (i32.store (i32.const 32) (i32.sub (global.get $boundaryOut) (global.get $outBase)))
     ;; Sessions measure the boundary in UTF-16 units instead of decoding prefixes.
     ;; With global definitions they render whole documents and need no boundary.
     (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 8)) (i32.const 0))
           (i32.eqz (global.get $linkHash)))
       (then
         (i32.store (i32.const 36) (call $utf16Length (i32.const $mem.input)
-          (i32.add (i32.const $mem.input) (i32.load (i32.const 26)))))
+          (i32.add (i32.const $mem.input) (local.get $safeEnd))))
         (i32.store (i32.const 40) (call $utf16Length (global.get $outBase) (global.get $boundaryOut))))))
 )

@@ -547,8 +547,8 @@ export function findSimdCallersWithoutSimd(text: string): {
 }
 
 /**
- * Check that `src/memory.wat` data segments fit below the input without
- * overlap. A bad address can silently corrupt another table.
+ * Check that data segments end below `limit` and do not overlap. A bad address
+ * would silently corrupt another table.
  */
 export function checkDataSegments(
   code: string,
@@ -603,9 +603,6 @@ export function checkDataSegments(
   }
 }
 
-/**
- * Compile WAT to WebAssembly.
- */
 export function wat2wasm(filename: string, text: string): Uint8Array {
   const wasmModule = parseWat(filename, text, {
     bulk_memory: true,
@@ -629,8 +626,8 @@ export function wasmToText(wasmBytes: Uint8Array): string {
 }
 
 /**
- * Optimize with Binaryen at `-O3`, emit Stack IR, then rewrite the folded text.
- * Three passes reduce the module size. A fourth gives no further reduction.
+ * Optimize with Binaryen at `-O3`, then rewrite the folded text. Three passes
+ * shrink the module. A fourth does not.
  */
 export function optimizeWasm(
   wasmBytes: Uint8Array,
@@ -663,33 +660,21 @@ export function optimizeWasm(
       wasmModule.dispose();
     }
   }
-  // Binaryen turns byte splats into 18-byte vector constants.
-  // After optimization, restore the 4-5-byte scalar-and-splat form.
-  // Also restore compound-negation rewrites and SIMD markers.
-  // All three transformations operate on folded WAT.
-  const compact = readWasm(wasmBytes, { readDebugNames: false });
-  try {
-    const code = compact.toText({ foldExprs: true, inlineExport: false });
-    return wat2wasm(
-      options.filename,
-      markSimdReachers(
-        wrapCompoundNegations(
-          compactMaskedCompares(
-            replaceForm(code, 'v128.const', (inner) => {
-              const byte = inner.match(
-                /^\s*i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1\s*$/
-              )?.[2];
-              return byte === undefined
-                ? `(v128.const${inner})`
-                : `(i8x16.splat (i32.const ${(parseInt(byte, 16) << 24) >> 24}))`;
-            })
-          )
-        )
-      )
-    );
-  } finally {
-    compact.destroy();
-  }
+  // Binaryen turns byte splats into 18-byte vector constants, so restore the
+  // 4-5-byte scalar splat. Its passes also undo compound-negation rewrites and
+  // SIMD markers, so apply those again.
+  const compact = replaceForm(wasmToText(wasmBytes), 'v128.const', (inner) => {
+    const byte = inner.match(
+      /^\s*i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1\s*$/
+    )?.[2];
+    return byte === undefined
+      ? `(v128.const${inner})`
+      : `(i8x16.splat (i32.const ${(parseInt(byte, 16) << 24) >> 24}))`;
+  });
+  return wat2wasm(
+    options.filename,
+    markSimdReachers(wrapCompoundNegations(compactMaskedCompares(compact)))
+  );
 }
 
 /**

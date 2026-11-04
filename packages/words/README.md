@@ -1,25 +1,21 @@
-# @pierre/words
+# Words, from Pierre
 
-A fast Markdown renderer written in WebAssembly Text (WAT).
+`@pierre/words` is a Markdown renderer written in WebAssembly Text (WAT). It
+supports CommonMark 0.31.2 and GFM 0.29, and writes HTML or ANSI. The core has
+no runtime dependencies. A React component for streaming text and a code
+highlighting plugin are optional.
 
-- CommonMark `0.31.2` and GFM `0.29.0` support.
-- HTML and ANSI output, with optional YAML frontmatter.
-- No runtime dependencies in the core renderer.
-- Optional React component, incremental HTML updates, and syntax highlighting.
+Try the [demo](https://diffs.com/words).
 
-The parser uses two passes, flat records, and 16-byte SIMD scans. It creates no
-syntax tree. See the [architecture](./ARCHITECTURE.md) and
-[benchmarks](./benchmark/README.md).
-
-## Usage
+## Installation
 
 ```bash
 pnpm add @pierre/words
 ```
 
-Words runs in Node.js, browsers, and Cloudflare Workers. Package exports select
-the Wasm loader. The default entry point includes the Wasm bytes and needs no
-filesystem access.
+The package runs in Node.js, browsers, and Cloudflare Workers.
+
+## Quick start
 
 ```js
 import { renderToAnsi, renderToHtml } from '@pierre/words';
@@ -28,33 +24,25 @@ const html = new TextDecoder().decode(renderToHtml('# Hello, **world**!'));
 process.stdout.write(renderToAnsi('# Hello, **world**!', { width: 80 }));
 ```
 
-Both functions accept a string, `Uint8Array`, or `ArrayBuffer`. They return a
-`Uint8Array` view of Wasm memory. Copy or decode the result before the next
-render call.
+Both functions take a string, `Uint8Array`, or `ArrayBuffer`. They return a
+`Uint8Array` that shares Wasm memory, so decode or copy it before the next
+render.
 
-`renderToHtml()` accepts these options:
+`renderToHtml()` options:
 
-| Option        | Default | Purpose                                             |
-| ------------- | ------- | --------------------------------------------------- |
-| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. |
-| `skipHtml`    | `false` | Omit raw HTML from the source.                      |
-| `incomplete`  | `false` | Complete common unfinished inline syntax.           |
+| Option        | Default | Purpose                                                                                |
+| ------------- | ------- | -------------------------------------------------------------------------------------- |
+| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. `meta` is `null` if there is none. |
+| `skipHtml`    | `false` | Omit raw HTML.                                                                         |
+| `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
 
-With `frontmatter: true`, `meta` contains the parsed YAML value, or `null` when
-frontmatter is absent:
+`renderToAnsi()` takes `width`, the wrap column. With the default, `0`, the
+terminal wraps the text. Control characters print as U+FFFD, so a document
+cannot send escape sequences.
 
-```js
-const [meta, output] = renderToHtml('---\ntitle: Hello\n---\n# Hello', {
-  frontmatter: true,
-});
-```
-
-`renderToAnsi()` accepts `width` for the terminal wrap column. Its default is
-`0`, which lets the terminal wrap the text. Control characters in the input
-print as U+FFFD, so a document cannot send terminal escape sequences.
-
-`renderToHtml()` preserves raw HTML by default. Sanitize output from untrusted
-Markdown before insertion into a page. `skipHtml` alone is not a sanitizer.
+**Warning:** `renderToHtml()` keeps raw HTML by default. Sanitize the output of
+untrusted Markdown before you add it to a page. `skipHtml` alone is not a
+sanitizer.
 
 ## React
 
@@ -67,38 +55,34 @@ import '@pierre/words/styles.css';
 </Markdown>;
 ```
 
-Pass the full Markdown string on each update. React owns one container. The HTML
-renderer updates its native DOM nodes.
+Pass the full Markdown string on each update, and keep `isAnimating` true for as
+long as text arrives. While it is true, the component completes unfinished
+emphasis, code, and links, and hides unfinished images. Finished text renders as
+normal Markdown.
 
 | Prop                                    | Purpose                                                                                       |
 | --------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `children`                              | Full Markdown string.                                                                         |
-| `mode`                                  | `streaming` (default) or `static`.                                                            |
+| `isAnimating`                           | The stream is active. Default: `false`.                                                       |
+| `mode`                                  | `streaming` (default), or `static` for content that never streams.                            |
 | `parseIncompleteMarkdown`               | Complete unfinished syntax while the stream is active. Default: `true`.                       |
-| `isAnimating`                           | Mark the stream as active. Default: `false`.                                                  |
 | `animated`                              | Fade in new text. Use `true` or `{ animation: 'fadeIn', duration: 180 }`. Default: `false`.   |
 | `caret`                                 | Show a `block` or `circle` caret while the stream is active.                                  |
-| `components`                            | HTML string hooks for generated elements, including `inlineCode`.                             |
+| `components`                            | HTML hooks for generated elements, including `inlineCode`.                                    |
 | `plugins.code`                          | Code highlighter.                                                                             |
-| `plugins.renderers`                     | Custom code-fence renderers, selected by language.                                            |
+| `plugins.renderers`                     | Custom code block renderers, selected by language.                                            |
 | `controls`                              | Code copy/download buttons. Use a boolean or `{ code: { copy, download } }`. Default: `true`. |
 | `lineNumbers`                           | Show code line numbers. Default: `true`.                                                      |
 | `allowedElements`, `disallowedElements` | Element filters. Use only one of these props.                                                 |
 | `unwrapDisallowed`                      | Keep the children of filtered elements.                                                       |
-| `urlTransform`                          | Transform link and image URLs before validation.                                              |
-| `onAnimationStart`, `onAnimationEnd`    | Callbacks for stream activity.                                                                |
+| `urlTransform`                          | Change link and image URLs before validation.                                                 |
+| `idPrefix`                              | Prefix for generated ids. Default: a unique React id.                                         |
+| `onAnimationStart`, `onAnimationEnd`    | Called when the stream starts and ends.                                                       |
 
-While `isAnimating` is true, the default mode completes common unfinished
-emphasis, code, and links, and hides incomplete images. Finished text renders
-with normal Markdown semantics, so set `isAnimating` for as long as text
-arrives. Use `mode="static"` for content that never streams, or
-`parseIncompleteMarkdown={false}` to disable completion. Completion does not
-provide full Remend compatibility.
+Fades and the caret need `styles.css`. Fades run only during a stream. Reduced
+motion and a zero duration turn them off.
 
-Fades and the caret require `styles.css`. Fades also need an active stream. The
-duration is in milliseconds. Reduced motion and a zero duration disable fades.
-
-HTML hooks receive and return strings, not React elements:
+Hooks take and return HTML strings, not React elements:
 
 ```tsx
 const components = {
@@ -108,9 +92,11 @@ const components = {
 <Markdown components={components}>{text}</Markdown>;
 ```
 
-The React renderer omits raw HTML and rejects unsafe URL schemes. External
-HTTP(S) images are permitted. Use URL or element filters to restrict them. Hooks
-and plugins are trusted code: escape any untrusted text that they add.
+The component omits raw HTML and rejects unsafe URL schemes. It allows external
+images, so use `urlTransform` or element filters to block them. Hooks and
+plugins are trusted code: escape any untrusted text they add.
+
+Math, Mermaid, CJK extensions, and remark or rehype plugins are not supported.
 
 ### Syntax highlighting
 
@@ -123,16 +109,13 @@ const plugins = { code: createHighlightsPlugin({ theme: pierreLight }) };
 <Markdown plugins={plugins}>{text}</Markdown>;
 ```
 
-Keep the plugin object stable across renders. Unknown languages use escaped
-text. React and Highlights are optional peers. The core entry point loads
-neither.
-
-The React API does not include math, Mermaid, CJK extensions, raw HTML, or
-remark/rehype plugins.
+Create the plugin once, outside the render. Unknown languages render as plain
+text. React and `@pierre/highlights` are optional peer dependencies, and the
+core entry point loads neither.
 
 ## HTML sessions
 
-Use an HTML session for incremental output without React or a browser:
+A session renders a growing string to HTML, without React or a browser:
 
 ```ts
 import { createHtmlSession } from '@pierre/words';
@@ -142,34 +125,33 @@ const { html, stable, pending } = session.render('First paragraph.\n\nSecond');
 session.render('First paragraph.\n\nSecond paragraph.');
 ```
 
-`html` contains the full output. `stable` contains completed blocks, and
-`pending` contains the mutable suffix. Pass `{ incomplete: true }` as the second
-argument to complete unfinished syntax. A link without its destination yet
-renders as `<a data-markdown-incomplete>`, with no `href`. The session also
-marks an open code fence with `<pre data-markdown-incomplete>`.
+`stable` holds completed blocks, `pending` holds the part that can still change,
+and `html` holds both. Sessions omit raw HTML.
 
-Append updates reuse completed blocks. Edits, completion-option changes, and
-global link or footnote definitions can require a full render. A long open
-paragraph still requires a full parse of that paragraph.
+Pass `{ incomplete: true }` as the second argument to complete unfinished
+syntax. A link with no destination yet renders as
+`<a data-markdown-incomplete>`, and an open code fence as
+`<pre data-markdown-incomplete>`.
+
+Appended text reuses completed blocks. An edit, a changed `incomplete` option,
+or a link or footnote definition can force a full render. A long open paragraph
+is parsed again on each update.
 
 `@pierre/words/html` exports `createHtmlRenderer()` for formatted HTML and
-`createDomRenderer()` for native DOM updates. See the
-[HTML options](./html/types.ts) for filters, hooks, and plugins.
+`createDomRenderer()` for DOM updates without React. See
+[`html/types.ts`](./html/types.ts) for their options.
 
 ## Development
 
-| Command                                | Purpose                                   |
-| -------------------------------------- | ----------------------------------------- |
-| `pnpm install`                         | Install dependencies.                     |
-| `moonx words:build`                    | Build Wasm, JavaScript, and declarations. |
-| `moonx words:test`                     | Run the test suites.                      |
-| `moonx words:test-spec`                | Check CommonMark and GFM conformance.     |
-| `moonx words:bench --ignore-ci-checks` | Compare parser performance.               |
+```bash
+moonx words:build
+moonx words:test
+moonx words:test-spec
+moonx words:bench --ignore-ci-checks
+```
 
-Read [ARCHITECTURE.md](./ARCHITECTURE.md) before edits to `src/`. The
-[benchmark guide](./benchmark/README.md) covers HTML throughput, React streams,
-and memory measurements.
+[Benchmarks](./benchmark/README.md) · [Architecture](./ARCHITECTURE.md)
 
 ## License
 
-[Apache-2.0](./LICENSE.md).
+[Apache-2.0](./LICENSE.md)

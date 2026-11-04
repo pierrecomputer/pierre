@@ -7,13 +7,11 @@ const GFM =
   'https://raw.githubusercontent.com/github/cmark-gfm/0.29.0.gfm.13/test/spec.txt';
 
 async function fetchText(url: string) {
-  console.log('🔍 Fetching', url, '...');
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url}: ${response.status}`);
   return response.text();
 }
 
-/** extract the example blocks from a GFM spec document */
 function extractExamples(text: string) {
   const lines = text.split('\n');
   const fence = /^`{32,}\s*example(\s+.*)?$/;
@@ -60,10 +58,5 @@ writeFileSync(
   JSON.stringify(gfm, null, 1)
 );
 console.log(
-  '✨ Done!',
-  'commonmark:',
-  commonmark.length,
-  'examples, gfm:',
-  gfm.length,
-  'examples'
+  `commonmark: ${commonmark.length} examples, gfm: ${gfm.length} examples`
 );

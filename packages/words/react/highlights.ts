@@ -17,7 +17,7 @@ import type {
 
 const decoder = new TextDecoder();
 
-/** Keep highlighted output as HTML; only the mutable code fence owns a live tokenizer. */
+/** Highlight code with `@pierre/highlights`. An open fence keeps a live tokenizer. */
 export function createHighlightsPlugin(
   options: Omit<CodeToTokensOptions, 'lang'>
 ): CodeHighlighterPlugin {
@@ -39,7 +39,7 @@ export function createHighlightsPlugin(
         prefixLineCount = 0;
         result = undefined;
       };
-      /** Retain settled line HTML and return only the changed suffix for native DOM updates. */
+      /** Keep the HTML of finished lines, and return only the changed lines. */
       const highlightLines = ({
         code,
         language: nextLanguage,
@@ -106,7 +106,7 @@ export function createHighlightsPlugin(
           );
         } else tokenizer.reset(code);
 
-        // Capture strings rather than the mutable line cache so older lazy results stay valid.
+        // Keep strings, not the line cache, so older lazy results stay valid.
         if (first < prefixLineCount) {
           prefixHtml = '';
           prefixLineCount = 0;

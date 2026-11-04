@@ -1,4 +1,4 @@
-# coverted from https://html.spec.whatwg.org/entities.json
+# converted from https://html.spec.whatwg.org/entities.json
 AElig Æ
 AMP &
 Aacute Á

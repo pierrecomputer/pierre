@@ -14,8 +14,6 @@ export type {
   RenderOptions,
 } from './types';
 
-export type { Renderer };
-
 type Input = string | Uint8Array | ArrayBuffer;
 /** `boundary` makes Wasm measure the session's safe boundary in UTF-16 units. */
 type Options = AnsiOptions & RenderOptions & { boundary?: boolean };
@@ -118,7 +116,6 @@ class Renderer {
     return ret;
   }
 
-  /** Grow the wasm linear memory so the input and its slack fit. */
   grow(len: number) {
     const needed = 1 + Math.ceil(len / pageSize);
     if (needed > this.pages) {
@@ -127,7 +124,6 @@ class Renderer {
     }
   }
 
-  /** Rebind the views after the memory grew. */
   bindMemory() {
     if (this.buffer?.buffer === this.memory.buffer) return;
     this.pages = this.memory.buffer.byteLength / pageSize;
@@ -165,8 +161,8 @@ export function renderToAnsi(input: Input, options?: AnsiOptions): Uint8Array {
 }
 
 /**
- * Stream HTML strings directly from Wasm, retaining only the completed HTML
- * prefix and reparsing only the unfinished suffix.
+ * Render a growing string to HTML. A session keeps completed HTML and reparses
+ * only the unfinished end.
  */
 export function createHtmlSession(): {
   render(input: string, options?: HtmlSessionOptions): HtmlUpdate;
@@ -231,8 +227,7 @@ export function createHtmlSession(): {
       const completedHtml = stable;
       let fullHtml: string | undefined;
       result = {
-        // DOM consumers only need the addition and pending suffix. Assemble the
-        // full document only when a string consumer or initial mount asks for it.
+        // The DOM renderer reads only `addition` and `pending`, so build this on demand.
         get html() {
           return (fullHtml ??= completedHtml + pending);
         },

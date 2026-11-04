@@ -98,7 +98,6 @@ const sampleOptions = [
   })),
 ];
 
-/** Match Edit mode's toggle pill with one accessible button and a visual switch. */
 function ExampleSwitch({
   label,
   icon,
@@ -137,7 +136,6 @@ function ExampleSwitch({
   );
 }
 
-/** Each feature owns its playback so controls and edits stay local to that example. */
 function WordsExample({
   kind,
   title,
@@ -190,7 +188,7 @@ function WordsExample({
           ? 'streaming'
           : 'paused';
 
-  // Follow each committed chunk only in the scrollable longer-run preview.
+  // Only the playground preview scrolls to follow the stream.
   useLayoutEffect(() => {
     const preview = previewRef.current;
     if (playground && playing && preview !== null)

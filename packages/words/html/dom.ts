@@ -8,7 +8,7 @@ const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
   '[data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"]';
 
-/** Only live fades keep records. Settled output is native DOM text, with no leaf state. */
+/** Wrap new text in fade spans, and unwrap each span when its animation ends. */
 function createFades(root: HTMLElement) {
   const pending = new Map<HTMLElement, number>();
   const document = root.ownerDocument;
@@ -63,8 +63,8 @@ function createFades(root: HTMLElement) {
   const animate = (text: Text): void => {
     if (!enabled() || text.data.trim() === '' || text.parentElement === null)
       return;
-    // Fenced HTML ends each open line with a newline. Keep that terminator
-    // outside the delivery span so the next chunk can extend the same line.
+    // An open fence line ends with LF. Keep the LF outside the span, so the
+    // next chunk can extend the same line.
     if (
       text.data.endsWith('\n') &&
       text.data.length > 1 &&
@@ -88,7 +88,7 @@ function createFades(root: HTMLElement) {
       stop();
       query?.removeEventListener('change', motionChanged);
     },
-    // Prune and schedule once after the whole DOM patch, rather than per text run.
+    // Runs once per DOM patch, not once per text run.
     finish(): void {
       let next = Infinity;
       for (const [span, deadline] of pending) {
@@ -138,7 +138,7 @@ function createFades(root: HTMLElement) {
 
 type Fades = ReturnType<typeof createFades>;
 
-/** Reconcile native nodes in the mutable suffix; fade spans are transparent text runs. */
+/** Patch `parent` to match `incoming`, and reuse nodes. A fade span counts as text. Returns the node at `committed`. */
 function patchChildren(
   parent: Node,
   incoming: Node,
@@ -148,9 +148,8 @@ function patchChildren(
   marker?: Comment,
   revising = false
 ): Node | null {
-  // A late definition can change markup around text that is already visible.
-  // Compare against the old parent text only on these full reparses so new
-  // elements containing existing words do not replay their entrance effects.
+  // A late definition can change the markup around visible text. Compare with
+  // the old text on these full reparses, so existing words do not fade in again.
   const previousText = revising ? (parent.textContent ?? '') : undefined;
   let current = first;
   let target = incoming.firstChild;
@@ -160,7 +159,7 @@ function patchChildren(
     const nextTarget = target.nextSibling;
     let actual: Node;
     if (target === marker) {
-      // The owned line boundary does not replace an existing token at that position.
+      // The marker is always inserted. It never replaces an existing node.
       actual = target;
       parent.insertBefore(target, current);
     } else if (target.nodeType === 3) {
@@ -206,7 +205,7 @@ function patchChildren(
         }
         actual = target;
         parent.insertBefore(target, end);
-        // Replacement edits do not replay existing text as an entrance effect.
+        // Text that replaces other text does not fade in.
         if (previous === '') {
           if (
             previousText === undefined ||
@@ -268,7 +267,7 @@ function patchChildren(
   return firstPending;
 }
 
-/** Locate only the final code line in the last line group; earlier lines stay outside subsequent patches. */
+/** Insert a comment before the last code line, so later updates patch only that line. */
 function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
   let before = code.firstChild;
   for (let node = code.lastChild; node !== null; node = node.previousSibling) {
@@ -294,7 +293,7 @@ function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
 const blockTags =
   /^(?:BLOCKQUOTE|DIV|H[1-6]|LI|OL|P|PRE|SECTION|TABLE|TBODY|TD|TH|THEAD|TR|UL)$/;
 
-/** Compare code controls by the buttons they produce, so inline objects stay equal. */
+/** Compare controls by the buttons they produce, so equal inline objects match. */
 const controlFlags = (controls: HtmlOptions['controls']): number => {
   const code = typeof controls === 'object' ? controls.code : controls;
   return code === false
@@ -304,7 +303,7 @@ const controlFlags = (controls: HtmlOptions['controls']): number => {
       : 3;
 };
 
-/** Own an opaque HTML region. React or another framework only supplies source and options. */
+/** Render Markdown into `root`, and patch its DOM nodes on each update. */
 export function createDomRenderer(
   root: HTMLElement,
   options: HtmlOptions = {},
@@ -376,9 +375,9 @@ export function createDomRenderer(
       root.removeEventListener('click', click);
     },
     /**
-     * Reformat completed output only when an option changes by value, so
-     * inline option objects are cheap. New hook and `urlTransform` functions
-     * format later output; a changed set of hook names reformats everything.
+     * Reformat completed output only when an option value changes, so inline
+     * option objects stay cheap. New hook and `urlTransform` functions apply to
+     * later output. A changed set of hook names reformats everything.
      */
     configure(next: HtmlOptions): void {
       if (next === options) return;
@@ -426,7 +425,7 @@ export function createDomRenderer(
       fades.update(active, animated);
       const nextCaret = active ? shape : undefined;
       if (!changed && nextCaret === previousCaret) return;
-      // The caret lives inside the last text block, so patches never see it.
+      // Remove the caret first, so patches never see it.
       caret.remove();
       const codeUpdate = update.code;
       if (
@@ -518,8 +517,8 @@ export function createDomRenderer(
           codeState.numberCount = count;
         }
       } else if (changed) {
-        // Initial HTML and skipped formatter results need the full prefix. Normal
-        // deliveries consume only their addition, without scanning settled HTML.
+        // The first render and skipped revisions need the full prefix. Other
+        // updates use only the addition.
         codeState?.marker.remove();
         codeState = undefined;
         if (reset) {
@@ -535,7 +534,7 @@ export function createDomRenderer(
           codeUpdate === undefined
             ? null
             : tail.content.querySelector('[data-incomplete] > pre > code');
-        // Mark the generated line boundary before insertion can wrap multiline text in fades.
+        // Add the marker before insertion, because fades wrap multi-line text.
         const codeMarker =
           incomingCode === null || codeUpdate === undefined
             ? undefined

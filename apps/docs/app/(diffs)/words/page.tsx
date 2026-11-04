@@ -49,8 +49,8 @@ export default function WordsPage() {
               Ready as it arrives.
             </h2>
             <p className="text-muted-foreground text-sm">
-              Incomplete emphasis and links settle into place while a response
-              streams. Finished blocks keep their place.
+              Unfinished emphasis and links render correctly while a response
+              streams. Finished blocks are not rendered again.
             </p>
           </div>
           <div>
@@ -58,8 +58,8 @@ export default function WordsPage() {
               Your HTML.
             </h2>
             <p className="text-muted-foreground text-sm">
-              Customize headings, links, and code blocks with HTML string hooks.
-              Keep the rendering path direct.
+              Customize headings, links, and code blocks with hooks that take
+              and return HTML strings.
             </p>
           </div>
           <div>

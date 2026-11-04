@@ -5,7 +5,7 @@
   "license": "apache-2.0",
   "files": [
     "dist/",
-    "!dist/md.wat",
+    "!dist/benchmark/",
     "LICENSE.md",
     "NOTICE.md"
   ],
