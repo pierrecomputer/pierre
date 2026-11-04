@@ -127,3 +127,16 @@ body {
 .bench-real-terminal {
   background: #000;
 }
+
+/* Overlays: a modal of a fixed size over the workspace, and a drawer. */
+.bench-modal {
+  width: 640px;
+  height: 420px;
+  padding: 16px;
+}
+
+.bench-drawer {
+  --layout-drawer-size: 360px;
+
+  padding: 16px;
+}

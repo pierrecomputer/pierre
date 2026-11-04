@@ -156,6 +156,73 @@ const COVERED_TILE_LIMIT_MB = 0.5;
 
 const DISCRETE = ['zoom', 'restore', 'split', 'close', 'move', 'focus'];
 
+// The open and the close of each overlay (task explore-overlays-boundary).
+// Each one is a discrete operation, with the budget of
+// DEC-layouts-time-budgets: 10 ms of main-thread time with light content.
+const OVERLAY_SCENARIOS = [
+  'modal-open',
+  'modal-close',
+  'drawer-open',
+  'drawer-close',
+];
+const OVERLAY_BUDGET_MS = 10;
+
+function overlayChecks(scenario: string): Check[] {
+  return [
+    {
+      id: `${scenario}-animations-composited`,
+      rule: 'compositing',
+      description: `Every animation of a ${scenario} runs on the compositor (4 light panes).`,
+      limit: '0 animations',
+      evaluate: atMost(scenario, 4, 'light', 'animationsNotComposited', 0),
+    },
+    {
+      id: `${scenario}-no-content-render`,
+      rule: 'independence-from-content',
+      description: `A ${scenario} renders no pane content (16 heavy panes).`,
+      limit: '0 renders',
+      evaluate: atMost(scenario, 16, 'heavy', 'contentRenders', 0),
+    },
+    {
+      id: `${scenario}-no-layout-in-panes`,
+      rule: 'independence-of-layers',
+      description: `A ${scenario} marks no element inside a pane for layout (16 heavy panes, attribution run).`,
+      limit: '0 elements',
+      evaluate: (find) => {
+        const value = find(scenario, 16, 'heavy')?.attribution
+          ?.innerLayoutInvalidationsOutsideTarget;
+        return value === undefined ? null : { value, pass: value === 0 };
+      },
+    },
+    {
+      id: `${scenario}-time-independent-of-content`,
+      rule: 'independence-from-content',
+      description: `The main-thread time of a ${scenario} does not grow with content (16 panes, heavy over light).`,
+      limit: `ratio ≤ ${GROWTH}`,
+      evaluate: ratio(
+        scenario,
+        'mainThreadMs',
+        [16, 'heavy'],
+        [16, 'light'],
+        1
+      ),
+    },
+    {
+      id: `${scenario}-main-thread-budget`,
+      rule: 'time',
+      description: `A ${scenario} uses at most ${OVERLAY_BUDGET_MS} ms of main-thread time (16 light panes).`,
+      limit: `${OVERLAY_BUDGET_MS} ms`,
+      evaluate: atMost(
+        scenario,
+        16,
+        'light',
+        'mainThreadMs',
+        OVERLAY_BUDGET_MS
+      ),
+    },
+  ];
+}
+
 export const CHECKS: Check[] = [
   {
     id: 'zoom-no-dropped-frames',
@@ -474,6 +541,7 @@ export const CHECKS: Check[] = [
       },
     })
   ),
+  ...OVERLAY_SCENARIOS.flatMap(overlayChecks),
   ...['zoom', 'focus', 'split', 'tab-switch'].map(
     (scenario): Check => ({
       id: `${scenario}-time-independent-of-panes`,
