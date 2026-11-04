@@ -154,7 +154,41 @@ const REPEAT_TILE_GROWTH_MB = 5;
 // Chromium stores tiles of 64 by 64 pixels and larger; a smaller difference is not a tile.
 const COVERED_TILE_LIMIT_MB = 0.5;
 
-const DISCRETE = ['zoom', 'restore', 'split', 'close', 'move', 'focus'];
+// The time budgets of the intent, with light pane content. The values are
+// milliseconds of main-thread time on the reference machine (Apple M5 Pro,
+// headless Chromium 134); on another machine, compare the values between runs.
+const REFERENCE_MACHINE = 'on the reference machine';
+const OPERATION_BUDGET_MS = 10;
+const GESTURE_FRAME_BUDGET_MS: Record<number, number> = { 4: 2, 16: 3 };
+
+const CONTENT_WEIGHTS: readonly ContentWeight[] = ['light', 'heavy', 'real'];
+
+const DISCRETE = [
+  'zoom',
+  'restore',
+  'split',
+  'close',
+  'move',
+  'focus',
+  'hide',
+  'show',
+];
+
+// The most content renders of any record of a scenario, at 4 and 16 panes
+// and each content weight: a check that holds at every parameter set.
+function noRenderInAnyRecord(scenario: string): Check['evaluate'] {
+  return (find) => {
+    const renders = [4, 16].flatMap((panes) =>
+      CONTENT_WEIGHTS.flatMap((content) => {
+        const record = find(scenario, panes, content);
+        return record === undefined ? [] : [record.median.contentRenders];
+      })
+    );
+    if (renders.length === 0) return null;
+    const value = Math.max(...renders);
+    return { value, pass: value === 0 };
+  };
+}
 
 // The open and the close of each overlay (task explore-overlays-boundary).
 // Each one is a discrete operation, with the budget of
@@ -267,23 +301,39 @@ export const CHECKS: Check[] = [
     limit: '0 animations',
     evaluate: atMost('split', 4, 'light', 'animationsNotComposited', 0),
   },
-  ...DISCRETE.map(
-    (scenario): Check => ({
-      id: `${scenario}-main-thread-budget`,
+  ...DISCRETE.flatMap((scenario) =>
+    [4, 16].map(
+      (panes): Check => ({
+        id: `${scenario}-main-thread-budget-${panes}`,
+        rule: 'time',
+        description: `A ${scenario} uses at most ${OPERATION_BUDGET_MS} ms of main-thread time (${panes} light panes, ${REFERENCE_MACHINE}).`,
+        limit: `${OPERATION_BUDGET_MS} ms`,
+        evaluate: atMost(
+          scenario,
+          panes,
+          'light',
+          'mainThreadMs',
+          OPERATION_BUDGET_MS
+        ),
+      })
+    )
+  ),
+  ...[4, 16].map(
+    (panes): Check => ({
+      id: `resize-main-thread-per-step-${panes}`,
       rule: 'time',
-      description: `A ${scenario} uses at most 4 ms of main-thread time (4 light panes).`,
-      limit: '4 ms',
-      evaluate: atMost(scenario, 4, 'light', 'mainThreadMs', 4),
+      description: `A resize drag uses at most ${GESTURE_FRAME_BUDGET_MS[panes]} ms of main-thread time per pointer move (${panes} light panes, ${REFERENCE_MACHINE}).`,
+      limit: `${GESTURE_FRAME_BUDGET_MS[panes]} ms`,
+      evaluate: atMost(
+        'resize',
+        panes,
+        'light',
+        'mainThreadMs',
+        GESTURE_FRAME_BUDGET_MS[panes],
+        true
+      ),
     })
   ),
-  {
-    id: 'resize-main-thread-per-step',
-    rule: 'time',
-    description:
-      'A resize drag uses at most 2 ms of main-thread time per pointer move (4 light panes).',
-    limit: '2 ms',
-    evaluate: atMost('resize', 4, 'light', 'mainThreadMs', 2, true),
-  },
   {
     id: 'focus-no-content-render',
     rule: 'independence-from-content',
@@ -304,6 +354,22 @@ export const CHECKS: Check[] = [
     description: 'A resize drag renders no pane content (16 heavy panes).',
     limit: '0 renders',
     evaluate: atMost('resize', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'hide-no-content-render',
+    rule: 'independence-from-content',
+    description:
+      'A hide renders no pane content (the most renders of any hide record: 4 and 16 panes, each content weight).',
+    limit: '0 renders',
+    evaluate: noRenderInAnyRecord('hide'),
+  },
+  {
+    id: 'show-no-content-render',
+    rule: 'independence-from-content',
+    description:
+      'A show of a hidden pane renders no pane content (the most renders of any show record: 4 and 16 panes, each content weight).',
+    limit: '0 renders',
+    evaluate: noRenderInAnyRecord('show'),
   },
   {
     id: 'zoom-one-content-resize',
