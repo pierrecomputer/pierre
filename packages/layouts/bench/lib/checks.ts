@@ -172,6 +172,8 @@ const DISCRETE = [
   'focus',
   'hide',
   'show',
+  'collapse',
+  'tab-switch',
 ];
 
 // The most content renders of any record of a scenario, at 4 and 16 panes
@@ -199,7 +201,6 @@ const OVERLAY_SCENARIOS = [
   'drawer-open',
   'drawer-close',
 ];
-const OVERLAY_BUDGET_MS = 10;
 
 function overlayChecks(scenario: string): Check[] {
   return [
@@ -244,14 +245,14 @@ function overlayChecks(scenario: string): Check[] {
     {
       id: `${scenario}-main-thread-budget`,
       rule: 'time',
-      description: `A ${scenario} uses at most ${OVERLAY_BUDGET_MS} ms of main-thread time (16 light panes).`,
-      limit: `${OVERLAY_BUDGET_MS} ms`,
+      description: `A ${scenario} uses at most ${OPERATION_BUDGET_MS} ms of main-thread time (16 light panes).`,
+      limit: `${OPERATION_BUDGET_MS} ms`,
       evaluate: atMost(
         scenario,
         16,
         'light',
         'mainThreadMs',
-        OVERLAY_BUDGET_MS
+        OPERATION_BUDGET_MS
       ),
     },
   ];
@@ -491,18 +492,30 @@ export const CHECKS: Check[] = [
   {
     id: 'tab-drag-main-thread-per-step-4',
     rule: 'time',
-    description:
-      'A tab drag uses at most 2 ms of main-thread time per pointer move (4 light panes).',
-    limit: '2 ms',
-    evaluate: atMost('tab-drag', 4, 'light', 'mainThreadMs', 2, true),
+    description: `A tab drag uses at most ${GESTURE_FRAME_BUDGET_MS[4]} ms of main-thread time per pointer move (4 light panes, ${REFERENCE_MACHINE}).`,
+    limit: `${GESTURE_FRAME_BUDGET_MS[4]} ms`,
+    evaluate: atMost(
+      'tab-drag',
+      4,
+      'light',
+      'mainThreadMs',
+      GESTURE_FRAME_BUDGET_MS[4],
+      true
+    ),
   },
   {
     id: 'tab-drag-main-thread-per-step-16',
     rule: 'time',
-    description:
-      'A tab drag uses at most 3 ms of main-thread time per pointer move (16 light panes).',
-    limit: '3 ms',
-    evaluate: atMost('tab-drag', 16, 'light', 'mainThreadMs', 3, true),
+    description: `A tab drag uses at most ${GESTURE_FRAME_BUDGET_MS[16]} ms of main-thread time per pointer move (16 light panes, ${REFERENCE_MACHINE}).`,
+    limit: `${GESTURE_FRAME_BUDGET_MS[16]} ms`,
+    evaluate: atMost(
+      'tab-drag',
+      16,
+      'light',
+      'mainThreadMs',
+      GESTURE_FRAME_BUDGET_MS[16],
+      true
+    ),
   },
   {
     id: 'tab-drag-no-content-render',
