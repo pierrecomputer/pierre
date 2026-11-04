@@ -3761,6 +3761,7 @@ export function FileTreeView({
             ref={searchInputRef}
             aria-activedescendant={activeDescendantId}
             aria-controls={treeDomId}
+            aria-label="Search files"
             placeholder="Search…"
             data-file-tree-search-input
             data-file-tree-search-input-fake-focus={

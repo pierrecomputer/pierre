@@ -738,4 +738,37 @@ describe('file-tree search', () => {
       cleanup();
     }
   });
+  test('search input has an accessible name that does not rely on its placeholder', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        id: 'pst-search-accessible-name-test',
+        initialExpansion: 'open',
+        paths: FILES,
+        search: true,
+        initialVisibleRowCount: 220 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
+        'input[data-file-tree-search-input]'
+      );
+      expect(searchInput).not.toBeNull();
+      // Screen readers should not have to fall back to the placeholder text,
+      // which disappears once the user starts typing.
+      expect(searchInput?.getAttribute('aria-label')).toBe('Search files');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
 });
