@@ -15,15 +15,130 @@
   (global $compArr  (mut i32) (i32.const 0))
   (global $compN    (mut i32) (i32.const 0))
 
+  ;; Node bytes before the first compaction and after it. Below the first bar a diff
+  ;; pays nothing; the copy walks every new node, so a first run costs far more than
+  ;; the bump allocations. After it, a small bar is fastest because the nodes stay in
+  ;; cache. The bar also stays >= 2 * live bytes, so runs are amortized O(new nodes).
+  ;; $nodeLim is the address where $myers next calls $reserveNodes.
+  (global $compactFirst i32       (i32.const 0x10000000))
+  (global $compactMin   i32       (i32.const 0x400000))
+  (global $compactAt    (mut i32) (i32.const 0))
+  (global $nodeLim      (mut i32) (i32.const 0))
+
+  ;; Make room for $t node bytes and return the new node top, or 0 on oom.
+  ;; Most nodes die as diagonals move on, but the bump pointer keeps them: unrelated
+  ;; inputs would reach 2*D^2 bytes where jsdiff's GC holds O(D). So past the bar, copy
+  ;; the paths of bestPath entries [$entry, $last] above $top, joining each added or
+  ;; removed run into one node, and slide them down to $base, the first node. A copy
+  ;; is always kind 0: (prev link, flags | count). A source node's first word becomes
+  ;; copy | 3 (no link has kind 3), so paths that branch at a run boundary stay
+  ;; shared, as jsdiff's components do.
+  ;; Warning: keep this out of $myers: its size there slows the diagonal loop.
+  (func $reserveNodes (param $top i32) (param $t i32) (param $entry i32) (param $last i32) (param $base i32) (result i32)
+    (local $start i32) (local $to i32) (local $lim i32) (local $delta i32) (local $slot i32)
+    (local $link i32) (local $node i32) (local $next i32) (local $run i32) (local $v i32)
+    (if (i32.gt_u
+          (i32.add (i32.sub (local.get $top) (local.get $base)) (local.get $t))
+          (global.get $compactAt))
+      (then
+        (global.set $heap (local.get $top))
+        (local.set $start (call $alloc (i32.const 8)))
+        (if (i32.eqz (local.get $start)) (then (return (i32.const 0))))
+        (local.set $to (local.get $start))
+        (local.set $lim (global.get $memEnd))
+        ;; links hold final addresses: physical copy address - $delta
+        (local.set $delta (i32.sub (local.get $start) (local.get $base)))
+        (block $done (loop $roots
+          (br_if $done (i32.gt_u (local.get $entry) (local.get $last)))
+          (if (i32.ne (i32.load (local.get $entry)) (i32.const 0x80808080))
+            (then
+              (local.set $slot (i32.add (local.get $entry) (i32.const 4)))
+              (local.set $link (i32.load (local.get $slot)))
+              (block $path (loop $walk
+                (if (i32.eqz (local.get $link))
+                  (then
+                    (i32.store (local.get $slot) (i32.const 0))
+                    (br $path)))
+                (local.set $node (i32.and (local.get $link) (i32.const -4)))
+                (local.set $next (i32.load (local.get $node)))
+                (if (i32.eq (i32.and (local.get $next) (i32.const 3)) (i32.const 3))
+                  (then
+                    (i32.store (local.get $slot) (i32.and (local.get $next) (i32.const -4)))
+                    (br $path)))
+                (if (i32.gt_u (i32.const 8) (i32.sub (local.get $lim) (local.get $to)))
+                  (then
+                    (global.set $heap (local.get $to))
+                    (if (i32.eqz (call $alloc (i32.const 8))) (then (return (i32.const 0))))
+                    (local.set $lim (global.get $memEnd))))
+                (local.set $v (i32.sub (local.get $to) (local.get $delta)))
+                (i32.store (local.get $slot) (local.get $v))
+                (i32.store (local.get $node) (i32.or (local.get $v) (i32.const 3)))
+                (local.set $run (select
+                  (i32.or (i32.shl (local.get $link) (i32.const 30)) (i32.const 1))
+                  (i32.load offset=4 (local.get $node))
+                  (i32.and (local.get $link) (i32.const 3))))
+                (local.set $link (local.get $next))
+                (block $joined (loop $join
+                  (br_if $joined (i32.eqz (local.get $link)))
+                  (local.set $node (i32.and (local.get $link) (i32.const -4)))
+                  (local.set $v (select
+                    (i32.or (i32.shl (local.get $link) (i32.const 30)) (i32.const 1))
+                    (i32.load offset=4 (local.get $node))
+                    (i32.and (local.get $link) (i32.const 3))))
+                  (br_if $joined (i32.shr_u (i32.xor (local.get $v) (local.get $run)) (i32.const 30)))
+                  (local.set $next (i32.load (local.get $node)))
+                  (if (i32.eq (i32.and (local.get $next) (i32.const 3)) (i32.const 3))
+                    (then ;; an older part of this run is already copied: end on its count and link
+                      (local.set $v (i32.add (i32.and (local.get $next) (i32.const -4)) (local.get $delta)))
+                      (i32.store (local.get $to) (i32.load (local.get $v)))
+                      (i32.store offset=4 (local.get $to) (i32.add
+                        (local.get $run)
+                        (i32.and (i32.load offset=4 (local.get $v)) (i32.const 0x3FFFFFFF))))
+                      (local.set $to (i32.add (local.get $to) (i32.const 8)))
+                      (br $path)))
+                  (local.set $run (i32.add (local.get $run) (i32.and (local.get $v) (i32.const 0x3FFFFFFF))))
+                  (local.set $link (local.get $next))
+                  (br $join)))
+                (i32.store offset=4 (local.get $to) (local.get $run))
+                (local.set $slot (local.get $to))
+                (local.set $to (i32.add (local.get $to) (i32.const 8)))
+                (br $walk)))))
+          (local.set $entry (i32.add (local.get $entry) (i32.const 8)))
+          (br $roots)))
+        (local.set $v (i32.sub (local.get $to) (local.get $start)))
+        (memory.copy (local.get $base) (local.get $start) (local.get $v))
+        (local.set $top (i32.add (local.get $base) (local.get $v)))
+        (local.set $v (i32.shl (local.get $v) (i32.const 1)))
+        (global.set $compactAt (select
+          (local.get $v)
+          (global.get $compactMin)
+          (i32.gt_u (local.get $v) (global.get $compactMin))))))
+    (if (i32.gt_u (local.get $t) (i32.sub (global.get $memEnd) (local.get $top)))
+      (then
+        (global.set $heap (local.get $top))
+        (if (i32.eqz (call $alloc (local.get $t))) (then (return (i32.const 0))))))
+    (global.set $nodeLim (global.get $memEnd))
+    ;; Warning: stop at the bar, so a compaction has free memory above $top for its
+    ;; copies; without it, each run grows memory by 25%
+    (local.set $v (i32.sub
+      (i32.add (local.get $base) (global.get $compactAt))
+      (local.get $top)))
+    (if (i32.and
+          (i32.gt_u (local.get $v) (local.get $t))
+          (i32.lt_u (local.get $v) (i32.sub (global.get $memEnd) (local.get $top))))
+      (then (global.set $nodeLim (i32.add (local.get $top) (local.get $v)))))
+    (local.get $top)
+  )
+
   ;; jsdiff Myers over interned ids. Last link of the finished path (0 = empty),
   ;; or 0 with $err. bestPath: 8-byte (oldPos, lastComponent); oldPos
   ;; 0x80808080 = undefined, matching jsdiff's sparse array. Entries are set
   ;; undefined lazily, two per edit length, so setup is O(D) like jsdiff, not O(M+N).
   ;; Paths share immutable nodes, as jsdiff's component objects. A link is a node
   ;; address | its kind: 0 common (prev link, count), 1 removed or 2 added (prev
-  ;; link; one token). Link 0 is the empty path. The diagonal loop makes no calls
-  ;; (V8 spills every live value around one): nodes bump from $top, with room
-  ;; reserved once per row.
+  ;; link; one token). $reserveNodes also writes kind 0 nodes that hold flags | count.
+  ;; Link 0 is the empty path. The diagonal loop makes no calls (V8 spills every
+  ;; live value around one): nodes bump from $top, with room reserved once per row.
   (func $myers (result i32)
     (local $M i32) (local $N i32) (local $maxEdit i32) (local $size i32)
     (local $bpZero i32) (local $d i32) (local $k i32) (local $kEnd i32)
@@ -33,6 +148,7 @@
     (local $t i32) (local $ea i32) (local $nEnd i32)
     (local $top i32) (local $lim i32) (local $oi i32) (local $ni i32)
     (local $po i32) (local $pn i32) (local $eo i32) (local $v v128)
+    (global.set $compactAt (global.get $compactFirst))
     (local.set $M (global.get $oldN))
     (local.set $N (global.get $newN))
     (local.set $maxEdit (i32.add (local.get $M) (local.get $N)))
@@ -157,14 +273,25 @@
             (local.set $kEnd (local.get $d))
             (if (i32.lt_s (local.get $maxDiag) (local.get $kEnd))
               (then (local.set $kEnd (local.get $maxDiag))))
-            ;; node room for the row: <= d+1 steps of <= 12 node bytes. $alloc grows
-            ;; memory or fails at the 4 GiB end; $lim 0 there makes $lim-$top the room left.
+            ;; node room for the row: <= d+1 steps of <= 12 node bytes. Memory ends at
+            ;; 4 GiB; $lim 0 there makes $lim-$top the room left.
             (local.set $t (i32.shl (i32.add (local.get $d) (i32.const 1)) (i32.const 4)))
             (if (i32.gt_u (local.get $t) (i32.sub (local.get $lim) (local.get $top)))
               (then
-                (global.set $heap (local.get $top))
-                (if (i32.eqz (call $alloc (local.get $t))) (then (return (i32.const 0))))
-                (local.set $lim (global.get $memEnd))))
+                ;; only bestPath[k-1 .. kEnd+1] can be read from now on; the first node
+                ;; follows bestPath
+                (local.set $top (call $reserveNodes
+                  (local.get $top)
+                  (local.get $t)
+                  (i32.add (local.get $bpZero) (i32.shl (local.get $k) (i32.const 3)))
+                  (i32.add
+                    (i32.add (local.get $bpZero) (i32.shl (local.get $kEnd) (i32.const 3)))
+                    (i32.const 16))
+                  (i32.add
+                    (i32.add (local.get $bpZero) (i32.shl (local.get $maxEdit) (i32.const 3)))
+                    (i32.const 32))))
+                (if (i32.eqz (local.get $top)) (then (return (i32.const 0))))
+                (local.set $lim (global.get $nodeLim))))
             (br $next)))
         (local.set $ea (i32.add (local.get $bpZero) (i32.shl (local.get $k) (i32.const 3))))
         ;; load both neighbours always: undef oldPos 0x80808080 fails the unsigned
@@ -206,7 +333,7 @@
   ;; flatten the reversed node list into $compArr (u32 count | added << 31 |
   ;; removed << 30, forward order). Adjacent added (or removed) nodes join, as
   ;; jsdiff addToPath merges a token into the last component of its flavor;
-  ;; common runs never touch.
+  ;; common runs never touch. Each node gives at most one component.
   (func $buildComps (param $last i32)
     (local $n i32) (local $c i32) (local $end i32) (local $p i32) (local $cf i32)
     (local.set $c (local.get $last))
@@ -225,18 +352,20 @@
     (local.set $c (local.get $last))
     (block $filled (loop $fill
       (br_if $filled (i32.eqz (local.get $c)))
-      ;; kind 1/2 is flags bit 30/31
-      (local.set $cf (i32.shl (local.get $c) (i32.const 30)))
+      ;; flags | count: kind 1/2 is flags bit 30/31 and one token, kind 0 holds both
+      (local.set $cf (select
+        (i32.or (i32.shl (local.get $c) (i32.const 30)) (i32.const 1))
+        (i32.load offset=4 (i32.and (local.get $c) (i32.const -4)))
+        (i32.and (local.get $c) (i32.const 3))))
       (local.set $c (i32.and (local.get $c) (i32.const -4)))
       (if (i32.shr_u (i32.xor (i32.load (local.get $p)) (local.get $cf)) (i32.const 30))
         (then
           (local.set $p (i32.sub (local.get $p) (i32.const 4)))
-          (i32.store (local.get $p) (select
-            (i32.or (local.get $cf) (i32.const 1))
-            (i32.load offset=4 (local.get $c))
-            (local.get $cf))))
-        (else ;; same flavor: one more token
-          (i32.store (local.get $p) (i32.add (i32.load (local.get $p)) (i32.const 1)))))
+          (i32.store (local.get $p) (local.get $cf)))
+        (else ;; same flavor: add its tokens
+          (i32.store (local.get $p) (i32.add
+            (i32.load (local.get $p))
+            (i32.and (local.get $cf) (i32.const 0x3FFFFFFF))))))
       (local.set $c (i32.load (local.get $c)))
       (br $fill)))
     (global.set $compArr (local.get $p))

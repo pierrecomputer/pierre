@@ -24,6 +24,7 @@ export interface WorkerRenderingOptions {
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  preferredDiffLib?: DiffLib;
   maxLineDiffLength: number;
 }
 
@@ -57,7 +58,6 @@ export interface RenderFileRequest {
 }
 
 export interface RenderDiffRequest {
-  preferredDiffLib?: DiffLib;
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;

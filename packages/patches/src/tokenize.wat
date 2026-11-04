@@ -87,24 +87,6 @@
     (local.get $n)
   )
 
-  ;; jsdiff extendedWordChars: a-z A-Z 0-9 _ U+00AD U+00C0-D6 U+00D8-F6
-  ;; U+00F8-2C6 U+02C8-2D7 U+02DE-2FF U+1E00-1EFF. ASCII (<0x80) is inline in
-  ;; $tokenizeWords; here $c >= 0x80. Encoded as C0..2D7 minus {D7,F7,2C7};
-  ;; D7 and F7 differ only in bit 5, so (c|0x20)==0xF7 tests both.
-  (func $isWordCp (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.eq (local.get $c) (i32.const 0xAD))
-        (i32.and
-          (i32.and
-            (i32.le_u (i32.sub (local.get $c) (i32.const 0xC0)) (i32.const 0x217))
-            (i32.ne (i32.or (local.get $c) (i32.const 0x20)) (i32.const 0xF7)))
-          (i32.ne (local.get $c) (i32.const 0x2C7))))
-      (i32.or
-        (i32.le_u (i32.sub (local.get $c) (i32.const 0x2DE)) (i32.const 0x21))
-        (i32.le_u (i32.sub (local.get $c) (i32.const 0x1E00)) (i32.const 0xFF))))
-  )
-
   ;; JS `\s` minus `\n` `\r` (`[^\S\n\r]`): TAB VT FF SP NBSP U+1680 U+2000-200A
   ;; U+2028 U+2029 U+202F U+205F U+3000 U+FEFF. ASCII (TAB VT FF SP) is inline in
   ;; $tokenizeWords; here $c >= 0x80.
@@ -200,15 +182,8 @@
     (local.get $n)
   )
 
-  ;; non-ASCII class: 1 word, 2 space, 0 else (disjoint, bits never combine)
-  (func $clsCp (param $c i32) (result i32)
-    (i32.or
-      (call $isWordCp (local.get $c))
-      (i32.shl (call $isSpaceNotNl (local.get $c)) (i32.const 1)))
-  )
-
   ;; ASCII class table [73:187) (layout in mem.wat): page-1 byte 64+$c is the
-  ;; class of ASCII $c, same encoding as $clsCp. 0..8 and 123..127 stay zero-init.
+  ;; class of ASCII $c: 1 word, 2 space, 0 else. 0..8 and 123..127 stay zero-init.
   (data (i32.const 73)
     "\02\00\02\02\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"           ;; TAB VT FF
     "\02\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"                                ;; SP
@@ -220,10 +195,11 @@
   ;; jsdiff wordsWithSpaceDiff.tokenize: (\r?\n) | [word]+ | [^\S\n\r]+ | [^word].
   ;; A token starts where the cp class changes and at every class-0 cp, except
   ;; the \n of \r\n. ASCII class from table at 64; leads >= 0x80 pay
-  ;; $decodeCp+$clsCp. No branch on token ends: each cp stores its offset, and
+  ;; $decodeCp and the class tests. No branch on token ends: each cp stores its offset, and
   ;; only a token start keeps it.
   (func $tokenizeWords (param $src i32) (param $end i32) (param $offs i32) (result i32)
     (local $p i32) (local $c i32) (local $k i32) (local $prev i32) (local $cr i32) (local $o i32)
+    (local $u i32)
     (local.set $p (local.get $src))
     (local.set $o (local.get $offs))
     ;; no class, so the first cp starts a token
@@ -239,7 +215,23 @@
         (else ;; $c keeps the lead byte: >= 0x80, so it is never \n or \r below
           (call $decodeCp (local.get $p) (local.get $end))
           (local.set $p (i32.add (local.get $p) (global.get $cpLen)))
-          (local.set $k (call $clsCp (global.get $cp)))))
+          (local.set $u (global.get $cp))
+          ;; jsdiff extendedWordChars above ASCII: U+00AD U+00C0-D6 U+00D8-F6 U+00F8-2C6
+          ;; U+02C8-2D7 U+02DE-2FF U+1E00-1EFF. Encoded as C0..2D7 minus {D7,F7,2C7};
+          ;; D7 and F7 differ only in bit 5, so (c|0x20)==0xF7 tests both.
+          (local.set $k (i32.or
+            (i32.or
+              (i32.or
+                (i32.eq (local.get $u) (i32.const 0xAD))
+                (i32.and
+                  (i32.and
+                    (i32.le_u (i32.sub (local.get $u) (i32.const 0xC0)) (i32.const 0x217))
+                    (i32.ne (i32.or (local.get $u) (i32.const 0x20)) (i32.const 0xF7)))
+                  (i32.ne (local.get $u) (i32.const 0x2C7))))
+              (i32.or
+                (i32.le_u (i32.sub (local.get $u) (i32.const 0x2DE)) (i32.const 0x21))
+                (i32.le_u (i32.sub (local.get $u) (i32.const 0x1E00)) (i32.const 0xFF))))
+            (i32.shl (call $isSpaceNotNl (local.get $u)) (i32.const 1))))))
       (local.set $o (i32.add (local.get $o) (i32.shl
         (i32.or
           (i32.ne (local.get $k) (local.get $prev))

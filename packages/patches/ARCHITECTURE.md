@@ -12,18 +12,18 @@ JS strings -> WTF-8 bytes -> tokens -> integer ids -> Myers diff
 
 ## Source files
 
-| File                                     | Purpose                                                         |
-| ---------------------------------------- | --------------------------------------------------------------- |
-| [`src/mem.wat`](./src/mem.wat)           | Memory layout, allocation, byte operations, token hash          |
-| [`src/tokenize.wat`](./src/tokenize.wat) | WTF-8 decoder, tokenizers, token ids                            |
-| [`src/myers.wat`](./src/myers.wat)       | Myers algorithm, change components, change records              |
-| [`src/patch.wat`](./src/patch.wat)       | Entry point, hunk groups, headers, patch output                 |
-| [`lib/core.ts`](./lib/core.ts)           | Shared host code and public APIs                                |
-| [`lib/index.ts`](./lib/index.ts)         | Node, Deno, Bun, and browser entry point with inline wasm bytes |
-| [`lib/workerd.ts`](./lib/workerd.ts)     | Cloudflare Workers entry point with a native wasm import        |
-| [`scripts/build.ts`](./scripts/build.ts) | WAT preprocessor, compiler, optimizer                           |
-| [`test/`](./test/)                       | API, tokenizer, size-limit, and jsdiff fuzz tests               |
-| [`benchmark/`](./benchmark/)             | Throughput and memory comparisons with jsdiff                   |
+| File                                     | Purpose                                                   |
+| ---------------------------------------- | --------------------------------------------------------- |
+| [`src/mem.wat`](./src/mem.wat)           | Memory layout, allocation, byte operations, token hash    |
+| [`src/tokenize.wat`](./src/tokenize.wat) | WTF-8 decoder, tokenizers, token ids                      |
+| [`src/myers.wat`](./src/myers.wat)       | Myers algorithm, change components, change records        |
+| [`src/patch.wat`](./src/patch.wat)       | Entry point, hunk groups, headers, patch output           |
+| [`lib/core.ts`](./lib/core.ts)           | Shared host code and public APIs                          |
+| [`lib/index.ts`](./lib/index.ts)         | Node, Deno, Bun, and browser entry point with inline wasm |
+| [`lib/workerd.ts`](./lib/workerd.ts)     | Cloudflare Workers entry point with a native wasm import  |
+| [`scripts/build.ts`](./scripts/build.ts) | WAT preprocessor, compiler, optimizer                     |
+| [`test/`](./test/)                       | API, tokenizer, size-limit, and jsdiff fuzz tests         |
+| [`benchmark/`](./benchmark/)             | Throughput and memory comparisons with jsdiff             |
 
 ## Compatibility
 
@@ -89,6 +89,13 @@ The diagonal loop calls no functions, because V8 spills all live values around a
 wasm call. Nodes come from a bump pointer, and each edit length reserves the
 memory for its nodes first.
 
+Most nodes die as diagonals move on, but the bump pointer keeps them. So
+`$reserveNodes` compacts the paths when node memory passes a limit: 256 MiB for
+the first run, then 4 MiB or twice the live bytes. It copies the nodes that
+`bestPath` can still reach and joins each added or removed run into one node,
+like jsdiff's components. Diffs below the first limit pay nothing. It stays
+outside `$myers` because its size there slows the loop on JSC.
+
 ## Results
 
 ### Change records
@@ -150,9 +157,10 @@ between calls, not peak memory during a call. `Infinity` keeps all memory.
 
 - Each input has a 256 MB limit. Token tables check their sizes before integer
   overflow.
-- Worst-case time is `O((N+M)·D)`, and component memory is `O(D²)`, as in
+- Worst-case time is `O((N+M)·D)`, and live component memory is `O(D²)`, as in
   jsdiff. N and M are the token counts. Large, unrelated inputs are the
-  expensive case.
+  expensive case in time. Two unrelated 34,000-line files use about 280 MB of
+  wasm memory, because compaction keeps only the live paths.
 - Wasm memory has a 4 GiB limit. If wasm cannot allocate memory, it returns
   `out of memory` without a trap. The host reads the message and throws an
   `Error`.
@@ -166,9 +174,9 @@ tsdown:
    little-endian integers.
 2. `wat2wasm()` compiles with wabt, with bulk memory and SIMD enabled.
 3. `optimizeWasm()` runs three binaryen passes with `-O3 --shrink-level=1` and
-   the optimized Stack IR writer. `--one-caller-inline-max-size=250` keeps
-   `$myers` and `$emitPatch` out of the entry function, so V8 compiles the Myers
-   loop alone.
+   the optimized Stack IR writer. `--one-caller-inline-max-size=220` keeps
+   `$myers` and `$emitPatch` out of the entry function and `$reserveNodes` out
+   of `$myers`, so the engines compile the Myers loop alone.
 
 The build writes `dist/patch.wat`, `dist/patch.wasm`, `dist/patch.wasm.mjs`, and
 the compiled host code. It also records wasm sizes in `package.json` under

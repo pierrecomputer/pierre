@@ -79,7 +79,8 @@
     (local.set $end (i32.add (local.get $base) (local.get $size)))
     ;; two separate ifs: merging (i32.or / shared-oom) costs ~7-10% on every bench
     ;; via binaryen inlining this into the Myers component allocator
-    (if (i32.lt_u (local.get $end) (local.get $base))
+    ;; Warning: compare with $heap, not $base: rounding up can wrap $base to 0 at 4 GiB
+    (if (i32.lt_u (local.get $end) (global.get $heap))
       (then
         (call $oom)
         (return (i32.const 0))))

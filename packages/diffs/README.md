@@ -42,8 +42,13 @@ const options = { parseDiffOptions: { preferredDiffLib: '@pierre/patches' } };
 ```
 
 The option controls file diffs, editor updates, and word or character
-highlights. Worker requests use the component's selected library. Supplied patch
-hunks stay unchanged until an edit requires a new diff.
+highlights. With a worker pool, set `preferredDiffLib` on the pool for
+highlights, like `lineDiffType`. Supplied patch hunks stay unchanged until an
+edit requires a new diff. Changing the library does not recompute a parsed diff:
+both libraries give the same output.
+
+If `@pierre/patches` fails to compute a file diff, for example on a page that
+blocks WebAssembly, `parseDiffFromFile` logs the error and uses `jsdiff`.
 
 `parseDiffFromFile(oldFile, newFile, { preferredDiffLib: '@pierre/patches' })`
 also accepts the option.

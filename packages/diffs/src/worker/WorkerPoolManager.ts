@@ -16,7 +16,6 @@ import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
 import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
-  DiffLib,
   DiffsHighlighter,
   DiffsTheme,
   DiffsThemeNames,
@@ -144,6 +143,7 @@ export class WorkerPoolManager {
       theme = DEFAULT_THEMES,
       useTokenTransformer = false,
       lineDiffType = 'word-alt',
+      preferredDiffLib,
       maxLineDiffLength = 1000,
       tokenizeMaxLineLength = 1000,
       preferredHighlighter,
@@ -154,6 +154,7 @@ export class WorkerPoolManager {
       theme,
       useTokenTransformer,
       lineDiffType,
+      preferredDiffLib,
       maxLineDiffLength,
       tokenizeMaxLineLength,
     };
@@ -221,10 +222,7 @@ export class WorkerPoolManager {
   ): boolean {
     if (
       cacheKey == null ||
-      !areDiffRenderOptionsEqual(
-        options,
-        this.getDiffRenderOptions(options.preferredDiffLib)
-      )
+      !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
     ) {
       return false;
     }
@@ -258,6 +256,7 @@ export class WorkerPoolManager {
     theme = this.renderOptions.theme ?? DEFAULT_THEMES,
     useTokenTransformer = this.renderOptions.useTokenTransformer ?? false,
     lineDiffType = this.renderOptions.lineDiffType ?? 'word-alt',
+    preferredDiffLib = this.renderOptions.preferredDiffLib,
     maxLineDiffLength = this.renderOptions.maxLineDiffLength ?? 1000,
     tokenizeMaxLineLength = this.renderOptions.tokenizeMaxLineLength ?? 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
@@ -271,6 +270,7 @@ export class WorkerPoolManager {
         theme,
         useTokenTransformer,
         lineDiffType,
+        preferredDiffLib,
         maxLineDiffLength,
         tokenizeMaxLineLength,
       };
@@ -353,8 +353,8 @@ export class WorkerPoolManager {
     return { theme, useTokenTransformer, tokenizeMaxLineLength };
   }
 
-  public getDiffRenderOptions(preferredDiffLib?: DiffLib): RenderDiffOptions {
-    return { ...this.renderOptions, preferredDiffLib };
+  public getDiffRenderOptions(): RenderDiffOptions {
+    return { ...this.renderOptions };
   }
 
   private async setRenderOptionsOnWorkers(
@@ -845,8 +845,7 @@ export class WorkerPoolManager {
 
   public highlightDiffAST(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata,
-    preferredDiffLib?: DiffLib
+    diff: FileDiffMetadata
   ): void {
     const cachedResult = this.getDiffResultCache(diff);
     // If we've already highlighted the diff or it's plain text, we should not
@@ -857,20 +856,17 @@ export class WorkerPoolManager {
       (cachedResult != null &&
         areDiffRenderOptionsEqual(
           cachedResult.options,
-          this.getDiffRenderOptions(preferredDiffLib)
+          this.getDiffRenderOptions()
         ))
     ) {
       return;
     }
-    if (!this.hasMatchingDiffInstanceTask(instance, diff, preferredDiffLib)) {
-      this.submitTask(instance, { type: 'diff', diff, preferredDiffLib });
+    if (!this.hasMatchingDiffInstanceTask(instance, diff)) {
+      this.submitTask(instance, { type: 'diff', diff });
     }
   }
 
-  public primeDiffHighlightCache(
-    diff: FileDiffMetadata,
-    preferredDiffLib?: DiffLib
-  ): Promise<void> {
+  public primeDiffHighlightCache(diff: FileDiffMetadata): Promise<void> {
     if (!this.isWorkingPool()) {
       return Promise.reject(
         new Error(
@@ -879,11 +875,11 @@ export class WorkerPoolManager {
       );
     }
 
-    if (!this.shouldPrimeDiffHighlightCache(diff, preferredDiffLib)) {
+    if (!this.shouldPrimeDiffHighlightCache(diff)) {
       return Promise.resolve();
     }
     if (this.shouldHighlightOnMainThread(diff)) {
-      const options = this.getDiffRenderOptions(preferredDiffLib);
+      const options = this.getDiffRenderOptions();
       return this.primeHighlightCacheOnMainThread(
         getLangsFromRequest({ type: 'diff', diff }),
         options.theme,
@@ -894,7 +890,7 @@ export class WorkerPoolManager {
           })
       );
     }
-    const task = this.getOrCreateDiffHighlightCacheTask(diff, preferredDiffLib);
+    const task = this.getOrCreateDiffHighlightCacheTask(diff);
     return task != null
       ? this.createRenderTaskCallbacks(task)
       : Promise.resolve();
@@ -902,10 +898,7 @@ export class WorkerPoolManager {
 
   // Priming needs a cache key to store the result under, and skips diffs that
   // are plain text or already cached with the current render options.
-  private shouldPrimeDiffHighlightCache(
-    diff: FileDiffMetadata,
-    preferredDiffLib?: DiffLib
-  ): boolean {
+  private shouldPrimeDiffHighlightCache(diff: FileDiffMetadata): boolean {
     if (diff.cacheKey == null) {
       console.warn(
         `WorkerPoolManager.primeDiffHighlightCache: priming highlight cache requires diff.cacheKey; skipping "${diff.prevName ?? diff.name}" -> "${diff.name}".`
@@ -918,7 +911,7 @@ export class WorkerPoolManager {
       (cachedResult == null ||
         !areDiffRenderOptionsEqual(
           cachedResult.options,
-          this.getDiffRenderOptions(preferredDiffLib)
+          this.getDiffRenderOptions()
         ))
     );
   }
@@ -955,10 +948,9 @@ export class WorkerPoolManager {
   }
 
   private getOrCreateDiffHighlightCacheTask(
-    diff: FileDiffMetadata,
-    preferredDiffLib?: DiffLib
+    diff: FileDiffMetadata
   ): RenderDiffTask | undefined {
-    const highlightKey = this.getDiffHighlightKey(diff, preferredDiffLib);
+    const highlightKey = this.getDiffHighlightKey(diff);
     if (highlightKey == null) {
       return undefined;
     }
@@ -972,10 +964,7 @@ export class WorkerPoolManager {
       existingTask.primeCache = true;
       return existingTask;
     } else {
-      const task = this.submitCacheTask(
-        { type: 'diff', diff, preferredDiffLib },
-        highlightKey
-      );
+      const task = this.submitCacheTask({ type: 'diff', diff }, highlightKey);
       if (task.type !== 'diff') {
         throw new Error(
           'WorkerPoolManager.getOrCreateDiffHighlightCacheTask: Invalid task created'
@@ -990,8 +979,7 @@ export class WorkerPoolManager {
     startingLine: number,
     totalLines: number,
     expandedHunks?: Map<number, HunkExpansionRegion> | true,
-    collapsedContextThreshold?: number,
-    preferredDiffLib?: DiffLib
+    collapsedContextThreshold?: number
   ): ThemedDiffResult | undefined {
     const highlighter = getHighlighterIfLoaded({
       theme: this.renderOptions.theme,
@@ -1000,18 +988,13 @@ export class WorkerPoolManager {
       this.queueInitialization();
       return undefined;
     }
-    return renderDiffWithHighlighter(
-      diff,
-      highlighter,
-      this.getDiffRenderOptions(preferredDiffLib),
-      {
-        forcePlainText: true,
-        startingLine,
-        totalLines,
-        expandedHunks,
-        collapsedContextThreshold,
-      }
-    );
+    return renderDiffWithHighlighter(diff, highlighter, this.renderOptions, {
+      forcePlainText: true,
+      startingLine,
+      totalLines,
+      expandedHunks,
+      collapsedContextThreshold,
+    });
   }
 
   public terminate(): void {
@@ -1345,10 +1328,7 @@ export class WorkerPoolManager {
             const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
-              !areDiffRenderOptionsEqual(
-                options,
-                this.getDiffRenderOptions(task.request.preferredDiffLib)
-              )
+              !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
             ) {
               throw IGNORE_RESPONSE;
             }
@@ -1526,14 +1506,11 @@ export class WorkerPoolManager {
     return `file:${file.cacheKey}:${this.renderOptionsVersion}`;
   }
 
-  private getDiffHighlightKey(
-    diff: FileDiffMetadata,
-    preferredDiffLib?: DiffLib
-  ): string | undefined {
+  private getDiffHighlightKey(diff: FileDiffMetadata): string | undefined {
     if (diff.cacheKey == null) {
       return undefined;
     }
-    return `diff:${diff.cacheKey}:${this.renderOptionsVersion}:${preferredDiffLib ?? 'jsdiff'}`;
+    return `diff:${diff.cacheKey}:${this.renderOptionsVersion}`;
   }
 
   private getHighlightKeyForRequest(
@@ -1543,7 +1520,7 @@ export class WorkerPoolManager {
       case 'file':
         return this.getFileHighlightKey(request.file);
       case 'diff':
-        return this.getDiffHighlightKey(request.diff, request.preferredDiffLib);
+        return this.getDiffHighlightKey(request.diff);
     }
   }
 
@@ -1735,17 +1712,14 @@ export class WorkerPoolManager {
 
   private hasMatchingDiffInstanceTask(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata,
-    preferredDiffLib?: DiffLib
+    diff: FileDiffMetadata
   ): boolean {
     for (const task of this.iterateRenderTasks()) {
       if (
         task.type === 'diff' &&
         this.isCurrentRenderTask(task) &&
         task.instances.has(instance) &&
-        areDiffTargetsEqual(task.request.diff, diff) &&
-        (task.request.preferredDiffLib ?? 'jsdiff') ===
-          (preferredDiffLib ?? 'jsdiff')
+        areDiffTargetsEqual(task.request.diff, diff)
       ) {
         return true;
       }

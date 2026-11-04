@@ -1486,9 +1486,7 @@ export class VirtualizedFileDiff<
     const newFile = fileInput?.newFile;
     const filesDidChange =
       hasFileInput &&
-      (this.parsedDiffLib !==
-        (this.options.parseDiffOptions?.preferredDiffLib ?? 'jsdiff') ||
-        !areOptionalFilesEqual(oldFile, this.deletionFile) ||
+      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
     let nextFileDiff = fileDiff ?? this.getInputDiff();
     if (
@@ -1501,8 +1499,6 @@ export class VirtualizedFileDiff<
         fileInput.newFile,
         this.options.parseDiffOptions
       );
-      this.parsedDiffLib =
-        this.options.parseDiffOptions?.preferredDiffLib ?? 'jsdiff';
     }
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;

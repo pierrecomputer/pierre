@@ -121,7 +121,29 @@ for (const preferredDiffLib of [
   });
 }
 
-test('FileDiff changes libraries for the same file pair', async () => {
+test('parseDiffFromFile falls back to jsdiff when the selected library fails', () => {
+  const patch = spyOn(
+    diffLibs['@pierre/patches'],
+    'createTwoFilesPatch'
+  ).mockImplementation(() => {
+    throw new Error('out of memory');
+  });
+  const log = spyOn(console, 'error').mockImplementation(() => {});
+  const options = { preferredDiffLib: '@pierre/patches' } as const;
+  try {
+    const parsed = parseDiffFromFile(oldFile, newFile, options);
+    expect(parsed.hunks[0]?.additionLines).toBe(1);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(() => parseDiffFromFile(oldFile, newFile, options, true)).toThrow(
+      'out of memory'
+    );
+  } finally {
+    patch.mockRestore();
+    log.mockRestore();
+  }
+});
+
+test('FileDiff keeps parsed hunks and highlights with a new library', async () => {
   const { cleanup } = installDom();
   const instance = new FileDiff({ theme: 'pierre-dark', lineDiffType: 'char' });
   const patch = spyOn(diffLibs['@pierre/patches'], 'createTwoFilesPatch');
@@ -130,7 +152,6 @@ test('FileDiff changes libraries for the same file pair', async () => {
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
     instance.render({ oldFile, newFile, fileContainer });
-    expect(patch).not.toHaveBeenCalled();
     instance.setOptions({
       theme: 'pierre-dark',
       lineDiffType: 'char',
@@ -138,7 +159,7 @@ test('FileDiff changes libraries for the same file pair', async () => {
     });
     instance.render({ oldFile, newFile, fileContainer, forceRender: true });
     await waitFor(() => chars.mock.calls.length > 0);
-    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch).not.toHaveBeenCalled();
   } finally {
     instance.cleanUp();
     patch.mockRestore();

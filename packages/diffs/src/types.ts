@@ -494,8 +494,8 @@ export interface BaseDiffOptions extends BaseCodeOptions {
    * and the disableLineMatching escape hatch. Also used when deriving cache
    * keys during partial diff hydration; use the same matching mode as the
    * supplied patch. Does not change the hunks in supplied pre-parsed patches.
-   * `preferredDiffLib` also selects the library for word and character
-   * highlights.
+   * Without a worker pool, `preferredDiffLib` also selects the library for word
+   * and character highlights; a pool uses its own `preferredDiffLib` for them.
    */
   parseDiffOptions?: ParseDiffOptions;
 }

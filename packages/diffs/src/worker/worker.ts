@@ -175,7 +175,6 @@ async function handleRenderFile({
 async function handleRenderDiff({
   id,
   diff,
-  preferredDiffLib,
   resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
@@ -191,8 +190,7 @@ async function handleRenderDiff({
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
-  const options = { ...renderOptions, preferredDiffLib };
-  const result = renderDiffWithHighlighter(diff, highlighter, options);
+  const result = renderDiffWithHighlighter(diff, highlighter, renderOptions);
   const code = compactResults
     ? {
         deletionLines: encodeHastLines(result.code.deletionLines),
@@ -204,7 +202,7 @@ async function handleRenderDiff({
     requestType: 'diff',
     id,
     result,
-    options,
+    options: renderOptions,
     sentAt: Date.now(),
   };
   postMessage(

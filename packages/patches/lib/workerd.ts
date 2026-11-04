@@ -3,4 +3,17 @@ import wasmModule from './patch.wasm';
 
 init(() => wasmModule);
 
-export * from './core';
+export {
+  createPatch,
+  createTwoFilesPatch,
+  diffChars,
+  diffLines,
+  diffWordsWithSpace,
+  setMemoryLimit,
+} from './core';
+export type {
+  ChangeObject,
+  CreatePatchOptions,
+  DiffLinesOptions,
+  HeaderOptions,
+} from './core';

@@ -136,12 +136,12 @@ automatically. If you're using the Vanilla JS APIs, we provide a
 you can then manually pass to all your File/FileDiff instances.
 
 <Notice icon={<IconInfoFill />} variant="warning">
-  When using the worker pool, the `theme`, `lineDiffType`,
+  When using the worker pool, the `theme`, `lineDiffType`, `preferredDiffLib`,
   `tokenizeMaxLineLength`, and `useTokenTransformer` render options are
   controlled by `WorkerPoolManager`, not individual components. Passing these
-  options into component instances will be ignored. The diff library is the
-  exception: each component's `parseDiffOptions.preferredDiffLib` also selects
-  the library its worker requests use for inline change highlights.
+  options into component instances will be ignored. A component's
+  `parseDiffOptions.preferredDiffLib` still selects the library for its file
+  diffs.
 </Notice>
 
 To change render options after `WorkerPoolManager` instantiates, call

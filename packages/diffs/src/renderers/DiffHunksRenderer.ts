@@ -498,10 +498,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       workerManager.evictDiffFromCache(diff.cacheKey);
       return workerManager
-        .primeDiffHighlightCache(
-          diff,
-          this.options.parseDiffOptions?.preferredDiffLib
-        )
+        .primeDiffHighlightCache(diff)
         .then(() => {
           this.applyRefreshedResult(
             diff,
@@ -782,11 +779,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (workerManager != null) {
       if (this.renderCache.result == null && !massiveDiff) {
         // We should only kick off a preload of the AST if we have a WorkerPool
-        workerManager.highlightDiffAST(
-          this,
-          this.diff,
-          this.options.parseDiffOptions?.preferredDiffLib
-        );
+        workerManager.highlightDiffAST(this, this.diff);
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
@@ -851,9 +844,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
     const options: RenderDiffOptions = (() => {
       if (this.workerManager?.isWorkingPool() === true) {
-        const poolOptions = this.workerManager.getDiffRenderOptions(
-          this.options.parseDiffOptions?.preferredDiffLib
-        );
+        const poolOptions = this.workerManager.getDiffRenderOptions();
         // Active edit sessions require `useTokenTransformer: true`
         if (
           this.editSessionActive &&
@@ -1028,8 +1019,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               : expandUnchanged
                 ? true
                 : this.expandedHunks,
-            collapsedContextThreshold,
-            this.options.parseDiffOptions?.preferredDiffLib
+            collapsedContextThreshold
           );
           // A plain result for the same diff keeps its rows as the window
           // moves, so rows that stay on screen stay the same objects.
@@ -1055,11 +1045,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        workerManager.highlightDiffAST(
-          this,
-          diff,
-          this.options.parseDiffOptions?.preferredDiffLib
-        );
+        workerManager.highlightDiffAST(this, diff);
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);

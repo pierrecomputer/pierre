@@ -33,15 +33,26 @@ export function parseDiffFromFile(
 
   const resolvedOldFile = oldFile ?? createMissingFile();
   const resolvedNewFile = newFile ?? createMissingFile();
-  const patch = diffLibs[preferredDiffLib].createTwoFilesPatch(
+  const patchArgs = [
     resolvedOldFile.name,
     resolvedNewFile.name,
     resolvedOldFile.contents,
     resolvedNewFile.contents,
     resolvedOldFile.header,
     resolvedNewFile.header,
-    diffOptions
-  );
+    diffOptions,
+  ] as const;
+  let patch: string;
+  try {
+    patch = diffLibs[preferredDiffLib].createTwoFilesPatch(...patchArgs);
+  } catch (error) {
+    // Wasm can fail where jsdiff works: locked-down pages or no memory left.
+    if (throwOnError || preferredDiffLib === 'jsdiff') {
+      throw error;
+    }
+    console.error(error);
+    patch = diffLibs.jsdiff.createTwoFilesPatch(...patchArgs);
+  }
 
   const fileData = processFile(patch, {
     cacheKey: (() => {

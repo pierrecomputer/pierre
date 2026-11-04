@@ -431,6 +431,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
 //     How to diff lines (default: 'word-alt')
+//   - preferredDiffLib?: 'jsdiff' | '@pierre/patches' - Library for inline change highlights (default: 'jsdiff')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
 //   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' | 'highlights' - Highlighter backend (default: 'shiki-js')
@@ -450,6 +451,7 @@ poolManager.setRenderOptions(options)
 // Accepts: Partial<WorkerRenderingOptions>
 //   - theme?: DiffsThemeNames | ThemesType
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
+//   - preferredDiffLib?: 'jsdiff' | '@pierre/patches'
 //   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number
 // Omitted options will use defaults. WARNING: This forces all mounted
@@ -464,7 +466,7 @@ poolManager.highlightFileAST(fileInstance, file, options)
 poolManager.getPlainFileAST(file, startingLineNumber?)
 // Returns: ThemedFileResult | undefined - Sync render with 'text' lang
 
-poolManager.highlightDiffAST(fileDiffInstance, diff, options)
+poolManager.highlightDiffAST(fileDiffInstance, diff)
 // Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
 
 poolManager.getPlainDiffAST(diff, lineDiffType)

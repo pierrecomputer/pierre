@@ -82,8 +82,12 @@ function start(): void {
   bind();
   // a random odd hash multiplier ([1016] in src/mem.wat): with the fixed default,
   // crafted lines that share a hash slot make the token table quadratic
-  crypto.getRandomValues(u8.subarray(1016, 1024));
-  u8[1016] |= 1;
+  // WARNING: crypto can be missing (Node 18) or refused (Workers global scope);
+  // the odd default multiplier stays then, and the diffs stay correct
+  try {
+    crypto.getRandomValues(u8.subarray(1016, 1024));
+    u8[1016] |= 1;
+  } catch {}
 }
 
 /**
@@ -175,25 +179,28 @@ export function createTwoFilesPatch(
     );
   }
   check(options, 'createTwoFilesPatch', patchKeys);
-  const { context = 4, headerOptions: h } = options ?? {};
+  const h = options?.headerOptions;
+  const c = options?.context as number | null | false | undefined;
+  // like jsdiff: left out means 4, null and false mean 0
+  const context = c === undefined ? 4 : c === null || c === false ? 0 : c;
   // jsdiff prints odd hunk headers (e.g. "@@ -2,3.5") for these; Infinity means whole-file context
   if (!(Number.isInteger(context) && context >= 0) && context !== Infinity) {
     throw new Error('options.context must be a non-negative integer');
   }
   // Wasm writes the whole patch, header lines included; JS only passes the
   // strings and the header flags ([2] in src/mem.wat). Like jsdiff, no
-  // headerOptions writes every header line, and a falsy field is off.
+  // or falsy headerOptions writes every header line, and a falsy field is off.
   return run(
     3,
     oldStr,
     newStr,
     options,
     Math.min(context, 0x0fffffff),
-    (h != null
-      ? ((h.includeIndex ?? false) ? 1 : 0) |
-        ((h.includeUnderline ?? false) ? 2 : 0) |
-        ((h.includeFileHeaders ?? false) ? 4 : 0)
-      : 7) |
+    (Boolean(h) === false
+      ? 7
+      : ((h!.includeIndex ?? false) ? 1 : 0) |
+        ((h!.includeUnderline ?? false) ? 2 : 0) |
+        ((h!.includeFileHeaders ?? false) ? 4 : 0)) |
       (oldFileName !== undefined ? 8 : 0) |
       (newFileName !== undefined ? 16 : 0),
     [
@@ -253,13 +260,22 @@ function run(
     oldStr = oldStr.replaceAll('\r\n', '\n');
     newStr = newStr.replaceAll('\r\n', '\n');
   }
+  // wasm has the same limit, but only after the memory growth and the encode below;
+  // UTF-8 has at least one byte per UTF-16 unit
+  if (oldStr.length >= 0x10000000 || newStr.length >= 0x10000000) {
+    throw new Error('out of memory');
+  }
   if (wasm === undefined) start();
   // input starts on page 2; WTF-8 is at most 3 bytes per UTF-16 code unit, and
   // 64 covers the SIMD overread pad
   let need = 65600 + (oldStr.length + newStr.length) * 3;
   if (headers !== undefined) for (const s of headers) need += s.length * 3;
   if (need > u8.length) {
-    memory.grow(Math.ceil((need - u8.length) / 65536));
+    try {
+      memory.grow(Math.ceil((need - u8.length) / 65536));
+    } catch {
+      throw new Error('out of memory');
+    }
     bind();
   }
   wtf8 = false;
@@ -347,7 +363,10 @@ function encode(s: string, p: number): number {
   if (s.length < 256) return encodeJS(s, p);
   const written = enc.encodeInto(s, u8.subarray(p)).written;
   // only non-ASCII text can hold lone surrogates
-  return written === s.length || s.isWellFormed() ? written : encodeJS(s, p);
+  // WARNING: isWellFormed is ES2024; without it the JS encoder is slower but correct
+  return written === s.length || (s.isWellFormed?.() ?? false)
+    ? written
+    : encodeJS(s, p);
 }
 
 /** Write `s` at `p` as WTF-8 and return the byte count; lone surrogates set `wtf8`. */

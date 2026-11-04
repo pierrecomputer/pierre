@@ -17,7 +17,6 @@ const { parseWat } = await wabt();
 export function transformWat(url: string | URL, content?: string): string {
   if (!(url instanceof URL)) url = pathToFileURL(url);
   content ??= readFileSync(url, 'utf-8');
-  const imports: string[] = [];
   const seen = new Set([url.href]);
   const flatten = (moduleUrl: URL, source: string): string =>
     source.replace(/\(\s*import\s+"(\.+\/.+\.wat)"\s*\)/g, (_, path) => {
@@ -29,30 +28,21 @@ export function transformWat(url: string | URL, content?: string): string {
         '$1'
       );
     });
-  let code = flatten(url, content)
-    .replace(/(;;.+\s+)*\(\s*import +".+" +\( *func.+\)/g, (i) => {
-      imports.push(i);
-      return '';
-    })
-    .replace(/i(32|64).const\s+(".+?")/g, (_, bits, str) => {
+  return flatten(url, content).replace(
+    /i(32|64).const\s+(".+?")/g,
+    (_, bits, str) => {
       const chars = JSON.parse(str) as string;
       if (chars.length > 8) {
         throw new Error(`Cannot convert '${chars}' to an integer`);
       }
       const hex = chars
         .split('')
-        .map((c) => c.charCodeAt(0).toString(16))
+        .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
         .reverse()
         .join('');
       return `i${bits}.const 0x${hex}`;
-    });
-  if (imports.length > 0) {
-    code = code.replace(
-      /^\s*\(\s*module(\s+)/,
-      `(module\n${imports.map((i) => '  ' + i).join('\n')}$1`
-    );
-  }
-  return code;
+    }
+  );
 }
 
 /** Compile WAT text to a wasm binary with bulk memory and SIMD. */
@@ -64,17 +54,18 @@ export function wat2wasm(filename: string, text: string): Uint8Array {
 
 /**
  * Optimize a wasm binary with binaryen (`wasm-opt -O3 --shrink-level=1
- * --one-caller-inline-max-size=250`) and the optimized Stack IR writer. The
+ * --one-caller-inline-max-size=220`) and the optimized Stack IR writer. The
  * pipeline runs three times: reading an optimized binary again lets the next
  * pass fold patterns that the previous one exposed.
  */
 export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
   binaryen.setOptimizeLevel(3);
   binaryen.setShrinkLevel(1);
-  // keeps the two largest single-caller functions ($myers, $emitPatch) out of
-  // the entry function: there, V8's register allocator slows the Myers loop
-  // by up to 7% whenever unrelated code changes
-  binaryen.setOneCallerInlineMaxSize(250);
+  // keeps the largest single-caller functions out of their callers: $myers and
+  // $emitPatch out of the entry function, where V8's register allocator slows the
+  // Myers loop by up to 7% whenever unrelated code changes, and $reserveNodes out
+  // of $myers, where it slows the loop on JSC
+  binaryen.setOneCallerInlineMaxSize(220);
   binaryen.setGenerateStackIR(true);
   binaryen.setOptimizeStackIR(true);
   for (let pass = 0; pass < 3; pass++) {
@@ -110,10 +101,7 @@ if (import.meta.main) {
   writeFileSync(new URL('patch.wasm', dist), wasmBytes);
   writeFileSync(
     new URL('patch.wasm.mjs', dist),
-    `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
-      `const b = new Uint8Array(s.length);\n` +
-      `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
-      `export default b;\n`
+    `export default "${Buffer.from(wasmBytes).toString('base64')}";\n`
   );
   const pkgUrl = new URL('../package.json', import.meta.url);
   const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8')) as {
