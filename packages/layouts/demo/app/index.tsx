@@ -210,24 +210,31 @@ export default function App(): JSX.Element {
           >
             New terminal
           </button>
-          <label className="app-check">
-            <input
-              type="checkbox"
-              checked={animateLayout}
-              onChange={(event) => setAnimateLayout(event.target.checked)}
-            />
-            Animate panes
-          </label>
-          <label className="app-check">
-            <input
-              type="checkbox"
-              checked={animateZoom}
-              onChange={(event) => setAnimateZoom(event.target.checked)}
-            />
-            Animate zoom
-          </label>
+          {/* Short visible labels keep the header on one row at 1280 px; each
+              control keeps its full name. */}
+          <span className="app-resize" role="group" aria-label="Animate">
+            Animate
+            <label className="app-check">
+              <input
+                type="checkbox"
+                aria-label="Animate panes"
+                checked={animateLayout}
+                onChange={(event) => setAnimateLayout(event.target.checked)}
+              />
+              panes
+            </label>
+            <label className="app-check">
+              <input
+                type="checkbox"
+                aria-label="Animate zoom"
+                checked={animateZoom}
+                onChange={(event) => setAnimateZoom(event.target.checked)}
+              />
+              zoom
+            </label>
+          </span>
           <span className="app-resize">
-            Pane layers
+            Layers
             <select
               aria-label="Pane layers"
               value={layers}
@@ -235,13 +242,15 @@ export default function App(): JSX.Element {
                 setLayers(event.target.value as 'on' | 'off' | 'auto')
               }
             >
-              <option value="auto">from 6 panes (default)</option>
+              <option value="auto" title="From 6 visible panes (default)">
+                auto (6+)
+              </option>
               <option value="on">on</option>
               <option value="off">off</option>
             </select>
           </span>
           <span className="app-resize">
-            Resize drag
+            Drag
             <ResizeSelect value={resize} onChange={setResize} />
           </span>
           <span className="app-resize">

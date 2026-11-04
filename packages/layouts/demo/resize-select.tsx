@@ -18,11 +18,26 @@ export function ResizeSelect({
       value={value}
       onChange={(event) => onChange(event.target.value as ResizeStrategy)}
     >
-      <option value="live">live</option>
-      <option value="frame">once per frame</option>
-      <option value="preview">preview, resize on release</option>
-      <option value="freeze">freeze content</option>
-      <option value="settle">freeze, settle one pane per frame</option>
+      {/* Short names keep the select narrow in a header; each title holds
+          the description. */}
+      <option value="live" title="Resize on each pointer move">
+        live
+      </option>
+      <option value="frame" title="Resize once per frame">
+        per frame
+      </option>
+      <option value="preview" title="Move the separator, resize on release">
+        preview
+      </option>
+      <option value="freeze" title="Freeze the content while the pointer moves">
+        freeze
+      </option>
+      <option
+        value="settle"
+        title="Freeze the content, then settle one pane per frame"
+      >
+        settle
+      </option>
     </select>
   );
 }

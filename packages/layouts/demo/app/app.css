@@ -11,10 +11,12 @@
 .app-header {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  height: 48px;
-  padding: 0 12px;
+  gap: 8px 10px;
+  /* One row of 48 px; a narrow window wraps the controls to more rows. */
+  min-height: 36px;
+  padding: 6px 12px;
   border-bottom: 1px solid #dce1e8;
   background: #fff;
   font-size: 13px;
@@ -27,6 +29,7 @@
   color: inherit;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .app-brand span:last-child {
@@ -94,16 +97,21 @@
 
 .app-header-end {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 10px;
 }
 
 .app-check {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: #6b7586;
   white-space: nowrap;
+}
+
+.app-check input {
+  margin: 0;
 }
 
 .app-resize {
@@ -111,12 +119,10 @@
   align-items: center;
   gap: 8px;
   color: #6b7586;
+  white-space: nowrap;
 }
 
 .app-resize select {
-  /* The options of the resize strategy are long; a select as wide as them
-     pushes the header past the window. */
-  max-width: 140px;
   padding: 4px 6px;
   border: 1px solid #dce1e8;
   border-radius: 6px;
