@@ -166,7 +166,12 @@ export function compose(outer: Piecewise, inner: Piecewise): Piecewise {
       }
     }
   }
-  const knots = union(xs, []);
+  // The crossings of a falling segment come in descending order, so sort the
+  // knots: `union` may expect each list in ascending order.
+  const knots = union(
+    [...xs].sort((x, y) => x - y),
+    []
+  );
   // After the last knot, `inner` is linear, and `outer` is on its last
   // segment when `inner` grows, or on its first when `inner` falls.
   const outerSlope =
