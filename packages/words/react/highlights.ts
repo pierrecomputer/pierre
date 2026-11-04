@@ -21,7 +21,16 @@ const decoder = new TextDecoder();
 export function createHighlightsPlugin(
   options: Omit<CodeToTokensOptions, 'lang'>
 ): CodeHighlighterPlugin {
+  const highlight = ({ code, language }: CodeOptions): string | null => {
+    if (!isSupportedLanguage(language)) return null;
+    const html = decoder.decode(
+      codeToHtml(code, { ...options, lang: language } as CodeToHtmlOptions)
+    );
+    const start = html.indexOf('<code>') + 6;
+    return html.slice(start, html.lastIndexOf('</code>'));
+  };
   return {
+    highlight,
     createSession() {
       let tokenizer: LiveTokenizer | undefined;
       let previous = '';
@@ -43,28 +52,25 @@ export function createHighlightsPlugin(
       const highlightLines = ({
         code,
         language: nextLanguage,
+        isIncomplete,
       }: CodeOptions): CodeHighlightUpdate | null => {
         if (!isSupportedLanguage(nextLanguage)) {
           dispose();
           return null;
         }
         if (code.includes('\r')) code = code.replace(/\r\n?/g, '\n');
+        if (language !== nextLanguage) {
+          dispose();
+          language = nextLanguage;
+        }
         let first = 0;
         const previousLineCount = lines.length;
         const previousContentLine = Math.max(
           0,
           previousLineCount - (previous.endsWith('\n') ? 2 : 1)
         );
-        if (tokenizer === undefined || language !== nextLanguage) {
-          dispose();
-          tokenizer = new LiveTokenizer({
-            ...options,
-            lang: nextLanguage,
-            code,
-          } as LiveTokenizerOptions);
-          language = nextLanguage;
-        } else if (code === previous) {
-          const unchanged = result!;
+        if (code === previous && result !== undefined) {
+          const unchanged = result;
           return {
             firstLine: lines.length,
             lineCount: lines.length,
@@ -74,6 +80,28 @@ export function createHighlightsPlugin(
               return unchanged.fullHtml;
             },
           };
+        }
+        let ansiLines: string[] | undefined;
+        if (nextLanguage.toLowerCase() === 'ansi') {
+          // Warning: LiveTokenizer keeps escape sequences as text, so ANSI
+          // renders the whole fence. Appends can change only the last line.
+          ansiLines = highlight({
+            code,
+            language: nextLanguage,
+            isIncomplete,
+          })!.split('\n');
+          if (
+            code.startsWith(
+              previous.endsWith('\n') ? previous.slice(0, -1) : previous
+            )
+          )
+            first = previousContentLine;
+        } else if (tokenizer === undefined) {
+          tokenizer = new LiveTokenizer({
+            ...options,
+            lang: nextLanguage,
+            code,
+          } as LiveTokenizerOptions);
         } else if (code.startsWith(previous)) {
           const line = tokenizer.lineCount - 1;
           const end = { line, character: tokenizer.getLineLength(line) };
@@ -117,12 +145,13 @@ export function createHighlightsPlugin(
         lines.length = first;
         let html = '';
         let lastLineOffset = 0;
+        const lineCount = ansiLines?.length ?? tokenizer!.lineCount;
         const lastContentLine = Math.max(
           0,
-          tokenizer.lineCount - (code.endsWith('\n') ? 2 : 1)
+          lineCount - (code.endsWith('\n') ? 2 : 1)
         );
-        for (let line = first; line < tokenizer.lineCount; line++) {
-          const value = tokenizer.getLineHtml(line);
+        for (let line = first; line < lineCount; line++) {
+          const value = ansiLines?.[line] ?? tokenizer!.getLineHtml(line);
           lines.push(value);
           if (line > first) html += '\n';
           if (line === lastContentLine) lastLineOffset = html.length;
@@ -133,7 +162,7 @@ export function createHighlightsPlugin(
         let fullHtml: string | undefined;
         result = {
           firstLine: first,
-          lineCount: tokenizer.lineCount,
+          lineCount,
           html,
           lastLineOffset,
           get fullHtml() {
@@ -149,14 +178,6 @@ export function createHighlightsPlugin(
           return highlightLines(options)?.fullHtml ?? null;
         },
       };
-    },
-    highlight({ code, language }) {
-      if (!isSupportedLanguage(language)) return null;
-      const html = decoder.decode(
-        codeToHtml(code, { ...options, lang: language } as CodeToHtmlOptions)
-      );
-      const start = html.indexOf('<code>') + 6;
-      return html.slice(start, html.lastIndexOf('</code>'));
     },
   };
 }

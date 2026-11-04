@@ -1423,6 +1423,54 @@ describe('direct HTML sessions', () => {
 });
 
 describe('incremental streaming', () => {
+  test('ANSI fences stream the same colors as closed fences', () => {
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    const code =
+      '\x1b[31mred\x1b[0m\n\x1b[32mgreen\nstill <green>\x1b[0m\nend\n';
+    const session = plugin.createSession!();
+    let line = 0;
+    for (let end = 0; end <= code.length; end++) {
+      const options = {
+        code: code.slice(0, end),
+        language: 'ansi',
+        isIncomplete: true,
+      };
+      const update = session.highlightLines!(options)!;
+      expect(update.fullHtml).toBe(plugin.highlight(options)!);
+      // Finished lines are never sent again.
+      expect(update.firstLine).toBe(line);
+      expect(update.fullHtml.split('\n').length).toBe(update.lineCount);
+      line = Math.max(
+        0,
+        update.lineCount - (options.code.endsWith('\n') ? 2 : 1)
+      );
+    }
+    const rewrite = { code: 'other\n', language: 'ansi', isIncomplete: false };
+    expect(session.highlightLines!(rewrite)!.firstLine).toBe(0);
+    expect(session.highlight(rewrite)).toBe(plugin.highlight(rewrite));
+    session.dispose();
+
+    const container = mountDOM();
+    const options = { plugins: { code: plugin } };
+    const renderer = createDomRenderer(container, options);
+    let source = '```ansi\n';
+    renderer.update(source, true, true);
+    for (const char of code) {
+      source += char;
+      renderer.update(source, true, true);
+      expectFreshDom(container, source, options);
+    }
+    source += '```\n';
+    renderer.update(source, false, false);
+    const element = container.querySelector('code')!;
+    expect(element.textContent).toBe('red\ngreen\nstill <green>\nend\n');
+    expect(element.innerHTML).toContain(
+      plugin
+        .highlight({ code, language: 'ansi', isIncomplete: false })!
+        .split('\n')[0]
+    );
+    renderer.disconnect();
+  });
   test('appends to an empty code line keep the trailing line break last', async () => {
     const host = mountDOM();
     const options = { controls: false, lineNumbers: false };
