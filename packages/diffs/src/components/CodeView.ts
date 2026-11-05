@@ -1622,6 +1622,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     );
     searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
       containerElement: container,
+      unsafeCSS: this.options.unsafeCSS,
       defaultQuery: query ?? this.getSearchQueryFromScope(),
       defaults: this.options.searchOptions?.defaults,
       mode,

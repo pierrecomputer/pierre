@@ -57,6 +57,9 @@
         params.get('diffStyle') === 'unified' ? 'unified' : 'split';
       const view = new CodeView({
         diffStyle,
+        ...(params.has('unsafe')
+          ? { unsafeCSS: 'input[data-search] { color: rgb(1, 2, 3); }' }
+          : {}),
         ...(params.has('retokenize')
           ? { preferredHighlighter: 'highlights', themeType: 'dark' }
           : {}),

@@ -1881,6 +1881,30 @@ describe('CodeView search panel', () => {
     }
   });
 
+  // The panel's own stylesheet is an inlined CSS import that bun's test loader
+  // does not expose as text, so its layering is covered by the e2e suites.
+  test('applies the host unsafeCSS inside the panel after its own styles', () => {
+    const dom = installDom();
+    const unsafeCSS = 'input[data-search] { color: rgb(1, 2, 3); }';
+    const viewer = new CodeView({ unsafeCSS });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      viewer.openSearch();
+      const styles = Array.from(
+        getSearchPanelRoot(root).querySelectorAll('style')
+      );
+      expect(styles).toHaveLength(2);
+      expect(styles[0].hasAttribute('data-unsafe-css')).toBe(false);
+      expect(styles[1].hasAttribute('data-unsafe-css')).toBe(true);
+      expect(styles[1].textContent).toContain('@layer unsafe {');
+      expect(styles[1].textContent).toContain(unsafeCSS);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('indexes matches in file items from the panel query', async () => {
     const dom = installDom();
     const viewer = new CodeView();

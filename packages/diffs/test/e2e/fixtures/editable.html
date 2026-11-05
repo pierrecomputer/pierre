@@ -97,6 +97,9 @@ const baz = foo;
         onEditChange({ file }) {
           events.push(file.contents);
         },
+        ...(params.has('unsafe')
+          ? { unsafeCSS: 'input[data-search] { color: rgb(1, 2, 3); }' }
+          : {}),
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',

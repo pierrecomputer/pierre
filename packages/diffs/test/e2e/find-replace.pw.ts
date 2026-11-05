@@ -709,3 +709,12 @@ test('initial search indexes results after the mounted editor window before wrap
   await input.fill('TARGET');
   await expect(page.locator(MATCHES)).toHaveText('1 of 3');
 });
+
+test('unsafeCSS reaches the search panel and wins over its own styles', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/editable.html?unsafe');
+  await page.waitForFunction(() => window.__editableReady === true);
+  await openSearchPanel(page);
+  await expect(page.locator(SEARCH_INPUT)).toHaveCSS('color', 'rgb(1, 2, 3)');
+});

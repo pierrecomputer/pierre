@@ -1,3 +1,4 @@
+import { UNSAFE_CSS_ATTRIBUTE } from '../constants';
 import {
   dequeueRender,
   queueRender,
@@ -9,6 +10,7 @@ import {
   type SearchPanelState,
   type SearchParams,
 } from '../search';
+import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import { resolveFindAgainShortcut, resolveSearchShortcut } from './command';
 import searchPanelCSS from './searchPanel.css?inline';
 import {
@@ -33,6 +35,7 @@ export interface SearchPanelReplaceHandlers<TMatch> {
 
 export interface SearchPanelOptions<TMatch = MatchRange> {
   containerElement: HTMLElement;
+  unsafeCSS?: string;
   defaultQuery: string;
   defaults?: SearchOptionDefaults;
   mode?: SearchPanelMode;
@@ -70,6 +73,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   constructor(options: SearchPanelOptions<TMatch>) {
     const {
       containerElement,
+      unsafeCSS,
       defaultQuery,
       defaults,
       mode = 'find',
@@ -524,6 +528,13 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       shadowRoot.appendChild(spriteElement);
     }
     h('style', { textContent: searchPanelCSS }, shadowRoot);
+    if (unsafeCSS != null) {
+      h(
+        'style',
+        { textContent: wrapUnsafeCSS(unsafeCSS) },
+        shadowRoot
+      ).setAttribute(UNSAFE_CSS_ATTRIBUTE, '');
+    }
 
     h(
       'div',

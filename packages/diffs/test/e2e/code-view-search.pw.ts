@@ -1277,3 +1277,17 @@ for (const diffStyle of ['split', 'unified']) {
     ).toBe(firstVisibleLine);
   });
 }
+
+test('unsafeCSS reaches the CodeView search panel and wins over its own styles', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?unsafe');
+  const root = page.locator('[data-code-view-root]');
+  await root.click();
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveCSS('color', 'rgb(1, 2, 3)');
+});

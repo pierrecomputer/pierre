@@ -6676,6 +6676,7 @@ export class Editor<
 
     const searchPanel = new SearchPanelWidget({
       containerElement: preElement,
+      unsafeCSS: this.#fileInstance?.options.unsafeCSS,
       defaultQuery,
       mode,
       onQueryChange: () => {
