@@ -41,6 +41,10 @@
   (const $mem.opener $mem.container+1024)
   (const $mem.tickMemo $mem.opener+128)
   (const $mem.bracket $mem.opener+1152)
+  ;; Completion runs when block analysis is done and inline analysis has not
+  ;; started, so its 64-entry delimiter and bracket stacks use this space too.
+  (const $mem.completeDelims $mem.bracket)
+  (const $mem.completeLinks $mem.completeDelims+512)
   (const $mem.column $mem.containerEnd)
   (const $mem.columnEnd $mem.column+1024)
   (const $mem.align $mem.columnEnd)

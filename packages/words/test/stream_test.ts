@@ -211,7 +211,7 @@ void test('emphasis around unfinished links and images closes outside them', () 
     ['[a](b`c) more *x', '[a](b`c) more *x*'],
     ['[a](http://x/[y', '[a](streamdown:incomplete-link)'],
     ['[a](u) *[b*', '[a](u) *[b*](streamdown:incomplete-link)'],
-    ['<b [a', ''],
+    ['<b [a', '<b [a](streamdown:incomplete-link)'],
   ]) {
     assert.equal(
       full(source, { incomplete: true }),
@@ -480,6 +480,311 @@ void test('closers that could not close are not appended', () => {
     full('[a\\', { incomplete: true }),
     '<p><a data-markdown-incomplete>a</a></p>\n'
   );
+});
+
+void test('repair leaves code and raw HTML blocks alone', () => {
+  for (const source of [
+    'Para\n\n    const a = [',
+    '    **bold',
+    '    `tick',
+    '\tb [',
+    '- a\n\n      code [',
+    '> a\n>\n>     code *',
+    'x[^1]\n\n[^1]: ```js\n    const a = [',
+    // A fence indented four columns neither opens nor closes.
+    '```py\n    ```\nx = [',
+    '    ```\n\n```\n[a',
+  ]) {
+    assert.equal(full(source, { incomplete: true }), full(source), source);
+    streamMatches(source, true);
+  }
+  const raw = (source: string) =>
+    decoder.decode(renderToHtml(source, { incomplete: true }));
+  assert.equal(raw('<!-- [a'), '<!-- [a\n');
+  assert.equal(raw('<div>\n[a'), '<div>\n[a\n');
+  // An unfinished tag would swallow the markup after it.
+  assert.equal(raw('<div class="a'), '');
+  assert.equal(raw('<div>\n<b c="'), '<div>\n');
+  // After an indented "fence", later blocks still repair and sessions move on.
+  assert.equal(
+    full('    ```\n\ntext **bold', { incomplete: true }),
+    full('    ```\n\ntext **bold**')
+  );
+  assert.ok(
+    createHtmlSession()
+      .render('    ```\n\ntext\n\nmore **bold', { incomplete: true })
+      .stable.includes('<p>text</p>')
+  );
+});
+
+void test('bare URLs keep their bytes out of repair', () => {
+  for (const [source, expected] of [
+    ['See https://a.bc/[id', 'See https://a.bc/[id'],
+    ['See https://a.bc/[id](x', 'See https://a.bc/[id](x'],
+    ['See https://a.bc/*x', 'See https://a.bc/*x'],
+    ['See www.a.bc/_x', 'See www.a.bc/_x'],
+    ['**https://a.bc/x', '**https://a.bc/x**'],
+    ['_https://a.bc/x', '_https://a.bc/x_'],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(expected),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
+});
+
+void test('only text that can still become a tag is hidden', () => {
+  for (const [source, expected] of [
+    // Bytes that cannot be in a tag show the text at once.
+    ['if x <y, then more', 'if x \\<y, then more'],
+    ['a <1', 'a \\<1'],
+    // A `<` right after a word is a comparison or a generic type.
+    ['if x<y and more', 'if x\\<y and more'],
+    ['Vec<int and more', 'Vec\\<int and more'],
+    // These can still become a tag.
+    ['a <b', 'a '],
+    ['a <b c', 'a '],
+    ['a <b c="d', 'a '],
+    ['a </b', 'a '],
+    ['**a <b c="*', '**a** '],
+    // A finished tag is whole: its attributes hold no delimiters.
+    ['a <b c="*">d', 'a <b c="*">d'],
+    ['a <!-- *b --> c', 'a <!-- *b --> c'],
+    // An autolink shows as text until it closes, and is whole afterwards.
+    ['a <mailto:b_c', 'a \\<mailto:b_c'],
+    ['a <http://b.c/*d>', 'a <http://b.c/*d>'],
+    // A tag on an earlier line cannot hide this line.
+    ['a <b\nc', 'a \\<b\nc'],
+  ]) {
+    assert.equal(
+      decoder.decode(renderToHtml(source, { incomplete: true })),
+      decoder.decode(renderToHtml(expected)),
+      JSON.stringify(source)
+    );
+  }
+});
+
+void test('a final backslash never creates a blank line', () => {
+  for (const [source, final] of [
+    ['[a\n\\\n', '[a\n\\\nb](u)'],
+    ['[a\\ ', '[a\\ b](u)'],
+    ['> [a\n> \\\n', '> [a\n> \\\n> b](u)'],
+  ]) {
+    assert.equal(links(full(source, { incomplete: true })).length, 1, source);
+    assert.ok(!full(source, { incomplete: true }).includes('streamdown'));
+    streamMatches(final, true);
+  }
+  assert.equal(
+    createHtmlSession().render('[a\n\\\n', { incomplete: true }).stable,
+    ''
+  );
+});
+
+void test('a delimiter run at the end waits instead of breaking the closers', () => {
+  for (const [source, completed] of [
+    ['**bold *', '**bold**'],
+    ['**bold **', '**bold**'],
+    ['*foo **', '*foo*'],
+    ['__a _', '__a__'],
+    ['**a * ', '**a**'],
+    ['~~a *', '~~a~~'],
+    // Nothing to close: the run stays as it was.
+    ['a *', 'a *'],
+    ['[a *', '[a *](streamdown:incomplete-link)'],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      fullPending(completed),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
+});
+
+void test('link destinations follow the parser on parentheses and titles', () => {
+  const pending = '<p><a data-markdown-incomplete>a</a></p>\n';
+  for (const source of [
+    '[a](http://x/y_(z)',
+    '[a](http://x/y_(z) "t',
+    '[a](http://x/y_(z) "t"',
+    '[a](((',
+    '[a](<b c',
+    '[a](b\n"t',
+  ])
+    assert.equal(full(source, { incomplete: true }), pending, source);
+  for (const source of [
+    '[a](http://x/y_(z))',
+    '[a](http://x/y_(z) "t")',
+    '**[a](b(c)d)**',
+    // A space ends a bare destination, so this is not a link.
+    '[a](b c',
+    '[a](b "t" x',
+  ]) {
+    assert.equal(full(source, { incomplete: true }), full(source), source);
+    streamMatches(source, true);
+  }
+  assert.equal(
+    full('**[a](b(c)d) *e', { incomplete: true }),
+    full('**[a](b(c)d) *e***')
+  );
+});
+
+void test('nested brackets pair like the parser', () => {
+  const placeholder = '](streamdown:incomplete-link)';
+  for (const [source, completed] of [
+    // An image in a link, while the link's destination arrives.
+    ['[![b](x.svg)', `[![b](x.svg)${placeholder}`],
+    ['[![b](x.svg)](https://a', `[![b](x.svg)${placeholder}`],
+    ['[![b](x.svg)](https://a)', '[![b](x.svg)](https://a)'],
+    // Only the unfinished image goes.
+    ['[a ![b', `[a ${placeholder}`],
+    ['[a ![b](htt', `[a ${placeholder}`],
+    ['**[a ![b', `**[a ${placeholder}**`],
+    ['[**a ![b *', `[**a** ${placeholder}`],
+    // A reference link waits for its label.
+    ['[a][', `[a${placeholder}`],
+    ['[a][b c', `[a${placeholder}`],
+    // A failed inner bracket leaves the outer one open.
+    ['[a [b] c', `[a [b] c${placeholder}`],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      fullPending(completed),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
+  for (const source of [
+    // A link cannot hold a link, so the outer `]` is text.
+    '[a [b](c) d',
+    '[a [b](c) d](e',
+    // A footnote reference takes the next `]`.
+    '[a [^1',
+    '[^1]: n\n\n[a [^1',
+    // A resolved reference stops the bracket around it from being a link.
+    '[1]: /u\n\n[see [1] for',
+    '[1]: /u\n\n[see [1]',
+    // An opener right before a dropped image gets no closers to join.
+    '[\n~~![**a',
+    // A closed label inside an open bracket.
+    '[a [b]',
+    // A closed tick run after an open one joined the last run of the content.
+    '[a ``b`',
+    '![a ``b`',
+  ]) {
+    assert.ok(
+      !full(source, { incomplete: true }).includes('streamdown'),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
+  // Definitions earlier in the document resolve the finished label.
+  assert.equal(
+    full('[b]: /u\n\n[a][b', { incomplete: true }),
+    '<p><a data-markdown-incomplete>a</a></p>\n'
+  );
+  assert.equal(
+    full('[b]: /u\n\n[a][b]', { incomplete: true }),
+    '<p><a href="/u">a</a></p>\n'
+  );
+  // A list marker with no content keeps the paragraph open.
+  assert.ok(!full('[\n1. ', { incomplete: true }).includes('<ol'));
+  assert.ok(!full('[\n- ', { incomplete: true }).includes('<ul'));
+});
+
+void test('task markers and footnote references never show as pending links', () => {
+  const item = (inner: string) => `<ul>\n<li>${inner}</li>\n</ul>\n`;
+  for (const source of [
+    '- [',
+    '- [x',
+    '- [X',
+    '- [x]',
+    '- [ ]',
+    '- [x] ',
+    '1. [ ]',
+  ])
+    assert.ok(
+      !full(source, { incomplete: true }).includes('<a'),
+      JSON.stringify(source)
+    );
+  assert.equal(full('- [x', { incomplete: true }), item(''));
+  assert.match(full('- [x] a', { incomplete: true }), /checkbox/);
+  // Other labels, and later blocks of an item, are ordinary pending links.
+  assert.equal(
+    full('- [ab', { incomplete: true }),
+    item('<a data-markdown-incomplete>ab</a>')
+  );
+  assert.equal(
+    full('[x]', { incomplete: true }),
+    '<p><a data-markdown-incomplete>x</a></p>\n'
+  );
+  assert.match(
+    full('- a\n\n  [x]', { incomplete: true }),
+    /<a data-markdown-incomplete>x<\/a>/
+  );
+  for (const source of ['see [^1', 'see [^1]'])
+    assert.equal(full(source, { incomplete: true }), full(source), source);
+});
+
+void test('intraword delimiters follow Unicode neighbors', () => {
+  for (const source of ['café_bar', 'x_y é_z', '中文_x', 'é*b', 'snake_中'])
+    assert.equal(full(source, { incomplete: true }), full(source), source);
+  for (const [source, completed] of [
+    ['_é', '_é_'],
+    ['**中', '**中**'],
+    ['é **x', 'é **x**'],
+  ])
+    assert.equal(full(source, { incomplete: true }), full(completed), source);
+});
+
+void test('repair stays inside a table cell and before closing heading marks', () => {
+  const head = '| a | b |\n|---|---|\n';
+  for (const [source, completed] of [
+    [`${head}| c | **d`, `${head}| c | **d**`],
+    [`${head}| c | d\\|**e`, `${head}| c | d\\|**e**`],
+    // Cells parse apart, so a closer in the next cell would only show as text.
+    [`${head}| **c | d`, `${head}| \\*\\*c | d`],
+    [`${head}| **c |`, `${head}| \\*\\*c |`],
+    [`${head}| **c |\n`, `${head}| \\*\\*c |\n`],
+    ['# **a', '# **a**'],
+    ['# **a ##', '# **a** ##'],
+    // A heading cannot continue on the next line.
+    ['# **a\n', '# \\*\\*a\n'],
+    ['**a\n---', '\\*\\*a\n---'],
+    // Text on an indented or blank-looking last line may still continue.
+    ['**a\n  ', '**a**\n  '],
+    ['> **a\n  ', '> **a**\n  '],
+    ['**a\n\n  ', '\\*\\*a\n\n  '],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      full(completed),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
+});
+
+void test('completion stays linear on long runs', () => {
+  for (const source of [
+    'x' + ']'.repeat(400_000),
+    '['.repeat(400_000),
+    '<'.repeat(400_000),
+    '<a'.repeat(200_000),
+    '[a]('.repeat(100_000),
+    '[a](x '.repeat(70_000),
+    '<a b="'.repeat(70_000),
+    '- '.repeat(40_000) + '~~~ '.repeat(40_000),
+    ' '.repeat(200_000) + '~~~ '.repeat(40_000),
+    'a'.repeat(100_000) + '`'.repeat(100_000),
+  ]) {
+    const start = performance.now();
+    renderToHtml(source, { incomplete: true });
+    const ms = performance.now() - start;
+    assert.ok(ms < 2000, `${source.slice(0, 12)}... took ${ms} ms`);
+  }
 });
 
 void test('a render that throws leaves the session unchanged', () => {

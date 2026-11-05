@@ -127,14 +127,17 @@ function hookHtml(html: unknown): string {
   return html;
 }
 
-/** Return `url` if it is relative or uses http, https, mailto, or tel. Reject network paths. */
+/**
+ * Return `url` if it is relative or uses http, https, mailto, tel, or a scheme
+ * the parser autolinks (ftp, xmpp). Reject network paths.
+ */
 export function defaultUrlTransform(url: string): string | undefined {
   // oxlint-disable-next-line no-control-regex -- Browsers ignore these characters in URLs.
   const normalized = url.replace(/[\u0000-\u0020\u007f-\u009f]/g, '');
   // Browsers read `\` as `/`, so `/\host` and `\\host` are network paths too.
   if (/^(?:\\|\/[\\/])/.test(normalized)) return undefined;
   const scheme = /^([^/?#]*):/.exec(normalized)?.[1];
-  return scheme !== undefined && !/^(https?|mailto|tel)$/i.test(scheme)
+  return scheme !== undefined && !/^(https?|ftp|mailto|tel|xmpp)$/i.test(scheme)
     ? undefined
     : url;
 }

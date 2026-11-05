@@ -499,8 +499,14 @@ describe('HTML rendering and the React wrapper', () => {
       '/docs',
       '#section',
       'mailto:a@example.com',
+      // The parser autolinks these, so their links must stay usable.
+      'ftp://example.com/x',
+      'xmpp:a@example.com',
     ])
       expect(defaultUrlTransform(url)).toBe(url);
+    expect(html('ftp://example.com/x')).toContain('href="ftp://example.com/x"');
+    expect(html('<ftp://a.b>')).toContain('href="ftp://a.b"');
+    expect(html('xmpp:a@b.co')).toContain('href="xmpp:a@b.co"');
   });
   test('runs HTML hooks on generated markup and keeps inline code separate', () => {
     const components: Components = {
@@ -1470,6 +1476,76 @@ describe('incremental streaming', () => {
         .split('\n')[0]
     );
     renderer.disconnect();
+  });
+  test('compares plugins by their parts, not by the wrapper object', () => {
+    let calls = 0;
+    const highlight = () => {
+      calls++;
+      return null;
+    };
+    const plugin = { highlight };
+    const render = () => '';
+    const parts = {
+      code: plugin,
+      renderers: [{ language: 'x', render }],
+    };
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, { plugins: parts });
+    const fences = '```ts\na\n```\n\n```ts\nb\n```\n\n';
+    renderer.update(`${fences}c`, true, true);
+    const settled = calls;
+    expect(settled).toBeGreaterThan(0);
+    // A new wrapper around the same parts keeps the formatted output.
+    renderer.configure({ plugins: { ...parts } });
+    renderer.update(`${fences}cd`, true, true);
+    renderer.configure({
+      plugins: { ...parts, renderers: [{ language: 'x', render }] },
+    });
+    renderer.update(`${fences}cde`, true, true);
+    expect(calls).toBe(settled);
+    // A different part formats everything again.
+    renderer.configure({ plugins: { code: { highlight } } });
+    renderer.update(`${fences}cdef`, true, true);
+    expect(calls).toBeGreaterThan(settled);
+    const reset = calls;
+    renderer.configure({
+      plugins: { code: { highlight }, renderers: [{ language: 'y', render }] },
+    });
+    renderer.update(`${fences}cdefg`, true, true);
+    expect(calls).toBeGreaterThan(reset);
+    renderer.disconnect();
+  });
+  test('the copy button shows Copied for a moment', async () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, {});
+    renderer.connect();
+    renderer.update('```text\nhello\n```\n', false, false);
+    const clipboard = { writeText: async () => {} };
+    Object.defineProperty(document.defaultView!.navigator, 'clipboard', {
+      configurable: true,
+      value: clipboard,
+    });
+    const realTimeout = globalThis.setTimeout;
+    const timers: (() => void)[] = [];
+    globalThis.setTimeout = ((callback: () => void) => {
+      timers.push(callback);
+      return 0;
+    }) as unknown as typeof setTimeout;
+    try {
+      const button = container.querySelector<HTMLButtonElement>(
+        '[data-code-action="copy"]'
+      )!;
+      button.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(button.textContent).toBe('Copied');
+      expect(timers.length).toBe(1);
+      timers[0]();
+      expect(button.textContent).toBe('Copy');
+    } finally {
+      globalThis.setTimeout = realTimeout;
+      renderer.disconnect();
+    }
   });
   test('appends to an empty code line keep the trailing line break last', async () => {
     const host = mountDOM();

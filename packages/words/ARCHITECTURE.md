@@ -136,8 +136,9 @@ footnote definition resets the session. Definitions can change earlier output,
 so those documents always render in full.
 
 [`complete.wat`](./src/complete.wat) repairs a display copy of unfinished
-syntax. It never changes the source. React asks for repairs only while the
-stream is active.
+syntax. It never changes the source. It runs after block analysis and looks only
+at the last block, and the parser runs again only when the copy changed. React
+asks for repairs only while the stream is active.
 
 [`html/render.ts`](./html/render.ts) adds URL checks, element filters, code
 plugins, and hooks. [`html/dom.ts`](./html/dom.ts) patches DOM nodes:

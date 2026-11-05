@@ -70,11 +70,18 @@
       (i32.eq (local.get $c) (i32.const 32))
       (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))
 
+  ;; Set when a tag scan failed only because the input ended, so more bytes could
+  ;; finish the tag. Completion clears and reads this.
+  (global $tagAtEnd (mut i32) (i32.const 0))
+
   ;; tagname = [A-Za-z][A-Za-z0-9-]* ; returns the length, or 0
   (func $scanTagName (param $p i32) (param $end i32) (result i32)
     (local $q i32)
     (local $c i32)
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
+    (if (i32.ge_u (local.get $p) (local.get $end))
+      (then
+        (global.set $tagAtEnd (i32.const 1))
+        (return (i32.const 0))))
     (if (i32.eqz (call $isAlpha (i32.load8_u (local.get $p)))) (then (return (i32.const 0))))
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
     (block $done
@@ -122,14 +129,20 @@
           (then
             (local.set $q (call $skipWs (i32.add (local.get $q) (i32.const 1)) (local.get $end)))
             ;; attributevalue = unquoted | 'single' | "double"
-            (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
+            (if (i32.ge_u (local.get $q) (local.get $end))
+              (then
+                (global.set $tagAtEnd (i32.const 1))
+                (return (i32.const 0))))
             (local.set $c (i32.load8_u (local.get $q)))
             (if (i32.or (i32.eq (local.get $c) (i32.const "'"))
                   (i32.eq (local.get $c) (i32.const "\22")))
               (then
                 (local.set $p (call $findByte
                   (i32.add (local.get $q) (i32.const 1)) (local.get $end) (local.get $c)))
-                (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
+                (if (i32.ge_u (local.get $p) (local.get $end))
+                  (then
+                    (global.set $tagAtEnd (i32.const 1))
+                    (return (i32.const 0))))
                 (local.set $p (i32.add (local.get $p) (i32.const 1))))
               (else
                 ;; unquotedvalue = [^ \t\r\n\v\f"'=<>`]+
@@ -144,9 +157,12 @@
                 (if (i32.eq (local.get $p) (local.get $q)) (then (return (i32.const 0))))))))
         (br $attr)))
     (local.set $p (call $skipWs (local.get $p) (local.get $end)))
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
-    (local.set $p (i32.add (local.get $p) (i32.eq (i32.load8_u (local.get $p)) (i32.const "/"))))
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
+    (if (i32.lt_u (local.get $p) (local.get $end))
+      (then (local.set $p (i32.add (local.get $p) (i32.eq (i32.load8_u (local.get $p)) (i32.const "/"))))))
+    (if (i32.ge_u (local.get $p) (local.get $end))
+      (then
+        (global.set $tagAtEnd (i32.const 1))
+        (return (i32.const 0))))
     (if (i32.ne (i32.load8_u (local.get $p)) (i32.const ">")) (then (return (i32.const 0))))
     (i32.add (local.get $p) (i32.const 1)))
 
@@ -156,7 +172,10 @@
     (local.set $n (call $scanTagName (local.get $p) (local.get $end)))
     (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
     (local.set $p (call $skipWs (i32.add (local.get $p) (local.get $n)) (local.get $end)))
-    (if (i32.ge_u (local.get $p) (local.get $end)) (then (return (i32.const 0))))
+    (if (i32.ge_u (local.get $p) (local.get $end))
+      (then
+        (global.set $tagAtEnd (i32.const 1))
+        (return (i32.const 0))))
     (if (i32.ne (i32.load8_u (local.get $p)) (i32.const ">")) (then (return (i32.const 0))))
     (i32.add (local.get $p) (i32.const 1)))
 

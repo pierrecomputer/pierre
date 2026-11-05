@@ -29,7 +29,6 @@ const maxInput = 2 ** 30 - 2 * pageSize;
 class Renderer {
   memory: WebAssembly.Memory;
   wasmRender: () => void;
-  wasmComplete: () => number;
   buffer!: Uint8Array<ArrayBuffer>;
   dv!: DataView<ArrayBuffer>;
   pages!: number;
@@ -38,7 +37,6 @@ class Renderer {
     const instance = new WebAssembly.Instance(wasmModule, {});
     this.memory = instance.exports.memory as WebAssembly.Memory;
     this.wasmRender = instance.exports.render as () => void;
-    this.wasmComplete = instance.exports.complete as () => number;
     // A random label hash seed, so crafted reference labels cannot share a
     // slot. Math.random suffices and avoids ~2 MiB of webcrypto setup in Node.
     (instance.exports.seed as (seed: number) => void)(
@@ -83,13 +81,10 @@ class Renderer {
       (options?.frontmatter === true ? 1 : 0) |
         (options?.skipHtml === true ? 2 : 0) |
         (options?.boundary === true ? 8 : 0) |
-        (mode === 1 && typeof input !== 'string' ? 32 : 0)
+        (mode === 1 && typeof input !== 'string' ? 32 : 0) |
+        (options?.incomplete === true ? 64 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
-    if (options?.incomplete === true) {
-      inputLength = this.wasmComplete();
-      this.dv.setUint32(2, inputLength, true);
-    }
     this.dv.setUint32(
       22,
       options?.width != null && options.width > 0
@@ -146,7 +141,14 @@ export function renderToHtml<T = Frontmatter>(
   input: Input,
   options: RenderOptions & { frontmatter: true }
 ): [T | null, Uint8Array];
-export function renderToHtml(input: Input, options?: RenderOptions): Uint8Array;
+export function renderToHtml(
+  input: Input,
+  options?: RenderOptions & { frontmatter?: false }
+): Uint8Array;
+export function renderToHtml<T = Frontmatter>(
+  input: Input,
+  options: RenderOptions
+): Uint8Array | [T | null, Uint8Array];
 export function renderToHtml(
   input: Input,
   options?: RenderOptions

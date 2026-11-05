@@ -137,18 +137,8 @@
       (then (i32.store offset=$M.prev (call $slotAt (local.get $next)) (local.get $prev)))
       (else (global.set $delimTail (local.get $prev)))))
 
-  (func $inlineScan
-    (local $p i32)
-    (local $end i32)
-    (local $base i32)
-    (local $c i32)
-    (local $mask i32)
-    (local $scanEnd i32)
-    (local $markLo v128)
-    (local $markHi v128)
-    (local $classFlags v128)
-    (local.set $markLo (v128.load (i32.const $mem.markLo)))
-    (local.set $markHi (v128.load (i32.const $mem.markHi)))
+  ;; Reset the per-leaf inline state. Completion scans with the same handlers.
+  (func $inlineReset
     (global.set $literalNeedsEscape (i32.const 0))
     (global.set $markOff (select
       (i32.const 0)
@@ -165,6 +155,21 @@
     (global.set $htmlNoClose (i32.const 0))
     (global.set $wwwRejectBefore (i32.const 0))
     (global.set $lastMarkEnd (i32.const 0))
+  )
+
+  (func $inlineScan
+    (local $p i32)
+    (local $end i32)
+    (local $base i32)
+    (local $c i32)
+    (local $mask i32)
+    (local $scanEnd i32)
+    (local $markLo v128)
+    (local $markHi v128)
+    (local $classFlags v128)
+    (local.set $markLo (v128.load (i32.const $mem.markLo)))
+    (local.set $markHi (v128.load (i32.const $mem.markHi)))
+    (call $inlineReset)
     (local.set $end (global.get $contentLen))
     (block $done
       (loop $l

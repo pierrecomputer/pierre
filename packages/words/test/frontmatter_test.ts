@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import test from 'node:test';
 
-import { renderToHtml } from '../dist/index.js';
+import { type RenderOptions, renderToHtml } from '../dist/index.js';
 
 const dec = new TextDecoder();
 const meta = (yaml: string) =>
@@ -229,4 +229,15 @@ void test('deeply nested frontmatter does not overflow the stack', () => {
       renderToHtml(`---\n${src}\n---\nbody\n`, { frontmatter: true })
     );
   }
+});
+
+void test('a boolean frontmatter option types as both results', () => {
+  const options: RenderOptions = { frontmatter: true };
+  const result = renderToHtml('---\na: 1\n---\nb', options);
+  // @ts-expect-error The result may be a [meta, html] pair at runtime.
+  assert.throws(() => new TextDecoder().decode(result), TypeError);
+  assert.ok(Array.isArray(result));
+  assert.deepEqual(result[0], { a: 1 });
+  const off: RenderOptions & { frontmatter?: false } = { frontmatter: false };
+  assert.ok(renderToHtml('a', off) instanceof Uint8Array);
 });

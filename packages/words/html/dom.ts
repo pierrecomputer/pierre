@@ -1,5 +1,5 @@
 import { createHtmlRenderer } from './render';
-import type { AnimateOptions, HtmlOptions } from './types';
+import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
 
 const isFade = (node: Node): node is HTMLElement =>
   node.nodeType === 1 &&
@@ -346,6 +346,9 @@ export function createDomRenderer(
         ?.writeText(code)
         .then(() => {
           button.textContent = 'Copied';
+          setTimeout(() => {
+            button.textContent = 'Copy';
+          }, 2000);
         })
         .catch(() => {
           button.textContent = 'Copy';
@@ -377,7 +380,8 @@ export function createDomRenderer(
     /**
      * Reformat completed output only when an option value changes, so inline
      * option objects stay cheap. New hook and `urlTransform` functions apply to
-     * later output. A changed set of hook names reformats everything.
+     * later output. A changed set of hook names reformats everything. Plugins
+     * compare by their parts, because a wrapper object is often written inline.
      */
     configure(next: HtmlOptions): void {
       if (next === options) return;
@@ -385,6 +389,19 @@ export function createDomRenderer(
         Object.keys(value ?? {})
           .filter((tag) => value?.[tag] !== undefined)
           .join(' ');
+      const samePlugins = (a?: PluginConfig, b?: PluginConfig): boolean => {
+        const left = a?.renderers ?? [];
+        const right = b?.renderers ?? [];
+        return (
+          a?.code === b?.code &&
+          left.length === right.length &&
+          left.every(
+            (renderer, at) =>
+              renderer.render === right[at].render &&
+              String(renderer.language) === String(right[at].language)
+          )
+        );
+      };
       let reset = false;
       const keys = new Set([...Object.keys(options), ...Object.keys(next)]);
       for (const key of keys as Set<keyof HtmlOptions>) {
@@ -400,10 +417,15 @@ export function createDomRenderer(
                 hooks(value as HtmlOptions['components'])
               : key === 'urlTransform'
                 ? (previous === undefined) === (value === undefined)
-                : Array.isArray(previous) &&
-                  Array.isArray(value) &&
-                  previous.length === value.length &&
-                  previous.every((tag, at) => tag === value[at]))
+                : key === 'plugins'
+                  ? samePlugins(
+                      previous as PluginConfig | undefined,
+                      value as PluginConfig | undefined
+                    )
+                  : Array.isArray(previous) &&
+                    Array.isArray(value) &&
+                    previous.length === value.length &&
+                    previous.every((tag, at) => tag === value[at]))
         );
       }
       formatter.configure(next, reset);
