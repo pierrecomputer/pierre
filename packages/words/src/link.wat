@@ -164,6 +164,10 @@
         (br $l)))
     (i32.add (local.get $q) (i32.const 1)))
 
+  ;; Set when a destination scan failed only because the input ended. Completion
+  ;; clears and reads this.
+  (global $linkDestAtEnd (mut i32) (i32.const 0))
+
   ;; a link destination; returns the position after it, or -1
   (func $scanLinkDest (param $p i32) (param $end i32) (result i32)
     (local $i i32)
@@ -178,7 +182,10 @@
           ;; `<...>`: no line ending or unescaped `<`; `\` skips the next byte
           (loop $l
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br_if $fail (i32.ge_u (local.get $i) (local.get $end)))
+            (if (i32.ge_u (local.get $i) (local.get $end))
+              (then
+                (global.set $linkDestAtEnd (i32.const 1))
+                (br $fail)))
             (local.set $c (i32.load8_u (local.get $i)))
             (if (i32.eq (local.get $c) (i32.const "\5c"))
               (then
@@ -234,7 +241,10 @@
                         (br $done)))))))))
           (local.set $i (i32.add (local.get $i) (i32.const 1)))
           (br $l)))
-      (br_if $fail (local.get $depth))
+      (if (local.get $depth)
+        (then
+          (global.set $linkDestAtEnd (i32.ge_u (local.get $i) (local.get $end)))
+          (br $fail)))
       (return (local.get $i)))
     (i32.const -1))
 

@@ -25,8 +25,7 @@
         (i32.lt_u (local.get $end) (global.get $eof)))))
 
   ;; The start of the `---` or `...` line that closes a frontmatter block opened
-  ;; by a `---` line at $p, or 0. Both lines may end in spaces or tabs. Render
-  ;; and completion share this so they agree on where the markdown starts.
+  ;; by a `---` line at $p, or 0. Both lines may end in spaces or tabs.
   (func $frontmatterClose (param $p i32) (result i32)
     (local $e i32)
     (local $q i32)

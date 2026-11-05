@@ -8,7 +8,8 @@
                       bit 3 = session render: measure the boundary in UTF-16
                       units and mark an open fence,
                       bit 4 = completion appended a pending link destination,
-                      bit 5 = ansi input is bytes and may hold invalid UTF-8
+                      bit 5 = ansi input is bytes and may hold invalid UTF-8,
+                      bit 6 = complete unfinished inline syntax
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
@@ -85,17 +86,15 @@
     (local.get $n))
 
   ;; Render the input in [$mem.input, $mem.input + length) and publish the result.
-  (func (export "render")
+  (func $render (export "render")
     (local $start i32)
     (local $fmClose i32)
     (local $fmMeta i32)
     (local $blockStart i32)
     (local $blockEnd i32)
-    (local $fenceBlank i32)
     (local $safeEnd i32)
-    ;; complete() runs right before this render, so its note belongs to this input
-    (local.set $fenceBlank (global.get $completeFenceBlank))
-    (global.set $completeFenceBlank (i32.const 0))
+    (local $repair i32)
+    (local $firstItemBlock i32)
     (global.set $boundaryRec (i32.const 0))
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
@@ -134,6 +133,7 @@
     (global.set $recBase (global.get $rec))
     (global.set $sp (i32.const 0))
     (global.set $leaf (enum.get $Blk.none))
+    (global.set $leafRec (i32.const 0))
     (global.set $plainRunLiteral (i32.const 0))
     (global.set $linkHash (i32.const 0))
     (global.set $linkMask (i32.const 0))
@@ -219,11 +219,10 @@
               (else (i32.const 0))))
             (call $addBlockLine))
           ;; Freeze only newline-terminated blank lines at document depth. EOF
-          ;; closures and open lists/code remain mutable; inline repair resets
-          ;; at a blank line, so it cannot carry delimiters across this
-          ;; boundary. $blank also holds after a thematic break or an empty
-          ;; heading, so the line itself must be blank. Repair keeps its state
-          ;; at blank lines inside what it takes for a fence, up to $fenceBlank.
+          ;; closures and open lists/code remain mutable; inline repair touches
+          ;; only the last block, so it cannot reach across this boundary.
+          ;; $blank also holds after a thematic break or an empty heading, so
+          ;; the line itself must be blank.
           (if (i32.and (i32.and (global.get $blank) (i32.eqz (global.get $sp)))
                 (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.none))
                   (i32.lt_u (local.get $blockEnd) (global.get $eof))))
@@ -236,10 +235,8 @@
           (local.set $blockStart (call $lineAfter (local.get $blockEnd)))
           (br $blockLine))
         ;; a blank line at document depth is a safe append boundary
-        (if (i32.gt_u (local.get $blockStart) (local.get $fenceBlank))
-          (then
-            (local.set $safeEnd (i32.sub (local.get $blockStart) (i32.const $mem.input)))
-            (global.set $boundaryRec (global.get $rec))))
+        (local.set $safeEnd (i32.sub (local.get $blockStart) (i32.const $mem.input)))
+        (global.set $boundaryRec (global.get $rec))
         (br $blockLine)))
     ;; Preserve the specific leaf closed by EOF so nested/footnote code blocks
     ;; can expose their incomplete state without guessing from output order.
@@ -248,6 +245,13 @@
           (i32.ne (global.get $codeFenceCh) (i32.const 0)))
       (then (global.set $incompleteCodeRec (global.get $leafRec))))
     (call $closeLeaf)
+    (local.set $repair (i32.and (i32.load8_u (i32.const 1)) (i32.const 64)))
+    (if (i32.and (i32.ne (local.get $repair) (i32.const 0)) (i32.ne (global.get $sp) (i32.const 0)))
+      (then
+        (local.set $blockEnd (call $containerAt (global.get $sp)))
+        (local.set $firstItemBlock (i32.and
+          (i32.eq (i32.load8_u (local.get $blockEnd)) (enum.get $Blk.li))
+          (i32.eq (i32.load offset=$CS.children (local.get $blockEnd)) (i32.const 1))))))
     (block $containersDone
       (loop $closeContainers
         (br_if $containersDone (i32.eqz (global.get $sp)))
@@ -255,6 +259,15 @@
         (br $closeContainers)))
     (call $linkIndex)
     (i32.store8 (i32.const 30) (i32.ne (global.get $linkHash) (i32.const 0)))
+    ;; Completion reads the finished block structure and definitions. When it
+    ;; changes the input, those are stale, so parse the repaired input.
+    (if (local.get $repair)
+      (then
+        (i32.store8 (i32.const 1) (i32.and (i32.load8_u (i32.const 1)) (i32.const 191)))
+        (if (call $complete (local.get $firstItemBlock))
+          (then
+            (call $render)
+            (return)))))
     (global.set $out (i32.and (i32.add (global.get $rec) (i32.const 15)) (i32.const -16)))
     (global.set $outBase (global.get $out))
     (call $setOutCap)
