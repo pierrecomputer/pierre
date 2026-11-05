@@ -624,7 +624,7 @@ describe('Editor clipboard events', () => {
     }
   });
 
-  test('allows the first browser paste shortcut in a diff and suppresses repeat paste', async () => {
+  test('a held browser paste shortcut in a diff pastes once', async () => {
     const fixture = await createDiffEditorFixture('alpha\nold', 'alpha\nnew');
     const { editor, container } = fixture;
 
@@ -662,7 +662,7 @@ describe('Editor clipboard events', () => {
     }
   });
 
-  test('reads from a custom clipboard provider on repeat paste shortcut', async () => {
+  test('does not read a custom clipboard provider on a repeat paste shortcut', async () => {
     const { cleanup } = installDom();
     let reads = 0;
 
@@ -697,8 +697,8 @@ describe('Editor clipboard events', () => {
       await wait();
 
       expect(repeatKeydown.defaultPrevented).toBe(true);
-      expect(reads).toBe(1);
-      expect(editor.getText()).toBe('alpha bravo');
+      expect(reads).toBe(0);
+      expect(editor.getText()).toBe('alpha');
     } finally {
       editor.cleanUp();
       cleanup();

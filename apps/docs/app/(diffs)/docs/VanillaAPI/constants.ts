@@ -1155,9 +1155,9 @@ for (const patch of patches) {
     // Render hunks (async - waits for highlighter initialization)
     const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-    // result contains hast nodes based on diffStyle:
-    // - 'unified' mode: unifiedGutterAST/unifiedContentAST
-    // - 'split' mode: additionsGutterAST/additionsContentAST and deletionsGutterAST/deletionsContentAST
+    // result.columns holds the keyed rows of each column, by diffStyle:
+    // - 'unified' mode: columns.unified
+    // - 'split' mode: columns.deletions and columns.additions
 
     // Render to complete HTML (includes <pre> and <code> wrappers)
     const fullHTML: string = instance.renderFullHTML(result);

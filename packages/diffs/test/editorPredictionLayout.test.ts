@@ -58,9 +58,9 @@ interface LayoutHost {
   // Public path that recomputes layout for the current target.
   relayout(): number;
   isLayoutDirty(): boolean;
-  // Number of rows carrying a folded height (heights / heightDeltas size).
+  // Number of lines taller than one line height.
   foldedRowCount(): number;
-  // Total px the cache adds on top of one line height per row.
+  // Total px the lines have on top of one line height each.
   foldedExtraHeight(): number;
   // Sparse layout checkpoints built by the last layout walk.
   checkpointCount(): number;
@@ -68,22 +68,12 @@ interface LayoutHost {
 }
 
 interface InspectableVirtualizedFile {
-  cache: {
-    heights: Map<number, number>;
-    ghostTextRows: ReadonlyMap<number, number>;
-    checkpoints: unknown[];
-  };
+  cache: { checkpoints: unknown[] };
   layoutDirty: boolean;
 }
 
 interface InspectableVirtualizedFileDiff {
-  cache: {
-    heightDeltas: Map<number, number>;
-    measuredHeightDeltaTotal: number;
-    ghostTextRows: ReadonlyMap<number, number>;
-    ghostTextRowsByIndex: Map<number, number>;
-    checkpoints: unknown[];
-  };
+  cache: { checkpoints: unknown[] };
   layoutDirty: boolean;
 }
 
@@ -120,6 +110,8 @@ function createRecordingVirtualizer(root: HTMLElement) {
     requestHeightReconcile(instance: object) {
       reconcileRequests.push(instance);
     },
+    scrollSpanIntoView() {},
+    cancelScroll() {},
   } as never;
   return { virtualizer, reconcileRequests };
 }
@@ -195,6 +187,7 @@ async function createHost(
   );
 
   let host: Omit<LayoutHost, 'editor' | 'content' | 'reconcileRequests'>;
+  const lineCount = contents.split('\n').length;
   if (surface === 'File') {
     const file: FileContents = { name: FILE_NAME, contents };
     const instance = new VirtualizedFile<undefined>(
@@ -211,11 +204,17 @@ async function createHost(
       resetLayoutCache: () => instance.setMetrics(undefined, true),
       relayout: () => instance.updateCodeViewLayout(file, 0),
       isLayoutDirty: () => inspectFile(instance).layoutDirty,
-      foldedRowCount: () => inspectFile(instance).cache.heights.size,
+      foldedRowCount() {
+        let count = 0;
+        for (let line = 0; line < lineCount; line++) {
+          if (instance.getLineHeight(line) !== lineHeight) count++;
+        }
+        return count;
+      },
       foldedExtraHeight() {
         let total = 0;
-        for (const height of inspectFile(instance).cache.heights.values()) {
-          total += height - lineHeight;
+        for (let line = 0; line < lineCount; line++) {
+          total += instance.getLineHeight(line) - lineHeight;
         }
         return total;
       },
@@ -252,9 +251,22 @@ async function createHost(
       resetLayoutCache: () => instance.setMetrics(undefined, true),
       relayout: () => instance.updateCodeViewLayout(fileDiff, 0),
       isLayoutDirty: () => inspectFileDiff(instance).layoutDirty,
-      foldedRowCount: () => inspectFileDiff(instance).cache.heightDeltas.size,
-      foldedExtraHeight: () =>
-        inspectFileDiff(instance).cache.measuredHeightDeltaTotal,
+      foldedRowCount() {
+        let count = 0;
+        for (let line = 1; line <= lineCount; line++) {
+          const height = instance.getLinePosition(line, 'additions')?.height;
+          if (height != null && height !== lineHeight) count++;
+        }
+        return count;
+      },
+      foldedExtraHeight() {
+        let total = 0;
+        for (let line = 1; line <= lineCount; line++) {
+          const height = instance.getLinePosition(line, 'additions')?.height;
+          total += (height ?? lineHeight) - lineHeight;
+        }
+        return total;
+      },
       checkpointCount: () => inspectFileDiff(instance).cache.checkpoints.length,
       async cleanup() {
         editor.cleanUp();

@@ -211,6 +211,12 @@ class FakeHTMLElement {
   public getBoundingClientRect(): DOMRect {
     return { height: this.getHeight() } as DOMRect;
   }
+
+  // The code columns listen for scroll to keep their scroll offset; a fake
+  // column never scrolls.
+  public addEventListener(): void {}
+
+  public removeEventListener(): void {}
 }
 
 function installFakeHTMLElement() {

@@ -8,9 +8,9 @@ export type {
   CodeToTokensOptions,
   DecorationItem,
   DiffsHighlighter,
-  DiffsEditorTokenizer,
   DiffsEditorTokenizerOptions,
   DiffsStreamTokenizer,
+  DiffsEditorTokenizer,
   ThemedToken,
   TokensResult,
 } from './highlighter/types';
@@ -41,6 +41,13 @@ export interface ParsePatchOptions {
 }
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
+
+/**
+ * How a virtualizer requested line scroll ended: 'settled' after the render
+ * that finishes the scroll, so the line's rows exist, or 'cancelled' when the
+ * user took over or a newer request replaced it.
+ */
+export type ScrollRequestResult = 'settled' | 'cancelled';
 
 /**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
@@ -806,7 +813,7 @@ export interface ForceFilePlainTextOptions {
   startingLine?: number;
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
-  lines?: string[];
+  lines?: readonly string[];
 }
 
 export interface RenderFileOptions {
