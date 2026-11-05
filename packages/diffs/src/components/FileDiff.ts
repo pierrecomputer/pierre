@@ -1689,6 +1689,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       fileContainer,
       containerWrapper
     );
+    this.ensureSpriteSVG(fileContainer);
     this.applyCachedThemeState(themeType);
 
     if (collapsed) {
@@ -2911,7 +2912,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (containerChanged) {
       this.adoptReusableShellElements(this.fileContainer);
     }
-    this.ensureSpriteSVG(this.fileContainer);
     return this.fileContainer;
   }
 

@@ -482,6 +482,76 @@ function createFollowingFile(
   return { instance, container };
 }
 
+// Counts icon sprite sheets inserted into a shadow root, including ones that
+// were added and then removed again before the caller looks at the DOM. A
+// placeholder has no icons, so building the sprite for it is wasted work.
+function observeSpriteInsertions(shadowRoot: ShadowRoot) {
+  let count = 0;
+  const countRecords = (records: MutationRecord[]) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (
+          node instanceof SVGElement &&
+          node.hasAttribute('data-icon-sprite')
+        ) {
+          count++;
+        }
+      }
+    }
+  };
+  // Records are delivered to the callback during awaits; takeRecords() picks
+  // up any that are still queued from synchronous work.
+  const observer = new MutationObserver(countRecords);
+  observer.observe(shadowRoot, { childList: true });
+  return {
+    takeInsertedCount(): number {
+      countRecords(observer.takeRecords());
+      const result = count;
+      count = 0;
+      return result;
+    },
+    disconnect() {
+      observer.disconnect();
+    },
+  };
+}
+
+describe.each(['file', 'diff'] as const)('off-screen %s sprite', (kind) => {
+  test('defers the icon sprite until content renders', async () => {
+    const fixture = createOffscreenFixture(kind);
+    // Attach the shadow root up front so insertions during the very first
+    // placeholder render are observable.
+    const shadowRoot = fixture.container.attachShadow({ mode: 'open' });
+    const sprites = observeSpriteInsertions(shadowRoot);
+    const spriteCount = () =>
+      shadowRoot.querySelectorAll('svg[data-icon-sprite]').length;
+    try {
+      fixture.mount();
+      fixture.expectHidden(60);
+      // Hidden re-renders (metrics changes) stay on the placeholder path.
+      fixture.setLineHeight(30);
+      fixture.expectHidden(90);
+      expect(sprites.takeInsertedCount()).toBe(0);
+      expect(spriteCount()).toBe(0);
+
+      await fixture.show('first');
+      expect(sprites.takeInsertedCount()).toBe(1);
+      expect(spriteCount()).toBe(1);
+
+      fixture.hide();
+      fixture.expectHidden(90);
+      expect(spriteCount()).toBe(0);
+
+      await fixture.show('third');
+      expect(sprites.takeInsertedCount()).toBe(1);
+      expect(spriteCount()).toBe(1);
+    } finally {
+      sprites.disconnect();
+      fixture.cleanup();
+    }
+  });
+});
+
 describe.each(['file', 'split', 'unified'] as const)(
   'off-screen %s prediction',
   (surface) => {
