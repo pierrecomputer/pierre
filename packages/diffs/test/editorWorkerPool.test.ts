@@ -9,6 +9,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
 import {
   disposeHighlighter,
   getSharedHighlighter,
@@ -18,6 +19,7 @@ import {
   type HunksRenderResult,
 } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
+import { preloadDiffHTML } from '../src/ssr/preloadDiffs';
 import type {
   DiffsHighlighter,
   FileContents,
@@ -30,8 +32,13 @@ import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighte
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createRoot, installDom, wait } from './domHarness';
-import { createEditorInstance } from './editorTestUtils';
-import { createDeferred, type Deferred } from './testUtils';
+import { createEditorInstance, lineEdit } from './editorTestUtils';
+import {
+  columnContent,
+  createDeferred,
+  type Deferred,
+  fileContentAST,
+} from './testUtils';
 import {
   createInitializedManager,
   installAnimationFramePolyfill,
@@ -48,14 +55,6 @@ import {
 // behavior at the renderer level plus the component wiring.
 
 let restoreAnimationFrame: (() => void) | undefined;
-
-function createKeylessSessionDiff(
-  externalDiff: FileDiffMetadata
-): FileDiffMetadata {
-  const sessionDiff = { ...externalDiff };
-  delete sessionDiff.cacheKey;
-  return sessionDiff;
-}
 
 class DeferredHighlighterDiffRenderer extends DiffHunksRenderer {
   readonly initializations: Deferred<DiffsHighlighter>[] = [];
@@ -89,10 +88,22 @@ function createFile(cacheKey: string): FileContents {
   return { name: 'demo.ts', contents: FILE_CONTENTS, cacheKey };
 }
 
-function createEditSessionFile(file: FileContents): FileContents {
-  const editSessionFile = { ...file };
-  delete editSessionFile.cacheKey;
-  return editSessionFile;
+// Applies an edit to the session as the editor does: the document changes,
+// then the renderer's model takes the change.
+function editFirstLine(
+  renderer: FileRenderer,
+  session: FileContents,
+  text: string
+): void {
+  const document = new TextDocument<'file', undefined>(
+    'inmemory://session',
+    session.contents
+  );
+  const change = document.applyEdits([lineEdit(document, 0, text)]);
+  if (change == null) {
+    throw new Error('the edit applied nothing');
+  }
+  renderer.applyChange(change, document);
 }
 
 // A structurally valid plain (non-transformer) worker result for `contents`:
@@ -114,9 +125,9 @@ function renderedDiffHtml(
   result: ReturnType<DiffHunksRenderer['renderDiff']>
 ): string {
   return toHtml([
-    ...(result?.unifiedContentAST ?? []),
-    ...(result?.additionsContentAST ?? []),
-    ...(result?.deletionsContentAST ?? []),
+    ...columnContent(result?.columns.unified),
+    ...columnContent(result?.columns.additions),
+    ...columnContent(result?.columns.deletions),
   ]);
 }
 
@@ -195,6 +206,65 @@ async function waitFor(
   }
 }
 
+describe('hydrated FileDiff edit session', () => {
+  test('an editor attached to hydrated markup finds its rows without a new highlight', async () => {
+    const dom = installDom();
+    const options = {
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+      disableFileHeader: true,
+      diffStyle: 'unified',
+    } as const;
+    const diff = parseDiffFromFile(
+      { name: 'a.ts', contents: 'const a = 1;\nconst b = 2;', cacheKey: 'old' },
+      { name: 'a.ts', contents: 'const a = 3;\nconst b = 2;', cacheKey: 'new' }
+    );
+    const html = await preloadDiffHTML({ fileDiff: diff, options });
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff(options, manager);
+    const editor = new Editor('file-diff');
+    try {
+      // A warmed pool cache makes the hydrated markup editor-ready as is.
+      const primed = manager.primeDiffHighlightCache(diff);
+      const request = await withTimeout(worker.waitForDiffRequest());
+      respondWithHighlightedDiff(manager, worker, request, diff);
+      await primed;
+
+      fileDiff.hydrate({
+        fileDiff: diff,
+        fileContainer: container,
+        prerenderedHTML: html,
+      });
+      editor.edit(fileDiff);
+      // The cached highlight serves the session; the hydrated columns are
+      // written once so the rows get keys the editor can address them by.
+      expect(worker.diffRequestCount).toBe(1);
+      const rows = [
+        ...(container.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-line]'
+        ) ?? []),
+      ];
+      expect(rows.map((row) => row.textContent)).toEqual([
+        'const a = 1;',
+        'const a = 3;',
+        'const b = 2;',
+      ]);
+      expect(fileDiff.lineElement(0)).toBe(rows[1]);
+      expect(fileDiff.lineElement(1)).toBe(rows[2]);
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+});
+
 describe('FileRenderer edit session', () => {
   test('editing renders locally with editor-compatible token markup', async () => {
     const { manager, worker } = await createInitializedManager({
@@ -213,13 +283,12 @@ describe('FileRenderer edit session', () => {
       await withTimeout(worker.waitForFileRequest());
       expect(worker.fileRequestCount).toBe(1);
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml(result.contentAST);
+      const html = toHtml(fileContentAST(result));
       expect(html).toContain('data-char');
       expect(html).toContain('<br>');
       expect(worker.fileRequestCount).toBe(1);
@@ -244,8 +313,7 @@ describe('FileRenderer edit session', () => {
       renderer.renderFile(file);
       const request = await withTimeout(worker.waitForFileRequest());
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       renderer.renderFile(editSessionFile);
       const poolMarker: ElementContent[] = [
         {
@@ -264,7 +332,7 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
+      expect(toHtml(fileContentAST(result))).not.toContain('data-pool-result');
     } finally {
       manager.terminate();
     }
@@ -287,8 +355,7 @@ describe('FileRenderer edit session', () => {
       renderer.renderFile(file);
       const request = await withTimeout(worker.waitForFileRequest());
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       renderer.renderFile(editSessionFile);
       const poolMarker: ElementContent[] = [
         {
@@ -311,13 +378,13 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
+      expect(toHtml(fileContentAST(result))).not.toContain('data-pool-result');
 
       result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml(result.contentAST);
+      const html = toHtml(fileContentAST(result));
       expect(html).not.toContain('data-pool-result');
       expect(html).toContain('data-char');
       expect(html).toContain('color:');
@@ -338,8 +405,9 @@ describe('FileRenderer edit session', () => {
         undefined,
         manager
       );
-      const editSessionFile = createEditSessionFile(createFile('file:hydrate'));
-      renderer.beginEditSession(editSessionFile);
+      const editSessionFile = renderer.startEditSession(
+        createFile('file:hydrate')
+      );
       renderer.hydrate(editSessionFile);
       await wait(50);
       expect(worker.fileRequestCount).toBe(0);
@@ -371,15 +439,10 @@ describe('FileRenderer edit session', () => {
         plainFileCode(FILE_CONTENTS)
       );
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       renderer.renderFile(editSessionFile);
 
-      // Simulate an editor keystroke: line 0 rewritten, cache marked dirty.
-      renderer.updateRenderCache(
-        new Map([[0, [[0, '#ffffff', 'const edited = 1;']]]]),
-        'dark'
-      );
+      editFirstLine(renderer, editSessionFile, 'const edited = 1;');
 
       renderer.endEditSession();
       const result = renderer.renderFile(editSessionFile);
@@ -388,7 +451,7 @@ describe('FileRenderer edit session', () => {
       }
       expect(file.contents).toBe(FILE_CONTENTS);
       expect(editSessionFile.contents).toContain('const edited = 1;');
-      expect(toHtml(result.contentAST)).toContain('const edited = 1;');
+      expect(toHtml(fileContentAST(result))).toContain('const edited = 1;');
     } finally {
       manager.terminate();
     }
@@ -406,8 +469,7 @@ describe('FileRenderer edit session', () => {
         manager
       );
       const file = createFile('file:detach');
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
 
       renderer.renderFile(editSessionFile);
       expect(worker.fileRequestCount).toBe(0);
@@ -446,13 +508,9 @@ describe('FileRenderer edit session', () => {
         manager.getFileResultCache(externalFile)
       );
 
-      const editSessionFile = createEditSessionFile(externalFile);
-      renderer.beginEditSession(editSessionFile, externalFile);
+      const editSessionFile = renderer.startEditSession(externalFile);
       expect(renderer.editorRenderReady()).toBe(true);
-      renderer.updateRenderCache(
-        new Map([[0, [[0, '#ffffff', 'const edited = true;']]]]),
-        'dark'
-      );
+      editFirstLine(renderer, editSessionFile, 'const edited = true;');
 
       expect(editSessionFile.contents).toContain('const edited = true;');
       expect(externalFile).toEqual(externalBefore);
@@ -469,6 +527,89 @@ describe('FileRenderer edit session', () => {
 });
 
 describe('FileRenderer worker rendering', () => {
+  test('moving the window keeps the plain rows already on screen', async () => {
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const renderer = new FileRenderer(
+      { theme: 'pierre-dark' },
+      undefined,
+      undefined,
+      manager
+    );
+    const file: FileContents = {
+      name: 'window.ts',
+      contents: Array.from(
+        { length: 40 },
+        (_, line) => `const value${line} = ${line};`
+      ).join('\n'),
+      cacheKey: 'window-file',
+    };
+    const range = (startingLine: number) => ({
+      startingLine,
+      totalLines: 20,
+      bufferBefore: 0,
+      bufferAfter: 0,
+    });
+    try {
+      const first = renderer.renderFile(file, range(0));
+      const second = renderer.renderFile(file, range(10));
+      if (first == null || second == null) {
+        throw new Error('expected plain render results');
+      }
+      expect(second.allRowsChanged).toBe(false);
+      expect(second.column[0].content).toBe(first.column[10].content);
+      expect(second.column[0].gutter).toBe(first.column[10].gutter);
+      expect(second.column[9].content).toBe(first.column[19].content);
+      expect(toHtml(fileContentAST(second)[10])).toContain(
+        'const value20 = 20;'
+      );
+    } finally {
+      renderer.cleanUp();
+      manager.terminate();
+    }
+  });
+
+  test('a zero-line window adds no rows to the merged result', async () => {
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const renderer = new FileRenderer(
+      { theme: 'pierre-dark' },
+      undefined,
+      undefined,
+      manager
+    );
+    const file: FileContents = {
+      name: 'collapsed.ts',
+      contents: 'alpha\nbeta\ngamma',
+      cacheKey: 'collapsed-file',
+    };
+    try {
+      // A collapsed file renders a window of no lines before it expands.
+      const collapsed = renderer.renderFile(file, {
+        startingLine: 0,
+        totalLines: 0,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      expect(collapsed?.rowCount).toBe(0);
+      const expanded = renderer.renderFile(file, {
+        startingLine: 0,
+        totalLines: 3,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      expect(fileContentAST(expanded).map((row) => toHtml(row))).toEqual(
+        expect.arrayContaining([expect.stringContaining('alpha')])
+      );
+      expect(toHtml(fileContentAST(expanded)[0])).toContain('alpha');
+    } finally {
+      renderer.cleanUp();
+      manager.terminate();
+    }
+  });
+
   test('keeps a hydrated file selected when its replacement cannot render synchronously', async () => {
     const { manager } = await createInitializedManager({
       theme: 'pierre-dark',
@@ -531,13 +672,17 @@ describe('FileRenderer worker rendering', () => {
       await respondWithRealFileHighlight(manager, worker, currentFile);
       await withTimeout(primeCurrent);
       const currentResult = renderer.renderFile(currentFile);
-      expect(toHtml(currentResult?.contentAST ?? [])).toContain('currentValue');
+      expect(toHtml(fileContentAST(currentResult) ?? [])).toContain(
+        'currentValue'
+      );
 
       const pendingResult = renderer.renderFile(replacementFile);
       expect(renderer.getFileForNextRender(replacementFile)).toBe(currentFile);
       expect(pendingResult?.file).toBe(currentFile);
-      expect(toHtml(pendingResult?.contentAST ?? [])).toContain('currentValue');
-      expect(toHtml(pendingResult?.contentAST ?? [])).not.toContain(
+      expect(toHtml(fileContentAST(pendingResult) ?? [])).toContain(
+        'currentValue'
+      );
+      expect(toHtml(fileContentAST(pendingResult) ?? [])).not.toContain(
         'replacementValue'
       );
 
@@ -568,10 +713,10 @@ describe('FileRenderer worker rendering', () => {
       const replacementResult = renderer.renderFile(replacementFile);
       expect(renderer.fileCache).toBe(replacementFile);
       expect(replacementResult?.file).toBe(replacementFile);
-      expect(toHtml(replacementResult?.contentAST ?? [])).toContain(
+      expect(toHtml(fileContentAST(replacementResult) ?? [])).toContain(
         'replacementValue'
       );
-      expect(toHtml(replacementResult?.contentAST ?? [])).not.toContain(
+      expect(toHtml(fileContentAST(replacementResult) ?? [])).not.toContain(
         'currentValue'
       );
     } finally {
@@ -1188,13 +1333,12 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'd:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       const request = await withTimeout(worker.waitForDiffRequest());
       expect(worker.diffRequestCount).toBe(1);
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       respondToDiffRequest(manager, worker, request);
       // Refused outright: nothing is applied and nothing is requested — the
       // session render issued at editor attach supplies the highlight.
@@ -1209,9 +1353,9 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected a render result');
       }
       const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+        ...columnContent(result?.columns.unified),
+        ...columnContent(result?.columns.additions),
+        ...columnContent(result?.columns.deletions),
       ]);
       expect(html).toContain('data-char');
       expect(renderer.diffCache).toBe(sessionDiff);
@@ -1245,9 +1389,8 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'r:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       renderer.renderDiff(sessionDiff);
       expect(worker.diffRequestCount).toBe(0);
 
@@ -1283,7 +1426,6 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'cached:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       respondWithHighlightedDiff(
@@ -1304,19 +1446,17 @@ describe('DiffHunksRenderer edit session', () => {
       const cachedExternalSnapshot = structuredClone(cachedExternalBefore);
       const renderUpdatesBeforeSession = renderUpdates;
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       expect(renderer.diffCache).toBe(sessionDiff);
       expect(renderUpdates).toBe(renderUpdatesBeforeSession);
 
-      renderer.beginEditSession(sessionDiff);
-      sessionDiff.additionLines = [...sessionDiff.additionLines];
-      renderer.updateRenderCache(
+      renderer.setTokens(
         new Map<number, HighlightedToken[]>([
           [0, [[0, '', 'const edited = true;']]],
-        ]),
-        'dark'
+        ])
       );
+      renderer.renderDiff(sessionDiff);
 
       const cachedExternalResult = manager.getDiffResultCache(externalDiff);
       expect(cachedExternalResult).toEqual(cachedExternalSnapshot);
@@ -1324,7 +1464,6 @@ describe('DiffHunksRenderer edit session', () => {
         toHtml(cachedExternalResult?.result.code.additionLines ?? [])
       ).not.toContain('const edited = true;');
       expect(renderer.diffCache).toBe(sessionDiff);
-      expect(sessionDiff.additionLines[0]).toBe('const edited = true;\n');
       expect(sessionDiff.cacheKey).toBeUndefined();
       expect(worker.diffRequestCount).toBe(1);
     } finally {
@@ -1348,7 +1487,6 @@ describe('DiffHunksRenderer edit session', () => {
         'pending-edit',
         'const pendingEdit = true;\n'
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       respondWithHighlightedDiff(
@@ -1361,7 +1499,7 @@ describe('DiffHunksRenderer edit session', () => {
         expect(manager.getDiffResultCache(externalDiff)).toBeDefined();
       });
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
       const result = renderer.renderDiff(sessionDiff);
@@ -1398,7 +1536,6 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'incompatible:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       respondToDiffRequest(
@@ -1408,7 +1545,7 @@ describe('DiffHunksRenderer edit session', () => {
       );
       await waitFor(() => expect(renderUpdates).toBe(1));
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
       const result = renderer.renderDiff(sessionDiff);
@@ -1417,9 +1554,9 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected an editor-compatible session render');
       }
       const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+        ...columnContent(result?.columns.unified),
+        ...columnContent(result?.columns.additions),
+        ...columnContent(result?.columns.deletions),
       ]);
 
       expect(html).toContain('data-char');
@@ -1468,7 +1605,6 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'session:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(sessionExternalDiff);
 
       renderer.renderDiff(renderedExternalDiff);
       respondToDiffRequest(
@@ -1478,7 +1614,7 @@ describe('DiffHunksRenderer edit session', () => {
       );
       await waitFor(() => expect(renderUpdates).toBe(1));
 
-      renderer.beginEditSession(sessionDiff, sessionExternalDiff);
+      const sessionDiff = renderer.startEditSession(sessionExternalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
       const result = renderer.renderDiff(sessionDiff);
@@ -1487,9 +1623,9 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected an editor-compatible session render');
       }
       const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+        ...columnContent(result?.columns.unified),
+        ...columnContent(result?.columns.additions),
+        ...columnContent(result?.columns.deletions),
       ]);
 
       expect(html).toContain('session');
@@ -1523,11 +1659,10 @@ describe('DiffHunksRenderer edit session', () => {
           contents: 'const staleResult = true;\n',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       expect(renderer.initializations).toHaveLength(1);
-      renderer.beginEditSession(sessionDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       renderer.renderDiff(sessionDiff);
       expect(renderer.initializations).toHaveLength(2);
 
@@ -1548,12 +1683,22 @@ describe('DiffHunksRenderer edit session', () => {
       expect(renderer.diffCache).toBe(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
 
-      sessionDiff.additionLines = [...sessionDiff.additionLines];
-      renderer.updateRenderCache(
+      const sessionDocument = new TextDocument<'file-diff', undefined>(
+        'inmemory://stale',
+        externalDiff.additionLines.join('')
+      );
+      const change = sessionDocument.applyEdits([
+        lineEdit(sessionDocument, 0, 'const sessionResult = true;'),
+      ]);
+      if (change == null) {
+        throw new Error('expected a document change');
+      }
+      renderer.applyChange(
+        change,
+        sessionDocument,
         new Map<number, HighlightedToken[]>([
           [0, [[0, '', 'const sessionResult = true;']]],
-        ]),
-        'dark'
+        ])
       );
 
       const renderSessionHtml = (): string => {
@@ -1562,9 +1707,9 @@ describe('DiffHunksRenderer edit session', () => {
           throw new Error('expected a session render result');
         }
         return toHtml([
-          ...(result.unifiedContentAST ?? []),
-          ...(result.additionsContentAST ?? []),
-          ...(result.deletionsContentAST ?? []),
+          ...columnContent(result?.columns.unified),
+          ...columnContent(result?.columns.additions),
+          ...columnContent(result?.columns.deletions),
         ]);
       };
 
@@ -1925,6 +2070,7 @@ describe('rendering when an editor attaches', () => {
         isInstanceVisible: () => true,
         markDOMDirty() {},
         requestHeightReconcile() {},
+        cancelScroll() {},
       } as never;
       const instance = new VirtualizedFileDiff<undefined>(
         { theme: 'pierre-dark', disableFileHeader: true },
@@ -1979,17 +2125,22 @@ describe('rendering when an editor attaches', () => {
 
       const detach = editor.edit(instance);
       // Compatible transformer markup is retained while its renderer cache is
-      // moved onto the private, keyless session model.
+      // moved onto the private, keyless session model: the session's render
+      // keeps the rows on screen by key and adds the row for the editor's
+      // empty last line after the file's final newline.
       await waitFor(() => expect(attaches).toBe(1));
       await wait(50);
 
-      expect(instanceChangedCalls).toBe(callsBefore);
+      expect(instanceChangedCalls).toBe(callsBefore + 1);
       expect(fileContainer.shadowRoot?.querySelector('[data-content]')).toBe(
         contentBefore
       );
       expect(fileContainer.shadowRoot?.querySelector('[data-line="1"]')).toBe(
         lineBefore
       );
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-line="2"]')
+      ).not.toBeNull();
       expect(editor.getFile()?.cacheKey).toBeUndefined();
       expect(instance.options.useTokenTransformer).toBeUndefined();
       expect(worker.diffRequestCount).toBe(1);

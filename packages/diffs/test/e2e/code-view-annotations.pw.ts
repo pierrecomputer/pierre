@@ -174,11 +174,18 @@ test.describe('CodeView annotation scroll anchoring', () => {
     expect((await measureViewport(page)).scrollHeight).toBe(
       before.scrollHeight - 40
     );
-    expect(
-      await page.evaluate(() => window.__annotationScroll?.getScrollTop())
-    ).toBe(
-      await page.evaluate(() => window.__annotationScroll?.root.scrollTop)
-    );
+    // The anchor correction for the new heights lands over a frame; the
+    // logical and DOM scroll positions agree once it has.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const fixture = window.__annotationScroll;
+          return fixture == null
+            ? undefined
+            : fixture.getScrollTop() - fixture.root.scrollTop;
+        })
+      )
+      .toBe(0);
     expect(errors).toEqual([]);
   });
 
@@ -265,6 +272,12 @@ test.describe('CodeView annotation scroll anchoring', () => {
         () => window.__annotationScroll?.getEditorAnnotationLines()?.[0] === 191
       );
       await waitForAnnotationHeight(page, 80);
+      // The editor publishes the change before the host's frame renders the
+      // new row, so wait for the scroll range to take the extra line.
+      await page.waitForFunction(
+        (height) => window.__annotationScroll?.root.scrollHeight === height,
+        before.scrollHeight + 20
+      );
       const moved = await measureViewport(page);
       expect(moved.scrollHeight).toBe(before.scrollHeight + 20);
       expect(moved.anchorTop).toBeCloseTo(before.anchorTop, 1);

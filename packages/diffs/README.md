@@ -40,6 +40,8 @@ npx skills add pierrecomputer/pierre --skill diffs
 ## Development
 
 We use pnpm for workspace package management and Bun for tests.
+[ARCHITECTURE.md](./ARCHITECTURE.md) maps the rendering and editing pipeline:
+which module owns what, and how a render and a keystroke move through them.
 
 ```bash
 # From the root of the monorepo: setup dependencies

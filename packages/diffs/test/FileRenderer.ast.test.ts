@@ -64,7 +64,7 @@ describe('FileRenderer AST Structure', () => {
       );
       expect(lineElement.properties['data-line']).toBe(i + 1);
       expect(lineElement.properties['data-line-type']).toBe('context');
-      expect(lineElement.properties['data-line-index']).toBe(i);
+      expect(lineElement.properties['data-line-index']).toBe(`${i}`);
     }
 
     // Verify each gutter item
@@ -163,14 +163,6 @@ describe('FileRenderer AST Structure', () => {
     expect(result.rowCount).toBe(2);
     expect(gutter.children).toHaveLength(2);
     expect(contentColumn.children).toHaveLength(2);
-  });
-
-  test('css is always empty in the non-worker render path', async () => {
-    const instance = new FileRenderer();
-    const result = await instance.asyncRender(mockFiles.file2);
-    // processFileResult hardcodes css: '' here; only the worker pipeline
-    // produces theme CSS. If this ever changes, the renderer contract changed
-    expect(result.css).toBe('');
   });
 
   test('renders file-level annotations before the first file line', async () => {

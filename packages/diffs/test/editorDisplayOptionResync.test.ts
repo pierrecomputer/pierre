@@ -433,12 +433,12 @@ async function waitForEditable(container: HTMLElement): Promise<void> {
 
 describe('file editor: theme toggle mid-edit', () => {
   // The plain-file twin of "keeps focus when replacement does not emit blur":
-  // File.applyFullRender rewrites the code columns' innerHTML, which destroys
-  // the DOM focus state without a blur event. The render must capture focus
-  // intent before the rewrite so __syncRenderView restores it — the same
-  // capture FileDiff.applyHunksToDOM performs. Focus arrives here without a
-  // caret (tab/pointer focus), so the selection-based fallback cannot restore
-  // it and only the captured request can.
+  // a new highlight result makes File.applyRowsToDOM rewrite every row, which
+  // destroys the DOM focus state without a blur event. The render must
+  // capture focus intent before the rewrite so __syncRenderView restores it,
+  // the same capture FileDiff.applyHunksToDOM performs. Focus arrives here
+  // without a caret (tab/pointer focus), so the selection-based fallback
+  // cannot restore it and only the captured request can.
   test('restores focus when a theme toggle forces a full render', async () => {
     const dom = installDom();
     const container = document.createElement('div');

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { toHtml } from 'hast-util-to-html';
 import { JSDOM } from 'jsdom';
 
@@ -89,4 +89,82 @@ test('undecorated editor lines retain whitespace positions and empty-line placeh
   ]);
   expect(fragment.querySelectorAll('[data-char] [data-char]')).toHaveLength(0);
   expect(fragment.querySelectorAll('.line:last-child > br')).toHaveLength(1);
+});
+
+// Expected HTML was captured from the renderer before decoration handling
+// moved into DecoratedLineBuilder, so these pin that output exactly.
+describe('decoration edge cases match the previous renderer', () => {
+  function coloredTokens(contents: string[]): ThemedToken[] {
+    let offset = 0;
+    return contents.map((content) => {
+      const token = { content, offset, color: `#${content.length}00` };
+      offset += content.length;
+      return token;
+    });
+  }
+  function range(
+    name: string,
+    [startLine, startCharacter]: [number, number],
+    [endLine, endCharacter]: [number, number]
+  ): DecorationItem {
+    return {
+      start: { line: startLine, character: startCharacter },
+      end: { line: endLine, character: endCharacter },
+      properties: { 'data-range': name },
+    };
+  }
+  const lines = [
+    coloredTokens(['const', ' ', 'value']),
+    coloredTokens(['foo', '(', 'bar', ')']),
+    [],
+  ];
+  const multiLine = [
+    range('across', [0, 6], [1, 2]),
+    range('past-end', [1, 4], [1, 99]),
+  ];
+  const empty = [
+    range('start', [0, 0], [0, 0]),
+    range('end', [0, 11], [0, 11]),
+    range('empty-line', [2, 0], [2, 0]),
+  ];
+
+  test('a range across lines and a range past the line end', () => {
+    expect(toHtml(renderTokenLines(lines, { decorations: multiLine }))).toBe(
+      '<span class="line"><span style="color:#500">const</span><span style="color:#500"> </span><span data-range="across"><span style="color:#500">value</span></span></span>' +
+        '<span class="line"><span data-range="across"><span style="color:#300">fo</span></span><span style="color:#300">o</span><span style="color:#100">(</span><span data-range="past-end"><span style="color:#300">bar</span><span style="color:#100">)</span></span></span>' +
+        '<span class="line"></span>'
+    );
+    expect(
+      toHtml(
+        renderTokenLines(lines, {
+          decorations: multiLine,
+          useTokenTransformer: true,
+        })
+      )
+    ).toBe(
+      '<span class="line"><span style="color:#500" data-char="0">const</span><span style="color:#100" data-char="5"> </span><span data-range="across" data-char="6"><span style="color:#500">value</span></span></span>' +
+        '<span class="line"><span data-char="0"><span data-range="across"><span style="color:#300">fo</span></span><span style="color:#300">o</span></span><span style="color:#100" data-char="3">(</span><span data-range="past-end"><span style="color:#300" data-char="4">bar</span><span style="color:#100" data-char="7">)</span></span></span>' +
+        '<span class="line"><br></span>'
+    );
+  });
+
+  test('empty ranges at the line start, the line end, and on an empty line', () => {
+    expect(toHtml(renderTokenLines(lines, { decorations: empty }))).toBe(
+      '<span class="line"><span data-range="start"></span><span style="color:#500">const</span><span style="color:#500"> value</span><span data-range="end"></span></span>' +
+        '<span class="line"><span style="color:#300">foo</span><span style="color:#100">(</span><span style="color:#300">bar</span><span style="color:#100">)</span></span>' +
+        '<span class="line"><span data-range="empty-line"></span></span>'
+    );
+    expect(
+      toHtml(
+        renderTokenLines(lines, {
+          decorations: empty,
+          useTokenTransformer: true,
+        })
+      )
+    ).toBe(
+      '<span class="line"><span data-range="start"></span><span style="color:#500" data-char="0">const</span><span style="color:#100" data-char="5"> </span><span style="color:#500" data-char="6">value</span><span data-range="end"></span></span>' +
+        '<span class="line"><span style="color:#300" data-char="0">foo</span><span style="color:#100" data-char="3">(</span><span style="color:#300" data-char="4">bar</span><span style="color:#100" data-char="7">)</span></span>' +
+        '<span class="line"><span data-range="empty-line"></span><br></span>'
+    );
+  });
 });

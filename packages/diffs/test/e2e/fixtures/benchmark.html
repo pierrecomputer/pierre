@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs render benchmark</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-mount] {
+        width: 1000px;
+      }
+      [data-code-view-root] {
+        width: 1000px;
+        height: 800px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-mount></div>
+    <script type="module">
+      // The browser twin of scripts/benchmarkRender.ts: the same cases on the
+      // built library in a real DOM. scripts/benchmarkBrowser.ts drives it.
+      import {
+        CodeView,
+        DEFAULT_THEMES,
+        File,
+        FileDiff,
+        getSharedHighlighter,
+        parseDiffFromFile,
+      } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const mount = document.querySelector('[data-mount]');
+      const LINES = 2000;
+      const WINDOW = 200;
+
+      await getSharedHighlighter({
+        preferredHighlighter: 'highlights',
+        themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
+        langs: ['text', 'typescript'],
+      });
+
+      const fixture = (() => {
+        const oldLines = [];
+        for (let index = 0; index < LINES; index++) {
+          oldLines.push(
+            `export const value${index} = compute(${index}, "label ${index}", [${index % 7}, ${index % 11}]);`
+          );
+        }
+        const newLines = oldLines.map((line, index) =>
+          index % 40 === 20 ? line.replace('compute(', 'computeNext(') : line
+        );
+        newLines.splice(
+          Math.floor(LINES / 2),
+          0,
+          ...Array.from(
+            { length: 10 },
+            (_, index) => `export const inserted${index} = ${index};`
+          )
+        );
+        return {
+          oldFile: { name: 'bench.ts', contents: oldLines.join('\n') + '\n' },
+          newFile: { name: 'bench.ts', contents: newLines.join('\n') + '\n' },
+          changedLine: 20,
+          contextLine: 21,
+        };
+      })();
+
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const nextFrame = () =>
+        new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      async function waitFor(predicate, timeout = 10_000) {
+        const deadline = performance.now() + timeout;
+        while (!predicate()) {
+          if (performance.now() > deadline) {
+            throw new Error('benchmark: timed out waiting');
+          }
+          await wait(5);
+        }
+      }
+      const windowRange = (startingLine, totalLines) => ({
+        startingLine,
+        totalLines,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      const isEditable = (container) =>
+        container.shadowRoot?.querySelector(
+          '[data-code]:not([data-deletions]) [data-content]'
+        )?.contentEditable === 'true';
+      const replaceText = (editor, line, start, end, newText) =>
+        editor.applyEdits([
+          {
+            range: {
+              start: { line, character: start },
+              end: { line, character: end },
+            },
+            newText,
+          },
+        ]);
+
+      const diffOptions = (diffStyle, extra = {}) => ({
+        theme: DEFAULT_THEMES,
+        preferredHighlighter: 'highlights',
+        disableFileHeader: true,
+        disableErrorHandling: true,
+        diffStyle,
+        ...extra,
+      });
+      const fileOptions = (extra = {}) => ({
+        theme: DEFAULT_THEMES,
+        preferredHighlighter: 'highlights',
+        disableFileHeader: true,
+        disableErrorHandling: true,
+        ...extra,
+      });
+
+      function createContainer() {
+        const container = document.createElement('div');
+        mount.appendChild(container);
+        return container;
+      }
+      function renderDiff(options, renderRange) {
+        const container = createContainer();
+        const fileDiff = new FileDiff(options);
+        fileDiff.render({
+          oldFile: fixture.oldFile,
+          newFile: fixture.newFile,
+          fileContainer: container,
+          forceRender: true,
+          renderRange,
+        });
+        return { fileDiff, container };
+      }
+      async function renderEditableDiff(diffStyle, renderRange) {
+        const { fileDiff, container } = renderDiff(
+          diffOptions(diffStyle, {
+            expandUnchanged: true,
+            useTokenTransformer: true,
+          }),
+          renderRange
+        );
+        const editor = new Editor('file-diff');
+        editor.edit(fileDiff);
+        await waitFor(() => isEditable(container));
+        await wait(20);
+        return { fileDiff, editor, container };
+      }
+      function renderFile(options, renderRange) {
+        const container = createContainer();
+        const file = new File(options);
+        file.render({
+          file: fixture.newFile,
+          fileContainer: container,
+          forceRender: true,
+          renderRange,
+        });
+        return { file, container };
+      }
+      async function renderEditableFile(renderRange) {
+        const { file, container } = renderFile(
+          fileOptions({ useTokenTransformer: true }),
+          renderRange
+        );
+        const editor = new Editor('file');
+        editor.edit(file);
+        await waitFor(() => isEditable(container));
+        await wait(20);
+        return { file, editor, container };
+      }
+      async function setupCodeView(edit) {
+        const root = document.createElement('div');
+        root.dataset.codeViewRoot = '';
+        mount.appendChild(root);
+        const viewer = new CodeView({
+          theme: DEFAULT_THEMES,
+          preferredHighlighter: 'highlights',
+          diffStyle: 'split',
+          expandUnchanged: true,
+          useTokenTransformer: true,
+          createEditor: (type, options, key) => new Editor(type, options, key),
+        });
+        viewer.setup(root);
+        viewer.setItems([
+          {
+            id: 'bench',
+            type: 'diff',
+            fileDiff: parseDiffFromFile(fixture.oldFile, fixture.newFile),
+            edit,
+            version: 1,
+          },
+        ]);
+        viewer.render(true);
+        await wait(0);
+        if (edit) {
+          await waitFor(() => viewer.getEditor('bench') != null);
+          await wait(20);
+        }
+        return {
+          viewer,
+          root,
+          cleanup() {
+            viewer.cleanUp();
+            root.remove();
+          },
+        };
+      }
+
+      const cases = new Map();
+      const addCase = (name, prepare) => cases.set(name, prepare);
+
+      for (const diffStyle of ['split', 'unified']) {
+        addCase(`first-paint/${diffStyle}/window`, () => {
+          const container = createContainer();
+          const fileDiff = new FileDiff(
+            diffOptions(diffStyle, { expandUnchanged: true })
+          );
+          return {
+            run() {
+              fileDiff.render({
+                oldFile: fixture.oldFile,
+                newFile: fixture.newFile,
+                fileContainer: container,
+                forceRender: true,
+                renderRange: windowRange(0, WINDOW),
+              });
+            },
+            cleanup() {
+              fileDiff.cleanUp();
+              container.remove();
+            },
+          };
+        });
+        addCase(`scroll-step/${diffStyle}`, () => {
+          const { fileDiff, container } = renderDiff(
+            diffOptions(diffStyle, { expandUnchanged: true }),
+            windowRange(0, WINDOW)
+          );
+          return {
+            run() {
+              fileDiff.render({
+                oldFile: fixture.oldFile,
+                newFile: fixture.newFile,
+                fileContainer: container,
+                renderRange: windowRange(WINDOW / 2, WINDOW),
+              });
+            },
+            cleanup() {
+              fileDiff.cleanUp();
+              container.remove();
+            },
+          };
+        });
+        addCase(`edit-attach/${diffStyle}/window`, () => {
+          const { fileDiff, container } = renderDiff(
+            diffOptions(diffStyle, {
+              expandUnchanged: true,
+              useTokenTransformer: true,
+            }),
+            windowRange(0, WINDOW)
+          );
+          const editor = new Editor('file-diff');
+          return {
+            run() {
+              editor.edit(fileDiff);
+            },
+            cleanup() {
+              editor.cleanUp();
+              fileDiff.cleanUp();
+              container.remove();
+            },
+          };
+        });
+        for (const [name, line, text] of [
+          ['type-in-change', fixture.changedLine, 'x'],
+          ['type-context-to-change', fixture.contextLine, 'x'],
+        ]) {
+          addCase(`${name}/${diffStyle}/window`, async () => {
+            const { fileDiff, editor, container } = await renderEditableDiff(
+              diffStyle,
+              windowRange(0, WINDOW)
+            );
+            return {
+              run() {
+                replaceText(editor, line, 13, 13, text);
+              },
+              cleanup() {
+                editor.cleanUp();
+                fileDiff.cleanUp();
+                container.remove();
+              },
+            };
+          });
+        }
+        addCase(`enter/${diffStyle}/window`, async () => {
+          const { fileDiff, editor, container } = await renderEditableDiff(
+            diffStyle,
+            windowRange(0, WINDOW)
+          );
+          return {
+            run() {
+              replaceText(editor, fixture.contextLine, 0, 0, '\n');
+            },
+            cleanup() {
+              editor.cleanUp();
+              fileDiff.cleanUp();
+              container.remove();
+            },
+          };
+        });
+      }
+
+      addCase('file-first-paint/window', () => {
+        const container = createContainer();
+        const file = new File(fileOptions());
+        return {
+          run() {
+            file.render({
+              file: fixture.newFile,
+              fileContainer: container,
+              forceRender: true,
+              renderRange: windowRange(0, WINDOW),
+            });
+          },
+          cleanup() {
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      });
+      addCase('file-scroll-step', () => {
+        const { file, container } = renderFile(
+          fileOptions(),
+          windowRange(0, WINDOW)
+        );
+        return {
+          run() {
+            file.render({
+              file: fixture.newFile,
+              fileContainer: container,
+              renderRange: windowRange(WINDOW / 2, WINDOW),
+            });
+          },
+          cleanup() {
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      });
+      addCase('file-edit-attach/window', () => {
+        const { file, container } = renderFile(
+          fileOptions({ useTokenTransformer: true }),
+          windowRange(0, WINDOW)
+        );
+        const editor = new Editor('file');
+        return {
+          run() {
+            editor.edit(file);
+          },
+          cleanup() {
+            editor.cleanUp();
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      });
+      addCase('file-type/window', async () => {
+        const { file, editor, container } = await renderEditableFile(
+          windowRange(0, WINDOW)
+        );
+        return {
+          run() {
+            replaceText(editor, fixture.contextLine, 13, 13, 'x');
+          },
+          cleanup() {
+            editor.cleanUp();
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      });
+      addCase('file-enter/window', async () => {
+        const { file, editor, container } = await renderEditableFile(
+          windowRange(0, WINDOW)
+        );
+        return {
+          run() {
+            replaceText(editor, fixture.contextLine, 0, 0, '\n');
+          },
+          cleanup() {
+            editor.cleanUp();
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      });
+
+      addCase('codeview-scroll-step/split', async () => {
+        const { viewer, root, cleanup } = await setupCodeView(false);
+        return {
+          run() {
+            for (let step = 0; step < 10; step++) {
+              root.scrollTop += 800;
+              root.dispatchEvent(new Event('scroll'));
+              viewer.render(true);
+            }
+          },
+          cleanup,
+        };
+      });
+      addCase('codeview-type-in-change/split', async () => {
+        const { viewer, cleanup } = await setupCodeView(true);
+        const editor = viewer.getEditor('bench');
+        return {
+          run() {
+            replaceText(editor, fixture.changedLine, 13, 13, 'x');
+            viewer.render(true);
+          },
+          cleanup,
+        };
+      });
+      addCase('codeview-enter/split', async () => {
+        const { viewer, cleanup } = await setupCodeView(true);
+        const editor = viewer.getEditor('bench');
+        return {
+          run() {
+            replaceText(editor, fixture.contextLine, 0, 0, '\n');
+            viewer.render(true);
+          },
+          cleanup,
+        };
+      });
+
+      const median = (values) => {
+        const sorted = [...values].sort((a, b) => a - b);
+        const middle = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0
+          ? (sorted[middle - 1] + sorted[middle]) / 2
+          : sorted[middle];
+      };
+
+      // Runs one case: `sync` is the operation's own time, `frame` the time
+      // until the frame after it has been produced, so style, layout and
+      // paint of the change are included.
+      async function runCase(name, runs, warmupRuns) {
+        const prepare = cases.get(name);
+        if (prepare == null) {
+          throw new Error(`benchmark: unknown case ${name}`);
+        }
+        const sync = [];
+        const frame = [];
+        for (let run = 0; run < warmupRuns + runs; run++) {
+          const prepared = await prepare();
+          await nextFrame();
+          await nextFrame();
+          const start = performance.now();
+          prepared.run();
+          const afterRun = performance.now();
+          await nextFrame();
+          await nextFrame();
+          const afterFrame = performance.now();
+          if (run >= warmupRuns) {
+            sync.push(afterRun - start);
+            frame.push(afterFrame - start);
+          }
+          prepared.cleanup();
+          await wait(5);
+        }
+        return { name, runs, syncMs: median(sync), frameMs: median(frame) };
+      }
+
+      window.__bench = { cases: [...cases.keys()], run: runCase };
+      window.__benchReady = true;
+    </script>
+  </body>
+</html>

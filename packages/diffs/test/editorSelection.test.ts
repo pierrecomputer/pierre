@@ -4893,3 +4893,57 @@ describe('delete word backward character groups', () => {
     }
   );
 });
+
+describe('line endings in selection helpers', () => {
+  test('auto-surround keeps a multi-line selection in a CRLF file', () => {
+    const textDocument = new TextDocument('inmemory://1', 'aa\r\nbb\r\ncc');
+    const selections = [createSelection(0, 0, 1, 2, DirectionForward)];
+    const texts = getAutoSurroundReplacementTexts(
+      textDocument,
+      selections,
+      '('
+    );
+    expect(texts).toEqual(['(aa\nbb)']);
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      texts!
+    );
+    expect(textDocument.getText()).toBe('(aa\r\nbb)\r\ncc');
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 1, 2, DirectionForward),
+    ]);
+  });
+
+  test('the next occurrence of a multi-line selection is found in a CRLF file', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'aa\r\nbb\r\naa\r\nbb'
+    );
+    const next = findNextMatch(textDocument, [
+      createSelection(0, 0, 1, 2, DirectionForward),
+    ]);
+    expect(next?.map(({ start, end }) => [start, end])).toEqual([
+      [
+        { line: 0, character: 0 },
+        { line: 1, character: 2 },
+      ],
+      [
+        { line: 2, character: 0 },
+        { line: 3, character: 2 },
+      ],
+    ]);
+  });
+
+  test('copied text carries the file line ending throughout', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'aa\r\nbb\r\ncc\r\ndd'
+    );
+    const selections = [
+      createSelection(0, 0, 1, 1, DirectionForward),
+      createSelection(3, 0, 3, 1, DirectionForward),
+    ];
+    expect(getSelectionText(textDocument, selections)).toBe('aa\r\nb\r\nd');
+  });
+});
