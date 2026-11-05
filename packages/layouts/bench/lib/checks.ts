@@ -1,0 +1,662 @@
+import type { Attribution, Sample } from './measure';
+import type { MemorySnapshot } from './memory';
+import type { RepeatRecord } from './report';
+import type { ContentWeight } from './scenarios';
+
+/** The median sample of one scenario at one parameter set. */
+export interface RecordSummary {
+  scenario: string;
+  panes: number;
+  content: ContentWeight;
+  steps: number;
+  median: Sample;
+  /** One run with invalidation tracking, when the bench ran it. */
+  attribution?: Attribution;
+  /** Memory after the operation of that run, when the bench measured it. */
+  memory?: MemorySnapshot;
+}
+
+/**
+ * The rules of the performance baseline in the `pierre-layouts` intent, and
+ * `memory`: repeated operations do not grow memory, because apps run for hours.
+ */
+export type Rule =
+  | 'frame-rate'
+  | 'main-thread'
+  | 'time'
+  | 'independence-from-content'
+  | 'independence-of-layers'
+  | 'compositing'
+  | 'hidden-content'
+  | 'scale'
+  | 'memory';
+
+export interface CheckResult {
+  id: string;
+  rule: Rule;
+  description: string;
+  value: number | null;
+  limit: string;
+  pass: boolean | null;
+}
+
+type Metric = keyof Sample;
+
+interface Check {
+  id: string;
+  rule: Rule;
+  description: string;
+  limit: string;
+  evaluate(
+    find: Finder,
+    findRepeat: RepeatFinder
+  ): { value: number; pass: boolean } | null;
+}
+
+type Finder = (
+  scenario: string,
+  panes: number,
+  content: ContentWeight
+) => RecordSummary | undefined;
+
+type RepeatFinder = (
+  panes: number,
+  content: ContentWeight
+) => RepeatRecord | undefined;
+
+// Allowed growth when a cost must not depend on content or on the number of panes.
+const GROWTH = 1.25;
+
+function atMost(
+  scenario: string,
+  panes: number,
+  content: ContentWeight,
+  metric: Metric,
+  limit: number,
+  perStep = false
+): Check['evaluate'] {
+  return (find) => {
+    const record = find(scenario, panes, content);
+    if (record === undefined) return null;
+    const value = record.median[metric] / (perStep ? record.steps : 1);
+    return { value, pass: value <= limit };
+  };
+}
+
+// A frame check has no value when the trace holds no frames, for example after
+// Chrome renames a trace field. Without this guard, such a check would pass.
+function noFrames(
+  scenario: string,
+  panes: number,
+  content: ContentWeight,
+  metric: Metric
+): Check['evaluate'] {
+  const evaluate = atMost(scenario, panes, content, metric, 0);
+  return (find, findRepeat) => {
+    const record = find(scenario, panes, content);
+    if (record === undefined) return null;
+    const { framesPresented, framesPartial, framesDropped } = record.median;
+    if (framesPresented + framesPartial + framesDropped === 0) return null;
+    return evaluate(find, findRepeat);
+  };
+}
+
+// The ratio of a metric between two parameter sets, for example heavy over light content.
+function ratio(
+  scenario: string,
+  metric: Metric,
+  numerator: [number, ContentWeight],
+  denominator: [number, ContentWeight],
+  floor: number
+): Check['evaluate'] {
+  return (find) => {
+    const top = find(scenario, ...numerator);
+    const bottom = find(scenario, ...denominator);
+    if (top === undefined || bottom === undefined) return null;
+    // A floor keeps tiny denominators from turning noise into a large ratio.
+    const value =
+      Math.max(top.median[metric], floor) /
+      Math.max(bottom.median[metric], floor);
+    return { value, pass: value <= GROWTH };
+  };
+}
+
+// The ratio of the tile memory between two parameter sets of one scenario.
+function tileMemoryRatio(
+  scenario: string,
+  numerator: [number, ContentWeight],
+  denominator: [number, ContentWeight]
+): Check['evaluate'] {
+  return (find) => {
+    const top = find(scenario, ...numerator)?.memory?.tileMemoryMb;
+    const bottom = find(scenario, ...denominator)?.memory?.tileMemoryMb;
+    if (top === undefined || bottom === undefined || bottom === 0) return null;
+    return { value: top / bottom, pass: top / bottom <= GROWTH };
+  };
+}
+
+// The growth of a memory value over the repeat scenario (16 heavy panes).
+function repeatGrowth(
+  value: keyof RepeatRecord['growth'],
+  limit: number
+): Check['evaluate'] {
+  return (_find, findRepeat) => {
+    const growth = findRepeat(16, 'heavy')?.growth[value];
+    return growth === undefined
+      ? null
+      : { value: growth, pass: growth <= limit };
+  };
+}
+
+// Limits of the repeat scenario's growth, from the first runs (task bench-harness-memory).
+const REPEAT_HEAP_GROWTH_MB = 1;
+const REPEAT_TILE_GROWTH_MB = 5;
+// Chromium stores tiles of 64 by 64 pixels and larger; a smaller difference is not a tile.
+const COVERED_TILE_LIMIT_MB = 0.5;
+
+// The time budgets of the intent, with light pane content. The values are
+// milliseconds of main-thread time on the reference machine (Apple M5 Pro,
+// headless Chromium 134); on another machine, compare the values between runs.
+const REFERENCE_MACHINE = 'on the reference machine';
+const OPERATION_BUDGET_MS = 10;
+const GESTURE_FRAME_BUDGET_MS: Record<number, number> = { 4: 2, 16: 3 };
+
+const CONTENT_WEIGHTS: readonly ContentWeight[] = ['light', 'heavy', 'real'];
+
+const DISCRETE = [
+  'zoom',
+  'restore',
+  'split',
+  'close',
+  'move',
+  'focus',
+  'hide',
+  'show',
+  'collapse',
+  'tab-switch',
+];
+
+// The most content renders of any record of a scenario, at 4 and 16 panes
+// and each content weight: a check that holds at every parameter set.
+function noRenderInAnyRecord(scenario: string): Check['evaluate'] {
+  return (find) => {
+    const renders = [4, 16].flatMap((panes) =>
+      CONTENT_WEIGHTS.flatMap((content) => {
+        const record = find(scenario, panes, content);
+        return record === undefined ? [] : [record.median.contentRenders];
+      })
+    );
+    if (renders.length === 0) return null;
+    const value = Math.max(...renders);
+    return { value, pass: value === 0 };
+  };
+}
+
+// The open and the close of each overlay (task explore-overlays-boundary).
+// Each one is a discrete operation, with the budget of
+// DEC-layouts-time-budgets: 10 ms of main-thread time with light content.
+const OVERLAY_SCENARIOS = [
+  'modal-open',
+  'modal-close',
+  'drawer-open',
+  'drawer-close',
+];
+
+function overlayChecks(scenario: string): Check[] {
+  return [
+    {
+      id: `${scenario}-animations-composited`,
+      rule: 'compositing',
+      description: `Every animation of a ${scenario} runs on the compositor (4 light panes).`,
+      limit: '0 animations',
+      evaluate: atMost(scenario, 4, 'light', 'animationsNotComposited', 0),
+    },
+    {
+      id: `${scenario}-no-content-render`,
+      rule: 'independence-from-content',
+      description: `A ${scenario} renders no pane content (16 heavy panes).`,
+      limit: '0 renders',
+      evaluate: atMost(scenario, 16, 'heavy', 'contentRenders', 0),
+    },
+    {
+      id: `${scenario}-no-layout-in-panes`,
+      rule: 'independence-of-layers',
+      description: `A ${scenario} marks no element inside a pane for layout (16 heavy panes, attribution run).`,
+      limit: '0 elements',
+      evaluate: (find) => {
+        const value = find(scenario, 16, 'heavy')?.attribution
+          ?.innerLayoutInvalidationsOutsideTarget;
+        return value === undefined ? null : { value, pass: value === 0 };
+      },
+    },
+    {
+      id: `${scenario}-time-independent-of-content`,
+      rule: 'independence-from-content',
+      description: `The main-thread time of a ${scenario} does not grow with content (16 panes, heavy over light).`,
+      limit: `ratio ≤ ${GROWTH}`,
+      evaluate: ratio(
+        scenario,
+        'mainThreadMs',
+        [16, 'heavy'],
+        [16, 'light'],
+        1
+      ),
+    },
+    {
+      id: `${scenario}-main-thread-budget`,
+      rule: 'time',
+      description: `A ${scenario} uses at most ${OPERATION_BUDGET_MS} ms of main-thread time (16 light panes).`,
+      limit: `${OPERATION_BUDGET_MS} ms`,
+      evaluate: atMost(
+        scenario,
+        16,
+        'light',
+        'mainThreadMs',
+        OPERATION_BUDGET_MS
+      ),
+    },
+  ];
+}
+
+export const CHECKS: Check[] = [
+  {
+    id: 'zoom-no-dropped-frames',
+    rule: 'frame-rate',
+    description: 'A zoom drops no frame (16 light panes).',
+    limit: '0 frames',
+    evaluate: noFrames('zoom', 16, 'light', 'framesDroppedAfterFirst'),
+  },
+  {
+    id: 'resize-no-dropped-frames',
+    rule: 'frame-rate',
+    description: 'A resize drag drops no frame (16 heavy panes).',
+    limit: '0 frames',
+    evaluate: noFrames('resize', 16, 'heavy', 'framesDropped'),
+  },
+  {
+    id: 'zoom-busy-no-dropped-frames',
+    rule: 'main-thread',
+    description:
+      'A 200 ms long task during a zoom drops no frame of the animation (4 light panes).',
+    limit: '0 frames',
+    evaluate: noFrames('zoom-busy', 4, 'light', 'framesDroppedAfterFirst'),
+  },
+  {
+    id: 'zoom-no-main-thread-animation',
+    rule: 'main-thread',
+    description: 'No frame of a zoom needs a main-thread animation.',
+    limit: '0 frames',
+    evaluate: noFrames('zoom', 4, 'light', 'framesWithMainAnimation'),
+  },
+  {
+    id: 'zoom-animations-composited',
+    rule: 'compositing',
+    description: 'Every animation of a zoom runs on the compositor.',
+    limit: '0 animations',
+    evaluate: atMost('zoom', 4, 'light', 'animationsNotComposited', 0),
+  },
+  {
+    id: 'split-animations-composited',
+    rule: 'compositing',
+    description: 'Every animation of a split runs on the compositor.',
+    limit: '0 animations',
+    evaluate: atMost('split', 4, 'light', 'animationsNotComposited', 0),
+  },
+  ...DISCRETE.flatMap((scenario) =>
+    [4, 16].map(
+      (panes): Check => ({
+        id: `${scenario}-main-thread-budget-${panes}`,
+        rule: 'time',
+        description: `A ${scenario} uses at most ${OPERATION_BUDGET_MS} ms of main-thread time (${panes} light panes, ${REFERENCE_MACHINE}).`,
+        limit: `${OPERATION_BUDGET_MS} ms`,
+        evaluate: atMost(
+          scenario,
+          panes,
+          'light',
+          'mainThreadMs',
+          OPERATION_BUDGET_MS
+        ),
+      })
+    )
+  ),
+  ...[4, 16].map(
+    (panes): Check => ({
+      id: `resize-main-thread-per-step-${panes}`,
+      rule: 'time',
+      description: `A resize drag uses at most ${GESTURE_FRAME_BUDGET_MS[panes]} ms of main-thread time per pointer move (${panes} light panes, ${REFERENCE_MACHINE}).`,
+      limit: `${GESTURE_FRAME_BUDGET_MS[panes]} ms`,
+      evaluate: atMost(
+        'resize',
+        panes,
+        'light',
+        'mainThreadMs',
+        GESTURE_FRAME_BUDGET_MS[panes],
+        true
+      ),
+    })
+  ),
+  {
+    id: 'focus-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A focus change renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('focus', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'zoom-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A zoom renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('zoom', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'resize-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A resize drag renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('resize', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'hide-no-content-render',
+    rule: 'independence-from-content',
+    description:
+      'A hide renders no pane content (the most renders of any hide record: 4 and 16 panes, each content weight).',
+    limit: '0 renders',
+    evaluate: noRenderInAnyRecord('hide'),
+  },
+  {
+    id: 'show-no-content-render',
+    rule: 'independence-from-content',
+    description:
+      'A show of a hidden pane renders no pane content (the most renders of any show record: 4 and 16 panes, each content weight).',
+    limit: '0 renders',
+    evaluate: noRenderInAnyRecord('show'),
+  },
+  {
+    id: 'zoom-one-content-resize',
+    rule: 'independence-from-content',
+    description:
+      'A zoom resizes the content of the zoomed pane once, not once per frame.',
+    limit: '1 callback',
+    evaluate: atMost('zoom', 4, 'heavy', 'contentResizeCallbacks', 1),
+  },
+  {
+    id: 'zoom-layout-once',
+    rule: 'independence-from-content',
+    description:
+      'A zoom lays out at most twice: at the start and at the end (4 heavy panes).',
+    limit: '2 layouts',
+    evaluate: atMost('zoom', 4, 'heavy', 'layouts', 2),
+  },
+  {
+    id: 'focus-style-independent-of-content',
+    rule: 'independence-from-content',
+    description:
+      'The style work of a focus change does not grow with content (16 panes, heavy over light).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('focus', 'styleElements', [16, 'heavy'], [16, 'light'], 10),
+  },
+  {
+    id: 'resize-style-independent-of-content',
+    rule: 'independence-from-content',
+    description:
+      'The style work of a resize drag does not grow with content (16 panes, heavy over light).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio(
+      'resize',
+      'styleElements',
+      [16, 'heavy'],
+      [16, 'light'],
+      10
+    ),
+  },
+  {
+    id: 'zoom-time-independent-of-content',
+    rule: 'independence-from-content',
+    description:
+      'The main-thread time of a zoom does not grow with content (16 panes, heavy over light).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('zoom', 'mainThreadMs', [16, 'heavy'], [16, 'light'], 1),
+  },
+  {
+    id: 'append-renders-one-pane',
+    rule: 'independence-of-layers',
+    description:
+      'Output in one pane renders only that pane: one render per update (16 heavy panes).',
+    limit: '1 render per update',
+    evaluate: atMost('append', 16, 'heavy', 'contentRenders', 1, true),
+  },
+  {
+    id: 'append-style-independent-of-panes',
+    rule: 'independence-of-layers',
+    description:
+      'The style work of output in one pane does not grow with the number of panes (heavy, 16 over 4).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('append', 'styleElements', [16, 'heavy'], [4, 'heavy'], 10),
+  },
+  {
+    id: 'append-layout-independent-of-panes',
+    rule: 'independence-of-layers',
+    description:
+      'The layout time of output in one pane does not grow with the number of panes (heavy, 16 over 4).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('append', 'layoutMs', [16, 'heavy'], [4, 'heavy'], 0.5),
+  },
+  {
+    id: 'append-time-independent-of-panes',
+    rule: 'independence-of-layers',
+    description:
+      'The main-thread time of output in one pane does not grow with the number of panes (heavy, 16 over 4).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('append', 'mainThreadMs', [16, 'heavy'], [4, 'heavy'], 1),
+  },
+  {
+    id: 'hidden-append-no-layout',
+    rule: 'hidden-content',
+    description:
+      'Output in a pane under a zoomed pane causes no layout (4 heavy panes).',
+    limit: '0 ms',
+    evaluate: atMost('hidden-append', 4, 'heavy', 'layoutMs', 0),
+  },
+  {
+    id: 'hidden-append-no-paint',
+    rule: 'hidden-content',
+    description:
+      'Output in a pane under a zoomed pane causes no paint (4 heavy panes).',
+    limit: '0 paints',
+    evaluate: atMost('hidden-append', 4, 'heavy', 'paints', 0),
+  },
+  {
+    id: 'hidden-tab-append-no-layout',
+    rule: 'hidden-content',
+    description:
+      'Output in a tab that does not show causes no layout (16 heavy panes).',
+    limit: '0 ms',
+    evaluate: atMost('hidden-tab-append', 16, 'heavy', 'layoutMs', 0),
+  },
+  {
+    id: 'hidden-tab-append-no-paint',
+    rule: 'hidden-content',
+    description:
+      'Output in a tab that does not show causes no paint (16 heavy panes).',
+    limit: '0 paints',
+    evaluate: atMost('hidden-tab-append', 16, 'heavy', 'paints', 0),
+  },
+  {
+    id: 'collapse-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A collapse renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('collapse', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'tab-drag-main-thread-per-step-4',
+    rule: 'time',
+    description: `A tab drag uses at most ${GESTURE_FRAME_BUDGET_MS[4]} ms of main-thread time per pointer move (4 light panes, ${REFERENCE_MACHINE}).`,
+    limit: `${GESTURE_FRAME_BUDGET_MS[4]} ms`,
+    evaluate: atMost(
+      'tab-drag',
+      4,
+      'light',
+      'mainThreadMs',
+      GESTURE_FRAME_BUDGET_MS[4],
+      true
+    ),
+  },
+  {
+    id: 'tab-drag-main-thread-per-step-16',
+    rule: 'time',
+    description: `A tab drag uses at most ${GESTURE_FRAME_BUDGET_MS[16]} ms of main-thread time per pointer move (16 light panes, ${REFERENCE_MACHINE}).`,
+    limit: `${GESTURE_FRAME_BUDGET_MS[16]} ms`,
+    evaluate: atMost(
+      'tab-drag',
+      16,
+      'light',
+      'mainThreadMs',
+      GESTURE_FRAME_BUDGET_MS[16],
+      true
+    ),
+  },
+  {
+    id: 'tab-drag-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A tab drag renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('tab-drag', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'tab-switch-no-content-render',
+    rule: 'independence-from-content',
+    description: 'A change of tab renders no pane content (16 heavy panes).',
+    limit: '0 renders',
+    evaluate: atMost('tab-switch', 16, 'heavy', 'contentRenders', 0),
+  },
+  {
+    id: 'tab-switch-no-content-resize',
+    rule: 'independence-from-content',
+    description:
+      'A change of tab gives no pane content a new size (16 heavy panes).',
+    limit: '0 callbacks',
+    evaluate: atMost('tab-switch', 16, 'heavy', 'contentResizeCallbacks', 0),
+  },
+  {
+    id: 'zoom-covered-panes-no-raster',
+    rule: 'hidden-content',
+    description:
+      'Covered panes keep no raster tiles after a zoom: the tile memory of a zoom less that of the same zoom with the other panes hidden (4 light panes, repeat run).',
+    limit: `${COVERED_TILE_LIMIT_MB} MB`,
+    evaluate: (_find, findRepeat) => {
+      const value = findRepeat(4, 'light')?.covered.tileMemoryMb;
+      return value === undefined
+        ? null
+        : { value, pass: value <= COVERED_TILE_LIMIT_MB };
+    },
+  },
+  {
+    id: 'hide-no-raster-in-hidden-pane',
+    rule: 'hidden-content',
+    description:
+      'A pane that store.setHidden hides has no layer that draws (16 heavy panes).',
+    limit: '0 layers',
+    evaluate: (find) => {
+      const pane = find('hide', 16, 'heavy')?.memory?.panes.p1;
+      return pane === undefined
+        ? null
+        : { value: pane.drawingLayers, pass: pane.drawingLayers === 0 };
+    },
+  },
+  {
+    id: 'idle-tile-memory-independent-of-panes',
+    rule: 'compositing',
+    description:
+      'The tile memory of a layout does not grow with the number of panes (heavy, 16 over 4).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: tileMemoryRatio('idle', [16, 'heavy'], [4, 'heavy']),
+  },
+  {
+    id: 'repeat-no-dom-node-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides add no DOM node (16 heavy panes, after a garbage collection).',
+    limit: '0 nodes',
+    evaluate: repeatGrowth('domNodes', 0),
+  },
+  {
+    id: 'repeat-no-listener-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides add no event listener (16 heavy panes).',
+    limit: '0 listeners',
+    evaluate: repeatGrowth('jsEventListeners', 0),
+  },
+  {
+    id: 'repeat-js-heap-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides grow the JS heap by little (16 heavy panes, after a garbage collection).',
+    limit: `${REPEAT_HEAP_GROWTH_MB} MB`,
+    evaluate: repeatGrowth('jsHeapMb', REPEAT_HEAP_GROWTH_MB),
+  },
+  {
+    id: 'repeat-tile-memory-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides grow the tile memory by little (16 heavy panes).',
+    limit: `${REPEAT_TILE_GROWTH_MB} MB`,
+    evaluate: repeatGrowth('tileMemoryMb', REPEAT_TILE_GROWTH_MB),
+  },
+  // An operation on one pane marks no element inside another pane for layout.
+  // A pane host that a zoom hides or shows may count once; its content not.
+  ...['zoom', 'restore', 'focus', 'append', 'tab-switch'].map(
+    (scenario): Check => ({
+      id: `${scenario}-no-layout-outside-target`,
+      rule: 'independence-of-layers',
+      description: `A ${scenario} marks no element inside another pane for layout (16 heavy panes, attribution run).`,
+      limit: '0 elements',
+      evaluate: (find) => {
+        const value = find(scenario, 16, 'heavy')?.attribution
+          ?.innerLayoutInvalidationsOutsideTarget;
+        return value === undefined ? null : { value, pass: value === 0 };
+      },
+    })
+  ),
+  ...OVERLAY_SCENARIOS.flatMap(overlayChecks),
+  ...['zoom', 'focus', 'split', 'tab-switch'].map(
+    (scenario): Check => ({
+      id: `${scenario}-time-independent-of-panes`,
+      rule: 'scale',
+      description: `The main-thread time of a ${scenario} does not grow with the number of panes (light, 16 over 4).`,
+      limit: `ratio ≤ ${GROWTH}`,
+      evaluate: ratio(scenario, 'mainThreadMs', [16, 'light'], [4, 'light'], 1),
+    })
+  ),
+];
+
+/** Evaluate every check against the medians and the repeat records of a benchmark run. */
+export function evaluateChecks(
+  records: RecordSummary[],
+  repeats: RepeatRecord[] = []
+): CheckResult[] {
+  const find: Finder = (scenario, panes, content) =>
+    records.find(
+      (record) =>
+        record.scenario === scenario &&
+        record.panes === panes &&
+        record.content === content
+    );
+  const findRepeat: RepeatFinder = (panes, content) =>
+    repeats.find(
+      (record) => record.panes === panes && record.content === content
+    );
+  return CHECKS.map((check) => {
+    const result = check.evaluate(find, findRepeat);
+    return {
+      id: check.id,
+      rule: check.rule,
+      description: check.description,
+      limit: check.limit,
+      value: result === null ? null : Number(result.value.toFixed(3)),
+      pass: result?.pass ?? null,
+    };
+  });
+}
