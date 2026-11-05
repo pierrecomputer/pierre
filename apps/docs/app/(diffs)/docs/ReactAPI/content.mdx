@@ -87,7 +87,7 @@ component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
 Diff components accept `ParseDiffOptions` through `options.parseDiffOptions`,
-including jsdiff settings and the `disableLineMatching` escape hatch (default:
+including diff settings and the `disableLineMatching` escape hatch (default:
 `false`). `MultiFileDiff` uses these options to parse `oldFile`/`newFile`;
 editable diff components also use them when recomputing edits. They do not
 rewrite supplied `fileDiff` metadata.

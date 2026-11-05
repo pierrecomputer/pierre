@@ -11,9 +11,11 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import type { RenderDiffOptions } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
+import type { DiffRendererInstance } from '../src/worker/types';
 import type { WorkerWireResponse } from '../src/worker/workerMessage';
 import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { installAnimationFramePolyfill } from './workerPoolHarness';
@@ -27,6 +29,43 @@ beforeEach(disposeHighlighter);
 afterAll(async () => {
   restoreAnimationFrame?.();
   await disposeHighlighter();
+});
+
+test('worker results carry the pool diff library', async () => {
+  const manager = new WorkerPoolManager(
+    {
+      poolSize: 1,
+      workerFactory: () =>
+        new Worker(new URL('../src/worker/worker.ts', import.meta.url), {
+          type: 'module',
+        }),
+    },
+    { theme: 'pierre-dark', preferredDiffLib: '@pierre/patches' }
+  );
+  const diff = parseDiffFromFile(
+    { name: 'shared.ts', contents: 'const value = 1;\n', cacheKey: 'old' },
+    { name: 'shared.ts', contents: 'const value = 2;\n', cacheKey: 'new' }
+  );
+  const highlight = (__id: string) =>
+    new Promise<RenderDiffOptions>((resolve, reject) => {
+      const instance: DiffRendererInstance = {
+        __id,
+        onHighlightError: reject,
+        onHighlightSuccess(_, result, options) {
+          expect(result.code.additionLines).toHaveLength(1);
+          resolve(options);
+        },
+      };
+      manager.highlightDiffAST(instance, diff);
+    });
+  try {
+    await manager.initialize();
+    expect((await highlight('first')).preferredDiffLib).toBe('@pierre/patches');
+    await manager.setRenderOptions({ preferredDiffLib: 'jsdiff' });
+    expect((await highlight('second')).preferredDiffLib).toBe('jsdiff');
+  } finally {
+    manager.terminate();
+  }
 });
 
 describe('worker cache transport', () => {
