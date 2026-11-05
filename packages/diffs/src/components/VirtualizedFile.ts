@@ -1306,7 +1306,6 @@ export class VirtualizedFile<
     let absoluteLineTop = fileTop + (checkpoint?.top ?? codeRegionTop);
     let currentLine = checkpoint?.lineIndex ?? 0;
     let firstVisibleHunk: number | undefined;
-    let centerHunk: number | undefined;
     let overflowCounter: number | undefined;
 
     const startingLineIndex = checkpoint?.lineIndex ?? 0;
@@ -1336,11 +1335,6 @@ export class VirtualizedFile<
         firstVisibleHunk ??= currentHunk;
       }
 
-      // Track which hunk contains the viewport center
-      if (absoluteLineTop + lineHeight > viewportCenter) {
-        centerHunk ??= currentHunk;
-      }
-
       // Start overflow when we are out of the viewport at a hunk boundary
       if (
         overflowCounter == null &&
@@ -1358,7 +1352,6 @@ export class VirtualizedFile<
     if (firstVisibleHunk == null) {
       if (measuredFileAnnotationVisible) {
         firstVisibleHunk = 0;
-        centerHunk = 0;
       } else {
         return {
           startingLine: 0,
@@ -1369,24 +1362,16 @@ export class VirtualizedFile<
       }
     }
 
-    // Calculate balanced startingLine centered around the viewport center
-    centerHunk ??= firstVisibleHunk;
-    const idealStartHunk = Math.round(centerHunk - totalHunks / 2);
-
-    // Clamp startHunk: at the beginning, reduce totalLines; at the end, shift
-    // startHunk back
+    // Start the slice at the first visible hunk: a window's worth of rows at
+    // the base line height always reaches the bottom of the window from there,
+    // whatever the rows really measure. Near the end of the file the start
+    // moves back so the slice stays full.
     const maxStartHunk = Math.max(
       0,
       Math.ceil(lineCount / hunkLineCount) - totalHunks
     );
-    const startHunk = Math.max(0, Math.min(idealStartHunk, maxStartHunk));
+    const startHunk = Math.min(firstVisibleHunk, maxStartHunk);
     const startingLine = startHunk * hunkLineCount;
-
-    // If we wanted to start before 0, reduce totalLines by the clamped amount
-    const clampedTotalLines =
-      idealStartHunk < 0
-        ? totalLines + idealStartHunk * hunkLineCount
-        : totalLines;
 
     // Use hunkOffsets array for efficient buffer calculations
     const codeBufferBefore = hunkOffsets[startHunk] ?? 0;
@@ -1394,7 +1379,7 @@ export class VirtualizedFile<
       startingLine === 0 ? 0 : fileAnnotationHeight + codeBufferBefore;
 
     // Calculate bufferAfter
-    const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
+    const finalHunkIndex = startHunk + totalHunks;
     const bufferAfter =
       finalHunkIndex < hunkOffsets.length
         ? codeRowsHeight - hunkOffsets[finalHunkIndex]
@@ -1402,7 +1387,7 @@ export class VirtualizedFile<
 
     return {
       startingLine,
-      totalLines: clampedTotalLines,
+      totalLines,
       bufferBefore,
       bufferAfter: Math.max(0, bufferAfter),
     };
