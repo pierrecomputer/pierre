@@ -1959,6 +1959,63 @@ describe('CodeView search panel', () => {
     }
   });
 
+  test('scrolls to matches with the configured behavior', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      searchOptions: { scrollBehavior: 'smooth' },
+    });
+    const getScrollAnimation = () =>
+      (viewer as unknown as { scrollAnimation: unknown }).scrollAnimation;
+    const { matchMedia } = window;
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'file-a',
+          type: 'file',
+          file: { name: 'file-a.ts', contents: makeSearchScrollContents() },
+        },
+      ]);
+      viewer.openSearch({ query: 'target' });
+      viewer.navigateSearch('next');
+      expect(getSearchState(viewer).current?.lineNumber).toBe(500);
+      expect(getScrollAnimation()).toBeDefined();
+
+      // The option applies live through setOptions.
+      viewer.setOptions({ searchOptions: { scrollBehavior: 'instant' } });
+      viewer.navigateSearch('previous');
+      expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+      expect(getScrollAnimation()).toBeUndefined();
+      viewer.render(true);
+      expect(root.scrollTop).toBe(0);
+      viewer.navigateSearch('next');
+      expect(getScrollAnimation()).toBeUndefined();
+      viewer.render(true);
+      expect(root.scrollTop).toBeGreaterThan(0);
+
+      // A reduced-motion preference overrides a smooth request.
+      viewer.setOptions({ searchOptions: { scrollBehavior: 'smooth' } });
+      window.matchMedia = (query: string): MediaQueryList => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addEventListener() {},
+        removeEventListener() {},
+        addListener() {},
+        removeListener() {},
+        dispatchEvent: () => true,
+      });
+      viewer.navigateSearch('previous');
+      expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+      expect(getScrollAnimation()).toBeUndefined();
+    } finally {
+      window.matchMedia = matchMedia;
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('keeps composed input find-again shortcut scrolls pending', async () => {
     const dom = installDom();
     const viewer = new CodeView();

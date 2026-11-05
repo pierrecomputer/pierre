@@ -130,6 +130,12 @@ export interface CodeViewSearchOptions {
    * @default false
    */
   disableShortcuts?: boolean;
+  /**
+   * How the viewport moves to a match that navigation has to bring into
+   * view. Reduced-motion preferences still force instant scrolling.
+   * @default 'smooth-auto'
+   */
+  scrollBehavior?: CodeViewScrollBehavior;
 }
 
 type CodeViewEditor<LAnnotation, Caret> =
@@ -1746,7 +1752,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       lineNumber: match.lineNumber,
       side: match.side,
       align: 'center',
-      behavior: 'smooth-auto',
+      behavior: this.options.searchOptions?.scrollBehavior ?? 'smooth-auto',
     });
   }
 
