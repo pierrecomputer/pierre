@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 
 import { ThemesGridClient } from './ThemesGridClient';
 import { pageMetadata } from '@/lib/page-metadata';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 const SAMPLE_OLD_FILE = {
   name: 'config.ts',
@@ -198,7 +199,11 @@ export default async function ThemeGalleryPage() {
     (t): t is NonNullable<typeof t> => t != null
   );
 
-  const fileDiff = parseDiffFromFile(SAMPLE_OLD_FILE, SAMPLE_NEW_FILE);
+  const fileDiff = parseDiffFromFile(
+    SAMPLE_OLD_FILE,
+    SAMPLE_NEW_FILE,
+    DEFAULT_PARSE_DIFF_OPTIONS
+  );
 
   return (
     <Suspense>

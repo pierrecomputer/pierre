@@ -10,6 +10,7 @@ import { WorkerPoolManager } from '@pierre/diffs/worker';
 import { createContext, type ReactNode, useEffect, useState } from 'react';
 
 import { MAIN_THREAD_MAX_CHARACTERS } from '../_components/WorkerPoolContext';
+import { getPreferredDiffLib } from '@/lib/preferredDiffLib';
 
 export const PlaygroundHighlighterReadyContext = createContext(true);
 
@@ -54,7 +55,11 @@ export function PlaygroundWorkerPool({
               new URL('@pierre/diffs/worker/worker.js', import.meta.url)
             ),
         },
-        { preferredHighlighter: highlighter, useTokenTransformer: true }
+        {
+          preferredDiffLib: getPreferredDiffLib(),
+          preferredHighlighter: highlighter,
+          useTokenTransformer: true,
+        }
       );
       await manager.initialize();
       if (!cancelled) {
