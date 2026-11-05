@@ -2,6 +2,7 @@ import { DEFAULT_THEMES, type FileContents } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 const CUSTOM_HEADER_OLD_FILE: FileContents = {
   name: 'AppConfig.swift',
@@ -67,6 +68,7 @@ export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<
   oldFile: CUSTOM_HEADER_OLD_FILE,
   newFile: CUSTOM_HEADER_NEW_FILE,
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'unified',
