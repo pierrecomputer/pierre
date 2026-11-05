@@ -67,6 +67,11 @@
     --diffs-bg-selection-override
     --diffs-bg-selection-number-override
 
+    // Search Match Color Overrides (find/replace)
+    --diffs-fg-search-match-override
+    --diffs-bg-search-match-override
+    --diffs-bg-search-match-current-override
+
     // Available CSS Layout Overrides
     --diffs-gap-inline
     --diffs-gap-block
@@ -213,7 +218,9 @@
       color-mix(in lab, var(--diffs-selection-base) 65%, var(--diffs-mixer)),
       color-mix(in lab, var(--diffs-selection-base) 75%, var(--diffs-mixer))
     );
-    --diffs-search-text-color: var(--diffs-fg);
+    /* Match backgrounds are a saturated yellow and blue in both schemes, so
+       the text stays black regardless of the theme foreground. */
+    --diffs-search-text-color: var(--diffs-fg-search-match-override, #000);
     --diffs-search-match-color: var(
       --diffs-bg-search-match-override,
       var(
