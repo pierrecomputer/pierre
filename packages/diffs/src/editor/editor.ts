@@ -2027,6 +2027,7 @@ export class Editor<
   }
 
   #resetState(preserveCarets = false): void {
+    this.#isComposing = false;
     this.#searchHighlighter?.clear();
     this.#searchHighlighter = undefined;
     this.#setEditorActiveLineSafe(null);
@@ -2251,6 +2252,7 @@ export class Editor<
           // back, the native selection is the browser's reaction to rows
           // coming and going, not the user's; the restore places the caret.
           if (
+            this.#isComposing ||
             this.#shouldIgnoreSelectionChange ||
             this.#suppressNativeSelectionSync ||
             this.#replacementFocusRequest != null ||
