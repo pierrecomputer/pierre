@@ -534,7 +534,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 1,
-          "data-line-index": 0,
+          "data-line-index": "0",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -553,7 +553,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 2,
-          "data-line-index": 1,
+          "data-line-index": "1",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -617,7 +617,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 3,
-          "data-line-index": 2,
+          "data-line-index": "2",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -733,7 +733,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 4,
-          "data-line-index": 3,
+          "data-line-index": "3",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -836,7 +836,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 5,
-          "data-line-index": 4,
+          "data-line-index": "4",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -887,7 +887,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 6,
-          "data-line-index": 5,
+          "data-line-index": "5",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -925,7 +925,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 7,
-          "data-line-index": 6,
+          "data-line-index": "6",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -989,7 +989,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 8,
-          "data-line-index": 7,
+          "data-line-index": "7",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1053,7 +1053,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 9,
-          "data-line-index": 8,
+          "data-line-index": "8",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1130,7 +1130,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 10,
-          "data-line-index": 9,
+          "data-line-index": "9",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1194,7 +1194,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 11,
-          "data-line-index": 10,
+          "data-line-index": "10",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1232,7 +1232,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 12,
-          "data-line-index": 11,
+          "data-line-index": "11",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1309,7 +1309,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 13,
-          "data-line-index": 12,
+          "data-line-index": "12",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1334,7 +1334,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 14,
-          "data-line-index": 13,
+          "data-line-index": "13",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1567,7 +1567,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 15,
-          "data-line-index": 14,
+          "data-line-index": "14",
           "data-line-type": "context",
         },
         "tagName": "div",
@@ -1592,7 +1592,7 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
         "properties": {
           "data-alt-line": undefined,
           "data-line": 16,
-          "data-line-index": 15,
+          "data-line-index": "15",
           "data-line-type": "context",
         },
         "tagName": "div",

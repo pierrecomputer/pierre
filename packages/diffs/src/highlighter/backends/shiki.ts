@@ -6,6 +6,7 @@ import {
 } from 'shiki/core';
 
 import type { ResolvedLanguage } from '../../worker/types';
+import { DiffsEditorTokenizer } from '../DiffsEditorTokenizer';
 import { DiffsHighlighter } from '../DiffsHighlighter';
 import { attachResolvedLanguages } from '../languages/attachResolvedLanguages';
 import { RegisteredCustomLanguages } from '../languages/constants';
@@ -78,8 +79,11 @@ export class ShikiHighlighter extends DiffsHighlighter {
 
   createEditorTokenizer(
     options: DiffsEditorTokenizerOptions
-  ): ShikiEditorTokenizer {
-    return new ShikiEditorTokenizer(this.raw, options, this);
+  ): DiffsEditorTokenizer {
+    return new DiffsEditorTokenizer(
+      new ShikiEditorTokenizer(this.raw, options, this),
+      options
+    );
   }
 
   createStreamTokenizer(options: CodeToTokensOptions): DiffsStreamTokenizer {

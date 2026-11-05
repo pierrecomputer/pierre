@@ -10,7 +10,6 @@ import {
   captureExpansionAnchors,
   findDivergenceCore,
   finishEditSessionForDiff,
-  normalizeEditorLines,
   rebuildExpansionFromAnchors,
   rebuildSessionHunks,
   remapExpandedHunksForRegionChange,
@@ -118,14 +117,6 @@ function expectPairingParity(
   expect(pairingProjection(diff)).toEqual(pairingProjection(expected));
   expect(verifyFileDiffHunkValues(diff)).toEqual({ valid: true, errors: [] });
 }
-
-describe('normalizeEditorLines', () => {
-  test('drops only the phantom trailing empty line', () => {
-    expect(normalizeEditorLines(['a\n', 'b\n', ''])).toEqual(['a\n', 'b\n']);
-    expect(normalizeEditorLines(['a\n', 'b'])).toEqual(['a\n', 'b']);
-    expect(normalizeEditorLines([''])).toEqual(['']);
-  });
-});
 
 describe('findDivergenceCore', () => {
   test('finds replacement, insertion, and the identical case', () => {

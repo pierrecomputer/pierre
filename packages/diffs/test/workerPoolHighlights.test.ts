@@ -18,6 +18,7 @@ import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { fileContentAST } from './testUtils';
 import {
   createInitializedManager,
   createInitializingManager,
@@ -107,7 +108,7 @@ describe('a Highlights worker pool', () => {
       expect(updated).toBeGreaterThan(0);
       const result = renderer.renderFile(oldFile);
       if (result == null) throw new Error('expected a file render');
-      expect(toHtml(result.contentAST)).toContain('data-pool-result');
+      expect(toHtml(fileContentAST(result))).toContain('data-pool-result');
       expect(worker.fileRequestCount).toBe(1);
     } finally {
       renderer.cleanUp();
@@ -252,7 +253,7 @@ describe('a Highlights worker pool', () => {
       expect(highlighter.name).toBe('highlights');
       const result = renderer.renderFile(oldFile);
       if (result == null) throw new Error('expected a file render');
-      expect(toHtml(result.contentAST)).toContain('color:');
+      expect(toHtml(fileContentAST(result))).toContain('color:');
       expect(worker.fileRequestCount).toBe(0);
     } finally {
       logError.mockRestore();
