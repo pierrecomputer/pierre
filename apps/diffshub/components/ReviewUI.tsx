@@ -330,7 +330,9 @@ function ReviewUIInner({
             themeType={colorMode}
             viewerRef={viewerRef}
             initialItems={initialItems}
-            loadDiffFiles={loadDiffFiles}
+            // Local mode has no GitHub repo behind it; /local/... paths would
+            // misparse as owner "local" and 404, so never attach the loader.
+            loadDiffFiles={localSource == null ? loadDiffFiles : undefined}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
             onLineLinkChange={onLineLinkChange}
