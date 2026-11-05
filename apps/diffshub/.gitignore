@@ -45,3 +45,6 @@ next-env.d.ts
 
 # crapper/dryer/mutator reports
 /.metrics/
+
+# moon task outputs
+/target/

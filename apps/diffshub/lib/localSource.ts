@@ -24,11 +24,11 @@ export const LOCAL_PROJECTS_ENDPOINT = '/api/local/projects';
 export const LOCAL_PRS_ENDPOINT = '/api/local/prs';
 export const LOCAL_DIFF_ENDPOINT = '/api/local/diff';
 
-export const PR_NUMBER_PATTERN = /^\d+$/;
+const PR_NUMBER_PATTERN = /^\d+$/;
 
 // Git refs/ranges: branch names, tags, SHAs, a...b and a..b ranges. No leading
 // dash (would be parsed as a flag) and no whitespace or shell metacharacters.
-export const COMPARE_RANGE_PATTERN =
+const COMPARE_RANGE_PATTERN =
   /^(?!-)[A-Za-z0-9._/@{}^~][A-Za-z0-9._/@{}^~/-]*$/;
 
 export function isValidProjectId(id: string): boolean {

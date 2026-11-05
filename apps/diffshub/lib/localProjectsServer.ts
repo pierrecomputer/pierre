@@ -30,7 +30,7 @@ let cachedConfig: {
   projects: LocalProject[] | undefined;
 } | null = null;
 
-export function getLocalConfigPath(): string {
+function getLocalConfigPath(): string {
   return (
     process.env.DIFFSHUB_LOCAL_CONFIG ??
     path.join(process.cwd(), CONFIG_FILE_NAME)
@@ -122,7 +122,7 @@ export function listLocalProjects(): LocalProjectSummary[] {
   }));
 }
 
-export function resolveLocalProject(id: string): LocalProject | undefined {
+function resolveLocalProject(id: string): LocalProject | undefined {
   if (!isValidProjectId(id)) return undefined;
   return loadLocalProjects()?.find((project) => project.id === id);
 }
@@ -203,7 +203,7 @@ export function buildLocalDiffCommand(
   }
 }
 
-export const PR_LIST_STATES = ['open', 'closed', 'merged', 'all'] as const;
+const PR_LIST_STATES = ['open', 'closed', 'merged', 'all'] as const;
 export type PrListState = (typeof PR_LIST_STATES)[number];
 
 export function isValidPrListState(state: string): state is PrListState {
@@ -243,7 +243,7 @@ export function buildPrListCommand(
   };
 }
 
-export function runLocalCommand(
+function runLocalCommand(
   command: LocalCommand,
   cwd: string
 ): Promise<{ stdout: string; stderr: string }> {
@@ -286,7 +286,7 @@ export async function listProjectPullRequests(
     throw new Error('gh pr list returned an unexpected payload');
   }
   return parsed.map((pr: Record<string, unknown>) => {
-    if (typeof pr.number !== 'number') {
+    if (typeof pr.number !== 'number' || !Number.isInteger(pr.number)) {
       throw new Error('gh pr list returned a PR without a number');
     }
     return {

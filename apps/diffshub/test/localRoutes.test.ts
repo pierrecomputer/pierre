@@ -109,12 +109,11 @@ describe('GET /api/local/projects', () => {
     expect(JSON.stringify(body)).not.toContain('dir');
   });
 
-  test('returns 500 when the config is invalid', async () => {
+  test('returns 500 as plain text when the config is invalid', async () => {
     writeConfig('{ nope');
     const response = getProjects();
     expect(response.status).toBe(500);
-    const body = (await response.json()) as { error: string };
-    expect(body.error).toMatch(/not valid JSON/);
+    expect(await response.text()).toMatch(/not valid JSON/);
   });
 });
 
@@ -247,7 +246,9 @@ describe('GET /api/local/diff', () => {
 
   test('streams command output as the response body', async () => {
     writeConfig(validConfig());
-    spawnImpl = () => {
+    let spawnOptions: { timeout?: number } | undefined;
+    spawnImpl = (_file, _args, options) => {
+      spawnOptions = options as { timeout?: number };
       const child = new FakeChild();
       queueMicrotask(() => {
         child.stdout.emit('data', Buffer.from('diff --git a/x b/x\n'));
@@ -259,6 +260,7 @@ describe('GET /api/local/diff', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/plain');
     expect(await response.text()).toBe('diff --git a/x b/x\n');
+    expect(spawnOptions?.timeout).toBe(120_000);
   });
 
   test('stream errors when the command fails before any output', async () => {
