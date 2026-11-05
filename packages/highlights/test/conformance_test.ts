@@ -59,7 +59,7 @@ const lexers = Object.keys(languageEnum).filter((name) => name !== 'plain');
 // its baseline: the per-lexer functions need a few hundred calls each before
 // that tier picks them up, and a miscompile there - Bun 1.4 cut identifier
 // scans after 8 bytes in any lexer that inlined a scanner without the SIMD
-// marker `markSimdReachers` adds in scripts/build.ts - must surface as a
+// marker `markSimdReachers` adds in @pierre/wat-tools - must surface as a
 // failed check, not as a wrong result after the checks have passed.
 for (let round = 0; round < 240; round++) {
   for (const name of lexers) {

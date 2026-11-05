@@ -2,6 +2,7 @@ import { LiveTokenizer } from '@pierre/highlights';
 import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
+import type { TextDocumentChange } from '../src/editor/textDocument';
 import {
   createHighlighter,
   disposeHighlighter,
@@ -317,6 +318,12 @@ describe('backend tokenizers', () => {
         theme: 'pierre-dark',
         onDeferTokenize: () => {},
       });
+      // The first call can spend its time budget before a line finishes, so
+      // the second call reads the changed lines after they complete.
+      const tokenizeAll = (change: TextDocumentChange) => {
+        tokenizer.tokenize(change);
+        return tokenizer.tokenize(change);
+      };
       const expectLinesMatchDocument = (
         lines: Map<number, HighlightedToken[]>
       ) => {
@@ -347,7 +354,7 @@ describe('backend tokenizers', () => {
             newText: 'renamed',
           },
         ]);
-        const lines = tokenizer.tokenize(renamed!);
+        const lines = tokenizeAll(renamed!);
         expectLinesMatchDocument(lines);
         expect(
           lines
@@ -375,7 +382,7 @@ describe('backend tokenizers', () => {
             newText: '10',
           },
         ]);
-        const relined = tokenizer.tokenize(widened!);
+        const relined = tokenizeAll(widened!);
         expectLinesMatchDocument(relined);
         expect(
           relined
@@ -402,7 +409,7 @@ describe('backend tokenizers', () => {
             newText: '11',
           },
         ]);
-        const updated = tokenizer.tokenize(incremented!);
+        const updated = tokenizeAll(incremented!);
         expectLinesMatchDocument(updated);
         expect(
           updated

@@ -1,0 +1,63 @@
+(module
+  (const $mem.numbuf 48)
+  (const $mem.numbufEnd 64)
+  (const $mem.hexdigits 64)
+  (const $mem.strings 80)
+  (const $mem.stringsEnd 967)
+  (const $mem.paragraphLo $mem.stringsEnd)
+  (const $mem.crByte $mem.paragraphLo+16)
+  (const $mem.quoteEscape $mem.crByte+1)
+  (const $mem.lineEnds $mem.quoteEscape+8)
+  (const $mem.lanePack $mem.lineEnds+16)
+  (const $mem.markLo $mem.lanePack+16)
+  (const $mem.markHi $mem.markLo+16)
+  (const $mem.syntaxLo $mem.markHi+16)
+  (const $mem.escapeNibbles $mem.syntaxLo+16)
+  (const $mem.entities $mem.escapeNibbles+16)
+  (const $mem.entitiesEnd $mem.entities+16424)
+  ;; 2-way cache of recent named-reference lookups (128 sets x 32 bytes), see $entityMatch
+  (const $mem.entityCache $mem.entitiesEnd)
+  (const $mem.punct $mem.entityCache+4096)
+  (const $mem.punctEnd $mem.punct+1536)
+  (const $mem.fold $mem.punctEnd)
+  (const $mem.foldEnd $mem.fold+3328)
+  (const $mem.blockTags $mem.foldEnd)
+  (const $mem.blockTagsEnd $mem.blockTags+512)
+  (const $mem.filterTags $mem.blockTagsEnd)
+  (const $mem.filterTagsEnd $mem.filterTags+256)
+  (const $mem.width $mem.filterTagsEnd)
+  (const $mem.widthEnd $mem.width+3328)
+  (const $mem.quoteBar $mem.widthEnd)
+  (const $mem.bullet $mem.quoteBar+19)
+  ;; 16 spaces for indents, then byte constants ansi.wat splats (see its data)
+  (const $mem.spaces $mem.bullet+12)
+  (const $mem.sgr $mem.spaces+33)
+  ;; Block analysis owns [$mem.container, $mem.containerEnd): 250 × 24-byte
+  ;; spine entries. Rendering reuses the first 1 KB as its type/tightness
+  ;; stack and the rest as the inline opener bottoms, backtick memo, and
+  ;; bracket stack, which are dead until the record stream is finished.
+  (const $mem.container $mem.sgr+8)
+  (const $mem.containerEnd $mem.container+6000)
+  (const $mem.opener $mem.container+1024)
+  (const $mem.tickMemo $mem.opener+128)
+  (const $mem.bracket $mem.opener+1152)
+  ;; Completion runs when block analysis is done and inline analysis has not
+  ;; started, so its 64-entry delimiter and bracket stacks use this space too.
+  (const $mem.completeDelims $mem.bracket)
+  (const $mem.completeLinks $mem.completeDelims+512)
+  (const $mem.column $mem.containerEnd)
+  (const $mem.columnEnd $mem.column+1024)
+  (const $mem.align $mem.columnEnd)
+  (const $mem.alignEnd $mem.align+256)
+  (const $mem.prefix $mem.alignEnd)
+  (const $mem.prefixEnd $mem.prefix+1024)
+  (const $mem.pending $mem.prefixEnd-256)
+  (const $mem.listNum $mem.prefixEnd)
+  (const $mem.listKind $mem.listNum+1024)
+  (const $mem.itemIndent $mem.listKind+256)
+  ;; ANSI table rendering caches measured cell widths in the otherwise unused
+  ;; fixed-memory gap below the input. Inline rendering owns no bytes here.
+  (const $mem.cellWidth $mem.itemIndent+256)
+  (const $mem.cellWidthSlots 6264) ;; (65536 - $mem.cellWidth) / 4
+  (const $mem.input 65536)
+)

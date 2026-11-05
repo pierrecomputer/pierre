@@ -1,0 +1,450 @@
+{
+  "browser": {
+    "date": "2026-11-03T01:50:39.089Z",
+    "commit": "43311732c363647f5b98a5971b1fdc8ba1946d2c",
+    "dirty": true,
+    "bun": "1.4.0",
+    "platform": "darwin/arm64",
+    "cpu": "Apple M4 Pro",
+    "memoryBytes": 51539607552,
+    "chrome": "134.0.6998.35",
+    "versions": {
+      "react": "19.2.7",
+      "streamdown": "2.7.1",
+      "@streamdown/code": "2.0.0",
+      "@playwright/test": "1.51.1"
+    },
+    "settings": {
+      "intervalMs": 40,
+      "charactersPerUpdate": "32 × scale",
+      "viewport": {
+        "width": 1280,
+        "height": 960
+      },
+      "runs": 3,
+      "stressTimeoutMs": 180000
+    },
+    "rows": [
+      {
+        "scale": 1,
+        "mode": "plain",
+        "characters": 8524,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 0.4,
+          "frameP95Ms": 9.1,
+          "heapBytes": 603992,
+          "elements": 409
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 1.1,
+          "frameP95Ms": 9.2,
+          "heapBytes": 3125072,
+          "elements": 590
+        }
+      },
+      {
+        "scale": 1,
+        "mode": "highlight",
+        "characters": 8524,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 1.7,
+          "frameP95Ms": 9.2,
+          "heapBytes": 735084,
+          "elements": 929
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 2.2,
+          "frameP95Ms": 9.1,
+          "heapBytes": 3929452,
+          "elements": 950
+        }
+      },
+      {
+        "scale": 1,
+        "mode": "animated",
+        "characters": 8524,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 1.5,
+          "frameP95Ms": 9.3,
+          "heapBytes": 871156,
+          "elements": 929
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 4.7,
+          "frameP95Ms": 9.2,
+          "heapBytes": 6033512,
+          "elements": 950
+        }
+      },
+      {
+        "scale": 100,
+        "mode": "plain",
+        "characters": 852598,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 1.7,
+          "frameP95Ms": 9.3,
+          "heapBytes": 3554000,
+          "elements": 40801
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 25.6,
+          "frameP95Ms": 16.7,
+          "heapBytes": 126035852,
+          "elements": 58901
+        }
+      },
+      {
+        "scale": 100,
+        "mode": "highlight",
+        "characters": 852598,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 2.2,
+          "frameP95Ms": 9.9,
+          "heapBytes": 6023900,
+          "elements": 90961
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 25.2,
+          "frameP95Ms": 16.7,
+          "heapBytes": 142327284,
+          "elements": 94901
+        }
+      },
+      {
+        "scale": 100,
+        "mode": "animated",
+        "characters": 852598,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 13.2,
+          "frameP95Ms": 16.8,
+          "heapBytes": 8196844,
+          "elements": 90961
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 3,
+          "updateP95Ms": 44.7,
+          "frameP95Ms": 91.6,
+          "heapBytes": 237340916,
+          "elements": 94901
+        }
+      }
+    ],
+    "stress": [
+      {
+        "scale": 1000,
+        "mode": "highlight",
+        "characters": 8525998,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 1,
+          "updateP95Ms": 4.1,
+          "frameP95Ms": 141.6,
+          "heapBytes": 51198988,
+          "elements": 890281
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 1,
+          "updateP95Ms": 228.9,
+          "frameP95Ms": 291.6,
+          "heapBytes": 1397858724,
+          "elements": 949001
+        }
+      },
+      {
+        "scale": 1000,
+        "mode": "animated",
+        "characters": 8525998,
+        "updates": 267,
+        "words": {
+          "status": "completed",
+          "runs": 1,
+          "updateP95Ms": 208.3,
+          "frameP95Ms": 234.1,
+          "heapBytes": 67320292,
+          "elements": 890281
+        },
+        "streamdown": {
+          "status": "timed-out"
+        }
+      }
+    ],
+    "download": {
+      "base": {
+        "words": 50350,
+        "streamdown": 165295
+      },
+      "highlight": {
+        "words": 254401,
+        "streamdown": 244940
+      },
+      "css": {
+        "words": 1232,
+        "streamdown": 449
+      }
+    }
+  },
+  "packageRun": {
+    "head": "6b6adede21c2ff1f77527c8c749fc70c607ce4e7",
+    "environment": {
+      "date": "2026-11-02T15:11:35.130Z",
+      "node": "v24.11.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M4 Pro",
+      "memoryBytes": 51539607552,
+      "versions": {
+        "md4x": "0.0.29",
+        "markdown-it": "15.0.0",
+        "streamdown": "2.7.1",
+        "react": "19.2.7",
+        "jsdom": "26.1.0"
+      }
+    },
+    "metrics": [
+      {
+        "label": "HTML throughput",
+        "description": "Median HTML throughput in MiB/s. Higher is better.",
+        "decimals": 1,
+        "unit": "MiB/s",
+        "higherIsBetter": true,
+        "engines": [
+          "Words",
+          "md4x (native)",
+          "md4x (Wasm)",
+          "markdown-it"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              318.1,
+              143.9,
+              105.4,
+              14.2
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              384.8,
+              208.7,
+              166.6,
+              23.4
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              441,
+              221.4,
+              178.8,
+              32.8
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              371.5,
+              190.1,
+              132.8,
+              22.8
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              370.3,
+              175.7,
+              126.6,
+              31
+            ]
+          }
+        ]
+      },
+      {
+        "label": "React stream replay",
+        "description": "Median ms per complete React replay in JSDOM, with chunks of up to 256 UTF-16 code units. Lower is better.",
+        "decimals": 2,
+        "unit": "ms",
+        "engines": [
+          "Words React",
+          "Streamdown"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              3.35,
+              6.84
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              11.27,
+              31.56
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              6.53,
+              10.92
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              45.25,
+              181.71
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              281.06,
+              4385.23
+            ]
+          }
+        ]
+      },
+      {
+        "label": "HTML memory",
+        "description": "Median peak RSS growth in MiB through the first HTML render, relative to each process before engine import. Five processes per engine and fixture. Lower is better.",
+        "decimals": 1,
+        "unit": "MiB",
+        "engines": [
+          "Words",
+          "md4x (native)",
+          "md4x (Wasm)",
+          "markdown-it"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              3.2,
+              0.9,
+              7.7,
+              6.2
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              3.1,
+              0.9,
+              7.7,
+              6
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              3.2,
+              0.9,
+              7.7,
+              5.7
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              3.5,
+              1.4,
+              11.5,
+              8.7
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              8.7,
+              2.6,
+              22.1,
+              17.7
+            ]
+          }
+        ]
+      },
+      {
+        "label": "React stream memory",
+        "description": "Median peak RSS growth in MiB through a complete JSDOM replay, relative to each process before engine import. Five processes per engine and fixture. Lower is better.",
+        "decimals": 1,
+        "unit": "MiB",
+        "engines": [
+          "Words React",
+          "Streamdown"
+        ],
+        "rows": [
+          {
+            "fixture": "tiny.md",
+            "values": [
+              75.6,
+              87
+            ]
+          },
+          {
+            "fixture": "assistant-review.md",
+            "values": [
+              85,
+              121.7
+            ]
+          },
+          {
+            "fixture": "assistant-explain.md",
+            "values": [
+              76.3,
+              94.4
+            ]
+          },
+          {
+            "fixture": "simd.md",
+            "values": [
+              109.6,
+              145.5
+            ]
+          },
+          {
+            "fixture": "gfm-spec.md",
+            "values": [
+              201.4,
+              328.9
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

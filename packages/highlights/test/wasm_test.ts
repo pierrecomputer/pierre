@@ -1,3 +1,4 @@
+import { findSimdCallersWithoutSimd } from '@pierre/wat-tools';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -189,7 +190,7 @@ void test('live state hashing and comparison ignore bytes beyond the state', () 
 // JavaScriptCore compiles a function with the SIMD register convention only
 // when the function's own bytecode uses SIMD, but its optimizing tier inlines
 // small callees. Without the marker the build adds (markSimdReachers in
-// scripts/build.ts), a lexer that inlined a scanner kept the scanner's vector
+// @pierre/wat-tools), a lexer that inlined a scanner kept the scanner's vector
 // constants in callee-saved registers across calls and lost their upper
 // halves on Bun 1.4. The invariant is local - every direct caller of a SIMD
 // function uses SIMD itself, through an instruction or a v128 local - and
@@ -207,41 +208,10 @@ void test(
       ['preprocessed source', code],
       ['optimized module', optimized],
     ] as const) {
-      const usesSimd =
-        /\b(?:v128|[if](?:8x16|16x8|32x4|64x2))\.|\(local\b[^()]*\bv128\b/;
-      const imported = (text.match(/\(import\b[^\n]*\(func\b/g) ?? []).length;
-      const funcs: { name: string; body: string }[] = [];
-      const starts = [...text.matchAll(/^\s*\(func(?:\s+(\$[^\s()]+))?/gm)];
-      for (const [i, m] of starts.entries()) {
-        const end = starts[i + 1]?.index ?? text.length;
-        funcs.push({
-          name: m[1] ?? `#${i + imported}`,
-          body: text.slice(m.index, end).replace(/"(?:[^"\\]|\\.)*"/g, '""'),
-        });
-      }
-      assert.ok(funcs.length > 300, `${label}: found the module functions`);
-      const simd = new Set(
-        funcs.flatMap((f, i) =>
-          usesSimd.test(f.body) ? [f.name, `#${i + imported}`] : []
-        )
-      );
-      assert.ok(simd.size > 40, `${label}: found the SIMD scanners`);
-      for (const f of funcs) {
-        if (simd.has(f.name)) continue;
-        const callees = [...f.body.matchAll(/\bcall\s+(\$[^\s()]+|\d+)/g)].map(
-          (m) => (/^\d+$/.test(m[1]) ? `#${m[1]}` : m[1])
-        );
-        const simdCallee = callees.find((c) => simd.has(c));
-        assert.equal(
-          simdCallee,
-          undefined,
-          `${label}: ${f.name} calls ${simdCallee} without using SIMD`
-        );
-        assert.ok(
-          !/\bcall_indirect\b/.test(f.body),
-          `${label}: ${f.name} uses call_indirect without using SIMD`
-        );
-      }
+      const { functions, simd, violations } = findSimdCallersWithoutSimd(text);
+      assert.ok(functions > 300, `${label}: found the module functions`);
+      assert.ok(simd > 40, `${label}: found the SIMD scanners`);
+      assert.deepEqual(violations, [], label);
     }
   }
 );
