@@ -2,6 +2,7 @@ import type { FileOptions } from '../components/File';
 import { FileRenderer } from '../renderers/FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import {
+  createCoreStyleElement,
   createStyleElement,
   createThemeStyleElement,
 } from '../utils/createStyleElement';
@@ -44,7 +45,7 @@ export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
   }
 
   const fileResult = await fileRenderer.asyncRender(file);
-  const children = [createStyleElement(fileResult.css, true)];
+  const children = [createCoreStyleElement()];
 
   children.push(
     createThemeStyleElement(

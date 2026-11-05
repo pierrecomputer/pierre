@@ -10,6 +10,7 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from './computeVirtualFileMetrics';
+import { endsWithNewline } from './iterateOverDiff';
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
@@ -26,6 +27,11 @@ export interface ComputeEstimatedDiffHeightsOptions {
   expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
   collapsedContextThreshold: number;
   canHydratePartialDiff: boolean;
+  // Count the row for the empty line after the final newline; see
+  // IterateOverDiffProps.includeTrailingNewline.
+  includeTrailingNewline?: boolean;
+  // Count the "No newline at end of file" marker rows.
+  showNoNewlineMarkers?: boolean;
 }
 
 export interface EstimatedDiffHeights {
@@ -44,6 +50,8 @@ export function computeEstimatedDiffHeights({
   expandedHunks: configuredExpandedHunks,
   collapsedContextThreshold,
   canHydratePartialDiff,
+  includeTrailingNewline = false,
+  showNoNewlineMarkers = true,
 }: ComputeEstimatedDiffHeightsOptions): EstimatedDiffHeights {
   let splitHeight = getVirtualFileHeaderRegion(metrics, disableFileHeader);
   let unifiedHeight = splitHeight;
@@ -83,9 +91,11 @@ export function computeEstimatedDiffHeights({
     splitHeight += hunk.splitLineCount * metrics.lineHeight;
     unifiedHeight += hunk.unifiedLineCount * metrics.lineHeight;
 
-    const metadataLineCounts = getNoNewlineMetadataLineCounts(hunk);
-    splitHeight += metadataLineCounts.split * metrics.lineHeight;
-    unifiedHeight += metadataLineCounts.unified * metrics.lineHeight;
+    if (showNoNewlineMarkers) {
+      const metadataLineCounts = getNoNewlineMetadataLineCounts(hunk);
+      splitHeight += metadataLineCounts.split * metrics.lineHeight;
+      unifiedHeight += metadataLineCounts.unified * metrics.lineHeight;
+    }
 
     const trailingRegion =
       hunkIndex === finalHunkIndex
@@ -125,6 +135,16 @@ export function computeEstimatedDiffHeights({
         })?.totalHeight ?? 0;
       splitHeight += separatorHeight;
       unifiedHeight += separatorHeight;
+    }
+
+    if (
+      includeTrailingNewline &&
+      hunkIndex === finalHunkIndex &&
+      (trailingRegion?.collapsedLines ?? 0) === 0 &&
+      endsWithNewline(fileDiff, 'additions')
+    ) {
+      splitHeight += metrics.lineHeight;
+      unifiedHeight += metrics.lineHeight;
     }
   }
 
