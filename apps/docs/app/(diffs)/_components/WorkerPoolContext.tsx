@@ -8,6 +8,7 @@ import {
 } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
+import { getPreferredDiffLib } from '@/lib/preferredDiffLib';
 import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 function isMobileBrowser(): boolean {
@@ -61,6 +62,7 @@ const PoolOptions: WorkerPoolOptions = {
 const SITE = process.env.NEXT_PUBLIC_SITE;
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
+  preferredDiffLib: getPreferredDiffLib(),
   preferredHighlighter: getPreferredHighlighter(),
   // diffshub intentionally previews on the soft Pierre pair (a deliberate
   // product choice) even though the canonical default is the non-soft pair.
