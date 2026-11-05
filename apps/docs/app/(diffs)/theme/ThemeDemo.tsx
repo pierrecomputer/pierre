@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useTheme } from '@/components/theme-provider';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 import { useOnValueChange } from '@/lib/useOnValueChange';
 import { cn } from '@/lib/utils';
@@ -341,7 +342,8 @@ export function ThemeDemo() {
       workingFiles.map((wf) => {
         const diff = parseDiffFromFile(
           { name: wf.name, contents: wf.oldContents },
-          { name: wf.name, contents: wf.newContents }
+          { name: wf.name, contents: wf.newContents },
+          DEFAULT_PARSE_DIFF_OPTIONS
         );
         const hasChanges = diff.hunks.some((hunk) =>
           hunk.hunkContent.some((content) => content.type === 'change')
@@ -645,6 +647,7 @@ export function ThemeDemo() {
                       key={fileData.id}
                       fileDiff={fileData.diff}
                       options={{
+                        parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
                         theme: themeName,
                         themeType: colorMode,
                         diffStyle: 'unified',
