@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local-mode config (copy local-projects.example.json to get started)
 /local-projects.json
+
+# crapper/dryer/mutator reports
+/.metrics/

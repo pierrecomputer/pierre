@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { ReviewUI } from '@/components/ReviewUI';
-import { resolveLocalProject } from '@/lib/localProjects.server';
+import { tryResolveLocalProject } from '@/lib/localProjectsServer';
 import { isValidCompareRange, type LocalViewerSource } from '@/lib/localSource';
 import { SITE_NAME } from '@/lib/site';
 
@@ -14,7 +14,7 @@ export async function generateMetadata({
   params,
 }: LocalComparePageProps): Promise<Metadata> {
   const { project, range } = await params;
-  const resolved = resolveLocalProject(project);
+  const resolved = tryResolveLocalProject(project);
   const joined = range.join('/');
   const title =
     resolved != null && isValidCompareRange(joined)
@@ -30,7 +30,7 @@ export default async function LocalComparePage({
   params,
 }: LocalComparePageProps) {
   const { project, range } = await params;
-  const resolved = resolveLocalProject(project);
+  const resolved = tryResolveLocalProject(project);
   const joined = range.join('/');
   if (resolved == null || !isValidCompareRange(joined)) {
     notFound();

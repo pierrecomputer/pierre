@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { listLocalProjects } from '@/lib/localProjects.server';
+import { listLocalProjects } from '@/lib/localProjectsServer';
 
 // Local mode is dev-only; never cache the config-derived listing.
 export const dynamic = 'force-dynamic';

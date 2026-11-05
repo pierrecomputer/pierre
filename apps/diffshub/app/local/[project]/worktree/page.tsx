@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { ReviewUI } from '@/components/ReviewUI';
-import { resolveLocalProject } from '@/lib/localProjects.server';
+import { tryResolveLocalProject } from '@/lib/localProjectsServer';
 import type { LocalViewerSource } from '@/lib/localSource';
 import { SITE_NAME } from '@/lib/site';
 
@@ -14,7 +14,7 @@ export async function generateMetadata({
   params,
 }: LocalWorktreePageProps): Promise<Metadata> {
   const { project } = await params;
-  const resolved = resolveLocalProject(project);
+  const resolved = tryResolveLocalProject(project);
   const title =
     resolved != null
       ? `${resolved.label} local changes — ${SITE_NAME}`
@@ -28,7 +28,7 @@ export default async function LocalWorktreePage({
   params,
 }: LocalWorktreePageProps) {
   const { project } = await params;
-  const resolved = resolveLocalProject(project);
+  const resolved = tryResolveLocalProject(project);
   if (resolved == null) {
     notFound();
   }

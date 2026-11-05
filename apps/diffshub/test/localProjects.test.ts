@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,7 +7,7 @@ import {
   buildLocalDiffCommand,
   buildPrListCommand,
   loadLocalProjects,
-} from '../lib/localProjects.server';
+} from '../lib/localProjectsServer';
 
 function withTempConfig(content: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'diffshub-local-projects-'));
@@ -92,6 +92,60 @@ describe('loadLocalProjects', () => {
       })
     );
     expect(() => loadLocalProjects(configPath)).toThrow(/does not exist/);
+    rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
+  test('throws on a non-object project entry', () => {
+    const configPath = withTempConfig(JSON.stringify({ projects: [null] }));
+    expect(() => loadLocalProjects(configPath)).toThrow(/must be an object/);
+    rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
+  test('throws on an empty dir', () => {
+    const configPath = withTempConfig(
+      JSON.stringify({ projects: [{ id: 'p', repo: 'a/b', dir: '' }] })
+    );
+    expect(() => loadLocalProjects(configPath)).toThrow(/"dir" must be/);
+    rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
+  test('throws on invalid project id', () => {
+    const configPath = withTempConfig(
+      JSON.stringify({
+        projects: [{ id: '../etc', repo: 'a/b', dir: tmpdir() }],
+      })
+    );
+    expect(() => loadLocalProjects(configPath)).toThrow(/"id" must be/);
+    rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
+  test('defaults an empty label to the id', () => {
+    const configPath = withTempConfig(
+      JSON.stringify({
+        projects: [{ id: 'p', label: '', repo: 'a/b', dir: tmpdir() }],
+      })
+    );
+    expect(loadLocalProjects(configPath)?.[0]?.label).toBe('p');
+    rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
+  test('picks up config edits when the file mtime changes', () => {
+    const configPath = withTempConfig(
+      JSON.stringify({
+        projects: [{ id: 'one', repo: 'a/b', dir: tmpdir() }],
+      })
+    );
+    expect(loadLocalProjects(configPath)?.map((p) => p.id)).toEqual(['one']);
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        projects: [{ id: 'two', repo: 'a/b', dir: tmpdir() }],
+      })
+    );
+    // writeFileSync may not advance mtime enough on fast filesystems
+    const later = new Date(Date.now() + 2000);
+    utimesSync(configPath, later, later);
+    expect(loadLocalProjects(configPath)?.map((p) => p.id)).toEqual(['two']);
     rmSync(path.dirname(configPath), { recursive: true, force: true });
   });
 

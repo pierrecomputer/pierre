@@ -2,7 +2,7 @@
 // diffs produced by commands run on the server (gh pr diff, git diff) against
 // projects listed in local-projects.json, instead of proxying GitHub. The
 // server-only config loading and process spawning live in
-// localProjects.server.ts — never import that module from client components.
+// localProjectsServer.ts — never import that module from client components.
 
 export interface LocalProjectSummary {
   id: string;
@@ -46,22 +46,23 @@ export function isValidCompareRange(range: string): boolean {
 }
 
 // Parses the /api/local/diff query params. Exactly one target must be present:
-// ?pr=123, ?range=a...b, or ?worktree=1. Returns undefined when absent/invalid.
+// ?pr=123, ?range=a...b, or ?worktree=1. Returns undefined when absent,
+// invalid, or ambiguous (more than one target present).
 export function parseLocalDiffTarget(
   searchParams: URLSearchParams
 ): LocalDiffTarget | undefined {
   const pr = searchParams.get('pr');
+  const range = searchParams.get('range');
+  const worktree = searchParams.get('worktree');
+  const present = [pr, range, worktree].filter((value) => value != null).length;
+  if (present !== 1) return undefined;
   if (pr != null) {
     return isValidPrNumber(pr) ? { kind: 'pull', pr } : undefined;
   }
-  const range = searchParams.get('range');
   if (range != null) {
     return isValidCompareRange(range) ? { kind: 'compare', range } : undefined;
   }
-  if (searchParams.get('worktree') === '1') {
-    return { kind: 'worktree' };
-  }
-  return undefined;
+  return worktree === '1' ? { kind: 'worktree' } : undefined;
 }
 
 export function buildLocalDiffSearchParams(
@@ -113,18 +114,16 @@ export function getLocalViewerPath(source: LocalViewerSource): string {
   }
 }
 
-export function describeLocalSource(
-  source: LocalViewerSource,
-  projects?: readonly LocalProjectSummary[]
-): string {
-  const label =
-    projects?.find((p) => p.id === source.project)?.label ?? source.project;
-  switch (source.target.kind) {
-    case 'pull':
-      return `${label} PR #${source.target.pr}`;
-    case 'compare':
-      return `${label} ${source.target.range}`;
-    case 'worktree':
-      return `${label} local changes`;
-  }
+// Shape of one PR as returned by `gh pr list --json`, shared between the
+// server route and the client panel.
+export interface LocalPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  headRefName: string;
+  baseRefName: string;
+  isDraft: boolean;
+  author: string;
+  url: string;
+  updatedAt: string;
 }

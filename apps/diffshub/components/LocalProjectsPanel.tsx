@@ -10,19 +10,8 @@ import {
   LOCAL_PROJECTS_ENDPOINT,
   LOCAL_PRS_ENDPOINT,
   type LocalProjectSummary,
+  type LocalPullRequest,
 } from '@/lib/localSource';
-
-interface LocalPullRequest {
-  number: number;
-  title: string;
-  state: string;
-  headRefName: string;
-  baseRefName: string;
-  isDraft: boolean;
-  author: string;
-  url: string;
-  updatedAt: string;
-}
 
 interface ProjectSectionState {
   project: LocalProjectSummary;

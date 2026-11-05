@@ -12,6 +12,7 @@ import {
   isValidProjectId,
   type LocalDiffTarget,
   type LocalProjectSummary,
+  type LocalPullRequest,
 } from './localSource';
 
 export interface LocalProject extends LocalProjectSummary {
@@ -126,6 +127,56 @@ export function resolveLocalProject(id: string): LocalProject | undefined {
   return loadLocalProjects()?.find((project) => project.id === id);
 }
 
+// Page-safe variant: a broken local-projects.json renders 404 instead of an
+// unhandled error mid-render.
+export function tryResolveLocalProject(id: string): LocalProject | undefined {
+  try {
+    return resolveLocalProject(id);
+  } catch {
+    return undefined;
+  }
+}
+
+export function createLocalTextResponse(
+  message: string,
+  status: number
+): Response {
+  return new Response(message, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+// Shared API-route wiring: resolves the project id against the config and
+// produces the 500 (bad config) / 404 (unknown project) responses, so each
+// local route stays a one-liner.
+export function resolveLocalProjectForApi(
+  projectId: string
+): { project: LocalProject } | { errorResponse: Response } {
+  try {
+    const project = resolveLocalProject(projectId);
+    if (project != null) return { project };
+    return {
+      errorResponse: createLocalTextResponse(
+        `Unknown local project "${projectId}". Add it to local-projects.json.`,
+        404
+      ),
+    };
+  } catch (error) {
+    return {
+      errorResponse: createLocalTextResponse(
+        error instanceof Error
+          ? error.message
+          : 'Failed to load local projects config',
+        500
+      ),
+    };
+  }
+}
+
 export interface LocalCommand {
   file: string;
   args: string[];
@@ -220,18 +271,6 @@ export function runLocalCommand(
       }
     );
   });
-}
-
-export interface LocalPullRequest {
-  number: number;
-  title: string;
-  state: string;
-  headRefName: string;
-  baseRefName: string;
-  isDraft: boolean;
-  author: string;
-  url: string;
-  updatedAt: string;
 }
 
 export async function listProjectPullRequests(

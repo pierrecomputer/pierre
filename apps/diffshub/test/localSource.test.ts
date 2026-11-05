@@ -40,6 +40,12 @@ describe('isValidCompareRange', () => {
     expect(isValidCompareRange('a b')).toBe(false);
     expect(isValidCompareRange('$(whoami)')).toBe(false);
   });
+
+  test('accepts a single-character ref and rejects overlong ranges', () => {
+    expect(isValidCompareRange('a')).toBe(true);
+    expect(isValidCompareRange('v'.repeat(512))).toBe(true);
+    expect(isValidCompareRange('v'.repeat(513))).toBe(false);
+  });
 });
 
 describe('isValidProjectId', () => {
@@ -90,6 +96,24 @@ describe('parseLocalDiffTarget', () => {
     expect(
       parseLocalDiffTarget(
         new URLSearchParams({ project: 'x', worktree: 'yes' })
+      )
+    ).toBeUndefined();
+  });
+
+  test('returns undefined when more than one target is present', () => {
+    expect(
+      parseLocalDiffTarget(
+        new URLSearchParams({ project: 'x', pr: '1', range: 'a...b' })
+      )
+    ).toBeUndefined();
+    expect(
+      parseLocalDiffTarget(
+        new URLSearchParams({ project: 'x', pr: '1', worktree: '1' })
+      )
+    ).toBeUndefined();
+    expect(
+      parseLocalDiffTarget(
+        new URLSearchParams({ project: 'x', range: 'a...b', worktree: '1' })
       )
     ).toBeUndefined();
   });

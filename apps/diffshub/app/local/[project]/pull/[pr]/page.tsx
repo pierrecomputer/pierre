@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { ReviewUI } from '@/components/ReviewUI';
-import { resolveLocalProject } from '@/lib/localProjects.server';
+import { tryResolveLocalProject } from '@/lib/localProjectsServer';
 import { isValidPrNumber, type LocalViewerSource } from '@/lib/localSource';
 import { SITE_NAME } from '@/lib/site';
 
@@ -14,7 +14,7 @@ export async function generateMetadata({
   params,
 }: LocalPullPageProps): Promise<Metadata> {
   const { project, pr } = await params;
-  const resolved = resolveLocalProject(project);
+  const resolved = tryResolveLocalProject(project);
   const title =
     resolved != null && isValidPrNumber(pr)
       ? `${resolved.label} #${pr} — ${SITE_NAME}`
@@ -26,7 +26,7 @@ export async function generateMetadata({
 // `gh pr diff <pr> --repo <repo>` in the project's local checkout.
 export default async function LocalPullPage({ params }: LocalPullPageProps) {
   const { project, pr } = await params;
-  const resolved = resolveLocalProject(project);
+  const resolved = tryResolveLocalProject(project);
   if (resolved == null || !isValidPrNumber(pr)) {
     notFound();
   }
