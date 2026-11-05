@@ -381,44 +381,34 @@ export class VirtualizedFileDiff<
     this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
   }
 
-  // An edit moved the rows from the one showing `startLine` down, so their
-  // measurements describe other lines now and are dropped, by probing down
-  // from the highest measured row, so the work is the rows from there to the
-  // edit, not the rows measured. The rows come from the diff itself, since
-  // the cached layout is the old.
-  private dropMeasurementsFrom(startLine: number): void {
+  // A row an edit removed leaves its measurement at an index nothing renders
+  // again, so it would stay in the height total; those are dropped here, by
+  // probing down from the highest measured row to the new row count, so the
+  // work is the rows removed past the end, not the rows measured. The row
+  // count comes from the diff itself, since the cached one is the old.
+  private dropMeasurementsPastEnd(): void {
     const fileDiff = this.getRenderedDiff();
     const { heightDeltas } = this.cache;
     if (fileDiff == null || heightDeltas.size === 0) {
       return;
     }
     const diffStyle = this.getDiffStyle();
-    const indexes = this.getLineIndexForDiff(
-      fileDiff,
-      startLine + 1,
-      'additions'
+    const rowCount = Math.max(
+      this.getExpandedLineCount(fileDiff, diffStyle),
+      diffStyle === 'split'
+        ? fileDiff.splitLineCount
+        : fileDiff.unifiedLineCount,
+      fileDiff.additionLines.length,
+      fileDiff.deletionLines.length
     );
-    const firstRow =
-      indexes == null ? 0 : diffStyle === 'split' ? indexes[1] : indexes[0];
-    // Whichever is fewer: the rows between the edit and the highest measured
-    // one, or the measurements themselves.
-    if (this.highestMeasuredRow - firstRow < heightDeltas.size) {
-      for (let row = this.highestMeasuredRow; row >= firstRow; row--) {
-        const delta = heightDeltas.get(row);
-        if (delta != null) {
-          heightDeltas.delete(row);
-          this.cache.measuredHeightDeltaTotal -= delta;
-        }
-      }
-    } else {
-      for (const [row, delta] of heightDeltas) {
-        if (row >= firstRow) {
-          heightDeltas.delete(row);
-          this.cache.measuredHeightDeltaTotal -= delta;
-        }
+    for (let row = this.highestMeasuredRow; row >= rowCount; row--) {
+      const delta = heightDeltas.get(row);
+      if (delta != null) {
+        heightDeltas.delete(row);
+        this.cache.measuredHeightDeltaTotal -= delta;
       }
     }
-    this.highestMeasuredRow = Math.min(this.highestMeasuredRow, firstRow - 1);
+    this.highestMeasuredRow = Math.min(this.highestMeasuredRow, rowCount - 1);
   }
 
   // The rows moved or the layout inputs changed: positions, row counts and,
@@ -613,12 +603,8 @@ export class VirtualizedFileDiff<
   // rows below and the file's height, so the layout caches are invalidated
   // with the render; a released item reports its new height from the next
   // layout pass. Either way the render itself runs in the virtualizer's frame.
-  protected override renderChange(
-    structural: boolean,
-    startLine: number
-  ): void {
+  protected override renderChange(structural: boolean): void {
     if (structural) {
-      this.dropMeasurementsFrom(startLine);
       this.escalateEditSessionRender('change');
     } else {
       this.rerender();
@@ -1260,10 +1246,12 @@ export class VirtualizedFileDiff<
   // released instance stops at the cache invalidation and the host relayout
   // covers it.
   protected override escalateEditSessionRender(cause: 'change' | 'exit'): void {
-    // The exit recompute renders a different diff; a change dropped the
-    // measurements of the rows it moved already (see renderChange).
+    // The exit recompute renders a different diff; a change moves this one's
+    // rows, whose measurements stay, except those of rows it removed.
     if (cause === 'exit') {
       this.resetMeasurements();
+    } else {
+      this.dropMeasurementsPastEnd();
     }
     this.invalidateEditSessionLayout();
     if (!this.enabled || this.getInputDiff() == null) {

@@ -2009,9 +2009,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     // A render through the session gives the editor its rows and syncs it
     // after. Rows already on screen are kept by key; the end of the file
-    // gains the editor's empty last line and loses its "No newline" markers,
-    // so the change starts at the line after the last.
-    this.renderChange(true, editSessionDiff?.additionLines.length ?? 0);
+    // gains the editor's empty last line and loses its "No newline" markers.
+    this.renderChange(true);
   }
 
   /**
@@ -2182,13 +2181,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     // others at the same count. A plain diff renders either way.
     const rowsMoved =
       lineDelta !== 0 || removedLineIds.length > 0 || regionsChanged;
-    // A change that kept every line in place (typing in an added file still
-    // recomputes its hunks) moved no row, so it starts after the last line.
-    const linesMoved = lineDelta !== 0 || removedLineIds.length > 0;
-    this.renderChange(
-      rowsMoved || hunksChanged,
-      linesMoved ? change.startLine : document.lineCount
-    );
+    this.renderChange(rowsMoved || hunksChanged);
     // Nothing was on screen, or a render callback ended the session.
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
@@ -2204,9 +2197,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // touches what changed. Does nothing when unmounted or recycled; the next
   // render picks the change up. VirtualizedFileDiff renders in its host's
   // frame and invalidates its layout for a structural change.
-  // `startLine` is the first new-file line whose row the change moved, or
-  // the line count when it moved none.
-  protected renderChange(_structural: boolean, _startLine: number): void {
+  protected renderChange(_structural: boolean): void {
     if (this.fileContainer == null) {
       return;
     }

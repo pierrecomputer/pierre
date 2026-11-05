@@ -866,22 +866,12 @@ export class VirtualizedFile<
   }
 
   // A line-count change also moves the rows below and the file's height, so
-  // the measurements from the edit's line down are dropped (those lines show
-  // other text now) and the layout caches are invalidated with the render.
-  // Either way the render itself runs in the virtualizer's frame.
-  protected override renderChange(
-    structural: boolean,
-    startLine: number
-  ): void {
+  // the layout caches are invalidated with the render. Either way the render
+  // itself runs in the virtualizer's frame.
+  protected override renderChange(structural: boolean): void {
     if (!structural) {
       this.rerender();
       return;
-    }
-    const { heights } = this.cache;
-    for (const lineIndex of heights.keys()) {
-      if (lineIndex >= startLine) {
-        heights.delete(lineIndex);
-      }
     }
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.invalidateLayout({

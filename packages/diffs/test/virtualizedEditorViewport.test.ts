@@ -527,72 +527,6 @@ describe('virtualized editor viewport', () => {
       toJSON() {},
     };
   };
-  const insertAtLine = (
-    editor: Editor<'file', undefined> | Editor<'file-diff', undefined>,
-    line: number
-  ) =>
-    editor.applyEdits([
-      {
-        range: {
-          start: { line, character: 0 },
-          end: { line, character: 0 },
-        },
-        newText: 'inserted\n',
-      },
-    ]);
-
-  test('a line inserted drops the file measurements below it and keeps those above', async () => {
-    const { cleanup } = installDom();
-    const rectOf = HTMLElement.prototype.getBoundingClientRect;
-    HTMLElement.prototype.getBoundingClientRect = rectByText;
-    try {
-      const root = document.createElement('div');
-      document.body.appendChild(root);
-      const file = new VirtualizedFile<undefined>(
-        { overflow: 'wrap' },
-        createSimpleVirtualizer(root)
-      );
-      const fileContainer = document.createElement('div');
-      root.appendChild(fileContainer);
-      file.render({
-        file: {
-          name: 'tall.txt',
-          contents: Array.from(
-            { length: 30 },
-            (_, line) => `line ${line}`
-          ).join('\n'),
-          lang: 'text',
-        },
-        fileContainer,
-        forceRender: true,
-      });
-      const rowText = (index: number) =>
-        fileContainer.shadowRoot?.querySelector(
-          `[data-content] > [data-line-index="${index}"]`
-        )?.textContent;
-      await waitFor(() => rowText(10) === 'line 10');
-      expect(file.reconcileHeights()).toBe(true);
-      expect(file.getLineHeight(1)).toBe(40);
-      expect(file.getLineHeight(10)).toBe(40);
-
-      const editor = new Editor<'file', undefined>('file');
-      editor.edit(file);
-      await waitFor(() => editor.getText().startsWith('line 0'));
-      insertAtLine(editor, 8);
-      expect(file.getLineHeight(1)).toBe(40);
-      expect(file.getLineHeight(10)).toBe(20);
-      expect(file.getLineHeight(11)).toBe(20);
-      await waitFor(() => rowText(11) === 'line 10');
-      expect(file.reconcileHeights()).toBe(true);
-      expect(file.getLineHeight(11)).toBe(40);
-      expect(file.getLineHeight(10)).toBe(20);
-      editor.cleanUp();
-    } finally {
-      HTMLElement.prototype.getBoundingClientRect = rectOf;
-      cleanup();
-    }
-  });
-
   test('typing in an added file keeps its diff measurements', async () => {
     const { cleanup } = installDom();
     const rectOf = HTMLElement.prototype.getBoundingClientRect;
@@ -642,62 +576,6 @@ describe('virtualized editor viewport', () => {
         },
       ]);
       expect(heightOf(11)).toBe(40);
-      editor.cleanUp();
-    } finally {
-      HTMLElement.prototype.getBoundingClientRect = rectOf;
-      cleanup();
-    }
-  });
-
-  test('a line inserted drops the diff measurements below it and keeps those above', async () => {
-    const { cleanup } = installDom();
-    const rectOf = HTMLElement.prototype.getBoundingClientRect;
-    HTMLElement.prototype.getBoundingClientRect = rectByText;
-    try {
-      const root = document.createElement('div');
-      document.body.appendChild(root);
-      const fileDiff = new VirtualizedFileDiff<undefined>(
-        { diffStyle: 'unified', expandUnchanged: true, overflow: 'wrap' },
-        createSimpleVirtualizer(root)
-      );
-      const fileContainer = document.createElement('div');
-      root.appendChild(fileContainer);
-      const lines = Array.from({ length: 30 }, (_, line) => `line ${line}`);
-      fileDiff.render({
-        fileDiff: parseDiffFromFile(
-          { name: 'tall.txt', contents: lines.join('\n'), lang: 'text' },
-          {
-            name: 'tall.txt',
-            contents: lines.with(20, 'changed 20').join('\n'),
-            lang: 'text',
-          }
-        ),
-        fileContainer,
-        forceRender: true,
-      });
-      const rowText = (index: number) =>
-        fileContainer.shadowRoot?.querySelector(
-          `[data-content] > [data-line-index^="${index},"]`
-        )?.textContent;
-      const heightOf = (lineNumber: number) =>
-        fileDiff.getLinePosition(lineNumber, 'additions')?.height;
-      const editor = new Editor<'file-diff', undefined>('file-diff');
-      editor.edit(fileDiff);
-      await waitFor(() => editor.getText().startsWith('line 0'));
-      await waitFor(() => rowText(10) === 'line 10');
-      await wait(0);
-      fileDiff.reconcileHeights();
-      expect(heightOf(2)).toBe(40);
-      expect(heightOf(11)).toBe(40);
-
-      insertAtLine(editor, 8);
-      expect(heightOf(2)).toBe(40);
-      expect(heightOf(11)).toBe(20);
-      expect(heightOf(12)).toBe(20);
-      await waitFor(() => rowText(11) === 'line 10');
-      expect(fileDiff.reconcileHeights()).toBe(true);
-      expect(heightOf(12)).toBe(40);
-      expect(heightOf(11)).toBe(20);
       editor.cleanUp();
     } finally {
       HTMLElement.prototype.getBoundingClientRect = rectOf;

@@ -160,10 +160,10 @@ for (const surface of ['file', 'diff'] as const) {
       expect(position(6)?.height).toBe(lineHeight * 2);
       expect(position(7)?.top).toBe(position(6)!.top + lineHeight * 2);
 
-      // Enter at the top moves every row down one line, so the wrapped
-      // row's measurement is dropped with them: the surface counts the new
-      // line and the row's estimate until the render that follows measures
-      // the two lines where the row is now.
+      // Enter at the top moves every row down one line. The measured height
+      // is kept, so the surface grows by exactly the new line before any row
+      // is measured again, and the render that follows puts the two lines on
+      // the wrapped row where it is now.
       editor.applyEdits([
         {
           range: {
@@ -173,7 +173,7 @@ for (const surface of ['file', 'diff'] as const) {
           newText: '\n',
         },
       ]);
-      expect(instance.getVirtualizedHeight()).toBe(height);
+      expect(instance.getVirtualizedHeight()).toBe(height + lineHeight);
 
       await wait(20);
       expect(position(7)?.height).toBe(lineHeight * 2);
