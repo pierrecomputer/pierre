@@ -467,18 +467,6 @@
         );
         --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
-        &:where([data-gutter-buffer], [data-column-number]) {
-          color: var(
-            --diffs-fg-number-deletion-override,
-            var(--diffs-deletion-base)
-          );
-
-          --diffs-diff-line-mix-target: var(
-            --diffs-bg-deletion-number-override,
-            var(--diffs-deletion-base)
-          );
-        }
-
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -499,18 +487,6 @@
           var(--diffs-addition-base)
         );
         --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
-
-        &:where([data-gutter-buffer], [data-column-number]) {
-          color: var(
-            --diffs-fg-number-addition-override,
-            var(--diffs-addition-base)
-          );
-
-          --diffs-diff-line-mix-target: var(
-            --diffs-bg-addition-number-override,
-            var(--diffs-addition-base)
-          );
-        }
 
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
@@ -533,18 +509,6 @@
         );
         --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
-        &:where([data-gutter-buffer], [data-column-number]) {
-          color: var(
-            --diffs-fg-number-addition-override,
-            var(--diffs-addition-base)
-          );
-
-          --diffs-diff-line-mix-target: var(
-            --conflict-bg-current-number-override,
-            var(--diffs-addition-base)
-          );
-        }
-
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -566,15 +530,6 @@
         );
         --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
-        &:where([data-gutter-buffer], [data-column-number]) {
-          color: var(--diffs-modified-base);
-
-          --diffs-diff-line-mix-target: var(
-            --conflict-bg-incoming-number-override,
-            var(--diffs-modified-base)
-          );
-        }
-
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -588,6 +543,57 @@
           )
         );
       }
+    }
+
+    /* Number cells of changed and conflict lines. Written with the cell
+   * attribute first so the match rejects every other element at once. */
+    [data-gutter-buffer][data-line-type='change-deletion'],
+    [data-column-number][data-line-type='change-deletion'] {
+      color: var(
+        --diffs-fg-number-deletion-override,
+        var(--diffs-deletion-base)
+      );
+
+      --diffs-diff-line-mix-target: var(
+        --diffs-bg-deletion-number-override,
+        var(--diffs-deletion-base)
+      );
+    }
+
+    [data-gutter-buffer][data-line-type='change-addition'],
+    [data-column-number][data-line-type='change-addition'] {
+      color: var(
+        --diffs-fg-number-addition-override,
+        var(--diffs-addition-base)
+      );
+
+      --diffs-diff-line-mix-target: var(
+        --diffs-bg-addition-number-override,
+        var(--diffs-addition-base)
+      );
+    }
+
+    [data-gutter-buffer][data-merge-conflict='current'],
+    [data-column-number][data-merge-conflict='current'] {
+      color: var(
+        --diffs-fg-number-addition-override,
+        var(--diffs-addition-base)
+      );
+
+      --diffs-diff-line-mix-target: var(
+        --conflict-bg-current-number-override,
+        var(--diffs-addition-base)
+      );
+    }
+
+    [data-gutter-buffer][data-merge-conflict='incoming'],
+    [data-column-number][data-merge-conflict='incoming'] {
+      color: var(--diffs-modified-base);
+
+      --diffs-diff-line-mix-target: var(
+        --conflict-bg-incoming-number-override,
+        var(--diffs-modified-base)
+      );
     }
   }
 
@@ -609,22 +615,20 @@
     --diffs-selection-emphasis-mix-target: var(--diffs-selection-mix-target);
 
     &:where([data-editor-overlay]),
-    &:where(
+    &[data-selected-line]:where(
         [data-line],
         [data-line-annotation],
         [data-merge-conflict],
         [data-merge-conflict-actions],
         [data-no-newline]
-      )[data-selected-line] {
+      ) {
       --mix-selection-light: 82%;
       --mix-selection-dark: 75%;
       --diffs-hover-mix-target: var(--diffs-selection-mix-target);
     }
 
-    &:where(
-      [data-gutter-buffer][data-selected-line],
-      [data-column-number]:is([data-selected-line], [data-editor-active-line])
-    ) {
+    &[data-selected-line]:where([data-gutter-buffer], [data-column-number]),
+    &[data-editor-active-line]:where([data-column-number]) {
       --mix-selection-light: 75%;
       --mix-selection-dark: 60%;
       --diffs-selection-mix-target: var(
@@ -1336,84 +1340,62 @@
     padding-inline-start: 2ch;
   }
 
+  /* Change indicators. Pseudo-element rules are tried on every element, so
+   * the row attribute comes first and rejects most of them at once. */
   [data-indicators='classic'] {
-    [data-line-type='change-addition'],
-    [data-line-type='change-deletion'] {
-      &[data-no-newline],
-      &[data-line] {
-        &::before {
-          display: inline-block;
-          width: 1ch;
-          height: 1lh;
-          position: absolute;
-          top: 0;
-          left: 0;
-          user-select: none;
-        }
-      }
+    [data-line][data-line-type='change-addition']::before,
+    [data-line][data-line-type='change-deletion']::before,
+    [data-no-newline][data-line-type='change-addition']::before,
+    [data-no-newline][data-line-type='change-deletion']::before {
+      display: inline-block;
+      width: 1ch;
+      height: 1lh;
+      position: absolute;
+      top: 0;
+      left: 0;
+      user-select: none;
     }
 
-    [data-line-type='change-addition'] {
-      &[data-line],
-      &[data-no-newline] {
-        &::before {
-          content: '+';
-          color: var(--diffs-addition-base);
-        }
-      }
+    [data-line][data-line-type='change-addition']::before,
+    [data-no-newline][data-line-type='change-addition']::before {
+      content: '+';
+      color: var(--diffs-addition-base);
     }
 
-    [data-line-type='change-deletion'] {
-      &[data-line],
-      &[data-no-newline] {
-        &::before {
-          content: '-';
-          color: var(--diffs-deletion-base);
-        }
-      }
+    [data-line][data-line-type='change-deletion']::before,
+    [data-no-newline][data-line-type='change-deletion']::before {
+      content: '-';
+      color: var(--diffs-deletion-base);
     }
   }
 
   [data-indicators='bars'] {
-    [data-line-type='change-deletion'],
-    [data-line-type='change-addition'] {
-      &[data-column-number] {
-        &::before {
-          content: '';
-          display: block;
-          width: 4px;
-          height: 100%;
-          position: absolute;
-          top: 0;
-          left: 0;
-          user-select: none;
-          contain: strict;
-        }
-      }
+    [data-column-number][data-line-type='change-deletion']::before,
+    [data-column-number][data-line-type='change-addition']::before {
+      content: '';
+      display: block;
+      width: 4px;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      user-select: none;
+      contain: strict;
     }
 
-    [data-line-type='change-deletion'] {
-      &[data-column-number] {
-        &::before {
-          background-image: linear-gradient(
-            0deg,
-            var(--diffs-bg-deletion) 50%,
-            var(--diffs-deletion-base) 50%
-          );
-          background-repeat: repeat;
-          background-size: 2px 2px;
-          background-size: calc(1lh / round(1lh / 2px))
-            calc(1lh / round(1lh / 2px));
-        }
-      }
+    [data-column-number][data-line-type='change-deletion']::before {
+      background-image: linear-gradient(
+        0deg,
+        var(--diffs-bg-deletion) 50%,
+        var(--diffs-deletion-base) 50%
+      );
+      background-repeat: repeat;
+      background-size: 2px 2px;
+      background-size: calc(1lh / round(1lh / 2px)) calc(1lh / round(1lh / 2px));
     }
 
-    [data-line-type='change-addition'] {
-      &[data-column-number] {
-        &::before {
-          background-color: var(--diffs-addition-base);
-        }
-      }
+    [data-column-number][data-line-type='change-addition']::before {
+      background-color: var(--diffs-addition-base);
     }
   }
 
@@ -1518,18 +1500,19 @@
   [data-merge-conflict='marker-end'] {
     display: flex;
     align-items: center;
+  }
 
-    &::after {
-      color: var(--diffs-fg-conflict-marker);
-      font-style: normal;
-      font-size: 0.75rem;
-      line-height: 1.25rem;
-      padding-left: 1ch;
-      font-family: var(
-        --diffs-header-font-family,
-        var(--diffs-header-font-fallback)
-      );
-    }
+  [data-merge-conflict='marker-start']::after,
+  [data-merge-conflict='marker-end']::after {
+    color: var(--diffs-fg-conflict-marker);
+    font-style: normal;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    padding-left: 1ch;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
   }
 
   [data-merge-conflict='marker-start']::after {

@@ -44,6 +44,12 @@ import {
   wait,
   waitFor,
 } from './domHarness';
+import {
+  applySessionEdits,
+  createTextDocumentFromLines,
+  documentEdit,
+  lineEdit,
+} from './editorTestUtils';
 
 type TestEditorComponent<EType extends EditorType> = EType extends 'file'
   ? File<undefined>
@@ -148,6 +154,25 @@ function insertAtStart(
 function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
   return (instance as { editSession?: { diff: FileDiffMetadata } }).editSession
     ?.diff;
+}
+
+// The editor's document for the item's file, and the change that replaces
+// its text with `next`, as the editor hands them to the component.
+function replaceItemContents(item: CodeViewItem<undefined>, next: string) {
+  if (item.type !== 'file') {
+    throw new Error('Expected a file item');
+  }
+  const document = new TextDocument<'file', undefined>(
+    `inmemory://${item.id}`,
+    item.file.contents
+  );
+  const change = document.applyEdits([
+    documentEdit(document, next.split(/(?<=\n)/)),
+  ]);
+  if (change == null) {
+    throw new Error('the edit applied nothing');
+  }
+  return { document, change };
 }
 
 function getEditSessionFile(instance: unknown): FileContents | undefined {
@@ -369,9 +394,13 @@ describe('programmatic edits on suspended CodeView editors', () => {
         );
         insertAtStart(editor, '// after\n');
         expect(changes.at(-1)).toBe(editor.getText());
-        expect(
-          secondViewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
-        ).toContain('// after');
+        // The rows follow in CodeView's frame.
+        await waitFor(
+          () =>
+            secondViewer
+              ?.getRenderedItems()[0]
+              ?.element.shadowRoot?.textContent?.includes('// after') === true
+        );
       } finally {
         secondViewer?.cleanUp();
         firstViewer.cleanUp();
@@ -667,7 +696,6 @@ describe('programmatic edits on suspended CodeView editors', () => {
           expect(
             changes.every(({ document, session }) => document === session)
           ).toBe(true);
-          expect(getCachedRenderTarget(instance)).toBeUndefined();
 
           if (suspension === 'scroll') {
             viewer.scrollTo({
@@ -1821,9 +1849,8 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic an edit session that grew the document: the editor pushes the
-      // larger document into the host, which patches its render caches and
-      // remembers the document's line count.
+      // Mimic an edit session that grew the document: the editor hands the
+      // change to the component, whose model takes the new line count.
       const edited = viewer.getRenderedItems()[0];
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
@@ -1833,12 +1860,8 @@ describe('CodeView item edit mode', () => {
         { length: lineCount },
         (_, i) => `edited ${i}`
       ).join('\n');
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file', undefined>(
-          'inmemory://code-view-file',
-          documentText
-        )
-      );
+      const grown = replaceItemContents(items[0], documentText);
+      edited.instance.applyChange(grown.document, grown.change);
 
       // Scroll the edited item out (recycle) and back in. The private session
       // keeps its patched render cache, so the remount renders its grown
@@ -1904,12 +1927,8 @@ describe('CodeView item edit mode', () => {
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
       }
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file', undefined>(
-          'inmemory://code-view-shrunk',
-          'only line'
-        )
-      );
+      const shrunk = replaceItemContents(items[0], 'only line');
+      edited.instance.applyChange(shrunk.document, shrunk.change);
       await wait(0);
 
       expect(viewer.getScrollHeight()).toBeLessThan(heightBefore);
@@ -1947,15 +1966,18 @@ describe('CodeView item edit mode', () => {
         (_, i) => `edited ${i}`
       ).join('\n');
       const edited = viewer.getRenderedItems()[0];
-      if (edited.type !== 'diff') {
+      const item = items[0];
+      if (edited.type !== 'diff' || item.type !== 'diff') {
         throw new Error('Expected an edited diff');
       }
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file-diff', undefined>(
-          'inmemory://code-view-diff',
-          documentText
-        )
+      const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        item.fileDiff.additionLines,
+        'inmemory://code-view-diff'
       );
+      applySessionEdits(edited.instance, sessionDocument, [
+        documentEdit(sessionDocument, [documentText]),
+      ]);
       // Scroll the edited item out before any render pass reconciles it: the
       // released item's cached layout height must still pick up the change.
       root.scrollTop = 10_000;
@@ -1989,12 +2011,26 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic a same-line-count edit: the editor pushes the dirty line's
-      // tokens into the host render caches, exactly like #applyChange does
-      // after a keystroke.
+      // Mimic a same-line-count edit: the editor hands the change and the
+      // line's tokens to the component, as it does after a keystroke.
       const edited = viewer.getRenderedItems()[0];
+      if (edited.type !== 'file') {
+        throw new Error('Expected an edited file');
+      }
       const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
-      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
+      const document = new TextDocument<'file', undefined>(
+        'inmemory://edited',
+        items[0].type === 'file' ? items[0].file.contents : ''
+      );
+      const change = document.applyEdits([
+        lineEdit(document, 0, 'edited marker line'),
+      ]);
+      if (change == null) {
+        throw new Error('the edit applied nothing');
+      }
+      edited.instance.applyChange(document, change, {
+        tokens: new Map([[0, tokens]]),
+      });
 
       // Scroll the edited item out (recycle) and back in. The private session
       // retains its patched render cache across the remount.
@@ -2190,6 +2226,7 @@ describe('CodeView item edit mode', () => {
         ?.element.shadowRoot?.querySelector('[data-code]');
       expect(code).toBeInstanceOf(HTMLElement);
       (code as HTMLElement).scrollLeft = 24;
+      dispatchScroll(code as HTMLElement);
       root.scrollTop = 48;
       const finalState: EditorViewState = {
         selections: [
@@ -2471,7 +2508,11 @@ describe('CodeView item edit mode', () => {
       expect(replacementSession?.additionLines.join('')).toBe(
         'one\nexternal value\nthree\n'
       );
-      expect(changes).toEqual(['one\nlocal value\nthree\n']);
+      // The replacement reaches the retained document at once.
+      expect(changes).toEqual([
+        'one\nlocal value\nthree\n',
+        'one\nexternal value\nthree\n',
+      ]);
 
       root.scrollTop = 0;
       dispatchScroll(root);
@@ -2570,7 +2611,8 @@ describe('CodeView item edit mode', () => {
       const replacementSession = getEditSessionFile(rendered.instance);
       expect(replacementSession).not.toBe(previousSession);
       expect(replacementSession?.contents).toBe(externalContents);
-      expect(changes).toEqual([localContents]);
+      // The replacement reaches the retained document at once.
+      expect(changes).toEqual([localContents, externalContents]);
 
       root.scrollTop = 0;
       dispatchScroll(root);
@@ -2765,8 +2807,17 @@ describe('CodeView item edit mode', () => {
         .getRenderedItems()
         .find((entry) => entry.id === item.id);
       expect(rendered).toBeDefined();
-      const tokens: HighlightedToken[] = [[0, '', 'line 10']];
-      rendered!.instance.updateRenderCache(new Map([[10, tokens]]), 'light');
+      if (rendered?.type !== 'diff' || item.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
+      const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        item.fileDiff.additionLines,
+        'inmemory://code-view-revert'
+      );
+      applySessionEdits(rendered.instance, sessionDocument, [
+        lineEdit(sessionDocument, 10, 'line 10'),
+      ]);
     }
 
     test('a region-changing render flushes deferred line state', async () => {
@@ -2785,10 +2836,17 @@ describe('CodeView item edit mode', () => {
         expect(rendered).toBeDefined();
         const externalBefore = structuredClone(edited.fileDiff);
         const externalHunks = edited.fileDiff.hunks;
-        rendered.instance.updateRenderCache(
-          new Map([[25, [[0, '', 'line 25 changed']]]]),
-          'light'
+        if (rendered.type !== 'diff') {
+          throw new Error('Expected a diff edit-session item.');
+        }
+        const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+          'file-diff',
+          edited.fileDiff.additionLines,
+          'inmemory://code-view-region'
         );
+        applySessionEdits(rendered.instance, sessionDocument, [
+          lineEdit(sessionDocument, 25, 'line 25 changed'),
+        ]);
         expect(edited.fileDiff).toEqual(externalBefore);
         expect(edited.fileDiff.hunks).toBe(externalHunks);
 

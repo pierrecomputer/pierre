@@ -3,8 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import { FileDiff, parseDiffFromFile } from '../src';
 import { installDom, wait } from './domHarness';
 import {
+  applySessionEdits,
   createEditorInstance,
   createTextDocumentFromLines,
+  documentEdit,
 } from './editorTestUtils';
 
 const fileDiff = parseDiffFromFile(
@@ -73,13 +75,14 @@ describe('FileDiff header slots', () => {
       await waitForHeaderCount(fileContainer, '[data-additions-count]', '+1');
 
       detach = instance.__attachEditor(createEditorInstance('file-diff'));
-      instance.applyDocumentChange(
-        createTextDocumentFromLines(
-          'file-diff',
-          ['new\n', 'extra\n'],
-          'inmemory://file-diff-header'
-        )
+      const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        externalDiff.additionLines,
+        'inmemory://file-diff-header'
       );
+      applySessionEdits(instance, sessionDocument, [
+        documentEdit(sessionDocument, ['new\n', 'extra\n']),
+      ]);
 
       await waitForHeaderCount(fileContainer, '[data-additions-count]', '+2');
       expect(externalDiff.additionLines).toBe(externalAdditionLines);

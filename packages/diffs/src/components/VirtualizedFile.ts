@@ -1,5 +1,10 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
+import {
+  changeMovesLines,
+  type TextDocument,
+  type TextDocumentChange,
+} from '../editor/textDocument';
+import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   FileContents,
   LineAnnotation,
@@ -7,11 +12,13 @@ import type {
   PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
+  ScrollRequestResult,
   StickySpecs,
   ThemeTypes,
   VirtualFileMetrics,
 } from '../types';
 import { areFileTargetsEqual } from '../utils/areFileTargetsEqual';
+import { areGhostTextRowsEqual } from '../utils/areGhostTextRowsEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import {
@@ -46,9 +53,16 @@ interface FileLayoutCache {
   // Measured height for the file-level annotation row. Starts at 0 so
   // unmeasured annotations behave like all other unmeasured annotations.
   fileAnnotationHeight: number;
-  // Ghost text rows folded into `heights` (zero-based line -> row count), so an
-  // entry can be corrected when the editor's ghost text changes or goes away.
+  // The editor's ghost text rows (zero-based line -> row count) as of the
+  // last layout pass. Heights count these, not the editor's current rows, so
+  // positions move only inside a pass, after the host has anchored its
+  // scroll.
   ghostTextRows: ReadonlyMap<number, number>;
+}
+
+interface InvalidateLayoutOptions {
+  forceSimpleRecompute?: boolean;
+  resetRenderRange?: boolean;
 }
 
 interface PendingRender {
@@ -124,7 +138,8 @@ export class VirtualizedFile<
     }
 
     this.metrics = nextMetrics;
-    this.resetLayoutCache();
+    this.resetMeasurements();
+    this.invalidateLayout();
   }
 
   override setLineAnnotations(
@@ -151,6 +166,7 @@ export class VirtualizedFile<
     }
 
     super.setLineAnnotations(lineAnnotations);
+    this.managersDirty = true;
     return true;
   }
 
@@ -171,27 +187,38 @@ export class VirtualizedFile<
   }
 
   // Every line is exactly one line height tall, so positions can be multiplied
-  // instead of walked: no wrapping, no line annotations, and nothing cached (in
-  // such files the cache only fills because of ghost text rows).
+  // instead of walked: no wrapping, no line annotations, nothing measured and
+  // no ghost text below any line.
   private hasUniformLineHeights(): boolean {
     const { overflow = 'scroll' } = this.options;
     return (
       overflow === 'scroll' &&
       !this.hasLineAnnotations() &&
-      this.cache.heights.size === 0
+      this.cache.heights.size === 0 &&
+      this.cache.ghostTextRows.size === 0
     );
   }
 
-  // Get the height for a line, using cached value if available.
-  // If not cached and hasMetadataLine is true, adds lineHeight for the
-  // metadata.
+  // The editor's ghost text rows below lines right now (zero-based line ->
+  // row count). They sit in a margin that measuring a row never includes.
+  private currentGhostTextRows(): ReadonlyMap<number, number> {
+    return this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS;
+  }
+
+  // The line's height: measured if it was, else the default (twice the line
+  // height when a metadata row hangs under it), plus the ghost text rows
+  // below it as of the last layout pass.
   public getLineHeight(lineIndex: number, hasMetadataLine = false): number {
-    const cached = this.cache.heights.get(lineIndex);
-    if (cached != null) {
-      return cached;
+    const { cache } = this;
+    const cached = cache.heights.get(lineIndex);
+    if (cache.ghostTextRows.size === 0) {
+      return cached ?? this.metrics.lineHeight * (hasMetadataLine ? 2 : 1);
     }
-    const multiplier = hasMetadataLine ? 2 : 1;
-    return this.metrics.lineHeight * multiplier;
+    const { lineHeight } = this.metrics;
+    return (
+      (cached ?? lineHeight * (hasMetadataLine ? 2 : 1)) +
+      (cache.ghostTextRows.get(lineIndex) ?? 0) * lineHeight
+    );
   }
 
   override setOptions(
@@ -211,7 +238,8 @@ export class VirtualizedFile<
     super.setOptions(options);
 
     if (layoutChanged) {
-      this.resetLayoutCache(true);
+      this.resetMeasurements();
+      this.invalidateLayout({ forceSimpleRecompute: true });
     }
     // Any option can affect rendered DOM; only layout-affecting options clear
     // the measured height cache above.
@@ -233,61 +261,35 @@ export class VirtualizedFile<
     super.setThemeType(themeType);
   }
 
-  private resetLayoutCache(recompute = false, resetRenderRange = true): void {
-    this.layoutDirty = true;
+  // Drops what was measured from the DOM: line heights, the ghost rows
+  // last seen and the file annotation's height. The next renders measure
+  // again.
+  private resetMeasurements(): void {
     this.cache.fileAnnotationHeight = 0;
     if (this.cache.heights.size > 0) {
       this.cache.heights.clear();
     }
+    this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
+  }
+
+  // The lines moved or the layout inputs changed: positions are computed
+  // again from the measurements kept.
+  private invalidateLayout({
+    forceSimpleRecompute = false,
+    resetRenderRange = true,
+  }: InvalidateLayoutOptions = {}): void {
+    this.layoutDirty = true;
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
     }
-    this.cache.ghostTextRows = NO_GHOST_TEXT_ROWS;
     if (this.renderRange != null && resetRenderRange) {
       this.renderRange = undefined;
     }
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
-    if (recompute && this.isSimpleMode()) {
+    if (forceSimpleRecompute && this.isSimpleMode()) {
       this.computeApproximateSize();
     }
-  }
-
-  // Fold the ghost text rows the editor is showing below lines into the height
-  // cache (zero-based line -> row count). Ghost text sits in a margin below the
-  // row, which measuring never includes, so the rows are added here on top of
-  // the line's own height, and removed again when the ghost text changes or
-  // goes away, even for rows that are not rendered right now.
-  private applyGhostTextRows(
-    ghostTextRows: ReadonlyMap<number, number>
-  ): boolean {
-    const { heights, ghostTextRows: previous } = this.cache;
-    if (previous === ghostTextRows) {
-      return false;
-    }
-    const { lineHeight } = this.metrics;
-    let changed = false;
-    for (const lineIndex of new Set([
-      ...previous.keys(),
-      ...ghostTextRows.keys(),
-    ])) {
-      const previousRows = previous.get(lineIndex) ?? 0;
-      const rows = ghostTextRows.get(lineIndex) ?? 0;
-      if (rows === previousRows) {
-        continue;
-      }
-      const ownHeight =
-        (heights.get(lineIndex) ?? lineHeight) - previousRows * lineHeight;
-      const height = ownHeight + rows * lineHeight;
-      if (height === lineHeight) {
-        heights.delete(lineIndex);
-      } else {
-        heights.set(lineIndex, height);
-      }
-      changed = true;
-    }
-    this.cache.ghostTextRows = ghostTextRows;
-    return changed;
   }
 
   // Measure rendered lines and update height cache.
@@ -303,9 +305,11 @@ export class VirtualizedFile<
     }
     const { overflow = 'scroll' } = this.options;
     this.top = this.getVirtualizedTop();
-    const ghostTextRows =
-      this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS;
-    hasHeightChange = this.applyGhostTextRows(ghostTextRows);
+    const ghostTextRows = this.currentGhostTextRows();
+    if (!areGhostTextRowsEqual(ghostTextRows, this.cache.ghostTextRows)) {
+      hasHeightChange = true;
+    }
+    this.cache.ghostTextRows = ghostTextRows;
     const measureAllRows =
       overflow !== 'scroll' ||
       this.lineAnnotations.length > 0 ||
@@ -358,17 +362,13 @@ export class VirtualizedFile<
       if (lineIndexAttr == null) continue;
 
       const lineIndex = Number(lineIndexAttr);
-      const ghostHeight = (ghostTextRows.get(lineIndex) ?? 0) * lineHeight;
       const cachedHeight = this.cache.heights.get(lineIndex);
-      // With no annotations or wrapping, only stale custom measurements need
-      // DOM reads. Ghost rows already have known heights from the editor.
-      if (
-        !measureAllRows &&
-        (cachedHeight == null || cachedHeight === lineHeight + ghostHeight)
-      ) {
+      // With no annotations or wrapping, only lines measured before can have
+      // changed, so only those need DOM reads.
+      if (!measureAllRows && cachedHeight == null) {
         continue;
       }
-      let measuredHeight = line.getBoundingClientRect().height + ghostHeight;
+      let measuredHeight = line.getBoundingClientRect().height;
       let hasMetadata = false;
 
       // Annotations or noNewline metadata increase the size of their attached line
@@ -384,8 +384,7 @@ export class VirtualizedFile<
           line.nextElementSibling.getBoundingClientRect().height;
       }
 
-      const expectedHeight = this.getLineHeight(lineIndex, hasMetadata);
-
+      const expectedHeight = cachedHeight ?? lineHeight * (hasMetadata ? 2 : 1);
       if (measuredHeight === expectedHeight) {
         continue;
       }
@@ -451,7 +450,8 @@ export class VirtualizedFile<
     }
 
     if (shouldResetLayoutCache) {
-      this.resetLayoutCache();
+      this.resetMeasurements();
+      this.invalidateLayout();
     }
 
     if (targetChanged) {
@@ -539,6 +539,37 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple'
       ? this.virtualizer.getRoot()
       : this.virtualizer.getContainerElement();
+  }
+
+  public scrollToLine(
+    lineNumber: number,
+    align: ScrollLogicalPosition,
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    const { virtualizer } = this;
+    if (virtualizer.type === 'advanced') {
+      virtualizer.scrollToInstanceLine(this, lineNumber, align, onDone);
+      return;
+    }
+    virtualizer.scrollSpanIntoView({
+      align,
+      onDone,
+      resolveSpan: () => {
+        const position = this.getLinePosition(lineNumber);
+        return position != null
+          ? {
+              top: this.getVirtualizedTop() + position.top,
+              height: position.height,
+            }
+          : undefined;
+      },
+    });
+  }
+
+  // Drop the host's pending scroll request. With onDone, only while that
+  // request is still the one onDone made.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    this.virtualizer.cancelScroll(onDone);
   }
 
   public getNumericScrollAnchor(
@@ -672,8 +703,8 @@ export class VirtualizedFile<
 
   override cleanUp(recycle = false): void {
     // The editor's own cleanUp has already cleared its ghost text rows without
-    // asking for a layout pass. Mark the layout dirty so a pooled item drops the
-    // folded rows on its next pass instead of keeping phantom height.
+    // asking for a layout pass. Mark the layout dirty so a pooled item drops
+    // them on its next pass instead of keeping phantom height.
     const hadGhostTextRows = this.cache.ghostTextRows.size > 0;
     if (hadGhostTextRows) {
       this.layoutDirty = true;
@@ -688,7 +719,8 @@ export class VirtualizedFile<
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
     if (!recycle) {
-      this.resetLayoutCache();
+      this.resetMeasurements();
+      this.invalidateLayout();
     }
     this.pendingRender = undefined;
     this.isSetup = false;
@@ -719,9 +751,8 @@ export class VirtualizedFile<
       this.layoutDirty = false;
       return;
     }
-    this.applyGhostTextRows(
-      this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
-    );
+    // The heights summed below include the ghost text rows as they are now.
+    this.cache.ghostTextRows = this.currentGhostTextRows();
 
     const { disableFileHeader = false, collapsed = false } = this.options;
     const { lineHeight } = this.metrics;
@@ -821,8 +852,8 @@ export class VirtualizedFile<
   }
 
   // The editor changed the ghost text rows it shows below lines. Ask the
-  // virtualizer for a layout pass, which folds them in (see
-  // applyGhostTextRows). Layout state only changes inside that pass.
+  // virtualizer for a layout pass, which sums the heights again with the new
+  // rows. Layout state only changes inside that pass.
   public syncGhostTextRows(): void {
     const codeView = this.getAdvancedVirtualizer();
     if (codeView != null) {
@@ -834,44 +865,37 @@ export class VirtualizedFile<
     }
   }
 
-  // normally triggered by the host when the document line count changes
-  override applyDocumentChange(
-    textDocument: TextDocument<'file', LAnnotation>,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer = false
-  ): void {
-    const { renderRange: previousRenderRange } = this;
-    // Capture the scroll anchor before the synchronous document swap and
-    // layout-cache wipe below; the host's next frame resolves it against the
-    // new geometry so on-screen rows do not shift.
-    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
-    super.applyDocumentChange(textDocument, newLineAnnotations);
+  // A line-count change also moves the rows below and the file's height, so
+  // the layout caches are invalidated with the render. Either way the render
+  // itself runs in the virtualizer's frame.
+  protected override renderChange(structural: boolean): void {
+    if (!structural) {
+      this.rerender();
+      return;
+    }
     this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache(this.isSimpleMode(), false);
-
-    const file = this.getRenderedFile();
+    this.invalidateLayout({
+      forceSimpleRecompute: this.isSimpleMode(),
+      resetRenderRange: false,
+    });
     if (!this.isSimpleMode()) {
       this.computeApproximateSize(true);
-    } else if (
-      shouldUpdateBuffer &&
-      previousRenderRange != null &&
-      file != null
-    ) {
-      // Update the buffers caused by the line-count change to ensure the host
-      // scrolls to the correct position before re-rendering.
-      const windowSpecs = this.virtualizer.getWindowSpecs();
-      const renderRange = this.computeRenderRangeFromWindow(
-        file,
-        this.top ?? 0,
-        windowSpecs
-      );
-      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
-        this.updateBuffers(renderRange);
-      }
     }
-
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
+  }
+
+  public override applyChange(
+    document: TextDocument<'file', LAnnotation>,
+    change: TextDocumentChange,
+    options?: ApplyChangeOptions<'file', LAnnotation>
+  ): ApplyChangeResult {
+    // CodeView anchors scroll to what is on screen before the lines move, so
+    // its next frame keeps it in place.
+    if (changeMovesLines(change)) {
+      this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
+    }
+    return super.applyChange(document, change, options);
   }
 
   override render({
@@ -908,7 +932,8 @@ export class VirtualizedFile<
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
     if (layoutFileChanged) {
-      this.resetLayoutCache();
+      this.resetMeasurements();
+      this.invalidateLayout();
     }
 
     fileContainer = this.getOrCreateFileContainerNode(fileContainer);
@@ -1271,7 +1296,6 @@ export class VirtualizedFile<
     let absoluteLineTop = fileTop + (checkpoint?.top ?? codeRegionTop);
     let currentLine = checkpoint?.lineIndex ?? 0;
     let firstVisibleHunk: number | undefined;
-    let centerHunk: number | undefined;
     let overflowCounter: number | undefined;
 
     const startingLineIndex = checkpoint?.lineIndex ?? 0;
@@ -1301,11 +1325,6 @@ export class VirtualizedFile<
         firstVisibleHunk ??= currentHunk;
       }
 
-      // Track which hunk contains the viewport center
-      if (absoluteLineTop + lineHeight > viewportCenter) {
-        centerHunk ??= currentHunk;
-      }
-
       // Start overflow when we are out of the viewport at a hunk boundary
       if (
         overflowCounter == null &&
@@ -1323,7 +1342,6 @@ export class VirtualizedFile<
     if (firstVisibleHunk == null) {
       if (measuredFileAnnotationVisible) {
         firstVisibleHunk = 0;
-        centerHunk = 0;
       } else {
         return {
           startingLine: 0,
@@ -1334,24 +1352,16 @@ export class VirtualizedFile<
       }
     }
 
-    // Calculate balanced startingLine centered around the viewport center
-    centerHunk ??= firstVisibleHunk;
-    const idealStartHunk = Math.round(centerHunk - totalHunks / 2);
-
-    // Clamp startHunk: at the beginning, reduce totalLines; at the end, shift
-    // startHunk back
+    // Start the slice at the first visible hunk: a window's worth of rows at
+    // the base line height always reaches the bottom of the window from there,
+    // whatever the rows really measure. Near the end of the file the start
+    // moves back so the slice stays full.
     const maxStartHunk = Math.max(
       0,
       Math.ceil(lineCount / hunkLineCount) - totalHunks
     );
-    const startHunk = Math.max(0, Math.min(idealStartHunk, maxStartHunk));
+    const startHunk = Math.min(firstVisibleHunk, maxStartHunk);
     const startingLine = startHunk * hunkLineCount;
-
-    // If we wanted to start before 0, reduce totalLines by the clamped amount
-    const clampedTotalLines =
-      idealStartHunk < 0
-        ? totalLines + idealStartHunk * hunkLineCount
-        : totalLines;
 
     // Use hunkOffsets array for efficient buffer calculations
     const codeBufferBefore = hunkOffsets[startHunk] ?? 0;
@@ -1359,7 +1369,7 @@ export class VirtualizedFile<
       startingLine === 0 ? 0 : fileAnnotationHeight + codeBufferBefore;
 
     // Calculate bufferAfter
-    const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
+    const finalHunkIndex = startHunk + totalHunks;
     const bufferAfter =
       finalHunkIndex < hunkOffsets.length
         ? codeRowsHeight - hunkOffsets[finalHunkIndex]
@@ -1367,7 +1377,7 @@ export class VirtualizedFile<
 
     return {
       startingLine,
-      totalLines: clampedTotalLines,
+      totalLines,
       bufferBefore,
       bufferAfter: Math.max(0, bufferAfter),
     };

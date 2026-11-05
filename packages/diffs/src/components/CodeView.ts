@@ -11,6 +11,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor, EditorOptions } from '../editor/editor';
+import { getCaretPosition } from '../editor/selection';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -40,6 +41,7 @@ import type {
   DiffsThemeNames,
   HunkSeparators,
   PendingCodeViewLayoutReset,
+  ScrollRequestResult,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
@@ -57,6 +59,7 @@ import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollP
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
+import { isUserScrollInput } from '../utils/isUserScrollInput';
 import { isFirefox } from '../utils/platform';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
@@ -828,8 +831,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // - 'position' targets settle on the first frame that applies their
   //   scrollTop — there is no layout-dependent destination to chase.
   private pendingScrollTarget: PendingScrollTarget | undefined;
+  private pendingScrollDone:
+    | ((result: ScrollRequestResult) => void)
+    | undefined;
   private pendingLayoutAnchor: ScrollAnchor | undefined;
   private shouldFixContainerFocus = false;
+  private focusedItemId: string | undefined;
 
   // Active smooth-scroll animation state. Only populated while a scrollTo
   // with `behavior: 'smooth'` is in flight; cleared on settle (position +
@@ -1236,6 +1243,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.root.addEventListener('keydown', this.clearPendingScroll, {
       passive: true,
     });
+    this.root.addEventListener('focusin', this.handleFocusIn);
+    this.root.addEventListener('focusout', this.handleFocusOut);
     this.resizeObserver.observe(this.root);
     this.render(true);
 
@@ -1320,6 +1329,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.containerHeight = -1;
     this.windowSpecs = { top: 0, bottom: 0 };
     this.pendingLayoutAnchor = undefined;
+    this.finishPendingScroll('cancelled');
     this.shouldFixContainerFocus = false;
     this.height = 0;
     this.scrollTop = 0;
@@ -1360,6 +1370,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
     this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
     this.root?.removeEventListener('keydown', this.clearPendingScroll);
+    this.root?.removeEventListener('focusin', this.handleFocusIn);
+    this.root?.removeEventListener('focusout', this.handleFocusOut);
+    this.focusedItemId = undefined;
     this.root?.style.removeProperty('overflow-anchor');
     this.container?.remove();
     this.stickyOffset.remove();
@@ -1472,6 +1485,89 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
+  // Keeps focusedItemId current: focus inside a rendered item names that
+  // item, focus on the root (parked there while the item is away) changes
+  // nothing, focus anywhere else clears it.
+  private handleFocusIn = (event: FocusEvent): void => {
+    if (event.target === this.root) {
+      return;
+    }
+    this.focusedItemId = this.renderedItemInPath(event.composedPath())?.item.id;
+  };
+
+  // Focus leaving the CodeView for nothing (a click on the page) or for an
+  // element outside the root clears the focused item; moves within the root
+  // are followed by a focusin that names the new owner. While a released
+  // item's focus is on its way to the root, the blur its teardown causes is
+  // not the user leaving.
+  private handleFocusOut = (event: FocusEvent): void => {
+    if (this.shouldFixContainerFocus) {
+      return;
+    }
+    const { relatedTarget } = event;
+    if (
+      !(relatedTarget instanceof Node) ||
+      this.root?.contains(relatedTarget) !== true
+    ) {
+      this.focusedItemId = undefined;
+    }
+  };
+
+  private renderedItemInPath(
+    path: ReadonlyArray<EventTarget | undefined>
+  ): CodeViewContextItem<LAnnotation, Caret> | undefined {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex < 0) {
+      return undefined;
+    }
+    for (let index = firstIndex; index <= lastIndex; index++) {
+      const item = this.items[index];
+      if (item?.element != null && path.includes(item.element)) {
+        return item;
+      }
+    }
+    return undefined;
+  }
+
+  // Gives focus back to the focused item's editor after virtualization
+  // released its element and parked focus on the root: once the editor is
+  // attached again and its primary caret's row is on screen, so the caret
+  // lands on its line. Called for each edited item in a render pass.
+  private returnParkedFocus(
+    item: CodeViewContextItem<LAnnotation, Caret>
+  ): void {
+    const { id } = item.item;
+    if (this.focusedItemId !== id || !this.rootHasFocus()) {
+      return;
+    }
+    const record = this.itemEditors.get(id);
+    if (record == null || !this.attachedEditors.has(id)) {
+      return;
+    }
+    const primary = record.editor.getViewState().selections?.at(-1);
+    if (
+      primary == null ||
+      item.instance.lineElement(getCaretPosition(primary).line) == null
+    ) {
+      return;
+    }
+    record.editor.focus({ preventScroll: true });
+  }
+
+  // Whether the focus parked on the root by fixContainerFocus is still there.
+  private rootHasFocus(): boolean {
+    const { root } = this;
+    if (root == null) {
+      return false;
+    }
+    const rootNode = root.getRootNode();
+    const activeElement =
+      rootNode instanceof ShadowRoot
+        ? rootNode.activeElement
+        : document.activeElement;
+    return activeElement === root;
+  }
+
   // Strip item-specific DOM while keeping the expensive shared shell assets
   // that are valid for every item in this CodeView until shared options
   // change.
@@ -1574,19 +1670,42 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public scrollTo(target: CodeViewScrollTarget): void {
+    this.requestScroll(target);
+  }
+
+  private requestScroll(
+    target: CodeViewScrollTarget,
+    onDone?: (result: ScrollRequestResult) => void
+  ): void {
     if (this.root == null) {
       return;
     }
+    // Install the replacement before telling the replaced request it was
+    // cancelled, so a callback that requests again supersedes it in turn.
+    const { pendingScrollDone: replaced } = this;
+    this.pendingScrollDone = undefined;
+    this.installScrollRequest(target, onDone);
+    replaced?.('cancelled');
+  }
 
+  // The newest request replaces any scroll still in flight, even when it needs
+  // no scroll of its own.
+  private installScrollRequest(
+    target: CodeViewScrollTarget,
+    onDone: ((result: ScrollRequestResult) => void) | undefined
+  ): void {
     const pendingTarget = this.normalizeScrollTarget(target);
-    if (pendingTarget == null) {
+    const destination =
+      pendingTarget != null
+        ? this.resolveScrollTargetTop(pendingTarget)
+        : undefined;
+    if (pendingTarget == null || destination == null) {
+      this.pendingScrollTarget = undefined;
+      this.scrollAnimation = undefined;
+      onDone?.('cancelled');
       return;
     }
-
-    const destination = this.resolveScrollTargetTop(pendingTarget);
-    if (destination == null) {
-      return;
-    }
+    this.pendingScrollDone = onDone;
 
     this.primeScrollTarget(pendingTarget);
 
@@ -1594,7 +1713,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       pendingTarget,
       destination
     );
-    if (behavior === 'smooth') {
+    const needsScroll =
+      roundToDevicePixel(destination) !==
+      roundToDevicePixel(this.getScrollTop());
+    // A request that is already in place stops any earlier animation, so its
+    // momentum can't carry the view away.
+    if (behavior === 'smooth' && needsScroll) {
       // Use ??= so if we have an animation in progress it will be smoothly
       // transitioned into the new target and not reset
       this.scrollAnimation ??= {
@@ -1609,8 +1733,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.scrollAnimation = undefined;
     }
 
-    // We'll attempt to scroll to this new target on the next render frame
-    this.suspendScrollInteractions();
+    // We'll attempt to scroll to this new target on the next render frame.
+    // Interactions are only suspended for a request that actually moves.
+    if (needsScroll) {
+      this.suspendScrollInteractions();
+    }
     this.pendingLayoutAnchor = undefined;
     this.pendingScrollTarget = pendingTarget;
     this.render();
@@ -2126,6 +2253,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       );
     }
     return item.top;
+  }
+
+  public scrollToInstanceLine(
+    instance: CodeViewVirtualizedInstanceKey,
+    lineNumber: number,
+    align: ScrollLogicalPosition,
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    const item = this.instanceToItem.get(instance);
+    if (item == null) {
+      throw new Error(
+        'CodeView.scrollToInstanceLine: unknown virtualized instance'
+      );
+    }
+    this.requestScroll(
+      { type: 'line', id: item.item.id, lineNumber, align },
+      onDone
+    );
   }
 
   public getTopForItem(id: string): number | undefined {
@@ -3192,14 +3337,20 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         ? this.getStickyHeaderOffset()
         : 0);
     const visibleBottom = currentTop + this.getHeight();
+    // For certain alignment scenarios, if the target is already visible, then
+    // we should just attempt to hold it in place
+    const holdInPlace: PendingScrollTarget = {
+      ...target,
+      align: 'start',
+      offset: targetTop - visibleTop,
+    };
 
-    // If the item is spanning beyond the full viewport,
-    // do nothing as it's already in view
+    // If the item is spanning beyond the full viewport, it's already in view
     if (
       targetTop - offset <= visibleTop &&
       targetBottom + offset >= visibleBottom
     ) {
-      return undefined;
+      return holdInPlace;
     }
 
     // Let's use the top as the target
@@ -3212,8 +3363,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return { ...target, align: 'end' };
     }
 
-    // The element is already in view, nothing to do.
-    return undefined;
+    // The element is already in view
+    return holdInPlace;
   }
 
   /**
@@ -3430,6 +3581,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (destination == null) {
       this.pendingScrollTarget = undefined;
       this.scrollAnimation = undefined;
+      this.finishPendingScroll('cancelled');
       return undefined;
     }
     const animation = this.scrollAnimation;
@@ -3639,6 +3791,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       // no-ops unless the item is in edit mode and not already attached.
       if (item.item.edit === true) {
         this.attachItemEditor(item);
+        this.returnParkedFocus(item);
       }
     }
 
@@ -3735,6 +3888,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     this.validateStickyContainerHeight();
     this.fixContainerFocus();
+
+    // The rendered slice and scroll position are final for this frame, so a
+    // request with no target left pending has reached its line.
+    if (this.pendingScrollTarget == null) {
+      this.finishPendingScroll('settled');
+    }
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
     // render to fill out content. If we are performing a scroll animation we'll
@@ -3916,11 +4075,30 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // Abort any in-flight programmatic scroll when the user takes over.
   // Attached to root as a passive listener for wheel / touchstart /
   // pointerdown / keydown; we never mutate the event, just drop our state.
-  private clearPendingScroll = (): void => {
-    this.pendingScrollTarget = undefined;
+  private clearPendingScroll = (event: Event): void => {
+    if (!isUserScrollInput(event)) {
+      return;
+    }
     this.pendingLayoutAnchor = undefined;
-    this.scrollAnimation = undefined;
+    this.cancelScroll();
   };
+
+  // Drop the in-flight scroll, reporting its request as cancelled. With
+  // onDone, only while that request is still the pending one.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    if (onDone != null && this.pendingScrollDone !== onDone) {
+      return;
+    }
+    this.pendingScrollTarget = undefined;
+    this.scrollAnimation = undefined;
+    this.finishPendingScroll('cancelled');
+  }
+
+  private finishPendingScroll(result: ScrollRequestResult): void {
+    const { pendingScrollDone } = this;
+    this.pendingScrollDone = undefined;
+    pendingScrollDone?.(result);
+  }
 
   private handleResize = (entries: ResizeObserverEntry[]) => {
     let shouldRender = false;
