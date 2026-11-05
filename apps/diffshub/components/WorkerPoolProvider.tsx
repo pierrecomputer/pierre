@@ -10,6 +10,7 @@ import {
 } from '@pierre/diffs/worker';
 import { type ReactNode, useState } from 'react';
 
+import { getPreferredDiffLib } from '@/lib/preferredDiffLib';
 import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 // Files and diffs up to this many characters highlight on the main thread,
@@ -97,6 +98,7 @@ function getHighlighterOptions(): WorkerInitializationRenderOptions {
       'typescript',
       'zig',
     ],
+    preferredDiffLib: getPreferredDiffLib(),
     preferredHighlighter: getPreferredHighlighter(),
   };
 }

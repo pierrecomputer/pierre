@@ -1,11 +1,10 @@
-import { createTwoFilesPatch } from 'diff';
-
 import type {
   FileContents,
   FileDiffMetadata,
   ParseDiffOptions,
 } from '../types';
 import { composeCacheKey } from './composeCacheKey';
+import { diffLibs, resolveDiffLib } from './diffLibs';
 import { processFile } from './parsePatchFiles';
 
 const MISSING_FILE_NAME = '/dev/null';
@@ -19,7 +18,11 @@ const MISSING_FILE_NAME = '/dev/null';
 export function parseDiffFromFile(
   oldFile: FileContents | null,
   newFile: FileContents | null,
-  { disableLineMatching, ...diffOptions }: ParseDiffOptions = {},
+  {
+    preferredDiffLib = 'jsdiff',
+    disableLineMatching,
+    ...diffOptions
+  }: ParseDiffOptions = {},
   throwOnError = false
 ): FileDiffMetadata {
   if (oldFile === null && newFile === null) {
@@ -30,15 +33,29 @@ export function parseDiffFromFile(
 
   const resolvedOldFile = oldFile ?? createMissingFile();
   const resolvedNewFile = newFile ?? createMissingFile();
-  const patch = createTwoFilesPatch(
+  const patchArgs = [
     resolvedOldFile.name,
     resolvedNewFile.name,
     resolvedOldFile.contents,
     resolvedNewFile.contents,
     resolvedOldFile.header,
     resolvedNewFile.header,
-    diffOptions
-  );
+    diffOptions,
+  ] as const;
+  const diffLib = throwOnError
+    ? preferredDiffLib
+    : resolveDiffLib(preferredDiffLib);
+  let patch: string;
+  try {
+    patch = diffLibs[diffLib].createTwoFilesPatch(...patchArgs);
+  } catch (error) {
+    // Wasm can run out of memory where jsdiff works.
+    if (throwOnError || diffLib === 'jsdiff') {
+      throw error;
+    }
+    console.error(error);
+    patch = diffLibs.jsdiff.createTwoFilesPatch(...patchArgs);
+  }
 
   const fileData = processFile(patch, {
     cacheKey: (() => {

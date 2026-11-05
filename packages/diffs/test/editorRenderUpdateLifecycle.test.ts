@@ -1,5 +1,5 @@
+import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
 import type { ThemeRegistration } from 'shiki';
 
 import {
