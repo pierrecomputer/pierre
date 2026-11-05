@@ -12,13 +12,13 @@ import {
 } from '../constants';
 import { resolveFindAgainShortcut } from '../editor/command';
 import type { Editor, EditorOptions } from '../editor/editor';
-import { getCaretPosition } from '../editor/selection';
 import { isPrimaryModifier } from '../editor/platform';
 import {
   type SearchPanelReplaceHandlers,
   SearchPanelWidget,
   type SearchResult,
 } from '../editor/searchPanel';
+import { getCaretPosition } from '../editor/selection';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -1630,14 +1630,22 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     ) {
       return false;
     }
+    const rect = this.getScrollTargetRect({
+      type: 'line',
+      id: match.itemId,
+      lineNumber: match.lineNumber,
+      side: match.side,
+      align: 'nearest',
+    });
+    if (rect == null) return false;
+    const top = this.getItemTopOffset() + rect.top;
+    const bottom = top + rect.height;
+    const scrollTop = this.getScrollTop();
+    const visibleTop = scrollTop + this.getStickyHeaderOffset();
+    const visibleBottom = scrollTop + this.getHeight();
     return (
-      this.normalizeScrollTarget({
-        type: 'line',
-        id: match.itemId,
-        lineNumber: match.lineNumber,
-        side: match.side,
-        align: 'nearest',
-      }) == null
+      (top >= visibleTop && bottom <= visibleBottom) ||
+      (top <= visibleTop && bottom >= visibleBottom)
     );
   }
 
@@ -2176,12 +2184,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // Gives focus back to the focused item's editor after virtualization
   // released its element and parked focus on the root: once the editor is
   // attached again and its primary caret's row is on screen, so the caret
-  // lands on its line. Called for each edited item in a render pass.
+  // lands on its line. An open global search keeps root focus outside editors.
+  // Called for each edited item in a render pass.
   private returnParkedFocus(
     item: CodeViewContextItem<LAnnotation, Caret>
   ): void {
     const { id } = item.item;
-    if (this.focusedItemId !== id || !this.rootHasFocus()) {
+    if (
+      this.focusedItemId !== id ||
+      !this.rootHasFocus() ||
+      (this.searchPanel != null && this.searchState.scope?.itemId !== id)
+    ) {
       return;
     }
     const record = this.itemEditors.get(id);

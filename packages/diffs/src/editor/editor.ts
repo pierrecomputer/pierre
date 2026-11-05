@@ -420,7 +420,6 @@ export interface EditorFocusOptions extends FocusOptions {
   offset?: number;
 }
 
-
 // Wrap offsets persist across render-range syncs (see #resetCache), so
 // scrolling through a very large file could otherwise accumulate an entry per
 // line. Past this many lines the cache resets and refills lazily for whatever
@@ -954,27 +953,22 @@ export class Editor<
       return undefined;
     }
 
-    let replacementEnd = 0;
-    let offsetDelta = 0;
-    const edits = matches.map(([start, end]): TextEdit => {
-      const newText = buildSearchReplacementText(
-        (offset) => textDocument.positionAt(offset),
-        (position) => textDocument.offsetAt(position),
-        (line) => textDocument.getLineText(line),
-        searchParams,
-        start,
-        end
-      );
-      replacementEnd = start + offsetDelta + newText.length;
-      offsetDelta += newText.length - (end - start);
-      return {
+    const edits = matches.map(
+      ([start, end]): TextEdit => ({
         range: {
           start: textDocument.positionAt(start),
           end: textDocument.positionAt(end),
         },
-        newText,
-      };
-    });
+        newText: buildSearchReplacementText(
+          (offset) => textDocument.positionAt(offset),
+          (position) => textDocument.offsetAt(position),
+          (line) => textDocument.getLineText(line),
+          searchParams,
+          start,
+          end
+        ),
+      })
+    );
     const selectionsBefore = this.#selections;
     const selectionOffsets = selectionsBefore?.map(
       (selection) =>
@@ -986,6 +980,11 @@ export class Editor<
     const resolvedEdits = textDocument
       .resolveEdits(edits)
       .sort((a, b) => a.start - b.start);
+    // The final match's original end moves by each normalized edit's length delta.
+    let replacementEnd = resolvedEdits.at(-1)!.end;
+    for (const { start, end, text } of resolvedEdits) {
+      replacementEnd += text.length - (end - start);
+    }
     const change = textDocument.applyEdits(edits, true, selectionsBefore);
     if (change != null) {
       // Replacements re-anchor the existing selections like any other edit;
