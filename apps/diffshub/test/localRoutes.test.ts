@@ -282,6 +282,25 @@ describe('GET /api/local/diff', () => {
     expect(String(error)).toMatch(/not a git repository/);
   });
 
+  test('stream errors on non-zero exit even after partial output', async () => {
+    writeConfig(validConfig());
+    spawnImpl = () => {
+      const child = new FakeChild();
+      queueMicrotask(() => {
+        child.stdout.emit('data', Buffer.from('partial diff\n'));
+        child.stderr.emit('data', Buffer.from('fatal: timeout'));
+        child.emit('close', null);
+      });
+      return child;
+    };
+    const response = getDiff(request('/api/local/diff?project=bun&worktree=1'));
+    const error = await response.text().then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(String(error)).toMatch(/timeout/);
+  });
+
   test('stream errors when the process cannot start', async () => {
     writeConfig(validConfig());
     spawnImpl = () => {

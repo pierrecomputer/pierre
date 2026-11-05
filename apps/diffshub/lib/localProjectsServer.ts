@@ -63,9 +63,17 @@ function validateProject(raw: unknown, index: number): LocalProject {
     throw new Error(`${where}: "dir" must be the path to a local checkout`);
   }
   const resolvedDir = path.resolve(expandHomeDir(dir));
-  if (!existsSync(resolvedDir)) {
+  let dirStat;
+  try {
+    dirStat = statSync(resolvedDir);
+  } catch {
     throw new Error(
       `${where}: dir "${dir}" does not exist (resolved to ${resolvedDir})`
+    );
+  }
+  if (!dirStat.isDirectory()) {
+    throw new Error(
+      `${where}: dir "${dir}" is not a directory (resolved to ${resolvedDir})`
     );
   }
   return {
@@ -285,28 +293,32 @@ export async function listProjectPullRequests(
   if (!Array.isArray(parsed)) {
     throw new Error('gh pr list returned an unexpected payload');
   }
+  const stringField = (value: unknown): string =>
+    typeof value === 'string' ? value : '';
   return parsed.map((pr: Record<string, unknown>) => {
     if (typeof pr.number !== 'number' || !Number.isInteger(pr.number)) {
       throw new Error('gh pr list returned a PR without a number');
     }
+    const authorLogin = (pr.author as { login?: unknown } | null)?.login;
     return {
       number: pr.number,
-      title: (pr.title as string) ?? '',
-      state: (pr.state as string) ?? '',
-      headRefName: (pr.headRefName as string) ?? '',
-      baseRefName: (pr.baseRefName as string) ?? '',
+      title: stringField(pr.title),
+      state: stringField(pr.state),
+      headRefName: stringField(pr.headRefName),
+      baseRefName: stringField(pr.baseRefName),
       isDraft: pr.isDraft === true,
-      author: (pr.author as { login?: string } | null)?.login ?? '',
-      url: (pr.url as string) ?? '',
-      updatedAt: (pr.updatedAt as string) ?? '',
+      author: typeof authorLogin === 'string' ? authorLogin : '',
+      url: stringField(pr.url),
+      updatedAt: stringField(pr.updatedAt),
     };
   });
 }
 
 // Spawns a local command and exposes its stdout as a stream, so large diffs
-// render incrementally exactly like the proxied GitHub route. If the command
-// fails before producing any output the stream errors (the client surfaces the
-// stderr message); a failure after partial output just closes the stream.
+// render incrementally exactly like the proxied GitHub route. A non-zero
+// exit (including the timeout kill) always errors the stream — even after
+// partial output — so a truncated diff never renders as complete; the client
+// surfaces the stderr message.
 export function createLocalCommandStream(
   command: LocalCommand,
   cwd: string
@@ -339,16 +351,12 @@ export function createLocalCommandStream(
           controller.close();
           return;
         }
-        if (!emittedOutput) {
-          const detail = stderrText.trim();
-          controller.error(
-            new Error(
-              `\`${command.file} ${command.args.join(' ')}\` exited with code ${code ?? 'unknown'}: ${detail !== '' ? detail : 'no stderr output'}`
-            )
-          );
-        } else {
-          controller.close();
-        }
+        const detail = stderrText.trim();
+        controller.error(
+          new Error(
+            `\`${command.file} ${command.args.join(' ')}\` exited with code ${code ?? 'unknown'}: ${detail !== '' ? detail : 'no stderr output'}`
+          )
+        );
       });
     },
     cancel() {

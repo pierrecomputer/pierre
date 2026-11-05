@@ -16,6 +16,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { DiffsHubStatusPanel } from '../components/DiffsHubStatusPanel';
 import { usePatchLoader } from '../components/usePatchLoader';
+import type { LocalViewerSource } from '../lib/localSource';
 
 const originalFetch = globalThis.fetch;
 const originalGlobals = {
@@ -38,6 +39,37 @@ function PatchLoaderHarness() {
   const result = usePatchLoader({
     collapseMode: 'expanded',
     path: '/owner/repo/compare/main...main',
+    viewerRef,
+    onLoadStart,
+  });
+  return (
+    <div
+      data-load-state={result.loadState}
+      data-file-count={result.diffStats?.fileCount}
+      data-item-count={result.initialItems.length}
+    >
+      <DiffsHubStatusPanel
+        errorMessage={result.errorMessage}
+        onRetry={result.retryLoad}
+        state={result.loadState}
+      />
+    </div>
+  );
+}
+
+const localSource: LocalViewerSource = {
+  project: 'bun',
+  target: { kind: 'pull', pr: '42' },
+};
+// Stable identity: the hook's load effect depends on getGitHubToken.
+const getSecretToken = () => 'secret-github-token';
+
+function LocalPatchLoaderHarness() {
+  const result = usePatchLoader({
+    collapseMode: 'expanded',
+    getGitHubToken: getSecretToken,
+    localSource,
+    path: '/local/bun/pull/42',
     viewerRef,
     onLoadStart,
   });
@@ -147,6 +179,21 @@ describe('patch loader and status panel', () => {
     expect(result.getAttribute('data-load-state')).toBe('ready');
     expect(result.getAttribute('data-file-count')).toBe('1');
     expect(result.getAttribute('data-item-count')).toBe('1');
+  });
+
+  test('local source fetches /api/local/diff without the GitHub token', async () => {
+    const fetchMock = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(patchText, { headers: { 'Content-Type': 'text/plain' } })
+    );
+    act(() => root.render(<LocalPatchLoaderHarness />));
+    const result = await waitForLoad();
+
+    expect(result.getAttribute('data-load-state')).toBe('ready');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toBe('/api/local/diff?project=bun&pr=42');
+    // getGitHubToken returns a token, but local mode must not send it
+    expect(init.headers).toBeUndefined();
   });
 
   test('rejects a nonempty error payload returned with HTTP 200', async () => {

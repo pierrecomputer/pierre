@@ -83,6 +83,16 @@ describe('loadLocalProjects', () => {
     rmSync(path.dirname(configPath), { recursive: true, force: true });
   });
 
+  test('throws when dir is a file, not a directory', () => {
+    const configPath = withTempConfig(
+      JSON.stringify({
+        projects: [{ id: 'p', repo: 'a/b', dir: __filename }],
+      })
+    );
+    expect(() => loadLocalProjects(configPath)).toThrow(/not a directory/);
+    rmSync(path.dirname(configPath), { recursive: true, force: true });
+  });
+
   test('throws on nonexistent dir', () => {
     const configPath = withTempConfig(
       JSON.stringify({
