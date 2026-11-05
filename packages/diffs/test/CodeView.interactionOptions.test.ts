@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import {
   CodeView,
@@ -10,10 +10,13 @@ import {
   createRoot,
   installDom,
   makeFile,
+  preloadTestHighlighter,
   renderItems,
   wait,
   waitFor,
 } from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 // Differs from the shared makeFileItem: these tests use 8-line .txt fixtures
 // rather than the harness default of 20-line .ts files.

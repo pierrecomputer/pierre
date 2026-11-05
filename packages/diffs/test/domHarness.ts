@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
+import { preloadHighlighter } from '../src/highlighter/shared_highlighter';
 import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { resetPlatformDetection } from '../src/utils/platform';
@@ -403,6 +404,16 @@ export function makeFileItem(
 }
 
 // Pushes items into the viewer and flushes the rAF-scheduled render pass.
+// CodeView skips renders until the shared highlighter loads. Files that assert
+// right after a render call this in beforeAll, so they don't depend on an
+// earlier test file having loaded it. CI file order changes between runs.
+export function preloadTestHighlighter(): Promise<void> {
+  return preloadHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+  });
+}
+
 export async function renderItems<LAnnotation, Caret>(
   viewer: CodeView<LAnnotation, Caret>,
   items: readonly CodeViewItem<LAnnotation>[]
