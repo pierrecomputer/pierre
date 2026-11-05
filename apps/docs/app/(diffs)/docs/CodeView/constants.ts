@@ -168,6 +168,149 @@ viewer.scrollTo({ type: 'position', position: 0 });`,
   options,
 };
 
+export const CODE_VIEW_SEARCH_REACT_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'code_view_search.tsx',
+    contents: `import type {
+  CodeViewItem,
+  CodeViewOptions,
+  SearchPanelState,
+} from '@pierre/diffs';
+import { resolveSearchShortcut } from '@pierre/diffs/edit';
+import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
+import { useEffect, useRef, useState } from 'react';
+
+const options: CodeViewOptions<undefined, undefined> = {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  searchOptions: {
+    // The viewer stops binding cmd/ctrl+f itself; the window handler below
+    // owns it. Escape and find-again still work while a panel is open.
+    disableShortcuts: true,
+    // How the viewport moves to a match that navigation has to bring into
+    // view: 'instant', 'smooth', or the default 'smooth-auto'.
+    scrollBehavior: 'instant',
+    // Matching options a fresh panel opens with.
+    defaults: { caseSensitive: true },
+  },
+};
+
+export function SearchableCodeView({
+  items,
+}: {
+  items: CodeViewItem<undefined>[];
+}) {
+  const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
+  // Reported when the panel opens and after every change; undefined on close.
+  const [search, setSearch] = useState<SearchPanelState>();
+
+  // Open find from anywhere on the page, not only while the viewer has focus.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const shortcut = resolveSearchShortcut(event);
+      if (shortcut == null) return;
+      event.preventDefault();
+      if (shortcut === 'next' || shortcut === 'previous') {
+        viewer.current?.navigateSearch(shortcut);
+      } else {
+        // Like the built-in binding: both open shortcuts request the replace
+        // row, which only shows while the scope is an item being edited. Pass
+        // \`{ mode: shortcut }\` instead to open find-only on cmd/ctrl+f the
+        // way the standalone editor does.
+        viewer.current?.openSearch();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  return (
+    <>
+      <p>{search == null ? '' : \`\${search.matchCount} matches for \${search.text}\`}</p>
+      <button
+        onClick={() =>
+          // Search one editable item with a preset query.
+          viewer.current?.openSearch({
+            scope: { itemId: 'diff:src/app.ts' },
+            query: 'TODO',
+          })
+        }
+      >
+        Find TODOs
+      </button>
+      <CodeView
+        ref={viewer}
+        items={items}
+        options={{ ...options, onSearchStateChange: setSearch }}
+        style={{ height: '24rem', overflow: 'auto' }}
+      />
+    </>
+  );
+}`,
+  },
+  options,
+};
+
+export const CODE_VIEW_SEARCH_VANILLA_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'code_view_search.ts',
+    contents: `import { CodeView, type SearchPanelState } from '@pierre/diffs';
+import { resolveSearchShortcut } from '@pierre/diffs/edit';
+
+const badge = document.querySelector<HTMLElement>('#search-badge')!;
+
+const viewer = new CodeView({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  searchOptions: {
+    // The viewer stops binding cmd/ctrl+f itself; the window handler below
+    // owns it. Escape and find-again still work while a panel is open.
+    disableShortcuts: true,
+    // How the viewport moves to a match that navigation has to bring into
+    // view: 'instant', 'smooth', or the default 'smooth-auto'.
+    scrollBehavior: 'instant',
+    // Matching options a fresh panel opens with.
+    defaults: { caseSensitive: true },
+  },
+  // Reported when the panel opens and after every change; undefined on close.
+  onSearchStateChange(state: SearchPanelState | undefined) {
+    badge.textContent =
+      state == null ? '' : \`\${state.matchCount} matches for \${state.text}\`;
+  },
+});
+viewer.setup(document.querySelector<HTMLElement>('#code-view')!);
+viewer.setItems(items);
+
+// Open find from anywhere on the page, not only while the viewer has focus.
+window.addEventListener('keydown', (event) => {
+  const shortcut = resolveSearchShortcut(event);
+  if (shortcut == null) return;
+  event.preventDefault();
+  if (shortcut === 'next' || shortcut === 'previous') {
+    viewer.navigateSearch(shortcut);
+  } else {
+    // Like the built-in binding: both open shortcuts request the replace row,
+    // which only shows while the scope is an item being edited. Pass
+    // \`{ mode: shortcut }\` instead to open find-only on cmd/ctrl+f the way
+    // the standalone editor does.
+    viewer.openSearch();
+  }
+});
+
+// Search one editable item with a preset query.
+viewer.openSearch({ scope: { itemId: 'diff:src/app.ts' }, query: 'TODO' });
+
+if (viewer.isSearchOpen()) {
+  viewer.closeSearch();
+}`,
+  },
+  options,
+};
+
 export const CODE_VIEW_REACT_EXAMPLE: PreloadFileOptions<undefined, undefined> =
   {
     file: {
