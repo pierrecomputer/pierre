@@ -1902,6 +1902,7 @@ export class Editor<
   }
 
   #resetState(preserveCarets = false): void {
+    this.#isComposing = false;
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -2109,6 +2110,7 @@ export class Editor<
           // selectionchange whose range still belongs to the editor must not
           // overwrite the remapped #selections before the user returns to type.
           if (
+            this.#isComposing ||
             this.#shouldIgnoreSelectionChange ||
             this.#suppressNativeSelectionSync ||
             shadowRoot == null ||

@@ -1504,7 +1504,7 @@ describe('Editor edit-state manager', () => {
 });
 
 describe('Editor recycle cleanUp', () => {
-  test('recycle keeps document and undo history across re-attach', () => {
+  test('recycle keeps document and undo history across re-attach', async () => {
     const dom = installDom();
     const editor = new Editor('file');
     const first = createTestFile(createFile());
@@ -1513,6 +1513,12 @@ describe('Editor recycle cleanUp', () => {
       insertAtStart(editor, 'X');
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
+      first.contentElement.dispatchEvent(
+        new dom.window.CompositionEvent('compositionstart', {
+          bubbles: true,
+          composed: true,
+        })
+      );
       // Simulate a virtualized unmount: the host recycles, the editor is
       // unrendered non-destructively.
       editor.cleanUp('recycle');
@@ -1527,6 +1533,42 @@ describe('Editor recycle cleanUp', () => {
       // Undo history lives in the retained document and survives with it.
       editor.undo();
       expect(editor.getText()).toBe(FILE_CONTENTS);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      editor.focus();
+      await new Promise<void>((resolve) =>
+        queueRender(() => queueRender(() => resolve()))
+      );
+      const row = first.contentElement.querySelector('[data-line="1"]');
+      const node =
+        row == null
+          ? null
+          : document
+              .createTreeWalker(row, dom.window.NodeFilter.SHOW_TEXT)
+              .nextNode();
+      if (node == null) throw new Error('missing rendered text after recycle');
+      Object.defineProperty(document.getSelection()!, 'getComposedRanges', {
+        configurable: true,
+        value: () => [
+          {
+            collapsed: true,
+            startContainer: node,
+            startOffset: 2,
+            endContainer: node,
+            endOffset: 2,
+          },
+        ],
+      });
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 2,
+      });
     } finally {
       editor.cleanUp();
       first.cleanUp();

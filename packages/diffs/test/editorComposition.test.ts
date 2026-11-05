@@ -6,6 +6,7 @@ import type { EditorKeymap } from '../src/editor/command';
 import { Editor } from '../src/editor/editor';
 import { DirectionForward, DirectionNone } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
@@ -187,6 +188,88 @@ function updateInputValue(input: HTMLInputElement, value: string): void {
 }
 
 describe('Editor composition input', () => {
+  test('keeps the insertion position when deferred focus settles during the next composition', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: '앞뒤',
+      selections: [
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ],
+    });
+    clearRenderQueue();
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    const raf = spyOn(globalThis, 'requestAnimationFrame').mockImplementation(
+      (callback) => {
+        frames.set(++nextFrame, callback);
+        return nextFrame;
+      }
+    );
+    const cancel = spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(
+      (id) => {
+        frames.delete(id);
+      }
+    );
+    const frame = () => {
+      const pending = [...frames.values()];
+      frames.clear();
+      for (const callback of pending) callback(0);
+    };
+    const composition = (type: string, data = '') =>
+      content.dispatchEvent(
+        new window.CompositionEvent(type, {
+          bubbles: true,
+          composed: true,
+          data,
+        })
+      );
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+      composition('compositionstart');
+      composition('compositionend', '가');
+      composition('compositionstart');
+      frame();
+      frame();
+
+      const row = content.querySelector<HTMLElement>('[data-line="1"]')!;
+      row.textContent = '앞가ㄴ뒤';
+      const node = row.firstChild!;
+      const selection = document.getSelection()!;
+      Object.defineProperty(selection, 'getComposedRanges', {
+        configurable: true,
+        value: () => [
+          {
+            collapsed: true,
+            startContainer: node,
+            startOffset: 3,
+            endContainer: node,
+            endOffset: 3,
+          },
+        ],
+      });
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 2,
+      });
+      composition('compositionend', '나');
+
+      expect(editor.getText()).toBe('앞가나뒤');
+    } finally {
+      clearRenderQueue();
+      raf.mockRestore();
+      cancel.mockRestore();
+      cleanup();
+    }
+  });
+
   test('lets the browser own IME preview before committing composition text', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture();
     const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {});
