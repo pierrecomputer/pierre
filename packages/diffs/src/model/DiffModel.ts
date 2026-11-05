@@ -1,10 +1,9 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
-
 import type {
   FileContents,
   FileDiffMetadata,
   Hunk,
   HunkExpansionRegion,
+  ParseDiffOptions,
 } from '../types';
 import { cloneHunks } from '../utils/cloneFileDiffMetadata';
 import { countLineBreaks } from '../utils/computeFileOffsets';
@@ -39,14 +38,14 @@ import type {
 /** What the renderer hands the model with each change and when editing ends. */
 export interface ModelSessionState {
   /** Options for recomputing hunks. */
-  parseDiffOptions?: CreatePatchOptionsNonabortable;
+  parseDiffOptions?: ParseDiffOptions;
   /** How far each hunk's collapsed context is expanded, by hunk index. */
   expandedHunks?: Map<number, HunkExpansionRegion>;
 }
 
 export interface StartSessionOptions {
   /** Options for the recompute an empty or renamed new file needs at the start. */
-  parseDiffOptions?: CreatePatchOptionsNonabortable;
+  parseDiffOptions?: ParseDiffOptions;
   /**
    * The editor's document when it is not the input's new file: a retained
    * draft from an earlier session, split like the parsed diff (no entry for
