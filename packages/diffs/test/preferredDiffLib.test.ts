@@ -143,6 +143,53 @@ test('parseDiffFromFile falls back to jsdiff when the selected library fails', (
   }
 });
 
+test('a page that blocks WebAssembly logs once and then uses jsdiff', () => {
+  // the check is cached per process, so blocking wasm needs its own process
+  const { stdout, stderr, exitCode } = Bun.spawnSync(
+    [
+      process.execPath,
+      '--eval',
+      `
+    Reflect.deleteProperty(globalThis, 'WebAssembly');
+    const { computeLineDiffRanges } = await import('./src/utils/computeLineDiffRanges.ts');
+    const { parseDiffFromFile } = await import('./src/utils/parseDiffFromFile.ts');
+    let errors = 0;
+    console.error = () => errors++;
+    const oldFile = ${JSON.stringify(oldFile)};
+    const newFile = ${JSON.stringify(newFile)};
+    const options = { preferredDiffLib: '@pierre/patches' };
+    const additions = [1, 2, 3].map(
+      () => parseDiffFromFile(oldFile, newFile, options).hunks[0].additionLines
+    );
+    const ranges = (lib) => computeLineDiffRanges('a b', 'a c', 'word', 1000, lib);
+    const sameRanges =
+      JSON.stringify(ranges('@pierre/patches')) === JSON.stringify(ranges('jsdiff'));
+    const logged = errors;
+    let thrown;
+    try {
+      parseDiffFromFile(oldFile, newFile, options, true);
+    } catch (error) {
+      thrown = error.name;
+    }
+    console.log(JSON.stringify({ additions, sameRanges, logged, thrown }));
+  `,
+    ],
+    {
+      cwd: new URL('..', import.meta.url).pathname,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    }
+  );
+  expect(stderr.toString()).toBe('');
+  expect(exitCode).toBe(0);
+  expect(JSON.parse(stdout.toString())).toEqual({
+    additions: [1, 1, 1],
+    sameRanges: true,
+    logged: 1,
+    thrown: 'ReferenceError',
+  });
+});
+
 test('preloadDiffHTML falls back to jsdiff when inline highlights fail', async () => {
   const lib = diffLibs['@pierre/patches'];
   const failure = () => {

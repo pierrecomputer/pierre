@@ -2,7 +2,7 @@ import type { ChangeObject } from '@pierre/patches';
 
 import type { DiffLib, LineDiffTypes } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
-import { diffLibs } from './diffLibs';
+import { diffLibs, resolveDiffLib } from './diffLibs';
 import { pushOrJoinSpan } from './parseDiffDecorations';
 
 /** Start and end column of changed text in a line. The end is exclusive. */
@@ -45,7 +45,8 @@ export function computeLineDiffRanges(
   ) {
     return NO_RANGES;
   }
-  const { diffChars, diffWordsWithSpace } = diffLibs[preferredDiffLib];
+  const { diffChars, diffWordsWithSpace } =
+    diffLibs[resolveDiffLib(preferredDiffLib)];
   const lineDiff =
     lineDiffType === 'char'
       ? diffChars(deletionLine, additionLine)

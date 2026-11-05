@@ -51,7 +51,7 @@ const lineKeys = ['ignoreWhitespace', 'stripTrailingCr'];
 const patchKeys = [...lineKeys, 'context', 'headerOptions'];
 
 let load: () => WebAssembly.Module;
-// undefined until the first call compiles it
+// undefined until the first call compiles it and creates an instance
 let wasm: WebAssembly.Module | undefined;
 let memory: WebAssembly.Memory;
 let diffCall: () => void;
@@ -75,8 +75,10 @@ export function init(loadModule: () => WebAssembly.Module): void {
 
 /** Create a wasm instance, compiling the module first if needed. */
 function start(): void {
-  wasm ??= load();
-  const { exports } = new WebAssembly.Instance(wasm, {});
+  const compiled = wasm ?? load();
+  const { exports } = new WebAssembly.Instance(compiled, {});
+  // WARNING: set `wasm` only now: `run` takes a set `wasm` to mean an instance exists
+  wasm = compiled;
   memory = exports.memory as WebAssembly.Memory;
   diffCall = exports.diff as () => void;
   bind();
@@ -405,5 +407,11 @@ function bind(): void {
 
 /** Replace the instance when its memory passed the limit; the GC frees the old one. */
 function release(): void {
-  if (u8.length > maxBytes) start();
+  if (u8.length > maxBytes) {
+    // WARNING: the caller's result or wasm error is ready and must survive, so when
+    // no new instance can be created, keep this one; a later call tries again
+    try {
+      start();
+    } catch {}
+  }
 }

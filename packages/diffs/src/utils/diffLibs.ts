@@ -30,3 +30,27 @@ export const diffLibs: Record<
     diffWordsWithSpace: diffPatchesWords,
   },
 };
+
+let patchesWork: boolean | undefined;
+
+/**
+ * Pick jsdiff when `@pierre/patches` cannot load, so a page that blocks
+ * WebAssembly fails and logs once, not on every diff.
+ * WARNING: do not use `canUseWASM` here. Cloudflare Workers block its runtime
+ * compile, but this package loads a precompiled module there and works.
+ */
+export function resolveDiffLib(preferred: DiffLib): DiffLib {
+  if (preferred === 'jsdiff') {
+    return preferred;
+  }
+  if (patchesWork === undefined) {
+    try {
+      diffPatchesChars('', '');
+      patchesWork = true;
+    } catch (error) {
+      console.error(error);
+      patchesWork = false;
+    }
+  }
+  return patchesWork ? preferred : 'jsdiff';
+}

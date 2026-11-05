@@ -460,7 +460,7 @@ poolManager.setRenderOptions(options)
 poolManager.getRenderOptions()
 // Returns: WorkerRenderingOptions - Current render options (copy)
 
-poolManager.highlightFileAST(fileInstance, file, options)
+poolManager.highlightFileAST(fileInstance, file)
 // Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
 
 poolManager.getPlainFileAST(file, startingLineNumber?)

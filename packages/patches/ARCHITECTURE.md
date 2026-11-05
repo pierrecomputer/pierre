@@ -152,8 +152,10 @@ no cleanup.
 
 Wasm memory cannot shrink. After the host reads a result or a wasm error, it
 replaces the instance if memory exceeds `setMemoryLimit` (default 32 MB). The
-garbage collector can then free the old memory. This limit controls memory
-between calls, not peak memory during a call. `Infinity` keeps all memory.
+garbage collector can then free the old memory. If no new instance can be
+created, the current one stays until a later call can replace it. This limit
+controls memory between calls, not peak memory during a call. `Infinity` keeps
+all memory.
 
 - Each input has a 256 MB limit. Token tables check their sizes before integer
   overflow.

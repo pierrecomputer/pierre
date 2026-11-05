@@ -31,7 +31,7 @@ afterAll(async () => {
   await disposeHighlighter();
 });
 
-test('workers use the pool diff library', async () => {
+test('worker results carry the pool diff library', async () => {
   const manager = new WorkerPoolManager(
     {
       poolSize: 1,

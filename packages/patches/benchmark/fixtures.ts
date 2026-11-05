@@ -22,8 +22,8 @@ type Rnd = () => number;
 const pick = <T>(rnd: Rnd, arr: readonly T[]): T =>
   arr[Math.floor(rnd() * arr.length)];
 
-/** generate a random number between 0 and 1 */
-function mulberry32(seed: number): Rnd {
+/** Deterministic PRNG for reproducible fixtures and fuzzing. */
+export function mulberry32(seed: number): Rnd {
   return function () {
     seed |= 0;
     seed = (seed + 0x6d2b79f5) | 0;

@@ -51,8 +51,8 @@ export class LineDiffRangeCache {
         this.preferredDiffLib
       );
     } catch (error) {
-      // WARNING: Wasm can fail on locked-down pages or without enough memory.
-      // Keep jsdiff for this cache so each new line does not retry the failure.
+      // WARNING: Wasm can run out of memory. Keep jsdiff for this cache so each
+      // new line does not retry the failure.
       if (this.preferredDiffLib === 'jsdiff') {
         throw error;
       }

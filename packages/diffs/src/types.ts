@@ -1,4 +1,5 @@
 import type { CreatePatchOptions } from '@pierre/patches';
+import type { CreatePatchOptionsNonabortable as JsdiffCreatePatchOptions } from 'diff';
 import type { ElementContent } from 'hast';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
@@ -17,7 +18,7 @@ export type {
 
 export type { CreatePatchOptions };
 /** @deprecated Use `CreatePatchOptions`. */
-export type CreatePatchOptionsNonabortable = CreatePatchOptions;
+export type CreatePatchOptionsNonabortable = JsdiffCreatePatchOptions;
 
 export interface ParseDiffOptions extends CreatePatchOptions {
   preferredDiffLib?: DiffLib; // jsdiff is default
@@ -490,7 +491,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 
   /**
    * Parser options used when computing diffs from file contents
-   * (oldFile/newFile) or recomputing edited diffs. Includes jsdiff settings
+   * (oldFile/newFile) or recomputing edited diffs. Includes diff settings
    * and the disableLineMatching escape hatch. Also used when deriving cache
    * keys during partial diff hydration; use the same matching mode as the
    * supplied patch. Does not change the hunks in supplied pre-parsed patches.

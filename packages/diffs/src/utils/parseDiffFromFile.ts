@@ -4,7 +4,7 @@ import type {
   ParseDiffOptions,
 } from '../types';
 import { composeCacheKey } from './composeCacheKey';
-import { diffLibs } from './diffLibs';
+import { diffLibs, resolveDiffLib } from './diffLibs';
 import { processFile } from './parsePatchFiles';
 
 const MISSING_FILE_NAME = '/dev/null';
@@ -42,12 +42,15 @@ export function parseDiffFromFile(
     resolvedNewFile.header,
     diffOptions,
   ] as const;
+  const diffLib = throwOnError
+    ? preferredDiffLib
+    : resolveDiffLib(preferredDiffLib);
   let patch: string;
   try {
-    patch = diffLibs[preferredDiffLib].createTwoFilesPatch(...patchArgs);
+    patch = diffLibs[diffLib].createTwoFilesPatch(...patchArgs);
   } catch (error) {
-    // Wasm can fail where jsdiff works: locked-down pages or no memory left.
-    if (throwOnError || preferredDiffLib === 'jsdiff') {
+    // Wasm can run out of memory where jsdiff works.
+    if (throwOnError || diffLib === 'jsdiff') {
       throw error;
     }
     console.error(error);

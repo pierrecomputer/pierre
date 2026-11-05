@@ -181,6 +181,51 @@ test('compaction bounds memory on unrelated inputs', () => {
   }
 });
 
+test('a refused wasm instance loses no result and breaks no later call', () => {
+  const Instance = WebAssembly.Instance;
+  let refuse = true;
+  let instances = 0;
+  WebAssembly.Instance = class extends Instance {
+    constructor(module: WebAssembly.Module) {
+      if (refuse) throw new RangeError('refused');
+      super(module, {});
+      instances++;
+    }
+  };
+  // reports an error at byte 2048, as wasm does when it runs out of memory
+  const failing = `(module
+    (memory (export "memory") 2)
+    (data (i32.const 2048) "out of memory")
+    (func (export "diff")
+      (i32.store (i32.const 12) (i32.const 13))
+      (i32.store (i32.const 16) (i32.const 2048))))`;
+  init(loadWasm);
+  setMemoryLimit(Infinity);
+  try {
+    // the first instance: this call fails, and the next call creates it
+    expect(() => diffChars('ab', 'ac')).toThrow('refused');
+    refuse = false;
+    expect(diffChars('ab', 'ac')).toHaveLength(3);
+    expect(instances).toBe(1);
+    // a replacement: the result stays, and the next call tries again
+    refuse = true;
+    setMemoryLimit(0);
+    expect(diffChars('ab', 'ac')).toHaveLength(3);
+    refuse = false;
+    expect(diffChars('ab', 'ac')).toHaveLength(3);
+    expect(instances).toBe(2);
+    // a replacement after a wasm error: the message stays
+    init(() => new WebAssembly.Module(wat2wasm('failing.wat', failing)));
+    expect(() => diffChars('ab', 'ac')).toThrow('out of memory');
+    refuse = true;
+    expect(() => diffChars('ab', 'ac')).toThrow('out of memory');
+  } finally {
+    WebAssembly.Instance = Instance;
+    init(loadWasm);
+    setMemoryLimit(32 << 20);
+  }
+});
+
 test('oversized inputs and refused memory growth throw out of memory', () => {
   const text = 'x'.repeat(0x10000000);
   const grow = spyOn(WebAssembly.Memory.prototype, 'grow');

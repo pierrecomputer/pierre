@@ -4,7 +4,8 @@
   "description": "A fast text diff library written in WebAssembly Text (WAT), compatible with jsdiff",
   "license": "apache-2.0",
   "files": [
-    "dist/"
+    "dist/",
+    "NOTICE.md"
   ],
   "type": "module",
   "main": "./dist/index.js",
