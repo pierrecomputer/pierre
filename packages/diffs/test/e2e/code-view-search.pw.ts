@@ -726,9 +726,7 @@ test('scoped replacement advances past inserted matches and replace all is one u
   await expectSearchHighlights(content, 5);
 });
 
-test('unified edit highlights survive the delayed diff refresh', async ({
-  page,
-}) => {
+test('unified edit highlights follow reconciled rows', async ({ page }) => {
   await page.goto(
     '/test/e2e/fixtures/code-view-search.html?recycle&diffStyle=unified'
   );
@@ -745,24 +743,16 @@ test('unified edit highlights survive the delayed diff refresh', async ({
   await page.keyboard.press('Home');
   await page.keyboard.type('X');
   await expect(line).toContainText('Xtarget');
-  const editedRow = await line.elementHandle();
-  try {
-    await expect
-      .poll(() => editedRow!.evaluate((row) => row.isConnected))
-      .toBe(false);
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          [
-            ...CSS.highlights.get('diffs-search-match')!,
-            ...CSS.highlights.get('diffs-search-current')!,
-          ].map((range) => (range as Range).toString())
-        )
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [
+          ...CSS.highlights.get('diffs-search-match')!,
+          ...CSS.highlights.get('diffs-search-current')!,
+        ].map((range) => (range as Range).toString())
       )
-      .toEqual(['target', 'target']);
-  } finally {
-    await editedRow?.dispose();
-  }
+    )
+    .toEqual(['target', 'target']);
 });
 
 for (const kind of ['file', 'split', 'unified']) {

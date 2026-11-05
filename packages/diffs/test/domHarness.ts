@@ -86,6 +86,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     PointerEvent: Reflect.get(globalThis, 'PointerEvent'),
     requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
     ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
+    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
     SVGElement: Reflect.get(globalThis, 'SVGElement'),
     SVGSVGElement: Reflect.get(globalThis, 'SVGSVGElement'),
     window: Reflect.get(globalThis, 'window'),
@@ -256,6 +257,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MutationObserver: dom.window.MutationObserver,
     Node: dom.window.Node,
     NodeFilter: dom.window.NodeFilter,
+    ShadowRoot: dom.window.ShadowRoot,
     PointerEvent: MockPointerEvent,
     requestAnimationFrame: (callback: FrameRequestCallback) => {
       const id = ++nextFrameId;

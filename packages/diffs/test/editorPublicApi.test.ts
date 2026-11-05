@@ -1518,9 +1518,14 @@ describe('Editor.replaceSearchMatches', () => {
     }
   });
 
-  test.each(['file', 'file-diff'] as const)(
-    'replaces regex matches in a %s as one undoable edit without taking focus',
-    async (type) => {
+  test.each([
+    ['file', '\n'],
+    ['file-diff', '\n'],
+    ['file', '\r\n'],
+    ['file-diff', '\r\n'],
+  ] as const)(
+    'replaces regex matches in a %s with %j replacement newlines as one undoable edit without taking focus',
+    async (type, replacementEol) => {
       const contents = 'foo-1\r\nfoo-22';
       const fixture =
         type === 'file'
@@ -1534,7 +1539,7 @@ describe('Editor.replaceSearchMatches', () => {
       try {
         const params: SearchParams = {
           text: 'foo-(\\d+)',
-          replaceText: '$1:$&\n',
+          replaceText: `$1:$&${replacementEol}`,
           caseSensitive: true,
           wholeWord: false,
           regex: true,
@@ -1549,8 +1554,8 @@ describe('Editor.replaceSearchMatches', () => {
           textDocument.search(params),
           params
         );
-        expect(fixture.editor.getText()).toBe('1:foo-1\n\r\n22:foo-22\n');
-        expect(end).toEqual([20, 20]);
+        expect(fixture.editor.getText()).toBe('1:foo-1\r\n\r\n22:foo-22\r\n');
+        expect(end).toEqual([19, 19]);
         expect(onChange).toHaveBeenCalledTimes(1);
         await wait(0);
         expect(globalThis.document.activeElement).toBe(outside);
@@ -1558,7 +1563,7 @@ describe('Editor.replaceSearchMatches', () => {
         expect(fixture.editor.getText()).toBe(contents);
         expect(fixture.editor.canUndo).toBe(false);
         fixture.editor.redo();
-        expect(fixture.editor.getText()).toBe('1:foo-1\n\r\n22:foo-22\n');
+        expect(fixture.editor.getText()).toBe('1:foo-1\r\n\r\n22:foo-22\r\n');
       } finally {
         fixture.cleanup();
       }
