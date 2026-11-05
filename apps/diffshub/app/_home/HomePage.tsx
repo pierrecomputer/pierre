@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { HomeFetchForm } from './HomeFetchForm';
 import { HomeGitHubTokenForm } from './HomeGitHubTokenForm';
 import { DiffsHubLogo } from '@/components/DiffsHubLogo';
+import { LocalProjectsPanel } from '@/components/LocalProjectsPanel';
 import { getGitHubPath } from '@/lib/getGitHubPath';
 
 const DIFF_LINE_BADGE = 'inline-flex rounded-r py-0.25 pr-1.5 pl-1.5';
@@ -107,6 +108,7 @@ export function HomePage() {
             serves diffs over 100k lines with a delayed first byte.
           </p>
         </div>
+        <LocalProjectsPanel />
       </section>
       <section
         id="home-more"

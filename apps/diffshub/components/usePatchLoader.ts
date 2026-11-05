@@ -34,6 +34,12 @@ import {
   parseDiffsHubLineHash,
 } from '@/lib/lineHash';
 import {
+  buildLocalDiffSearchParams,
+  getLocalSourceKey,
+  LOCAL_DIFF_ENDPOINT,
+  type LocalViewerSource,
+} from '@/lib/localSource';
+import {
   getStreamedPatchMetadata,
   streamGitPatchFiles,
 } from '@/lib/streamGitPatchFiles';
@@ -60,6 +66,9 @@ interface UsePatchLoaderOptions {
   domain?: string;
   getGitHubToken?(): string | undefined;
   githubTokenVersion?: number | string;
+  // When set, the patch comes from /api/local/diff (a command run server-side
+  // against a configured local project) instead of the proxied GitHub route.
+  localSource?: LocalViewerSource;
   onLoadStart(): void;
   path: string;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
@@ -86,6 +95,7 @@ export function usePatchLoader({
   domain,
   getGitHubToken,
   githubTokenVersion = 0,
+  localSource,
   onLoadStart,
   path,
   viewerRef,
@@ -219,11 +229,20 @@ export function usePatchLoader({
 
   useEffect(() => {
     const patchRequestKey =
-      domain == null || domain === '' ? path : `${domain}${path}`;
-    const patchSearchParams = new URLSearchParams({ path });
-    if (domain != null && domain !== '') {
+      localSource != null
+        ? getLocalSourceKey(localSource)
+        : domain == null || domain === ''
+          ? path
+          : `${domain}${path}`;
+    const patchSearchParams =
+      localSource != null
+        ? buildLocalDiffSearchParams(localSource)
+        : new URLSearchParams({ path });
+    if (localSource == null && domain != null && domain !== '') {
       patchSearchParams.set('domain', domain);
     }
+    const patchEndpoint =
+      localSource != null ? LOCAL_DIFF_ENDPOINT : '/api/diff';
 
     const controller = new AbortController();
     const requestId = ++requestIdRef.current;
@@ -288,10 +307,12 @@ export function usePatchLoader({
         }
 
         const response = await fetch(
-          `/api/diff?${patchSearchParams}`,
+          `${patchEndpoint}?${patchSearchParams}`,
           createPatchRequestInit(
             controller.signal,
-            domain == null || domain === '' ? getGitHubToken?.() : undefined
+            localSource != null || (domain != null && domain !== '')
+              ? undefined
+              : getGitHubToken?.()
           )
         );
 
@@ -509,6 +530,7 @@ export function usePatchLoader({
     getGitHubToken,
     githubTokenVersion,
     loadAttempt,
+    localSource,
     onLoadStart,
     path,
     prepareItemsForViewer,

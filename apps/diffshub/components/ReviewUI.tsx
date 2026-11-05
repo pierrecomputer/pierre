@@ -29,6 +29,7 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
+import type { LocalViewerSource } from '@/lib/localSource';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -44,20 +45,38 @@ const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 interface ReviewUIProps {
   domain?: string;
   initialUrl: string;
+  // When set, the diff is loaded from a local command (see /api/local/diff)
+  // instead of the proxied GitHub route.
+  localSource?: LocalViewerSource;
   path: string;
 }
 
-export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
+export function ReviewUI({
+  domain,
+  initialUrl,
+  localSource,
+  path,
+}: ReviewUIProps) {
   // Provide the diffshub-scoped theme context, then render the body BELOW it so
   // the diffs hook + selection hook can read the controller context.
   return (
     <ThemeSourceProvider controller={themeController}>
-      <ReviewUIInner domain={domain} initialUrl={initialUrl} path={path} />
+      <ReviewUIInner
+        domain={domain}
+        initialUrl={initialUrl}
+        localSource={localSource}
+        path={path}
+      />
     </ThemeSourceProvider>
   );
 }
 
-function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
+function ReviewUIInner({
+  domain,
+  initialUrl,
+  localSource,
+  path,
+}: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
@@ -154,6 +173,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     domain,
     getGitHubToken,
     githubTokenVersion,
+    localSource,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,

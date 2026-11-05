@@ -1,0 +1,16 @@
+{
+  "projects": [
+    {
+      "id": "bun",
+      "label": "Bun",
+      "repo": "oven-sh/bun",
+      "dir": "~/code/bun"
+    },
+    {
+      "id": "linux",
+      "label": "Linux",
+      "repo": "torvalds/linux",
+      "dir": "~/code/linux"
+    }
+  ]
+}
