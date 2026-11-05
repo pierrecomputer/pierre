@@ -56,6 +56,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     handlers: SearchPanelReplaceHandlers<TMatch> | undefined
   ) => void;
   #navigate?: (findPrevious: boolean) => void;
+  #setQuery?: (text: string) => void;
+  #hasReplaceHandlers?: () => boolean;
   #close?: () => void;
 
   constructor(options: SearchPanelOptions<TMatch>) {
@@ -320,6 +322,17 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       },
     });
 
+    // Hosts replace the query programmatically; the next focus() selects it so
+    // typing replaces it like a seeded default query.
+    this.#setQuery = (text: string) => {
+      if (this.#inputElement.value === text) {
+        return;
+      }
+      this.#inputElement.value = text;
+      matches.current = undefined;
+      updateSearchParam('text', text);
+    };
+
     // The three search-option toggles are overlaid on the right edge of the
     // find input instead of sitting beside it.
     const searchTogglesElement = h('div', {
@@ -448,6 +461,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       ],
     });
 
+    this.#hasReplaceHandlers = () => replaceHandlers != null;
     this.#setReplaceHandlers = (handlers) => {
       replaceHandlers = handlers;
       gridElement.dataset.mode = normalizeMode(requestedMode);
@@ -521,12 +535,21 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     return this.#inputElement.value !== '';
   }
 
+  hasReplaceHandlers(): boolean {
+    return this.#hasReplaceHandlers?.() === true;
+  }
+
   focus(): void {
     this.#inputElement.focus();
   }
 
   navigate(findPrevious: boolean): void {
+    this.#initializeMatches();
     this.#navigate?.(findPrevious);
+  }
+
+  setQuery(text: string): void {
+    this.#setQuery?.(text);
   }
 
   updateMatches(options?: { skipNavigation?: boolean }): void {

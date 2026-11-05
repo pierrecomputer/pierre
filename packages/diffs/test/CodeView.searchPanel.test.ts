@@ -1508,6 +1508,162 @@ describe('CodeView search panel', () => {
     }
   });
 
+  test('opens, scopes, navigates, and closes search programmatically', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      // Before setup there is nowhere to mount a panel.
+      viewer.openSearch({ query: 'target' });
+      expect(viewer.isSearchOpen()).toBe(false);
+      viewer.setup(root);
+      expect(viewer.isSearchOpen()).toBe(false);
+      viewer.navigateSearch('next');
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target target' },
+        },
+        {
+          id: 'read',
+          type: 'file',
+          file: { name: 'read.txt', contents: 'target read' },
+        },
+      ]);
+
+      // Nothing focused: the default scope is every item, so the replace
+      // request is ignored and the seeded query searches on open. Navigation
+      // right after opening steps from that query's results.
+      viewer.openSearch({ query: 'target' });
+      viewer.navigateSearch('next');
+      expect(viewer.isSearchOpen()).toBe(true);
+      const input = getSearchInput(root);
+      const grid =
+        getSearchPanelRoot(root).querySelector<HTMLElement>(
+          '[data-search-grid]'
+        )!;
+      expect(getSearchPanelRoot(root).activeElement).toBe(input);
+      expect(input.value).toBe('target');
+      expect(grid.dataset.mode).toBe('find');
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+      expect(getSearchState(viewer).current).toMatchObject({
+        itemId: 'a',
+        startCharacter: 7,
+      });
+
+      viewer.navigateSearch('previous');
+      expect(getSearchState(viewer).current).toMatchObject({
+        itemId: 'a',
+        startCharacter: 0,
+      });
+      viewer.navigateSearch('previous');
+      expect(getSearchState(viewer).current).toMatchObject({
+        itemId: 'read',
+      });
+
+      // An explicit item scope sticks only for an expanded edit-mode item,
+      // and navigation right after a scope change steps through that scope.
+      viewer.openSearch({ scope: { itemId: 'a' } });
+      viewer.navigateSearch('next');
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'a' });
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+      expect(getSearchState(viewer).current).toMatchObject({ itemId: 'a' });
+      expect(grid.dataset.mode).toBe('replace');
+      viewer.openSearch({ scope: { itemId: 'read' } });
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(grid.dataset.mode).toBe('find');
+      viewer.openSearch({ scope: { itemId: 'missing' } });
+      expect(getSearchState(viewer).scope).toBeUndefined();
+
+      // The default scope follows the focused editor, and the panel keeps it
+      // once focus moves into the panel.
+      getEditorContent(viewer, 'a').focus();
+      viewer.openSearch({ mode: 'find' });
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'a' });
+      expect(grid.dataset.mode).toBe('find');
+      expect(getSearchPanelRoot(root).activeElement).toBe(input);
+      viewer.openSearch({ query: 'read' });
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'a' });
+      expect(input.value).toBe('read');
+      expect(getSearchState(viewer).matches).toHaveLength(0);
+      viewer.openSearch({ scope: 'all' });
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      expect(getSearchState(viewer).matches[0]).toMatchObject({
+        itemId: 'read',
+      });
+
+      viewer.closeSearch();
+      expect(viewer.isSearchOpen()).toBe(false);
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+      expect(getSearchState(viewer).matches).toHaveLength(0);
+      viewer.navigateSearch('next');
+      viewer.closeSearch();
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('rebinds replace when a scoped offscreen edit item mounts', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      const filler = Array.from({ length: 400 }, (_, i) => `line ${i}`).join(
+        '\n'
+      );
+      await renderItems(viewer, [
+        {
+          id: 'top',
+          type: 'file',
+          file: { name: 'top.txt', contents: filler },
+        },
+        {
+          id: 'far',
+          type: 'file',
+          edit: true,
+          file: { name: 'far.txt', contents: 'target far' },
+        },
+      ]);
+      expect(viewer.getEditor('far')).toBeUndefined();
+
+      viewer.openSearch({ scope: { itemId: 'far' }, query: 'target' });
+      await wait(0);
+      const grid =
+        getSearchPanelRoot(root).querySelector<HTMLElement>(
+          '[data-search-grid]'
+        )!;
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'far' });
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      expect(grid.dataset.mode).toBe('find');
+
+      viewer.scrollTo({ type: 'item', id: 'far', behavior: 'instant' });
+      await waitFor(() => viewer.getEditor('far') != null);
+      await waitFor(() => grid.dataset.mode === 'replace');
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'far' });
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      fillReplace(root, 'done');
+      replaceFromPanel(root);
+      expect(viewer.getEditor('far')?.getEditState()?.document.getText()).toBe(
+        'done far'
+      );
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('indexes matches in file items from the panel query', async () => {
     const dom = installDom();
     const viewer = new CodeView();

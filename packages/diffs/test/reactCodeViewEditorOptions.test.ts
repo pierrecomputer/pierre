@@ -361,6 +361,51 @@ describe('React CodeView options', () => {
   });
 });
 
+describe('React CodeView search handle', () => {
+  test('opens, navigates, and closes search through the ref', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(
+        root,
+        createCodeViewElement({ ref: handle, items: [makeFileItem('a')] })
+      );
+      expect(handle.current?.isSearchOpen()).toBe(false);
+
+      await act(async () => {
+        handle.current?.openSearch({ query: 'const' });
+        await wait(0);
+      });
+      expect(handle.current?.isSearchOpen()).toBe(true);
+      const panel = container.querySelector<HTMLElement>('[data-search-panel]');
+      expect(panel).not.toBeNull();
+      const input =
+        panel?.shadowRoot?.querySelector<HTMLInputElement>(
+          'input[data-search]'
+        );
+      expect(input?.value).toBe('const');
+
+      await act(async () => {
+        handle.current?.navigateSearch('next');
+        handle.current?.closeSearch();
+        await wait(0);
+      });
+      expect(handle.current?.isSearchOpen()).toBe(false);
+      expect(container.querySelector('[data-search-panel]')).toBeNull();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+});
+
 describe('React CodeView editor factory', () => {
   test('renders read-only without a provider and rejects a factory escape hatch', async () => {
     const { cleanup } = installCodeViewDom();

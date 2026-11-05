@@ -13,6 +13,7 @@ import {
 import { resolveSearchShortcut } from '../editor/command';
 import type { Editor, EditorOptions } from '../editor/editor';
 import {
+  type SearchPanelMode,
   type SearchPanelReplaceHandlers,
   SearchPanelWidget,
   type SearchResult,
@@ -98,6 +99,28 @@ export type CodeViewCreateEditorOptions<
     'onChange' | 'onFocus' | 'onBlur' | 'onRender' | 'searchPanel'
   >
 >;
+
+/**
+ * Which items a search covers. `'focused'` scopes to the focused editor, or
+ * keeps the current scope while the panel itself has focus, and otherwise
+ * searches every item. `'all'` always searches every item. An item id scopes
+ * to that item while it is an expanded edit-mode item, and otherwise falls
+ * back to every item.
+ */
+export type CodeViewSearchScope = 'focused' | 'all' | { itemId: string };
+
+export interface CodeViewOpenSearchOptions {
+  /**
+   * Requested panel mode. The replace row only shows while the scope is an
+   * edit-mode item; elsewhere the request is ignored.
+   * @default 'replace'
+   */
+  mode?: SearchPanelMode;
+  /** @default 'focused' */
+  scope?: CodeViewSearchScope;
+  /** Replaces the query. Omitted, an open panel keeps its query. */
+  query?: string;
+}
 
 export interface CodeViewSearchOptions {
   /**
@@ -1360,7 +1383,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   public reset(): void {
     dequeueRender(this.computeRenderRangeAndEmit);
     this.clearReadySubscription();
-    this.closeSearchPanel();
+    this.closeSearch();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     const { items: discardedItems } = this;
@@ -1528,15 +1551,44 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       .removeEventListener('focusout', this.handleSearchPanelBlur);
   }
 
-  private openSearchPanel(scope: CodeViewSearchState['scope']): void {
-    const container = this.container;
-    if (container === undefined) {
+  private resolveSearchScope(
+    scope: CodeViewSearchScope
+  ): CodeViewSearchState['scope'] {
+    if (scope === 'all') {
+      return undefined;
+    }
+    if (scope === 'focused') {
+      if (this.isSearchPanelFocused()) {
+        return this.searchState.scope;
+      }
+      return this.focusedEditor != null
+        ? { itemId: this.focusedEditor.id }
+        : undefined;
+    }
+    const item = this.idToItem.get(scope.itemId);
+    return item != null && this.isItemInEditMode(item)
+      ? { itemId: scope.itemId }
+      : undefined;
+  }
+
+  /**
+   * Opens the find/replace panel, or refocuses an open one, the way the find
+   * shortcut does. Apps binding the shortcut themselves (see
+   * `searchOptions.disableShortcuts`) call this from their own handler.
+   */
+  public openSearch(options?: CodeViewOpenSearchOptions): void {
+    const { container } = this;
+    if (this.root == null || container == null) {
       return;
     }
+    const { mode = 'replace', scope = 'focused', query } = options ?? {};
 
-    this.setSearchScope(scope);
-    if (this.searchPanel !== undefined) {
-      this.searchPanel.setMode('replace');
+    this.setSearchScope(this.resolveSearchScope(scope));
+    if (this.searchPanel != null) {
+      if (query != null) {
+        this.searchPanel.setQuery(query);
+      }
+      this.searchPanel.setMode(mode);
       this.searchPanel.focus();
       return;
     }
@@ -1546,8 +1598,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     );
     this.searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
       containerElement: container,
-      defaultQuery: '',
-      mode: 'replace',
+      defaultQuery: query ?? '',
+      mode,
       replace: this.getSearchReplaceHandlers(),
       onQueryChange: () => {
         this.searchState.centerNavigation = false;
@@ -1610,11 +1662,22 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchPanel.focus();
   }
 
-  private closeSearchPanel(): void {
+  /** Closes the find/replace panel and clears its match highlights. */
+  public closeSearch(): void {
     this.removeSearchFocusListeners();
     this.searchPanel?.cleanup();
     this.searchPanel = undefined;
     this.resetSearchState();
+  }
+
+  public isSearchOpen(): boolean {
+    return this.searchPanel != null;
+  }
+
+  /** Steps the open panel to the next or previous match, like find-again. */
+  public navigateSearch(direction: 'next' | 'previous'): void {
+    this.flushSearchMatches();
+    this.searchPanel?.navigate(direction === 'previous');
   }
 
   private resetSearchState(): void {
@@ -3122,7 +3185,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             queueRender(this.syncSearchFocus);
           }
         };
-        const { queueSearchHighlightPaint: onRender } = this;
+        const onRender = () => {
+          this.queueSearchHighlightPaint();
+          if (
+            this.searchState.scope?.itemId === state.id &&
+            this.searchPanel?.hasReplaceHandlers() === false
+          ) {
+            this.markSearchMatchesDirty();
+          }
+        };
         const editStateKey = this.options.getEditStateKey?.(item.item);
         if (item.type === 'diff') {
           const editor = createEditor(
@@ -4816,7 +4887,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (event.key === 'Escape' && this.searchPanel !== undefined) {
       event.preventDefault();
       event.stopPropagation();
-      this.closeSearchPanel();
+      this.closeSearch();
       return;
     }
 
@@ -4827,7 +4898,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       }
       event.preventDefault();
       event.stopPropagation();
-      this.searchPanel.navigate(shortcut === 'previous');
+      this.navigateSearch(shortcut);
       return;
     }
 
@@ -4840,13 +4911,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       // scope rather than the key.
       event.preventDefault();
       event.stopPropagation();
-      this.openSearchPanel(
-        this.isSearchPanelFocused()
-          ? this.searchState.scope
-          : this.focusedEditor != null
-            ? { itemId: this.focusedEditor.id }
-            : undefined
-      );
+      this.openSearch();
     }
   };
 

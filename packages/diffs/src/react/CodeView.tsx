@@ -36,6 +36,7 @@ import {
   type CodeViewLineSelection,
   type CodeViewMode,
   type CodeViewModeItemMap,
+  type CodeViewOpenSearchOptions,
   type CodeViewOptions,
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
@@ -182,6 +183,10 @@ export interface CodeViewHandle<LAnnotation, Caret> {
     | Editor<'file-diff', LAnnotation, Caret>
     | undefined;
   getInstance(): CodeViewClass<LAnnotation, Caret> | undefined;
+  openSearch(options?: CodeViewOpenSearchOptions): void;
+  closeSearch(): void;
+  isSearchOpen(): boolean;
+  navigateSearch(direction: 'next' | 'previous'): void;
 }
 
 type CodeViewComponent = <LAnnotation = undefined, Caret = undefined>(
@@ -653,6 +658,26 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
           instance.clearSelectedLines({ notify: false });
           emitSelectedLinesChange(null);
         }
+      },
+      openSearch(options) {
+        const { instance } = cachedDataRef.current;
+        if (instance == null) {
+          console.error(
+            'CodeView.openSearch: no valid instance to search with',
+            options
+          );
+        } else {
+          instance.openSearch(options);
+        }
+      },
+      closeSearch() {
+        cachedDataRef.current.instance?.closeSearch();
+      },
+      isSearchOpen() {
+        return cachedDataRef.current.instance?.isSearchOpen() === true;
+      },
+      navigateSearch(direction) {
+        cachedDataRef.current.instance?.navigateSearch(direction);
       },
       getEditor(id) {
         const { instance } = cachedDataRef.current;
