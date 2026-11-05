@@ -302,6 +302,7 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   scss: 'scss',
   sdbl: 'sdbl',
   shadergraph: 'shader',
+  silk: 'silk',
   st: 'smalltalk',
   sol: 'solidity',
   sparql: 'sparql',

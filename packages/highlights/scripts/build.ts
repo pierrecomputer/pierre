@@ -316,6 +316,7 @@ export function transformWat(
     '$hlSas',
     '$hlScala',
     '$hlShaderlab',
+    '$hlSilk',
     '$hlSolidity',
     '$hlSqlImpl',
     '$hlStata',
