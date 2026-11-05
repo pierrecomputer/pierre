@@ -3,8 +3,7 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import { type MatchRange, type SearchParams } from '../search';
-import { resolveFindAgainShortcut } from './command';
-import { isPrimaryModifier } from './platform';
+import { resolveFindAgainShortcut, resolveSearchShortcut } from './command';
 import searchPanelCSS from './searchPanel.css?inline';
 import {
   getEditorIconSvg,
@@ -300,26 +299,23 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         if (e.isComposing || e.keyCode === 229) {
           return;
         }
-        const findAgain = resolveFindAgainShortcut(e);
+        const shortcut = resolveSearchShortcut(e);
         if (e.key === 'Escape') {
           e.preventDefault();
           close();
         } else if (e.key === 'Enter') {
           e.preventDefault();
           findNextMatch(e.shiftKey, true);
-        } else if (findAgain !== undefined) {
+        } else if (shortcut === 'next' || shortcut === 'previous') {
           // Override the native browser find-again shortcut so cmd+g steps to
           // the next match and cmd+shift+g to the previous one.
           e.preventDefault();
-          findNextMatch(findAgain === 'previous', true);
-        } else if (
-          isPrimaryModifier(e) &&
-          (e.key === 'f' || e.code === 'KeyF')
-        ) {
+          findNextMatch(shortcut === 'previous', true);
+        } else if (shortcut != null) {
           // Prevent the default browser search panel and switch the panel mode
           // in place (cmd+f -> find, cmd+opt+f -> find/replace).
           e.preventDefault();
-          applyMode(e.altKey ? 'replace' : 'find');
+          applyMode(shortcut);
         }
       },
     });

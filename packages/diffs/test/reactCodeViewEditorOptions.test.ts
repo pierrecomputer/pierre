@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import {
   act,
   type ComponentType,
@@ -321,6 +321,45 @@ function withProvider(
 ): ReactElement {
   return createElement(EditProviderComponent, { createEditor }, child);
 }
+
+describe('React CodeView options', () => {
+  test('forwards searchOptions changes to the instance without re-applying equal values', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
+    const render = (disableShortcuts: boolean) =>
+      createCodeViewElement({
+        ref: handle,
+        items: [makeFileItem('a')],
+        options: { ...CODE_VIEW_OPTIONS, searchOptions: { disableShortcuts } },
+      });
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(root, render(true));
+      const instance = handle.current?.getInstance();
+      expect(instance).toBeDefined();
+      const setOptions = spyOn(instance!, 'setOptions');
+
+      await renderRoot(root, render(true));
+      expect(setOptions).not.toHaveBeenCalled();
+
+      await renderRoot(root, render(false));
+      expect(setOptions).toHaveBeenCalledTimes(1);
+      expect(setOptions.mock.calls[0]?.[0]?.searchOptions).toEqual({
+        disableShortcuts: false,
+      });
+      setOptions.mockRestore();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+});
 
 describe('React CodeView editor factory', () => {
   test('renders read-only without a provider and rejects a factory escape hatch', async () => {

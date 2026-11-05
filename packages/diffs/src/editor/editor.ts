@@ -375,6 +375,14 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
     context: SelectionActionContext<EType, LAnnotation>
   ) => HTMLElement;
   /**
+   * Who answers the find and replace shortcuts for this editor. `'editor'`
+   * opens the editor's own panel. `'host'` leaves cmd/ctrl+f and
+   * cmd/ctrl+alt+f untouched for an embedding host that runs its own
+   * find/replace, such as CodeView.
+   * @default 'editor'
+   */
+  searchPanel?: 'editor' | 'host';
+  /**
    * Render an externally owned caret at its normalized document position.
    */
   renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;
@@ -2623,7 +2631,13 @@ export class Editor<
           e,
           this.#options.keymap
         );
-        if (command !== undefined) {
+        // A host that runs its own find/replace answers these keys itself,
+        // so leave the event untouched for it.
+        const hostOwnsSearch =
+          this.#options.searchPanel === 'host' &&
+          (command === 'openSearchPanel' ||
+            command === 'openSearchReplacePanel');
+        if (command != null && !hostOwnsSearch) {
           e.preventDefault();
           if (command === 'simplifySelection') {
             this.#searchPanel?.close();

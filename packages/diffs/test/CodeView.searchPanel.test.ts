@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
-import { CodeView } from '../src/components/CodeView';
+import { CodeView, type CodeViewOptions } from '../src/components/CodeView';
 import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
 import {
@@ -1435,6 +1435,73 @@ describe('CodeView search panel', () => {
       viewer.cleanUp();
       expect(root.querySelector('[data-search-panel]')).toBeNull();
       expect(dispatchPrimaryFind(root).defaultPrevented).toBe(false);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('leaves the find shortcut to the host while shortcuts are disabled', async () => {
+    const dom = installDom();
+    const createEditor: CodeViewOptions<
+      undefined,
+      undefined
+    >['createEditor'] = (type, options, key) => new Editor(type, options, key);
+    const viewer = new CodeView({
+      createEditor,
+      searchOptions: { disableShortcuts: true },
+    });
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target target' },
+        },
+      ]);
+      const content = getEditorContent(viewer, 'a');
+      const itemRoot = viewer.getRenderedItems()[0].element.shadowRoot!;
+
+      // Neither CodeView nor the editor it created answers the find keys, so
+      // a window-level binding (or the browser) gets them.
+      content.focus();
+      for (const altKey of [false, true]) {
+        const event = dispatchPrimaryFind(content, altKey);
+        await wait(0);
+        expect(event.defaultPrevented).toBe(false);
+        expect(root.querySelector('[data-search-panel]')).toBeNull();
+        expect(itemRoot.querySelector('[data-search-panel]')).toBeNull();
+      }
+      root.focus();
+      expect(dispatchPrimaryFind(root).defaultPrevented).toBe(false);
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+
+      // The binding follows setOptions without a re-render.
+      viewer.setOptions({
+        createEditor,
+        searchOptions: { disableShortcuts: false },
+      });
+      expect(dispatchPrimaryFind(root).defaultPrevented).toBe(true);
+      await wait(0);
+      fillSearch(root, 'target');
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+
+      // Disabling again only drops the open shortcut: find-again and Escape
+      // still drive the open panel.
+      viewer.setOptions({
+        createEditor,
+        searchOptions: { disableShortcuts: true },
+      });
+      expect(dispatchFindAgain(root).defaultPrevented).toBe(true);
+      expect(getSearchState(viewer).current?.startCharacter).toBe(7);
+      expect(dispatchEscape(root).defaultPrevented).toBe(true);
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+      expect(dispatchPrimaryFind(root).defaultPrevented).toBe(false);
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
     } finally {
       viewer.cleanUp();
       dom.cleanup();

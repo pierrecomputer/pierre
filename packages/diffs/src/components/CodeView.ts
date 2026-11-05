@@ -10,9 +10,8 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
-import { resolveFindAgainShortcut } from '../editor/command';
+import { resolveSearchShortcut } from '../editor/command';
 import type { Editor, EditorOptions } from '../editor/editor';
-import { isPrimaryModifier } from '../editor/platform';
 import {
   type SearchPanelReplaceHandlers,
   SearchPanelWidget,
@@ -96,9 +95,19 @@ export type CodeViewCreateEditorOptions<
 > = Required<
   Pick<
     EditorOptions<EType, LAnnotation, Caret>,
-    'onChange' | 'onFocus' | 'onBlur' | 'onRender'
+    'onChange' | 'onFocus' | 'onBlur' | 'onRender' | 'searchPanel'
   >
 >;
+
+export interface CodeViewSearchOptions {
+  /**
+   * Stop binding cmd/ctrl+f and cmd/ctrl+alt+f inside the CodeView root, for
+   * apps that bind the shortcut elsewhere, e.g. on window. Escape and
+   * find-again keep working while a panel is open.
+   * @default false
+   */
+  disableShortcuts?: boolean;
+}
 
 type CodeViewEditor<LAnnotation, Caret> =
   | Editor<'file', LAnnotation, Caret>
@@ -630,6 +639,8 @@ export interface CodeViewOptions<LAnnotation, Caret>
   controlledSelection?: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   layout?: CodeViewLayout;
+  /** Find/replace behavior for the CodeView-owned search panel. */
+  searchOptions?: CodeViewSearchOptions;
   /**
    * Return an in-memory retention key for an item's editable draft and
    * undo/redo history. Called only when CodeView creates the item's editor.
@@ -3116,7 +3127,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         if (item.type === 'diff') {
           const editor = createEditor(
             'file-diff',
-            { onChange, onFocus, onBlur, onRender },
+            { onChange, onFocus, onBlur, onRender, searchPanel: 'host' },
             editStateKey
           );
           createdEditor = editor;
@@ -3128,7 +3139,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         } else {
           const editor = createEditor(
             'file',
-            { onChange, onFocus, onBlur, onRender },
+            { onChange, onFocus, onBlur, onRender, searchPanel: 'host' },
             editStateKey
           );
           createdEditor = editor;
@@ -4791,9 +4802,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     pendingScrollDone?.(result);
   }
 
-  // Capture search shortcuts before child editors so finding an offscreen
-  // match uses CodeView's line scrolling instead of the editor's caret
-  // scrolling.
+  // Capture search keys at the root ahead of child editors so Escape and
+  // find-again act on CodeView's panel instead of the editor's selection
+  // handling, and navigation uses CodeView's line scrolling instead of the
+  // editor's caret scrolling. Editors CodeView creates run with
+  // `searchPanel: 'host'`, so the find shortcuts belong to CodeView whether or
+  // not it handles them here.
   private handleSearchKeyDown = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.isComposing || event.keyCode === 229) {
       return;
@@ -4806,21 +4820,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
 
-    if (this.searchPanel !== undefined) {
-      const findAgain = resolveFindAgainShortcut(event);
-      if (findAgain !== undefined) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.searchPanel.navigate(findAgain === 'previous');
+    const shortcut = resolveSearchShortcut(event);
+    if (shortcut === 'next' || shortcut === 'previous') {
+      if (this.searchPanel == null) {
         return;
       }
+      event.preventDefault();
+      event.stopPropagation();
+      this.searchPanel.navigate(shortcut === 'previous');
+      return;
     }
 
     if (
-      isPrimaryModifier(event) &&
-      (event.key === 'f' || event.code === 'KeyF')
+      shortcut != null &&
+      this.options.searchOptions?.disableShortcuts !== true
     ) {
       // Prevent browser find and open CodeView's panel with the focused scope.
+      // Both find shortcuts open the same panel: the replace row follows the
+      // scope rather than the key.
       event.preventDefault();
       event.stopPropagation();
       this.openSearchPanel(

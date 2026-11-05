@@ -2299,3 +2299,59 @@ describe('retained drafts', () => {
     }
   });
 });
+
+describe('Editor searchPanel option', () => {
+  test("'host' leaves the find shortcuts untouched and keeps the rest of the keymap", async () => {
+    const fixture = await createEditorFixture('alpha beta', {
+      searchPanel: 'host',
+    });
+    try {
+      const { container, content, editor } = fixture;
+      const pressFind = (altKey: boolean) => {
+        const event = new window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          code: 'KeyF',
+          key: 'f',
+          metaKey: true,
+          altKey,
+        });
+        content.dispatchEvent(event);
+        return event;
+      };
+      const panel = () =>
+        container.shadowRoot?.querySelector('[data-search-panel]') ?? null;
+
+      for (const altKey of [false, true]) {
+        const event = pressFind(altKey);
+        await wait(0);
+        expect(event.defaultPrevented).toBe(false);
+        expect(panel()).toBeNull();
+      }
+
+      const selectAll = new window.KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        code: 'KeyA',
+        key: 'a',
+        metaKey: true,
+      });
+      content.dispatchEvent(selectAll);
+      expect(selectAll.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toMatchObject([
+        { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      ]);
+
+      // Handing the shortcuts back to the editor opens its own panel again.
+      editor.setOptions({ searchPanel: 'editor' });
+      const event = pressFind(false);
+      await wait(0);
+      expect(event.defaultPrevented).toBe(true);
+      expect(panel()).not.toBeNull();
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
