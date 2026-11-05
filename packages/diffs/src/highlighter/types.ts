@@ -1,4 +1,5 @@
 import type { Properties } from 'hast';
+import type { GrammarState } from 'shiki/core';
 
 export type { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
 export type { DiffsHighlighter } from './DiffsHighlighter';
@@ -33,6 +34,7 @@ export type CodeToTokensOptions = {
   tokenizeMaxLineLength?: number;
   tokenizeTimeLimit?: number;
   mergeWhitespaces?: 'never' | 'always';
+  grammarState?: GrammarState;
 } & (
   | { theme: string; themes?: undefined }
   | { theme?: undefined; themes: Record<string, string> }
@@ -48,4 +50,5 @@ export interface TokensResult {
   bg?: string;
   themeName?: string;
   rootStyle?: string | false;
+  grammarState?: GrammarState;
 }

@@ -1,18 +1,19 @@
 import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
+import type { GrammarState } from 'shiki/core';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
+  CodeToTokensOptions,
   DecorationItem,
   DiffsHighlighter,
-  FileContents,
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
   LineDiffTypes,
   LineInfo,
   RenderDiffFilesResult,
   RenderDiffOptions,
-  SupportedLanguages,
   ThemedDiffResult,
+  TokensResult,
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
@@ -179,34 +180,44 @@ export function renderDiffWithHighlighter(
     },
   });
 
-  for (const bucket of buckets.values()) {
-    if (
-      bucket.deletionContent.length === 0 &&
-      bucket.additionContent.length === 0
-    ) {
-      continue;
-    }
-
-    const deletionFile = {
-      name: diff.prevName ?? diff.name,
-      contents: bucket.deletionContent.value,
-    };
-    const additionFile = {
-      name: diff.name,
-      contents: bucket.additionContent.value,
-    };
+  const renderedBuckets = Array.from(buckets.values()).filter(
+    (bucket) =>
+      bucket.deletionContent.length > 0 || bucket.additionContent.length > 0
+  );
+  const languageOverride = forcePlainText ? 'text' : diff.lang;
+  const deletionName = diff.prevName ?? diff.name;
+  const deletionTokens = tokenizeHunks(
+    highlighter,
+    renderedBuckets.map((bucket) => bucket.deletionContent.value),
+    getTokenOptions(
+      languageOverride ?? getFiletypeFromFileName(deletionName),
+      options.theme,
+      options.tokenizeMaxLineLength
+    ),
+    !forcePlainText
+  );
+  const additionTokens = tokenizeHunks(
+    highlighter,
+    renderedBuckets.map((bucket) => bucket.additionContent.value),
+    getTokenOptions(
+      languageOverride ?? getFiletypeFromFileName(diff.name),
+      options.theme,
+      options.tokenizeMaxLineLength
+    ),
+    !forcePlainText
+  );
+  for (const [bucketIndex, bucket] of renderedBuckets.entries()) {
     const { deletionLines, additionLines } = renderTwoFiles({
-      deletionFile,
+      deletionTokens: deletionTokens[bucketIndex],
       deletionInfo: bucket.deletionInfo,
       deletionDecorations: bucket.deletionDecorations,
 
-      additionFile,
+      additionTokens: additionTokens[bucketIndex],
       additionInfo: bucket.additionInfo,
       additionDecorations: bucket.additionDecorations,
 
-      highlighter,
       options,
-      languageOverride: forcePlainText ? 'text' : diff.lang,
+      highlighter,
       lazyLineAST,
     });
 
@@ -456,56 +467,180 @@ function createBucket(): RenderBucket {
 
 interface RenderTwoFilesProps {
   lazyLineAST: boolean;
-  deletionFile: FileContents;
-  additionFile: FileContents;
+  deletionTokens: TokensResult | undefined;
+  additionTokens: TokensResult | undefined;
   deletionInfo: (LineInfo | undefined)[];
   additionInfo: (LineInfo | undefined)[];
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
   highlighter: DiffsHighlighter;
-  languageOverride: SupportedLanguages | undefined;
 }
 
 function renderTwoFiles({
   lazyLineAST,
-  deletionFile,
-  additionFile,
+  deletionTokens,
+  additionTokens,
   deletionInfo,
   additionInfo,
   highlighter,
   deletionDecorations,
   additionDecorations,
-  languageOverride,
-  options: { theme, useTokenTransformer, tokenizeMaxLineLength },
+  options: { useTokenTransformer },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
   const renderFile = (
-    file: FileContents,
+    result: TokensResult | undefined,
     lineInfo: (LineInfo | undefined)[],
     decorations: DecorationItem[]
   ): RenderDiffFilesResult['additionLines'] => {
-    if (file.contents === '') return [];
-    return renderTokenLines(
-      highlighter.codeToTokens(
-        cleanLastNewline(file.contents),
-        getTokenOptions(
-          languageOverride ?? getFiletypeFromFileName(file.name),
-          theme,
-          tokenizeMaxLineLength
-        )
-      ).tokens,
-      {
-        state: { lineInfo },
-        useTokenTransformer,
-        decorations,
-        lazyLineAST,
-        cacheHtmlStyles: highlighter.name === 'highlights',
-      }
-    );
+    if (result == null) return [];
+    return renderTokenLines(result.tokens, {
+      state: { lineInfo },
+      useTokenTransformer,
+      decorations,
+      lazyLineAST,
+      cacheHtmlStyles: highlighter.name === 'highlights',
+    });
   };
 
   return {
-    deletionLines: renderFile(deletionFile, deletionInfo, deletionDecorations),
-    additionLines: renderFile(additionFile, additionInfo, additionDecorations),
+    deletionLines: renderFile(
+      deletionTokens,
+      deletionInfo,
+      deletionDecorations
+    ),
+    additionLines: renderFile(
+      additionTokens,
+      additionInfo,
+      additionDecorations
+    ),
   };
+}
+
+// The most start states tried per hunk. This sets an upper bound on cost for partial diffs with many hunks
+const MAX_CANDIDATES_PER_HUNK = 3;
+
+// One way of tokenizing a hunk: the result, and the candidate of the previous hunk
+interface HunkCandidate {
+  result: TokensResult;
+  previous: HunkCandidate | undefined;
+  // How many hunks on this path started from a state with scopes open, so a
+  // path that keeps a construct open across hunks scores higher.
+  carries: number;
+}
+
+// The number of open grammar scopes in a state, including the root
+function getOpenDepth(grammarState: GrammarState | undefined): number {
+  return grammarState?.getInternalStack()?.depth ?? Number.POSITIVE_INFINITY;
+}
+
+// Tokenizes the hunks of one side of a partial diff. The lines between hunks
+// are unknown, so a hunk can start inside a comment or string that opened
+// above it, or outside one that closed in the gap, and the right start state
+// is often only clear from the hunks after it.
+// Every hunk is tokenized from a fresh state and from each state the
+// previous hunk could have ended in. The path that leaves the fewest scopes
+// open at the end of the last hunk wins, and its choices are walked back to
+// the first hunk.
+// An empty hunk (no code) yields undefined and passes the state through.
+// Without `carryState`, or for a backend that returns no grammar state, such
+// as Highlights, each hunk tokenizes once.
+function tokenizeHunks(
+  highlighter: DiffsHighlighter,
+  hunks: string[],
+  tokenOptions: CodeToTokensOptions,
+  carryState: boolean
+): (TokensResult | undefined)[] {
+  const results: (TokensResult | undefined)[] = hunks.map(() => undefined);
+  let candidates: HunkCandidate[] = [];
+  // The candidates of each non-empty hunk, in order, for walking back.
+  const hunkIndexes: number[] = [];
+  for (const [index, hunk] of hunks.entries()) {
+    if (hunk === '') continue;
+    const code = cleanLastNewline(hunk);
+    const fresh = highlighter.codeToTokens(code, tokenOptions);
+    const next: HunkCandidate[] = [];
+    if (carryState && fresh.grammarState != null) {
+      for (const previous of candidates) {
+        if (previous.result.grammarState == null) continue;
+        // A previous hunk that ended with no scope open leaves the same state
+        // a fresh start does, so the fresh result is also the carried one.
+        const endsAtRoot = getOpenDepth(previous.result.grammarState) <= 1;
+        next.push({
+          result: endsAtRoot
+            ? fresh
+            : highlighter.codeToTokens(code, {
+                ...tokenOptions,
+                grammarState: previous.result.grammarState,
+              }),
+          previous,
+          carries: previous.carries + (endsAtRoot ? 0 : 1),
+        });
+      }
+    }
+    // Carried candidates come first so that, when a carried and a fresh
+    // candidate end in the same state, the carried one is kept.
+    const bestPrevious = pickBestCandidate(candidates);
+    next.push({
+      result: fresh,
+      previous: bestPrevious,
+      carries: bestPrevious?.carries ?? 0,
+    });
+    hunkIndexes.push(index);
+    candidates = pruneCandidates(next);
+  }
+  let best = pickBestCandidate(candidates);
+  for (let position = hunkIndexes.length - 1; position >= 0; position--) {
+    const index = hunkIndexes[position];
+    if (index == null || best == null) break;
+    results[index] = best.result;
+    best = best.previous;
+  }
+  return results;
+}
+
+// The candidate that leaves the fewest scopes open at the end of its hunk,
+// preferring the path with more carried hunks on a tie.
+function pickBestCandidate(
+  candidates: HunkCandidate[]
+): HunkCandidate | undefined {
+  let best: HunkCandidate | undefined;
+  for (const candidate of candidates) {
+    const depth = getOpenDepth(candidate.result.grammarState);
+    const bestDepth = getOpenDepth(best?.result.grammarState);
+    if (
+      best == null ||
+      depth < bestDepth ||
+      (depth === bestDepth && candidate.carries > best.carries)
+    ) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+// Drops candidates whose end state matches an earlier one's, since they
+// continue identically, then keeps the shallowest few.
+function pruneCandidates(candidates: HunkCandidate[]): HunkCandidate[] {
+  const unique: HunkCandidate[] = [];
+  for (const candidate of candidates) {
+    const stack = candidate.result.grammarState?.getInternalStack();
+    const duplicateIndex = unique.findIndex((other) => {
+      const otherStack = other.result.grammarState?.getInternalStack();
+      return stack != null && otherStack != null && stack.equals(otherStack);
+    });
+    if (duplicateIndex === -1) {
+      unique.push(candidate);
+    } else if (candidate.carries > (unique[duplicateIndex]?.carries ?? 0)) {
+      // Both continue the same way, so keep the path that carried more.
+      unique[duplicateIndex] = candidate;
+    }
+  }
+  return unique
+    .sort(
+      (a, b) =>
+        getOpenDepth(a.result.grammarState) -
+        getOpenDepth(b.result.grammarState)
+    )
+    .slice(0, MAX_CANDIDATES_PER_HUNK);
 }
