@@ -863,9 +863,6 @@ type CodeViewItemMap<LAnnotation, Caret> = Map<
 >;
 
 export class CodeView<LAnnotation = undefined, Caret = undefined> {
-  static __STOP = false;
-  static __lastScrollPosition = 0;
-
   public type = 'advanced' as const;
   public readonly config: VirtualizerConfig = {
     overscrollSize: 200,
@@ -1363,33 +1360,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.root.addEventListener('focusout', this.handleFocusOut);
     this.resizeObserver.observe(this.root);
     this.render(true);
-
-    // FIXME(amadeus): Remove me before release
-    window.__INSTANCE = this;
-    // Test code to bring back in if needed
-    // window.__CODE_VIEW_SCROLL_BEFORE_REBASE = (pixelsBefore = 1_000) => {
-    //   const target = this.clampScrollTop(
-    //     this.scrollPageOffset + this.scrollRebaseConfig.threshold - pixelsBefore
-    //   );
-    //   this.scrollTo({
-    //     type: 'position',
-    //     position: target,
-    //     behavior: 'instant',
-    //   });
-    // };
-    window.__TOGGLE = () => {
-      if (CodeView.__STOP) {
-        CodeView.__STOP = false;
-        this.scrollTo({
-          type: 'position',
-          position: CodeView.__lastScrollPosition,
-          behavior: 'instant',
-        });
-      } else {
-        CodeView.__lastScrollPosition = this.getScrollTop();
-        CodeView.__STOP = true;
-      }
-    };
   }
 
   public reset(): void {
@@ -2808,9 +2778,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public render(immediate = false): void {
-    if (CodeView.__STOP) {
-      return;
-    }
     if (immediate) {
       dequeueRender(this.computeRenderRangeAndEmit);
       this.computeRenderRangeAndEmit();
@@ -4434,7 +4401,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private computeRenderRangeAndEmit = (
     timestamp: number = performance.now()
   ): void => {
-    if (CodeView.__STOP || this.container == null) {
+    if (this.container == null) {
       return;
     }
     if (!this.isReady()) {
@@ -4882,9 +4849,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private handleScroll = (): void => {
-    if (CodeView.__STOP) {
-      return;
-    }
     this.suspendScrollInteractions();
     this.scrollDirty = true;
     this.notifyScroll();

@@ -68,9 +68,6 @@ let lastSize = 0;
 let instance = -1;
 
 export class Virtualizer {
-  static __STOP: boolean = false;
-  static __lastScrollPosition = 0;
-
   public readonly __id: string = `virtualizer-${++instance}`;
   public readonly config: VirtualizerConfig;
   public type = 'simple' as const;
@@ -132,19 +129,6 @@ export class Virtualizer {
       });
     }
 
-    // FIXME(amadeus): Remove me before release
-    window.__INSTANCE = this;
-    window.__TOGGLE = () => {
-      if (Virtualizer.__STOP) {
-        Virtualizer.__STOP = false;
-        const scroller = this.getScrollContainerElement() ?? window;
-        scroller.scrollTo({ top: Virtualizer.__lastScrollPosition });
-        queueRender(this.computeRenderRangeAndEmit);
-      } else {
-        Virtualizer.__lastScrollPosition = this.getScrollTop();
-        Virtualizer.__STOP = true;
-      }
-    };
     for (const [container, instance] of this.connectQueue.entries()) {
       this.connect(container, instance);
     }
@@ -343,7 +327,7 @@ export class Virtualizer {
   }
 
   private handleWindowResize = () => {
-    if (Virtualizer.__STOP || window.innerHeight === this.height) {
+    if (window.innerHeight === this.height) {
       return;
     }
     this.heightDirty = true;
@@ -351,11 +335,7 @@ export class Virtualizer {
   };
 
   private handleWindowScroll = () => {
-    if (
-      Virtualizer.__STOP ||
-      this.root == null ||
-      !(this.root instanceof Document)
-    ) {
+    if (this.root == null || !(this.root instanceof Document)) {
       return;
     }
     this.scrollDirty = true;
@@ -363,11 +343,7 @@ export class Virtualizer {
   };
 
   private handleElementScroll = () => {
-    if (
-      Virtualizer.__STOP ||
-      this.root == null ||
-      this.root instanceof Document
-    ) {
+    if (this.root == null || this.root instanceof Document) {
       return;
     }
     this.scrollDirty = true;
@@ -375,9 +351,6 @@ export class Virtualizer {
   };
 
   private computeRenderRangeAndEmit = () => {
-    if (Virtualizer.__STOP) {
-      return;
-    }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;
     let instancesHaveChanged = this.instancesChanged.size > 0;
 
