@@ -1,6 +1,6 @@
 import type { DiffModel } from '../model/DiffModel';
 import type { DiffSide } from '../model/types';
-import type { LineDiffTypes } from '../types';
+import type { DiffLib, LineDiffTypes } from '../types';
 import {
   computeLineDiffRanges,
   type LineDiffRange,
@@ -24,7 +24,8 @@ export class LineDiffRangeCache {
 
   constructor(
     readonly lineDiffType: LineDiffTypes,
-    readonly maxLineDiffLength: number
+    readonly maxLineDiffLength: number,
+    private preferredDiffLib: DiffLib = 'jsdiff'
   ) {}
 
   get(
@@ -40,12 +41,31 @@ export class LineDiffRangeCache {
     ) {
       return cached.ranges;
     }
-    const ranges = computeLineDiffRanges(
-      deletionText,
-      additionText,
-      this.lineDiffType,
-      this.maxLineDiffLength
-    );
+    let ranges: LineDiffRanges;
+    try {
+      ranges = computeLineDiffRanges(
+        deletionText,
+        additionText,
+        this.lineDiffType,
+        this.maxLineDiffLength,
+        this.preferredDiffLib
+      );
+    } catch (error) {
+      // WARNING: Wasm can run out of memory. Keep jsdiff for this cache so each
+      // new line does not retry the failure.
+      if (this.preferredDiffLib === 'jsdiff') {
+        throw error;
+      }
+      console.error(error);
+      this.preferredDiffLib = 'jsdiff';
+      ranges = computeLineDiffRanges(
+        deletionText,
+        additionText,
+        this.lineDiffType,
+        this.maxLineDiffLength,
+        this.preferredDiffLib
+      );
+    }
     this.#pairs.set(deletionIndex, { deletionText, additionText, ranges });
     return ranges;
   }

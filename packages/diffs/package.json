@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "@pierre/highlights": "workspace:*",
+    "@pierre/patches": "workspace:*",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
     "diff": "catalog:",

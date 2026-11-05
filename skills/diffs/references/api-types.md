@@ -169,8 +169,9 @@ file or diff invalidates that cache.
 | `CodeToTokensOptions`, `CodeToHtmlOptions`            | Select a language, themes, and tokenization limits.                                            |
 | `DiffsStreamTokenizer`                                | Incremental tokenization of appended chunks.                                                   |
 | `DiffsEditorTokenizer`, `DiffsEditorTokenizerOptions` | Incremental tokenization of document edits.                                                    |
-| `CreatePatchOptionsNonabortable`                      | Configures the underlying patch algorithm.                                                     |
-| `ParseDiffOptions`                                    | jsdiff options plus `disableLineMatching` for `parseDiffFromFile` and view `parseDiffOptions`. |
+| `CreatePatchOptions`                                  | Configures the underlying patch algorithm.                                                     |
+| `CreatePatchOptionsNonabortable`                      | Deprecated jsdiff type. Use `CreatePatchOptions`.                                              |
+| `ParseDiffOptions`                                    | Patch settings plus `disableLineMatching` for `parseDiffFromFile` and view `parseDiffOptions`. |
 | `ParsePatchOptions`                                   | `disableLineMatching`, `cacheKeyPrefix`, and `throwOnError` for patch parsing.                 |
 
 Import TextMate registration and Shiki transformer types from `shiki`. Diffs no

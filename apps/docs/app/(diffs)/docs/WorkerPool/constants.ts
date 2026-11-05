@@ -425,12 +425,13 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //     Failed initialization switches components to main-thread highlighting.
 //   - mainThreadMaxCharacters?: number (default: unset) - Files and diffs with
 //     at most this many characters highlight on the main thread instead of a
-//     worker. Diffs count both sides. Unset (default behavior) sends every 
+//     worker. Diffs count both sides. Unset (default behavior) sends every
 //     highlight to a worker.
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
 //     How to diff lines (default: 'word-alt')
+//   - preferredDiffLib?: 'jsdiff' | '@pierre/patches' - Library for inline change highlights (default: 'jsdiff')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
 //   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' | 'highlights' - Highlighter backend (default: 'shiki-js')
@@ -450,6 +451,7 @@ poolManager.setRenderOptions(options)
 // Accepts: Partial<WorkerRenderingOptions>
 //   - theme?: DiffsThemeNames | ThemesType
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
+//   - preferredDiffLib?: 'jsdiff' | '@pierre/patches'
 //   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number
 // Omitted options will use defaults. WARNING: This forces all mounted
@@ -458,13 +460,13 @@ poolManager.setRenderOptions(options)
 poolManager.getRenderOptions()
 // Returns: WorkerRenderingOptions - Current render options (copy)
 
-poolManager.highlightFileAST(fileInstance, file, options)
+poolManager.highlightFileAST(fileInstance, file)
 // Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
 
 poolManager.getPlainFileAST(file, startingLineNumber?)
 // Returns: ThemedFileResult | undefined - Sync render with 'text' lang
 
-poolManager.highlightDiffAST(fileDiffInstance, diff, options)
+poolManager.highlightDiffAST(fileDiffInstance, diff)
 // Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
 
 poolManager.getPlainDiffAST(diff, lineDiffType)

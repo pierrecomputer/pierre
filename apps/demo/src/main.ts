@@ -29,7 +29,7 @@ import {
   IconCiWarningFill,
   IconInfoFill,
 } from '@pierre/icons';
-import { createTwoFilesPatch } from 'diff';
+import { createTwoFilesPatch } from '@pierre/patches';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 

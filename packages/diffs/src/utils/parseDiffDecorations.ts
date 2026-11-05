@@ -1,4 +1,4 @@
-import { type ChangeObject } from 'diff';
+import type { ChangeObject } from '@pierre/patches';
 
 import type { DecorationItem } from '../types';
 
@@ -22,7 +22,7 @@ export function createDiffSpanDecoration({
 }
 
 interface PushOrJoinSpanProps {
-  item: ChangeObject<string>;
+  item: ChangeObject;
   arr: [0 | 1, string][];
   enableJoin: boolean;
   isNeutral?: boolean;

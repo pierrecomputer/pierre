@@ -9,6 +9,7 @@ import type {
   AnnotationLineMap,
   AnnotationSpan,
   CodeColumnType,
+  DiffLib,
   DiffLineAnnotation,
   HunkData,
   HunkExpansionRegion,
@@ -58,6 +59,7 @@ export interface DiffLayoutOptions {
   hunkSeparators: HunkSeparators;
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
+  preferredDiffLib?: DiffLib;
   /** Collapsed context can still be loaded, so every gap is expandable. */
   canHydrateContext: boolean;
 }
@@ -188,7 +190,8 @@ export class DiffLayout<LAnnotation = undefined> {
   constructor(private options: DiffLayoutOptions) {
     this.#ranges = new LineDiffRangeCache(
       options.lineDiffType,
-      options.maxLineDiffLength
+      options.maxLineDiffLength,
+      options.preferredDiffLib
     );
   }
 
@@ -196,11 +199,13 @@ export class DiffLayout<LAnnotation = undefined> {
     const previous = this.options;
     if (
       options.lineDiffType !== previous.lineDiffType ||
-      options.maxLineDiffLength !== previous.maxLineDiffLength
+      options.maxLineDiffLength !== previous.maxLineDiffLength ||
+      options.preferredDiffLib !== previous.preferredDiffLib
     ) {
       this.#ranges = new LineDiffRangeCache(
         options.lineDiffType,
-        options.maxLineDiffLength
+        options.maxLineDiffLength,
+        options.preferredDiffLib
       );
     }
     // Every option shapes the walk, so a change means the next layout walks.
@@ -213,6 +218,7 @@ export class DiffLayout<LAnnotation = undefined> {
       options.hunkSeparators !== previous.hunkSeparators ||
       options.lineDiffType !== previous.lineDiffType ||
       options.maxLineDiffLength !== previous.maxLineDiffLength ||
+      options.preferredDiffLib !== previous.preferredDiffLib ||
       options.canHydrateContext !== previous.canHydrateContext
     ) {
       this.invalidateLines();
