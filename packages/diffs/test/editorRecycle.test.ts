@@ -1517,7 +1517,8 @@ describe('Editor recycle cleanUp', () => {
       insertAtStart(editor, 'X');
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
-      first.contentElement.dispatchEvent(
+      const composingContent = first.contentElement;
+      composingContent.dispatchEvent(
         new dom.window.CompositionEvent('compositionstart', {
           bubbles: true,
           composed: true,
@@ -1526,6 +1527,7 @@ describe('Editor recycle cleanUp', () => {
       // Simulate a virtualized unmount: the host recycles, the editor is
       // unrendered non-destructively.
       editor.cleanUp('recycle');
+      expect(composingContent.hasAttribute('data-composing')).toBe(false);
       first.cleanUp(true);
       first.virtualizedSetup();
 
@@ -1533,6 +1535,7 @@ describe('Editor recycle cleanUp', () => {
       // document (holding the unsaved edit) must win over host contents.
       editor.edit(first);
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
+      expect(first.contentElement.hasAttribute('data-composing')).toBe(false);
 
       // Undo history lives in the retained document and survives with it.
       editor.undo();
