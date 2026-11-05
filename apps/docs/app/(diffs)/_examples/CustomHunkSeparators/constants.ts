@@ -2,6 +2,7 @@ import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 // Restyle the built-in line-info-basic separator to resemble the old custom
 // example without supplying custom separator markup.
@@ -178,6 +179,7 @@ export const CUSTOM_HUNK_SEPARATORS_EXAMPLE: PreloadMultiFileDiffOptions<
     contents: createTaskSummarySource('new'),
   },
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'split',
