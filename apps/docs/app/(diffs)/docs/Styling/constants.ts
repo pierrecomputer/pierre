@@ -55,6 +55,11 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined, undefined> = {
   --diffs-bg-search-match-override: #eab308;
   --diffs-bg-search-match-current-override: #3b82f6;
 
+  /* Where the find/replace panel sits inside the scroll container, measured
+   * from the top and right edges. */
+  --diffs-search-panel-inset-top: 16px;
+  --diffs-search-panel-inset-right: 16px;
+
   /* Some basic variables for tweaking the layouts of some of the built in
    * components */
   --diffs-gap-inline: 8px;

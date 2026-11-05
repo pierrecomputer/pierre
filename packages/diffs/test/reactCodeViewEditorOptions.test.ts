@@ -329,11 +329,14 @@ describe('React CodeView options', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const handle = createRef<CodeViewHandle<undefined, undefined>>();
-    const render = (disableShortcuts: boolean) =>
+    const render = (disableShortcuts: boolean, caseSensitive = true) =>
       createCodeViewElement({
         ref: handle,
         items: [makeFileItem('a')],
-        options: { ...CODE_VIEW_OPTIONS, searchOptions: { disableShortcuts } },
+        options: {
+          ...CODE_VIEW_OPTIONS,
+          searchOptions: { disableShortcuts, defaults: { caseSensitive } },
+        },
       });
     let root: Root | undefined;
 
@@ -351,6 +354,17 @@ describe('React CodeView options', () => {
       expect(setOptions).toHaveBeenCalledTimes(1);
       expect(setOptions.mock.calls[0]?.[0]?.searchOptions).toEqual({
         disableShortcuts: false,
+        defaults: { caseSensitive: true },
+      });
+
+      // Nested defaults compare by value too.
+      await renderRoot(root, render(false));
+      expect(setOptions).toHaveBeenCalledTimes(1);
+      await renderRoot(root, render(false, false));
+      expect(setOptions).toHaveBeenCalledTimes(2);
+      expect(setOptions.mock.calls[1]?.[0]?.searchOptions).toEqual({
+        disableShortcuts: false,
+        defaults: { caseSensitive: false },
       });
       setOptions.mockRestore();
     } finally {

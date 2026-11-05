@@ -79,6 +79,8 @@
     --diffs-scrollbar-gutter-override
     --diffs-tab-size
     --diffs-popover-gap (edit mode: inset for edge-clamped popovers)
+    --diffs-search-panel-inset-top (find panel distance from the top edge)
+    --diffs-search-panel-inset-right (find panel distance from the right edge)
     */
 
     color-scheme: light dark;

@@ -13,12 +13,14 @@ import {
 import { resolveSearchShortcut } from '../editor/command';
 import type { Editor, EditorOptions } from '../editor/editor';
 import {
-  type SearchPanelMode,
   type SearchPanelReplaceHandlers,
   SearchPanelWidget,
   type SearchResult,
 } from '../editor/searchPanel';
-import { getCaretPosition } from '../editor/selection';
+import {
+  getCaretPosition,
+  getSearchQueryFromSelection,
+} from '../editor/selection';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -35,11 +37,16 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import type {
+  SearchOptionDefaults,
+  SearchPanelMode,
+  SearchPanelState,
+} from '../search';
 import {
-  type LineByLineSearchDocument,
   type MatchRange,
-  MAX_FIND_MATCHES,
-  searchLineByLine,
+  MAX_SEARCH_MATCHES,
+  type SearchableDocument,
+  searchDocument,
   type SearchParams,
 } from '../search';
 import type {
@@ -136,6 +143,11 @@ export interface CodeViewSearchOptions {
    * @default 'smooth-auto'
    */
   scrollBehavior?: CodeViewScrollBehavior;
+  /**
+   * Matching options a fresh panel opens with, e.g. a user's persisted
+   * preferences. An open panel keeps whatever the user toggled.
+   */
+  defaults?: SearchOptionDefaults;
 }
 
 type CodeViewEditor<LAnnotation, Caret> =
@@ -670,6 +682,11 @@ export interface CodeViewOptions<LAnnotation, Caret>
   layout?: CodeViewLayout;
   /** Find/replace behavior for the CodeView-owned search panel. */
   searchOptions?: CodeViewSearchOptions;
+  /**
+   * Called with the search state when the panel opens and after every
+   * change, and with undefined when it closes.
+   */
+  onSearchStateChange?(state: SearchPanelState | undefined): void;
   /**
    * Return an in-memory retention key for an item's editable draft and
    * undo/redo history. Called only when CodeView creates the item's editor.
@@ -1590,23 +1607,34 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const { mode = 'replace', scope = 'focused', query } = options ?? {};
 
     this.setSearchScope(this.resolveSearchScope(scope));
-    if (this.searchPanel != null) {
+    let { searchPanel } = this;
+    if (searchPanel != null) {
       if (query != null) {
-        this.searchPanel.setQuery(query);
+        searchPanel.setQuery(query);
       }
-      this.searchPanel.setMode(mode);
-      this.searchPanel.focus();
+      searchPanel.setMode(mode);
+      searchPanel.focus();
       return;
     }
 
     this.searchHighlighter ??= SearchHighlighter.create(
       container.ownerDocument
     );
-    this.searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
+    searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
       containerElement: container,
-      defaultQuery: query ?? '',
+      defaultQuery: query ?? this.getSearchQueryFromScope(),
+      defaults: this.options.searchOptions?.defaults,
       mode,
       replace: this.getSearchReplaceHandlers(),
+      onStateChange: (state) => {
+        // While a refresh is pending the counts still describe the previous
+        // scope or contents; the refresh reports the settled state.
+        if (this.searchMatchesDirty) {
+          return;
+        }
+        const { onSearchStateChange } = this.options;
+        onSearchStateChange?.(state);
+      },
       onQueryChange: () => {
         this.searchState.centerNavigation = false;
       },
@@ -1652,28 +1680,55 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         return nextCurrent;
       },
       onClose: () => {
-        this.removeSearchFocusListeners();
-        this.searchPanel = undefined;
-        this.resetSearchState();
+        this.closeSearch();
       },
     });
+    this.searchPanel = searchPanel;
+    searchPanel.mount();
+    // The state callback may close the panel while it mounts.
+    if (this.searchPanel !== searchPanel) {
+      return;
+    }
     this.root?.ownerDocument.addEventListener(
       'focusin',
       this.handleSearchFocusIn
     );
-    this.searchPanel
+    searchPanel
       .getHostElement()
       .addEventListener('focusout', this.handleSearchPanelBlur);
     this.applySearchPanelOverlayStyles();
-    this.searchPanel.focus();
+    searchPanel.focus();
   }
 
   /** Closes the find/replace panel and clears its match highlights. */
   public closeSearch(): void {
+    const { searchPanel } = this;
     this.removeSearchFocusListeners();
-    this.searchPanel?.cleanup();
     this.searchPanel = undefined;
     this.resetSearchState();
+    if (searchPanel == null) {
+      return;
+    }
+    searchPanel.cleanup();
+    const { onSearchStateChange } = this.options;
+    onSearchStateChange?.(undefined);
+  }
+
+  // A panel scoped to an editor opens on that editor's selection, or the
+  // word under its caret, like the standalone editor's find. Searching every
+  // item opens empty.
+  private getSearchQueryFromScope(): string {
+    const { scope } = this.searchState;
+    const editor =
+      scope != null ? this.itemEditors.get(scope.itemId)?.editor : undefined;
+    const document = editor?.getEditState()?.document;
+    if (editor == null || document == null) {
+      return '';
+    }
+    return getSearchQueryFromSelection(
+      document,
+      editor.getViewState().selections?.at(-1)
+    );
   }
 
   public isSearchOpen(): boolean {
@@ -1817,13 +1872,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.searchState.scope = undefined;
       this.searchState.centerNavigation = false;
     }
-    this.searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
-    if (this.searchPanel?.hasQuery() !== true) {
-      return;
+    // Flag the refresh before rebinding so the rebind's state report waits
+    // for the refreshed matches.
+    const needsRefresh = this.searchPanel?.hasQuery() === true;
+    if (needsRefresh) {
+      this.searchMatchesDirty = true;
     }
-
-    this.searchMatchesDirty = true;
-    this.render();
+    this.searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
+    if (needsRefresh) {
+      this.render();
+    }
   }
 
   private flushSearchMatches(): void {
@@ -1917,7 +1975,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const items =
       scope == null ? this.items : scopedItem == null ? [] : [scopedItem];
     for (const item of items) {
-      const remaining = MAX_FIND_MATCHES - matches.length;
+      const remaining = MAX_SEARCH_MATCHES - matches.length;
       if (remaining <= 0) {
         break;
       }
@@ -5441,7 +5499,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 }
 
-class CodeViewLineSearchDocument implements LineByLineSearchDocument {
+class CodeViewLineSearchDocument implements SearchableDocument {
   readonly lines: CodeViewSearchLine[];
   readonly lineStarts: number[] = [];
   readonly textLength: number;
@@ -5530,7 +5588,7 @@ function collectCodeViewLineMatches(
 
   const document = new CodeViewLineSearchDocument(lines);
   const matches: CodeViewSearchMatch[] = [];
-  searchLineByLine(
+  searchDocument(
     document,
     searchParams,
     limit,

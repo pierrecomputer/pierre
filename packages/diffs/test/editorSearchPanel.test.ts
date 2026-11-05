@@ -2,14 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { PieceTable } from '../src/editor/pieceTable';
 import {
-  type MatchRange,
   type SearchPanelOptions,
   SearchPanelWidget,
-  type SearchParams,
   type SearchResult,
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
 import type { ResolvedTextEdit } from '../src/editor/types';
+import type { MatchRange, SearchParams } from '../src/search';
 import { buildSearchReplacementText } from '../src/search';
 import { installDom, wait } from './domHarness';
 
@@ -147,6 +146,7 @@ function createWidget(
       closed = true;
     },
   });
+  widget.mount();
 
   const query = (selector: string) =>
     getSearchPanelRoot().querySelector<HTMLElement>(selector);
@@ -196,6 +196,7 @@ describe('SearchPanelWidget', () => {
         onClose: () => {},
         replace: { replaceMatch: () => undefined, replaceAll: () => {} },
       });
+      widget.mount();
       const panel = widget.getHostElement().shadowRoot!;
       const query =
         panel.querySelector<HTMLInputElement>('input[data-search]')!;
@@ -267,6 +268,7 @@ describe('SearchPanelWidget', () => {
           },
           onClose: () => {},
         });
+        widget.mount();
         expect(widget.hasQuery()).toBe(defaultQuery !== '');
         await waitForAnimationFrame();
         expect(searches).toEqual(defaultQuery === '' ? [] : ['foo']);
@@ -737,6 +739,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     },
     onClose: () => {},
   });
+  widget.mount();
 
   const panel = (selector: string) =>
     getSearchPanelRoot().querySelector<HTMLElement>(selector);
@@ -1321,6 +1324,7 @@ describe('SearchPanelWidget', () => {
         },
         onClose: () => {},
       });
+      widget.mount();
       const panel = widget.getHostElement().shadowRoot!;
       const input =
         panel.querySelector<HTMLInputElement>('input[data-search]')!;
@@ -1358,6 +1362,7 @@ describe('SearchPanelWidget', () => {
         onUpdate: ({ matches }) => matches[0],
         onClose: () => {},
       });
+      widget.mount();
       await wait(0);
       const panel = widget.getHostElement().shadowRoot!;
       const grid = panel.querySelector<HTMLElement>('[data-search-grid]')!;
@@ -1435,6 +1440,7 @@ describe('SearchPanelWidget', () => {
         },
         onClose: () => {},
       });
+      widget.mount();
 
       await waitForAnimationFrame();
 
@@ -1506,6 +1512,7 @@ describe('SearchPanelWidget', () => {
         onUpdate: ({ matches: allMatches }) => allMatches[0],
         onClose: () => {},
       });
+      widget.mount();
 
       await waitForAnimationFrame();
 

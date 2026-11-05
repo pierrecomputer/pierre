@@ -3,13 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { TextDocument } from '../src/editor/textDocument';
 import {
   buildSearchReplacementText,
-  type LineByLineSearchDocument,
   type MatchRange,
-  searchLineByLine,
+  type SearchableDocument,
+  searchDocument,
   type SearchParams,
 } from '../src/search';
 
-function createSearchDocument(text: string): LineByLineSearchDocument {
+function createSearchDocument(text: string): SearchableDocument {
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) {
     if (text.charCodeAt(i) === 10) {
@@ -53,7 +53,7 @@ function isLineEnding(charCode: number): boolean {
   return charCode === 10 || charCode === 13;
 }
 
-describe('searchLineByLine', () => {
+describe('searchDocument', () => {
   test('visits accepted matches in order while collecting the complete limited result', () => {
     const document = new TextDocument(
       'inmemory://search-visitor',
@@ -98,7 +98,7 @@ describe('searchLineByLine', () => {
   test('visits UTF-16 line coordinates for regex matches across CRLF lines', () => {
     const document = createSearchDocument('😀 aa\r\n\r\n😀 bbb cc');
     const positions: number[][] = [];
-    const ranges = searchLineByLine(
+    const ranges = searchDocument(
       document,
       searchParams({ text: '[a-z]+', regex: true }),
       3,
@@ -122,19 +122,17 @@ describe('searchLineByLine', () => {
   test('searches a string document without TextDocument', () => {
     const document = createSearchDocument('Alpha beta\nalpha BETA');
 
-    expect(searchLineByLine(document, searchParams({ text: 'alpha' }))).toEqual(
-      [
-        [0, 5],
-        [11, 16],
-      ]
-    );
+    expect(searchDocument(document, searchParams({ text: 'alpha' }))).toEqual([
+      [0, 5],
+      [11, 16],
+    ]);
   });
 
   test('supports whole-word matching', () => {
     const document = createSearchDocument('foo food (foo)');
 
     expect(
-      searchLineByLine(document, searchParams({ text: 'foo', wholeWord: true }))
+      searchDocument(document, searchParams({ text: 'foo', wholeWord: true }))
     ).toEqual([
       [0, 3],
       [10, 13],
@@ -145,7 +143,7 @@ describe('searchLineByLine', () => {
     const document = createSearchDocument('foo');
 
     expect(
-      searchLineByLine(document, searchParams({ text: '[', regex: true }))
+      searchDocument(document, searchParams({ text: '[', regex: true }))
     ).toEqual([]);
   });
 
@@ -153,13 +151,10 @@ describe('searchLineByLine', () => {
     const document = createSearchDocument('foo\nbar');
 
     expect(
-      searchLineByLine(document, searchParams({ text: 'foo\nbar' }))
+      searchDocument(document, searchParams({ text: 'foo\nbar' }))
     ).toEqual([]);
     expect(
-      searchLineByLine(
-        document,
-        searchParams({ text: 'foo\\nbar', regex: true })
-      )
+      searchDocument(document, searchParams({ text: 'foo\\nbar', regex: true }))
     ).toEqual([]);
   });
 

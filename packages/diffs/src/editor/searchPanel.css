@@ -10,8 +10,8 @@
   );
   color-scheme: light dark;
   position: sticky;
-  top: 16px;
-  right: 16px;
+  top: var(--diffs-search-panel-inset-top, 16px);
+  right: var(--diffs-search-panel-inset-right, 16px);
   z-index: 100;
   display: flex;
   justify-content: flex-end;
@@ -58,7 +58,7 @@
   padding: 4px;
   max-width: 100%;
   min-width: 260px;
-  margin-inline: auto 16px;
+  margin-inline: auto var(--diffs-search-panel-inset-right, 16px);
   border: 1px solid var(--diffs-widget-border);
   border-radius: 9px;
   background-color: var(--diffs-widget-bg);

@@ -13,6 +13,7 @@ import {
 import {
   buildSearchReplacementText,
   type MatchRange,
+  type SearchPanelMode,
   type SearchParams,
 } from '../search';
 import type {
@@ -72,11 +73,7 @@ import {
   PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
-import {
-  type SearchPanelMode,
-  SearchPanelWidget,
-  type SearchResult,
-} from './searchPanel';
+import { SearchPanelWidget, type SearchResult } from './searchPanel';
 import type {
   AutoSurround,
   CursorMoveOptions,
@@ -104,6 +101,7 @@ import {
   getCaretPosition,
   getDocumentBoundarySelection,
   getDocumentFullSelection,
+  getSearchQueryFromSelection,
   getSelectedLineBlocks,
   getSelectionAnchor,
   getSelectionClipboardTexts,
@@ -6651,17 +6649,10 @@ export class Editor<
       preElement.ownerDocument
     );
 
-    let defaultQuery = '';
-    const primarySelection = selections?.at(-1);
-    if (primarySelection != null) {
-      const queryRange = isCollapsedSelection(primarySelection)
-        ? expandCollapsedSelectionToWord(textDocument, primarySelection)
-        : primarySelection;
-      const selectionText = textDocument.getText(queryRange);
-      if (selectionText !== '' && !selectionText.includes('\n')) {
-        defaultQuery = selectionText;
-      }
-    }
+    const defaultQuery = getSearchQueryFromSelection(
+      textDocument,
+      selections?.at(-1)
+    );
     this.#currentSearchMatch = undefined;
 
     // Preserve the viewport until navigation first needs a scroll, then center
@@ -6745,6 +6736,7 @@ export class Editor<
 
     this.#searchPanel = searchPanel;
     this.#retainSearchPanelFocus = false;
+    searchPanel.mount();
   }
 
   // Choose the starting match during collection so navigation needs neither

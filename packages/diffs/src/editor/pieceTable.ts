@@ -1,6 +1,6 @@
 import {
   type MatchRange,
-  searchLineByLine,
+  searchDocument,
   type SearchMatchVisitor,
   type SearchParams,
 } from '../search';
@@ -309,7 +309,7 @@ export class PieceTable {
     // descending it again for every line and whole-word boundary.
     const documentText = this.#textFromPieces();
     const lineOffsets = computeLineOffsets(documentText);
-    return searchLineByLine(
+    return searchDocument(
       {
         textLength: documentText.length,
         lineCount: lineOffsets.length,

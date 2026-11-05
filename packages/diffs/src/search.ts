@@ -8,6 +8,24 @@ export interface SearchParams {
   regex: boolean;
 }
 
+export type SearchPanelMode = 'find' | 'replace';
+
+/** Matching options a host can preset for a fresh panel. */
+export type SearchOptionDefaults = Partial<
+  Pick<SearchParams, 'caseSensitive' | 'wholeWord' | 'regex'>
+>;
+
+/** Search state reported after every change while a panel is open. */
+export interface SearchPanelState extends SearchParams {
+  /** Shown mode: `find` whenever replacement is unavailable. */
+  mode: SearchPanelMode;
+  /** Whether the host bound replacement for the current scope. */
+  canReplace: boolean;
+  matchCount: number;
+  /** Zero-based index of the current match, or undefined when none is current. */
+  currentMatchIndex: number | undefined;
+}
+
 // Called for each accepted match with both document offsets and line-relative
 // coordinates so callers need not recover the line from the offsets.
 export type SearchMatchVisitor = (
@@ -23,7 +41,11 @@ export interface SearchPosition {
   readonly character: number;
 }
 
-export interface LineByLineSearchDocument {
+/**
+ * What a document must expose to be searched. Matching runs one line at a
+ * time, so patterns that span a newline never match.
+ */
+export interface SearchableDocument {
   readonly textLength: number;
   readonly lineCount: number;
   getLineText(line: number): string;
@@ -31,15 +53,15 @@ export interface LineByLineSearchDocument {
   charAt(offset: number): string;
 }
 
-export const MAX_FIND_MATCHES = 100000;
+export const MAX_SEARCH_MATCHES = 100000;
 
 // TODO(ije): use Intl.Segmenter instead of regex for word separators
 const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
 
-export function searchLineByLine(
-  document: LineByLineSearchDocument,
+export function searchDocument(
+  document: SearchableDocument,
   searchParams: SearchParams,
-  limit: number = MAX_FIND_MATCHES,
+  limit: number = MAX_SEARCH_MATCHES,
   onMatch?: SearchMatchVisitor
 ): MatchRange[] {
   if (searchParams.text.length === 0 || document.textLength === 0) {
@@ -123,7 +145,7 @@ function isNewlineSpanningSearch(text: string, isRegex: boolean): boolean {
 }
 
 function collectSearchMatchesLineByLine(
-  document: LineByLineSearchDocument,
+  document: SearchableDocument,
   pattern: RegExp,
   wholeWord: boolean,
   limit: number,

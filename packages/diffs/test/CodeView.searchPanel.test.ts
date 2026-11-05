@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
+import type { SearchPanelState } from '../src';
 import { CodeView, type CodeViewOptions } from '../src/components/CodeView';
 import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
@@ -1658,6 +1659,222 @@ describe('CodeView search panel', () => {
       expect(viewer.getEditor('far')?.getEditState()?.document.getText()).toBe(
         'done far'
       );
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('reports search state on open, every change, and close', async () => {
+    const dom = installDom();
+    const states: (SearchPanelState | undefined)[] = [];
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+      onSearchStateChange: (state) => states.push(state),
+    });
+    const last = () => states.at(-1);
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target target' },
+        },
+        {
+          id: 'read',
+          type: 'file',
+          file: { name: 'read.txt', contents: 'target read' },
+        },
+      ]);
+
+      viewer.openSearch({ query: 'target' });
+      expect(last()).toMatchObject({
+        text: 'target',
+        matchCount: 0,
+        canReplace: false,
+        mode: 'find',
+      });
+      await wait(0);
+      expect(last()).toMatchObject({ matchCount: 3, currentMatchIndex: 0 });
+
+      viewer.navigateSearch('next');
+      expect(last()).toMatchObject({ currentMatchIndex: 1 });
+
+      fillSearch(root, 'tar');
+      expect(last()).toMatchObject({ text: 'tar', matchCount: 3 });
+      fillReplace(root, 'x');
+      expect(last()).toMatchObject({ replaceText: 'x' });
+      getSearchPanelRoot(root)
+        .querySelector<HTMLButtonElement>('button[title="Match Case"]')!
+        .click();
+      expect(last()).toMatchObject({ caseSensitive: true });
+
+      // A scope change reports nothing until its matches are refreshed, so
+      // no snapshot pairs the new scope with the old counts.
+      const beforeScope = states.length;
+      getEditorContent(viewer, 'a').focus();
+      viewer.openSearch();
+      expect(states.length).toBe(beforeScope);
+      await wait(0);
+      expect(states.length).toBeGreaterThan(beforeScope);
+      for (const state of states.slice(beforeScope)) {
+        expect(state).toMatchObject({
+          canReplace: true,
+          mode: 'replace',
+          matchCount: 2,
+        });
+      }
+
+      viewer.closeSearch();
+      expect(last()).toBeUndefined();
+      expect(states.filter((state) => state == null)).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('survives closing from inside the state callback', async () => {
+    const dom = installDom();
+    const states: (SearchPanelState | undefined)[] = [];
+    const viewer = new CodeView({
+      onSearchStateChange: (state) => {
+        states.push(state);
+        if (state?.text === 'close me') {
+          viewer.closeSearch();
+        }
+      },
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        { id: 'a', type: 'file', file: { name: 'a.txt', contents: 'target' } },
+      ]);
+
+      // Closing from the opening emission leaves nothing behind.
+      viewer.openSearch({ query: 'close me' });
+      expect(viewer.isSearchOpen()).toBe(false);
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+      expect(states.at(-1)).toBeUndefined();
+
+      // Closing from a query change on an open panel does not throw, and no
+      // state is reported after the close.
+      viewer.openSearch({ query: 'target' });
+      expect(viewer.isSearchOpen()).toBe(true);
+      viewer.openSearch({ query: 'close me' });
+      expect(viewer.isSearchOpen()).toBe(false);
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+      expect(states.at(-1)).toBeUndefined();
+      await wait(0);
+      expect(states.at(-1)).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('applies matching defaults to a fresh panel only', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      searchOptions: { defaults: { caseSensitive: true, regex: true } },
+    });
+    const caseToggle = () =>
+      getSearchPanelRoot(root).querySelector<HTMLButtonElement>(
+        'button[title="Match Case"]'
+      )!;
+    const root = createRoot();
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          file: { name: 'a.txt', contents: 'target Target t.rget' },
+        },
+      ]);
+
+      viewer.openSearch({ query: 't.rget' });
+      await wait(0);
+      expect(caseToggle().ariaPressed).toBe('true');
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+
+      // The user's own toggles survive reopening the live panel.
+      caseToggle().click();
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+      viewer.openSearch();
+      expect(caseToggle().ariaPressed).toBe('false');
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+
+      // A fresh panel starts from the defaults again.
+      viewer.closeSearch();
+      viewer.openSearch({ query: 't.rget' });
+      await wait(0);
+      expect(caseToggle().ariaPressed).toBe('true');
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('seeds the query from the scoped editor selection', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'alpha beta\ngamma' },
+        },
+      ]);
+      const content = getEditorContent(viewer, 'a');
+      const editor = viewer.getEditor('a')!;
+      const select = (
+        start: { line: number; character: number },
+        end: { line: number; character: number }
+      ) => {
+        content.focus();
+        editor.setSelections([{ start, end, direction: 'forward' }]);
+      };
+
+      // A collapsed caret opens on the word under it.
+      select({ line: 0, character: 7 }, { line: 0, character: 7 });
+      viewer.openSearch();
+      await wait(0);
+      expect(getSearchInput(root).value).toBe('beta');
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      // Reopening keeps the panel's query.
+      select({ line: 0, character: 1 }, { line: 0, character: 1 });
+      viewer.openSearch();
+      expect(getSearchInput(root).value).toBe('beta');
+      viewer.closeSearch();
+
+      // A single-line selection opens on its text; a multi-line one opens empty.
+      select({ line: 0, character: 0 }, { line: 0, character: 3 });
+      viewer.openSearch();
+      expect(getSearchInput(root).value).toBe('alp');
+      viewer.closeSearch();
+      select({ line: 0, character: 6 }, { line: 1, character: 2 });
+      viewer.openSearch();
+      expect(getSearchInput(root).value).toBe('');
+      viewer.closeSearch();
+
+      // Searching every item opens empty regardless of the selection.
+      select({ line: 0, character: 7 }, { line: 0, character: 7 });
+      viewer.openSearch({ scope: 'all' });
+      expect(getSearchInput(root).value).toBe('');
     } finally {
       viewer.cleanUp();
       dom.cleanup();

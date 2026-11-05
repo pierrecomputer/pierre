@@ -2,7 +2,13 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
-import { type MatchRange, type SearchParams } from '../search';
+import {
+  type MatchRange,
+  type SearchOptionDefaults,
+  type SearchPanelMode,
+  type SearchPanelState,
+  type SearchParams,
+} from '../search';
 import { resolveFindAgainShortcut, resolveSearchShortcut } from './command';
 import searchPanelCSS from './searchPanel.css?inline';
 import {
@@ -11,10 +17,6 @@ import {
   SVGSpriteSheet,
 } from './sprite';
 import { h } from './utils';
-
-export type SearchPanelMode = 'find' | 'replace';
-
-export type { MatchRange, SearchParams } from '../search';
 
 export interface SearchResult<TMatch> {
   matches: TMatch[];
@@ -32,6 +34,7 @@ export interface SearchPanelReplaceHandlers<TMatch> {
 export interface SearchPanelOptions<TMatch = MatchRange> {
   containerElement: HTMLElement;
   defaultQuery: string;
+  defaults?: SearchOptionDefaults;
   mode?: SearchPanelMode;
   search: (searchParams: SearchParams) => SearchResult<TMatch>;
   isSameMatch?: (a: TMatch, b: TMatch) => boolean;
@@ -43,6 +46,8 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
     result: SearchResult<TMatch>,
     options?: { skipNavigation?: boolean }
   ) => TMatch | undefined;
+  /** Reports the panel state on open and after every change. */
+  onStateChange?: (state: SearchPanelState) => void;
   onClose: () => void;
 }
 
@@ -50,6 +55,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #initializeMatches: () => void;
+  #mount?: () => void;
+  #closed = false;
   #updateMatches?: (options?: { skipNavigation?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
   #setReplaceHandlers?: (
@@ -64,6 +71,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     const {
       containerElement,
       defaultQuery,
+      defaults,
       mode = 'find',
       search,
       isSameMatch = Object.is,
@@ -71,6 +79,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       replace,
       onQueryChange,
       onUpdate,
+      onStateChange,
       onClose,
     } = options;
 
@@ -82,9 +91,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     const searchParams: SearchParams = {
       text: defaultQuery,
       replaceText: '',
-      caseSensitive: false,
-      wholeWord: false,
-      regex: false,
+      caseSensitive: defaults?.caseSensitive === true,
+      wholeWord: defaults?.wholeWord === true,
+      regex: defaults?.regex === true,
     };
 
     const matches = {
@@ -95,6 +104,21 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     const getSearchParamsSnapshot = (): SearchParams => ({ ...searchParams });
     const getMatchIndex = (match: TMatch): number =>
       matches.all.findIndex((candidate) => isSameMatch(candidate, match));
+
+    const emitState = () => {
+      if (onStateChange == null || this.#closed) {
+        return;
+      }
+      const { current } = matches;
+      const index = current !== undefined ? getMatchIndex(current) : -1;
+      onStateChange({
+        ...getSearchParamsSnapshot(),
+        mode: normalizeMode(requestedMode),
+        canReplace: replaceHandlers != null,
+        matchCount: matches.all.length,
+        currentMatchIndex: index === -1 ? undefined : index,
+      });
+    };
 
     // Default to the empty-query "no results" state so it shows on open before
     // any search runs.
@@ -133,11 +157,11 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         matchResultElement.dataset.noMatches = '';
         matches.current = undefined;
         onUpdate(result);
-        return;
+      } else {
+        delete matchResultElement.dataset.noMatches;
+        updateCurrentMatch(onUpdate(result, options));
       }
-
-      delete matchResultElement.dataset.noMatches;
-      updateCurrentMatch(onUpdate(result, options));
+      emitState();
     };
     this.#updateMatches = updateMatches;
 
@@ -179,6 +203,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         scrollToMatch(nextMatch, retainFocus);
       }
       matches.current = nextMatch;
+      emitState();
     };
     // Keep focus in the panel when stepping through matches from the inputs.
     this.#navigate = (findPrevious: boolean) =>
@@ -382,6 +407,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       value: '',
       oninput: (e: Event) => {
         searchParams.replaceText = (e.target as HTMLInputElement).value;
+        emitState();
       },
       onkeydown: (e: KeyboardEvent) => {
         if (e.isComposing || e.keyCode === 229) {
@@ -469,6 +495,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       replaceToggleElement.ariaExpanded = String(
         gridElement.dataset.mode === 'replace'
       );
+      emitState();
     };
 
     // Toggles the panel between find and find/replace modes by showing or
@@ -482,6 +509,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       );
       this.#inputElement.focus();
       this.#inputElement.select();
+      emitState();
     };
     this.#applyMode = applyMode;
 
@@ -511,20 +539,30 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       shadowRoot
     );
 
-    containerElement.before(this.#host);
-    this.#inputElement.select();
-
     // Hosts install the panel before its initial results can be delivered.
     // An earlier input or refresh has already done that work; closing the
     // panel also makes this deferred update obsolete. Select the initial query
-    // above so this frame never changes the user's later focus or input caret.
+    // on mount so this frame never changes the user's later focus or input
+    // caret.
     this.#initializeMatches = () => {
       if (matchesUpdated || !this.#host.isConnected) {
         return;
       }
       updateMatches();
     };
-    queueRender(this.#initializeMatches);
+
+    this.#mount = () => {
+      containerElement.before(this.#host);
+      this.#inputElement.select();
+      emitState();
+      queueRender(this.#initializeMatches);
+    };
+  }
+
+  // Inserts the panel and reports its initial state. Separate from the
+  // constructor so the host holds the panel before any callback can close it.
+  mount(): void {
+    this.#mount?.();
   }
 
   getHostElement(): HTMLDivElement {
@@ -577,6 +615,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   // highlights in place; only use it when the caller clears that state itself
   // (e.g. a full editor reset). User-initiated dismissals should call close().
   cleanup(): void {
+    this.#closed = true;
     dequeueRender(this.#initializeMatches);
     this.#host.remove();
   }

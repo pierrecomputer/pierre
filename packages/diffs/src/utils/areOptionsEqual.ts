@@ -19,6 +19,8 @@ export function areOptionsEqual<LAnnotation, Caret>(
   optionsA: AnyOptions<LAnnotation, Caret>,
   optionsB: AnyOptions<LAnnotation, Caret>
 ): boolean {
+  const searchOptionsA = getSearchOptions(optionsA);
+  const searchOptionsB = getSearchOptions(optionsB);
   return (
     areThemesEqual(
       optionsA?.theme ?? DEFAULT_THEMES,
@@ -33,7 +35,8 @@ export function areOptionsEqual<LAnnotation, Caret>(
       getParseDiffOptions(optionsA),
       getParseDiffOptions(optionsB)
     ) &&
-    areObjectsEqual(getSearchOptions(optionsA), getSearchOptions(optionsB))
+    areObjectsEqual(searchOptionsA, searchOptionsB, ['defaults']) &&
+    areObjectsEqual(searchOptionsA?.defaults, searchOptionsB?.defaults)
   );
 }
 
