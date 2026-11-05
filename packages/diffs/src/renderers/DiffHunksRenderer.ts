@@ -862,6 +862,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.editSessionActive || this.options.useTokenTransformer === true,
         tokenizeMaxLineLength,
         lineDiffType,
+        preferredDiffLib: this.options.parseDiffOptions?.preferredDiffLib,
         maxLineDiffLength,
       };
     })();
@@ -1314,7 +1315,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       collapsedContextThreshold,
       hunkSeparators,
     } = this.getOptionsWithDefaults();
-    const { lineDiffType, maxLineDiffLength } =
+    const { lineDiffType, maxLineDiffLength, preferredDiffLib } =
       this.getRenderOptions(diff).options;
     const layoutOptions: DiffLayoutOptions = {
       diffStyle,
@@ -1324,6 +1325,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
+      preferredDiffLib,
       canHydrateContext: canHydrateCollapsedContext(
         diff,
         this.options.loadDiffFiles != null

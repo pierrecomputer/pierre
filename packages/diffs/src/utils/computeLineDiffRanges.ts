@@ -1,7 +1,8 @@
-import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
+import type { ChangeObject } from '@pierre/patches';
 
-import type { LineDiffTypes } from '../types';
+import type { DiffLib, LineDiffTypes } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import { diffLibs, resolveDiffLib } from './diffLibs';
 import { pushOrJoinSpan } from './parseDiffDecorations';
 
 /** Start and end column of changed text in a line. The end is exclusive. */
@@ -27,7 +28,8 @@ export function computeLineDiffRanges(
   deletionLine: string,
   additionLine: string,
   lineDiffType: LineDiffTypes,
-  maxLineDiffLength: number
+  maxLineDiffLength: number,
+  preferredDiffLib: DiffLib = 'jsdiff'
 ): LineDiffRanges {
   if (lineDiffType === 'none') {
     return NO_RANGES;
@@ -43,6 +45,8 @@ export function computeLineDiffRanges(
   ) {
     return NO_RANGES;
   }
+  const { diffChars, diffWordsWithSpace } =
+    diffLibs[resolveDiffLib(preferredDiffLib)];
   const lineDiff =
     lineDiffType === 'char'
       ? diffChars(deletionLine, additionLine)
@@ -99,7 +103,7 @@ function getSpanRanges(spans: [0 | 1, string][]): LineDiffRange[] {
 
 // For 'word-line': returns one range per side, from the first change to the
 // last, so each line gets a single highlight.
-function getWordLineRanges(lineDiff: ChangeObject<string>[]): LineDiffRanges {
+function getWordLineRanges(lineDiff: ChangeObject[]): LineDiffRanges {
   let deletionOffset = 0;
   let additionOffset = 0;
   let deletionStart = -1;
