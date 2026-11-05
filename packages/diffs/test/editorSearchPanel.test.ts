@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
 import { PieceTable } from '../src/editor/pieceTable';
-import {
-  type SearchPanelOptions,
-  SearchPanelWidget,
-  type SearchResult,
-} from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
 import type { ResolvedTextEdit } from '../src/editor/types';
 import type { MatchRange, SearchParams } from '../src/search';
 import { buildSearchReplacementText } from '../src/search';
+import {
+  type SearchPanelOptions,
+  SearchPanelWidget,
+  type SearchResult,
+} from '../src/search/SearchPanelWidget';
 import { installDom, wait } from './domHarness';
 
 function setInputValue(input: HTMLInputElement, value: string): void {
@@ -106,14 +106,7 @@ function createWidget(
   ): ResolvedTextEdit => ({
     start,
     end,
-    text: buildSearchReplacementText(
-      (offset) => textDocument.positionAt(offset),
-      (position) => textDocument.offsetAt(position),
-      (line) => textDocument.getLineText(line),
-      searchParams,
-      start,
-      end
-    ),
+    text: buildSearchReplacementText(textDocument, searchParams, start, end),
   });
 
   let closed = false;
@@ -605,20 +598,15 @@ function findAll(
 }
 
 // Builds the per-match replacement text the panel would insert for every match
-// of `params` in `docText`, through the same positionAt/offsetAt/getLineText
-// plumbing searchPanel.ts wires up.
+// of `params` in `docText`, through the same document plumbing the editor
+// hands SearchPanelWidget.
 function replacementsFor(docText: string, params: SearchParams): string[] {
   const table = new PieceTable(docText);
-  return table.search(params).map(([start, end]) =>
-    buildSearchReplacementText(
-      (offset) => table.positionAt(offset),
-      (position) => table.offsetAt(position),
-      (line) => table.getLineText(line),
-      params,
-      start,
-      end
-    )
-  );
+  return table
+    .search(params)
+    .map(([start, end]) =>
+      buildSearchReplacementText(table, params, start, end)
+    );
 }
 
 // Reference model for replace-all: one forward pass over the raw string,
@@ -684,14 +672,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
   ): ResolvedTextEdit => ({
     start,
     end,
-    text: buildSearchReplacementText(
-      (offset) => textDocument.positionAt(offset),
-      (position) => textDocument.offsetAt(position),
-      (line) => textDocument.getLineText(line),
-      searchParams,
-      start,
-      end
-    ),
+    text: buildSearchReplacementText(textDocument, searchParams, start, end),
   });
 
   const applyReplace = (edits: ResolvedTextEdit[]) => {

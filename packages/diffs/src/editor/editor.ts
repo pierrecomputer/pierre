@@ -3,10 +3,6 @@ import type { FileDiff } from '../components/FileDiff';
 import type { VirtualizedFile } from '../components/VirtualizedFile';
 import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
 import {
-  SearchHighlighter,
-  type SearchHighlightRange,
-} from '../managers/SearchHighlighter';
-import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
@@ -16,6 +12,15 @@ import {
   type SearchPanelMode,
   type SearchParams,
 } from '../search';
+import { revealMatchHorizontally } from '../search/revealMatchHorizontally';
+import {
+  SearchHighlighter,
+  type SearchHighlightRange,
+} from '../search/SearchHighlighter';
+import {
+  SearchPanelWidget,
+  type SearchResult,
+} from '../search/SearchPanelWidget';
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -73,7 +78,6 @@ import {
   PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
-import { SearchPanelWidget, type SearchResult } from './searchPanel';
 import type {
   AutoSurround,
   CursorMoveOptions,
@@ -966,9 +970,7 @@ export class Editor<
           end: textDocument.positionAt(end),
         },
         newText: buildSearchReplacementText(
-          (offset) => textDocument.positionAt(offset),
-          (position) => textDocument.offsetAt(position),
-          (line) => textDocument.getLineText(line),
+          textDocument,
           searchParams,
           start,
           end
@@ -5762,106 +5764,6 @@ export class Editor<
     }
   }
 
-  // Find paints native ranges independently of editor selections.
-  #renderSearchMatches(): void {
-    const highlighter = this.#searchHighlighter;
-    highlighter?.clear();
-    const textDocument = this.#editSession?.document;
-    if (highlighter == null || this.#matches == null || textDocument == null)
-      return;
-    const nativeRanges = new Map<number, SearchHighlightRange[]>();
-    const matches = this.#matches;
-    const renderRange = this.#renderRange;
-    const shouldCullMatches =
-      (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
-      (this.#isDiff &&
-        this.#fileDiffInstance?.options.expandUnchanged !== true);
-    const renderedLineRanges = shouldCullMatches
-      ? this.#getEditableLineRanges().rendered
-      : undefined;
-    let firstMatchIndex = 0;
-    const rangeCount = renderedLineRanges?.length ?? 1;
-    for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
-      let visibleEndOffset = Infinity;
-      const lineRange = renderedLineRanges?.[rangeIndex];
-      if (lineRange !== undefined) {
-        const [firstLine, lastLine] = lineRange;
-        const visibleStartOffset = textDocument.offsetAt({
-          line: firstLine,
-          character: 0,
-        });
-        const endLine = lastLine + 1;
-        visibleEndOffset =
-          endLine < textDocument.lineCount
-            ? textDocument.offsetAt({ line: endLine, character: 0 })
-            : textDocument.offsetAt({
-                line: endLine - 1,
-                character: textDocument.getLineLength(endLine - 1),
-              });
-
-        // Matches are sorted and non-overlapping, so narrow the rendered
-        // offset window before resolving any match positions through the treap.
-        let low = firstMatchIndex;
-        let high = matches.length;
-        while (low < high) {
-          const middle = low + Math.floor((high - low) / 2);
-          if (matches[middle][1] <= visibleStartOffset) {
-            low = middle + 1;
-          } else {
-            high = middle;
-          }
-        }
-        firstMatchIndex = low;
-      }
-      for (; firstMatchIndex < matches.length; firstMatchIndex++) {
-        const [startOffset, endOffset] = matches[firstMatchIndex];
-        if (startOffset >= visibleEndOffset) {
-          break;
-        }
-        const range: Range = {
-          start: textDocument.positionAt(startOffset),
-          end: textDocument.positionAt(endOffset),
-        };
-        const isFocused =
-          this.#currentSearchMatch?.[0] === startOffset &&
-          this.#currentSearchMatch[1] === endOffset;
-        const firstLine = Math.max(range.start.line, lineRange?.[0] ?? 0);
-        const lastLine = Math.min(
-          range.end.line,
-          lineRange?.[1] ?? textDocument.lineCount - 1
-        );
-        for (let line = firstLine; line <= lastLine; line++) {
-          const startCharacter =
-            line === range.start.line ? range.start.character : 0;
-          const endCharacter =
-            line === range.end.line
-              ? range.end.character
-              : textDocument.getLineLength(line);
-          if (endCharacter > startCharacter) {
-            let lineRanges = nativeRanges.get(line + 1);
-            if (lineRanges == null) {
-              lineRanges = [];
-              nativeRanges.set(line + 1, lineRanges);
-            }
-            lineRanges.push({
-              startCharacter,
-              endCharacter,
-              current: isFocused,
-            });
-          }
-        }
-      }
-    }
-    if (this.#contentElement != null && nativeRanges.size > 0) {
-      highlighter.paint(this.#contentElement, (lineNumber, side) =>
-        side === 'deletions' ? undefined : nativeRanges.get(lineNumber)
-      );
-      if (this.#pendingSearchHorizontalReveal) {
-        this.#pendingSearchHorizontalReveal = !highlighter.revealCurrentMatch();
-      }
-    }
-  }
-
   // Render externally owned cursors independently from local selections so
   // collaboration state never changes focus, editing, or native selection.
   #renderCarets(): void {
@@ -6566,6 +6468,108 @@ export class Editor<
       isSelectionVisible,
       viewport
     );
+  }
+
+  // Find paints native ranges independently of editor selections.
+  #renderSearchMatches(): void {
+    const highlighter = this.#searchHighlighter;
+    highlighter?.clear();
+    const textDocument = this.#editSession?.document;
+    if (highlighter == null || this.#matches == null || textDocument == null)
+      return;
+    const nativeRanges = new Map<number, SearchHighlightRange[]>();
+    const matches = this.#matches;
+    const renderRange = this.#renderRange;
+    const shouldCullMatches =
+      (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
+      (this.#isDiff &&
+        this.#fileDiffInstance?.options.expandUnchanged !== true);
+    const renderedLineRanges = shouldCullMatches
+      ? this.#getEditableLineRanges().rendered
+      : undefined;
+    let firstMatchIndex = 0;
+    const rangeCount = renderedLineRanges?.length ?? 1;
+    for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
+      let visibleEndOffset = Infinity;
+      const lineRange = renderedLineRanges?.[rangeIndex];
+      if (lineRange !== undefined) {
+        const [firstLine, lastLine] = lineRange;
+        const visibleStartOffset = textDocument.offsetAt({
+          line: firstLine,
+          character: 0,
+        });
+        const endLine = lastLine + 1;
+        visibleEndOffset =
+          endLine < textDocument.lineCount
+            ? textDocument.offsetAt({ line: endLine, character: 0 })
+            : textDocument.offsetAt({
+                line: endLine - 1,
+                character: textDocument.getLineLength(endLine - 1),
+              });
+
+        // Matches are sorted and non-overlapping, so narrow the rendered
+        // offset window before resolving any match positions through the treap.
+        let low = firstMatchIndex;
+        let high = matches.length;
+        while (low < high) {
+          const middle = low + Math.floor((high - low) / 2);
+          if (matches[middle][1] <= visibleStartOffset) {
+            low = middle + 1;
+          } else {
+            high = middle;
+          }
+        }
+        firstMatchIndex = low;
+      }
+      for (; firstMatchIndex < matches.length; firstMatchIndex++) {
+        const [startOffset, endOffset] = matches[firstMatchIndex];
+        if (startOffset >= visibleEndOffset) {
+          break;
+        }
+        const range: Range = {
+          start: textDocument.positionAt(startOffset),
+          end: textDocument.positionAt(endOffset),
+        };
+        const isFocused =
+          this.#currentSearchMatch?.[0] === startOffset &&
+          this.#currentSearchMatch[1] === endOffset;
+        const firstLine = Math.max(range.start.line, lineRange?.[0] ?? 0);
+        const lastLine = Math.min(
+          range.end.line,
+          lineRange?.[1] ?? textDocument.lineCount - 1
+        );
+        for (let line = firstLine; line <= lastLine; line++) {
+          const startCharacter =
+            line === range.start.line ? range.start.character : 0;
+          const endCharacter =
+            line === range.end.line
+              ? range.end.character
+              : textDocument.getLineLength(line);
+          if (endCharacter > startCharacter) {
+            let lineRanges = nativeRanges.get(line + 1);
+            if (lineRanges == null) {
+              lineRanges = [];
+              nativeRanges.set(line + 1, lineRanges);
+            }
+            lineRanges.push({
+              startCharacter,
+              endCharacter,
+              current: isFocused,
+            });
+          }
+        }
+      }
+    }
+    if (this.#contentElement != null && nativeRanges.size > 0) {
+      highlighter.paint(this.#contentElement, (lineNumber, side) =>
+        side === 'deletions' ? undefined : nativeRanges.get(lineNumber)
+      );
+      if (this.#pendingSearchHorizontalReveal) {
+        const range = highlighter.currentMatchRange;
+        this.#pendingSearchHorizontalReveal =
+          range == null || !revealMatchHorizontally(range);
+      }
+    }
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,

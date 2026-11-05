@@ -41,6 +41,13 @@ export interface SearchPosition {
   readonly character: number;
 }
 
+/** What a replacement needs from a document to expand `$1`-style references. */
+export interface ReplacementDocument {
+  positionAt(offset: number): SearchPosition;
+  offsetAt(position: SearchPosition): number;
+  getLineText(line: number): string;
+}
+
 /**
  * What a document must expose to be searched. Matching runs one line at a
  * time, so patterns that span a newline never match.
@@ -95,9 +102,7 @@ export function searchDocument(
 
 /** Expands `$&`, `$1`, `$$`, etc. in a regex replace string using a match. */
 export function buildSearchReplacementText(
-  positionAt: (offset: number) => SearchPosition,
-  offsetAt: (position: SearchPosition) => number,
-  getLineText: (line: number) => string,
+  document: ReplacementDocument,
   searchParams: SearchParams,
   matchStart: number,
   matchEnd: number
@@ -106,9 +111,9 @@ export function buildSearchReplacementText(
     return searchParams.replaceText;
   }
 
-  const position = positionAt(matchStart);
-  const lineText = getLineText(position.line);
-  const lineStart = offsetAt({ line: position.line, character: 0 });
+  const position = document.positionAt(matchStart);
+  const lineText = document.getLineText(position.line);
+  const lineStart = document.offsetAt({ line: position.line, character: 0 });
   const relStart = matchStart - lineStart;
 
   let pattern: RegExp;

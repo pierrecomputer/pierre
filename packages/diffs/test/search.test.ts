@@ -165,9 +165,11 @@ describe('searchDocument', () => {
 
     expect(
       buildSearchReplacementText(
-        positionAt,
-        (position) => position.character,
-        (line) => document.getLineText(line),
+        {
+          positionAt,
+          offsetAt: (position) => position.character,
+          getLineText: (line) => document.getLineText(line),
+        },
         searchParams({
           text: '(answer) = (\\d+)',
           replaceText: '$1: $2',

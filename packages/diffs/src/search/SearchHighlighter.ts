@@ -66,28 +66,9 @@ export class SearchHighlighter {
     this.currentRange = undefined;
   }
 
-  // Reveal the current match horizontally inside its code column. Instant
-  // scrolling overrides scroll-behavior without moving the vertical viewport.
-  revealCurrentMatch(): boolean {
-    const range = this.currentRange;
-    const code =
-      range?.startContainer.parentElement?.closest<HTMLElement>('[data-code]');
-    if (range == null || code == null || code.clientWidth === 0) return false;
-    if (code.scrollWidth <= code.clientWidth) return true;
-    const rect = range.getBoundingClientRect();
-    const viewport = code.getBoundingClientRect();
-    const gutter = code.querySelector<HTMLElement>(':scope > [data-gutter]');
-    const left = Math.max(
-      viewport.left + code.clientLeft,
-      gutter?.getBoundingClientRect().right ?? viewport.left
-    );
-    const right = viewport.left + code.clientLeft + code.clientWidth;
-    const delta =
-      rect.left < left || rect.width > right - left
-        ? rect.left - left
-        : Math.max(0, rect.right - right);
-    code.scrollTo({ left: code.scrollLeft + delta, behavior: 'instant' });
-    return true;
+  /** The painted range of the current match, while one is mounted. */
+  get currentMatchRange(): Range | undefined {
+    return this.currentRange;
   }
 
   // Look up matches only for mounted rows, including each side of a split

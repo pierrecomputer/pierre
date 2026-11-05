@@ -1,24 +1,27 @@
 import { UNSAFE_CSS_ATTRIBUTE } from '../constants';
 import {
+  resolveFindAgainShortcut,
+  resolveSearchShortcut,
+} from '../editor/command';
+import {
+  getEditorIconSvg,
+  type SVGSpriteNames,
+  SVGSpriteSheet,
+} from '../editor/sprite';
+import { h } from '../editor/utils';
+import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import {
   type MatchRange,
   type SearchOptionDefaults,
   type SearchPanelMode,
   type SearchPanelState,
   type SearchParams,
-} from '../search';
-import { wrapUnsafeCSS } from '../utils/cssWrappers';
-import { resolveFindAgainShortcut, resolveSearchShortcut } from './command';
-import searchPanelCSS from './searchPanel.css?inline';
-import {
-  getEditorIconSvg,
-  type SVGSpriteNames,
-  SVGSpriteSheet,
-} from './sprite';
-import { h } from './utils';
+} from './index';
+import searchPanelCSS from './SearchPanelWidget.css?inline';
 
 export interface SearchResult<TMatch> {
   matches: TMatch[];
@@ -473,7 +476,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       normalizeMode(mode) === 'replace'
     );
 
-    // Cells are positioned by CSS grid-template-areas (see searchPanel.css), so DOM
+    // Cells are positioned by CSS grid-template-areas (see SearchPanelWidget.css), so DOM
     // order here only drives tab/reading order, not layout. Keep the replace
     // input directly after the find input (and its toggles) so Tab walks
     // chevron -> find -> replace before reaching the nav arrows and close
