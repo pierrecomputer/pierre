@@ -1,0 +1,5 @@
+0f42eb2584c00efa09b5b5d931ca77c7524bd401d5a90d1fd660b858ec2a57e3  src/langs/gdresource.wat
+f7aa0e8d78735653d022631a112aee8954bccf7c85b827ef5ff3ebc2e70e747c  src/langs/gdscript.wat
+647830ca420d89fb9e5477ea9dce746f9a5e672a4d78cddc16a1331fe960bd50  src/langs/python.wat
+72ade453c29683b4a87df84404089a35f28515cd4377df70962e01e2b4c122fb  src/common.wat
+9287eeeb8b7db6ea4c096a0c952d6b5222b8466b719b0e7dd81a663dbc61c7a1  src/scan.wat
