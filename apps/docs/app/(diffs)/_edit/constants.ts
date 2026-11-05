@@ -14,6 +14,8 @@ import type {
   PreloadFileOptions,
 } from '@pierre/diffs/ssr';
 
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
+
 // The editor requires the token transformer, so enabling it in the SSR preload
 // keeps hydration from rerendering the component after the editor attaches.
 // Mirrors LiveEditing/constants.ts.
@@ -427,9 +429,11 @@ export const EDIT_PREDICTION_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<
 > = {
   fileDiff: parseDiffFromFile(
     EDIT_PREDICTION_OLD_FILE,
-    EDIT_PREDICTION_NEW_FILE
+    EDIT_PREDICTION_NEW_FILE,
+    DEFAULT_PARSE_DIFF_OPTIONS
   ),
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     ...EDITABLE_OPTIONS,
     diffStyle: 'unified',
   },

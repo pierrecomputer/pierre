@@ -2,6 +2,7 @@ import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 export const SHIKI_THEMES: PreloadMultiFileDiffOptions<undefined, undefined> = {
   oldFile: {
@@ -37,6 +38,7 @@ fn add(a: i32, b: i32) -> i32 {
 `,
   },
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     diffStyle: 'unified',
     theme: DEFAULT_THEMES,
     unsafeCSS: CustomScrollbarCSS,

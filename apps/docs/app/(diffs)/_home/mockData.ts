@@ -7,6 +7,7 @@ import type { DiffBasePropsReact } from '@pierre/diffs/react';
 import type { GitStatus, GitStatusEntry } from '@pierre/trees';
 
 import { GENERATED_AUI_SESSIONS } from './mockData.generated';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 // Render options shared by the agent demo's SSR preload (Home.tsx) and its
 // client FileDiff (AgentUi). The editor requires the token transformer, so
@@ -18,6 +19,7 @@ export const AUI_DIFF_OPTIONS: DiffBasePropsReact<
   undefined,
   undefined
 >['options'] = {
+  parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   disableFileHeader: true,
@@ -187,6 +189,7 @@ export function getFileDiff(
       name: file.path,
       contents: nextAfter ?? file.after,
       cacheKey: `${file.path}:after`,
-    }
+    },
+    DEFAULT_PARSE_DIFF_OPTIONS
   );
 }
