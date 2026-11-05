@@ -285,17 +285,22 @@ export async function listProjectPullRequests(
   if (!Array.isArray(parsed)) {
     throw new Error('gh pr list returned an unexpected payload');
   }
-  return parsed.map((pr: Record<string, unknown>) => ({
-    number: pr.number as number,
-    title: (pr.title as string) ?? '',
-    state: (pr.state as string) ?? '',
-    headRefName: (pr.headRefName as string) ?? '',
-    baseRefName: (pr.baseRefName as string) ?? '',
-    isDraft: pr.isDraft === true,
-    author: (pr.author as { login?: string } | null)?.login ?? '',
-    url: (pr.url as string) ?? '',
-    updatedAt: (pr.updatedAt as string) ?? '',
-  }));
+  return parsed.map((pr: Record<string, unknown>) => {
+    if (typeof pr.number !== 'number') {
+      throw new Error('gh pr list returned a PR without a number');
+    }
+    return {
+      number: pr.number,
+      title: (pr.title as string) ?? '',
+      state: (pr.state as string) ?? '',
+      headRefName: (pr.headRefName as string) ?? '',
+      baseRefName: (pr.baseRefName as string) ?? '',
+      isDraft: pr.isDraft === true,
+      author: (pr.author as { login?: string } | null)?.login ?? '',
+      url: (pr.url as string) ?? '',
+      updatedAt: (pr.updatedAt as string) ?? '',
+    };
+  });
 }
 
 // Spawns a local command and exposes its stdout as a stream, so large diffs
@@ -309,6 +314,7 @@ export function createLocalCommandStream(
   const child = spawn(command.file, command.args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: COMMAND_TIMEOUT_MS,
   });
   let stderrText = '';
   let emittedOutput = false;

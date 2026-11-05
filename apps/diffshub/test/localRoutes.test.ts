@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -21,6 +22,26 @@ let execFileImpl: (
 ) => void = (_file, _args, _options, callback) =>
   callback(new Error('gh failed'), '', 'mocked gh failure');
 
+// Minimal fake child process: stdout/stderr emitters plus on()/kill(), enough
+// to drive createLocalCommandStream through every branch.
+class FakeChild extends EventEmitter {
+  stdout = new EventEmitter();
+  stderr = new EventEmitter();
+  killedWith: string | null = null;
+  kill(signal: string) {
+    this.killedWith = signal;
+    return true;
+  }
+}
+
+let spawnImpl: (
+  file: string,
+  args: string[],
+  options: unknown
+) => FakeChild = () => {
+  throw new Error('spawn is not expected in this test');
+};
+
 void mock.module('node:child_process', () => ({
   execFile: (
     file: string,
@@ -28,9 +49,8 @@ void mock.module('node:child_process', () => ({
     options: unknown,
     callback: ExecFileCallback
   ) => execFileImpl(file, args, options, callback),
-  spawn: () => {
-    throw new Error('spawn is not expected in these tests');
-  },
+  spawn: (file: string, args: string[], options: unknown) =>
+    spawnImpl(file, args, options),
 }));
 
 const { GET: getProjects } = await import('../app/api/local/projects/route');
@@ -61,6 +81,9 @@ beforeEach(() => {
   tempDir = mkdtempSync(path.join(tmpdir(), 'diffshub-local-routes-'));
   execFileImpl = (_file, _args, _options, callback) =>
     callback(new Error('gh failed'), '', 'mocked gh failure');
+  spawnImpl = () => {
+    throw new Error('spawn is not expected in this test');
+  };
 });
 
 afterEach(() => {
@@ -220,5 +243,81 @@ describe('GET /api/local/diff', () => {
     writeConfig('{}');
     const response = getDiff(request('/api/local/diff?project=bun&pr=1'));
     expect(response.status).toBe(500);
+  });
+
+  test('streams command output as the response body', async () => {
+    writeConfig(validConfig());
+    spawnImpl = () => {
+      const child = new FakeChild();
+      queueMicrotask(() => {
+        child.stdout.emit('data', Buffer.from('diff --git a/x b/x\n'));
+        child.emit('close', 0);
+      });
+      return child;
+    };
+    const response = getDiff(request('/api/local/diff?project=bun&worktree=1'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('text/plain');
+    expect(await response.text()).toBe('diff --git a/x b/x\n');
+  });
+
+  test('stream errors when the command fails before any output', async () => {
+    writeConfig(validConfig());
+    spawnImpl = () => {
+      const child = new FakeChild();
+      queueMicrotask(() => {
+        child.stderr.emit('data', Buffer.from('fatal: not a git repository'));
+        child.emit('close', 128);
+      });
+      return child;
+    };
+    const response = getDiff(request('/api/local/diff?project=bun&worktree=1'));
+    expect(response.status).toBe(200);
+    const error = await response.text().then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(String(error)).toMatch(/not a git repository/);
+  });
+
+  test('stream errors when the process cannot start', async () => {
+    writeConfig(validConfig());
+    spawnImpl = () => {
+      const child = new FakeChild();
+      queueMicrotask(() => child.emit('error', new Error('spawn gh ENOENT')));
+      return child;
+    };
+    const response = getDiff(request('/api/local/diff?project=bun&pr=1'));
+    const error = await response.text().then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(String(error)).toMatch(/ENOENT/);
+  });
+
+  test('cancelling the stream kills the child process', async () => {
+    writeConfig(validConfig());
+    let child!: FakeChild;
+    spawnImpl = () => {
+      child = new FakeChild();
+      return child;
+    };
+    const response = getDiff(request('/api/local/diff?project=bun&worktree=1'));
+    const reader = response.body!.getReader();
+    await reader.cancel();
+    expect(child.killedWith).toBe('SIGTERM');
+  });
+});
+
+describe('gh pr list payload validation', () => {
+  test('returns 502 when a PR entry has no number', async () => {
+    writeConfig(validConfig());
+    execFileImpl = (_file, _args, _options, callback) =>
+      callback(null, JSON.stringify([{ title: 'no number' }]), '');
+    const response = await getPrs(
+      request('/api/local/prs?project=bun&state=open')
+    );
+    expect(response.status).toBe(502);
+    expect(await response.text()).toMatch(/without a number/);
   });
 });
