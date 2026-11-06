@@ -29,7 +29,7 @@ import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import {
   createSemanticRegionContent,
   createSemanticRegionGutter,
-  getSemanticRegionIconToggleProperties,
+  getSemanticRegionCollapseButtonProperties,
 } from '../utils/createSemanticRegionRow';
 import { createSeparator } from '../utils/createSeparator';
 import { DiffRowCursor } from '../utils/DiffRowCursor';
@@ -230,7 +230,7 @@ interface LineRowInputs {
   gutterLineType: LineTypes;
   gutterProperties: Properties | undefined;
   gutterIcon: SVGSpriteNames | undefined;
-  gutterIconProperties: Properties | undefined;
+  gutterIconButton: Properties | undefined;
 }
 
 // A collapsible region the walk is in, and whether it is collapsed.
@@ -786,7 +786,7 @@ export class DiffLayout<LAnnotation = undefined> {
                 gutterLineType: decoration.gutterLineType,
                 gutterProperties: decoration.gutterProperties,
                 gutterIcon: decoration.gutterIcon,
-                gutterIconProperties: decoration.gutterIconProperties,
+                gutterIconButton: decoration.gutterIconButton,
               }
             : {
                 column: 'unified',
@@ -801,7 +801,7 @@ export class DiffLayout<LAnnotation = undefined> {
                 gutterLineType: decoration.gutterLineType,
                 gutterProperties: decoration.gutterProperties,
                 gutterIcon: decoration.gutterIcon,
-                gutterIconProperties: decoration.gutterIconProperties,
+                gutterIconButton: decoration.gutterIconButton,
               }
         );
         const span = getUnifiedAnnotationSpan(
@@ -842,8 +842,10 @@ export class DiffLayout<LAnnotation = undefined> {
           expandedRegionStart != null
             ? {
                 ...host.getSemanticRegionDecoration(expandedRegionStart),
-                gutterIconProperties:
-                  getSemanticRegionIconToggleProperties(expandedRegionStart),
+                gutterIconButton:
+                  getSemanticRegionCollapseButtonProperties(
+                    expandedRegionStart
+                  ),
               }
             : host.getSplitLineDecoration({
                 side: 'deletions',
@@ -905,7 +907,7 @@ export class DiffLayout<LAnnotation = undefined> {
             gutterLineType: deletionDecoration.gutterLineType,
             gutterProperties: deletionDecoration.gutterProperties,
             gutterIcon: deletionDecoration.gutterIcon,
-            gutterIconProperties: deletionDecoration.gutterIconProperties,
+            gutterIconButton: deletionDecoration.gutterIconButton,
           });
         }
         if (additionLine != null) {
@@ -923,7 +925,7 @@ export class DiffLayout<LAnnotation = undefined> {
             gutterLineType: additionDecoration.gutterLineType,
             gutterProperties: additionDecoration.gutterProperties,
             gutterIcon: additionDecoration.gutterIcon,
-            gutterIconProperties: additionDecoration.gutterIconProperties,
+            gutterIconButton: additionDecoration.gutterIconButton,
           });
         }
         if (spans != null) {
@@ -1277,7 +1279,7 @@ export class DiffLayout<LAnnotation = undefined> {
         row.lineIndexText,
         row.gutterProperties,
         row.gutterIcon,
-        row.gutterIconProperties
+        row.gutterIconButton
       ),
       content,
     };

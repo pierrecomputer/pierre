@@ -111,14 +111,13 @@ export function createSemanticRegionContent(
   });
 }
 
-// Properties that make an expanded region's first-line icon collapse it again.
-export function getSemanticRegionIconToggleProperties(
+// Properties of the button around an expanded region's first-line icon, which
+// collapses the region again.
+export function getSemanticRegionCollapseButtonProperties(
   region: SemanticDiffCollapsibleRegion
 ): Properties {
   return {
     'data-semantic-region-toggle': region.old.start,
-    role: 'button',
-    'aria-hidden': undefined,
     'aria-expanded': 'true',
     'aria-label': 'Collapse moved lines',
   };

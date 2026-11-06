@@ -64,7 +64,7 @@ export interface LineDecoration {
   gutterLineType: LineTypes;
   gutterProperties?: Properties;
   gutterIcon?: SVGSpriteNames;
-  gutterIconProperties?: Properties;
+  gutterIconButton?: Properties;
   contentProperties?: Properties;
 }
 
