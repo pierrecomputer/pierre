@@ -48,7 +48,7 @@ export interface VirtualizerConfig {
   overscrollSize: number;
   /** Margin used by IntersectionObserver to decide when items should be considered visible. */
   intersectionObserverMargin: number;
-  /** Enables noisy resize logs to help tune metrics and investigate scroll jitter. */
+  /** Enables development-only resize logs to help tune metrics and investigate scroll jitter. */
   resizeDebugging: boolean;
 }
 
@@ -132,19 +132,20 @@ export class Virtualizer {
       });
     }
 
-    // FIXME(amadeus): Remove me before release
-    window.__INSTANCE = this;
-    window.__TOGGLE = () => {
-      if (Virtualizer.__STOP) {
-        Virtualizer.__STOP = false;
-        const scroller = this.getScrollContainerElement() ?? window;
-        scroller.scrollTo({ top: Virtualizer.__lastScrollPosition });
-        queueRender(this.computeRenderRangeAndEmit);
-      } else {
-        Virtualizer.__lastScrollPosition = this.getScrollTop();
-        Virtualizer.__STOP = true;
-      }
-    };
+    if (process.env.NODE_ENV === 'development') {
+      window.__INSTANCE = this;
+      window.__TOGGLE = () => {
+        if (Virtualizer.__STOP) {
+          Virtualizer.__STOP = false;
+          const scroller = this.getScrollContainerElement() ?? window;
+          scroller.scrollTo({ top: Virtualizer.__lastScrollPosition });
+          queueRender(this.computeRenderRangeAndEmit);
+        } else {
+          Virtualizer.__lastScrollPosition = this.getScrollTop();
+          Virtualizer.__STOP = true;
+        }
+      };
+    }
     for (const [container, instance] of this.connectQueue.entries()) {
       this.connect(container, instance);
     }
@@ -207,7 +208,10 @@ export class Virtualizer {
         if (blockSize !== this.scrollHeight) {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
-          if (this.config.resizeDebugging) {
+          if (
+            process.env.NODE_ENV === 'development' &&
+            this.config.resizeDebugging
+          ) {
             console.log('Virtualizer: content size change', this.__id, {
               sizeChange: blockSize - lastSize,
               newSize: blockSize,
@@ -224,7 +228,10 @@ export class Virtualizer {
         } else if (entry.target === this.contentContainer) {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
-          if (this.config.resizeDebugging) {
+          if (
+            process.env.NODE_ENV === 'development' &&
+            this.config.resizeDebugging
+          ) {
             console.log('Virtualizer: scroller size change', this.__id, {
               sizeChange: blockSize - lastSize,
               newSize: blockSize,
@@ -343,7 +350,10 @@ export class Virtualizer {
   }
 
   private handleWindowResize = () => {
-    if (Virtualizer.__STOP || window.innerHeight === this.height) {
+    if (
+      (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) ||
+      window.innerHeight === this.height
+    ) {
       return;
     }
     this.heightDirty = true;
@@ -352,7 +362,7 @@ export class Virtualizer {
 
   private handleWindowScroll = () => {
     if (
-      Virtualizer.__STOP ||
+      (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) ||
       this.root == null ||
       !(this.root instanceof Document)
     ) {
@@ -364,7 +374,7 @@ export class Virtualizer {
 
   private handleElementScroll = () => {
     if (
-      Virtualizer.__STOP ||
+      (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) ||
       this.root == null ||
       this.root instanceof Document
     ) {
@@ -375,7 +385,7 @@ export class Virtualizer {
   };
 
   private computeRenderRangeAndEmit = () => {
-    if (Virtualizer.__STOP) {
+    if (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) {
       return;
     }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;

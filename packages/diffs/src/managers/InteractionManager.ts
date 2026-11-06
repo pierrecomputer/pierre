@@ -466,12 +466,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    debugLogIfEnabled(
-      this.options.__debugPointerEvents,
-      'click',
-      'FileDiff.DEBUG.handlePointerClick:',
-      event
-    );
+    if (process.env.NODE_ENV === 'development') {
+      debugLogIfEnabled(
+        this.options.__debugPointerEvents,
+        'click',
+        'FileDiff.DEBUG.handlePointerClick:',
+        event
+      );
+    }
     this.handlePointerEvent({ eventType: 'click', event });
   };
 
@@ -500,12 +502,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    debugLogIfEnabled(
-      this.options.__debugPointerEvents,
-      'move',
-      'FileDiff.DEBUG.handlePointerMove:',
-      event
-    );
+    if (process.env.NODE_ENV === 'development') {
+      debugLogIfEnabled(
+        this.options.__debugPointerEvents,
+        'move',
+        'FileDiff.DEBUG.handlePointerMove:',
+        event
+      );
+    }
     // should we perhaps throttle this a bit because move can be fast as fuk
     // boiiii
     this.handlePointerEvent({ eventType: 'move', event });
@@ -513,17 +517,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   handlePointerLeave = (event: PointerEvent): void => {
     const { __debugPointerEvents } = this.options;
-    debugLogIfEnabled(
-      __debugPointerEvents,
-      'move',
-      'FileDiff.DEBUG.handlePointerLeave: no event'
-    );
-    if (this.hoveredLine == null && this.hoveredToken == null) {
+    if (process.env.NODE_ENV === 'development') {
       debugLogIfEnabled(
         __debugPointerEvents,
         'move',
-        'FileDiff.DEBUG.handlePointerLeave: returned early, no hovered line or token'
+        'FileDiff.DEBUG.handlePointerLeave: no event'
       );
+    }
+    if (this.hoveredLine == null && this.hoveredToken == null) {
+      if (process.env.NODE_ENV === 'development') {
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'move',
+          'FileDiff.DEBUG.handlePointerLeave: returned early, no hovered line or token'
+        );
+      }
       return;
     }
     if (this.hoveredToken != null) {
@@ -544,19 +552,23 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private handlePointerEvent({ eventType, event }: HandlePointerEventProps) {
     const { __debugPointerEvents } = this.options;
     const composedPath = event.composedPath();
-    debugLogIfEnabled(
-      __debugPointerEvents,
-      eventType,
-      'FileDiff.DEBUG.handlePointerEvent:',
-      { eventType, composedPath }
-    );
+    if (process.env.NODE_ENV === 'development') {
+      debugLogIfEnabled(
+        __debugPointerEvents,
+        eventType,
+        'FileDiff.DEBUG.handlePointerEvent:',
+        { eventType, composedPath }
+      );
+    }
     const target = this.resolvePointerTarget(composedPath);
-    debugLogIfEnabled(
-      __debugPointerEvents,
-      eventType,
-      'FileDiff.DEBUG.handlePointerEvent: resolvePointerTarget result:',
-      target
-    );
+    if (process.env.NODE_ENV === 'development') {
+      debugLogIfEnabled(
+        __debugPointerEvents,
+        eventType,
+        'FileDiff.DEBUG.handlePointerEvent: resolvePointerTarget result:',
+        target
+      );
+    }
 
     const {
       onLineClick,
@@ -701,42 +713,44 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       pre.addEventListener('pointerleave', this.handlePointerLeave);
       this.hasPointerListeners = true;
 
-      debugLogIfEnabled(
-        __debugPointerEvents,
-        'click',
-        'FileDiff.DEBUG.attachEventListeners: Attaching click events for:',
-        (() => {
-          const reasons: string[] = [];
-          if (
-            __debugPointerEvents === 'both' ||
-            __debugPointerEvents === 'click'
-          ) {
-            if (onLineClick != null) {
-              reasons.push('onLineClick');
+      if (process.env.NODE_ENV === 'development') {
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'click',
+          'FileDiff.DEBUG.attachEventListeners: Attaching click events for:',
+          (() => {
+            const reasons: string[] = [];
+            if (
+              __debugPointerEvents === 'both' ||
+              __debugPointerEvents === 'click'
+            ) {
+              if (onLineClick != null) {
+                reasons.push('onLineClick');
+              }
+              if (onLineNumberClick != null) {
+                reasons.push('onLineNumberClick');
+              }
+              if (onHunkExpand != null) {
+                reasons.push('expandable hunk separators');
+              }
+              if (onMergeConflictActionClick != null) {
+                reasons.push('merge conflict actions');
+              }
             }
-            if (onLineNumberClick != null) {
-              reasons.push('onLineNumberClick');
-            }
-            if (onHunkExpand != null) {
-              reasons.push('expandable hunk separators');
-            }
-            if (onMergeConflictActionClick != null) {
-              reasons.push('merge conflict actions');
-            }
-          }
-          return reasons;
-        })()
-      );
-      debugLogIfEnabled(
-        __debugPointerEvents,
-        'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching pointer move event'
-      );
-      debugLogIfEnabled(
-        __debugPointerEvents,
-        'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching pointer leave event'
-      );
+            return reasons;
+          })()
+        );
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'move',
+          'FileDiff.DEBUG.attachEventListeners: Attaching pointer move event'
+        );
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'move',
+          'FileDiff.DEBUG.attachEventListeners: Attaching pointer leave event'
+        );
+      }
     } else if (!shouldAttachPointerListeners && this.hasPointerListeners) {
       pre.removeEventListener('click', this.handlePointerClick);
       pre.removeEventListener('pointerdown', this.handlePointerDown);
