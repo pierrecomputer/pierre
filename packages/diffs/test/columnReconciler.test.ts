@@ -320,4 +320,56 @@ describe('ColumnReconciler', () => {
       reconciler.reconcile([row('a1', 'one'), row('a1', 'again')])
     ).toThrow('duplicate row key');
   });
+
+  test('a focused element with a focus key passes focus to its replacement', () => {
+    const { gutter, content, reconciler } = createColumns();
+    // A row whose gutter holds a button, under a key that both versions share.
+    const buttonRow = (key: RowKey, label: string): RowSpec => ({
+      key,
+      gutter: {
+        type: 'element',
+        tagName: 'div',
+        properties: {},
+        children: [
+          {
+            type: 'element',
+            tagName: 'button',
+            properties: { 'data-focus-key': 'toggle' },
+            children: [{ type: 'text', value: label }],
+          },
+        ],
+      },
+      content: cell(label, { 'data-line': key }),
+    });
+    reconciler.reconcile([row('a1', 'one'), buttonRow('sem:2', 'expand')]);
+    const expand = gutter.querySelector('button');
+    expect(expand).not.toBeNull();
+    expand?.focus();
+
+    const next = [row('a1', 'one'), buttonRow('a2', 'collapse')];
+    reconciler.removeStale(next);
+    reconciler.reconcile(next);
+    expect(expand?.isConnected).toBe(false);
+    expect(document.activeElement?.textContent).toBe('collapse');
+    expect(content.childElementCount).toBe(2);
+  });
+
+  test('focus without a focus key, or focus that survives, is left alone', () => {
+    const { gutter, reconciler } = createColumns();
+    reconciler.reconcile([row('a1', 'one'), row('a2', 'two')]);
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    reconciler.reconcile([row('a1', 'one')]);
+    expect(document.activeElement).toBe(outside);
+
+    const cellElement = gutter.firstElementChild;
+    if (!(cellElement instanceof HTMLElement)) {
+      throw new Error('expected a gutter cell');
+    }
+    cellElement.tabIndex = 0;
+    cellElement.focus();
+    reconciler.reconcile([row('a2', 'two')]);
+    expect(document.activeElement).toBe(document.body);
+  });
 });
