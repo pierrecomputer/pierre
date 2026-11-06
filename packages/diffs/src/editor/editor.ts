@@ -1702,7 +1702,10 @@ export class Editor<
       // content element must drop the previous document's measurements here.
       this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
-      if (this.#options.__debug === true) {
+      if (
+        process.env.NODE_ENV === 'development' &&
+        this.#options.__debug === true
+      ) {
         console.log(
           '[diffs/editor] text document initialized from',
           fileOrDiff.name
@@ -1757,6 +1760,7 @@ export class Editor<
       this.#remeasureMetricsOnFontLoad();
       this.#listenContentElement(contentEl, gutterEl);
       if (
+        process.env.NODE_ENV === 'development' &&
         this.#contentElement !== undefined &&
         this.#options.__debug === true
       ) {
@@ -1843,7 +1847,11 @@ export class Editor<
         }
       }
 
-      if (this.#options.__debug === true && renderRange !== undefined) {
+      if (
+        process.env.NODE_ENV === 'development' &&
+        this.#options.__debug === true &&
+        renderRange !== undefined
+      ) {
         const { startingLine, totalLines } = renderRange;
         console.log(
           '[diffs/editor] render file:',
@@ -3134,7 +3142,10 @@ export class Editor<
         top: contentEl.offsetTop - this.#metrics.paddingTop,
         left: contentEl.offsetLeft - this.#getGutterWidth(),
       };
-      if (this.#options.__debug === true) {
+      if (
+        process.env.NODE_ENV === 'development' &&
+        this.#options.__debug === true
+      ) {
         console.log('[diffs/editor] content offset:', this.#contentOffset);
       }
     }
@@ -3896,9 +3907,15 @@ export class Editor<
 
     // Without a tokenizer (the next sync creates one) the component still
     // takes the change and shows the lines as plain text until tokens come.
-    const t = performance.now();
+    const t =
+      process.env.NODE_ENV === 'development' && this.#options.__debug === true
+        ? performance.now()
+        : 0;
     const dirtyLines = tokenizer?.tokenize(change, renderRange);
-    const t2 = performance.now();
+    const t2 =
+      process.env.NODE_ENV === 'development' && this.#options.__debug === true
+        ? performance.now()
+        : 0;
 
     const { rebuiltLines } = applyChange(textDocument, change, {
       tokens: dirtyLines,
@@ -3916,7 +3933,10 @@ export class Editor<
     }
     this.#renderCarets();
 
-    if (this.#options.__debug === true) {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      this.#options.__debug === true
+    ) {
       console.log(
         `[diffs/editor] re-render in: ${round(performance.now() - t2)}ms,`,
         `tokenize in: ${round(t2 - t)}ms (${dirtyLines?.size ?? 0} dirty lines)`

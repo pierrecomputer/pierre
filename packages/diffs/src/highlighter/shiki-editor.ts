@@ -224,7 +224,7 @@ export class ShikiEditorTokenizer {
 
   pause(): void {
     if (this.#paused) return;
-    if (this.#debug) {
+    if (process.env.NODE_ENV === 'development' && this.#debug) {
       console.log('[diffs/editor] background tokenization paused');
     }
     this.#paused = true;
@@ -233,7 +233,7 @@ export class ShikiEditorTokenizer {
 
   resume(): void {
     if (!this.#paused) return;
-    if (this.#debug) {
+    if (process.env.NODE_ENV === 'development' && this.#debug) {
       console.log('[diffs/editor] background tokenization resumed');
     }
     this.#paused = false;

@@ -5,7 +5,6 @@ import {
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
-  DIFFS_DEVELOPMENT_BUILD,
   DIFFS_TAG_NAME,
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
@@ -1065,17 +1064,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return this.options.pointerEventsOnScroll !== true;
   }
 
-  private shouldValidateItemHeights(): boolean {
-    return (
-      DIFFS_DEVELOPMENT_BUILD &&
-      this.options.__devOnlyValidateItemHeights === true
-    );
-  }
-
   private validateRenderedItemHeight(
     item: CodeViewContextItem<LAnnotation, Caret>
   ): void {
-    if (!this.shouldValidateItemHeights() || item.element == null) {
+    if (
+      process.env.NODE_ENV !== 'development' ||
+      this.options.__devOnlyValidateItemHeights !== true ||
+      item.element == null
+    ) {
       return;
     }
 
@@ -1120,7 +1116,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // rendered its header), and that mismatch is what drives the sticky container
   // to position against the wrong bounds.
   private validateStickyContainerHeight(): void {
-    if (!this.shouldValidateItemHeights()) {
+    if (
+      process.env.NODE_ENV !== 'development' ||
+      this.options.__devOnlyValidateItemHeights !== true
+    ) {
       return;
     }
 
@@ -1364,32 +1363,22 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.resizeObserver.observe(this.root);
     this.render(true);
 
-    // FIXME(amadeus): Remove me before release
-    window.__INSTANCE = this;
-    // Test code to bring back in if needed
-    // window.__CODE_VIEW_SCROLL_BEFORE_REBASE = (pixelsBefore = 1_000) => {
-    //   const target = this.clampScrollTop(
-    //     this.scrollPageOffset + this.scrollRebaseConfig.threshold - pixelsBefore
-    //   );
-    //   this.scrollTo({
-    //     type: 'position',
-    //     position: target,
-    //     behavior: 'instant',
-    //   });
-    // };
-    window.__TOGGLE = () => {
-      if (CodeView.__STOP) {
-        CodeView.__STOP = false;
-        this.scrollTo({
-          type: 'position',
-          position: CodeView.__lastScrollPosition,
-          behavior: 'instant',
-        });
-      } else {
-        CodeView.__lastScrollPosition = this.getScrollTop();
-        CodeView.__STOP = true;
-      }
-    };
+    if (process.env.NODE_ENV === 'development') {
+      window.__INSTANCE = this;
+      window.__TOGGLE = () => {
+        if (CodeView.__STOP) {
+          CodeView.__STOP = false;
+          this.scrollTo({
+            type: 'position',
+            position: CodeView.__lastScrollPosition,
+            behavior: 'instant',
+          });
+        } else {
+          CodeView.__lastScrollPosition = this.getScrollTop();
+          CodeView.__STOP = true;
+        }
+      };
+    }
   }
 
   public reset(): void {
@@ -2808,7 +2797,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public render(immediate = false): void {
-    if (CodeView.__STOP) {
+    if (process.env.NODE_ENV === 'development' && CodeView.__STOP) {
       return;
     }
     if (immediate) {
@@ -4434,7 +4423,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private computeRenderRangeAndEmit = (
     timestamp: number = performance.now()
   ): void => {
-    if (CodeView.__STOP || this.container == null) {
+    if (
+      (process.env.NODE_ENV === 'development' && CodeView.__STOP) ||
+      this.container == null
+    ) {
       return;
     }
     if (!this.isReady()) {
@@ -4882,7 +4874,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private handleScroll = (): void => {
-    if (CodeView.__STOP) {
+    if (process.env.NODE_ENV === 'development' && CodeView.__STOP) {
       return;
     }
     this.suspendScrollInteractions();
