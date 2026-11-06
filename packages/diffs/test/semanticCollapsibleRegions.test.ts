@@ -83,13 +83,15 @@ function columnRows(content: ElementContent[] | undefined): string[] {
   return content.flatMap((node) => {
     if (node.type !== 'element') return [];
     const { properties } = node;
-    if (properties['data-line'] != null) return [`${properties['data-line']}`];
+    if (properties['data-line'] != null) {
+      return [String(properties['data-line'])];
+    }
     if ('data-content-buffer' in properties) {
-      return [`gap×${properties['data-buffer-size']}`];
+      return [`gap×${String(properties['data-buffer-size'])}`];
     }
     if ('data-semantic-region' in properties) {
       return [
-        `collapsed ${properties['data-semantic-region-start']}-${properties['data-semantic-region-end']}`,
+        `collapsed ${String(properties['data-semantic-region-start'])}-${String(properties['data-semantic-region-end'])}`,
       ];
     }
     return [];
@@ -151,10 +153,6 @@ describe('collapsed moves', () => {
       '9',
     ]);
 
-    assertDefined(
-      gutterAST(result, 'deletions'),
-      'gutter AST should be defined'
-    );
     const gutter = collectAllElements(gutterAST(result, 'deletions'));
     const cell = gutter.find(
       (node) => node.properties['data-gutter-buffer'] === 'semantic-region'
