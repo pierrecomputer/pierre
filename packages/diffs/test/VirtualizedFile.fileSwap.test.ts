@@ -33,42 +33,41 @@ function placeholderCount(container: HTMLElement): number {
 // renamed file kept rendering the old header indefinitely.
 test('updates the rendered header when a live instance swaps to a renamed file', async () => {
   const dom = installDom();
+  const virtualizer = new Virtualizer();
+  let instance: VirtualizedFile | undefined;
   try {
     const root = createRoot();
     const container = document.createElement('diffs-container');
     root.appendChild(container);
-    const virtualizer = new Virtualizer();
     virtualizer.setup(root);
     await wait(10);
 
-    const instance = new VirtualizedFile(
+    let file = makeNamedFile('before.ts');
+    // A late highlight asks the owner to render the current file again.
+    instance = new VirtualizedFile(
       {},
       virtualizer,
       undefined,
       undefined,
-      () => undefined
+      () => {
+        instance?.render({ file });
+      }
     );
-    instance.render({
-      file: makeNamedFile('before.ts'),
-      fileContainer: container,
-    });
-    await wait(10);
+    instance.render({ file, fileContainer: container });
+    await waitFor(() => headerText(container).includes('before.ts'));
     expect(headerText(container)).toContain('before.ts');
 
     // Host-driven swap with forceRender false — the shape the React wrapper
     // produces when only the `file` prop changes.
-    instance.render({
-      file: makeNamedFile('after.ts'),
-      fileContainer: container,
-    });
+    file = makeNamedFile('after.ts');
+    instance.render({ file, fileContainer: container });
     await waitFor(() => headerText(container).includes('after.ts'));
     expect(headerText(container)).toContain('after.ts');
     expect(headerText(container)).not.toContain('before.ts');
-
-    instance.cleanUp();
+  } finally {
+    instance?.cleanUp();
     virtualizer.cleanUp();
     await wait(10);
-  } finally {
     dom.cleanup();
   }
 });
@@ -80,22 +79,25 @@ test('updates the rendered header when a live instance swaps to a renamed file',
 // computeApproximateSize and getLinePosition indefinitely.
 test('prepareCodeViewItem drops measured heights when the file is replaced', async () => {
   const dom = installDom();
+  const virtualizer = new Virtualizer();
+  let instance: VirtualizedFile | undefined;
   try {
     const root = createRoot();
     const container = document.createElement('diffs-container');
     root.appendChild(container);
-    const virtualizer = new Virtualizer();
     virtualizer.setup(root);
     await wait(10);
 
-    const instance = new VirtualizedFile(
+    const wrappedFile = makeNamedFile('wrapped.ts');
+    instance = new VirtualizedFile(
       { overflow: 'wrap', disableFileHeader: true },
       virtualizer,
       undefined,
       undefined,
-      () => undefined
+      () => {
+        instance?.render({ file: wrappedFile });
+      }
     );
-    const wrappedFile = makeNamedFile('wrapped.ts');
     instance.render({ file: wrappedFile, fileContainer: container });
     // Prime the prepare hook the way CodeView does on every layout pass —
     // the first call latches internal state (currentCollapsed) whose initial
@@ -103,7 +105,10 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
     // value is the estimate-based height for a fresh layout cache.
     const estimatedHeight = instance.updateCodeViewLayout(wrappedFile, 0);
     expect(estimatedHeight).toBeGreaterThan(0);
-    await wait(10);
+    await waitFor(
+      () => container.shadowRoot?.textContent?.includes('line 1') === true
+    );
+    expect(container.shadowRoot?.textContent).toContain('line 1');
 
     // jsdom rows measure 0px, so reconciling seeds every rendered line with a
     // measured height that differs from the estimate.
@@ -119,47 +124,46 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
     );
     expect(instance.getLineHeight(0)).toBe(20);
     expect(height).toBe(estimatedHeight);
-
-    instance.cleanUp();
+  } finally {
+    instance?.cleanUp();
     virtualizer.cleanUp();
     await wait(10);
-  } finally {
     dom.cleanup();
   }
 });
 
 test('updates the header when the swap lands while the file is hidden', async () => {
   const dom = installDom();
+  const virtualizer = new Virtualizer();
+  let instance: VirtualizedFile | undefined;
   try {
     const root = createRoot();
     const container = document.createElement('diffs-container');
     root.appendChild(container);
-    const virtualizer = new Virtualizer();
     virtualizer.setup(root);
     await wait(10);
 
-    const instance = new VirtualizedFile(
+    let file = makeNamedFile('before.ts');
+    instance = new VirtualizedFile(
       {},
       virtualizer,
       undefined,
       undefined,
-      () => undefined
+      () => {
+        instance?.render({ file });
+      }
     );
-    instance.render({
-      file: makeNamedFile('before.ts'),
-      fileContainer: container,
-    });
-    await wait(10);
+    instance.render({ file, fileContainer: container });
+    await waitFor(() => headerText(container).includes('before.ts'));
     expect(headerText(container)).toContain('before.ts');
 
     // Hide into a placeholder, then swap the file while hidden. The changed
     // file must not be absorbed by the placeholder path.
     instance.setVisibility(false);
     await waitFor(() => placeholderCount(container) === 1);
-    instance.render({
-      file: makeNamedFile('after.ts'),
-      fileContainer: container,
-    });
+    expect(placeholderCount(container)).toBe(1);
+    file = makeNamedFile('after.ts');
+    instance.render({ file, fileContainer: container });
 
     // Re-show through the virtualizer's sequence: visibility flip, then the
     // visible-instance render pass without forceRender.
@@ -173,11 +177,10 @@ test('updates the header when the swap lands while the file is hidden', async ()
     expect(placeholderCount(container)).toBe(0);
     expect(headerText(container)).toContain('after.ts');
     expect(headerText(container)).not.toContain('before.ts');
-
-    instance.cleanUp();
+  } finally {
+    instance?.cleanUp();
     virtualizer.cleanUp();
     await wait(10);
-  } finally {
     dom.cleanup();
   }
 });
