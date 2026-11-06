@@ -103,19 +103,26 @@ export function createGutterItem(
   lineIndex: string,
   properties: Properties = {},
   icon?: SVGSpriteNames,
-  iconProperties?: Properties
+  iconButton?: Properties
 ): HASTElement {
   const children: ElementContent[] = [];
   if (icon != null) {
+    const iconElement = createIconElement({
+      name: icon,
+      properties: { 'data-semantic-icon': '', 'aria-hidden': 'true' },
+    });
     children.push(
-      createIconElement({
-        name: icon,
-        properties: {
-          'data-semantic-icon': '',
-          'aria-hidden': 'true',
-          ...iconProperties,
-        },
-      })
+      iconButton != null
+        ? createHastElement({
+            tagName: 'button',
+            properties: {
+              type: 'button',
+              'data-semantic-icon-button': '',
+              ...iconButton,
+            },
+            children: [iconElement],
+          })
+        : iconElement
     );
   }
   if (lineNumber != null) {

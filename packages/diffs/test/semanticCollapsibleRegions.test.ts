@@ -210,7 +210,8 @@ describe('collapsed moves', () => {
     expect(toggles.map(iconHref)).toEqual(['#diffs-icon-symbol-moved-duo']);
     expect(toggles.map((node) => node.properties)).toEqual([
       expect.objectContaining({
-        'data-semantic-icon': '',
+        type: 'button',
+        'data-semantic-icon-button': '',
         'data-semantic-region-toggle': 3,
         'aria-expanded': 'true',
       }),
@@ -499,7 +500,7 @@ describe('collapsed moves', () => {
       expect(oldLineCount()).toBe(9);
 
       const icon = root().querySelector(
-        '[data-semantic-icon][data-semantic-region-toggle]'
+        '[data-semantic-icon-button][data-semantic-region-toggle]'
       );
       assertDefined(icon, 'collapse icon should be rendered');
       press(icon);
