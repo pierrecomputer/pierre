@@ -399,6 +399,63 @@ describe('collapsed moves', () => {
     }
   });
 
+  test('focus stays on the toggle when a button expands or collapses the move', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const instance = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+    });
+    const root = () => {
+      const { shadowRoot } = container;
+      assertDefined(shadowRoot, 'FileDiff should render into a shadow root');
+      return shadowRoot;
+    };
+    // The focused button, which a keyboard press activates with a click.
+    const pressFocused = () => {
+      const { activeElement } = root();
+      if (!(activeElement instanceof HTMLButtonElement)) {
+        throw new Error('expected a focused button');
+      }
+      activeElement.click();
+    };
+    try {
+      instance.render({
+        fileDiff: movedDiff(),
+        fileContainer: container,
+        forceRender: true,
+      });
+      await waitFor(() => renderedOldLines(container).length > 0);
+
+      const expand = root().querySelector<HTMLButtonElement>(
+        'button[data-semantic-region-button]'
+      );
+      assertDefined(expand, 'expand button should be rendered');
+      expand.focus();
+      pressFocused();
+      await waitFor(() => renderedOldLines(container).length === 9);
+      expect(
+        root().activeElement?.matches(
+          'button[data-semantic-icon-button][data-semantic-region-toggle="3"]'
+        )
+      ).toBe(true);
+
+      pressFocused();
+      await waitFor(() => renderedOldLines(container).length === 6);
+      expect(
+        root().activeElement?.matches(
+          'button[data-semantic-region-button][data-semantic-region-toggle="3"]'
+        )
+      ).toBe(true);
+    } finally {
+      await wait(10);
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('the first toggle after hydrating server markup expands the move', async () => {
     const options = {
       disableFileHeader: true,

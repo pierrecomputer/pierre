@@ -39,6 +39,9 @@ export interface ReconcileResult {
  * are the same objects as last time is not touched, so the layout's
  * memoization decides the cost. A change that moved no row skips the walk
  * and patches the rows it touched by key.
+ *
+ * A focused element with a `data-focus-key` keeps focus across a write that
+ * replaces it: the element with the same key in the new rows takes focus.
  */
 export class ColumnReconciler {
   readonly #gutter: HTMLElement;
@@ -49,6 +52,9 @@ export class ColumnReconciler {
   // them on the first incremental reconcile.
   #unindexed: { specs: readonly RowSpec[]; trusted: boolean } | undefined;
   #hasRows = false;
+  // The `data-focus-key` of the element that had focus in this column when a
+  // write began, until the write ends.
+  #focusKey: string | undefined;
 
   constructor(gutter: HTMLElement, content: HTMLElement) {
     this.#gutter = gutter;
@@ -57,11 +63,13 @@ export class ColumnReconciler {
 
   /** Writes every row with one string per column. */
   replaceAll(specs: readonly RowSpec[]): void {
+    this.#rememberFocus();
     this.#gutter.innerHTML = hastToHtml(specs.map((spec) => spec.gutter));
     this.#content.innerHTML = hastToHtml(specs.map((spec) => spec.content));
     this.#rows.clear();
     this.#unindexed = { specs, trusted: true };
     this.#hasRows = true;
+    this.#restoreFocus();
   }
 
   /**
@@ -99,6 +107,7 @@ export class ColumnReconciler {
    */
   removeStale(specs: readonly RowSpec[]): void {
     if (!this.#hasRows) return;
+    this.#rememberFocus();
     this.#index();
     const keep = new Set<RowKey>();
     for (const spec of specs) keep.add(spec.key);
@@ -129,8 +138,56 @@ export class ColumnReconciler {
         gutterRewritten: true,
       };
     }
+    this.#rememberFocus();
     this.#index();
-    return patched == null ? this.#walk(specs) : this.#patch(patched);
+    const result = patched == null ? this.#walk(specs) : this.#patch(patched);
+    this.#restoreFocus();
+    return result;
+  }
+
+  // Notes the focus key of the focused element, when it is in this column and
+  // has one. A write that began in `removeStale` keeps the key noted there.
+  #rememberFocus(): void {
+    if (this.#focusKey != null) return;
+    const active = this.#activeElement();
+    if (
+      active != null &&
+      (this.#gutter.contains(active) || this.#content.contains(active))
+    ) {
+      this.#focusKey = active.getAttribute('data-focus-key') ?? undefined;
+    }
+  }
+
+  // After a write that removed the focused element, focuses the element with
+  // its key in the new rows. Removing a focused element drops focus to the
+  // page, so focus anywhere else means it survived the write or moved on, and
+  // is left alone.
+  #restoreFocus(): void {
+    const key = this.#focusKey;
+    this.#focusKey = undefined;
+    const { activeElement, body } = this.#content.ownerDocument;
+    if (key == null || (activeElement != null && activeElement !== body)) {
+      return;
+    }
+    for (const column of [this.#gutter, this.#content]) {
+      for (const element of column.querySelectorAll('[data-focus-key]')) {
+        if (
+          element instanceof HTMLElement &&
+          element.getAttribute('data-focus-key') === key
+        ) {
+          element.focus({ preventScroll: true });
+          return;
+        }
+      }
+    }
+  }
+
+  // The focused element in the columns' document or shadow root.
+  #activeElement(): Element | undefined {
+    const root = this.#content.getRootNode();
+    return root instanceof ShadowRoot || root instanceof Document
+      ? (root.activeElement ?? undefined)
+      : undefined;
   }
 
   // Rewrites the cells of the rows with these keys, for the rows on screen.
