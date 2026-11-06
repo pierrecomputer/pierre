@@ -308,7 +308,7 @@ export function resolveSearchShortcut(
   }
   const normalizedKey =
     event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  if (normalizedKey === 'f' || event.code === 'KeyF') {
+  if (!event.shiftKey && (normalizedKey === 'f' || event.code === 'KeyF')) {
     return event.altKey ? 'replace' : 'find';
   }
   return resolveFindAgainShortcut(event, isMac);
