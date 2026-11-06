@@ -74,6 +74,7 @@ export function createSemanticRegionGutter(
               type: 'button',
               'data-semantic-region-button': '',
               'data-semantic-region-toggle': region.old.start,
+              'data-focus-key': getSemanticRegionFocusKey(region),
               'aria-expanded': 'false',
               'aria-label': 'Expand moved lines',
             },
@@ -118,7 +119,16 @@ export function getSemanticRegionCollapseButtonProperties(
 ): Properties {
   return {
     'data-semantic-region-toggle': region.old.start,
+    'data-focus-key': getSemanticRegionFocusKey(region),
     'aria-expanded': 'true',
     'aria-label': 'Collapse moved lines',
   };
+}
+
+// A region's expand and collapse buttons share a focus key, so focus moves
+// from one to the other when the region toggles.
+function getSemanticRegionFocusKey(
+  region: SemanticDiffCollapsibleRegion
+): string {
+  return `semantic-region:${region.old.start}`;
 }
