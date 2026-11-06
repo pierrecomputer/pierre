@@ -7,7 +7,12 @@ import { EditStateManager } from '../src/editor/EditStateManager';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileDiffMetadata, ParseDiffOptions } from '../src/types';
-import { installDom, wait, waitFor } from './domHarness';
+import {
+  getSearchHighlightRanges,
+  installDom,
+  wait,
+  waitFor,
+} from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -297,16 +302,18 @@ describe('diff editor: collapsed regions during edit', () => {
         })
       );
       await wait(0);
-      const input = container.shadowRoot?.querySelector<HTMLInputElement>(
-        '[data-search-panel] input[data-search]'
+      const panel = container.shadowRoot?.querySelector<HTMLElement>(
+        '[data-search-panel]'
       );
+      const input =
+        panel?.shadowRoot?.querySelector<HTMLInputElement>(
+          'input[data-search]'
+        );
       expect(input).not.toBeNull();
       input!.value = 'line';
       input!.dispatchEvent(new window.Event('input', { bubbles: true }));
 
-      const visibleMatchCount =
-        container.shadowRoot?.querySelectorAll('[data-match-range]').length ??
-        0;
+      const visibleMatchCount = getSearchHighlightRanges(container).length;
       expect(visibleMatchCount).toBeGreaterThan(0);
       expect(visibleMatchCount).toBeLessThan(60);
 
