@@ -313,7 +313,8 @@ export class VirtualizedFile<
     const measureAllRows =
       overflow !== 'scroll' ||
       this.lineAnnotations.length > 0 ||
-      this.isResizeDebuggingEnabled();
+      (process.env.NODE_ENV === 'development' &&
+        this.getSimpleVirtualizer()?.config.resizeDebugging === true);
 
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
     // rows to measure. After the last annotation is removed, keep measuring
@@ -401,7 +402,11 @@ export class VirtualizedFile<
       }
     }
 
-    if (hasHeightChange || this.isResizeDebuggingEnabled()) {
+    if (
+      hasHeightChange ||
+      (process.env.NODE_ENV === 'development' &&
+        this.getSimpleVirtualizer()?.config.resizeDebugging === true)
+    ) {
       this.computeApproximateSize(true);
     }
     return hasHeightChange;
@@ -758,8 +763,12 @@ export class VirtualizedFile<
     force = false,
     file: FileContents | undefined = this.getLayoutFile()
   ): void {
-    const shouldValidateSize = this.isResizeDebuggingEnabled();
-    if (!force && !this.layoutDirty && !shouldValidateSize) {
+    if (
+      !force &&
+      !this.layoutDirty &&
+      (process.env.NODE_ENV !== 'development' ||
+        this.getSimpleVirtualizer()?.config.resizeDebugging !== true)
+    ) {
       return;
     }
 
@@ -807,7 +816,12 @@ export class VirtualizedFile<
       this.height += paddingBottom;
     }
 
-    if (this.fileContainer != null && shouldValidateSize && !isFirstCompute) {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      this.getSimpleVirtualizer()?.config.resizeDebugging === true &&
+      this.fileContainer != null &&
+      !isFirstCompute
+    ) {
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(
@@ -1179,10 +1193,6 @@ export class VirtualizedFile<
 
   private getAdvancedVirtualizer(): CodeView<LAnnotation, Caret> | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
-  }
-
-  private isResizeDebuggingEnabled(): boolean {
-    return this.getSimpleVirtualizer()?.config.resizeDebugging ?? false;
   }
 
   private computeRenderRangeFromWindow(

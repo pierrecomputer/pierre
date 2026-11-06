@@ -10,16 +10,6 @@ import type {
 
 export const DIFFS_TAG_NAME = 'diffs-container' as const;
 
-// Keep this as a NODE_ENV read so app builds can hard-disable development-only
-// checks unless they are explicitly built for development.
-export const DIFFS_DEVELOPMENT_BUILD: boolean = (() => {
-  try {
-    return process.env.NODE_ENV === 'development';
-  } catch {
-    return false;
-  }
-})();
-
 // Misc patch/content parsing regexes
 export const COMMIT_METADATA_SPLIT: RegExp = /(?=^From [a-f0-9]+ .+$)/m;
 export const GIT_DIFF_FILE_BREAK_REGEX: RegExp = /(?=^diff --git)/gm;

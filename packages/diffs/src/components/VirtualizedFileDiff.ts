@@ -484,7 +484,8 @@ export class VirtualizedFileDiff<
     const measureAllRows =
       overflow !== 'scroll' ||
       this.lineAnnotations.length > 0 ||
-      this.isResizeDebuggingEnabled();
+      (process.env.NODE_ENV === 'development' &&
+        this.getSimpleVirtualizer()?.config.resizeDebugging === true);
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
     // rows to measure. After the last annotation is removed, keep measuring
     // rendered rows until their previously cached heights have been corrected.
@@ -584,7 +585,11 @@ export class VirtualizedFileDiff<
       }
     }
 
-    if (hasHeightChange || this.isResizeDebuggingEnabled()) {
+    if (
+      hasHeightChange ||
+      (process.env.NODE_ENV === 'development' &&
+        this.getSimpleVirtualizer()?.config.resizeDebugging === true)
+    ) {
       this.computeApproximateSize(true);
     }
     return hasHeightChange;
@@ -1372,8 +1377,12 @@ export class VirtualizedFileDiff<
     force = false,
     fileDiff: FileDiffMetadata | undefined = this.getLayoutDiff()
   ): void {
-    const shouldValidateSize = this.isResizeDebuggingEnabled();
-    if (!force && !this.layoutDirty && !shouldValidateSize) {
+    if (
+      !force &&
+      !this.layoutDirty &&
+      (process.env.NODE_ENV !== 'development' ||
+        this.getSimpleVirtualizer()?.config.resizeDebugging !== true)
+    ) {
       return;
     }
 
@@ -1404,7 +1413,11 @@ export class VirtualizedFileDiff<
       this.cache.measuredHeightDeltaTotal +
       this.ghostTextRowsHeight();
 
-    if (shouldValidateSize && !isFirstCompute) {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      this.getSimpleVirtualizer()?.config.resizeDebugging === true &&
+      !isFirstCompute
+    ) {
       this.validateComputedHeight(fileDiff);
     }
     this.layoutDirty = false;
@@ -1482,7 +1495,11 @@ export class VirtualizedFileDiff<
   private validateComputedHeight(
     fileDiff: FileDiffMetadata | undefined = this.getLayoutDiff()
   ): void {
-    if (this.fileContainer == null || fileDiff == null) {
+    if (
+      process.env.NODE_ENV !== 'development' ||
+      this.fileContainer == null ||
+      fileDiff == null
+    ) {
       return;
     }
 
@@ -1724,10 +1741,6 @@ export class VirtualizedFileDiff<
 
   private getAdvancedVirtualizer(): CodeView<LAnnotation, Caret> | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
-  }
-
-  private isResizeDebuggingEnabled(): boolean {
-    return this.getSimpleVirtualizer()?.config.resizeDebugging ?? false;
   }
 
   private getDiffStyle(): 'split' | 'unified' {
