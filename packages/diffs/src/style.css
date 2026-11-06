@@ -1951,10 +1951,24 @@
     user-select: none;
   }
 
-  /* An expanded region's first-line icon collapses it again. */
-  [data-semantic-icon][data-semantic-region-toggle] {
-    pointer-events: auto;
+  /* An expanded region's first-line icon sits in a button that collapses the
+   * region again. The button takes the icon's place. */
+  [data-semantic-icon-button] {
+    position: absolute;
+    top: calc((1lh - var(--diffs-semantic-icon-size)) / 2);
+    left: var(--diffs-semantic-icon-inset);
+    z-index: 1;
+    display: flex;
+    width: var(--diffs-semantic-icon-size);
+    height: var(--diffs-semantic-icon-size);
+    padding: 0;
+    border: none;
+    background: none;
     cursor: pointer;
+
+    [data-semantic-icon] {
+      position: static;
+    }
   }
 
   [data-semantic-region-icon] {

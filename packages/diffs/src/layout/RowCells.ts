@@ -17,7 +17,7 @@ interface GutterCell {
   lineIndexText: string;
   properties: Properties;
   icon: SVGSpriteNames | undefined;
-  iconProperties: Properties;
+  iconButton: Properties | undefined;
   cell: HASTElement;
 }
 
@@ -94,7 +94,7 @@ export class RowCells {
     lineIndexText: string,
     properties: Properties = {},
     icon?: SVGSpriteNames,
-    iconProperties: Properties = {}
+    iconButton?: Properties
   ): HASTElement {
     const cached = this.#gutters.get(key);
     if (
@@ -104,7 +104,7 @@ export class RowCells {
       cached.lineIndexText === lineIndexText &&
       cached.icon === icon &&
       arePropertiesEqual(cached.properties, properties) &&
-      arePropertiesEqual(cached.iconProperties, iconProperties)
+      areOptionalPropertiesEqual(cached.iconButton, iconButton)
     ) {
       return cached.cell;
     }
@@ -114,7 +114,7 @@ export class RowCells {
       lineIndexText,
       properties,
       icon,
-      iconProperties
+      iconButton
     );
     // Same line number and icon means only attributes changed, so keep the
     // children and let the reconciler patch attributes alone.
@@ -122,7 +122,7 @@ export class RowCells {
       cached != null &&
       cached.lineNumber === lineNumber &&
       cached.icon === icon &&
-      arePropertiesEqual(cached.iconProperties, iconProperties)
+      areOptionalPropertiesEqual(cached.iconButton, iconButton)
     ) {
       cell.children = cached.cell.children;
     }
@@ -132,7 +132,7 @@ export class RowCells {
       lineIndexText,
       properties,
       icon,
-      iconProperties,
+      iconButton,
       cell,
     });
     return cell;
@@ -189,6 +189,13 @@ export function readOnly(cell: HASTElement): HASTElement {
     ...cell,
     properties: { ...cell.properties, contenteditable: 'false' },
   };
+}
+
+function areOptionalPropertiesEqual(
+  a: Properties | undefined,
+  b: Properties | undefined
+): boolean {
+  return a == null || b == null ? a === b : arePropertiesEqual(a, b);
 }
 
 function arePropertiesEqual(a: Properties, b: Properties): boolean {
