@@ -131,7 +131,10 @@ function createMetadataElement(
   fileDiff: FileDiffMetadata | undefined
 ): HASTElement {
   const children: ElementContent[] = [];
-  if (fileDiff != null) {
+  if (
+    fileDiff != null &&
+    (fileDiff.type !== 'new' || fileDiff.additionCharacterCount > 0)
+  ) {
     let additions = 0;
     let deletions = 0;
     for (const hunk of fileDiff.hunks) {
