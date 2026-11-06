@@ -210,16 +210,20 @@ export function SearchableCodeView({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcut = resolveSearchShortcut(event);
-      if (shortcut == null) return;
-      event.preventDefault();
+      const view = viewer.current;
+      if (shortcut == null || view == null) return;
       if (shortcut === 'next' || shortcut === 'previous') {
-        viewer.current?.navigateSearch(shortcut);
+        // Leave the browser's find-again alone unless a panel is open.
+        if (!view.isSearchOpen()) return;
+        event.preventDefault();
+        view.navigateSearch(shortcut);
       } else {
+        event.preventDefault();
         // Like the built-in binding: both open shortcuts request the replace
         // row, which only shows while the scope is an item being edited. Pass
         // \`{ mode: shortcut }\` instead to open find-only on cmd/ctrl+f the
         // way the standalone editor does.
-        viewer.current?.openSearch();
+        view.openSearch();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -289,10 +293,13 @@ viewer.setItems(items);
 window.addEventListener('keydown', (event) => {
   const shortcut = resolveSearchShortcut(event);
   if (shortcut == null) return;
-  event.preventDefault();
   if (shortcut === 'next' || shortcut === 'previous') {
+    // Leave the browser's find-again alone unless a panel is open.
+    if (!viewer.isSearchOpen()) return;
+    event.preventDefault();
     viewer.navigateSearch(shortcut);
   } else {
+    event.preventDefault();
     // Like the built-in binding: both open shortcuts request the replace row,
     // which only shows while the scope is an item being edited. Pass
     // \`{ mode: shortcut }\` instead to open find-only on cmd/ctrl+f the way
