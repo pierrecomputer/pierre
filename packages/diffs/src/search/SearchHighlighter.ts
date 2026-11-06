@@ -13,6 +13,10 @@ interface SearchHighlights {
 
 const highlightsByDocument = new WeakMap<Document, SearchHighlights>();
 
+function isAlreadyRegisteredError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'InvalidModificationError';
+}
+
 // Paint matches over existing text nodes. Each surface owns its ranges, while
 // the document shares two registry entries styled inside every code shadow root.
 export class SearchHighlighter {
@@ -39,12 +43,21 @@ export class SearchHighlighter {
         '--diffs-search-current-color',
         '--diffs-search-text-color',
       ]) {
-        view.CSS.registerProperty({
-          name,
-          syntax: '<color>',
-          inherits: true,
-          initialValue: 'transparent',
-        });
+        try {
+          view.CSS.registerProperty({
+            name,
+            syntax: '<color>',
+            inherits: true,
+            initialValue: 'transparent',
+          });
+        } catch (error) {
+          // Another copy of this module, or the page, already registered the
+          // property for this document; that registration serves the same
+          // purpose.
+          if (!isAlreadyRegisteredError(error)) {
+            throw error;
+          }
+        }
       }
       highlights = {
         match: new view.Highlight(),

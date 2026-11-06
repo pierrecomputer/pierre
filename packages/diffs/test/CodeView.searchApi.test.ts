@@ -555,6 +555,28 @@ describe('CodeView search API', () => {
 
   // The panel's own stylesheet is an inlined CSS import that bun's test loader
   // does not expose as text, so its layering is covered by the e2e suites.
+  test('opens when the highlight properties are already registered', () => {
+    const dom = installDom();
+    const { registerProperty } = window.CSS;
+    // A second copy of the library, or a hot reload, finds the document's
+    // properties registered already and the browser refuses to re-register.
+    window.CSS.registerProperty = () => {
+      throw new DOMException('already registered', 'InvalidModificationError');
+    };
+    const viewer = new CodeView();
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      viewer.openSearch({ query: 'target' });
+      expect(viewer.isSearchOpen()).toBe(true);
+      expect(root.querySelector('[data-search-panel]')).not.toBeNull();
+    } finally {
+      window.CSS.registerProperty = registerProperty;
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('applies the host unsafeCSS inside the panel after its own styles', () => {
     const dom = installDom();
     const unsafeCSS = 'input[data-search] { color: rgb(1, 2, 3); }';
