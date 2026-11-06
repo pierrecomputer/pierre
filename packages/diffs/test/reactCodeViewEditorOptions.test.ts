@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 import {
   act,
   type ComponentType,
@@ -90,6 +98,8 @@ interface ReceivedEditorOptions {
   historyMaxEntries: number | undefined;
   onAttach: unknown;
   onChange: unknown;
+  onFocus: (() => void) | undefined;
+  onBlur: (() => void) | undefined;
   roundedSelection: boolean | undefined;
 }
 
@@ -179,6 +189,8 @@ function createEditorHarness(attachmentError?: Error) {
       historyMaxEntries: options.historyMaxEntries,
       onAttach: options.onAttach,
       onChange: options.onChange,
+      onFocus: options.onFocus,
+      onBlur: options.onBlur,
       roundedSelection: options.roundedSelection,
     });
     receivedEditStateKeys.push(editStateKey);
@@ -321,6 +333,104 @@ function withProvider(
   return createElement(EditProviderComponent, { createEditor }, child);
 }
 
+describe('React CodeView options', () => {
+  test('forwards searchOptions changes to the instance without re-applying equal values', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
+    const render = (disableShortcuts: boolean, caseSensitive = true) =>
+      createCodeViewElement({
+        ref: handle,
+        items: [makeFileItem('a')],
+        options: {
+          ...CODE_VIEW_OPTIONS,
+          searchOptions: { disableShortcuts, defaults: { caseSensitive } },
+        },
+      });
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(root, render(true));
+      const instance = handle.current?.getInstance();
+      expect(instance).toBeDefined();
+      const setOptions = spyOn(instance!, 'setOptions');
+
+      await renderRoot(root, render(true));
+      expect(setOptions).not.toHaveBeenCalled();
+
+      await renderRoot(root, render(false));
+      expect(setOptions).toHaveBeenCalledTimes(1);
+      expect(setOptions.mock.calls[0]?.[0]?.searchOptions).toEqual({
+        disableShortcuts: false,
+        defaults: { caseSensitive: true },
+      });
+
+      // Nested defaults compare by value too.
+      await renderRoot(root, render(false));
+      expect(setOptions).toHaveBeenCalledTimes(1);
+      await renderRoot(root, render(false, false));
+      expect(setOptions).toHaveBeenCalledTimes(2);
+      expect(setOptions.mock.calls[1]?.[0]?.searchOptions).toEqual({
+        disableShortcuts: false,
+        defaults: { caseSensitive: false },
+      });
+      setOptions.mockRestore();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+});
+
+describe('React CodeView search handle', () => {
+  test('opens, navigates, and closes search through the ref', async () => {
+    const { cleanup } = installCodeViewDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const handle = createRef<CodeViewHandle<undefined, undefined>>();
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderRoot(
+        root,
+        createCodeViewElement({ ref: handle, items: [makeFileItem('a')] })
+      );
+      expect(handle.current?.isSearchOpen()).toBe(false);
+
+      await act(async () => {
+        handle.current?.openSearch({ query: 'const' });
+        await wait(0);
+      });
+      expect(handle.current?.isSearchOpen()).toBe(true);
+      const panel = container.querySelector<HTMLElement>('[data-search-panel]');
+      expect(panel).not.toBeNull();
+      const input =
+        panel?.shadowRoot?.querySelector<HTMLInputElement>(
+          'input[data-search]'
+        );
+      expect(input?.value).toBe('const');
+
+      await act(async () => {
+        handle.current?.navigateSearch('next');
+        handle.current?.closeSearch();
+        await wait(0);
+      });
+      expect(handle.current?.isSearchOpen()).toBe(false);
+      expect(container.querySelector('[data-search-panel]')).toBeNull();
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+});
+
 describe('React CodeView editor factory', () => {
   test('renders read-only without a provider and rejects a factory escape hatch', async () => {
     const { cleanup } = installCodeViewDom();
@@ -387,6 +497,8 @@ describe('React CodeView editor factory', () => {
     } = createEditorHarness();
     const attemptedOnChange = mock(() => {});
     const onAttach = mock(() => {});
+    const onFocus = mock(() => {});
+    const onBlur = mock(() => {});
     const onItemEditChange = mock(
       (
         _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>,
@@ -398,6 +510,8 @@ describe('React CodeView editor factory', () => {
       // item router must overwrite it before invoking the provider factory.
       historyMaxEntries: 17,
       onAttach,
+      onFocus,
+      onBlur,
       onChange: attemptedOnChange,
       roundedSelection: false,
     };
@@ -429,7 +543,11 @@ describe('React CodeView editor factory', () => {
         expect(options.roundedSelection).toBe(false);
         expect(options.onChange).toBeDefined();
         expect(options.onChange).not.toBe(attemptedOnChange);
+        options.onFocus?.();
+        options.onBlur?.();
       }
+      expect(onFocus).toHaveBeenCalledTimes(2);
+      expect(onBlur).toHaveBeenCalledTimes(2);
 
       await setSessionText(editors[0], 'edited a');
       await setSessionText(editors[1], 'edited b');

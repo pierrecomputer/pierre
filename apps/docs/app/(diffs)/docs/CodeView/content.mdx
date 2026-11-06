@@ -166,6 +166,49 @@ autofocusing edit session together, the last callback to run owns focus. See
 [Control the editor](#edit-mode-control-the-editor) for explicit line targets,
 viewport fallback, offsets, and selection-state behavior.
 
+### Search
+
+`CodeView` owns one find/replace panel for everything it renders, in place of
+the per-editor panel. Cmd/Ctrl+F opens it, Escape closes it, and Cmd/Ctrl+G and
+Shift+Cmd/Ctrl+G step through matches. Search covers every expanded item unless
+an editor has focus; then it covers that editor alone and the replace row
+appears. Collapsed items are skipped, and a diff's collapsed unchanged context
+is searched only while that item is the scope or the context is expanded.
+Opening while the panel itself has focus keeps the current scope and query. A
+fresh panel scoped to an editor opens on that editor's selection when it stays
+on one line, or the word under its caret.
+
+Configure the panel through `searchOptions`:
+
+- `disableShortcuts` stops the viewer from binding the open shortcut, for apps
+  that bind it on `window` instead. Escape and find-again stay bound while a
+  panel is open.
+- `scrollBehavior` picks `'instant'`, `'smooth'`, or `'smooth-auto'` for the
+  scroll that brings a match into view. A reduced-motion preference always
+  scrolls instantly.
+- `defaults` presets the case, whole-word, and regex toggles for a fresh panel.
+  An open panel keeps whatever the user toggled.
+
+`onSearchStateChange` reports the query, options, shown mode, whether replace is
+available, the match count, and the current match index after every change, and
+`undefined` when the panel closes.
+
+Drive the panel with `openSearch`, `closeSearch`, `isSearchOpen`, and
+`navigateSearch`. In React they live on the ref. `openSearch` takes a requested
+`mode`, a `scope` of `'focused'` (the default), `'all'`, or `{ itemId }`, and a
+`query`. An item id scopes to that item while it is an expanded edit-mode item
+and otherwise searches every item. `resolveSearchShortcut` from
+`@pierre/diffs/edit` identifies the find, replace, and find-again shortcuts so a
+window-level binding handles platforms the same way the viewer does:
+
+<CodeViewExampleTabs
+  reactExample={codeViewSearchReactExample}
+  vanillaExample={codeViewSearchVanillaExample}
+/>
+
+Match colors and the panel's distance from the top and right edges are CSS
+variables; see [Styling](#styling).
+
 ### Padding &amp; Gap
 
 For controlling layout inside and between items in `CodeView`, you can use the
@@ -275,7 +318,8 @@ remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
 - In React, use `selectedLines` and `onSelectedLinesChange` when selection needs
   to live in component state.
 - In React, use the ref for `scrollTo`, `setSelectedLines`, `getSelectedLines`,
-  `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, `removeItem`, and
+  `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, `removeItem`,
+  `openSearch`, `closeSearch`, `isSearchOpen`, `navigateSearch`, and
   `getInstance`.
 - `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderFilenameSuffix`,
   `renderHeaderMetadata`, and `renderGutterUtility` receive the whole

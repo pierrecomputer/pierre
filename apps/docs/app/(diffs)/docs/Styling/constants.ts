@@ -49,6 +49,19 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined, undefined> = {
   /* Edit cursor background color */
   --diffs-bg-caret-override: rgba(128, 128, 128, 0.55);
 
+  /* Find/replace match colors: the text color painted over every match, the
+   * background of a match, and the background of the current match. These
+   * are fixed defaults rather than theme colors, so this is how to change
+   * them. */
+  --diffs-fg-search-match-override: #000;
+  --diffs-bg-search-match-override: #eab308;
+  --diffs-bg-search-match-current-override: #3b82f6;
+
+  /* Where the find/replace panel sits inside the scroll container, measured
+   * from the top and right edges. */
+  --diffs-search-panel-inset-top: 16px;
+  --diffs-search-panel-inset-right: 16px;
+
   /* Some basic variables for tweaking the layouts of some of the built in
    * components */
   --diffs-gap-inline: 8px;
