@@ -42,7 +42,6 @@ const ZED_COLOR_ALIASES: readonly (readonly [
   ['editor.selectionBackground', 'element.selected'],
   ['editor.findMatchBackground', 'search.match_background'],
   ['editor.findMatchHighlightBackground', 'search.match_background'],
-  ['terminal.ansiYellow', 'terminal.ansi.yellow'],
   [
     'editorBracketMatch.background',
     'editor.document_highlight.bracket_background',

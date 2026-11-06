@@ -15,44 +15,10 @@
     <button data-outside>Outside CodeView</button>
     <div data-code-view-root tabindex="0"></div>
     <script type="module">
-      import {
-        CodeView,
-        parseDiffFromFile,
-        registerCustomTheme,
-      } from '/dist/index.js';
+      import { CodeView, parseDiffFromFile } from '/dist/index.js';
       import { Editor } from '/dist/edit/index.js';
 
       const params = new URLSearchParams(location.search);
-      const searchTheme = params.get('search-theme');
-      if (searchTheme != null) {
-        for (const type of ['light', 'dark']) {
-          const name = `search-${type}`;
-          registerCustomTheme(name, () =>
-            Promise.resolve({
-              name,
-              type,
-              fg: type === 'light' ? '#202020' : '#eeeeee',
-              bg: type === 'light' ? '#ffffff' : '#101010',
-              colors: {
-                'editor.selectionBackground': '#009fff66',
-                ...(searchTheme !== 'missing'
-                  ? {
-                      'terminal.ansiYellow':
-                        type === 'light' ? '#b68d05' : '#f2d04b',
-                    }
-                  : {}),
-                ...(searchTheme === 'explicit'
-                  ? {
-                      'editor.findMatchBackground': '#65432166',
-                      'editor.findMatchHighlightBackground': '#12345644',
-                    }
-                  : {}),
-              },
-              tokenColors: [],
-            })
-          );
-        }
-      }
       const diffStyle =
         params.get('diffStyle') === 'unified' ? 'unified' : 'split';
       const view = new CodeView({
@@ -62,13 +28,6 @@
           : {}),
         ...(params.has('retokenize')
           ? { preferredHighlighter: 'highlights', themeType: 'dark' }
-          : {}),
-        ...(searchTheme != null
-          ? {
-              theme: { light: 'search-light', dark: 'search-dark' },
-              themeType: 'dark',
-              preferredHighlighter: 'shiki-js',
-            }
           : {}),
         expandUnchanged:
           params.has('viewport') ||

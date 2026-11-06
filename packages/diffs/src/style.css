@@ -223,19 +223,10 @@
     /* Match backgrounds are a saturated yellow and blue in both schemes, so
        the text stays black regardless of the theme foreground. */
     --diffs-search-text-color: var(--diffs-fg-search-match-override, #000);
-    --diffs-search-match-color: var(
-      --diffs-bg-search-match-override,
-      var(
-        --diffs-editor-match-highlight-bg,
-        var(--diffs-editor-search-yellow, #eab308)
-      )
-    );
+    --diffs-search-match-color: var(--diffs-bg-search-match-override, #ffff54);
     --diffs-search-current-color: var(
       --diffs-bg-search-match-current-override,
-      var(
-        --diffs-editor-match-bg,
-        var(--diffs-editor-selection-bg, var(--diffs-modified-base))
-      )
+      var(--diffs-modified-base)
     );
 
     background-color: var(--diffs-bg);
