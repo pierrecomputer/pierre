@@ -370,7 +370,9 @@ export class WorkerPoolManager {
     const taskPromises: Promise<void>[] = [];
     for (const managedWorker of this.workers) {
       if (!managedWorker.initialized) {
-        console.log({ managedWorker });
+        if (process.env.NODE_ENV === 'development') {
+          console.log({ managedWorker });
+        }
         throw new Error(
           'setRenderOptionsOnWorkers: Somehow we have an uninitialized worker'
         );
