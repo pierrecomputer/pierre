@@ -5,6 +5,15 @@ import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { resetPlatformDetection } from '../src/utils/platform';
 
+// The reduced-motion preference every harness window reports. The library
+// keeps the first reduced-motion query it gets for the whole run, so a test
+// changes the answer here, which every query the harness hands out reads.
+let prefersReducedMotion = false;
+
+export function setPrefersReducedMotion(value: boolean): void {
+  prefersReducedMotion = value;
+}
+
 export interface InstallDomNavigatorOptions {
   maxTouchPoints?: number;
   platform?: string;
@@ -166,7 +175,11 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   }
 
   const matchMedia = ((query: string) => ({
-    matches: false,
+    get matches() {
+      return (
+        query === '(prefers-reduced-motion: reduce)' && prefersReducedMotion
+      );
+    },
     media: query,
     onchange: null,
     addEventListener(): void {},

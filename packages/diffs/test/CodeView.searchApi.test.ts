@@ -25,6 +25,7 @@ import {
   createRoot,
   installDom,
   renderItems,
+  setPrefersReducedMotion,
   wait,
   waitFor,
 } from './domHarness';
@@ -606,7 +607,6 @@ describe('CodeView search API', () => {
     });
     const getScrollAnimation = () =>
       (viewer as unknown as { scrollAnimation: unknown }).scrollAnimation;
-    const { matchMedia } = window;
     try {
       const root = createRoot();
       viewer.setup(root);
@@ -636,21 +636,12 @@ describe('CodeView search API', () => {
 
       // A reduced-motion preference overrides a smooth request.
       viewer.setOptions({ searchOptions: { scrollBehavior: 'smooth' } });
-      window.matchMedia = (query: string): MediaQueryList => ({
-        matches: query === '(prefers-reduced-motion: reduce)',
-        media: query,
-        onchange: null,
-        addEventListener() {},
-        removeEventListener() {},
-        addListener() {},
-        removeListener() {},
-        dispatchEvent: () => true,
-      });
+      setPrefersReducedMotion(true);
       viewer.navigateSearch('previous');
       expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       expect(getScrollAnimation()).toBeUndefined();
     } finally {
-      window.matchMedia = matchMedia;
+      setPrefersReducedMotion(false);
       viewer.cleanUp();
       dom.cleanup();
     }
