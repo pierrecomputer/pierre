@@ -67,6 +67,11 @@
     --diffs-bg-selection-override
     --diffs-bg-selection-number-override
 
+    // Search Match Color Overrides (find/replace)
+    --diffs-fg-search-match-override
+    --diffs-bg-search-match-override
+    --diffs-bg-search-match-current-override
+
     // Available CSS Layout Overrides
     --diffs-gap-inline
     --diffs-gap-block
@@ -74,6 +79,8 @@
     --diffs-scrollbar-gutter-override
     --diffs-tab-size
     --diffs-popover-gap (edit mode: inset for edge-clamped popovers)
+    --diffs-search-panel-inset-top (find panel distance from the top edge)
+    --diffs-search-panel-inset-right (find panel distance from the right edge)
     */
 
     color-scheme: light dark;
@@ -213,6 +220,15 @@
       color-mix(in lab, var(--diffs-selection-base) 65%, var(--diffs-mixer)),
       color-mix(in lab, var(--diffs-selection-base) 75%, var(--diffs-mixer))
     );
+    /* Match backgrounds are a saturated yellow and blue in both schemes, so
+       the text stays black regardless of the theme foreground. */
+    --diffs-search-text-color: var(--diffs-fg-search-match-override, #000);
+    --diffs-search-match-color: var(--diffs-bg-search-match-override, #ffff54);
+    --diffs-search-current-color: var(
+      --diffs-bg-search-match-current-override,
+      var(--diffs-modified-base)
+    );
+
     background-color: var(--diffs-bg);
     color: var(--diffs-fg);
   }
@@ -1478,6 +1494,16 @@
   [data-diff-span] {
     border-radius: 3px;
     box-decoration-break: clone;
+  }
+
+  ::highlight(diffs-search-match) {
+    color: var(--diffs-search-text-color);
+    background-color: var(--diffs-search-match-color);
+  }
+
+  ::highlight(diffs-search-current) {
+    color: var(--diffs-search-text-color);
+    background-color: var(--diffs-search-current-color);
   }
 
   [data-line-type='change-addition'] [data-diff-span] {

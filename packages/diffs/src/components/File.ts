@@ -834,7 +834,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   public __getEffectiveCodeOptions(): BaseCodeOptions {
-    return { ...this.options, ...this.fileRenderer.getEffectiveCodeOptions() };
+    return {
+      ...this.options,
+      ...this.fileRenderer.getEffectiveCodeOptions(),
+      themeType: this.options.themeType,
+    };
   }
 
   // Sets the managers up again when the DOM they watch changed (the dirty

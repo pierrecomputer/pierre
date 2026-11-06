@@ -48,6 +48,7 @@ export * from './renderers/FileRenderer';
 export * from './rows/RowSource';
 export * from './rows/lineDiffRanges';
 export * from './rows/markRow';
+export * from './search';
 export * from './shiki-stream';
 export * from './sprite';
 export * from './utils/annotationHelpers';
