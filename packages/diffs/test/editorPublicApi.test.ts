@@ -13,6 +13,7 @@ import type { Marker } from '../src/editor/marker';
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorViewState } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { SearchParams } from '../src/search';
 import type {
   FileContents,
   FileDiffMetadata,
@@ -1477,6 +1478,135 @@ describe('Editor state round trip', () => {
   });
 });
 
+describe('Editor.replaceSearchMatches', () => {
+  test('remaps existing selections through replacements and restores them on undo', async () => {
+    const fixture = await createEditorFixture('foo keep foo');
+    try {
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 4 },
+          end: { line: 0, character: 8 },
+          direction: 'backward',
+        },
+      ]);
+      await wait(0);
+      const before = fixture.editor.getViewState().selections;
+      const params: SearchParams = {
+        text: 'foo',
+        replaceText: 'longer',
+        regex: false,
+        wholeWord: false,
+        caseSensitive: true,
+      };
+      const matches = fixture.editor.getEditState()!.document.search(params);
+      fixture.editor.replaceSearchMatches(matches, params);
+      expect(fixture.editor.getText()).toBe('longer keep longer');
+      const after = fixture.editor.getViewState().selections;
+      expect(after).toEqual([
+        {
+          start: { line: 0, character: 7 },
+          end: { line: 0, character: 11 },
+          direction: -1,
+        },
+      ]);
+      fixture.editor.undo();
+      expect(fixture.editor.getViewState().selections).toEqual(before);
+      fixture.editor.redo();
+      expect(fixture.editor.getViewState().selections).toEqual(after);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test.each([
+    ['file', '\n'],
+    ['file-diff', '\n'],
+    ['file', '\r\n'],
+    ['file-diff', '\r\n'],
+  ] as const)(
+    'replaces regex matches in a %s with %j replacement newlines as one undoable edit without taking focus',
+    async (type, replacementEol) => {
+      const contents = 'foo-1\r\nfoo-22';
+      const fixture =
+        type === 'file'
+          ? await createEditorFixture(contents)
+          : await createDiffEditorFixture(
+              'split',
+              undefined,
+              undefined,
+              contents
+            );
+      try {
+        const params: SearchParams = {
+          text: 'foo-(\\d+)',
+          replaceText: `$1:$&${replacementEol}`,
+          caseSensitive: true,
+          wholeWord: false,
+          regex: true,
+        };
+        const outside = document.createElement('input');
+        document.body.append(outside);
+        outside.focus();
+        const onChange = mock(() => {});
+        fixture.editor.setOptions({ onChange });
+        const textDocument = fixture.editor.getEditState()!.document;
+        const end = fixture.editor.replaceSearchMatches(
+          textDocument.search(params),
+          params
+        );
+        expect(fixture.editor.getText()).toBe('1:foo-1\r\n\r\n22:foo-22\r\n');
+        expect(end).toEqual([19, 19]);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        await wait(0);
+        expect(globalThis.document.activeElement).toBe(outside);
+        fixture.editor.undo();
+        expect(fixture.editor.getText()).toBe(contents);
+        expect(fixture.editor.canUndo).toBe(false);
+        fixture.editor.redo();
+        expect(fixture.editor.getText()).toBe('1:foo-1\r\n\r\n22:foo-22\r\n');
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
+});
+
+describe('Editor.setSelections', () => {
+  test('normalizes selections and scrolls to and focuses the caret', async () => {
+    const { cleanup, content, editor } =
+      await createEditorFixture('alpha\nbravo');
+    const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+    const focus = spyOn(content, 'focus');
+    try {
+      const outside = document.createElement('input');
+      document.body.append(outside);
+      outside.focus();
+
+      editor.setSelections([
+        {
+          start: { line: 1, character: 99 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 5 },
+          direction: -1,
+        },
+      ]);
+      await waitFor(() => focus.mock.calls.length > 0);
+      expect(scroll).toHaveBeenCalled();
+      expect(focus).toHaveBeenCalled();
+    } finally {
+      scroll.mockRestore();
+      focus.mockRestore();
+      cleanup();
+    }
+  });
+});
+
 describe('Editor.setOptions', () => {
   test('applies an option change after construction', async () => {
     const onChange = mock(() => {});
@@ -2166,6 +2296,62 @@ describe('retained drafts', () => {
       editor.cleanUp();
       fileDiff.cleanUp();
       dom.cleanup();
+    }
+  });
+});
+
+describe('Editor searchPanel option', () => {
+  test("'host' leaves the find shortcuts untouched and keeps the rest of the keymap", async () => {
+    const fixture = await createEditorFixture('alpha beta', {
+      searchPanel: 'host',
+    });
+    try {
+      const { container, content, editor } = fixture;
+      const pressFind = (altKey: boolean) => {
+        const event = new window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          code: 'KeyF',
+          key: 'f',
+          metaKey: true,
+          altKey,
+        });
+        content.dispatchEvent(event);
+        return event;
+      };
+      const panel = () =>
+        container.shadowRoot?.querySelector('[data-search-panel]') ?? null;
+
+      for (const altKey of [false, true]) {
+        const event = pressFind(altKey);
+        await wait(0);
+        expect(event.defaultPrevented).toBe(false);
+        expect(panel()).toBeNull();
+      }
+
+      const selectAll = new window.KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        code: 'KeyA',
+        key: 'a',
+        metaKey: true,
+      });
+      content.dispatchEvent(selectAll);
+      expect(selectAll.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toMatchObject([
+        { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      ]);
+
+      // Handing the shortcuts back to the editor opens its own panel again.
+      editor.setOptions({ searchPanel: 'editor' });
+      const event = pressFind(false);
+      await wait(0);
+      expect(event.defaultPrevented).toBe(true);
+      expect(panel()).not.toBeNull();
+    } finally {
+      fixture.cleanup();
     }
   });
 });

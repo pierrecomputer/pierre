@@ -1,10 +1,15 @@
-import type { CodeViewLayout } from '@pierre/diffs';
+import type { CodeViewLayout, CodeViewSearchOptions } from '@pierre/diffs';
 import type { FileTreeOptions } from '@pierre/trees';
 
 export const CODE_VIEW_LAYOUT: CodeViewLayout = {
   paddingTop: 0,
   gap: 1,
   paddingBottom: 0,
+};
+
+// Find is bound on window by the viewer, so CodeView leaves the shortcut alone.
+export const CODE_VIEW_SEARCH_OPTIONS: CodeViewSearchOptions = {
+  disableShortcuts: true,
 };
 
 export const CODE_VIEW_CUSTOM_CSS = `

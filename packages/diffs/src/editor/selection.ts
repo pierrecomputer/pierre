@@ -2110,6 +2110,24 @@ export function getSelectionAnchor(
 }
 
 /**
+ * The query a find panel opens with: the selection when it stays on one line,
+ * the word under a collapsed caret, or nothing.
+ */
+export function getSearchQueryFromSelection(
+  textDocument: TextDocument,
+  selection: EditorSelection | undefined
+): string {
+  if (selection == null) {
+    return '';
+  }
+  const queryRange = isCollapsedSelection(selection)
+    ? expandCollapsedSelectionToWord(textDocument, selection)
+    : selection;
+  const text = textDocument.getText(queryRange);
+  return text.includes('\n') ? '' : text;
+}
+
+/**
  * Expands a zero-width selection to the word-like segment that contains the caret.
  */
 export function expandCollapsedSelectionToWord(
