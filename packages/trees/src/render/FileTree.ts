@@ -33,6 +33,7 @@ import type {
   FileTreeGitStatusPatch,
   FileTreeHydrationProps,
   FileTreeItemHandle,
+  FileTreeLabels,
   FileTreeListener,
   FileTreeMoveOptions,
   FileTreeMutationEventForType,
@@ -61,6 +62,7 @@ import {
   wrapCoreCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { resolveFileTreeLabels } from '../utils/fileTreeLabels';
 import { FileTreeView } from './FileTreeView';
 import {
   hydrateFileTreeRoot,
@@ -195,6 +197,7 @@ export class FileTree
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
   #icons: FileTreeOptions['icons'];
+  #labels: FileTreeLabels;
   readonly #unsafeCSS: string | undefined;
   #unsafeCSSStyle: HTMLStyleElement | undefined;
   #appliedUnsafeCSS: string | undefined;
@@ -219,6 +222,7 @@ export class FileTree
       initialSearchQuery,
       icons,
       itemHeight,
+      labels,
       onSearchChange,
       onSelectionChange,
       overscan,
@@ -236,6 +240,7 @@ export class FileTree
     this.#id = createClientId(id);
     this.#gitStatusState = resolveFileTreeGitStatusState(gitStatus);
     this.#icons = icons;
+    this.#labels = resolveFileTreeLabels(labels);
     this.#unsafeCSS = unsafeCSS;
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
@@ -536,6 +541,19 @@ export class FileTree
     renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
   }
 
+  // Replaces every label at once. Labels left out fall back to their English
+  // defaults rather than keeping a previously set translation.
+  public setLabels(labels?: FileTreeOptions['labels']): void {
+    this.#labels = resolveFileTreeLabels(labels);
+
+    const mountedTree = this.#getMountedTreeElements();
+    if (mountedTree == null) {
+      return;
+    }
+
+    renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
+  }
+
   public hydrate({ fileTreeContainer }: FileTreeHydrationProps): void {
     const host = this.#prepareHost(fileTreeContainer);
     const wrapper = this.#getOrCreateWrapper(host);
@@ -582,6 +600,7 @@ export class FileTree
       directoriesWithGitChanges: this.#gitStatusState?.directoriesWithChanges,
       icons: this.#icons,
       instanceId: this.#id,
+      labels: this.#labels,
       renamingEnabled: this.#renamingEnabled,
       renderRowDecoration: this.#renderRowDecoration,
       searchBlurBehavior: this.#searchBlurBehavior,
@@ -867,6 +886,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     initialSearchQuery,
     icons,
     itemHeight,
+    labels,
     onSearchChange: _onSearchChange,
     onSelectionChange: _onSelectionChange,
     overscan,
@@ -918,6 +938,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       icons,
       instanceId: resolvedId,
       itemHeight: resolvedItemHeight,
+      labels: resolveFileTreeLabels(labels),
       overscan,
       renamingEnabled: renaming != null && renaming !== false,
       renderRowDecoration,

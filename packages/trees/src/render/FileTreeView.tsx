@@ -39,6 +39,7 @@ import type {
   FileTreeDirectoryHandle,
   FileTreeDropTarget,
   FileTreeItemHandle,
+  FileTreeLabels,
   FileTreeRowDecoration,
   FileTreeVisibleRow,
 } from '../model/publicTypes';
@@ -49,11 +50,8 @@ import {
 } from '../model/virtualization';
 import type { GitStatus } from '../publicTypes';
 import type { SVGSpriteNames } from '../sprite';
-import {
-  GIT_STATUS_DESCENDANT_TITLE,
-  GIT_STATUS_LABEL,
-  GIT_STATUS_TITLE,
-} from '../utils/gitStatusPresentation';
+import { DEFAULT_FILE_TREE_LABELS } from '../utils/fileTreeLabels';
+import { GIT_STATUS_LABEL } from '../utils/gitStatusPresentation';
 import { shouldBumpControllerRevision } from './controllerSnapshotSubscription';
 import {
   focusElement,
@@ -407,7 +405,8 @@ function getDragEdgeScrollDelta(clientY: number, scrollRect: DOMRect): number {
 // decorations can coexist without borrowing git styling or precedence.
 function getBuiltInGitStatusDecoration(
   gitStatus: GitStatus | null,
-  containsGitChange: boolean
+  containsGitChange: boolean,
+  labels: FileTreeLabels
 ): FileTreeRowDecoration | null {
   if (gitStatus != null) {
     const label = GIT_STATUS_LABEL[gitStatus];
@@ -417,14 +416,14 @@ function getBuiltInGitStatusDecoration(
 
     return {
       text: label,
-      title: GIT_STATUS_TITLE[gitStatus],
+      title: labels.gitStatusTitles[gitStatus],
     };
   }
 
   if (containsGitChange) {
     return {
       icon: { name: 'file-tree-icon-dot', width: 6, height: 6 },
-      title: GIT_STATUS_DESCENDANT_TITLE,
+      title: labels.containsGitStatusTitle,
     };
   }
 
@@ -954,6 +953,7 @@ type FileTreeRenderRowFrame = {
   ignoredInheritanceCache: Map<string, boolean>;
   directoriesWithGitChanges: ReadonlySet<string> | undefined;
   gitLaneActive: boolean;
+  labels: FileTreeLabels;
   contextMenuEnabled: boolean;
   contextMenuTriggerMode: FileTreeContextMenuTriggerMode;
   contextMenuButtonTriggerEnabled: boolean;
@@ -1016,6 +1016,7 @@ function renderStyledRow(
     ignoredInheritanceCache,
     directoriesWithGitChanges,
     gitLaneActive,
+    labels,
     contextMenuEnabled,
     contextMenuTriggerMode,
     contextMenuButtonTriggerEnabled,
@@ -1046,7 +1047,8 @@ function renderStyledRow(
   const customDecoration = renderDecorationForRow(row, targetPath);
   const gitDecoration = getBuiltInGitStatusDecoration(
     effectiveGitStatus,
-    containsGitChange
+    containsGitChange,
+    labels
   );
   const actionLaneEnabled =
     contextMenuEnabled && contextMenuButtonTriggerEnabled;
@@ -1061,7 +1063,7 @@ function renderStyledRow(
     isSticky || !isRenamingRow ? null : (
       <RenameInput
         ref={registerRenameInput}
-        ariaLabel={`Rename ${getFileTreeRowAriaLabel(row)}`}
+        ariaLabel={labels.renameItem(getFileTreeRowAriaLabel(row))}
         isFlattened={row.isFlattened}
         value={renamingValue}
         onBlur={() => {
@@ -1231,6 +1233,7 @@ export function FileTreeView({
   icons,
   instanceId,
   itemHeight = FILE_TREE_DEFAULT_ITEM_HEIGHT,
+  labels = DEFAULT_FILE_TREE_LABELS,
   overscan = FILE_TREE_DEFAULT_OVERSCAN,
   renamingEnabled = false,
   renderRowDecoration,
@@ -3699,6 +3702,7 @@ export function FileTreeView({
     ignoredInheritanceCache,
     instanceId,
     itemHeight,
+    labels,
     onKeyDown: handleTreeKeyDown,
     onRowClick: handleRowClick,
     openContextMenuForRow,
@@ -3761,7 +3765,7 @@ export function FileTreeView({
             ref={searchInputRef}
             aria-activedescendant={activeDescendantId}
             aria-controls={treeDomId}
-            placeholder="Search…"
+            placeholder={labels.searchPlaceholder}
             data-file-tree-search-input
             data-file-tree-search-input-fake-focus={
               fakeSearchFocusActive ? 'true' : undefined
@@ -3890,7 +3894,7 @@ export function FileTreeView({
             ref={contextMenuTriggerRef}
             type="button"
             data-type={CONTEXT_MENU_TRIGGER_TYPE}
-            aria-label="Options"
+            aria-label={labels.contextMenuTrigger}
             aria-haspopup="menu"
             aria-expanded={contextMenuState != null ? 'true' : 'false'}
             data-visible={triggerButtonVisible ? 'true' : 'false'}
