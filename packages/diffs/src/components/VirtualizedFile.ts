@@ -102,6 +102,10 @@ export class VirtualizedFile<
 
   public top: number | undefined;
   public height: number = 0;
+  // `true` if we attempted to reconcile a row's height but it returned 0. This
+  // means the wrapper is hidden or disconnected from the dom.  Annotation
+  // heights can't follow this heuristic because they could be 0 by default.
+  public unmeasured = false;
   private cache: FileLayoutCache = {
     heights: new Map(),
     checkpoints: [],
@@ -296,6 +300,7 @@ export class VirtualizedFile<
   // Called after render to reconcile estimated vs actual heights.
   public reconcileHeights(): boolean {
     let hasHeightChange = false;
+    this.unmeasured = false;
     if (this.fileContainer == null || this.getLayoutFile() == null) {
       if (this.height !== 0) {
         hasHeightChange = true;
@@ -343,20 +348,6 @@ export class VirtualizedFile<
       return hasHeightChange;
     }
 
-    // Keep offscreen file annotation measurements consistent with the buffers
-    // computed for this render. A rendered top row can confirm their removal.
-    if (
-      this.renderRange != null &&
-      shouldRenderFileAnnotations(this.renderRange)
-    ) {
-      const fileAnnotationHeight = measureFileAnnotationHeight(content);
-      const nextFileAnnotationHeight = fileAnnotationHeight ?? 0;
-      if (nextFileAnnotationHeight !== this.cache.fileAnnotationHeight) {
-        this.cache.fileAnnotationHeight = nextFileAnnotationHeight;
-        hasHeightChange = true;
-      }
-    }
-
     for (const line of content.children) {
       if (!(line instanceof HTMLElement)) continue;
 
@@ -371,6 +362,10 @@ export class VirtualizedFile<
         continue;
       }
       let measuredHeight = line.getBoundingClientRect().height;
+      if (measuredHeight === 0) {
+        this.unmeasured = true;
+        break;
+      }
       let hasMetadata = false;
 
       // Annotations or noNewline metadata increase the size of their attached line
@@ -400,6 +395,19 @@ export class VirtualizedFile<
       // Non-standard height, cache it
       else {
         this.cache.heights.set(lineIndex, measuredHeight);
+      }
+    }
+
+    if (
+      !this.unmeasured &&
+      this.renderRange != null &&
+      shouldRenderFileAnnotations(this.renderRange)
+    ) {
+      const fileAnnotationHeight = measureFileAnnotationHeight(content);
+      const nextFileAnnotationHeight = fileAnnotationHeight ?? 0;
+      if (nextFileAnnotationHeight !== this.cache.fileAnnotationHeight) {
+        this.cache.fileAnnotationHeight = nextFileAnnotationHeight;
+        hasHeightChange = true;
       }
     }
 
