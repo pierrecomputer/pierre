@@ -2331,8 +2331,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // Read the box rather than trusting the observer's last report, which can
     // be a frame behind a root that was just shown.
     const { width, height } = this.root.getBoundingClientRect();
-    this.rootHasBox = width > 0 || height > 0;
-    if (!this.rootHasBox) {
+    this.setRootHasBox(width > 0 || height > 0);
+    if (this.rootHasBox === false) {
       console.error(
         'CodeView.requestScroll: the root has no layout, scroll request ignored'
       );
@@ -5018,6 +5018,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return this.rootHasBox !== false;
   }
 
+  private setRootHasBox(hasBox: boolean): void {
+    this.rootHasBox = hasBox;
+    if (!hasBox) {
+      this.renderState.measurementsPending = true;
+    }
+  }
+
   private handleResize = (entries: ResizeObserverEntry[]) => {
     let shouldRender = false;
     // Handle the root's entry first: its size decides whether the other entries
@@ -5025,7 +5032,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const rootEntry = entries.find((entry) => entry.target === this.root);
     if (rootEntry != null) {
       const { inlineSize, blockSize } = rootEntry.borderBoxSize[0];
-      this.rootHasBox = inlineSize > 0 || blockSize > 0;
+      this.setRootHasBox(inlineSize > 0 || blockSize > 0);
       this.scrollDirty = true;
       this.heightDirty = true;
       shouldRender = true;
