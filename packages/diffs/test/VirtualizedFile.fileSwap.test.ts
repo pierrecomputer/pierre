@@ -110,10 +110,19 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
     );
     expect(container.shadowRoot?.textContent).toContain('line 1');
 
-    // jsdom rows measure 0px, so reconciling seeds every rendered line with a
-    // measured height that differs from the estimate.
+    // jsdom rows measure 0px, which the reconciler refuses as a measurement,
+    // so give every rendered line a wrapped height that differs from the
+    // estimate before reconciling.
+    for (const line of container.shadowRoot?.querySelectorAll(
+      '[data-line-index]'
+    ) ?? []) {
+      Object.defineProperty(line, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ height: 44, width: 0, top: 0, left: 0 }),
+      });
+    }
     instance.reconcileHeights();
-    expect(instance.getLineHeight(0)).toBe(0);
+    expect(instance.getLineHeight(0)).toBe(44);
     expect(instance.height).not.toBe(estimatedHeight);
 
     // Replace the file wholesale; same line count, so a correctly reset cache
