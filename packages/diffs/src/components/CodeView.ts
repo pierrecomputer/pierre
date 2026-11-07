@@ -420,6 +420,7 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'lineDiffType',
   'maxLineDiffLength',
   'expansionLineCount',
+  'labels',
   'lineHoverHighlight',
   'enableTokenInteractionsOnWhitespace',
   'enableGutterUtility',

@@ -490,6 +490,14 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 
   /**
+   * User-visible text rendered inside the diff, for localization. Any label
+   * left out falls back to its English default from `DEFAULT_DIFF_LABELS`.
+   * Changing this object re-renders the diff, so keep its identity stable
+   * (e.g., memoize it) between renders.
+   */
+  labels?: Partial<DiffLabels>;
+
+  /**
    * Parser options used when computing diffs from file contents
    * (oldFile/newFile) or recomputing edited diffs. Includes diff settings
    * and the disableLineMatching escape hatch. Also used when deriving cache
@@ -501,12 +509,37 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   parseDiffOptions?: ParseDiffOptions;
 }
 
+/**
+ * User-visible text rendered inside a diff. Supply translations through the
+ * `labels` diff option.
+ */
+export interface DiffLabels {
+  /**
+   * Hunk separator text for a collapsed region with a known line count.
+   * Receives the count so translations can apply their own plural rules.
+   */
+  unmodifiedLines: (count: number) => string;
+  /**
+   * Hunk separator text for a collapsed region whose size is unknown, which
+   * happens for partial diffs parsed from patches.
+   */
+  unknownUnmodifiedLines: string;
+  /** Button that expands an entire collapsed region at once. */
+  expandAll: string;
+  /** Marker shown after a final line that has no trailing newline. */
+  noNewlineAtEndOfFile: string;
+}
+
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
+    | 'unsafeCSS'
+    | 'preferredHighlighter'
+    | 'parseDiffOptions'
+    | 'loadDiffFiles'
+    | 'labels'
   >
->;
+> & { labels: DiffLabels };
 
 export type CustomPreProperties = Record<string, string | number | undefined>;
 

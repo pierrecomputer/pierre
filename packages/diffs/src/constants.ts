@@ -1,5 +1,6 @@
 import type {
   CodeViewLayout,
+  DiffLabels,
   HighlighterTypes,
   HunkExpansionRegion,
   RenderRange,
@@ -51,6 +52,19 @@ export const DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY =
 
 export const DEFAULT_COLLAPSED_CONTEXT_THRESHOLD = 1;
 export const DEFAULT_TOKENIZE_MAX_LENGTH = 100_000;
+
+// Use the platform's English plural rules to pick "line" vs "lines" so a
+// count of 0 reads as "0 unmodified lines". en-US returns "one" only for 1.
+const EN_PLURAL_RULES = new Intl.PluralRules('en-US');
+
+export const DEFAULT_DIFF_LABELS: DiffLabels = Object.freeze({
+  unmodifiedLines: (count: number) =>
+    `${count} unmodified line${EN_PLURAL_RULES.select(count) === 'one' ? '' : 's'}`,
+  unknownUnmodifiedLines: 'More unchanged context may be available',
+  expandAll: 'Expand all',
+  noNewlineAtEndOfFile: 'No newline at end of file',
+});
+
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 50,
   lineHeight: 20,
