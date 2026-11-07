@@ -205,11 +205,15 @@ test('cached file and diff renderers scroll across lazy rows without retokenizin
 });
 
 test('editing after a lazy render regenerates writable editor rows', () => {
+  // Lazy rows exist only without the transformer, so this render is the
+  // misconfiguration the session reports before it rebuilds the rows.
+  const consoleError = spyOn(console, 'error').mockImplementation(() => {});
   const renderer = new FileRenderer(options);
   const range = { ...DEFAULT_RENDER_RANGE, totalLines: 1 };
   try {
     renderer.renderFile(file, range);
     const session = renderer.startEditSession(file);
+    expect(consoleError).toHaveBeenCalledTimes(1);
     const editing = renderer.renderFile(session, range);
     expect(toHtml(fileContentAST(editing))).toContain('data-char');
     const document = new TextDocument<'file', undefined>(
@@ -232,6 +236,7 @@ test('editing after a lazy render regenerates writable editor rows', () => {
     expect(renderer.editorRenderReady()).toBe(true);
   } finally {
     renderer.cleanUp();
+    consoleError.mockRestore();
   }
 });
 

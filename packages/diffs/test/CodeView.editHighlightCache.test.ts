@@ -72,6 +72,7 @@ test('an editable file keeps its highlighted document through a scroll remount',
   const dom = installDom();
   const viewer = new CodeView({
     theme: 'pierre-dark',
+    useTokenTransformer: true,
     createEditor: (type, options, key) => new Editor(type, options, key),
   });
   const highlight = spyOn(highlighter, 'codeToTokens');
@@ -173,6 +174,11 @@ async function withViewer(
   run: (harness: HighlightHarness) => Promise<void>
 ): Promise<void> {
   const dom = installDom();
+  // Pool markup rendered without the transformer is highlighted again on the
+  // main thread when its edit session starts, and the renderer reports that
+  // through console.error once per edited item. Any other console.error call
+  // is a render-queue failure, so the spy expects exactly those reports.
+  const consoleError = spyOn(console, 'error').mockImplementation(() => {});
   let disposeViewer: (() => void) | undefined;
   let terminateManager: (() => void) | undefined;
   let restoreHighlight: (() => void) | undefined;
@@ -260,10 +266,16 @@ async function withViewer(
           .map(([source]) => source.split('\n')[0]),
       clearHighlights: () => highlight.mockClear(),
     });
+    const expectedReports = edit && !useTokenTransformer ? items.length : 0;
+    expect(consoleError).toHaveBeenCalledTimes(expectedReports);
+    for (const [message] of consoleError.mock.calls) {
+      expect(message).toStartWith('[diffs] "');
+    }
   } finally {
     disposeViewer?.();
     terminateManager?.();
     restoreHighlight?.();
+    consoleError.mockRestore();
     await wait(0);
     dom.cleanup();
   }
@@ -365,6 +377,7 @@ for (const partial of [false, true]) {
       : parseDiffFromFile(oldFile, newFile);
     const viewer = new CodeView({
       theme: 'pierre-dark',
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
       loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
     });

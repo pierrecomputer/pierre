@@ -121,6 +121,7 @@ describe('CodeView search API', () => {
       undefined
     >['createEditor'] = (type, options, key) => new Editor(type, options, key);
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       searchOptions: { disableShortcuts: true },
     });
@@ -184,6 +185,7 @@ describe('CodeView search API', () => {
   test('opens, scopes, navigates, and closes search programmatically', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -288,6 +290,7 @@ describe('CodeView search API', () => {
   test('rebinds replace when a scoped offscreen edit item mounts', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -341,6 +344,7 @@ describe('CodeView search API', () => {
     const dom = installDom();
     const states: (SearchPanelState | undefined)[] = [];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
       onSearchStateChange: (state) => states.push(state),
     });
@@ -497,6 +501,7 @@ describe('CodeView search API', () => {
   test('seeds the query from the scoped editor selection', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {

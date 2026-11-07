@@ -67,6 +67,7 @@ describe('FileDiff header slots', () => {
     const instance = new FileDiff({
       collapsed: true,
       disableErrorHandling: true,
+      useTokenTransformer: true,
     });
     let detach: ReturnType<FileDiff<undefined>['__attachEditor']> | undefined;
 

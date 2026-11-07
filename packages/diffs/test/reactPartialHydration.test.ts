@@ -183,6 +183,7 @@ describe('React partial diff hydration', () => {
             },
           },
           options: {
+            useTokenTransformer: true,
             disableErrorHandling: true,
             expandUnchanged: true,
             loadDiffFiles() {
@@ -262,6 +263,7 @@ describe('React partial diff hydration', () => {
           options: {
             disableErrorHandling: true,
             loadDiffFiles: () => loading,
+            useTokenTransformer: true,
           },
         })
       );

@@ -616,6 +616,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
     const instance = new TestVirtualizedFileDiff(
       {
         disableFileHeader: true,
+        useTokenTransformer: true,
         loadDiffFiles: () => deferred.promise,
       },
       virtualizerState.virtualizer
@@ -685,6 +686,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
     const instance = new TestVirtualizedFileDiff(
       {
         disableFileHeader: true,
+        useTokenTransformer: true,
         loadDiffFiles: () => deferred.promise,
       },
       virtualizerState.virtualizer

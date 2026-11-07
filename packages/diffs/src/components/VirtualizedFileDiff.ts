@@ -484,7 +484,8 @@ export class VirtualizedFileDiff<
     const measureAllRows =
       overflow !== 'scroll' ||
       this.lineAnnotations.length > 0 ||
-      (process.env.NODE_ENV === 'development' &&
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
         this.getSimpleVirtualizer()?.config.resizeDebugging === true);
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
     // rows to measure. After the last annotation is removed, keep measuring
@@ -587,7 +588,8 @@ export class VirtualizedFileDiff<
 
     if (
       hasHeightChange ||
-      (process.env.NODE_ENV === 'development' &&
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
         this.getSimpleVirtualizer()?.config.resizeDebugging === true)
     ) {
       this.computeApproximateSize(true);
@@ -1380,7 +1382,8 @@ export class VirtualizedFileDiff<
     if (
       !force &&
       !this.layoutDirty &&
-      (process.env.NODE_ENV !== 'development' ||
+      (typeof process === 'undefined' ||
+        process.env.NODE_ENV !== 'development' ||
         this.getSimpleVirtualizer()?.config.resizeDebugging !== true)
     ) {
       return;
@@ -1414,6 +1417,7 @@ export class VirtualizedFileDiff<
       this.ghostTextRowsHeight();
 
     if (
+      typeof process !== 'undefined' &&
       process.env.NODE_ENV === 'development' &&
       this.getSimpleVirtualizer()?.config.resizeDebugging === true &&
       !isFirstCompute
@@ -1496,6 +1500,7 @@ export class VirtualizedFileDiff<
     fileDiff: FileDiffMetadata | undefined = this.getLayoutDiff()
   ): void {
     if (
+      typeof process === 'undefined' ||
       process.env.NODE_ENV !== 'development' ||
       this.fileContainer == null ||
       fileDiff == null

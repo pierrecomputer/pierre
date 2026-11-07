@@ -127,6 +127,7 @@ async function createAttachedFixture(): Promise<{
   const instance = new TestFileDiff({
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
   });
 
   instance.render({
@@ -184,6 +185,7 @@ describe('FileDiff edit-session ownership', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
 
     try {
@@ -217,6 +219,7 @@ describe('FileDiff edit-session ownership', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     try {
       instance.render({
@@ -550,6 +553,7 @@ describe('FileDiff edit-session ownership', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file-diff', {
       onChange: (event) => changedFiles.push(event.file),
@@ -606,6 +610,7 @@ describe('FileDiff edit-session ownership', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditChange: (event) => componentEvents.push(event),
     });
     const editor = new Editor('file-diff', {
@@ -660,6 +665,7 @@ describe('FileDiff edit-session ownership', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file-diff');
 
@@ -741,6 +747,7 @@ describe('__completeEditSession', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete: config?.onEditComplete,
       onEditChange: config?.onEditChange,
       loadDiffFiles: config?.loadDiffFiles,
@@ -843,6 +850,7 @@ describe('__completeEditSession', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     // Restored state names the file but carries no contents, so the input
     // supplies them.
@@ -1491,6 +1499,7 @@ describe('__completeEditSession', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:accepted-v1';
@@ -1694,6 +1703,7 @@ describe('editor session lifecycle', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:session-v2';
@@ -1745,6 +1755,7 @@ describe('editor session lifecycle', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete(event) {
         events.push(event);
         event.fileDiff.cacheKey = 'external:session-v2';

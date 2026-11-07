@@ -60,6 +60,7 @@ const EditProviderComponent = EditProvider as ComponentType<
 const CODE_VIEW_OPTIONS = {
   disableFileHeader: true,
   theme: DEFAULT_THEMES,
+  useTokenTransformer: true,
 } as const;
 const CODE_VIEW_STYLE = { height: 800, overflow: 'auto' } as const;
 
