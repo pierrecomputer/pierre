@@ -1229,6 +1229,7 @@ export class Editor<
     this.#gutterElement = undefined;
     this.#deletionsColumn = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
+    this.#setComposing(false);
     this.#contentElement = undefined;
     this.#replacementFocusRequest = undefined;
     this.#contentHasFocus = false;
@@ -1595,6 +1596,7 @@ export class Editor<
     }
 
     if (this.#contentElement !== contentEl) {
+      this.#contentElement?.removeAttribute('data-composing');
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -1901,7 +1903,14 @@ export class Editor<
     this.#lastAccessedCharX = undefined;
   }
 
+  // The native caret follows browser-owned preedit text that is absent from the model.
+  #setComposing(composing: boolean): void {
+    this.#isComposing = composing;
+    this.#contentElement?.toggleAttribute('data-composing', composing);
+  }
+
   #resetState(preserveCarets = false): void {
+    this.#setComposing(false);
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -2109,6 +2118,7 @@ export class Editor<
           // selectionchange whose range still belongs to the editor must not
           // overwrite the remapped #selections before the user returns to type.
           if (
+            this.#isComposing ||
             this.#shouldIgnoreSelectionChange ||
             this.#suppressNativeSelectionSync ||
             shadowRoot == null ||
@@ -2304,6 +2314,7 @@ export class Editor<
   }
 
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
+    this.#setComposing(false);
     const { onFocus, onBlur } = this.#options;
     const targetIsContentElement = (e: Event) => {
       const target = e.composedPath()[0] as HTMLElement | undefined;
@@ -2705,7 +2716,7 @@ export class Editor<
             return;
           }
           this.#cancelEditPrediction(true);
-          this.#isComposing = true;
+          this.#setComposing(true);
           this.#shouldIgnoreSelectionChange = true;
         },
         { passive: true }
@@ -2720,7 +2731,7 @@ export class Editor<
           }
           this.#shouldIgnoreSelectionChange = false;
           const wasComposing = this.#isComposing;
-          this.#isComposing = false;
+          this.#setComposing(false);
           // An empty compositionend during a tracked composition means the
           // candidate was canceled (e.g. Esc), so there is nothing to commit.
           if (e.data !== '' || !wasComposing) {

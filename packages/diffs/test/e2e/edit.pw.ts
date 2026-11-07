@@ -148,6 +148,47 @@ test.describe('edit mode', () => {
     await expect.poll(() => changeCount(page)).toBeGreaterThan(0);
   });
 
+  test('uses the native caret during composition and restores the overlay', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await clickIntoAdditions(page);
+
+    const content = page.locator(ADDITIONS);
+    const caret = page
+      .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
+      .first();
+    const transparent = 'rgba(0, 0, 0, 0)';
+    await expect(content).toHaveCSS('caret-color', transparent);
+    await expect(caret).toHaveCSS('visibility', 'visible');
+
+    // Synthetic events check rendered caret modes; OS IME placement is manual.
+    for (const data of ['가', '']) {
+      await content.evaluate((element) => {
+        element.dispatchEvent(
+          new CompositionEvent('compositionstart', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+      await expect(content).not.toHaveCSS('caret-color', transparent);
+      await expect(caret).toHaveCSS('visibility', 'hidden');
+
+      await content.evaluate((element, data) => {
+        element.dispatchEvent(
+          new CompositionEvent('compositionend', {
+            bubbles: true,
+            composed: true,
+            data,
+          })
+        );
+      }, data);
+      await expect(content).toHaveCSS('caret-color', transparent);
+      await expect(caret).toHaveCSS('visibility', 'visible');
+    }
+  });
+
   test('additions are editable while deletions stay read-only', async ({
     page,
   }) => {
