@@ -77,6 +77,7 @@ for (const preferredDiffLib of [
       parseDiffOptions: { preferredDiffLib },
       theme: 'pierre-dark',
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     try {
       const parsed = parseDiffFromFile(oldFile, newFile, { preferredDiffLib });

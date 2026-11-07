@@ -54,6 +54,7 @@ function createTestFile(
   const options = {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   };
   const virtualizedComponent = virtualized
     ? new VirtualizedFile<undefined>(options, new Virtualizer())

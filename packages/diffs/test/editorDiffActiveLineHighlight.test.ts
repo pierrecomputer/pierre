@@ -130,6 +130,7 @@ async function createDiffEditorFixture(
 
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     diffStyle,
     ...options,

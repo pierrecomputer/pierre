@@ -186,7 +186,11 @@ describe('virtualized editor viewport', () => {
     root.scrollLeft = 900;
     const virtualizer = createSimpleVirtualizer(root);
     const file = new VirtualizedFile(
-      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
+      },
       virtualizer
     );
 
@@ -222,7 +226,11 @@ describe('virtualized editor viewport', () => {
     const root = document.createElement('div');
     const virtualizer = createSimpleVirtualizer(root);
     const file = new VirtualizedFile(
-      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
+      },
       virtualizer
     );
     const editor = new Editor('file', {
@@ -286,6 +294,7 @@ describe('virtualized editor viewport', () => {
       {
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
         onEditChange(event) {
           componentEvents.push(event);
           componentStates.push(event.editor.getViewState());
@@ -479,6 +488,7 @@ describe('virtualized editor viewport', () => {
         diffStyle: 'split',
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
       },
       virtualizer
     );
@@ -535,7 +545,7 @@ describe('virtualized editor viewport', () => {
       const root = document.createElement('div');
       document.body.appendChild(root);
       const fileDiff = new VirtualizedFileDiff<undefined>(
-        { diffStyle: 'unified', overflow: 'wrap' },
+        { diffStyle: 'unified', overflow: 'wrap', useTokenTransformer: true },
         createSimpleVirtualizer(root)
       );
       const fileContainer = document.createElement('div');

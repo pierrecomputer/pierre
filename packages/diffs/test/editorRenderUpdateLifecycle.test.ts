@@ -98,6 +98,7 @@ async function createFixture(options?: {
   const instance = new TestFileDiff({
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
     loadDiffFiles: options?.loadDiffFiles,
   });
   const editor = new Editor('file-diff', {
@@ -188,6 +189,7 @@ describe('calling back into the editor from onChange', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const render = (contents: string) => {
       const file: FileContents = {
@@ -327,6 +329,7 @@ describe('callbacks during a virtualized external replacement', () => {
         };
         const options = {
           disableFileHeader: true,
+          useTokenTransformer: true,
           disableErrorHandling: true,
           onEditChange: observer === 'onEditChange' ? disposeHost : undefined,
           onPostRender: observer === 'onPostRender' ? disposeHost : undefined,
@@ -472,7 +475,10 @@ describe('external FileDiff updates during editing', () => {
     const dom = installDom();
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
-    const instance = new TestFileDiff({ disableErrorHandling: true });
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      useTokenTransformer: true,
+    });
     const editor = new Editor('file-diff');
     const counts = () =>
       ['[data-deletions-count]', '[data-additions-count]'].map(
@@ -519,6 +525,7 @@ describe('external FileDiff updates during editing', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const oldFile = { name: 'pair.txt', contents: 'base\n' };
     const render = (contents: string) =>
@@ -627,6 +634,7 @@ describe('external FileDiff updates during editing', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file-diff', {
       onChange: (event) =>
@@ -650,6 +658,7 @@ describe('external FileDiff updates during editing', () => {
       instance.setOptions({
         disableErrorHandling: true,
         disableFileHeader: true,
+        useTokenTransformer: true,
         theme: themeName,
       });
       instance.render({
@@ -704,6 +713,7 @@ describe('external FileDiff updates during editing', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file-diff', {
       onChange: (event) =>
@@ -725,6 +735,7 @@ describe('external FileDiff updates during editing', () => {
       instance.setOptions({
         disableErrorHandling: true,
         disableFileHeader: true,
+        useTokenTransformer: true,
         theme: themeName,
       });
       replace('b\n', 'session:v2');
@@ -755,6 +766,7 @@ describe('external FileDiff updates during editing', () => {
     const instance = new FileDiff<string>({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const editor = new Editor<'file-diff', string>('file-diff', {
       onChange: (event) => events.push(event),
@@ -780,6 +792,7 @@ describe('external FileDiff updates during editing', () => {
       instance.setOptions({
         disableErrorHandling: true,
         disableFileHeader: true,
+        useTokenTransformer: true,
         theme: themeName,
       });
       instance.render({
@@ -852,6 +865,7 @@ describe('external FileDiff updates during editing', () => {
           fixture.instance.setOptions({
             disableErrorHandling: true,
             disableFileHeader: true,
+            useTokenTransformer: true,
             theme: themeName,
           });
         }

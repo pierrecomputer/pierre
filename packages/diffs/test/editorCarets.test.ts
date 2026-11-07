@@ -50,6 +50,7 @@ async function createEditorFixture(
   const file = new File<undefined, CaretMetadata>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor<'file', undefined, CaretMetadata>('file', options);
   const initialFile: FileContents = {
@@ -736,6 +737,7 @@ describe('Editor carets', () => {
       const file = new File<undefined, CaretMetadata>({
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
       });
       files.push(file);
       file.render({ file: fileContents, fileContainer, forceRender: true });

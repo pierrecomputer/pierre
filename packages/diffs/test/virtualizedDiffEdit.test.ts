@@ -76,7 +76,12 @@ describe('editing a virtualized diff', () => {
     test(`${diffStyle}: keystrokes render in the virtualizer's frame`, async () => {
       const editor = new Editor('file-diff');
       const instance = new VirtualizedFileDiff<undefined>(
-        { diffStyle, disableFileHeader: true, theme: DEFAULT_THEMES },
+        {
+          diffStyle,
+          disableFileHeader: true,
+          theme: DEFAULT_THEMES,
+          useTokenTransformer: true,
+        },
         virtualizer
       );
       try {

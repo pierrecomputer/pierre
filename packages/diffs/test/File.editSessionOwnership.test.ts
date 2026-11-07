@@ -59,6 +59,7 @@ async function createFixture(options?: {
   const instance = new TestFile({
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file', {
     onChange({ file, lineAnnotations }) {
@@ -122,6 +123,7 @@ describe('editing a File without changing its input', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     try {
       instance.render({ file: externalFile, fileContainer, forceRender: true });
@@ -157,6 +159,7 @@ describe('editing a File without changing its input', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     });
     const attachmentError = new Error('attachment failed');
     try {
@@ -403,6 +406,7 @@ describe('component onEditChange', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditChange: (event) => {
         componentEvents.push(event);
         callbackEditors.push(event.editor);
@@ -469,6 +473,7 @@ describe('component onEditChange', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditChange: (event) => firstEvents.push(event),
     });
     const editor = new Editor('file');
@@ -483,6 +488,7 @@ describe('component onEditChange', () => {
       instance.setOptions({
         disableErrorHandling: true,
         disableFileHeader: true,
+        useTokenTransformer: true,
         onEditChange: (event) => secondEvents.push(event),
       });
       replaceDocument(editor, 'second\n');
@@ -505,6 +511,7 @@ describe('component onEditChange', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditChange: (event) => events.push(event),
     });
     const editor = new Editor('file');
@@ -544,6 +551,7 @@ describe('session-owned line annotations', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditChange: (event) => events.push(event),
     });
     const editor = new Editor('file');
@@ -855,6 +863,7 @@ describe('__completeEditSession', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete: config?.onEditComplete,
       onEditChange: config?.onEditChange,
     });
@@ -996,7 +1005,10 @@ describe('__completeEditSession', () => {
       onEditComplete() {
         const fileContainer = document.createElement('div');
         document.body.appendChild(fileContainer);
-        replacementInstance = new TestFile({ disableFileHeader: true });
+        replacementInstance = new TestFile({
+          disableFileHeader: true,
+          useTokenTransformer: true,
+        });
         replacementInstance.render({
           file: { ...EXTERNAL_FILE },
           fileContainer,
@@ -1328,6 +1340,7 @@ describe('editor session lifecycle', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete: config?.onEditComplete,
     });
     const editor = new Editor('file');
@@ -1407,6 +1420,7 @@ describe('editor session lifecycle', () => {
     const instance = new TestFile({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       onEditComplete(event) {
         events.push(event);
         return 'reject';

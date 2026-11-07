@@ -104,6 +104,7 @@ async function createEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file', editorOptions, documentKey);
   const initialFile: FileContents = { ...fileInfo, contents };
@@ -157,6 +158,7 @@ function createPendingEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file', {}, documentKey);
   file.render({
@@ -191,6 +193,7 @@ async function createDiffEditorFixture(
     disableFileHeader: true,
     diffStyle,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file-diff', editorOptions, documentKey);
   fileDiff.render({
@@ -438,6 +441,7 @@ describe('Editor document registry surfaces', () => {
     const file = new TestFile({
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file', {}, editStateKey);
     try {
@@ -493,6 +497,7 @@ describe('Editor document registry surfaces', () => {
       disableFileHeader: true,
       diffStyle: 'split',
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file-diff', {}, editStateKey);
     const externalDiff = parseDiffFromFile(oldFile, newFile);
@@ -2115,6 +2120,7 @@ describe('replacing the diff while editing', () => {
       disableFileHeader: true,
       diffStyle: 'unified',
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
       preferredHighlighter: 'highlights',
     });
     const oldFile = { name: 'a.ts', contents: 'a\nb\nc\nd' };
@@ -2159,6 +2165,7 @@ describe('re-rendering the same diff while editing', () => {
       disableFileHeader: true,
       diffStyle: 'unified',
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
       preferredHighlighter: 'highlights',
     });
     const files = {
