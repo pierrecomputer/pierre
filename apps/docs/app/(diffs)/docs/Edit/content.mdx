@@ -443,9 +443,14 @@ window.
 #### Worker Pool
 
 The edited file renders on the main thread while a worker pool continues to
-render other components. Setting `useTokenTransformer: true` in the pool's
-highlighter options can avoid a one-time re-render when entering edit mode, at
-the cost of larger markup for every pool-rendered file.
+render other components. Set `useTokenTransformer: true` on any file that can
+enter edit mode: in the component options, or in the pool's highlighter options
+when a pool renders it. The editor reads token metadata that only the
+transformer emits. Markup rendered without it cannot be reused, so the whole
+file is re-highlighted and re-rendered synchronously on the main thread when
+editing starts. Development builds log an error whenever this happens. The
+transformer makes the rendered markup larger; which is the tradeoff for editable
+files.
 
 <EditWorkerPoolTabs
   vanillaExample={editWorkerPoolVanillaExample}

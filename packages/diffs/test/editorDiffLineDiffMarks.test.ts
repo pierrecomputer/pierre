@@ -140,6 +140,7 @@ async function renderReadOnly(
   document.body.appendChild(container);
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     diffStyle,
   });
   try {
@@ -209,6 +210,7 @@ async function withEditor(
   document.body.appendChild(container);
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     diffStyle,
   });
   const editor = new Editor('file-diff');
@@ -650,6 +652,7 @@ describe('word diff highlights after the editor redraws rows in the background',
     document.body.appendChild(container);
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       diffStyle,
       preferredHighlighter: 'highlights',
     });

@@ -40,6 +40,7 @@ test.each(['file', 'virtualized'])(
       theme: 'pierre-dark',
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
     };
     const virtualizer = type === 'virtualized' ? new Virtualizer() : undefined;
     virtualizer?.setup(root);
@@ -136,6 +137,7 @@ test('Highlights finishes every visible line an edit recolors in the same pass',
     theme: 'pierre-dark',
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file');
   const content = () =>
@@ -298,6 +300,7 @@ test('Highlights colors a file rendered plain for its size once the editor attac
     theme: 'pierre-dark',
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
     tokenizeMaxLength: 5,
   });
   const editor = new Editor('file');
@@ -360,6 +363,7 @@ test('Highlights colors lines an edit brings into view in the same pass', async 
     diffStyle: 'unified',
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file-diff');
   const content = () =>
@@ -428,6 +432,7 @@ test('Highlights colors lines scrolled into view before background tokenizing re
     theme: 'pierre-dark',
     disableErrorHandling: true,
     disableFileHeader: true,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file');
   const renderWindow = (startingLine: number) =>

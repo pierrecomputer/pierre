@@ -69,6 +69,7 @@ function createTestFile(
     {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
     },
     undefined,
     () => undefined
@@ -178,6 +179,7 @@ function createTestDiff(file: FileContents): FileDiff<undefined> {
   const component = new FileDiff<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);

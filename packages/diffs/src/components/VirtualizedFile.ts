@@ -313,7 +313,8 @@ export class VirtualizedFile<
     const measureAllRows =
       overflow !== 'scroll' ||
       this.lineAnnotations.length > 0 ||
-      (process.env.NODE_ENV === 'development' &&
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
         this.getSimpleVirtualizer()?.config.resizeDebugging === true);
 
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
@@ -404,7 +405,8 @@ export class VirtualizedFile<
 
     if (
       hasHeightChange ||
-      (process.env.NODE_ENV === 'development' &&
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
         this.getSimpleVirtualizer()?.config.resizeDebugging === true)
     ) {
       this.computeApproximateSize(true);
@@ -766,7 +768,8 @@ export class VirtualizedFile<
     if (
       !force &&
       !this.layoutDirty &&
-      (process.env.NODE_ENV !== 'development' ||
+      (typeof process === 'undefined' ||
+        process.env.NODE_ENV !== 'development' ||
         this.getSimpleVirtualizer()?.config.resizeDebugging !== true)
     ) {
       return;
@@ -817,6 +820,7 @@ export class VirtualizedFile<
     }
 
     if (
+      typeof process !== 'undefined' &&
       process.env.NODE_ENV === 'development' &&
       this.getSimpleVirtualizer()?.config.resizeDebugging === true &&
       this.fileContainer != null &&

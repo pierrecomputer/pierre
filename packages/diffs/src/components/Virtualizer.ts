@@ -132,7 +132,10 @@ export class Virtualizer {
       });
     }
 
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       window.__INSTANCE = this;
       window.__TOGGLE = () => {
         if (Virtualizer.__STOP) {
@@ -209,6 +212,7 @@ export class Virtualizer {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
           if (
+            typeof process !== 'undefined' &&
             process.env.NODE_ENV === 'development' &&
             this.config.resizeDebugging
           ) {
@@ -229,6 +233,7 @@ export class Virtualizer {
           this.scrollHeightDirty = true;
           shouldQueueUpdate = true;
           if (
+            typeof process !== 'undefined' &&
             process.env.NODE_ENV === 'development' &&
             this.config.resizeDebugging
           ) {
@@ -351,7 +356,9 @@ export class Virtualizer {
 
   private handleWindowResize = () => {
     if (
-      (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) ||
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
+        Virtualizer.__STOP) ||
       window.innerHeight === this.height
     ) {
       return;
@@ -362,7 +369,9 @@ export class Virtualizer {
 
   private handleWindowScroll = () => {
     if (
-      (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) ||
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
+        Virtualizer.__STOP) ||
       this.root == null ||
       !(this.root instanceof Document)
     ) {
@@ -374,7 +383,9 @@ export class Virtualizer {
 
   private handleElementScroll = () => {
     if (
-      (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) ||
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
+        Virtualizer.__STOP) ||
       this.root == null ||
       this.root instanceof Document
     ) {
@@ -385,7 +396,11 @@ export class Virtualizer {
   };
 
   private computeRenderRangeAndEmit = () => {
-    if (process.env.NODE_ENV === 'development' && Virtualizer.__STOP) {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      Virtualizer.__STOP
+    ) {
       return;
     }
     const wrapperDirty = this.heightDirty || this.scrollHeightDirty;

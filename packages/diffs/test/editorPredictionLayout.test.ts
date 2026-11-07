@@ -191,7 +191,11 @@ async function createHost(
   if (surface === 'File') {
     const file: FileContents = { name: FILE_NAME, contents };
     const instance = new VirtualizedFile<undefined>(
-      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
+      },
       virtualizer
     );
     instance.render({ file, fileContainer, forceRender: true });
@@ -237,6 +241,7 @@ async function createHost(
         disableFileHeader: true,
         expandUnchanged,
         theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
       },
       virtualizer
     );

@@ -78,6 +78,7 @@ import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
+import { reportEditWithoutTokenTransformer } from '../utils/reportEditWithoutTokenTransformer';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
@@ -295,6 +296,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.rowSource = undefined;
       }
     } else {
+      if (
+        renderCache != null &&
+        renderCache.options.useTokenTransformer !== true
+      ) {
+        reportEditWithoutTokenTransformer(model.diff.name);
+      }
       this.renderCache = undefined;
       this.rowSource = undefined;
     }

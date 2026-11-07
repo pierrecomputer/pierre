@@ -198,7 +198,10 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
   const externalAdditionLines = externalDiff.additionLines;
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
-  const instance = new TestFileDiff({ disableFileHeader: true });
+  const instance = new TestFileDiff({
+    disableFileHeader: true,
+    useTokenTransformer: true,
+  });
 
   try {
     instance.render({ fileDiff: externalDiff, fileContainer });
