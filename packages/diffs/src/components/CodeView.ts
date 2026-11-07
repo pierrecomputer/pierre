@@ -1068,6 +1068,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     item: CodeViewContextItem<LAnnotation, Caret>
   ): void {
     if (
+      typeof process === 'undefined' ||
       process.env.NODE_ENV !== 'development' ||
       this.options.__devOnlyValidateItemHeights !== true ||
       item.element == null
@@ -1117,6 +1118,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // to position against the wrong bounds.
   private validateStickyContainerHeight(): void {
     if (
+      typeof process === 'undefined' ||
       process.env.NODE_ENV !== 'development' ||
       this.options.__devOnlyValidateItemHeights !== true
     ) {
@@ -1363,7 +1365,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.resizeObserver.observe(this.root);
     this.render(true);
 
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       window.__INSTANCE = this;
       window.__TOGGLE = () => {
         if (CodeView.__STOP) {
@@ -2797,7 +2802,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public render(immediate = false): void {
-    if (process.env.NODE_ENV === 'development' && CodeView.__STOP) {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      CodeView.__STOP
+    ) {
       return;
     }
     if (immediate) {
@@ -4424,7 +4433,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     timestamp: number = performance.now()
   ): void => {
     if (
-      (process.env.NODE_ENV === 'development' && CodeView.__STOP) ||
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
+        CodeView.__STOP) ||
       this.container == null
     ) {
       return;
@@ -4874,7 +4885,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private handleScroll = (): void => {
-    if (process.env.NODE_ENV === 'development' && CodeView.__STOP) {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      CodeView.__STOP
+    ) {
       return;
     }
     this.suspendScrollInteractions();

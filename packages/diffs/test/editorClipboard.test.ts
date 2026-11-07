@@ -50,6 +50,7 @@ async function createDiffEditorFixture(
   document.body.appendChild(container);
 
   const fileDiff = new FileDiff<undefined>({
+    useTokenTransformer: true,
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
@@ -91,6 +92,7 @@ const testFileContainers = new WeakMap<File<undefined>, HTMLElement>();
 
 function createTestFile(fileContents: FileContents): File<undefined> {
   const file = new File<undefined>({
+    useTokenTransformer: true,
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });

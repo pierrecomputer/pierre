@@ -101,6 +101,7 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
   const virtualizer = new Virtualizer();
   const options = {
     disableFileHeader: true,
+    useTokenTransformer: true,
     renderAnnotation: (annotation: LineAnnotation<string>) => {
       const node = document.createElement('span');
       node.textContent = annotation.metadata;

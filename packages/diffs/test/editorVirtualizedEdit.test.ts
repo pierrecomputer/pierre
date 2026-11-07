@@ -87,6 +87,7 @@ async function createWindowedEditor(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file');
   const initialFile: FileContents = {

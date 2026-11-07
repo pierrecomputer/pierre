@@ -284,6 +284,7 @@ async function createFixture({
   const options: CodeViewOptions<undefined, undefined> = {
     createEditor,
     diffStyle: 'unified',
+    useTokenTransformer: true,
   };
   const viewer = new CodeView(options);
   const items: CodeViewItem<undefined>[] = [

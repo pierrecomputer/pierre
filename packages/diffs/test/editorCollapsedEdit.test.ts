@@ -89,6 +89,7 @@ async function createCollapsedEditFixture(
 
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
     parseDiffOptions,
@@ -185,6 +186,7 @@ describe('diff editor: parsing options', () => {
 describe('diff editor: attach-time markup normalization', () => {
   test('renders editor token markup without mutating component options', async () => {
     const dom = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const container = document.createElement('div');
     document.body.appendChild(container);
     // useTokenTransformer: false means the attach-time session render must
@@ -238,11 +240,14 @@ describe('diff editor: attach-time markup normalization', () => {
       expect(fileDiff.options.enableGutterUtility).toBe(true);
       expect(fileDiff.options.enableLineSelection).toBe(true);
       expect(fileDiff.options.lineHoverHighlight).toBe('both');
+      // Rendering without the transformer and then editing is reported.
+      expect(consoleError).toHaveBeenCalledTimes(1);
     } finally {
       await wait(10);
       editor.cleanUp();
       fileDiff.cleanUp();
       dom.cleanup();
+      consoleError.mockRestore();
     }
   });
 });

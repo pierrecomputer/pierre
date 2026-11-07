@@ -85,7 +85,11 @@ describe('editing before a cold first render completes', () => {
     const editor = new Editor<EditorType, undefined, undefined>('file');
     const file: FileContents = { name: FILE_NAME, contents: CONTENTS };
     const instance = new VirtualizedFile<undefined>(
-      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
+      },
       virtualizer
     );
     expect(instance.render({ file, fileContainer, forceRender: true })).toBe(
@@ -105,7 +109,12 @@ describe('editing before a cold first render completes', () => {
         { name: FILE_NAME, contents: CONTENTS }
       );
       const instance = new VirtualizedFileDiff<undefined>(
-        { diffStyle, disableFileHeader: true, theme: DEFAULT_THEMES },
+        {
+          diffStyle,
+          disableFileHeader: true,
+          theme: DEFAULT_THEMES,
+          useTokenTransformer: true,
+        },
         virtualizer
       );
       expect(
