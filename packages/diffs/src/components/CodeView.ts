@@ -911,6 +911,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private codeOverflowFix = false;
   private height: number = 0;
   private heightDirty = true;
+  // Whether the root is laid out and visible in the DOM, per its last
+  // ResizeObserver entry. A hidden or detached root is observed as 0x0.
+  // `undefined` assumes initial render.
+  private rootHasBox: boolean | undefined;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
   private renderState = {
     scrollTop: -1,
@@ -919,6 +923,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     stickyHeight: 0,
     stickyTop: -1,
     stickyBottom: -1,
+    // Set when a render could not measure its rows because the root lost its
+    // layout during that frame. The next render measures everything rendered.
+    measurementsPending: false,
   };
   private itemMetricsCache: VirtualFileMetrics = DEFAULT_CODE_VIEW_FILE_METRICS;
   private readonly fileOptionsPrototype: FileOptions<LAnnotation, Caret>;
@@ -1362,7 +1369,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     });
     this.root.addEventListener('focusin', this.handleFocusIn);
     this.root.addEventListener('focusout', this.handleFocusOut);
-    this.resizeObserver.observe(this.root);
+    this.resizeObserver.observe(this.root, { box: 'border-box' });
     this.render(true);
 
     if (
@@ -1480,6 +1487,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
+    this.rootHasBox = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
     this.root?.removeEventListener('wheel', this.clearPendingScroll);
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
@@ -2320,6 +2328,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (this.root == null) {
       return;
     }
+    // Read the box rather than trusting the observer's last report, which can
+    // be a frame behind a root that was just shown.
+    const { width, height } = this.root.getBoundingClientRect();
+    if (width === 0 && height === 0) {
+      console.error(
+        'CodeView.requestScroll: the root has no layout, scroll request ignored'
+      );
+      onDone?.('cancelled');
+      return;
+    }
+    this.setRootHasBox(true);
     // Install the replacement before telling the replaced request it was
     // cancelled, so a callback that requests again supersedes it in turn.
     const { pendingScrollDone: replaced } = this;
@@ -4444,6 +4463,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
 
+    // If the view doesn't have layout, then we should not do any render work
+    if (!this.hasLayout()) {
+      return;
+    }
+
     // Read the current viewport and logical scroll position before making DOM
     // mutations, then capture an anchor that can survive layout recalculation.
     const viewportHeight = this.getHeight();
@@ -4625,10 +4649,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.flushManagers(updatedItems);
     // Read phase: measure a freshly mounted or re-populated host now so its
     // getBoundingClientRect batches into the same reflow as the item height reads.
-    if (hostsChanged) {
+    const { measurementsPending } = this.renderState;
+    if (hostsChanged || measurementsPending) {
       this.measureMountedHosts();
     }
-    this.reconcileRenderedItems(updatedItems);
+    // `false` when a rendered row read as zero: the root lost its layout during
+    // this frame, before its ResizeObserver could report it.
+    const measured = this.reconcileRenderedItems(
+      !measurementsPending ? updatedItems : undefined
+    );
+    this.renderState.measurementsPending = !measured;
     this.syncContainerHeight();
     this.updateStickyPositioning();
 
@@ -4689,6 +4719,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     if (
       shouldCheckPendingTargetSettled &&
+      measured &&
       this.pendingScrollTarget != null &&
       this.isPendingTargetSettled(this.pendingScrollTarget)
     ) {
@@ -4707,7 +4738,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // renderRange (no-arg path) so renderState.stickyHeight matches the slice
     // actually in the DOM before we validate it.
     this.updateStickyPositioning();
-    this.validateStickyContainerHeight();
+    if (measured) {
+      this.validateStickyContainerHeight();
+    }
     this.fixContainerFocus();
     this.paintSearchHighlights();
 
@@ -4720,7 +4753,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // If we are hitting a fitPerfectly heuristic, we should queue up another
     // render to fill out content. If we are performing a scroll animation we'll
     // need another render to continue.
-    if (fitPerfectly || this.scrollAnimation != null) {
+    if (
+      fitPerfectly ||
+      this.scrollAnimation != null ||
+      this.renderState.measurementsPending
+    ) {
       this.render();
     }
   };
@@ -4809,16 +4846,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.applyStickyPositioning(stickyBounds);
   }
 
+  // Returns `false` if we can't measure layouts
   private reconcileRenderedItems(
     updatedItems?: Set<CodeViewContextItem<LAnnotation, Caret>>
-  ): void {
+  ): boolean {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1) {
-      return;
+      return true;
     }
 
     let currentTop = -1;
     let heightChanged = false;
+    let measured = true;
     // Iterate through the rendered items to reconcile height. If a height
     // has changed, we'll have to iterate all the way till the end to update
     // all appropriate heights
@@ -4845,7 +4884,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           heightChanged = true;
           item.height = item.instance.getVirtualizedHeight();
         }
-        this.validateRenderedItemHeight(item);
+        if (item.instance.unmeasured) {
+          measured = false;
+        } else {
+          this.validateRenderedItemHeight(item);
+        }
       }
       currentTop += item.instance.getVirtualizedHeight();
       if (index < this.items.length - 1) {
@@ -4857,6 +4900,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.scrollDirty = true;
       this.scrollHeight = currentTop;
     }
+    return measured;
   }
 
   private updateStickyPositioning(): void {
@@ -4969,8 +5013,33 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
   };
 
+  // A container that's detached or hidden can't be measured
+  private hasLayout(): boolean {
+    return this.rootHasBox !== false;
+  }
+
+  private setRootHasBox(hasBox: boolean): void {
+    this.rootHasBox = hasBox;
+    if (!hasBox) {
+      this.renderState.measurementsPending = true;
+    }
+  }
+
   private handleResize = (entries: ResizeObserverEntry[]) => {
     let shouldRender = false;
+    // Handle the root's entry first: its size decides whether the other entries
+    // in this batch are real measurements or just the collapse to zero.
+    const rootEntry = entries.find((entry) => entry.target === this.root);
+    if (rootEntry != null) {
+      const { inlineSize, blockSize } = rootEntry.borderBoxSize[0];
+      this.setRootHasBox(inlineSize > 0 || blockSize > 0);
+      this.scrollDirty = true;
+      this.heightDirty = true;
+      shouldRender = true;
+    }
+    if (!this.hasLayout()) {
+      return;
+    }
     for (const entry of entries) {
       // If the sticky container resizes (could be from a render, which it will
       // probably ignore) or if an annotation or line wrap triggers a resize
@@ -5058,12 +5127,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           }
           shouldRender = true;
         }
-      }
-      // Root element resize (element-mode only)
-      else {
-        this.scrollDirty = true;
-        this.heightDirty = true;
-        shouldRender = true;
       }
     }
 
@@ -5477,6 +5540,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.renderState.stickyHeight = 0;
     this.renderState.stickyTop = -1;
     this.renderState.stickyBottom = -1;
+    this.renderState.measurementsPending = false;
   }
 
   // We actually need a bit of overscroll even when attempting to fit perfectly
