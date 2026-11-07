@@ -19,6 +19,12 @@
       [data-wrapper][hidden] {
         display: none;
       }
+      /* `?hide=content-visibility` hides the wrapper without dropping its
+         layout, the way a tab panel that keeps its state does. */
+      [data-wrapper][data-hide='content-visibility'][hidden] {
+        display: block;
+        content-visibility: hidden;
+      }
     </style>
   </head>
   <body>
@@ -45,13 +51,20 @@
 
       const root = document.querySelector('[data-code-view-root]');
       const wrapper = document.querySelector('[data-wrapper]');
+      const hide = new URLSearchParams(location.search).get('hide');
+      if (hide != null) {
+        wrapper.dataset.hide = hide;
+      }
 
       // Long lines so every row soft-wraps to several visual lines.
-      const lines = [];
-      for (let index = 1; index <= 200; index++) {
-        lines.push(
-          `Line ${index}: ${'lorem ipsum dolor sit amet consectetur '.repeat(4)}`
-        );
+      function makeContents(lineCount, tag = '') {
+        const lines = [];
+        for (let index = 1; index <= lineCount; index++) {
+          lines.push(
+            `Line ${index}${tag}: ${'lorem ipsum dolor sit amet consectetur '.repeat(4)}`
+          );
+        }
+        return `${lines.join('\n')}\n`;
       }
 
       const codeView = new CodeView({
@@ -61,14 +74,21 @@
         disableFileHeader: true,
       });
       codeView.setup(root);
-      codeView.setItems([
-        {
-          id: 'file',
-          type: 'file',
-          file: { name: 'wrapped.md', contents: `${lines.join('\n')}\n` },
-          version: 0,
-        },
-      ]);
+      let version = 0;
+      function setContents(lineCount, tag) {
+        codeView.setItems([
+          {
+            id: 'file',
+            type: 'file',
+            file: {
+              name: 'wrapped.md',
+              contents: makeContents(lineCount, tag),
+            },
+            version: version++,
+          },
+        ]);
+      }
+      setContents(200);
 
       window.__hiddenRoot = {
         hide() {
@@ -76,6 +96,56 @@
         },
         show() {
           wrapper.hidden = false;
+        },
+        // Swaps the file for a shorter one whose lines carry `tag`.
+        replaceContents(tag) {
+          setContents(50, tag);
+        },
+        // Hides the root in a frame callback queued before the CodeView's own
+        // render, replaces the file, and shows the root in a callback queued
+        // after it: the root is hidden only while that render runs.
+        replaceContentsWhileHiddenForOneFrame(tag) {
+          requestAnimationFrame(() => {
+            wrapper.hidden = true;
+          });
+          setContents(50, tag);
+          requestAnimationFrame(() => {
+            wrapper.hidden = false;
+          });
+        },
+        scrollToLine(lineNumber) {
+          codeView.scrollTo({
+            type: 'line',
+            id: 'file',
+            lineNumber,
+            align: 'start',
+            behavior: 'instant',
+          });
+        },
+        firstRowText() {
+          return (
+            codeView
+              .getRenderedItems()[0]
+              ?.element?.shadowRoot?.querySelector('[data-content] [data-line]')
+              ?.textContent ?? ''
+          );
+        },
+        // How many wrapped-row heights the file cached as zero.
+        zeroHeights() {
+          const heights =
+            codeView.getRenderedItems()[0]?.instance.cache.heights;
+          let zeros = 0;
+          for (const height of heights?.values() ?? []) {
+            if (height === 0) zeros++;
+          }
+          return zeros;
+        },
+        // How many rows the file holds a measured height for. Every line here
+        // wraps, so a measured row always has an entry.
+        measuredRows() {
+          return (
+            codeView.getRenderedItems()[0]?.instance.cache.heights.size ?? 0
+          );
         },
         // Rendered rows as [line number, top relative to the root, height].
         rows() {

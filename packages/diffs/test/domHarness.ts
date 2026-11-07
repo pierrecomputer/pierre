@@ -133,11 +133,22 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       resizeObservers.delete(this);
     }
 
+    // Delivers an entry shaped like a browser's, with the sizes taken from the
+    // target's rect (zero unless a test stubbed it).
     trigger(target: Element): void {
       if (!this.#targets.has(target)) {
         return;
       }
-      this.#callback([{ target } as ResizeObserverEntry], this);
+      const rect = target.getBoundingClientRect();
+      const size = [{ inlineSize: rect.width, blockSize: rect.height }];
+      const entry = {
+        target,
+        contentRect: rect,
+        borderBoxSize: size,
+        contentBoxSize: size,
+        devicePixelContentBoxSize: size,
+      } as unknown as ResizeObserverEntry;
+      this.#callback([entry], this);
     }
   }
 
