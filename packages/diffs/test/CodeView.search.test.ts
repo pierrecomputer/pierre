@@ -50,6 +50,7 @@ describe('CodeView search', () => {
   test('empty queries tolerate scope and item changes without searching or repeated renders', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, editStateKey) =>
         new Editor(type, options, editStateKey),
     });
@@ -125,6 +126,7 @@ describe('CodeView search', () => {
     const dom = installDom();
     const changes: string[] = [];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
       onItemEditChange: (_event, item) => changes.push(item.id),
     });
@@ -237,6 +239,7 @@ describe('CodeView search', () => {
       const dom = installDom();
       const changes: string[] = [];
       const viewer = new CodeView({
+        useTokenTransformer: true,
         diffStyle: kind === 'unified' ? 'unified' : 'split',
         createEditor: (type, options, key) => new Editor(type, options, key),
         onItemEditChange: (_event, item) => changes.push(item.id),
@@ -302,6 +305,7 @@ describe('CodeView search', () => {
   test('replace all edits live scoped additions in one history step and refreshes highlights', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -352,6 +356,7 @@ describe('CodeView search', () => {
   test('navigates scoped and global matches without changing editor selections', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -414,6 +419,7 @@ describe('CodeView search', () => {
     async (diffStyle) => {
       const dom = installDom();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         diffStyle,
         createEditor: (type, options, key) => new Editor(type, options, key),
       });
@@ -480,6 +486,7 @@ describe('CodeView search', () => {
   test('follows editor focus, preserves panel scope, and clears scope outside CodeView', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -576,6 +583,7 @@ describe('CodeView search', () => {
     async (focus) => {
       const dom = installDom();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor: (type, options, key) => new Editor(type, options, key),
       });
       try {
@@ -654,6 +662,7 @@ describe('CodeView search', () => {
   test('updates scope for edit mode, item renaming, collapse, and removal', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -750,6 +759,7 @@ describe('CodeView search', () => {
   test('refreshes live file matches and highlights without a host update', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     const file = { name: 'live.txt', contents: 'old target\r\nlast line' };
@@ -809,6 +819,7 @@ describe('CodeView search', () => {
     async (diffStyle) => {
       const dom = installDom();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         diffStyle,
         createEditor: (type, options, key) => new Editor(type, options, key),
       });
@@ -915,6 +926,7 @@ describe('CodeView search', () => {
         const dom = installDom();
         const changes: string[] = [];
         const viewer = new CodeView({
+          useTokenTransformer: true,
           diffStyle: kind === 'unified' ? 'unified' : 'split',
           createEditor: (type, options, key) => new Editor(type, options, key),
           onItemEditChange: (_event, item) => changes.push(item.id),
@@ -1034,6 +1046,7 @@ describe('CodeView search', () => {
   test('searches retained edits after the item scrolls offscreen', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {
@@ -1113,6 +1126,7 @@ describe('CodeView search', () => {
   test('searches collapsed context only while scoped or explicitly expanded', async () => {
     const dom = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     try {

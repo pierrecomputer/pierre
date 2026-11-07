@@ -88,6 +88,7 @@ async function createFixture(
 
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });
@@ -364,6 +365,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
     document.body.appendChild(container);
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       theme: DEFAULT_THEMES,
       diffStyle: 'split',
     });
@@ -445,6 +447,7 @@ describe('file editor: theme toggle mid-edit', () => {
     document.body.appendChild(container);
     const file = new File<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       theme: DEFAULT_THEMES,
       themeType: 'light',
     });
@@ -563,6 +566,7 @@ describe('diff editor: detach then re-attach', () => {
     const fileDiff = new FileDiff<undefined>(
       {
         disableFileHeader: true,
+        useTokenTransformer: true,
         theme: DEFAULT_THEMES,
         diffStyle: 'split',
       },
@@ -615,6 +619,7 @@ describe('diff editor: detach then re-attach', () => {
       remountedFileDiff = new FileDiff<undefined>(
         {
           disableFileHeader: true,
+          useTokenTransformer: true,
           theme: DEFAULT_THEMES,
           diffStyle: 'split',
         },

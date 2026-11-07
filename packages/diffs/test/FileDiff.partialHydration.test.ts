@@ -324,6 +324,7 @@ describe('FileDiff partial hydration', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       loadDiffFiles: (fileDiff) => {
         expect(fileDiff).toBe(partial);
         return deferred.promise;
@@ -389,6 +390,7 @@ describe('FileDiff partial hydration', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       loadDiffFiles: () => deferred.promise,
     });
     let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
@@ -457,6 +459,7 @@ describe('FileDiff partial hydration', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       loadDiffFiles: (fileDiff) => {
         loadCalls++;
         expect(fileDiff).toBe(partial);
@@ -519,6 +522,7 @@ describe('FileDiff partial hydration', () => {
     const instance = new TestFileDiff({
       disableErrorHandling: true,
       disableFileHeader: true,
+      useTokenTransformer: true,
       loadDiffFiles: (fileDiff) => {
         expect(fileDiff).toBe(partial);
         return deferred.promise;

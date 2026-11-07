@@ -61,6 +61,7 @@ test('diff: deleting the rows below a wrapped row drops its measurement', async 
       overflow: 'wrap',
       diffStyle: 'unified',
       expandUnchanged: true,
+      useTokenTransformer: true,
     },
     virtualizer
   );
@@ -119,6 +120,7 @@ for (const surface of ['file', 'diff'] as const) {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       overflow: 'wrap' as const,
+      useTokenTransformer: true,
     };
     const instance =
       surface === 'file'

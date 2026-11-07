@@ -66,6 +66,7 @@ describe('FileDiff unified edit separators', () => {
       const fileContainer = document.createElement('div');
       instance = new FileDiff<string>({
         disableErrorHandling: true,
+        useTokenTransformer: true,
         disableFileHeader: true,
         diffStyle: 'unified',
         hunkSeparators: () => {

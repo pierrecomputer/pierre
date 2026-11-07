@@ -38,6 +38,9 @@ virtualizer.setup(root, content);
 const fileInstance = new VirtualizedFile(
   {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Recommended for editing: without it, entering edit mode re-highlights
+    // and re-renders the whole file.
+    useTokenTransformer: true,
     // Fired any time there's an edit to the document
     onEditChange(event) {
       console.log('change', event.file.name, event.lineAnnotations);
@@ -118,6 +121,9 @@ virtualizer.setup(root, contentWrapper);
 const fileDiffInstance = new VirtualizedFileDiff<ThreadMetadata>(
   {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Recommended for editing: without it, entering edit mode re-highlights
+    // and re-renders the whole file.
+    useTokenTransformer: true,
     renderAnnotation(annotation) {
       const element = document.createElement('div');
       element.textContent = 'Thread ' + annotation.metadata.id;
@@ -194,6 +200,9 @@ root.style.overflow = 'auto';
 
 const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
   createEditor(editorType, options, editStateKey) {
     return new Editor(editorType, {
       ...options,
@@ -688,6 +697,9 @@ export { greet };\`,
 
 const fileOptions: FileOptions<undefined, undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
 };
 
 const virtualizerStyle = {
@@ -823,6 +835,9 @@ const initialDiff: FileDiffMetadata = parseDiffFromFile(
 
 const fileDiffOptions: FileDiffOptions<ThreadMetadata, undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
 };
 
 const virtualizerStyle = {
@@ -1079,8 +1094,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: { workerFactory },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
-    // Optional: pool markup is then already editor-compatible, so entering
-    // edit mode skips a one-time re-render of the file.
+    // Recommended for editing pool-rendered files: without it, entering edit
+    // mode re-highlights and re-renders the whole file on the main thread.
     useTokenTransformer: true,
   },
 });
@@ -1125,8 +1140,8 @@ const file: FileContents = {
 const poolOptions = { workerFactory };
 const highlighterOptions = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  // Optional: pool markup is then already editor-compatible, so entering
-  // edit mode skips a one-time re-render of the file.
+  // Recommended for editing pool-rendered files: without it, entering edit
+  // mode re-highlights and re-renders the whole file on the main thread.
   useTokenTransformer: true,
 } as const;
 
@@ -1667,6 +1682,9 @@ const initialNewFile: FileContents = {
 
 const fileDiffOptions: FileDiffOptions<undefined, undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
 };
 
 const virtualizerStyle = {

@@ -466,7 +466,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       debugLogIfEnabled(
         this.options.__debugPointerEvents,
         'click',
@@ -502,7 +505,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       debugLogIfEnabled(
         this.options.__debugPointerEvents,
         'move',
@@ -517,7 +523,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   handlePointerLeave = (event: PointerEvent): void => {
     const { __debugPointerEvents } = this.options;
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       debugLogIfEnabled(
         __debugPointerEvents,
         'move',
@@ -525,7 +534,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       );
     }
     if (this.hoveredLine == null && this.hoveredToken == null) {
-      if (process.env.NODE_ENV === 'development') {
+      if (
+        typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development'
+      ) {
         debugLogIfEnabled(
           __debugPointerEvents,
           'move',
@@ -552,7 +564,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private handlePointerEvent({ eventType, event }: HandlePointerEventProps) {
     const { __debugPointerEvents } = this.options;
     const composedPath = event.composedPath();
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       debugLogIfEnabled(
         __debugPointerEvents,
         eventType,
@@ -561,7 +576,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       );
     }
     const target = this.resolvePointerTarget(composedPath);
-    if (process.env.NODE_ENV === 'development') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       debugLogIfEnabled(
         __debugPointerEvents,
         eventType,
@@ -713,7 +731,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       pre.addEventListener('pointerleave', this.handlePointerLeave);
       this.hasPointerListeners = true;
 
-      if (process.env.NODE_ENV === 'development') {
+      if (
+        typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development'
+      ) {
         debugLogIfEnabled(
           __debugPointerEvents,
           'click',

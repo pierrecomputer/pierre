@@ -264,6 +264,7 @@ async function createWrapEditor(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     overflow: 'wrap',
+    useTokenTransformer: true,
   });
   const editor = new Editor('file');
   const initialFile: FileContents = {
@@ -512,6 +513,7 @@ describe('editor wrap caret position', () => {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
       overflow: 'wrap',
+      useTokenTransformer: true,
     });
     const editor = new Editor('file');
     const initialFile: FileContents = {
@@ -792,6 +794,7 @@ describe('split wrap overlay offset', () => {
       diffStyle: 'split',
       overflow: 'wrap',
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
     });
     const editor = new Editor('file-diff');
 

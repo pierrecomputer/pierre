@@ -90,6 +90,7 @@ async function createFixture() {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true);
   const { manager, worker } = await createInitializedManager({
     theme: 'pierre-dark',
+    useTokenTransformer: true,
   });
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -98,6 +99,7 @@ async function createFixture() {
   const options = {
     theme: 'pierre-dark',
     disableErrorHandling: true,
+    useTokenTransformer: true,
     onPostRender(
       _node: HTMLElement,
       _instance: unknown,

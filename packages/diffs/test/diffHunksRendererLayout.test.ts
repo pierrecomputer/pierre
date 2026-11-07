@@ -42,6 +42,7 @@ const OPTIONS: DiffHunksRendererOptions = {
   diffStyle: 'unified',
   expandUnchanged: true,
   tokenizeMaxLineLength: 1000,
+  useTokenTransformer: true,
 };
 const ALL: RenderRange = {
   startingLine: 0,

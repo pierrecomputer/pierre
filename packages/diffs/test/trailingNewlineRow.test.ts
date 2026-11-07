@@ -299,6 +299,7 @@ describe('trailing newline row', () => {
       const renderer = new DiffHunksRenderer({
         theme: 'github-light',
         diffStyle,
+        useTokenTransformer: true,
       });
       const diff = makeDiffWithoutFinalNewline();
       await renderer.asyncRender(diff);
@@ -319,6 +320,7 @@ describe('trailing newline row', () => {
       const renderer = new DiffHunksRenderer({
         theme: 'github-light',
         diffStyle,
+        useTokenTransformer: true,
       });
       const diff = makeDiffEndingInChange();
       await renderer.asyncRender(diff);
@@ -355,6 +357,7 @@ describe('trailing newline row', () => {
     const renderer = new DiffHunksRenderer({
       theme: 'github-light',
       diffStyle: 'split',
+      useTokenTransformer: true,
     });
     const diff = makeDiffAddingFinalNewline();
     await renderer.asyncRender(diff);
@@ -384,6 +387,7 @@ describe('trailing newline row', () => {
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
         diffStyle: 'split',
+        useTokenTransformer: true,
       });
       const editor = new Editor('file-diff');
       try {

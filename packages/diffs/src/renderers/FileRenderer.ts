@@ -52,6 +52,7 @@ import { hastToHtml } from '../utils/hastToHtml';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { reportEditWithoutTokenTransformer } from '../utils/reportEditWithoutTokenTransformer';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import type { WorkerPoolManager } from '../worker';
 
@@ -265,6 +266,12 @@ export class FileRenderer<LAnnotation = undefined> {
         this.rowSource = undefined;
       }
     } else {
+      if (
+        renderCache != null &&
+        renderCache.options.useTokenTransformer !== true
+      ) {
+        reportEditWithoutTokenTransformer(model.file.name);
+      }
       this.renderCache = undefined;
       this.rowSource = undefined;
     }

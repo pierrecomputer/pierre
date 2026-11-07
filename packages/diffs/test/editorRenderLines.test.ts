@@ -116,6 +116,7 @@ describe('a CodeView item renders a keystroke as a patch in its frame', () => {
   test('typing inside a change rewrites its rows in the next frame', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options, key) => new Editor(type, options, key),
     });
     const root = createRoot();
