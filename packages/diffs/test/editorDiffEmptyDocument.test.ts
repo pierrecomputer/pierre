@@ -87,6 +87,7 @@ async function createDiffEditorFixture(
   document.body.appendChild(container);
 
   const fileDiff = new TestFileDiff({
+    useTokenTransformer: true,
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle,

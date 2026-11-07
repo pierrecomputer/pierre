@@ -4094,6 +4094,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
   document.body.appendChild(fileContainer);
 
   const file = new File<undefined>({
+    useTokenTransformer: true,
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });

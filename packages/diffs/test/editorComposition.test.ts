@@ -77,6 +77,7 @@ async function createEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const initialFile: FileContents = {
     name: 'editor.ts',

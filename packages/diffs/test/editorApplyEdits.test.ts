@@ -74,6 +74,7 @@ async function createEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
     ...fileOptions,
   });
   const editor = new Editor('file', editorOptions);

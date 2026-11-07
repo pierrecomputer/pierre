@@ -73,6 +73,7 @@ describe('CodeView partial hydration', () => {
       const viewer = new CodeView({
         createEditor: (type, options) => new Editor(type, options),
         loadDiffFiles: () => deferred.promise,
+        useTokenTransformer: true,
       });
       const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 

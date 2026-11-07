@@ -109,6 +109,7 @@ async function createPredictionFixture({
     let activeRenderRange = renderRange;
     const file = new File<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       overflow,
       theme: DEFAULT_THEMES,
     });
@@ -145,6 +146,7 @@ async function createPredictionFixture({
       oldContents ?? contents.replaceAll('value', 'previous');
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       diffStyle,
       overflow,
       theme: DEFAULT_THEMES,

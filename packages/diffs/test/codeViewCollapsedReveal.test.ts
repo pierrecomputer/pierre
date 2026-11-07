@@ -32,6 +32,7 @@ const CONTENTS = NEW_LINES.join('\n');
 test('selecting a line inside a collapsed region expands it and scrolls it into view', async () => {
   const { cleanup } = installDom();
   const viewer = new CodeView({
+    useTokenTransformer: true,
     createEditor: <EType extends EditorType>(
       type: EType,
       options: CodeViewCreateEditorOptions<EType, undefined, undefined>,
