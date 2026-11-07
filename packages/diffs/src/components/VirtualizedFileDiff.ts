@@ -156,6 +156,10 @@ export class VirtualizedFileDiff<
   // No measured row sits above this index. Only an upper bound: a write
   // raises it, dropping rows past the end lowers it to the new row count.
   private highestMeasuredRow = -1;
+  // `true` if we attempted to reconcile a row's height but it returned 0. This
+  // means the wrapper is hidden or disconnected from the dom.  Annotation
+  // heights can't follow this heuristic because they could be 0 by default.
+  public unmeasured = false;
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
@@ -463,6 +467,7 @@ export class VirtualizedFileDiff<
   // line heights or in cases of extremely large files...
   public reconcileHeights(): boolean {
     let hasHeightChange = false;
+    this.unmeasured = false;
     const {
       options: { overflow = 'scroll' },
     } = this;
@@ -508,19 +513,6 @@ export class VirtualizedFileDiff<
         ? [this.codeAdditions, this.codeDeletions]
         : [this.codeUnified];
 
-    // Keep offscreen file annotation measurements consistent with the buffers
-    // computed for this render. A rendered top row can confirm their removal.
-    if (
-      this.renderRange != null &&
-      shouldRenderFileAnnotations(this.renderRange)
-    ) {
-      const fileAnnotationHeight = measureFileAnnotationHeight(codeGroups);
-      const nextFileAnnotationHeight = fileAnnotationHeight ?? 0;
-      if (this.setFileAnnotationHeight(nextFileAnnotationHeight)) {
-        hasHeightChange = true;
-      }
-    }
-
     // In split view a row pair shares one grid track, so a track is measured
     // once: from the additions column, which owns the annotation and ghost
     // text rows hanging under it, and from the deletions column only for a
@@ -551,6 +543,10 @@ export class VirtualizedFileDiff<
           continue;
         }
         let measuredHeight = line.getBoundingClientRect().height;
+        if (measuredHeight === 0) {
+          this.unmeasured = true;
+          break;
+        }
         let hasMetadata = false;
         // Annotations or noNewline metadata increase the size of the their
         // attached line
@@ -583,6 +579,21 @@ export class VirtualizedFileDiff<
             lineIndex
           );
         }
+      }
+      if (this.unmeasured) {
+        break;
+      }
+    }
+
+    if (
+      !this.unmeasured &&
+      this.renderRange != null &&
+      shouldRenderFileAnnotations(this.renderRange)
+    ) {
+      const fileAnnotationHeight = measureFileAnnotationHeight(codeGroups);
+      const nextFileAnnotationHeight = fileAnnotationHeight ?? 0;
+      if (this.setFileAnnotationHeight(nextFileAnnotationHeight)) {
+        hasHeightChange = true;
       }
     }
 
