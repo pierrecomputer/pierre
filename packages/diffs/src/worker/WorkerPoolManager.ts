@@ -370,7 +370,10 @@ export class WorkerPoolManager {
     const taskPromises: Promise<void>[] = [];
     for (const managedWorker of this.workers) {
       if (!managedWorker.initialized) {
-        if (process.env.NODE_ENV === 'development') {
+        if (
+          typeof process !== 'undefined' &&
+          process.env.NODE_ENV === 'development'
+        ) {
           console.log({ managedWorker });
         }
         throw new Error(

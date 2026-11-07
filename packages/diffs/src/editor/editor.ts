@@ -1703,6 +1703,7 @@ export class Editor<
       this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
       if (
+        typeof process !== 'undefined' &&
         process.env.NODE_ENV === 'development' &&
         this.#options.__debug === true
       ) {
@@ -1760,6 +1761,7 @@ export class Editor<
       this.#remeasureMetricsOnFontLoad();
       this.#listenContentElement(contentEl, gutterEl);
       if (
+        typeof process !== 'undefined' &&
         process.env.NODE_ENV === 'development' &&
         this.#contentElement !== undefined &&
         this.#options.__debug === true
@@ -1848,6 +1850,7 @@ export class Editor<
       }
 
       if (
+        typeof process !== 'undefined' &&
         process.env.NODE_ENV === 'development' &&
         this.#options.__debug === true &&
         renderRange !== undefined
@@ -3143,6 +3146,7 @@ export class Editor<
         left: contentEl.offsetLeft - this.#getGutterWidth(),
       };
       if (
+        typeof process !== 'undefined' &&
         process.env.NODE_ENV === 'development' &&
         this.#options.__debug === true
       ) {
@@ -3908,12 +3912,16 @@ export class Editor<
     // Without a tokenizer (the next sync creates one) the component still
     // takes the change and shows the lines as plain text until tokens come.
     const t =
-      process.env.NODE_ENV === 'development' && this.#options.__debug === true
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      this.#options.__debug === true
         ? performance.now()
         : 0;
     const dirtyLines = tokenizer?.tokenize(change, renderRange);
     const t2 =
-      process.env.NODE_ENV === 'development' && this.#options.__debug === true
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      this.#options.__debug === true
         ? performance.now()
         : 0;
 
@@ -3934,6 +3942,7 @@ export class Editor<
     this.#renderCarets();
 
     if (
+      typeof process !== 'undefined' &&
       process.env.NODE_ENV === 'development' &&
       this.#options.__debug === true
     ) {
