@@ -2331,14 +2331,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // Read the box rather than trusting the observer's last report, which can
     // be a frame behind a root that was just shown.
     const { width, height } = this.root.getBoundingClientRect();
-    this.setRootHasBox(width > 0 || height > 0);
-    if (this.rootHasBox === false) {
+    if (width === 0 && height === 0) {
       console.error(
         'CodeView.requestScroll: the root has no layout, scroll request ignored'
       );
       onDone?.('cancelled');
       return;
     }
+    this.setRootHasBox(true);
     // Install the replacement before telling the replaced request it was
     // cancelled, so a callback that requests again supersedes it in turn.
     const { pendingScrollDone: replaced } = this;
