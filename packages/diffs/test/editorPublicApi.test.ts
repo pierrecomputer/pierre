@@ -13,6 +13,7 @@ import type { Marker } from '../src/editor/marker';
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorViewState } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { SearchParams } from '../src/search';
 import type {
   FileContents,
   FileDiffMetadata,
@@ -937,7 +938,7 @@ describe('Editor document registry surfaces', () => {
           }
         )
       ).rejects.toThrow(
-        'FileDiff: retained session cannot resume against a different old file'
+        'DiffModel.startEditSession: the retained session was diffed against a different old file'
       );
 
       const resumed = await createDiffEditorFixture(
@@ -1477,6 +1478,135 @@ describe('Editor state round trip', () => {
   });
 });
 
+describe('Editor.replaceSearchMatches', () => {
+  test('remaps existing selections through replacements and restores them on undo', async () => {
+    const fixture = await createEditorFixture('foo keep foo');
+    try {
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 4 },
+          end: { line: 0, character: 8 },
+          direction: 'backward',
+        },
+      ]);
+      await wait(0);
+      const before = fixture.editor.getViewState().selections;
+      const params: SearchParams = {
+        text: 'foo',
+        replaceText: 'longer',
+        regex: false,
+        wholeWord: false,
+        caseSensitive: true,
+      };
+      const matches = fixture.editor.getEditState()!.document.search(params);
+      fixture.editor.replaceSearchMatches(matches, params);
+      expect(fixture.editor.getText()).toBe('longer keep longer');
+      const after = fixture.editor.getViewState().selections;
+      expect(after).toEqual([
+        {
+          start: { line: 0, character: 7 },
+          end: { line: 0, character: 11 },
+          direction: -1,
+        },
+      ]);
+      fixture.editor.undo();
+      expect(fixture.editor.getViewState().selections).toEqual(before);
+      fixture.editor.redo();
+      expect(fixture.editor.getViewState().selections).toEqual(after);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test.each([
+    ['file', '\n'],
+    ['file-diff', '\n'],
+    ['file', '\r\n'],
+    ['file-diff', '\r\n'],
+  ] as const)(
+    'replaces regex matches in a %s with %j replacement newlines as one undoable edit without taking focus',
+    async (type, replacementEol) => {
+      const contents = 'foo-1\r\nfoo-22';
+      const fixture =
+        type === 'file'
+          ? await createEditorFixture(contents)
+          : await createDiffEditorFixture(
+              'split',
+              undefined,
+              undefined,
+              contents
+            );
+      try {
+        const params: SearchParams = {
+          text: 'foo-(\\d+)',
+          replaceText: `$1:$&${replacementEol}`,
+          caseSensitive: true,
+          wholeWord: false,
+          regex: true,
+        };
+        const outside = document.createElement('input');
+        document.body.append(outside);
+        outside.focus();
+        const onChange = mock(() => {});
+        fixture.editor.setOptions({ onChange });
+        const textDocument = fixture.editor.getEditState()!.document;
+        const end = fixture.editor.replaceSearchMatches(
+          textDocument.search(params),
+          params
+        );
+        expect(fixture.editor.getText()).toBe('1:foo-1\r\n\r\n22:foo-22\r\n');
+        expect(end).toEqual([19, 19]);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        await wait(0);
+        expect(globalThis.document.activeElement).toBe(outside);
+        fixture.editor.undo();
+        expect(fixture.editor.getText()).toBe(contents);
+        expect(fixture.editor.canUndo).toBe(false);
+        fixture.editor.redo();
+        expect(fixture.editor.getText()).toBe('1:foo-1\r\n\r\n22:foo-22\r\n');
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
+});
+
+describe('Editor.setSelections', () => {
+  test('normalizes selections and scrolls to and focuses the caret', async () => {
+    const { cleanup, content, editor } =
+      await createEditorFixture('alpha\nbravo');
+    const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+    const focus = spyOn(content, 'focus');
+    try {
+      const outside = document.createElement('input');
+      document.body.append(outside);
+      outside.focus();
+
+      editor.setSelections([
+        {
+          start: { line: 1, character: 99 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 5 },
+          direction: -1,
+        },
+      ]);
+      await waitFor(() => focus.mock.calls.length > 0);
+      expect(scroll).toHaveBeenCalled();
+      expect(focus).toHaveBeenCalled();
+    } finally {
+      scroll.mockRestore();
+      focus.mockRestore();
+      cleanup();
+    }
+  });
+});
+
 describe('Editor.setOptions', () => {
   test('applies an option change after construction', async () => {
     const onChange = mock(() => {});
@@ -1741,8 +1871,11 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus applies a top offset after sticky headers', async () => {
+    // The four leading rows stand in for the rows first-visible skips. They
+    // are relabeled in place: the column is written by key, so rows it did
+    // not write cannot be added to it.
     const { cleanup, container, content, editor } = await createEditorFixture(
-      'alpha\nbravo\ncharlie'
+      'r1\nr2\nr3\nr4\nalpha\nbravo\ncharlie'
     );
     try {
       const viewport = document.createElement('div');
@@ -1756,32 +1889,28 @@ describe('Editor focus lifecycle', () => {
       setRect(header, 0, 20);
       shadowRoot.prepend(header);
 
-      for (const lineType of [
+      const rows = getLineRows(content);
+      for (const [index, lineType] of [
         'annotation',
         'separator',
         'buffer',
         'change-deletion',
-      ]) {
-        const row = document.createElement('div');
+      ].entries()) {
+        const row = rows[index];
         row.dataset.line = '99';
         row.dataset.lineType = lineType;
         setRect(row, 35, 40);
-        content.prepend(row);
       }
-
-      const rows = getLineRows(content).filter(
-        (row) => row.dataset.line !== '99'
-      );
-      setRect(rows[0], 10, 20);
-      setRect(rows[1], 25, 35);
-      setRect(rows[2], 35, 45);
+      setRect(rows[4], 10, 20);
+      setRect(rows[5], 25, 35);
+      setRect(rows[6], 35, 45);
 
       editor.focus({
         lineNumber: 'first-visible',
         preventScroll: true,
         offset: 10,
       });
-      expect(editor.getViewState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(6);
     } finally {
       cleanup();
     }
@@ -1972,6 +2101,257 @@ describe('Editor history option plumbing', () => {
       expect(editor.getText()).toBe('Xbcdef');
     } finally {
       cleanup();
+    }
+  });
+});
+
+describe('replacing the diff while editing', () => {
+  test("a replacement render does not flush the old document's tokens", async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      diffStyle: 'unified',
+      theme: DEFAULT_THEMES,
+      preferredHighlighter: 'highlights',
+    });
+    const oldFile = { name: 'a.ts', contents: 'a\nb\nc\nd' };
+    fileDiff.render({
+      oldFile,
+      newFile: { name: 'a.ts', contents: 'x\nb\nc\nd' },
+      fileContainer: container,
+      forceRender: true,
+    });
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-line]') != null
+    );
+    const editor = new Editor('file-diff');
+    try {
+      // Attach and replace in the same tick: the editor has tokens for the
+      // four-line document and has not yet synced to the one-line one.
+      editor.edit(fileDiff);
+      expect(() =>
+        fileDiff.render({
+          oldFile,
+          newFile: { name: 'a.ts', contents: 'short' },
+          fileContainer: container,
+        })
+      ).not.toThrow();
+      await waitFor(() => editor.getText() === 'short');
+      expect(container.shadowRoot?.textContent).toContain('short');
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('re-rendering the same diff while editing', () => {
+  test('a fresh diff with the same text keeps the editor working', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      diffStyle: 'unified',
+      theme: DEFAULT_THEMES,
+      preferredHighlighter: 'highlights',
+    });
+    const files = {
+      oldFile: { name: 's.ts', contents: 'old\n' },
+      newFile: { name: 's.ts', contents: 'const x = 1;\n' },
+    };
+    fileDiff.render({ ...files, fileContainer: container, forceRender: true });
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-line]') != null
+    );
+    const editor = new Editor('file-diff');
+    try {
+      // Attach and re-render in the same tick: a fresh keyless diff of the
+      // same files counts as a replacement that changes nothing in the
+      // document, and the tokens the editor made on attach still apply.
+      editor.edit(fileDiff);
+      expect(() =>
+        fileDiff.render({
+          fileDiff: parseDiffFromFile(files.oldFile, files.newFile),
+          fileContainer: container,
+        })
+      ).not.toThrow();
+      await waitForEditableContent(container);
+      await wait(10);
+      insertText(editor, 0, 0, 'y');
+      expect(editor.getText()).toBe('yconst x = 1;\n');
+      expect(container.shadowRoot?.textContent).toContain('yconst x = 1;');
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('retained drafts', () => {
+  test('a retained draft renders its own rows over highlighted input rows', async () => {
+    EditStateManager.clearAll();
+    const documentKey = 'retained-draft-rows';
+    const files = {
+      oldFile: {
+        name: 'draft.ts',
+        contents: 'const alpha = 1;\nconst old = 2;\nconst charlie = 3;\n',
+      },
+      newFile: {
+        name: 'draft.ts',
+        contents: 'const alpha = 1;\nconst fresh = 2;\nconst charlie = 3;\n',
+      },
+    };
+    const dom = installDom();
+    // Renders the input highlighted with token spans, which is what a session
+    // may reuse, then attaches a keyed editor.
+    const mount = async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const fileDiff = new TestFileDiff({
+        disableFileHeader: true,
+        diffStyle: 'unified',
+        theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
+      });
+      fileDiff.render({
+        ...files,
+        fileContainer: container,
+        forceRender: true,
+      });
+      await waitFor(
+        () => container.shadowRoot?.querySelector('[data-char]') != null
+      );
+      const editor = new Editor('file-diff', undefined, documentKey);
+      editor.edit(fileDiff);
+      await waitForEditableContent(container);
+      return { container, editor, fileDiff };
+    };
+    const first = await mount();
+    try {
+      insertText(first.editor, 1, 0, 'const inserted = 0;\n');
+      await wait(0);
+      expect(first.container.shadowRoot?.textContent).toContain(
+        'const inserted = 0;'
+      );
+    } finally {
+      first.editor.cleanUp();
+      first.fileDiff.cleanUp();
+    }
+    const second = await mount();
+    try {
+      expect(second.editor.getText()).toContain('const inserted = 0;');
+      await wait(0);
+      const text = second.container.shadowRoot?.textContent ?? '';
+      expect(text).toContain('const inserted = 0;');
+      expect(text).toContain('const fresh = 2;');
+    } finally {
+      second.editor.cleanUp();
+      second.fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('edits made while recycled render their own rows on re-attach', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableFileHeader: true,
+      diffStyle: 'unified',
+      theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
+    });
+    fileDiff.render({
+      oldFile: { name: 'r.ts', contents: 'a\nold\nc\nd' },
+      newFile: { name: 'r.ts', contents: 'a\nnew\nc\nd' },
+      fileContainer: container,
+      forceRender: true,
+    });
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-char]') != null
+    );
+    const editor = new Editor('file-diff');
+    try {
+      editor.edit(fileDiff);
+      await waitForEditableContent(container);
+      editor.cleanUp('recycle');
+      insertText(editor, 1, 0, 'x\n');
+      editor.edit(fileDiff);
+      await waitForEditableContent(container);
+      await wait(0);
+      expect(editor.getText()).toBe('a\nx\nnew\nc\nd');
+      // Unified rows, the deleted old line among them.
+      const lines = [
+        ...(container.shadowRoot?.querySelectorAll('[data-line]') ?? []),
+      ].map((line) => line.textContent);
+      expect(lines).toEqual(['a', 'old', 'x', 'new', 'c', 'd']);
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('Editor searchPanel option', () => {
+  test("'host' leaves the find shortcuts untouched and keeps the rest of the keymap", async () => {
+    const fixture = await createEditorFixture('alpha beta', {
+      searchPanel: 'host',
+    });
+    try {
+      const { container, content, editor } = fixture;
+      const pressFind = (altKey: boolean) => {
+        const event = new window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          code: 'KeyF',
+          key: 'f',
+          metaKey: true,
+          altKey,
+        });
+        content.dispatchEvent(event);
+        return event;
+      };
+      const panel = () =>
+        container.shadowRoot?.querySelector('[data-search-panel]') ?? null;
+
+      for (const altKey of [false, true]) {
+        const event = pressFind(altKey);
+        await wait(0);
+        expect(event.defaultPrevented).toBe(false);
+        expect(panel()).toBeNull();
+      }
+
+      const selectAll = new window.KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        code: 'KeyA',
+        key: 'a',
+        metaKey: true,
+      });
+      content.dispatchEvent(selectAll);
+      expect(selectAll.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toMatchObject([
+        { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+      ]);
+
+      // Handing the shortcuts back to the editor opens its own panel again.
+      editor.setOptions({ searchPanel: 'editor' });
+      const event = pressFind(false);
+      await wait(0);
+      expect(event.defaultPrevented).toBe(true);
+      expect(panel()).not.toBeNull();
+    } finally {
+      fixture.cleanup();
     }
   });
 });

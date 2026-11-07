@@ -143,6 +143,7 @@ export class WorkerPoolManager {
       theme = DEFAULT_THEMES,
       useTokenTransformer = false,
       lineDiffType = 'word-alt',
+      preferredDiffLib,
       maxLineDiffLength = 1000,
       tokenizeMaxLineLength = 1000,
       preferredHighlighter,
@@ -153,6 +154,7 @@ export class WorkerPoolManager {
       theme,
       useTokenTransformer,
       lineDiffType,
+      preferredDiffLib,
       maxLineDiffLength,
       tokenizeMaxLineLength,
     };
@@ -254,6 +256,7 @@ export class WorkerPoolManager {
     theme = this.renderOptions.theme ?? DEFAULT_THEMES,
     useTokenTransformer = this.renderOptions.useTokenTransformer ?? false,
     lineDiffType = this.renderOptions.lineDiffType ?? 'word-alt',
+    preferredDiffLib = this.renderOptions.preferredDiffLib,
     maxLineDiffLength = this.renderOptions.maxLineDiffLength ?? 1000,
     tokenizeMaxLineLength = this.renderOptions.tokenizeMaxLineLength ?? 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
@@ -267,6 +270,7 @@ export class WorkerPoolManager {
         theme,
         useTokenTransformer,
         lineDiffType,
+        preferredDiffLib,
         maxLineDiffLength,
         tokenizeMaxLineLength,
       };
@@ -366,7 +370,9 @@ export class WorkerPoolManager {
     const taskPromises: Promise<void>[] = [];
     for (const managedWorker of this.workers) {
       if (!managedWorker.initialized) {
-        console.log({ managedWorker });
+        if (process.env.NODE_ENV === 'development') {
+          console.log({ managedWorker });
+        }
         throw new Error(
           'setRenderOptionsOnWorkers: Somehow we have an uninitialized worker'
         );
@@ -822,7 +828,7 @@ export class WorkerPoolManager {
     file: FileContents,
     startingLine: number,
     totalLines: number,
-    lines?: string[]
+    lines?: readonly string[]
   ): ThemedFileResult | undefined {
     const highlighter = getHighlighterIfLoaded({
       theme: this.renderOptions.theme,

@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import {
   DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_LAYOUT,
 } from '../src/constants';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -18,6 +22,14 @@ import {
 
 const ROOT_HEIGHT = 800;
 const ROOT_WIDTH = 1000;
+
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+  });
+});
+afterAll(disposeHighlighter);
 
 function makeInsertedDiffItem(id: string): CodeViewItem<undefined> {
   const oldLines = Array.from(
@@ -74,6 +86,45 @@ function getViewportTopForLocalTop(localTop: number): number {
 }
 
 describe('CodeView range scrolling', () => {
+  test('tearing the viewer down answers a pending line scroll as cancelled', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
+    const results: string[] = [];
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [makeFileItem('file:example', 120)]);
+      const instance = viewer.getRenderedItems()[0]?.instance;
+      expect(instance).toBeDefined();
+      instance?.scrollToLine(100, 'nearest', (result) => results.push(result));
+      viewer.cleanUp();
+      expect(results).toEqual(['cancelled']);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('removing the target item answers a pending line scroll as cancelled', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
+    const results: string[] = [];
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [makeFileItem('file:example', 120)]);
+      const instance = viewer.getRenderedItems()[0]?.instance;
+      expect(instance).toBeDefined();
+      instance?.scrollToLine(80, 'start', (result) => results.push(result));
+      viewer.setItems([]);
+      await wait();
+      expect(results).toEqual(['cancelled']);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('scrolls a single-line range to the same position as a line target', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
@@ -161,6 +212,43 @@ describe('CodeView range scrolling', () => {
       dispatchScroll(root);
       viewer.render(true);
 
+      viewer.scrollTo({
+        type: 'range',
+        id: 'file:example',
+        range: { start: 30, end: 35 },
+        align: 'nearest',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+
+      expect(root.scrollTop).toBe(500);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('a nearest request for a visible range replaces an in-flight scroll', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [makeFileItem('file:example', 120)]);
+
+      root.scrollTop = 500;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      viewer.scrollTo({
+        type: 'range',
+        id: 'file:example',
+        range: { start: 100, end: 105 },
+        align: 'start',
+        behavior: 'instant',
+      });
       viewer.scrollTo({
         type: 'range',
         id: 'file:example',

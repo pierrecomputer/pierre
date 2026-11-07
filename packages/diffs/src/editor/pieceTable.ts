@@ -1,13 +1,13 @@
+import {
+  type MatchRange,
+  searchDocument,
+  type SearchMatchVisitor,
+  type SearchParams,
+} from '../search';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
-import type { SearchParams } from './searchPanel';
 import type { Position, Range, ResolvedTextEdit } from './types';
 
-const MAX_FIND_MATCHES = 100000;
 const LINE_FEED = 10;
-const CARRIAGE_RETURN = 13;
-// TODO(ije): use Intl.Segmenter instead of regex for word separators
-const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
-
 // A piece is a segment of text that is either original or added.
 class Piece {
   static Original = 0;
@@ -18,20 +18,11 @@ class Piece {
     public readonly offset: number,
     public readonly length: number,
     public readonly lineOffsetStart: number,
-    public readonly lineOffsetEnd: number,
-    public readonly hasVirtualTrailingCRBreak: boolean,
-    public readonly firstCharCode: number,
-    public readonly lastCharCode: number
+    public readonly lineOffsetEnd: number
   ) {}
 
-  // A slice ending between a backing-buffer CRLF needs its own lone-CR break
-  // until the tree reconnects it to a piece beginning with LF.
   get lineBreakCount(): number {
-    return (
-      this.lineOffsetEnd -
-      this.lineOffsetStart +
-      (this.hasVirtualTrailingCRBreak ? 1 : 0)
-    );
+    return this.lineOffsetEnd - this.lineOffsetStart;
   }
 }
 
@@ -48,17 +39,9 @@ class TextBuffer {
   append(text: string): number {
     const offset = this.text.length;
     for (let i = 0; i < text.length; i++) {
-      const charCode = text.charCodeAt(i);
-      if (charCode !== LINE_FEED && charCode !== CARRIAGE_RETURN) {
-        continue;
+      if (text.charCodeAt(i) === LINE_FEED) {
+        this.lineOffsets.push(offset + i + 1);
       }
-      if (
-        charCode === CARRIAGE_RETURN &&
-        text.charCodeAt(i + 1) === LINE_FEED
-      ) {
-        i++;
-      }
-      this.lineOffsets.push(offset + i + 1);
     }
     this.text += text;
     return offset;
@@ -77,9 +60,7 @@ class PieceNode {
   constructor(
     public piece: Piece,
     public subtreeLength: number = piece.length,
-    public subtreeLineBreakCount: number = piece.lineBreakCount,
-    public subtreeFirstCharCode: number = piece.firstCharCode,
-    public subtreeLastCharCode: number = piece.lastCharCode
+    public subtreeLineBreakCount: number = piece.lineBreakCount
   ) {}
 
   updateSubtreeLength(): void {
@@ -87,32 +68,23 @@ class PieceNode {
       (this.left?.subtreeLength ?? 0) +
       this.piece.length +
       (this.right?.subtreeLength ?? 0);
-    // Pieces count their edge characters in isolation. Collapse a CRLF only
-    // when the two characters are actually adjacent in this subtree.
     this.subtreeLineBreakCount =
       (this.left?.subtreeLineBreakCount ?? 0) +
       this.piece.lineBreakCount +
-      (this.right?.subtreeLineBreakCount ?? 0) -
-      (formsCRLF(this.left?.subtreeLastCharCode, this.piece.firstCharCode)
-        ? 1
-        : 0) -
-      (formsCRLF(this.piece.lastCharCode, this.right?.subtreeFirstCharCode)
-        ? 1
-        : 0);
-    this.subtreeFirstCharCode =
-      this.left?.subtreeFirstCharCode ?? this.piece.firstCharCode;
-    this.subtreeLastCharCode =
-      this.right?.subtreeLastCharCode ?? this.piece.lastCharCode;
+      (this.right?.subtreeLineBreakCount ?? 0);
   }
 }
 
 /**
- * A piece table is a data structure that allows for efficient insertion and deletion of text.
- * It is a tree of pieces, where each piece is a segment of text that is either original or added.
- * The tree is a treap (a binary search tree that also keeps each node's random priority in heap
- * order, which keeps the tree balanced without an explicit rebalancing pass). Each edit reshapes
- * only the nodes along one root-to-leaf path via split and merge in O(log P), instead of
- * rebuilding all P pieces.
+ * A piece table is a data structure that allows for efficient insertion and
+ * deletion of text. It is a tree of pieces, where each piece is a segment of
+ * text that is either original or added. The tree is a treap (a binary search
+ * tree that also keeps each node's random priority in heap order, which keeps
+ * the tree balanced without an explicit rebalancing pass). Each edit reshapes
+ * only the nodes along one root-to-leaf path via split and merge in O(log P),
+ * instead of rebuilding all P pieces. The text has one kind of line break,
+ * `\n`; `TextDocument` rewrites any other before it reaches the table.
+ *
  * Inspired by https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation
  */
 export class PieceTable {
@@ -328,90 +300,34 @@ export class PieceTable {
     return foundOffset ?? wrappedOffset;
   }
 
-  search(searchParams: SearchParams): [start: number, end: number][] {
-    if (searchParams.text.length === 0 || this.#length === 0) {
-      return [];
-    }
-
-    // Search currently operates line-by-line, so newline-spanning patterns are unsupported.
-    if (
-      searchParams.text.includes('\n') ||
-      searchParams.text.includes('\r') ||
-      (searchParams.regex &&
-        (searchParams.text.includes('\\n') ||
-          searchParams.text.includes('\\r')))
-    ) {
-      return [];
-    }
-
-    let pattern: RegExp;
-    try {
-      pattern = compileSearchRegExp(
-        searchParams.text,
-        searchParams.regex,
-        searchParams.caseSensitive
-      );
-    } catch {
-      return [];
-    }
-
-    return this.#collectSearchMatchesLineByLine(
-      pattern,
-      searchParams.wholeWord,
-      MAX_FIND_MATCHES
-    );
-  }
-
-  #collectSearchMatchesLineByLine(
-    pattern: RegExp,
-    wholeWord: boolean,
-    limit: number
-  ): [number, number][] {
-    const out: [number, number][] = [];
-    // Search visits the whole document, so flatten it once instead of making
-    // several treap descents for every line and whole-word boundary.
+  search(
+    searchParams: SearchParams,
+    limit?: number,
+    onMatch?: SearchMatchVisitor
+  ): MatchRange[] {
+    // Search scans the whole document, so flatten the treap once instead of
+    // descending it again for every line and whole-word boundary.
     const documentText = this.#textFromPieces();
-    const docLength = documentText.length;
     const lineOffsets = computeLineOffsets(documentText);
-
-    // Reuse the single compiled pattern across every line, resetting its
-    // lastIndex before each line, instead of allocating a fresh RegExp per
-    // line. The pattern is global, so lastIndex tracks progress within a line.
-    for (let line = 0; line < lineOffsets.length; line++) {
-      const lineStart = lineOffsets[line];
-      let lineEnd = lineOffsets[line + 1] ?? docLength;
-      while (
-        lineEnd > lineStart &&
-        isEOL(documentText.charCodeAt(lineEnd - 1))
-      ) {
-        lineEnd--;
-      }
-      const lineText = documentText.slice(lineStart, lineEnd);
-      pattern.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = pattern.exec(lineText)) !== null) {
-        const rel = match.index;
-        const fragment = match[0];
-        if (fragment.length === 0) {
-          pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
-          continue;
-        }
-        const docStart = lineStart + rel;
-        if (
-          !wholeWord ||
-          isWholeWordAtDocOffsets(documentText, docStart, fragment.length)
-        ) {
-          out.push([docStart, docStart + fragment.length]);
-          if (out.length >= limit) {
-            return out;
+    return searchDocument(
+      {
+        textLength: documentText.length,
+        lineCount: lineOffsets.length,
+        getLineText: (line) => {
+          const start = lineOffsets[line] ?? documentText.length;
+          let end = lineOffsets[line + 1] ?? documentText.length;
+          while (end > start && isEOL(documentText.charCodeAt(end - 1))) {
+            end--;
           }
-        }
-        if (rel === pattern.lastIndex) {
-          pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
-        }
-      }
-    }
-    return out;
+          return documentText.slice(start, end);
+        },
+        getLineStartOffset: (line) => lineOffsets[line] ?? documentText.length,
+        charAt: (offset) => documentText.charAt(offset),
+      },
+      searchParams,
+      limit,
+      onMatch
+    );
   }
 
   insert(text: string, offset: number): void {
@@ -580,11 +496,7 @@ export class PieceTable {
         continue;
       }
 
-      line +=
-        (node.left?.subtreeLineBreakCount ?? 0) -
-        (formsCRLF(node.left?.subtreeLastCharCode, node.piece.firstCharCode)
-          ? 1
-          : 0);
+      line += node.left?.subtreeLineBreakCount ?? 0;
       remaining -= leftLength;
       if (remaining <= node.piece.length) {
         const buffer = this.#bufferFor(node.piece.source);
@@ -592,30 +504,10 @@ export class PieceTable {
           upperBound(buffer.lineOffsets, node.piece.offset + remaining),
           node.piece.lineOffsetEnd
         );
-        line += lineOffsetEnd - node.piece.lineOffsetStart;
-        if (
-          remaining === node.piece.length &&
-          node.piece.hasVirtualTrailingCRBreak
-        ) {
-          line++;
-        }
-        if (
-          remaining === node.piece.length &&
-          formsCRLF(
-            node.piece.lastCharCode,
-            this.#nextNode(node)?.piece.firstCharCode
-          )
-        ) {
-          line--;
-        }
-        return line;
+        return line + lineOffsetEnd - node.piece.lineOffsetStart;
       }
 
-      line +=
-        node.piece.lineBreakCount -
-        (formsCRLF(node.piece.lastCharCode, node.right?.subtreeFirstCharCode)
-          ? 1
-          : 0);
+      line += node.piece.lineBreakCount;
       remaining -= node.piece.length;
       node = node.right;
     }
@@ -627,16 +519,10 @@ export class PieceTable {
     let node = this.#root;
     let remaining = lineBreakIndex;
     let documentOffset = 0;
-    let followingCharCode: number | undefined;
 
     while (node !== null) {
-      const leftLineBreakCount =
-        (node.left?.subtreeLineBreakCount ?? 0) -
-        (formsCRLF(node.left?.subtreeLastCharCode, node.piece.firstCharCode)
-          ? 1
-          : 0);
+      const leftLineBreakCount = node.left?.subtreeLineBreakCount ?? 0;
       if (remaining < leftLineBreakCount) {
-        followingCharCode = node.piece.firstCharCode;
         node = node.left;
         continue;
       }
@@ -645,11 +531,7 @@ export class PieceTable {
       documentOffset += leftLength;
       remaining -= leftLineBreakCount;
 
-      const nextCharCode =
-        node.right?.subtreeFirstCharCode ?? followingCharCode;
-      const pieceLineBreakCount =
-        node.piece.lineBreakCount -
-        (formsCRLF(node.piece.lastCharCode, nextCharCode) ? 1 : 0);
+      const pieceLineBreakCount = node.piece.lineBreakCount;
       if (remaining < pieceLineBreakCount) {
         return (
           documentOffset + this.#pieceLineBreakOffset(node.piece, remaining)
@@ -715,18 +597,7 @@ export class PieceTable {
     const end = offset + length;
     const lineOffsetStart = upperBound(buffer.lineOffsets, offset);
     const lineOffsetEnd = upperBound(buffer.lineOffsets, end);
-    const lastCharCode = buffer.text.charCodeAt(end - 1);
-    return new Piece(
-      source,
-      offset,
-      length,
-      lineOffsetStart,
-      lineOffsetEnd,
-      lastCharCode === CARRIAGE_RETURN &&
-        buffer.lineOffsets[lineOffsetEnd - 1] !== end,
-      buffer.text.charCodeAt(offset),
-      lastCharCode
-    );
+    return new Piece(source, offset, length, lineOffsetStart, lineOffsetEnd);
   }
 
   // Replaces document range [start, end) with `text` by splitting at the start,
@@ -991,7 +862,7 @@ export class PieceTable {
 }
 
 function isEOL(charCode: number): boolean {
-  return charCode === /* \n */ 10 || charCode === /* \r */ 13;
+  return charCode === LINE_FEED;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -1060,13 +931,9 @@ function rangeOverlaps(
   return range !== undefined && range[0] < end;
 }
 
-// CRLF seams stay explicit because separately appended buffer chunks may each
-// record a break there; the tree aggregate reconciles the document-level pair.
 function canCoalescePieces(prev: Piece, next: Piece): boolean {
   return (
-    prev.source === next.source &&
-    prev.offset + prev.length === next.offset &&
-    !formsCRLF(prev.lastCharCode, next.firstCharCode)
+    prev.source === next.source && prev.offset + prev.length === next.offset
   );
 }
 
@@ -1079,18 +946,8 @@ function coalesceTwoPieces(prev: Piece, next: Piece): Piece {
     prev.offset,
     prev.length + next.length,
     prev.lineOffsetStart,
-    next.lineOffsetEnd,
-    next.hasVirtualTrailingCRBreak,
-    prev.firstCharCode,
-    next.lastCharCode
+    next.lineOffsetEnd
   );
-}
-
-function formsCRLF(
-  leftCharCode: number | undefined,
-  rightCharCode: number | undefined
-): boolean {
-  return leftCharCode === CARRIAGE_RETURN && rightCharCode === LINE_FEED;
 }
 
 // Returns the index of the first element in the array that is greater than the target.
@@ -1106,120 +963,4 @@ function upperBound(values: number[], target: number): number {
     }
   }
   return lo;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function isWordSeparatorCharCode(charCode: number): boolean {
-  if (charCode <= 32 || charCode === 127) {
-    return true;
-  }
-  const ch = String.fromCharCode(charCode);
-  return WORD_SEPARATORS.includes(ch);
-}
-
-// Checks if the given text is a whole word by checking if the
-// characters before and after are word separators.
-function isWholeWordAtDocOffsets(
-  text: string,
-  docStart: number,
-  length: number
-): boolean {
-  const beforeOk =
-    docStart <= 0 || isWordSeparatorCharCode(text.charCodeAt(docStart - 1));
-  const afterOk =
-    docStart + length >= text.length ||
-    isWordSeparatorCharCode(text.charCodeAt(docStart + length));
-  return beforeOk && afterOk;
-}
-
-function compileSearchRegExp(
-  source: string,
-  isRegex: boolean,
-  caseSensitive: boolean
-): RegExp {
-  const body = isRegex ? source : escapeRegExp(source);
-  const flags = `g${caseSensitive ? '' : 'i'}${isRegex ? 'm' : ''}`;
-  return new RegExp(body, flags);
-}
-
-/** Expands `$&`, `$1`, `$$`, etc. in a regex replace string using a match. */
-function expandReplaceString(
-  replacement: string,
-  match: RegExpExecArray
-): string {
-  return replacement.replace(/\$([$&]|\d+)/g, (_token, group: string) => {
-    if (group === '$') {
-      return '$';
-    }
-    if (group === '&') {
-      return match[0] ?? '';
-    }
-    const index = Number(group);
-    return match[index] ?? '';
-  });
-}
-
-/**
- * Builds the text to insert for one search match, including regex capture
- * substitution when regex mode is enabled.
- */
-export function buildSearchReplacementText(
-  positionAt: (offset: number) => Position,
-  offsetAt: (position: Position) => number,
-  getLineText: (line: number) => string,
-  searchParams: SearchParams,
-  matchStart: number,
-  matchEnd: number
-): string {
-  if (!searchParams.regex) {
-    return searchParams.replaceText;
-  }
-
-  const position = positionAt(matchStart);
-  const lineText = getLineText(position.line);
-  const lineStart = offsetAt({ line: position.line, character: 0 });
-  const relStart = matchStart - lineStart;
-
-  let pattern: RegExp;
-  try {
-    pattern = compileSearchRegExp(
-      searchParams.text,
-      true,
-      searchParams.caseSensitive
-    );
-  } catch {
-    return searchParams.replaceText;
-  }
-
-  // Re-run at the original line offset so lookaround can inspect context
-  // outside the matched range while captures still come from this exact hit.
-  pattern.lastIndex = relStart;
-  const match = pattern.exec(lineText);
-  if (
-    match === null ||
-    match.index !== relStart ||
-    match[0].length !== matchEnd - matchStart
-  ) {
-    return searchParams.replaceText;
-  }
-  return expandReplaceString(searchParams.replaceText, match);
-}
-
-function advancePastEmptyMatch(text: string, index: number): number {
-  if (index + 1 < text.length) {
-    const first = text.charCodeAt(index);
-    const second = text.charCodeAt(index + 1);
-    if (
-      first >= 0xd800 &&
-      first <= 0xdbff &&
-      second >= 0xdc00 &&
-      second <= 0xdfff
-    ) {
-      return index + 2;
-    }
-  }
-  return index + 1;
 }

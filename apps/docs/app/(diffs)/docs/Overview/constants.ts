@@ -4,6 +4,7 @@ import type {
 } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 const options = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -36,6 +37,7 @@ pub fn main() !void {
 `,
   },
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     diffStyle: 'split',
     diffIndicators: 'bars',

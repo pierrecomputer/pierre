@@ -135,10 +135,24 @@ Use the callbacks exposed by each component:
   `event.editor.getViewState()` or `event.editor.getEditState()` only when
   needed.
 
+`onEditChange`, and the editor's own `onChange`, run synchronously whenever the
+document changes: typing, undo and redo, `applyEdits`, and a new `file` or
+`fileDiff` passed to a component with an editor attached, which the editor
+applies as one undoable edit when the old side, name and language are unchanged,
+and as a fresh document with fresh history otherwise. They report the document,
+not the screen. The rows may not show the change yet when the callback runs, for
+example in a virtualized component whose render is queued or while a theme is
+still loading, so do not read the component's DOM from the callback.
+
 Do not feed `event.file` or `event.lineAnnotations` back into the active
 component on every change. Edit mode already owns the live document and
 annotation positions. Use the event for autosave, validation, or application
-side effects.
+side effects. Calling back into the editor or the component from inside the
+callback throws: `render` with a new `file` or `fileDiff`, `applyEdits`, `undo`,
+`redo`, `edit`, and `cleanUp`. If a change should lead to another change, make
+that call after the callback returns. An error thrown by the callback, including
+that one, is logged with `console.error` and does not stop the update that
+raised it.
 
 Most of the time you probably won't need this API.
 

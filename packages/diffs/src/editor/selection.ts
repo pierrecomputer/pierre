@@ -211,6 +211,9 @@ export function mapCursorMove(
           options.resolveRenderableLine == null
             ? line - 1
             : (options.resolveRenderableLine(line - 1, 'up') ?? line);
+      } else {
+        // Up on the first line goes to the start of the document.
+        character = 0;
       }
     } else if (shortcut === 'down') {
       const moved = moveBySoftLine(textDocument, line, character, 1, options);
@@ -227,6 +230,9 @@ export function mapCursorMove(
                   options.resolveRenderableLine(line + 1, 'down') ?? line,
                   maxLine
                 );
+        } else {
+          // Down on the last line goes to the end of the document.
+          character = textDocument.getLineLength(line);
         }
       }
     } else if (isCollapsedSelection(selection)) {
@@ -309,7 +315,11 @@ function moveBySoftLine(
   } else {
     const nextLine = line + direction;
     if (nextLine < 0 || nextLine >= textDocument.lineCount) {
-      return { line, character };
+      // Past the first or last soft line of the document: go to its start or end.
+      return {
+        line,
+        character: nextLine < 0 ? 0 : textDocument.getLineLength(line),
+      };
     }
 
     // Fold-skip: crossing to another document line skips collapsed regions;
@@ -493,7 +503,7 @@ export function applyTextChangeToSelections<
 >(
   textDocument: TextDocument<EType, LAnnotation>,
   selections: EditorSelection[],
-  edit: ResolvedTextEdit,
+  requested: ResolvedTextEdit,
   lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
   tabSize = 2,
   undoBoundary = false
@@ -501,6 +511,12 @@ export function applyTextChangeToSelections<
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
 } {
+  // The text goes in with the document's line break, so the caret lands
+  // where the inserted characters end.
+  const edit = {
+    ...requested,
+    text: textDocument.normalizeEol(requested.text),
+  };
   const primarySelection = selections[selections.length - 1];
   if (primarySelection === undefined) {
     return { nextSelections: [] };
@@ -928,7 +944,14 @@ export function getAutoSurroundReplacementTexts(
     if (isCollapsedSelection(selection)) {
       return undefined;
     }
-    replacements.push(char + textDocument.getText(selection) + closeChar);
+    replacements.push(
+      char +
+        textDocument.getTextSlice(
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end)
+        ) +
+        closeChar
+    );
   }
   return replacements;
 }
@@ -1711,7 +1734,12 @@ export function findNextMatch(
       ? expandCollapsedSelectionToWord(textDocument, selection)
       : selection
   );
-  const texts = normalizedSelections.map((s) => textDocument.getText(s));
+  const texts = normalizedSelections.map((s) =>
+    textDocument.getTextSlice(
+      textDocument.offsetAt(s.start),
+      textDocument.offsetAt(s.end)
+    )
+  );
   const needle = texts[0];
   if (needle.length === 0 || texts.some((t) => t !== needle)) {
     return undefined;
@@ -1843,7 +1871,7 @@ export function getSelectionClipboardTexts(
   selections: EditorSelection[]
 ): string[] {
   const regions = resolveClipboardRegions(textDocument, selections);
-  return regions.map(({ start, end }) => textDocument.getTextSlice(start, end));
+  return regions.map(({ start, end }) => fileText(textDocument, start, end));
 }
 
 /**
@@ -1869,7 +1897,7 @@ export function getSelectionText(
       // Contiguous with or overlapping the previous region: extend it rather
       // than repeat any shared text.
       if (region.end > prevEnd) {
-        result += textDocument.getTextSlice(prevEnd, region.end);
+        result += fileText(textDocument, prevEnd, region.end);
         prevEnd = region.end;
       }
       continue;
@@ -1877,7 +1905,7 @@ export function getSelectionText(
     if (result.length > 0 && !endsWithLineBreak(result)) {
       result += eol;
     }
-    result += textDocument.getTextSlice(region.start, region.end);
+    result += fileText(textDocument, region.start, region.end);
     prevEnd = region.end;
   }
   return result;
@@ -2089,6 +2117,24 @@ export function getSelectionAnchor(
     ];
   }
   return [lineElement, 0];
+}
+
+/**
+ * The query a find panel opens with: the selection when it stays on one line,
+ * the word under a collapsed caret, or nothing.
+ */
+export function getSearchQueryFromSelection(
+  textDocument: TextDocument,
+  selection: EditorSelection | undefined
+): string {
+  if (selection == null) {
+    return '';
+  }
+  const queryRange = isCollapsedSelection(selection)
+    ? expandCollapsedSelectionToWord(textDocument, selection)
+    : selection;
+  const text = textDocument.getText(queryRange);
+  return text.includes('\n') ? '' : text;
 }
 
 /**
@@ -2755,4 +2801,17 @@ function getTextOffset(
     offset,
     lineBreakIndex === -1 ? value.length : lineBreakIndex
   );
+}
+
+// The text between two offsets as it leaves the editor, with the file's line
+// ending.
+function fileText(
+  textDocument: TextDocument,
+  start: number,
+  end: number
+): string {
+  return textDocument.getText({
+    start: textDocument.positionAt(start),
+    end: textDocument.positionAt(end),
+  });
 }

@@ -32,6 +32,8 @@ const DELEGATED_TAGS = new Set(['svg', 'template', 'script', 'style']);
 const ATTRIBUTE_NAMES: Record<string, string | undefined> = {
   class: 'class',
   className: 'class',
+  contenteditable: 'contenteditable',
+  contentEditable: 'contenteditable',
   id: 'id',
   role: 'role',
   style: 'style',
@@ -132,6 +134,37 @@ function serializeStyle(value: string, styles: Map<string, string>): string {
     if (styles.size < MAX_CACHED_STYLES) styles.set(value, attribute);
   }
   return attribute;
+}
+
+/**
+ * The attribute a HAST property serializes to: its name and value as the
+ * markup carries them. `null` when the property writes nothing (unset,
+ * false or NaN), undefined when it needs the full HTML schema.
+ */
+export function attributeFor(
+  key: string,
+  value: Properties[string]
+): { name: string; value: string } | null | undefined {
+  if (value == null) {
+    return null;
+  }
+  const name =
+    ATTRIBUTE_NAMES[key] ?? (DATA_ATTRIBUTE.test(key) ? key : undefined);
+  if (name == null) {
+    return undefined;
+  }
+  if (value === false || (typeof value === 'number' && Number.isNaN(value))) {
+    return null;
+  }
+  return {
+    name,
+    value:
+      value === true
+        ? ''
+        : Array.isArray(value)
+          ? value.join(' ').trim()
+          : String(value),
+  };
 }
 
 // Returns undefined when a property needs the HTML schema to serialize.

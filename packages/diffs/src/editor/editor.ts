@@ -6,6 +6,21 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import {
+  buildSearchReplacementText,
+  type MatchRange,
+  type SearchPanelMode,
+  type SearchParams,
+} from '../search';
+import { revealMatchHorizontally } from '../search/revealMatchHorizontally';
+import {
+  SearchHighlighter,
+  type SearchHighlightRange,
+} from '../search/SearchHighlighter';
+import {
+  SearchPanelWidget,
+  type SearchResult,
+} from '../search/SearchPanelWidget';
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -14,11 +29,13 @@ import type {
   HighlightedToken,
   LineAnnotation,
   RenderRange,
+  ScrollRequestResult,
   SelectionSide,
 } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
+import { normalizeLineBreaks } from '../utils/lineEndings';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import {
   type EditorCommand,
@@ -42,17 +59,13 @@ import {
   type ManagedEditSession,
   toManagedEditState,
 } from './EditStateManager';
-import { getChangedDocumentLines } from './getChangedDocumentLines';
 import {
   type LanguageConfigMap,
   resolveBlockCommentEdits,
   resolveCommentConfig,
   resolveLineCommentEdits,
 } from './languages';
-import {
-  applyDocumentChangeToLineAnnotations,
-  renderLineAnnotations,
-} from './lineAnnotations';
+import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
 import {
   type Marker,
   MarkerRenderer,
@@ -65,11 +78,6 @@ import {
   PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
-import {
-  type MatchRange,
-  type SearchPanelMode,
-  SearchPanelWidget,
-} from './searchPanel';
 import type {
   AutoSurround,
   CursorMoveOptions,
@@ -86,7 +94,6 @@ import {
   comparePosition,
   convertSelection,
   createSelectionFrom,
-  createSelectionFromAnchorAndFocusOffsets,
   DirectionBackward,
   DirectionForward,
   DirectionNone,
@@ -98,6 +105,7 @@ import {
   getCaretPosition,
   getDocumentBoundarySelection,
   getDocumentFullSelection,
+  getSearchQueryFromSelection,
   getSelectedLineBlocks,
   getSelectionAnchor,
   getSelectionClipboardTexts,
@@ -128,11 +136,14 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import { EditorTokenizer, renderLineTokens } from './tokenizer';
+import { EditorTokenizer } from './tokenizer';
 import type {
+  ApplyChangeOptions,
+  ApplyChangeResult,
   EditorCaret,
   EditorChange,
   EditorChangeEvent,
+  EditorColumns,
   EditorEditCompleteEvent,
   EditorInitialState,
   EditorLineAnnotation,
@@ -189,11 +200,14 @@ function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
   };
 }
 
-/** Describe replacing the complete document from its previous text. */
+// Describes replacing the whole document, in the document's own text, with
+// one `\n` per line break.
 function createFullDocumentChange(
-  previousContents: string,
-  contents: string
+  previousText: string,
+  text: string
 ): EditorChange {
+  const previousContents = normalizeLineBreaks(previousText);
+  const contents = normalizeLineBreaks(text);
   const lineOffsets = computeLineOffsets(previousContents);
   const lastLineOffset = lineOffsets[lineOffsets.length - 1] ?? 0;
   return {
@@ -208,6 +222,11 @@ function createFullDocumentChange(
       },
     },
   };
+}
+
+interface ViewportBounds {
+  top: number;
+  bottom: number;
 }
 
 interface EditorAttachState {
@@ -234,23 +253,23 @@ interface TrackedCaret<T> {
 interface SyncRenderViewBaseProps {
   highlighter: DiffsHighlighter;
   fileContainer: HTMLElement;
+  columns: EditorColumns | undefined;
   renderRange: RenderRange | undefined;
-  /** Start fresh history instead of retaining or extending the current history. */
-  resetHistory?: boolean;
+  /**
+   * The DOM content for the rows matches the required editor tokenization
+   * structure, therefore we don't need to refresh the DOM on attach.
+   */
+  domCurrent: boolean;
 }
 
 interface SyncFileRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
-  /** Treat the supplied contents as an externally provided document update. */
-  externalDocument?: boolean;
 }
 
 interface SyncDiffRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
   fileDiff: FileDiffMetadata;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
-  /** Treat the supplied contents as an externally provided document update. */
-  externalDocument?: boolean;
 }
 
 type SyncRenderViewProps<
@@ -358,6 +377,14 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
     context: SelectionActionContext<EType, LAnnotation>
   ) => HTMLElement;
   /**
+   * Who answers the find and replace shortcuts for this editor. `'editor'`
+   * opens the editor's own panel. `'host'` leaves cmd/ctrl+f and
+   * cmd/ctrl+alt+f untouched for an embedding host that runs its own
+   * find/replace, such as CodeView.
+   * @default 'editor'
+   */
+  searchPanel?: 'editor' | 'host';
+  /**
    * Render an externally owned caret at its normalized document position.
    */
   renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;
@@ -367,9 +394,13 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
     fileInstance: EditorComponent<EType, LAnnotation, Caret>
   ) => void;
   /**
-   * Called with an `EditorChangeEvent` whenever the editor document changes.
-   * Treat this as a document notification; do not feed the changes back into
-   * the editor or you will create loops.
+   * Called synchronously whenever the editor document changes: typing, undo
+   * and redo, `applyEdits`, and a new file or diff given to the component. It
+   * reports the document, not the screen; the rows may not show the change
+   * yet. Calling `applyEdits`, `undo`, `redo`, `edit` or `cleanUp` on the
+   * editor, or `render` with a new file or diff on the component, from inside
+   * the callback throws. An error thrown by the callback is logged and the
+   * update finishes.
    */
   onChange?: (event: EditorChangeEvent<EType, LAnnotation, Caret>) => void;
   /**
@@ -384,6 +415,8 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
   onBlur?: () => void;
+  /** Called after rendered rows are synchronized or background tokens replace their text. */
+  onRender?: () => void;
   // debug flag
   __debug?: boolean;
 }
@@ -396,13 +429,6 @@ export interface EditorFocusOptions extends FocusOptions {
   /** Non-negative CSS pixels below the viewport or sticky header. */
   offset?: number;
 }
-
-// Cap on how far an edit may widen the virtualized render window, as a multiple
-// of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
-// Edits within this many lines of the window bottom widen so their caret renders;
-// larger inserts fall back to the bounded buffer-only path instead of building a
-// row per inserted line. A safety bound, not a correctness-critical value.
-const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
 
 // Wrap offsets persist across render-range syncs (see #resetCache), so
 // scrolling through a very large file could otherwise accumulate an entry per
@@ -418,7 +444,6 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 type OverlayRangeType =
   | 'selection'
-  | 'match'
   | 'marker'
   | 'bracketMatch'
   | 'caretHighlight'
@@ -459,6 +484,9 @@ export class Editor<
   #globalEventDisposes?: (() => void)[];
   #selectEventDisposes?: (() => void)[];
   #detach?: () => void;
+  // Set while onChange and onEditChange run, so a callback that calls back
+  // into the editor is caught.
+  #inChangeCallback = false;
   // onAttach is deferred until the synchronized document and DOM are usable.
   // Track the state so cleanup cannot notify an editor from an ended session.
   #attachState: EditorAttachState = {
@@ -473,7 +501,6 @@ export class Editor<
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
   #wrapLineOffsetsCache = new Map<number, Uint32Array>();
-  #lineElementsCache = new Map<number, HTMLElement | null>();
   #lastAccessedCharX?: [
     line: number,
     character: number,
@@ -499,17 +526,14 @@ export class Editor<
 
   // state
   #fileInstance?: EditorComponent<EType, LAnnotation, Caret>;
-  // Preserves the current file/diff instance's applyDocumentChange
-  // type/semantics to avoid annoying `as X` narrowing
-  #applyDocumentChange?: (
-    textDocument: TextDocument<EType, LAnnotation>,
-    newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined,
-    shouldUpdateBuffer?: boolean
-  ) => void;
-  #applySuspendedDocumentChange?: (
-    textDocument: TextDocument<EType, LAnnotation>,
-    newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
-  ) => void;
+  // The component's applyChange, saved when edit() matches the component to
+  // this editor's type: its document type depends on EType, so calling it on
+  // #fileInstance would repeat that type check at every call site.
+  #applyComponentChange?: (
+    document: TextDocument<EType, LAnnotation>,
+    change: TextDocumentChange,
+    options?: ApplyChangeOptions<EType, LAnnotation>
+  ) => ApplyChangeResult;
   #publishChange?: (
     changes: EditorChange[],
     file: FileContents,
@@ -520,14 +544,9 @@ export class Editor<
   #lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
   readonly #editStateKey?: string;
   readonly #ownsVerticalViewport: boolean;
+  #ownedViewport: HTMLElement | undefined;
+  #ownedViewportScrollTop = 0;
   #renderRange?: RenderRange;
-  // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
-  // sync. Used to cap how far #applyChange widens the window for an edit, so a
-  // large insert can't materialize an unbounded number of rows. Captured at sync
-  // time so consecutive edits that grow #renderRange can't ratchet the cap up.
-  // undefined until the first sync; Infinity for non-virtualized (whole-file)
-  // windows, where no cap is needed.
-  #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
   #carets?: TrackedCaret<Caret>[];
   #searchPanel?: SearchPanelWidget;
@@ -553,6 +572,10 @@ export class Editor<
   // consuming a newer replacement's focus intent. Once synchronized, target
   // identifies the new content so a subsequent user blur can cancel it.
   #replacementFocusRequest?: { target?: HTMLElement };
+  // The frame callback that applies an explicit #focus() on the next frame.
+  // Until it runs, the control that held focus before the request is not a
+  // newer intent; focus moving elsewhere in the gap cancels it.
+  #queuedFocusFrame?: () => void;
   #isComposing = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
@@ -568,6 +591,9 @@ export class Editor<
   #initSelections?: EditorSelection[];
   #selections?: EditorSelection[];
   #matches?: MatchRange[];
+  #searchHighlighter?: SearchHighlighter;
+  #currentSearchMatch?: MatchRange;
+  #pendingSearchHorizontalReveal = false;
   #scrollingToLine?: number;
   #scrollingToLineChar?: number;
   #scrollingToLineFixed = false;
@@ -597,45 +623,34 @@ export class Editor<
   // only when the contents change and never mutated, so the attached component
   // can treat the same instance as "nothing changed".
   #ghostTextRows: ReadonlyMap<number, number> = new Map();
-  #onDeferTokenize = (
-    lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'light' | 'dark'
-  ) => {
-    if (!this.#isRendering) {
-      return;
-    }
-    this.#fileInstance?.updateRenderCache(lines, themeType);
-    // update the view if the render range is updated by scrolling
-    // and the deferred tokenized lines inside the render range
+  #onDeferTokenize = (lines: Map<number, Array<HighlightedToken>>) => {
+    // Without rows on screen the component only keeps the tokens.
+    this.#fileInstance?.applyTokens(lines);
+    // A line with ghost text that was recolored needs its overlay redrawn.
     if (
+      this.#isRendering &&
       this.#renderRange !== undefined &&
-      this.#renderRange.totalLines !== Infinity
+      this.#renderRange.totalLines !== Infinity &&
+      this.#editPrediction !== undefined &&
+      this.#selections !== undefined
     ) {
-      const predictionLines =
-        this.#editPrediction === undefined
-          ? undefined
-          : new Set(
-              this.#editPrediction.response.edits.map(
-                (edit) => edit.range.start.line
-              )
-            );
-      let refreshPrediction = false;
+      const predictionLines = new Set(
+        this.#editPrediction.response.edits.map((edit) => edit.range.start.line)
+      );
       const { startingLine, totalLines } = this.#renderRange;
       const endLine = Math.min(
         startingLine + totalLines,
         (this.#editSession ?? this.#initialState)?.document?.lineCount ?? 0
       );
-      for (const [line, tokens] of lines) {
-        if (line >= startingLine && line < endLine) {
-          const lineElement = this.#getLineElement(line);
-          if (lineElement !== undefined) {
-            lineElement.replaceChildren(...renderLineTokens(tokens));
-            refreshPrediction ||= predictionLines?.has(line) === true;
-          }
+      for (const line of lines.keys()) {
+        if (
+          line >= startingLine &&
+          line < endLine &&
+          predictionLines.has(line)
+        ) {
+          this.#updateSelections(this.#selections);
+          break;
         }
-      }
-      if (refreshPrediction && this.#selections !== undefined) {
-        this.#updateSelections(this.#selections);
       }
     }
   };
@@ -730,6 +745,7 @@ export class Editor<
     fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
   edit(fileInstance: EditorComponent<EType, LAnnotation, Caret>): () => void {
+    this.__assertOutsideChangeCallback('Editor.edit');
     const editor = this.#getTypedEditor;
     const previousSession = this.#editSession;
     if (this.#isRendering) {
@@ -765,15 +781,14 @@ export class Editor<
     this.#initialState = undefined;
     this.#editSession = editSession;
     this.#fileInstance = fileInstance;
+    this.#trackOwnedViewport();
     this.#isRendering = true;
     this.#restoreEditorStateOnSync = editSession.editor != null;
     try {
       this.#initialize();
       if (fileInstance.type === 'file' && editor.type === 'file') {
-        editor.#applyDocumentChange =
-          fileInstance.applyDocumentChange.bind(fileInstance);
-        editor.#applySuspendedDocumentChange =
-          fileInstance.applySuspendedDocumentChange.bind(fileInstance);
+        editor.#applyComponentChange =
+          fileInstance.applyChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
           const event: EditorChangeEvent<'file', LAnnotation, Caret> = {
             changes,
@@ -797,10 +812,8 @@ export class Editor<
         fileInstance.type === 'file-diff' &&
         editor.type === 'file-diff'
       ) {
-        editor.#applyDocumentChange =
-          fileInstance.applyDocumentChange.bind(fileInstance);
-        editor.#applySuspendedDocumentChange =
-          fileInstance.applySuspendedDocumentChange.bind(fileInstance);
+        editor.#applyComponentChange =
+          fileInstance.applyChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
           const event: EditorChangeEvent<'file-diff', LAnnotation, Caret> = {
             changes,
@@ -842,8 +855,8 @@ export class Editor<
       this.#editSession = previousSession;
       if (this.#detach == null) {
         this.#fileInstance = undefined;
-        this.#applyDocumentChange = undefined;
-        this.#applySuspendedDocumentChange = undefined;
+        this.#trackOwnedViewport();
+        this.#applyComponentChange = undefined;
         this.#publishChange = undefined;
       }
       if (initialState != null && initialEditorState != null) {
@@ -868,6 +881,7 @@ export class Editor<
    * are remapped during replay and the text edit still joins the undo timeline.
    */
   applyEdits(edits: TextEdit[], updateHistory = true): void {
+    this.__assertOutsideChangeCallback('Editor.applyEdits');
     const textDocument = this.#editSession?.document;
     if (textDocument == null) {
       throw new Error('Editor.applyEdits: Editor is not attached');
@@ -933,6 +947,78 @@ export class Editor<
     );
   }
 
+  /**
+   * Replace search matches in document order as one undoable edit. Returns a
+   * collapsed range after the final replacement, without moving focus or scroll.
+   */
+  replaceSearchMatches(
+    matches: readonly MatchRange[],
+    searchParams: SearchParams
+  ): MatchRange | undefined {
+    const textDocument = this.#editSession?.document;
+    if (textDocument == null) {
+      throw new Error('Editor.replaceSearchMatches: Editor is not attached');
+    }
+    if (matches.length === 0) {
+      return undefined;
+    }
+
+    const edits = matches.map(
+      ([start, end]): TextEdit => ({
+        range: {
+          start: textDocument.positionAt(start),
+          end: textDocument.positionAt(end),
+        },
+        newText: buildSearchReplacementText(
+          textDocument,
+          searchParams,
+          start,
+          end
+        ),
+      })
+    );
+    const selectionsBefore = this.#selections;
+    const selectionOffsets = selectionsBefore?.map(
+      (selection) =>
+        [
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end),
+        ] as [number, number]
+    );
+    const resolvedEdits = textDocument
+      .resolveEdits(edits)
+      .sort((a, b) => a.start - b.start);
+    // The final match's original end moves by each normalized edit's length delta.
+    let replacementEnd = resolvedEdits.at(-1)!.end;
+    for (const { start, end, text } of resolvedEdits) {
+      replacementEnd += text.length - (end - start);
+    }
+    const change = textDocument.applyEdits(edits, true, selectionsBefore);
+    if (change != null) {
+      // Replacements re-anchor the existing selections like any other edit;
+      // navigating between matches never changes them.
+      const nextSelections =
+        selectionsBefore != null && selectionOffsets != null
+          ? remapSelectionsAfterEdits(
+              textDocument,
+              selectionsBefore,
+              selectionOffsets,
+              resolvedEdits
+            )
+          : undefined;
+      if (nextSelections != null) {
+        textDocument.setLastUndoSelectionsAfter(nextSelections);
+      }
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change),
+        { skipSearchRefresh: true, skipFocus: true }
+      );
+    }
+    return [replacementEnd, replacementEnd];
+  }
+
   /** Whether there is an edit to undo. */
   get canUndo(): boolean {
     return (
@@ -949,11 +1035,13 @@ export class Editor<
 
   /** Undo the last edit. Does nothing when there is nothing to undo. */
   undo(): void {
+    this.__assertOutsideChangeCallback('Editor.undo');
     this.#runCommand('undo');
   }
 
   /** Redo the last undone edit. Does nothing when there is nothing to redo. */
   redo(): void {
+    this.__assertOutsideChangeCallback('Editor.redo');
     this.#runCommand('redo');
   }
 
@@ -978,7 +1066,6 @@ export class Editor<
 
   /** Return an isolated copy of selections and restorable view state. */
   getViewState(): EditorViewState {
-    const fileInstance = this.#isRendering ? this.#fileInstance : undefined;
     if (!this.#isRendering && this.#editSession?.editor != null) {
       return cloneEditorViewState(this.#editSession.editor);
     }
@@ -987,20 +1074,49 @@ export class Editor<
       start: { ...selection.start },
       end: { ...selection.end },
     }));
-    if (fileInstance == null) {
-      return { selections };
-    }
-
-    const viewport = this.#getOwnedVerticalViewport();
-    const scrollLeft = fileInstance.getCodeScrollLeft();
-    if (viewport == null) {
-      return { selections, view: { scrollLeft } };
-    }
-    return {
-      selections,
-      view: { scrollLeft, scrollTop: viewport.scrollTop },
-    };
+    const view = this.#scrollOffsets();
+    return view == null ? { selections } : { selections, view };
   }
+
+  // The code column's horizontal scroll offset and, when the editor owns the
+  // vertical viewport, its scroll offset. Both are kept from scroll events,
+  // so this reads no DOM and never forces a layout.
+  #scrollOffsets(): EditorViewState['view'] {
+    const fileInstance = this.#isRendering ? this.#fileInstance : undefined;
+    if (fileInstance == null) {
+      return undefined;
+    }
+    this.#trackOwnedViewport();
+    const scrollLeft = fileInstance.getCodeScrollLeft();
+    return this.#ownedViewport == null
+      ? { scrollLeft }
+      : { scrollLeft, scrollTop: this.#ownedViewportScrollTop };
+  }
+
+  // Keeps the owned viewport's scroll offset current from its scroll events.
+  // The viewport is read once when it is bound. A host can get its viewport
+  // after the editor attached (a React Virtualizer sets up after its
+  // children mount), so every read checks the binding; a bound viewport
+  // costs one comparison.
+  #trackOwnedViewport(): void {
+    const viewport = this.#getOwnedVerticalViewport();
+    if (viewport === this.#ownedViewport) {
+      return;
+    }
+    this.#ownedViewport?.removeEventListener(
+      'scroll',
+      this.#handleOwnedViewportScroll
+    );
+    this.#ownedViewport = viewport;
+    this.#ownedViewportScrollTop = viewport?.scrollTop ?? 0;
+    viewport?.addEventListener('scroll', this.#handleOwnedViewportScroll, {
+      passive: true,
+    });
+  }
+
+  #handleOwnedViewportScroll = (): void => {
+    this.#ownedViewportScrollTop = this.#ownedViewport?.scrollTop ?? 0;
+  };
 
   /**
    * Return the objects that make up the active edit session, or undefined when
@@ -1039,7 +1155,12 @@ export class Editor<
       // guessing.
       const viewport = this.#getOwnedVerticalViewport();
       if (view.scrollTop !== undefined && viewport != null) {
+        // The restored position is the newest scroll intent. The viewport
+        // clamps a position past its content, and no scroll event follows
+        // when it did not move, so where it landed is read back.
+        this.#virtualizedInstance?.cancelScroll();
         viewport.scrollTop = view.scrollTop;
+        this.#ownedViewportScrollTop = viewport.scrollTop;
       }
     } else if (this.#ownsVerticalViewport) {
       this.#scrollToPrimaryCaret();
@@ -1050,10 +1171,11 @@ export class Editor<
   setSelections(
     selections: (Range & { direction: 'none' | 'backward' | 'forward' })[]
   ): void {
-    const textDocument = this.#editSession?.document;
-    if (textDocument === undefined) {
+    const editSession = this.#editSession;
+    if (editSession?.document == null) {
       throw new Error('Editor.setSelections: Text document is not initialized');
     }
+    const { document: textDocument } = editSession;
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
       let start = textDocument.normalizePosition(selection.start);
       let end = textDocument.normalizePosition(selection.end);
@@ -1077,6 +1199,14 @@ export class Editor<
     });
     this.#canMountSelectionAction = false;
     this.#updateSelections(resolvedSelections);
+    // A recycled editor restores selections from the retained session on
+    // remount, so navigation while offscreen must update that state too.
+    if (!this.#isRendering) {
+      editSession.editor = cloneEditorViewState({
+        ...editSession.editor,
+        selections: this.#selections,
+      });
+    }
     const primarySelection = resolvedSelections.at(-1);
     if (primarySelection !== undefined) {
       this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
@@ -1171,8 +1301,11 @@ export class Editor<
   // completion result. Keyed documents outlive all three teardown modes until
   // explicitly disposed or evicted from the manager.
   cleanUp(reason: 'discard' | 'recycle' | 'complete' = 'discard'): void {
+    this.__assertOutsideChangeCallback('Editor.cleanUp');
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
+    // Cancel our pending caret scroll so it can't fire after we've detached.
+    this.#virtualizedInstance?.cancelScroll(this.#handleCaretRevealDone);
     this.#cancelEditPrediction(true, false);
     if (!recycle) {
       this.#editPredictionHistory = [];
@@ -1190,11 +1323,14 @@ export class Editor<
     }
     this.#isRendering = false;
     dequeueRender(this.#handleCustomPasteEvent);
-    // The tokenizer is destroyed in both modes: it holds highlighter/worker
-    // resources and writes into the (removed below) theme style element.
-    // __syncRenderView recreates one for a retained document on render resume.
-    this.#tokenizer?.cleanUp();
-    this.#tokenizer = undefined;
+    // A recycled editor keeps its tokenizer with its document. It keeps
+    // working while the rows are gone: its tokens land in the component's
+    // model, and the render that brings the rows back shows them. A
+    // discarded editor releases it along with the document.
+    if (!recycle) {
+      this.#tokenizer?.cleanUp();
+      this.#tokenizer = undefined;
+    }
 
     // dispse event listeners
     this.#globalEventDisposes?.forEach((dispose) => dispose());
@@ -1211,7 +1347,6 @@ export class Editor<
     this.#contentWidthCache = undefined;
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
-    this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
 
     // clean up dom elements
@@ -1264,8 +1399,8 @@ export class Editor<
       } finally {
         this.#editSession = undefined;
         this.#fileInstance = undefined;
-        this.#applyDocumentChange = undefined;
-        this.#applySuspendedDocumentChange = undefined;
+        this.#trackOwnedViewport();
+        this.#applyComponentChange = undefined;
         this.#publishChange = undefined;
       }
     }
@@ -1329,12 +1464,28 @@ export class Editor<
     const tokenizer = this.#tokenizer;
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
-      requestAnimationFrame(() => {
+      queueRender(() => {
         if (this.#tokenizer === tokenizer) {
           tokenizer.resumeBackgroundTokenize();
         }
       });
     }
+  }
+
+  /**
+   * @internal Finishes coloring the lines the component is about to render, so
+   * none of them shows old colors until background tokenizing reaches it, and
+   * returns those tokens for the component to render with.
+   */
+  __prepareRender(
+    renderRange: RenderRange | undefined
+  ): Map<number, HighlightedToken[]> | undefined {
+    const tokenizer = this.#tokenizer;
+    if (tokenizer === undefined) {
+      return undefined;
+    }
+    const tokens = tokenizer.flush(renderRange);
+    return tokens.size > 0 ? tokens : undefined;
   }
 
   /** @internal */
@@ -1380,14 +1531,94 @@ export class Editor<
       : undefined;
   }
 
+  /**
+   * @internal The component received a new file for the document being
+   * edited. The new contents are applied as one undoable edit, or as a fresh
+   * document with fresh history when the caller asks for one or the file's
+   * name or language changed. The change is reported through onChange here;
+   * rendering follows separately.
+   */
+  __replaceDocument(
+    file: FileContents,
+    resetHistory: boolean,
+    lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
+  ): void {
+    this.__assertOutsideChangeCallback('FileDiff.render');
+    const editSession = this.#editSession;
+    if (editSession == null) {
+      throw new Error('Editor.__replaceDocument: no edit session');
+    }
+    const languageId = file.lang ?? getFiletypeFromFileName(file.name);
+    const previous = editSession.document;
+    const previousText = previous?.getText();
+    if (
+      previous == null ||
+      resetHistory ||
+      editSession.fileInfo?.name !== file.name ||
+      previous.languageId !== languageId
+    ) {
+      this.#cancelEditPrediction(true);
+      this.#editPredictionHistory = [];
+      this.#invalidateOnAttach();
+      editSession.editor = undefined;
+      editSession.document = new TextDocument<EType, LAnnotation>(
+        file.name,
+        file.contents,
+        languageId,
+        0,
+        new EditStack<EType, LAnnotation>({
+          maxEntries: this.#options.historyMaxEntries,
+        })
+      );
+      editSession.diffSession = undefined;
+      this.#tokenizer?.cleanUp();
+      this.#tokenizer = undefined;
+      this.#resetState();
+      this.#wrapLineOffsetsCache.clear();
+      this.#selections = this.#initSelections;
+    } else {
+      this.#applyExternalDocumentReplacement(
+        editSession,
+        file.contents,
+        lineAnnotations
+      );
+    }
+    editSession.fileInfo = { name: file.name, lang: file.lang };
+    // The replacement's annotations describe the new contents, so edits made
+    // before the next sync move them rather than the old ones.
+    if (lineAnnotations != null) {
+      this.#lineAnnotations = lineAnnotations;
+    }
+    // The retained session state describes the new document before anyone
+    // hears of the change.
+    this.#checkpointEditSessionState();
+    const text = editSession.document?.getText();
+    if (previousText != null && text != null && text !== previousText) {
+      this.#emitChange(
+        [createFullDocumentChange(previousText, text)],
+        lineAnnotations
+      );
+    }
+  }
+
+  /**
+   * @internal onChange and onEditChange are notifications. A callback that
+   * edits, re-attaches, cleans up or replaces the document from inside one is
+   * a bug in the caller, so it throws instead of running on top of the change
+   * still being reported.
+   */
+  __assertOutsideChangeCallback(caller: string): void {
+    if (this.#inChangeCallback) {
+      throw new Error(
+        `${caller}: not allowed inside onChange or onEditChange; the editor owns the document, so observe the change and call back after the callback returns`
+      );
+    }
+  }
+
   /** @internal */
   __syncRenderView(props: SyncRenderViewProps<EType, LAnnotation>): void {
-    const {
-      highlighter,
-      fileContainer,
-      renderRange,
-      externalDocument = false,
-    } = props;
+    const { highlighter, fileContainer, columns, renderRange, domCurrent } =
+      props;
     const renderView:
       | SyncFileRenderViewProps<LAnnotation>
       | SyncDiffRenderViewProps<LAnnotation> = props;
@@ -1402,7 +1633,6 @@ export class Editor<
     const lineAnnotations = renderView.lineAnnotations as
       | EditorLineAnnotation<EType, LAnnotation>[]
       | undefined;
-    const editStateKey = this.#editStateKey;
     const fileInstance = this.#fileInstance;
     const editSession = this.#editSession;
     if (!this.#isRendering || fileInstance == null || editSession == null) {
@@ -1414,48 +1644,10 @@ export class Editor<
       return;
     }
 
-    let codeElement: HTMLElement | undefined;
-    let gutterEl: HTMLElement | undefined;
-    let contentEl: HTMLElement | undefined;
-    let deletionsGutterEl: HTMLElement | undefined;
-    let deletionsContentEl: HTMLElement | undefined;
-    for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
-      const isDeletions = el.dataset.deletions != null;
-      if (!isDeletions) {
-        codeElement = el;
-      }
-      for (const child of el.children) {
-        if (!(child instanceof HTMLElement)) {
-          continue;
-        }
-        const { gutter, content } = child.dataset;
-        if (gutter != null) {
-          if (isDeletions) {
-            deletionsGutterEl = child;
-          } else {
-            gutterEl = child;
-          }
-        } else if (content != null) {
-          if (isDeletions) {
-            deletionsContentEl = child;
-          } else {
-            contentEl = child;
-          }
-        }
-      }
-    }
-    if (deletionsContentEl == null) {
-      this.#deletionsColumn = undefined;
-    } else if (deletionsGutterEl == null) {
-      throw new Error(
-        'Editor.__syncRenderView: the deletions column has no gutter'
-      );
-    } else {
-      this.#deletionsColumn = {
-        content: deletionsContentEl,
-        gutter: deletionsGutterEl,
-      };
-    }
+    const codeElement = columns?.code;
+    const contentEl = columns?.content;
+    const gutterEl = columns?.gutter;
+    this.#deletionsColumn = columns?.deletions;
     if (codeElement === undefined || contentEl === undefined) {
       this.#replacementFocusRequest = undefined;
       return;
@@ -1486,62 +1678,23 @@ export class Editor<
       'contents' in fileOrDiff
         ? fileOrDiff.contents
         : fileOrDiff.additionLines.join('');
-    const previousTextDocument = editSession.document;
-    // The caller flags whether the host replaced the file (`externalDocument`)
-    // document that should win. Undo-reset, however, is derived here from the
-    // editor's own fileInfo: it resets only when name/language change or when
-    // the caller passes in resetHistory
-    const resetHistory =
-      props.resetHistory ??
-      (previousTextDocument != null &&
-        editSession.fileInfo != null &&
-        (editSession.fileInfo.name !== fileOrDiff.name ||
-          previousTextDocument.languageId !== languageId));
-    const documentChanges =
-      externalDocument &&
-      previousTextDocument !== undefined &&
-      previousTextDocument.getText() !== contents
-        ? [createFullDocumentChange(previousTextDocument.getText(), contents)]
-        : undefined;
-
-    const resetForExternalDocument = externalDocument && resetHistory;
-    const shouldRebuildDocument =
-      editSession.document == null ||
-      editSession.fileInfo == null ||
-      (editStateKey == null &&
-        (editSession.fileInfo.name !== fileOrDiff.name ||
-          editSession.document.languageId !== languageId)) ||
-      resetForExternalDocument;
-    if (shouldRebuildDocument) {
+    // The first sync with a file builds the document from it. Later syncs
+    // keep the document the editor has, which the rendered file reflects.
+    if (editSession.document == null || editSession.fileInfo == null) {
       this.#cancelEditPrediction(true);
       this.#editPredictionHistory = [];
       this.#invalidateOnAttach();
       const { name, lang } = fileOrDiff;
-      let textDocument =
-        resetForExternalDocument ||
-        (editStateKey == null && editSession.fileInfo != null)
-          ? undefined
-          : editSession.document;
-      if (previousTextDocument != null && textDocument == null) {
-        editSession.editor = undefined;
-      }
-      if (textDocument == null) {
-        const editStack = new EditStack<EType, LAnnotation>({
+      editSession.document ??= new TextDocument<EType, LAnnotation>(
+        fileOrDiff.name,
+        contents,
+        languageId,
+        0,
+        new EditStack<EType, LAnnotation>({
           maxEntries: this.#options.historyMaxEntries,
-        });
-        textDocument = new TextDocument<EType, LAnnotation>(
-          fileOrDiff.name,
-          contents,
-          languageId,
-          0,
-          editStack
-        );
-      }
+        })
+      );
       editSession.fileInfo = { name, lang };
-      editSession.document = textDocument;
-      if (resetForExternalDocument) {
-        editSession.diffSession = undefined;
-      }
       this.#tokenizer?.cleanUp();
       this.#tokenizer = undefined;
       this.#resetState();
@@ -1549,28 +1702,20 @@ export class Editor<
       // content element must drop the previous document's measurements here.
       this.#wrapLineOffsetsCache.clear();
       this.#selections = this.#initSelections;
-      if (this.#options.__debug === true) {
+      if (
+        process.env.NODE_ENV === 'development' &&
+        this.#options.__debug === true
+      ) {
         console.log(
           '[diffs/editor] text document initialized from',
           fileOrDiff.name
         );
       }
     }
-    if (externalDocument && !resetForExternalDocument) {
-      this.#applyExternalDocumentReplacement(
-        editSession,
-        contents,
-        lineAnnotations
-      );
-      const { name, lang } = fileOrDiff;
-      editSession.fileInfo = { name, lang };
-    }
 
-    // The tokenizer is (re)created whenever the current document lacks one:
-    // right after a fresh document build above, or on the first sync after a
-    // recycled surface resumes its retained document. Tying it to the document
-    // (rather than the rebuild) keeps an unchanged resumed document, which
-    // skips the rebuild, able to paint edits.
+    // A document without a tokenizer gets one here: a document just built
+    // above, or one a recycled editor retained and brought back. A tokenizer
+    // for another highlighter is replaced.
     const textDocument = editSession.document;
     if (
       this.#tokenizer != null &&
@@ -1588,7 +1733,9 @@ export class Editor<
         onDeferTokenize: this.#onDeferTokenize,
         onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
         setStyle: (css) => {
-          this.#themeStyleElement!.textContent = css;
+          if (this.#themeStyleElement != null) {
+            this.#themeStyleElement.textContent = css;
+          }
         },
         __debug: this.#options.__debug,
       });
@@ -1613,6 +1760,7 @@ export class Editor<
       this.#remeasureMetricsOnFontLoad();
       this.#listenContentElement(contentEl, gutterEl);
       if (
+        process.env.NODE_ENV === 'development' &&
         this.#contentElement !== undefined &&
         this.#options.__debug === true
       ) {
@@ -1626,31 +1774,10 @@ export class Editor<
     // The contenteditable host advertises role="textbox", so without an
     // accessible name screen readers announce an unlabeled text field. Label it
     // with the file name. The same content element is reused across file
-    // switches (see File#applyFullRender), so refresh the label on every sync
+    // switches (see File#applyRowsToDOM), so refresh the label on every sync
     // rather than only when the element is first initialized above.
     if (contentEl.ariaLabel !== fileOrDiff.name) {
       contentEl.ariaLabel = fileOrDiff.name;
-    }
-
-    // Annotation rows, unified deleted rows, and hunk separators are
-    // non-document rows living inside the contenteditable column; mark them
-    // read-only so the caret can never enter them. Separators render in both
-    // diff styles whenever a collapsed region exists.
-    if (
-      (lineAnnotations !== undefined && lineAnnotations.length > 0) ||
-      this.#isDiff
-    ) {
-      for (const child of this.#contentElement.children) {
-        const el = child as HTMLElement;
-        const { lineAnnotation, lineType, separator } = el.dataset;
-        if (
-          lineAnnotation !== undefined ||
-          separator !== undefined ||
-          lineType === 'change-deletion'
-        ) {
-          el.setAttribute('contenteditable', 'false');
-        }
-      }
     }
 
     this.#resetCache();
@@ -1665,11 +1792,7 @@ export class Editor<
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
-    // Remember the bounded window the virtualizer just synced so #applyChange
-    // can clamp any edit-time widening against it. Refreshed on every scroll;
-    // undefined/Infinity windows leave the clamp disabled.
-    this.#viewportWindowLines = renderRange?.totalLines;
-    this.#tokenizer?.prebuildStateStack(renderRange);
+    this.#tokenizer?.prebuildStateStack(renderRange, domCurrent);
 
     const retainedEditorState = editSession.editor;
     const restoreEditorStateOnSync = this.#restoreEditorStateOnSync;
@@ -1724,7 +1847,11 @@ export class Editor<
         }
       }
 
-      if (this.#options.__debug === true && renderRange !== undefined) {
+      if (
+        process.env.NODE_ENV === 'development' &&
+        this.#options.__debug === true &&
+        renderRange !== undefined
+      ) {
         const { startingLine, totalLines } = renderRange;
         console.log(
           '[diffs/editor] render file:',
@@ -1737,11 +1864,6 @@ export class Editor<
         );
       }
 
-      // A reconciled replacement is current even when its text did not change.
-      // Retire it before checkpointing the new diff state or notifying observers.
-      if (externalDocument) {
-        fileInstance.__acknowledgeDocumentUpdate();
-      }
       this.#checkpointEditSessionState();
     } catch (error) {
       this.#restoreEditorStateOnSync = restoreEditorStateOnSync;
@@ -1749,24 +1871,31 @@ export class Editor<
       throw error;
     }
 
-    if (documentChanges != null) {
-      this.#emitChange(documentChanges, lineAnnotations);
-    }
-
     this.#scheduleOnAttach(fileInstance);
+    this.#options.onRender?.();
   }
 
-  // The host component has already rendered these external contents. Update
-  // only the editor document and history so the same replacement is not
-  // applied twice. __syncRenderView emits the resulting onChange notification
-  // afterward.
+  // Replaces the document's text with the new file's contents as one undoable
+  // edit, keeping history, selections and annotations in step.
   #applyExternalDocumentReplacement(
     editSession: ManagedEditSession<EType, LAnnotation>,
     contents: string,
     lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const textDocument = editSession.document;
-    if (textDocument == null || textDocument.getText() === contents) {
+    if (textDocument == null) {
+      return;
+    }
+    // The replacement is the file as last given, so its line ending is the
+    // file's from here on, even when the text itself is the same.
+    textDocument.adoptLineEnding(contents);
+    const text = normalizeLineBreaks(contents);
+    const lastLine = textDocument.lineCount - 1;
+    const end = textDocument.offsetAt({
+      line: lastLine,
+      character: textDocument.getLineLength(lastLine),
+    });
+    if (textDocument.getTextSlice(0, end) === text) {
       return;
     }
 
@@ -1778,11 +1907,7 @@ export class Editor<
           textDocument.offsetAt(selection.end),
         ] as const
     );
-    const replacement = {
-      start: 0,
-      end: textDocument.getText().length,
-      text: contents,
-    };
+    const replacement = { start: 0, end, text };
     const change = textDocument.applyResolvedEdits(
       [replacement],
       true,
@@ -1816,8 +1941,8 @@ export class Editor<
     this.#resetCache();
     this.#wrapLineOffsetsCache.clear();
     this.#markerRenderer?.removePopover();
-    if (this.#searchPanel !== undefined && this.#matches !== undefined) {
-      this.#searchPanel.updateMatches({ syncSelection: false });
+    if (this.#searchPanel != null) {
+      this.#searchPanel.updateMatches({ skipNavigation: true });
     }
   }
 
@@ -1897,11 +2022,12 @@ export class Editor<
   // last caret x).
   #resetCache(): void {
     this.#lineYCache.clear();
-    this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
   }
 
   #resetState(preserveCarets = false): void {
+    this.#searchHighlighter?.clear();
+    this.#searchHighlighter = undefined;
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -1922,6 +2048,9 @@ export class Editor<
     this.#markerRenderer = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
+    this.#matches = undefined;
+    this.#currentSearchMatch = undefined;
+    this.#pendingSearchHorizontalReveal = false;
     this.#selectionAction?.cleanup();
     this.#selectionAction = undefined;
     this.#canMountSelectionAction = true;
@@ -2028,6 +2157,8 @@ export class Editor<
     this.#themeStyleElement = h('style', {
       dataset: 'editorThemeCss',
     });
+    // A tokenizer kept across a recycle writes its theme into the new element.
+    this.#tokenizer?.applyStyle();
 
     this.#spriteElement = createSpriteElement();
 
@@ -2081,6 +2212,13 @@ export class Editor<
         'focusin',
         (event) => {
           if (!replacementFocusTargetIsContent(event)) {
+            const queuedFocusFrame = this.#queuedFocusFrame;
+            if (queuedFocusFrame !== undefined) {
+              dequeueRender(queuedFocusFrame);
+              this.#queuedFocusFrame = undefined;
+              this.#contentHasFocus = false;
+              this.#shouldIgnoreSelectionChange = false;
+            }
             cancelReplacementFocus();
           }
         },
@@ -2108,9 +2246,13 @@ export class Editor<
           // syncing the native Selection, so a DOM-driven or refocus
           // selectionchange whose range still belongs to the editor must not
           // overwrite the remapped #selections before the user returns to type.
+          // While a host DOM write has the editor waiting to put its caret
+          // back, the native selection is the browser's reaction to rows
+          // coming and going, not the user's; the restore places the caret.
           if (
             this.#shouldIgnoreSelectionChange ||
             this.#suppressNativeSelectionSync ||
+            this.#replacementFocusRequest != null ||
             shadowRoot == null ||
             !this.#contentHasFocus
           ) {
@@ -2128,27 +2270,7 @@ export class Editor<
             return;
           }
 
-          const selectionRaw = document.getSelection();
-          if (selectionRaw == null) {
-            return;
-          }
-          // Read the caret/selection through the editor's shadow root.
-          // getComposedRanges is the standard, spec'd way to do this but is only
-          // available in newer browsers. When it is missing (older browsers,
-          // embedded WebViews, and the pinned CI Chromium), fall back to the
-          // older Blink/WebKit-specific ShadowRoot.getSelection(), which still
-          // reports the range inside the shadow tree. Normalize that live Range
-          // to a StaticRange so it matches the getComposedRanges return shape.
-          // Only bail when neither API yields a range, so a click can still seed
-          // the caret rather than leaving the surface unusable.
-          let composedRange: StaticRange | undefined;
-          if (typeof selectionRaw.getComposedRanges === 'function') {
-            composedRange = selectionRaw.getComposedRanges({
-              shadowRoots: [shadowRoot],
-            })?.[0];
-          } else {
-            composedRange = getShadowRootRange(shadowRoot);
-          }
+          const composedRange = this.#composedSelectionRange(shadowRoot);
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
@@ -2356,6 +2478,10 @@ export class Editor<
         'pointerdown',
         (e) => {
           this.#canMountSelectionAction = true;
+          // A press on the content takes over from a pending focus restore:
+          // the user, not the host's last DOM write, now says where the
+          // caret goes.
+          this.#replacementFocusRequest = undefined;
           // Any pointer press — mouse, touch, or pen — moves off the select-all
           // selection, so let selectionchange sync #selections from the new
           // native selection again. This must run before the mouse-only guard
@@ -2513,7 +2639,13 @@ export class Editor<
           e,
           this.#options.keymap
         );
-        if (command !== undefined) {
+        // A host that runs its own find/replace answers these keys itself,
+        // so leave the event untouched for it.
+        const hostOwnsSearch =
+          this.#options.searchPanel === 'host' &&
+          (command === 'openSearchPanel' ||
+            command === 'openSearchReplacePanel');
+        if (command != null && !hostOwnsSearch) {
           e.preventDefault();
           if (command === 'simplifySelection') {
             this.#searchPanel?.close();
@@ -2567,9 +2699,10 @@ export class Editor<
 
         const normalizedKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
         if (normalizedKey === 'v' && isPrimaryModifier(e)) {
-          // Holding paste can enqueue a costly full diff recompute for every
-          // keyboard repeat. Accept the first paste and suppress repeats.
-          if (e.repeat && this.#isDiff) {
+          // A held paste shortcut pastes once. The OS throttles repeated
+          // paste shortcuts heavily and the lag that comes with it is not
+          // ours to carry, so the repeats are dropped.
+          if (e.repeat) {
             e.preventDefault();
             return;
           }
@@ -2783,9 +2916,29 @@ export class Editor<
             }
           },
           { passive: true }
+        ),
+        addEventListener(
+          deletionsCode,
+          'click',
+          this.#moveCaretFromReadOnlyClick,
+          { passive: true }
         )
       );
     }
+
+    // Unified view keeps its deleted rows inside the editable column.
+    this.#editorEventDisposes.push(
+      addEventListener(
+        contentEl,
+        'click',
+        (e) => {
+          if (this.#isDeletedLineTarget(e)) {
+            this.#moveCaretFromReadOnlyClick(e);
+          }
+        },
+        { passive: true }
+      )
+    );
 
     if (gutterEl !== undefined) {
       const resolveGutterTarget = (
@@ -2989,7 +3142,10 @@ export class Editor<
         top: contentEl.offsetTop - this.#metrics.paddingTop,
         left: contentEl.offsetLeft - this.#getGutterWidth(),
       };
-      if (this.#options.__debug === true) {
+      if (
+        process.env.NODE_ENV === 'development' &&
+        this.#options.__debug === true
+      ) {
         console.log('[diffs/editor] content offset:', this.#contentOffset);
       }
     }
@@ -3253,7 +3409,7 @@ export class Editor<
         // whole document. #suppressNativeSelectionSync then stops the resulting
         // selectionchange from reading that shorter range back over #selections
         // before the delete runs.
-        const renderedLineRanges = this.#getRenderedEditableLineRanges();
+        const renderedLineRanges = this.#getEditableLineRanges().rendered;
         const firstRenderedLine = renderedLineRanges[0]?.[0];
         const lastRenderedLine = renderedLineRanges.at(-1)?.[1];
         if (firstRenderedLine !== undefined && lastRenderedLine !== undefined) {
@@ -3445,25 +3601,25 @@ export class Editor<
       copiedLinesBefore.push(copiedLineCount);
       const blockLineCount = block.endLine - block.startLine + 1;
       copiedLineCount += blockLineCount;
-      const text = textDocument.getText({
-        start: { line: block.startLine, character: 0 },
-        end: {
+      const text = textDocument.getTextSlice(
+        textDocument.offsetAt({ line: block.startLine, character: 0 }),
+        textDocument.offsetAt({
           line: block.endLine,
           character: textDocument.getLineLength(block.endLine),
-        },
-      });
+        })
+      );
 
       if (direction > 0) {
         const position = { line: block.startLine, character: 0 };
         edits.push({
           range: { start: position, end: position },
-          newText: text + textDocument.eol,
+          newText: text + '\n',
         });
       } else if (block.endLine < textDocument.lineCount - 1) {
         const position = { line: block.endLine + 1, character: 0 };
         edits.push({
           range: { start: position, end: position },
-          newText: text + textDocument.eol,
+          newText: text + '\n',
         });
       } else {
         const position = {
@@ -3472,7 +3628,7 @@ export class Editor<
         };
         edits.push({
           range: { start: position, end: position },
-          newText: textDocument.eol + text,
+          newText: '\n' + text,
         });
       }
     }
@@ -3536,7 +3692,7 @@ export class Editor<
       };
       edits.push({
         range: { start: position, end: position },
-        newText: textDocument.eol + indent,
+        newText: '\n' + indent,
       });
     }
 
@@ -3578,8 +3734,8 @@ export class Editor<
     ): string => {
       const text = lines
         .map((line) => textDocument.getLineText(line))
-        .join(textDocument.eol);
-      return appendFinalLineBreak ? text + textDocument.eol : text;
+        .join('\n');
+      return appendFinalLineBreak ? `${text}\n` : text;
     };
 
     const edits: TextEdit[] = [];
@@ -3658,7 +3814,6 @@ export class Editor<
       return;
     }
 
-    this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
     // A width change means the inherited font/metrics may have changed (e.g. a
     // web font finished loading) while this same content element survived, so
@@ -3734,216 +3889,57 @@ export class Editor<
 
   #rerender(
     change: TextDocumentChange,
-    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
-    renderRange = this.#renderRange,
-    shouldUpdateBuffer?: boolean
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[]
   ) {
+    const renderRange = this.#renderRange;
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
-    const applyDocumentChange = this.#applyDocumentChange;
+    const applyChange = this.#applyComponentChange;
     const textDocument = this.#editSession?.document;
-    const gutterEl = this.#gutterElement;
-    const contentEl = this.#contentElement;
     if (
-      tokenizer == null ||
       fileInstance == null ||
-      applyDocumentChange == null ||
+      applyChange == null ||
       textDocument == null ||
-      contentEl == null
+      this.#contentElement == null
     ) {
       return;
     }
 
-    // cancel existing background tokenizing task
-    tokenizer.stopBackgroundTokenize();
+    // Without a tokenizer (the next sync creates one) the component still
+    // takes the change and shows the lines as plain text until tokens come.
+    const t =
+      process.env.NODE_ENV === 'development' && this.#options.__debug === true
+        ? performance.now()
+        : 0;
+    const dirtyLines = tokenizer?.tokenize(change, renderRange);
+    const t2 =
+      process.env.NODE_ENV === 'development' && this.#options.__debug === true
+        ? performance.now()
+        : 0;
 
-    const t = performance.now();
-    const dirtyLines = tokenizer.tokenize(
-      change,
-      renderRange,
-      !this.#isDiff && this.#virtualizedInstance != null
-    );
-    const t2 = performance.now();
-
-    if (dirtyLines.size > 0) {
-      const children = contentEl.children;
-      // Lines hidden inside a collapsed region have no row to patch, and
-      // letting them reach the create branch below would append rows for
-      // them; the tokenizer still received them (dirtyLines is forwarded to
-      // the host untouched).
-      const dirtyLineIndexes = new Set<number>();
-      for (const lineIndex of dirtyLines.keys()) {
-        if (this.#isLineRenderable(lineIndex)) {
-          dirtyLineIndexes.add(lineIndex);
-        }
-      }
-
-      // Update line elements that have been changed in the document. The
-      // scan starts at 0 because rendered rows can be sparse (collapsed
-      // regions): a dirty line's row may sit at a smaller child index than
-      // its dense line-arithmetic position, and overshooting it would fall
-      // through to the create branch below as a duplicate row.
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i] as HTMLElement | undefined;
-        if (child !== undefined) {
-          const lineNumber = getLineNumberAttr(child);
-          const lineType = child.dataset.lineType;
-          if (lineNumber === undefined || lineType === 'change-deletion') {
-            continue;
-          }
-          const lineIndex = lineNumber - 1;
-          if (dirtyLineIndexes.has(lineIndex)) {
-            const tokens = dirtyLines.get(lineIndex)!;
-            child.replaceChildren(...renderLineTokens(tokens));
-            dirtyLineIndexes.delete(lineIndex);
-            if (dirtyLineIndexes.size === 0) {
-              break;
-            }
-          }
-        }
-      }
-
-      // Create new line elements for the new lines — only beyond the last
-      // existing rendered row: rows are appended to the column end, so any
-      // earlier missing row belongs at a collapsed-region boundary and is
-      // owned by the full re-render that follows a hunk-structure change.
-      if (dirtyLineIndexes.size > 0) {
-        let lastRenderedLineNumber = 0;
-        for (let i = children.length - 1; i >= 0; i--) {
-          const child = children[i] as HTMLElement;
-          const lineNumber = getLineNumberAttr(child);
-          if (
-            lineNumber !== undefined &&
-            child.dataset.lineType !== 'change-deletion'
-          ) {
-            lastRenderedLineNumber = lineNumber;
-            break;
-          }
-        }
-        for (const lineIndex of dirtyLineIndexes) {
-          if (lineIndex < lastRenderedLineNumber) {
-            continue;
-          }
-          const tokens = dirtyLines.get(lineIndex)!;
-          const lineNumber = String(lineIndex + 1);
-          h(
-            'div',
-            {
-              dataset: {
-                line: lineNumber,
-                lineType: 'context',
-                lineIndex: lineIndex.toString(),
-              },
-              // oxlint-disable-next-line react/no-children-prop
-              children: renderLineTokens(tokens),
-            },
-            contentEl
-          );
-          if (gutterEl !== undefined) {
-            h(
-              'div',
-              {
-                dataset: {
-                  lineType: 'context',
-                  columnNumber: lineNumber,
-                  lineIndex: lineIndex.toString(),
-                },
-                // oxlint-disable-next-line react/no-children-prop
-                children: [
-                  h('span', {
-                    dataset: {
-                      lineNumberContent: '',
-                    },
-                    textContent: lineNumber,
-                  }),
-                ],
-              },
-              gutterEl
-            );
-          }
-        }
-      }
-    }
-
-    // remove line elements that have been deleted in the document
-    if (change.lineDelta < 0) {
-      for (const children of [contentEl.children, gutterEl?.children ?? []]) {
-        for (let i = children.length - 1; i >= 0; i--) {
-          const child = children[i] as HTMLElement;
-          const lineNumber =
-            getLineNumberAttr(child) ??
-            getLineNumberAttr(child, 'columnNumber');
-          const lineType = child.dataset.lineType;
-          if (lineNumber === undefined || lineType === 'change-deletion') {
-            continue;
-          }
-          if (lineNumber - 1 < change.lineCount) {
-            break;
-          }
-          child.remove();
-        }
-      }
-    }
-
-    const didLineCountChange = change.lineDelta !== 0;
-
-    // fix grid layout
-    if (didLineCountChange) {
-      let gridRow = contentEl.children.length;
-      for (const child of contentEl.children) {
-        const { bufferSize } = (child as HTMLElement).dataset;
-        if (bufferSize !== undefined) {
-          gridRow += parseInt(bufferSize) - 1;
-        }
-      }
-      contentEl.style.gridRow = 'span ' + gridRow;
-      if (gutterEl !== undefined) {
-        gutterEl.style.gridRow = 'span ' + gridRow;
-      }
-    }
-
-    fileInstance.updateRenderCache(dirtyLines, tokenizer.themeType, {
-      shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
-      lineCountChangeInFlight: didLineCountChange,
-      changedDocumentLines:
-        this.#isDiff && !didLineCountChange
-          ? getChangedDocumentLines(textDocument, change)
-          : undefined,
-      documentLineCount: textDocument.lineCount,
+    const { rebuiltLines } = applyChange(textDocument, change, {
+      tokens: dirtyLines,
+      lineAnnotations: newLineAnnotations,
     });
-    if (didLineCountChange) {
-      // Line-count change: recompute hunks from the full document and re-render.
-      applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
-    }
 
-    // A line-count change can remove cached rows, while a unified diff rebuilds
-    // its content column on every edit. Either can detach the line elements
-    // memoized for caret/selection geometry, making offsetTop read as 0 and
-    // scrolling the caret to the top. Re-measure against the current rows.
-    if (didLineCountChange || (this.#isDiff && this.#diffSyle === 'unified')) {
+    // Rebuilt rows are new elements, so cached geometry for the old ones is
+    // stale.
+    if (change.lineDelta !== 0 || rebuiltLines.length > 0) {
       this.#resetCache();
     }
 
     if (newLineAnnotations != null) {
       this.#lineAnnotations = newLineAnnotations;
-      // A structural FileDiff edit rebuilds both columns and their paired
-      // annotation rows together. Re-inserting those rows independently by
-      // line number would break their visual alignment in split view.
-      if (!this.#isDiff || !didLineCountChange) {
-        renderLineAnnotations(
-          newLineAnnotations,
-          contentEl,
-          gutterEl,
-          fileInstance.getAnnotationSlotName
-        );
-      }
     }
     this.#renderCarets();
 
-    if (this.#options.__debug === true) {
+    if (
+      process.env.NODE_ENV === 'development' &&
+      this.#options.__debug === true
+    ) {
       console.log(
         `[diffs/editor] re-render in: ${round(performance.now() - t2)}ms,`,
-        `tokenize in: ${round(t2 - t)}ms (${dirtyLines.size} dirty lines)`
+        `tokenize in: ${round(t2 - t)}ms (${dirtyLines?.size ?? 0} dirty lines)`
       );
     }
   }
@@ -3971,7 +3967,7 @@ export class Editor<
         break;
       case 'insertLineBreak':
       case 'insertParagraph': {
-        this.#replaceSelectionText(this.#editSession?.document?.eol ?? '\n');
+        this.#replaceSelectionText('\n');
         break;
       }
       case 'deleteContentBackward':
@@ -4019,7 +4015,10 @@ export class Editor<
       });
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
-      queueRender(() => {
+      const queuedFocusFrame = () => {
+        if (this.#queuedFocusFrame === queuedFocusFrame) {
+          this.#queuedFocusFrame = undefined;
+        }
         // #contentHasFocus was marked eagerly above; a blur (or cleanup) in
         // the deferred gap cedes focus, and this stale frame must not pull
         // it back into the current — possibly replaced — content.
@@ -4033,7 +4032,9 @@ export class Editor<
         queueRender(() => {
           this.#shouldIgnoreSelectionChange = false;
         });
-      });
+      };
+      this.#queuedFocusFrame = queuedFocusFrame;
+      queueRender(queuedFocusFrame);
     } else if (shouldFocus?.() !== false) {
       this.#contentElement?.focus({ preventScroll });
     } else {
@@ -4086,6 +4087,12 @@ export class Editor<
       primarySelection.direction === DirectionBackward
         ? primarySelection.end
         : primarySelection.start;
+    // A virtualized view can come back without the caret's row yet; the
+    // request waits for the render that has it, so the caret lands on its
+    // line and not wherever focus alone would put it.
+    if (this.#getLineElement(primaryPosition.line) == null) {
+      return;
+    }
     this.#focus(primaryPosition, true, shouldFocus);
   }
 
@@ -4099,6 +4106,9 @@ export class Editor<
       !shadowRoot.contains(contentElement)
     ) {
       return false;
+    }
+    if (this.#queuedFocusFrame !== undefined) {
+      return true;
     }
     const { activeElement: shadowActiveElement } = shadowRoot;
     if (
@@ -4250,25 +4260,59 @@ export class Editor<
       return;
     }
     const primaryCaretElement = this.#primaryCaretElement;
-    if (primaryCaretElement !== undefined) {
+    if (this.#virtualizedInstance !== undefined) {
+      this.#requestCaretReveal(scrollPosition);
+    } else if (primaryCaretElement !== undefined) {
       primaryCaretElement.scrollIntoView({
         block: scrollPosition,
         inline: 'nearest',
       });
-      if (!noFocus) {
-        const position =
-          primarySelection.direction === DirectionBackward
-            ? primarySelection.end
-            : primarySelection.start;
-        if (this.#replacementFocusRequest !== undefined) {
-          this.#restoreReplacementFocus(position);
-        } else {
-          this.#focus(position);
-        }
-      }
     } else {
       const pos = getCaretPosition(primarySelection);
       this.#scrollToLine(pos.line, pos.character, noFocus);
+      return;
+    }
+    if (!noFocus) {
+      this.#focusAt(
+        primarySelection.direction === DirectionBackward
+          ? primarySelection.end
+          : primarySelection.start
+      );
+    }
+  }
+
+  // Virtualized hosts own scrolling: the host brings the primary caret's line
+  // into view, then whatever caret the selection holds once it settles gets its
+  // exact row and column revealed. The reveal never moves focus.
+  #requestCaretReveal(align: ScrollLogicalPosition): void {
+    const host = this.#virtualizedInstance;
+    const caret = this.#selections?.at(-1);
+    if (host === undefined || caret === undefined) {
+      return;
+    }
+    this.__postponeBgTokenizeToNextFrame();
+    host.scrollToLine(
+      getCaretPosition(caret).line + 1,
+      align,
+      this.#handleCaretRevealDone
+    );
+  }
+
+  // Hosts keep one pending request and cancel it when replaced, so a settled
+  // result always belongs to the newest reveal.
+  #handleCaretRevealDone = (result: ScrollRequestResult): void => {
+    const caret = this.#selections?.at(-1);
+    if (result === 'settled' && caret !== undefined) {
+      const { line, character } = getCaretPosition(caret);
+      this.#scrollCaretIntoView(line, character, 'nearest');
+    }
+  };
+
+  #focusAt(position: Position): void {
+    if (this.#replacementFocusRequest !== undefined) {
+      this.#restoreReplacementFocus(position);
+    } else {
+      this.#focus(position);
     }
   }
 
@@ -4289,7 +4333,89 @@ export class Editor<
   #scrollToLine(line: number, char = 0, noFocus = false) {
     this.__postponeBgTokenizeToNextFrame();
 
-    const virtualCaret = h('div', {
+    if (this.#scrollCaretIntoView(line, char, 'center')) {
+      if (!noFocus) {
+        this.#focusAt({ line, character: char });
+      }
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineChar = undefined;
+      this.#scrollingToLineFixed = false;
+      this.#scrollingToLineNoFocus = false;
+      return;
+    }
+
+    // if the line is not rendered yet, scroll to the approximate line position
+    // to trigger the line to be rendered, then recall this function to ensure
+    // the line is scrolled into view
+    let yFix = 0;
+    if (this.#scrollingToLine === line && this.#contentElement !== undefined) {
+      for (let i = this.#contentElement.childElementCount - 1; i >= 0; i--) {
+        const child = this.#contentElement.children[i] as HTMLElement;
+        const lineType = child.dataset.lineType;
+        const lineNumber = getLineNumberAttr(child);
+        if (
+          lineType !== undefined &&
+          isLineEditable(lineType) &&
+          lineNumber !== undefined
+        ) {
+          yFix = (line - (lineNumber - 1)) * this.#metrics.lineHeight;
+          break;
+        }
+      }
+    }
+    const lineAnnotations = (this.#lineAnnotations ?? []).filter(
+      (annotation) => annotation.lineNumber < line
+    ).length;
+    const approximateLineY =
+      (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
+    const virtualCaret = this.#createVirtualCaret();
+    virtualCaret.style.top = approximateLineY + 'px';
+    this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
+    virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+    virtualCaret.remove();
+
+    if (
+      (this.#scrollingToLine === line &&
+        (yFix === 0 || this.#scrollingToLineFixed)) ||
+      !this.#isLineRenderable(line)
+    ) {
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineChar = undefined;
+      this.#scrollingToLineFixed = false;
+      this.#scrollingToLineNoFocus = false;
+    } else {
+      this.#scrollingToLine = line;
+      this.#scrollingToLineChar = char;
+      this.#scrollingToLineFixed = yFix !== 0;
+      this.#scrollingToLineNoFocus = noFocus;
+    }
+  }
+
+  // Scroll the caret's exact wrapped row and column into view. Returns false
+  // when the line has no rendered row to reveal.
+  #scrollCaretIntoView(
+    line: number,
+    char: number,
+    block: ScrollLogicalPosition
+  ): boolean {
+    if (!this.#isRendering || this.#getLineElement(line) === undefined) {
+      return false;
+    }
+    const [left, wrapLine] = this.#getCharX(line, char);
+    const virtualCaret = this.#createVirtualCaret();
+    virtualCaret.style.top =
+      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight + 'px';
+    virtualCaret.style.left = left + 'px';
+    this.#overlayElement?.appendChild(virtualCaret);
+    virtualCaret.scrollIntoView({ block, inline: 'nearest' });
+    virtualCaret.remove();
+    return true;
+  }
+
+  // A temporary one-line element that native scrollIntoView can target in
+  // place of a caret that is not rendered.
+  #createVirtualCaret(): HTMLElement {
+    return h('div', {
       style: {
         position: 'absolute',
         left: '0',
@@ -4298,100 +4424,6 @@ export class Editor<
         scrollMargin: this.#getScrollMargin(),
       },
     });
-    if (this.#getLineElement(line) !== undefined) {
-      const [left, wrapLine] = this.#getCharX(line, char);
-      const lineY = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-      virtualCaret.style.top = lineY + 'px';
-      virtualCaret.style.left = left + 'px';
-      this.#overlayElement?.appendChild(virtualCaret);
-      virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-      if (!noFocus) {
-        const position = { line, character: char };
-        if (this.#replacementFocusRequest !== undefined) {
-          this.#restoreReplacementFocus(position);
-        } else {
-          this.#focus(position);
-        }
-      }
-      this.#scrollingToLine = undefined;
-      this.#scrollingToLineChar = undefined;
-      this.#scrollingToLineFixed = false;
-      this.#scrollingToLineNoFocus = false;
-    }
-    // if the line is not rendered yet(virtualized), scroll to the modeled or approximate
-    // line position to trigger the line to be rendered, then recall this function
-    // to ensure the line is scrolled into view
-    else {
-      const modelLinePosition = this.#virtualizedInstance?.getLinePosition?.(
-        line + 1
-      );
-      if (modelLinePosition !== undefined) {
-        virtualCaret.style.top = modelLinePosition.top + 'px';
-        this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
-        virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-        // A collapsed line reports its separator's (nonzero) geometry, so
-        // parking the retry for it would re-scroll on every sync forever;
-        // only renderable lines may keep the retry alive.
-        if (modelLinePosition.height > 0 && this.#isLineRenderable(line)) {
-          this.#scrollingToLine = line;
-          this.#scrollingToLineChar = char;
-          this.#scrollingToLineNoFocus = noFocus;
-        } else {
-          this.#scrollingToLine = undefined;
-          this.#scrollingToLineChar = undefined;
-          this.#scrollingToLineNoFocus = false;
-        }
-      } else {
-        let yFix = 0;
-        if (
-          this.#scrollingToLine === line &&
-          this.#contentElement !== undefined
-        ) {
-          for (
-            let i = this.#contentElement.childElementCount - 1;
-            i >= 0;
-            i--
-          ) {
-            const child = this.#contentElement.children[i] as HTMLElement;
-            const lineType = child.dataset.lineType;
-            const lineNumber = getLineNumberAttr(child);
-            if (
-              lineType !== undefined &&
-              isLineEditable(lineType) &&
-              lineNumber !== undefined
-            ) {
-              yFix = (line - (lineNumber - 1)) * this.#metrics.lineHeight;
-              break;
-            }
-          }
-        }
-        const lineAnnotations = (this.#lineAnnotations ?? []).filter(
-          (annotation) => annotation.lineNumber < line
-        ).length;
-        const approximateLineY =
-          (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
-        virtualCaret.style.top = approximateLineY + 'px';
-        this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
-        virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-
-        if (
-          (this.#scrollingToLine === line &&
-            (yFix === 0 || this.#scrollingToLineFixed)) ||
-          !this.#isLineRenderable(line)
-        ) {
-          this.#scrollingToLine = undefined;
-          this.#scrollingToLineChar = undefined;
-          this.#scrollingToLineFixed = false;
-          this.#scrollingToLineNoFocus = false;
-        } else {
-          this.#scrollingToLine = line;
-          this.#scrollingToLineChar = char;
-          this.#scrollingToLineFixed = yFix !== 0;
-          this.#scrollingToLineNoFocus = noFocus;
-        }
-      }
-    }
-    virtualCaret.remove();
   }
 
   // Build a selection that fully covers every line from the anchor line to the
@@ -4422,6 +4454,71 @@ export class Editor<
       direction: DirectionForward,
     };
   }
+
+  // The native selection's first range as seen through the editor's shadow
+  // root. Selection.getComposedRanges is the standard way to read it; where
+  // it is missing (older browsers, embedded WebViews, the pinned CI Chromium)
+  // the older ShadowRoot.getSelection still reports the range inside the
+  // shadow tree. Undefined when neither has a range.
+  #composedSelectionRange(shadowRoot: ShadowRoot): StaticRange | undefined {
+    const selection = document.getSelection();
+    if (selection == null) {
+      return undefined;
+    }
+    return typeof selection.getComposedRanges === 'function'
+      ? selection.getComposedRanges({ shadowRoots: [shadowRoot] })?.[0]
+      : getShadowRootRange(shadowRoot);
+  }
+
+  // A plain click on text the editor cannot edit (the deletions column in
+  // split view, a deleted row in unified view) puts the caret where editing
+  // continues on the editable side: the same line and column for a context
+  // row, the start of the line the host names for a deleted row. A drag,
+  // double-click or gutter line select leaves a native selection behind and
+  // is left alone, so deleted text can still be selected and copied.
+  #moveCaretFromReadOnlyClick = (event: MouseEvent): void => {
+    const target = event.composedPath()[0];
+    const row =
+      target instanceof HTMLElement ? target.closest('[data-line]') : null;
+    const shadowRoot = this.#fileContainer?.shadowRoot;
+    const textDocument = this.#editSession?.document;
+    if (
+      !(row instanceof HTMLElement) ||
+      shadowRoot == null ||
+      textDocument == null ||
+      !this.#isRendering
+    ) {
+      return;
+    }
+    const range = this.#composedSelectionRange(shadowRoot);
+    if (range != null && !range.collapsed) {
+      return;
+    }
+    const lineNumber = getLineNumberAttr(row);
+    const line =
+      lineNumber != null
+        ? this.#fileDiffInstance?.editLineFor(lineNumber)
+        : undefined;
+    if (line == null) {
+      return;
+    }
+    // A context row has the same text on both sides, so the caret the browser
+    // placed in it says which column to continue from.
+    const clickedPosition =
+      row.dataset.lineType !== 'change-deletion' &&
+      range != null &&
+      row.contains(range.startContainer)
+        ? convertSelection(range)?.start
+        : undefined;
+    this.#setDeletedTextSelectionActive(false);
+    this.#focusAtPosition(
+      textDocument.normalizePosition({
+        line,
+        character: clickedPosition?.character ?? 0,
+      }),
+      false
+    );
+  };
 
   // A pointer gesture targets read-only deleted text when its closest row is a
   // change-deletion. Used to route a click in unified view's deleted text to a
@@ -5604,6 +5701,7 @@ export class Editor<
       this.#markerRenderer === undefined
     ) {
       this.#selections = undefined;
+      this.#searchHighlighter?.clear();
       this.#overlayElements?.forEach((el) => el.remove());
       this.#overlayElements?.clear();
       this.#selectionAction?.cleanup();
@@ -5661,80 +5759,7 @@ export class Editor<
     }
 
     const textDocument = this.#editSession?.document;
-    if (this.#matches !== undefined && textDocument !== undefined) {
-      const matches = this.#matches;
-      const renderRange = this.#renderRange;
-      const shouldCullMatches =
-        (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
-        (this.#isDiff &&
-          this.#fileDiffInstance?.options.expandUnchanged !== true);
-      const renderedLineRanges = shouldCullMatches
-        ? this.#getRenderedEditableLineRanges()
-        : undefined;
-      const primarySelection = this.#selections?.at(-1);
-      const primaryStartOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.start)
-          : -1;
-      const primaryEndOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.end)
-          : -1;
-      let firstMatchIndex = 0;
-      const rangeCount = renderedLineRanges?.length ?? 1;
-      for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
-        let visibleEndOffset = Infinity;
-        const lineRange = renderedLineRanges?.[rangeIndex];
-        if (lineRange !== undefined) {
-          const [firstLine, lastLine] = lineRange;
-          const visibleStartOffset = textDocument.offsetAt({
-            line: firstLine,
-            character: 0,
-          });
-          const endLine = lastLine + 1;
-          visibleEndOffset =
-            endLine < textDocument.lineCount
-              ? textDocument.offsetAt({ line: endLine, character: 0 })
-              : textDocument.offsetAt({
-                  line: endLine - 1,
-                  character: textDocument.getLineLength(endLine - 1),
-                });
-
-          // Matches are sorted and non-overlapping, so narrow the rendered
-          // offset window before resolving any match positions through the treap.
-          let low = firstMatchIndex;
-          let high = matches.length;
-          while (low < high) {
-            const middle = low + Math.floor((high - low) / 2);
-            if (matches[middle][1] <= visibleStartOffset) {
-              low = middle + 1;
-            } else {
-              high = middle;
-            }
-          }
-          firstMatchIndex = low;
-        }
-        for (; firstMatchIndex < matches.length; firstMatchIndex++) {
-          const [startOffset, endOffset] = matches[firstMatchIndex];
-          if (startOffset >= visibleEndOffset) {
-            break;
-          }
-          const range: Range = {
-            start: textDocument.positionAt(startOffset),
-            end: textDocument.positionAt(endOffset),
-          };
-          const isFocused =
-            primaryStartOffset === startOffset &&
-            primaryEndOffset === endOffset;
-          this.#renderSelection(
-            renderCtx,
-            'match',
-            range,
-            isFocused ? 'focus' : undefined
-          );
-        }
-      }
-    }
+    this.#renderSearchMatches();
 
     if (this.#markerRenderer !== undefined && textDocument !== undefined) {
       for (const marker of this.#markerRenderer.markers) {
@@ -6465,6 +6490,108 @@ export class Editor<
     );
   }
 
+  // Find paints native ranges independently of editor selections.
+  #renderSearchMatches(): void {
+    const highlighter = this.#searchHighlighter;
+    highlighter?.clear();
+    const textDocument = this.#editSession?.document;
+    if (highlighter == null || this.#matches == null || textDocument == null)
+      return;
+    const nativeRanges = new Map<number, SearchHighlightRange[]>();
+    const matches = this.#matches;
+    const renderRange = this.#renderRange;
+    const shouldCullMatches =
+      (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
+      (this.#isDiff &&
+        this.#fileDiffInstance?.options.expandUnchanged !== true);
+    const renderedLineRanges = shouldCullMatches
+      ? this.#getEditableLineRanges().rendered
+      : undefined;
+    let firstMatchIndex = 0;
+    const rangeCount = renderedLineRanges?.length ?? 1;
+    for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
+      let visibleEndOffset = Infinity;
+      const lineRange = renderedLineRanges?.[rangeIndex];
+      if (lineRange !== undefined) {
+        const [firstLine, lastLine] = lineRange;
+        const visibleStartOffset = textDocument.offsetAt({
+          line: firstLine,
+          character: 0,
+        });
+        const endLine = lastLine + 1;
+        visibleEndOffset =
+          endLine < textDocument.lineCount
+            ? textDocument.offsetAt({ line: endLine, character: 0 })
+            : textDocument.offsetAt({
+                line: endLine - 1,
+                character: textDocument.getLineLength(endLine - 1),
+              });
+
+        // Matches are sorted and non-overlapping, so narrow the rendered
+        // offset window before resolving any match positions through the treap.
+        let low = firstMatchIndex;
+        let high = matches.length;
+        while (low < high) {
+          const middle = low + Math.floor((high - low) / 2);
+          if (matches[middle][1] <= visibleStartOffset) {
+            low = middle + 1;
+          } else {
+            high = middle;
+          }
+        }
+        firstMatchIndex = low;
+      }
+      for (; firstMatchIndex < matches.length; firstMatchIndex++) {
+        const [startOffset, endOffset] = matches[firstMatchIndex];
+        if (startOffset >= visibleEndOffset) {
+          break;
+        }
+        const range: Range = {
+          start: textDocument.positionAt(startOffset),
+          end: textDocument.positionAt(endOffset),
+        };
+        const isFocused =
+          this.#currentSearchMatch?.[0] === startOffset &&
+          this.#currentSearchMatch[1] === endOffset;
+        const firstLine = Math.max(range.start.line, lineRange?.[0] ?? 0);
+        const lastLine = Math.min(
+          range.end.line,
+          lineRange?.[1] ?? textDocument.lineCount - 1
+        );
+        for (let line = firstLine; line <= lastLine; line++) {
+          const startCharacter =
+            line === range.start.line ? range.start.character : 0;
+          const endCharacter =
+            line === range.end.line
+              ? range.end.character
+              : textDocument.getLineLength(line);
+          if (endCharacter > startCharacter) {
+            let lineRanges = nativeRanges.get(line + 1);
+            if (lineRanges == null) {
+              lineRanges = [];
+              nativeRanges.set(line + 1, lineRanges);
+            }
+            lineRanges.push({
+              startCharacter,
+              endCharacter,
+              current: isFocused,
+            });
+          }
+        }
+      }
+    }
+    if (this.#contentElement != null && nativeRanges.size > 0) {
+      highlighter.paint(this.#contentElement, (lineNumber, side) =>
+        side === 'deletions' ? undefined : nativeRanges.get(lineNumber)
+      );
+      if (this.#pendingSearchHorizontalReveal) {
+        const range = highlighter.currentMatchRange;
+        this.#pendingSearchHorizontalReveal =
+          range == null || !revealMatchHorizontally(range);
+      }
+    }
+  }
+
   // Opens the search panel in the requested mode. If a panel is already open,
   // it switches that panel's mode in place (preserving the current query)
   // rather than recreating it.
@@ -6474,6 +6601,60 @@ export class Editor<
       return;
     }
     this.#renderSearchPanel(mode);
+  }
+
+  // Measure shared viewport geometry once per search lookup, rather than once
+  // for every match checked against it.
+  #getSearchViewportBounds(): ViewportBounds | undefined {
+    const viewport = this.#getScrollViewport();
+    if (viewport == null) return undefined;
+    let top = 0;
+    let bottom: number;
+    if (viewport instanceof HTMLElement) {
+      const rect = viewport.getBoundingClientRect();
+      top = rect.top;
+      bottom = rect.bottom;
+    } else {
+      bottom = viewport.defaultView?.innerHeight ?? 0;
+    }
+    const stickyHeader =
+      this.#fileContainer?.shadowRoot?.querySelector<HTMLElement>(
+        '[data-diffs-header][data-sticky]'
+      );
+    if (stickyHeader != null) {
+      top = Math.max(top, stickyHeader.getBoundingClientRect().bottom);
+    }
+    return { top, bottom };
+  }
+
+  // Mounted rows can still be outside the scroll viewport. Keep visible matches
+  // in place, including matches partway through a wrapped line.
+  #isSearchMatchInView(
+    [start, end]: MatchRange,
+    viewport = this.#getSearchViewportBounds()
+  ): boolean {
+    const textDocument = this.#editSession?.document;
+    if (textDocument == null || viewport == null) return false;
+    const startPosition = textDocument.positionAt(start);
+    const lastPosition = textDocument.positionAt(Math.max(start, end - 1));
+    const startRow = this.#getLineElement(startPosition.line);
+    const lastRow = this.#getLineElement(lastPosition.line);
+    if (startRow == null || lastRow == null) return false;
+
+    const startWrap = this.#getCharX(
+      startPosition.line,
+      startPosition.character
+    )[1];
+    const lastWrap = this.#getCharX(
+      lastPosition.line,
+      lastPosition.character
+    )[1];
+    const startRect = startRow.getBoundingClientRect();
+    const lastRect = lastRow.getBoundingClientRect();
+    if (startRect.height === 0 || lastRect.height === 0) return false;
+    const top = startRect.top + startWrap * this.#metrics.lineHeight;
+    const bottom = lastRect.top + (lastWrap + 1) * this.#metrics.lineHeight;
+    return bottom > top && top >= viewport.top && bottom <= viewport.bottom;
   }
 
   #renderSearchPanel(mode: SearchPanelMode) {
@@ -6488,131 +6669,156 @@ export class Editor<
       return;
     }
 
-    let defaultQuery = '';
-    let initialMatch: [number, number] | undefined = undefined;
+    this.#searchHighlighter ??= SearchHighlighter.create(
+      preElement.ownerDocument
+    );
 
-    if (selections !== undefined && selections.length > 0) {
-      let primarySelection = selections.at(-1)!;
-      if (isCollapsedSelection(primarySelection)) {
-        primarySelection = expandCollapsedSelectionToWord(
-          textDocument,
-          primarySelection
-        );
-        this.#updateSelections([...selections.slice(0, -1), primarySelection]);
-        const selectionText = textDocument.getText(primarySelection);
-        if (selectionText !== '' && !selectionText.includes('\n')) {
-          defaultQuery = selectionText;
-          initialMatch = [
-            textDocument.offsetAt(primarySelection.start),
-            textDocument.offsetAt(primarySelection.end),
-          ];
-        }
+    const defaultQuery = getSearchQueryFromSelection(
+      textDocument,
+      selections?.at(-1)
+    );
+    this.#currentSearchMatch = undefined;
+
+    // Preserve the viewport until navigation first needs a scroll, then center
+    // every destination for this query, including already-visible matches.
+    let centerSearchNavigation = false;
+    const scrollToMatch = (match: MatchRange, retainFocus: boolean) => {
+      this.#currentSearchMatch = match;
+      this.#pendingSearchHorizontalReveal = true;
+      const position = textDocument.positionAt(match[0]);
+      this.#revealLineIfCollapsed(position.line);
+      // A new match supersedes any retry for an earlier offscreen result.
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineFixed = false;
+      if (centerSearchNavigation || !this.#isSearchMatchInView(match)) {
+        centerSearchNavigation = true;
+        this.#scrollToLine(position.line, position.character, true);
       }
-    }
-
-    const scrollToMatch = (
-      [startOffset, endOffset]: MatchRange,
-      retainFocus: boolean
-    ) => {
-      const nextSelection = createSelectionFromAnchorAndFocusOffsets(
-        textDocument,
-        startOffset,
-        endOffset
-      );
-      this.#updateSelections([nextSelection]);
-      // Search counts include matches hidden in collapsed regions; navigating
-      // to one reveals it.
-      this.#revealLineIfCollapsed(getCaretPosition(nextSelection).line);
-      this.#scrollToPrimaryCaret(true); // scroll to the primary caret and don't focus
+      this.#renderSearchMatches();
       this.#retainSearchPanelFocus = retainFocus;
     };
 
     const searchPanel = new SearchPanelWidget({
-      textDocument,
       containerElement: preElement,
+      unsafeCSS: this.#fileInstance?.options.unsafeCSS,
       defaultQuery,
       mode,
-      initialMatch,
+      onQueryChange: () => {
+        centerSearchNavigation = false;
+      },
+      search: (searchParams) =>
+        this.#searchWithNavigationTarget(textDocument, searchParams),
+      isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
+        aStart === bStart && aEnd === bEnd,
       scrollToMatch,
-      applyReplace: (edits: ResolvedTextEdit[]) => {
-        if (edits.length === 0) {
-          return;
-        }
-        const change = textDocument.applyEdits(
-          edits.map((edit) => ({
-            range: {
-              start: textDocument.positionAt(edit.start),
-              end: textDocument.positionAt(edit.end),
-            },
-            newText: edit.text,
-          })),
-          true,
-          this.#selections
-        );
-        if (change !== undefined) {
-          this.#applyChange(
-            change,
-            undefined,
-            this.#applyChangeToLineAnnotations(change),
-            { skipSearchRefresh: true }
-          );
-        }
+      replace: {
+        replaceMatch: (match, searchParams) =>
+          this.replaceSearchMatches([match], searchParams),
+        replaceAll: (matches, searchParams) => {
+          this.replaceSearchMatches(matches, searchParams);
+        },
       },
       onUpdate: (
-        allMatches: MatchRange[],
-        options?: { syncSelection?: boolean }
+        { matches: allMatches, preferredMatch }: SearchResult<MatchRange>,
+        options?: { skipNavigation?: boolean }
       ): MatchRange | undefined => {
-        if (allMatches.length === 0) {
-          this.#matches = undefined;
-          this.#updateSelections(this.#selections ?? []);
+        const previous = this.#currentSearchMatch;
+        this.#matches = allMatches.length > 0 ? allMatches : undefined;
+        if (options?.skipNavigation === true) {
+          const current = allMatches.find(
+            ([start, end]) => start === previous?.[0] && end === previous[1]
+          );
+          this.#currentSearchMatch = current;
+          if (current == null) this.#pendingSearchHorizontalReveal = false;
+          this.#renderSearchMatches();
+          return current;
+        }
+
+        // Replacement leaves a collapsed marker at its end; advance past it.
+        const current =
+          previous != null && previous[0] === previous[1]
+            ? allMatches.find(([start]) => start >= previous[1])
+            : preferredMatch;
+        if (current == null) {
+          this.#currentSearchMatch = undefined;
+          this.#pendingSearchHorizontalReveal = false;
+          this.#renderSearchMatches();
           return;
         }
 
-        this.#matches = allMatches;
-        if (options?.syncSelection === false) {
-          this.#updateSelections(this.#selections ?? []);
-          const primarySelection = this.#selections?.at(-1);
-          if (primarySelection !== undefined) {
-            const startOffset = textDocument.offsetAt(primarySelection.start);
-            const endOffset = textDocument.offsetAt(primarySelection.end);
-            for (const match of allMatches) {
-              if (match[0] === startOffset && match[1] === endOffset) {
-                return match;
-              }
-            }
-          }
-          return undefined;
-        }
-
-        const primarySelection = this.#selections?.at(-1);
-        let searchOffset = 0;
-        let nextMatch: MatchRange | undefined;
-        if (primarySelection !== undefined) {
-          searchOffset = textDocument.offsetAt(primarySelection.start);
-        }
-        for (const m of allMatches) {
-          if (m[0] >= searchOffset) {
-            nextMatch = m;
-            break;
-          }
-        }
-        if (nextMatch !== undefined) {
-          scrollToMatch(nextMatch, true);
-        } else {
-          this.#updateSelections(this.#selections ?? []);
-        }
-        return nextMatch;
+        scrollToMatch(current, true);
+        return current;
       },
       onClose: () => {
         this.#searchPanel = undefined;
         this.#retainSearchPanelFocus = false;
         this.#matches = undefined;
-        this.#updateSelections(this.#selections ?? []);
+        this.#currentSearchMatch = undefined;
+        this.#pendingSearchHorizontalReveal = false;
+        this.#renderSearchMatches();
       },
     });
 
     this.#searchPanel = searchPanel;
     this.#retainSearchPanelFocus = false;
+    searchPanel.mount();
+  }
+
+  // Choose the starting match during collection so navigation needs neither
+  // another match scan nor intermediate state shared with the panel callbacks.
+  #searchWithNavigationTarget(
+    textDocument: TextDocument<EType, LAnnotation>,
+    searchParams: SearchParams
+  ): SearchResult<MatchRange> {
+    const viewport = this.#getSearchViewportBounds();
+    const { rendered, visible } = this.#getEditableLineRanges(viewport);
+    const toOffsets = ([first, last]: [number, number]): MatchRange => [
+      textDocument.offsetAt({ line: first, character: 0 }),
+      textDocument.offsetAt({
+        line: last,
+        character: textDocument.getLineLength(last),
+      }),
+    ];
+    const offsets = rendered.map(toOffsets);
+    const visibleOffsets = visible.map(toOffsets);
+    let rangeIndex = 0;
+    let visibleRangeIndex = 0;
+    const lastEnd = offsets.at(-1)?.[1];
+    let firstVisible: number | undefined;
+    let firstRendered: number | undefined;
+    let firstAfterRendered: number | undefined;
+    const matches = textDocument.search(
+      searchParams,
+      undefined,
+      (match, index) => {
+        const [start] = match;
+        while (rangeIndex < offsets.length && start > offsets[rangeIndex][1])
+          rangeIndex++;
+        while (
+          visibleRangeIndex < visibleOffsets.length &&
+          start > visibleOffsets[visibleRangeIndex][1]
+        )
+          visibleRangeIndex++;
+        if (rangeIndex < offsets.length && start >= offsets[rangeIndex][0]) {
+          firstRendered ??= index;
+          if (
+            firstVisible == null &&
+            visibleRangeIndex < visibleOffsets.length &&
+            start >= visibleOffsets[visibleRangeIndex][0] &&
+            this.#isSearchMatchInView(match, viewport)
+          ) {
+            firstVisible = index;
+          }
+        }
+        if (firstAfterRendered == null && lastEnd != null && start > lastEnd)
+          firstAfterRendered = index;
+      }
+    );
+    return {
+      matches,
+      preferredMatch:
+        matches[firstVisible ?? firstRendered ?? firstAfterRendered ?? 0],
+    };
   }
 
   #getSelectionText() {
@@ -6747,7 +6953,7 @@ export class Editor<
             {
               start: textDocument.offsetAt(primarySelection.start),
               end: textDocument.offsetAt(primarySelection.end),
-              text: Array.isArray(text) ? text.join(textDocument.eol) : text,
+              text: Array.isArray(text) ? text.join('\n') : text,
             },
             this.#lineAnnotations,
             undefined,
@@ -6963,92 +7169,21 @@ export class Editor<
     }
     this.#lastAccessedCharX = undefined;
 
-    let renderRange = this.#renderRange;
-    let shouldUpdateBuffer: boolean | undefined;
-    if (
-      renderRange !== undefined &&
-      newSelections !== undefined &&
-      newSelections.length > 0
-    ) {
-      const primarySelection = newSelections.at(-1)!;
-      const renderRangeEndLine =
-        renderRange.startingLine + renderRange.totalLines;
-      // When an edit moves the caret to or past the last rendered line — typing
-      // Enter at the window's bottom edge, or pasting a few lines there — widen
-      // the render range so every new line up to the caret gets a row when
-      // #rerender runs below. The widened range is also written back to
-      // #renderRange: the next edit reads renderRangeEndLine from it, and
-      // #renderCaret/#isLineVisible read it to decide whether to draw the caret.
-      // Without persisting, the end line stays stale, a following edit is
-      // misclassified as "past the window", and its just-typed line is left
-      // unrendered until the next scroll re-syncs the range. Only edits that
-      // carry a caret reach here (the block is guarded on `selections` above), so
-      // a bare programmatic applyEdits with no active selection does not widen.
-      //
-      // Cap the widening at a multiple of the bounded window the virtualizer
-      // last synced. A large insert at the caret — most often a big multi-line
-      // paste, or a scripted set-selection-then-edit at scale — can drop the
-      // caret far below the window; widening to reach it would make #rerender
-      // build a row per inserted line synchronously, defeating virtualization.
-      // Past the cap, keep the bounded window and only recompute the buffer
-      // spacer — the scroll that follows a focused edit (or the next user scroll
-      // when unfocused) renders the far region with a bounded window.
-      if (primarySelection.end.line >= renderRangeEndLine) {
-        const widenedTotalLines =
-          primarySelection.end.line - renderRange.startingLine + 1;
-        const maxWidenLines =
-          this.#viewportWindowLines === undefined ||
-          this.#viewportWindowLines === Infinity
-            ? Infinity
-            : this.#viewportWindowLines * MAX_EDIT_WIDEN_WINDOW_MULTIPLE;
-        // Only widen when the edit actually reaches the rendered window — its
-        // dirty lines start at or before the window end. #rerender materializes
-        // rows from change.startLine onward, so widening for an edit that starts
-        // entirely below the window (e.g. setSelections to an offscreen line
-        // then applyEdits before the virtualizer re-syncs) would leave the
-        // rows between the window and the edit unbuilt while #isLineVisible
-        // reports them visible, mispositioning the new rows and caret until the
-        // next scroll.
-        if (
-          change.startLine <= renderRangeEndLine &&
-          widenedTotalLines <= maxWidenLines &&
-          // Widening exists to give the caret's line a row; a caret target
-          // hidden in a collapsed region can never gain one, so take the
-          // buffer-only path instead of building rows toward it.
-          this.#isLineRenderable(primarySelection.end.line)
-        ) {
-          if (primarySelection.end.line > renderRangeEndLine) {
-            // The line count grew below the window, so the buffer spacer must be
-            // recomputed (preserves the prior behavior for this case).
-            shouldUpdateBuffer = true;
-          }
-          renderRange = { ...renderRange, totalLines: widenedTotalLines };
-          this.#renderRange = renderRange;
-        } else {
-          // The edit is past the cap, or starts below the rendered window: keep
-          // the bounded window and only recompute the buffer; the scroll that
-          // follows a focused edit (or the next user scroll) renders the far
-          // region.
-          shouldUpdateBuffer = true;
-        }
-      }
-    }
     if (
       this.#isRendering &&
       this.#tokenizer != null &&
       this.#contentElement != null
     ) {
-      this.#rerender(
-        change,
-        newLineAnnotations,
-        renderRange,
-        shouldUpdateBuffer
-      );
+      this.#rerender(change, newLineAnnotations);
     } else if (textDocument != null) {
       // Recycling or pending hydration can leave the document editable
-      // without editor markup. Keep the host session current before the
-      // change callback observes it or a later mount renders from it.
-      this.#applySuspendedDocumentChange?.(textDocument, newLineAnnotations);
+      // without editor markup. The tokenizer and the component's model still
+      // take the change, so onChange and a later render both see the current
+      // document with its colors.
+      this.#applyComponentChange?.(textDocument, change, {
+        tokens: this.#tokenizer?.tokenize(change, this.#renderRange),
+        lineAnnotations: newLineAnnotations,
+      });
       if (newLineAnnotations != null) {
         this.#lineAnnotations = newLineAnnotations;
       }
@@ -7060,16 +7195,13 @@ export class Editor<
       this.#updateSelections(newSelections);
     }
 
-    // A completed local edit also supersedes any pending external replacement.
-    this.#fileInstance?.__acknowledgeDocumentUpdate();
     this.#checkpointEditSessionState();
 
     this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
     this.#scheduleEditPrediction();
 
-    // Publish the change only after the host renderer agrees with the new
-    // document. Consumers may synchronously render the returned annotations,
-    // which must not observe the previous line structure.
+    // The component's model is updated before observers hear of the change;
+    // the rows follow in its render.
     this.#emitChange(
       change.changes,
       newLineAnnotations ?? this.#lineAnnotations
@@ -7077,10 +7209,9 @@ export class Editor<
 
     if (
       options?.skipSearchRefresh !== true &&
-      this.#searchPanel !== undefined &&
-      this.#matches !== undefined
+      this.#searchPanel !== undefined
     ) {
-      this.#searchPanel.updateMatches({ syncSelection: false });
+      this.#searchPanel.updateMatches({ skipNavigation: true });
     }
 
     if (newSelections != null) {
@@ -7095,7 +7226,9 @@ export class Editor<
         if (revealTarget !== undefined) {
           this.#revealLineIfCollapsed(getCaretPosition(revealTarget).line);
         }
-        if (this.#primaryCaretElement !== undefined) {
+        if (this.#virtualizedInstance !== undefined) {
+          this.#requestCaretReveal('nearest');
+        } else if (this.#primaryCaretElement !== undefined) {
           requestAnimationFrame(() => {
             this.#primaryCaretElement?.scrollIntoView({
               block: 'nearest',
@@ -7120,7 +7253,14 @@ export class Editor<
     if (file == null || publishChange == null) {
       return;
     }
-    publishChange(changes, file, lineAnnotations);
+    this.#inChangeCallback = true;
+    try {
+      publishChange(changes, file, lineAnnotations);
+    } catch (error: unknown) {
+      console.error(error);
+    } finally {
+      this.#inChangeCallback = false;
+    }
   }
 
   #applyChangeToLineAnnotations(
@@ -7142,34 +7282,69 @@ export class Editor<
     return undefined;
   }
 
-  // Returns contiguous document-line ranges that have editable rows in the
-  // current render window. Collapsed diff sections create gaps between ranges.
-  #getRenderedEditableLineRanges(): [first: number, last: number][] {
-    const contentElement = this.#contentElement;
-    if (contentElement === undefined) {
-      return [];
+  // Collect mounted and visible source-line ranges in one walk, preserving
+  // collapsed gaps. Full-file searches can use the document's rendered range
+  // directly and only visit rows around the viewport.
+  #getEditableLineRanges(viewport?: ViewportBounds): {
+    rendered: [first: number, last: number][];
+    visible: [first: number, last: number][];
+  } {
+    const rendered: [number, number][] = [];
+    const visible: [number, number][] = [];
+    const rows = this.#contentElement?.children;
+    if (rows == null) return { rendered, visible };
+    const textDocument = this.#editSession?.document;
+    const useDocumentRange =
+      viewport != null &&
+      textDocument != null &&
+      this.#renderRange == null &&
+      (!this.#isDiff ||
+        this.#fileDiffInstance?.options.expandUnchanged === true);
+    if (useDocumentRange) rendered.push([0, textDocument.lineCount - 1]);
+
+    let firstVisibleRow = 0;
+    // Unvirtualized files can mount thousands of rows. Only that case needs
+    // a seek; a virtualized window is small enough to walk directly.
+    if (viewport != null && this.#virtualizedInstance == null) {
+      let end = rows.length;
+      while (firstVisibleRow < end) {
+        const middle =
+          firstVisibleRow + Math.floor((end - firstVisibleRow) / 2);
+        if (rows[middle].getBoundingClientRect().bottom <= viewport.top)
+          firstVisibleRow = middle + 1;
+        else end = middle;
+      }
     }
-    const ranges: [first: number, last: number][] = [];
-    for (const child of contentElement.children) {
-      const el = child as HTMLElement;
-      const lineType = el.dataset.lineType;
-      const lineNumber = getLineNumberAttr(el);
-      if (
-        lineNumber === undefined ||
-        lineType === undefined ||
-        !isLineEditable(lineType)
-      ) {
+    const appendLine = (ranges: [number, number][], line: number): void => {
+      const previous = ranges.at(-1);
+      if (previous != null && line <= previous[1] + 1)
+        previous[1] = Math.max(previous[1], line);
+      else ranges.push([line, line]);
+    };
+    let pastViewport = viewport != null && viewport.bottom <= viewport.top;
+    for (
+      let rowIndex = useDocumentRange ? firstVisibleRow : 0;
+      rowIndex < rows.length;
+      rowIndex++
+    ) {
+      const row = rows[rowIndex] as HTMLElement;
+      const lineType = row.dataset.lineType;
+      const lineNumber = getLineNumberAttr(row);
+      if (lineNumber == null || lineType == null || !isLineEditable(lineType))
         continue;
-      }
       const line = lineNumber - 1;
-      const current = ranges.at(-1);
-      if (current !== undefined && line <= current[1] + 1) {
-        current[1] = Math.max(current[1], line);
-      } else {
-        ranges.push([line, line]);
+      if (!useDocumentRange) appendLine(rendered, line);
+      if (viewport == null || pastViewport || rowIndex < firstVisibleRow)
+        continue;
+      const rect = row.getBoundingClientRect();
+      if (rect.top >= viewport.bottom) {
+        pastViewport = true;
+        if (useDocumentRange) break;
+      } else if (rect.bottom > viewport.top) {
+        appendLine(visible, line);
       }
     }
-    return ranges;
+    return { rendered, visible };
   }
 
   // Whether the File or FileDiff component this editor is attached to
@@ -7186,56 +7361,7 @@ export class Editor<
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
-    let lineElement = this.#lineElementsCache.get(line);
-    if (lineElement !== undefined) {
-      return lineElement ?? undefined;
-    }
-
-    const renderRange = this.#renderRange;
-    if (!this.#isLineInRenderRange(line)) {
-      return undefined;
-    }
-
-    const contentElement = this.#contentElement;
-    if (contentElement === undefined) {
-      return undefined;
-    }
-
-    // check if the line is within the render range (fast)
-    if (renderRange !== undefined) {
-      const { startingLine } = renderRange;
-      const { children } = contentElement;
-      for (let i = line - startingLine; i <= children.length; i++) {
-        const child = children[i] as HTMLElement | undefined;
-        if (child === undefined) {
-          break;
-        }
-        const lineNumber = getLineNumberAttr(child);
-        const lineType = child.dataset.lineType;
-        if (
-          lineNumber !== undefined &&
-          lineNumber === line + 1 &&
-          lineType !== undefined &&
-          isLineEditable(lineType)
-        ) {
-          lineElement = child;
-          break;
-        }
-      }
-    }
-
-    // fallback to query selector
-    lineElement ??= contentElement.querySelector<HTMLElement>(
-      `[data-line="${line + 1}"]` +
-        (this.#diffSyle === 'unified'
-          ? ':not([data-line-type="change-deletion"])'
-          : '')
-    );
-
-    if (lineElement !== undefined) {
-      this.#lineElementsCache.set(line, lineElement);
-    }
-    return lineElement ?? undefined;
+    return this.#fileInstance?.lineElement(line);
   }
 
   #getGutterWidth(): number {

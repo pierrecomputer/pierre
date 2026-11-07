@@ -9,7 +9,7 @@ import { TextDocument } from '../src/editor/textDocument';
 import type { EditorChangeEvent, EditorViewState } from '../src/editor/types';
 import type {} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { installDom, waitFor } from './domHarness';
+import { dispatchScroll, installDom, wait, waitFor } from './domHarness';
 
 function createSimpleVirtualizer(root: HTMLElement) {
   return {
@@ -26,6 +26,8 @@ function createSimpleVirtualizer(root: HTMLElement) {
     isInstanceVisible: () => true,
     markDOMDirty() {},
     requestHeightReconcile() {},
+    scrollSpanIntoView() {},
+    cancelScroll() {},
   } as never;
 }
 
@@ -191,6 +193,7 @@ describe('virtualized editor viewport', () => {
     try {
       const code = await renderFile(file, root);
       code.scrollLeft = 60;
+      dispatchScroll(code);
 
       expect(file.getCodeScrollLeft()).toBe(60);
       file.setCodeScrollLeft(61);
@@ -205,6 +208,7 @@ describe('virtualized editor viewport', () => {
       };
       file.__attachEditor(editor);
       code.scrollLeft = 62;
+      dispatchScroll(code);
       file.cleanUp(true);
       expect(recyclePosition).toBe(62);
     } finally {
@@ -312,6 +316,7 @@ describe('virtualized editor viewport', () => {
         },
       ]);
       code.scrollLeft = 24;
+      dispatchScroll(code);
       root.scrollTop = 48;
 
       editor.applyEdits([
@@ -346,6 +351,7 @@ describe('virtualized editor viewport', () => {
         },
       ]);
       code.scrollLeft = 32;
+      dispatchScroll(code);
       root.scrollTop = 64;
       finishSession();
 
@@ -388,8 +394,10 @@ describe('virtualized editor viewport', () => {
       try {
         const code = await renderFileDiff(fileDiff, root);
         code.additions.scrollLeft = 40;
+        dispatchScroll(code.additions);
         if (code.deletions !== undefined) {
           code.deletions.scrollLeft = 60;
+          dispatchScroll(code.deletions);
         }
 
         expect(fileDiff.getCodeScrollLeft()).toBe(
@@ -401,6 +409,66 @@ describe('virtualized editor viewport', () => {
       }
     });
   }
+
+  test("keeps the widest split column's offset when the narrower one clamps", async () => {
+    const dom = installDom();
+    const root = document.createElement('div');
+    const virtualizer = createSimpleVirtualizer(root);
+    const fileDiff = new VirtualizedFileDiff(
+      {
+        diffStyle: 'split',
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+      },
+      virtualizer
+    );
+
+    try {
+      const code = await renderFileDiff(fileDiff, root);
+      expect(code.deletions).toBeDefined();
+      // Scrolling the deletions column syncs the additions column, whose
+      // shorter lines clamp it lower, and its scroll event lands last.
+      code.deletions!.scrollLeft = 1000;
+      dispatchScroll(code.deletions!);
+      code.additions.scrollLeft = 374;
+      dispatchScroll(code.additions);
+
+      expect(fileDiff.getCodeScrollLeft()).toBe(1000);
+    } finally {
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a restore past the content keeps the offset the column clamped to', async () => {
+    const dom = installDom();
+    const root = document.createElement('div');
+    const virtualizer = createSimpleVirtualizer(root);
+    const file = new VirtualizedFile(
+      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      virtualizer
+    );
+
+    try {
+      const code = await renderFile(file, root);
+      // jsdom never clamps; a browser caps scrollLeft at the overflow.
+      let scrollLeft = 0;
+      Object.defineProperty(code, 'scrollLeft', {
+        get: () => scrollLeft,
+        set: (position: number) => {
+          scrollLeft = Math.min(position, 120);
+        },
+      });
+
+      file.setCodeScrollLeft(1000);
+
+      expect(code.scrollLeft).toBe(120);
+      expect(file.getCodeScrollLeft()).toBe(120);
+    } finally {
+      file.cleanUp();
+      dom.cleanup();
+    }
+  });
 
   test('restores split FileDiff horizontal state to both code columns', async () => {
     const dom = installDom();
@@ -433,11 +501,85 @@ describe('virtualized editor viewport', () => {
       };
       fileDiff.__attachEditor(editor);
       code.deletions!.scrollLeft = 64;
+      dispatchScroll(code.deletions!);
       fileDiff.cleanUp(true);
       expect(recyclePosition).toBe(64);
     } finally {
       fileDiff.cleanUp();
       dom.cleanup();
+    }
+  });
+
+  // jsdom measures nothing: every row is one line tall except the ones
+  // holding "line 1" and "line 10", which wrap to two.
+  const rectByText = function (this: HTMLElement) {
+    const height =
+      this.textContent === 'line 1' || this.textContent === 'line 10' ? 40 : 20;
+    return {
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: height,
+      width: 0,
+      height,
+      toJSON() {},
+    };
+  };
+  test('typing in an added file keeps its diff measurements', async () => {
+    const { cleanup } = installDom();
+    const rectOf = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = rectByText;
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const fileDiff = new VirtualizedFileDiff<undefined>(
+        { diffStyle: 'unified', overflow: 'wrap' },
+        createSimpleVirtualizer(root)
+      );
+      const fileContainer = document.createElement('div');
+      root.appendChild(fileContainer);
+      const lines = Array.from({ length: 30 }, (_, line) => `line ${line}`);
+      fileDiff.render({
+        fileDiff: parseDiffFromFile(
+          { name: 'new.txt', contents: '', lang: 'text' },
+          { name: 'new.txt', contents: lines.join('\n'), lang: 'text' }
+        ),
+        fileContainer,
+        forceRender: true,
+      });
+      const heightOf = (lineNumber: number) =>
+        fileDiff.getLinePosition(lineNumber, 'additions')?.height;
+      const editor = new Editor<'file-diff', undefined>('file-diff');
+      editor.edit(fileDiff);
+      await waitFor(() => editor.getText().startsWith('line 0'));
+      await waitFor(
+        () =>
+          fileContainer.shadowRoot?.querySelector(
+            '[data-content] > [data-line-index^="10,"]'
+          )?.textContent === 'line 10'
+      );
+      await wait(0);
+      fileDiff.reconcileHeights();
+      expect(heightOf(11)).toBe(40);
+
+      // The hunks are computed again for every keystroke in an added file,
+      // but no row moved, so nothing measured is dropped.
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'x',
+        },
+      ]);
+      expect(heightOf(11)).toBe(40);
+      editor.cleanUp();
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = rectOf;
+      cleanup();
     }
   });
 });

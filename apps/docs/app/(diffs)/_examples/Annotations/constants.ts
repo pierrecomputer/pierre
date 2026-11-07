@@ -2,6 +2,7 @@ import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 export interface AnnotationMetadata {
   key: string;
@@ -64,6 +65,7 @@ def verify_token(token: str) -> Optional[dict]:
 `,
   },
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'unified',

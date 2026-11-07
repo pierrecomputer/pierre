@@ -8,20 +8,23 @@ import {
 import { wrapCoreCSS, wrapUnsafeCSS } from './cssWrappers';
 import { createHastElement, createTextNodeElement } from './hast_utils';
 
-export function createStyleElement(
-  content: string,
-  isCoreCSS: boolean = false
-): HASTElement {
+/** The base stylesheet server-rendered markup carries until it hydrates. */
+export function createCoreStyleElement(): HASTElement {
   return createHastElement({
     tagName: 'style',
-    children: [
-      createTextNodeElement(
-        isCoreCSS ? wrapCoreCSS(content) : wrapUnsafeCSS(content)
-      ),
-    ],
+    children: [createTextNodeElement(wrapCoreCSS())],
     properties: {
-      [CORE_CSS_ATTRIBUTE]: isCoreCSS ? '' : undefined,
-      [UNSAFE_CSS_ATTRIBUTE]: !isCoreCSS ? '' : undefined,
+      [CORE_CSS_ATTRIBUTE]: '',
+    },
+  });
+}
+
+export function createStyleElement(unsafeCSS: string): HASTElement {
+  return createHastElement({
+    tagName: 'style',
+    children: [createTextNodeElement(wrapUnsafeCSS(unsafeCSS))],
+    properties: {
+      [UNSAFE_CSS_ATTRIBUTE]: '',
     },
   });
 }

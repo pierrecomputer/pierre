@@ -2,6 +2,7 @@ import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<
   undefined,
@@ -33,6 +34,7 @@ export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<
 `,
   },
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'unified',

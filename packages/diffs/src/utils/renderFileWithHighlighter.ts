@@ -7,6 +7,7 @@ import type {
   ThemedFileResult,
 } from '../types';
 import { appendItems } from './appendItems';
+import { cleanLastNewline } from './cleanLastNewline';
 import { linesFromFileContents } from './computeFileOffsets';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
@@ -38,6 +39,9 @@ export function renderFileWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
+  const fileLines = isWindowedHighlight
+    ? (lines ?? linesFromFileContents(file.contents))
+    : undefined;
   const state: SharedRenderState = { lineInfo: [] };
   const lang = forcePlainText
     ? 'text'
@@ -48,6 +52,14 @@ export function renderFileWithHighlighter(
     theme,
     highlighter,
   });
+  // A window with no lines has no rows. The highlighter would give its empty
+  // text one empty line.
+  if (
+    fileLines != null &&
+    Math.min(startingLine + totalLines, fileLines.length) <= startingLine
+  ) {
+    return { code: new Array(startingLine), themeStyles, baseThemeType };
+  }
   state.lineInfo = (shikiLineNumber: number) => ({
     type: 'context',
     lineIndex: shikiLineNumber - 1 + startingLine,
@@ -56,12 +68,8 @@ export function renderFileWithHighlighter(
   const highlightedLines = renderTokenLines(
     highlighter.codeToTokens(
       normalizeHighlightLineEndings(
-        isWindowedHighlight
-          ? extractWindowedFileContent(
-              lines ?? linesFromFileContents(file.contents),
-              startingLine,
-              totalLines
-            )
+        fileLines != null
+          ? extractWindowedFileContent(fileLines, startingLine, totalLines)
           : file.contents
       ),
       getTokenOptions(lang, theme, tokenizeMaxLineLength)
@@ -90,8 +98,11 @@ function normalizeHighlightLineEndings(contents: string): string {
   return contents.replace(/\r(?!\n)/g, '\n');
 }
 
+// The text of the window's lines. A window that stops before the end of the
+// file leaves out its last line break, so the highlighter does not emit a
+// line after the window.
 function extractWindowedFileContent(
-  lines: string[],
+  lines: readonly string[],
   startingLine: number,
   totalLines: number
 ): string {
@@ -99,5 +110,6 @@ function extractWindowedFileContent(
     return '';
   }
   const endLine = Math.min(startingLine + totalLines, lines.length);
-  return lines.slice(startingLine, endLine).join('');
+  const contents = lines.slice(startingLine, endLine).join('');
+  return endLine < lines.length ? cleanLastNewline(contents) : contents;
 }

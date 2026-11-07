@@ -10,6 +10,7 @@ import type {
 } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 export const LIVE_EDITING_OLD_FILE: FileContents = {
   name: 'debounce.ts',
@@ -101,8 +102,13 @@ export const LIVE_EDITING_FILE_DIFF_EXAMPLE: PreloadFileDiffOptions<
   undefined,
   undefined
 > = {
-  fileDiff: parseDiffFromFile(LIVE_EDITING_OLD_FILE, LIVE_EDITING_NEW_FILE),
+  fileDiff: parseDiffFromFile(
+    LIVE_EDITING_OLD_FILE,
+    LIVE_EDITING_NEW_FILE,
+    DEFAULT_PARSE_DIFF_OPTIONS
+  ),
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'unified',

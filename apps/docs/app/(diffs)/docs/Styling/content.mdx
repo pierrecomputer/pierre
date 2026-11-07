@@ -13,8 +13,10 @@ be done in your global CSS, as style props on parent components, or on the
 
 For advanced customization, you can inject arbitrary CSS into the shadow DOM
 using the `unsafeCSS` option. This CSS will be wrapped in an `@layer unsafe`
-block, giving it the highest priority in the cascade. Use this sparingly and
-with caution, as it bypasses the normal style isolation.
+block, giving it the highest priority in the cascade. The find/replace panel
+renders in its own shadow root and receives the same CSS, so rules for its
+`[data-search-panel]`, `[data-search-grid]`, and input hooks apply there too.
+Use this sparingly and with caution, as it bypasses the normal style isolation.
 
 We also recommend that any CSS you apply uses simple, direct selectors targeting
 the existing data attributes. Avoid structural selectors like `:first-child`,
