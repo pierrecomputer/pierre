@@ -211,6 +211,9 @@ export function mapCursorMove(
           options.resolveRenderableLine == null
             ? line - 1
             : (options.resolveRenderableLine(line - 1, 'up') ?? line);
+      } else {
+        // Up on the first line goes to the start of the document.
+        character = 0;
       }
     } else if (shortcut === 'down') {
       const moved = moveBySoftLine(textDocument, line, character, 1, options);
@@ -227,6 +230,9 @@ export function mapCursorMove(
                   options.resolveRenderableLine(line + 1, 'down') ?? line,
                   maxLine
                 );
+        } else {
+          // Down on the last line goes to the end of the document.
+          character = textDocument.getLineLength(line);
         }
       }
     } else if (isCollapsedSelection(selection)) {
@@ -309,7 +315,11 @@ function moveBySoftLine(
   } else {
     const nextLine = line + direction;
     if (nextLine < 0 || nextLine >= textDocument.lineCount) {
-      return { line, character };
+      // Past the first or last soft line of the document: go to its start or end.
+      return {
+        line,
+        character: nextLine < 0 ? 0 : textDocument.getLineLength(line),
+      };
     }
 
     // Fold-skip: crossing to another document line skips collapsed regions;
