@@ -1564,6 +1564,55 @@ describe('mapSelectionMove', () => {
     ).toEqual([createSelection(0, 12, 0, 12)]);
   });
 
+  test('moves Up on the first line to the document start and Down on the last line to its end', () => {
+    const textDocument = new TextDocument('inmemory://1', 'first\nlast line');
+
+    expect(
+      mapCursorMove(textDocument, [createSelection(0, 3, 0, 3)], 'up')
+    ).toEqual([createSelection(0, 0, 0, 0)]);
+    expect(
+      mapCursorMove(textDocument, [createSelection(1, 4, 1, 4)], 'down')
+    ).toEqual([createSelection(1, 9, 1, 9)]);
+  });
+
+  test('moves Up and Down past wrapped document edges to the document start and end', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '012345678901234567890123456789'
+    );
+    const wrapOptions: CursorMoveOptions = {
+      getSoftLineOffsets: () => new Uint32Array([0, 10, 20, 30]),
+    };
+
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 5, 0, 5)],
+        'up',
+        wrapOptions
+      )
+    ).toEqual([createSelection(0, 0, 0, 0)]);
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 25, 0, 25)],
+        'down',
+        wrapOptions
+      )
+    ).toEqual([createSelection(0, 30, 0, 30)]);
+  });
+
+  test('extends a selection to the document start and end at its edges', () => {
+    const textDocument = new TextDocument('inmemory://1', 'first\nlast line');
+
+    expect(
+      mapSelectionShift(textDocument, [createSelection(0, 3, 0, 3)], 'up')
+    ).toEqual([createSelection(0, 0, 0, 3, DirectionBackward)]);
+    expect(
+      mapSelectionShift(textDocument, [createSelection(1, 4, 1, 4)], 'down')
+    ).toEqual([createSelection(1, 4, 1, 9, DirectionForward)]);
+  });
+
   test('extends selections by wrapped visual rows', () => {
     const textDocument = new TextDocument(
       'inmemory://1',
