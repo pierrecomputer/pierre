@@ -51,6 +51,69 @@ export const DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY =
 
 export const DEFAULT_COLLAPSED_CONTEXT_THRESHOLD = 1;
 export const DEFAULT_TOKENIZE_MAX_LENGTH = 100_000;
+
+export const DEFAULT_LOCALE = 'en';
+
+// Every user-visible string the diff renders, as ICU MessageFormat templates.
+// This object defines the translation keys; `DiffsTranslations` is derived
+// from it. Supported syntax is `{name}` arguments and one
+// `{name, plural, one {...} other {...}}` block per string, with `#` standing
+// for the number inside a branch.
+export const DEFAULT_TRANSLATIONS = {
+  /**
+   * Hunk separator text for a collapsed region with a known line count.
+   * Receives `count`.
+   */
+  unmodifiedLines:
+    '{count, plural, one {# unmodified line} other {# unmodified lines}}',
+  /**
+   * Hunk separator text for a collapsed region whose size is unknown, which
+   * happens for partial diffs parsed from patches.
+   */
+  unknownUnmodifiedLines: 'More unchanged context may be available',
+  /** Button that expands an entire collapsed region at once. */
+  expandAll: 'Expand all',
+  /** Marker shown after a final line that has no trailing newline. */
+  noNewlineAtEndOfFile: 'No newline at end of file',
+  /** Merge conflict button that keeps the current (ours) side. */
+  acceptCurrentChange: 'Accept current change',
+  /** Merge conflict button that keeps the incoming (theirs) side. */
+  acceptIncomingChange: 'Accept incoming change',
+  /** Merge conflict button that keeps both sides. */
+  acceptBoth: 'Accept both',
+  /** Placeholder of the editor search input. */
+  searchPlaceholder: 'Search',
+  /** Placeholder of the editor replace input. */
+  replacePlaceholder: 'Replace',
+  /** Search panel status when the query is empty or matches nothing. */
+  noSearchResults: 'No results',
+  /** Search panel status when no match is selected. Receives `count`. */
+  searchResultCount: '{count, plural, one {# result} other {# results}}',
+  /**
+   * Search panel status for the selected match. Receives the 1-based `index`
+   * and the `count` of matches.
+   */
+  searchResultPosition: '{index} of {count}',
+  /** Search option toggle for case-sensitive matching. */
+  matchCase: 'Match Case',
+  /** Search option toggle for whole-word matching. */
+  wholeWord: 'Whole Word',
+  /** Search option toggle for regular-expression matching. */
+  regularExpression: 'Regexp',
+  /** Button that replaces the selected match. */
+  replaceMatch: 'Replace',
+  /** Button that replaces every match. */
+  replaceAllMatches: 'Replace All',
+  /** Button that selects the previous match. */
+  previousMatch: 'Previous',
+  /** Button that selects the next match. */
+  nextMatch: 'Next',
+  /** Button that closes the search panel. */
+  closeSearch: 'Close',
+  /** Button that shows or hides the replace row. */
+  toggleReplace: 'Toggle Replace',
+};
+
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 50,
   lineHeight: 20,
