@@ -252,11 +252,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       ...options,
       parseDiffOptions: this.options.parseDiffOptions,
     });
+    const { rowSource } = this;
+    const renderCache = this.promoteReadyResult(inputDiff) ?? this.renderCache;
     this.editSessionActive = true;
     this.model = model;
     this.diff = model.diff;
     this.pendingHighlightResult = undefined;
-    const { renderCache, rowSource } = this;
     const { options: renderOptions } = this.getRenderOptions(model.diff);
     // Reuse the input diff's highlighted rows when the session starts from the
     // input's own lines and the rows carry the token spans the editor reads;
@@ -306,6 +307,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.rowSource = undefined;
     }
     return model.diff;
+  }
+
+  // Returns the render cache a ready highlight result for `diff` would give,
+  // or undefined when none is ready. Read before a session starts, since a
+  // session does not look at the pool's results.
+  private promoteReadyResult(
+    diff: FileDiffMetadata
+  ): DiffRenderCache | undefined {
+    const { options } = this.getRenderOptions(diff);
+    const ready = this.getReadyRenderResult(diff, options);
+    return ready != null
+      ? { ...ready, diff, renderRange: undefined }
+      : undefined;
   }
 
   /**
@@ -449,13 +463,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Ensures that the DOM is compatible with editor render updates
+   * Whether the rows on screen are ones the editor can update in place: laid
+   * out from a highlighted result that carries the token spans it reads.
    */
   public editorRenderReady(): boolean {
+    const { renderCache, rowSource } = this;
     return (
-      this.renderCache?.options.useTokenTransformer === true &&
-      this.renderCache.highlighted &&
-      this.renderCache.result != null
+      renderCache?.options.useTokenTransformer === true &&
+      renderCache.highlighted &&
+      renderCache.result != null &&
+      rowSource?.result === renderCache.result
     );
   }
 
@@ -800,6 +817,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }
       });
     }
+  }
+
+  /**
+   * Whether a session started now would throw away a pool highlight that is
+   * still on its way: the pool highlights `diff` with the token spans the
+   * editor reads, and that result is neither rendered nor ready to render.
+   * The pool task is joined through the diff's cache key, so a diff without
+   * one is never waited on, and neither is one the pool already refused: a
+   * session highlights that diff locally, as a read-only render of it stays
+   * plain.
+   */
+  public awaitsPoolHighlight(diff: FileDiffMetadata): boolean {
+    const workerManager = this.getHighlightWorkerManager(diff);
+    if (
+      workerManager == null ||
+      diff.cacheKey == null ||
+      workerManager.didHighlightFail(diff)
+    ) {
+      return false;
+    }
+    const options = workerManager.getDiffRenderOptions();
+    return (
+      options.useTokenTransformer === true &&
+      (diff.additionLines.length > 0 || diff.deletionLines.length > 0) &&
+      !isDiffPlainText(diff) &&
+      !isDiffMassive(diff, this.getTokenizeMaxLength()) &&
+      !this.hasHighlightedRenderCache(diff, options) &&
+      this.getReadyRenderResult(diff, options) == null
+    );
   }
 
   // Returns the pool when there's a valid worker AND we should use it
