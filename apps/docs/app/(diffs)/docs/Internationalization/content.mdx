@@ -1,0 +1,71 @@
+## Internationalization
+
+<Notice icon={<IconBulbFill />}>Import `i18n` from `@pierre/diffs`.</Notice>
+
+Every piece of text the diff renders itself, such as the collapsed-context
+separators, the "Expand all" button, the no-newline marker, and the merge
+conflict buttons, comes from one package-level store. Configure it once at
+application boot and every component reads from it. There is no per-component
+option.
+
+### Setup
+
+Call `i18n.set()` before the first diff renders, on the server and on the
+client. Translations you leave out fall back to their English defaults, and
+calling `i18n.set()` with no arguments restores English entirely.
+
+<DocsCodeExample {...i18nSetup} />
+
+Components that are already on screen re-render their text when `i18n.set()` is
+called again, so switching languages at runtime needs nothing beyond another
+call. Because every value is a plain string, a translation file is ordinary JSON
+in the `DiffsI18nConfig` shape and serves both sides of a server/client app.
+
+<DocsCodeExample {...i18nSwitch} />
+
+### Message syntax
+
+Translations are
+[ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
+strings, restricted to what the diff text needs:
+
+- Plain text.
+- `{name}` arguments, filled from the values the renderer passes.
+- One plural block per string: `{count, plural, one {# line} other {# lines}}`.
+  Branch names are the CLDR plural categories `zero`, `one`, `two`, `few`,
+  `many`, and `other`; `other` is required and `#` stands for the number.
+
+The plural category is chosen with `Intl.PluralRules` for the configured
+`locale`, so each language supplies only the branches it uses. English needs
+`one` and `other`, Japanese needs only `other`, and Russian uses four:
+
+<DocsCodeExample {...i18nPlurals} />
+
+Anything outside this subset, such as `select`, nested arguments, or `=0` exact
+matches, is rejected by `i18n.set()` with an error, so a syntax mistake fails at
+boot rather than on screen. Argument names are only checked when a string is
+rendered: a template that references an argument its key does not receive, such
+as `{count}` in `expandAll`, throws at render time.
+
+### Keys
+
+| Key                      | English default                                                       | Arguments |
+| ------------------------ | --------------------------------------------------------------------- | --------- |
+| `unmodifiedLines`        | `{count, plural, one {# unmodified line} other {# unmodified lines}}` | `count`   |
+| `unknownUnmodifiedLines` | `More unchanged context may be available`                             |           |
+| `expandAll`              | `Expand all`                                                          |           |
+| `noNewlineAtEndOfFile`   | `No newline at end of file`                                           |           |
+| `acceptCurrentChange`    | `Accept current change`                                               |           |
+| `acceptIncomingChange`   | `Accept incoming change`                                              |           |
+| `acceptBoth`             | `Accept both`                                                         |           |
+
+`DEFAULT_TRANSLATIONS` exports these defaults, and the `DiffsTranslations` type
+lists the keys.
+
+### Server rendering
+
+The SSR helpers read the same store, so call `i18n.set()` on the server before
+`preloadDiffHTML` and friends run. The store is one object per process, which
+means one language per server process. Hydration adopts the server markup as is,
+so the client must call `i18n.set()` with the same configuration before its
+first render.

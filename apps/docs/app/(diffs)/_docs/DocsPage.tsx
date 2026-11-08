@@ -84,6 +84,11 @@ import {
   PACKAGE_MANAGERS,
 } from '../docs/Installation/constants';
 import {
+  I18N_PLURALS,
+  I18N_SETUP,
+  I18N_SWITCH,
+} from '../docs/Internationalization/constants';
+import {
   OVERVIEW_INITIAL_EXAMPLE,
   OVERVIEW_REACT_PATCH_FILE,
   OVERVIEW_REACT_SINGLE_FILE,
@@ -217,6 +222,7 @@ export default function DocsPage() {
           <UtilitiesSection />
           <StylingSection />
           <ThemingSection />
+          <InternationalizationSection />
           <TokenHooksSection />
           <WorkerPoolSection />
           <SSRSection />
@@ -782,6 +788,19 @@ async function SSRSection() {
       preloadUnresolvedFileResult,
       preloadPatchFile,
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function InternationalizationSection() {
+  const [i18nSetup, i18nSwitch, i18nPlurals] = await Promise.all([
+    preloadCodeExample(I18N_SETUP),
+    preloadCodeExample(I18N_SWITCH),
+    preloadCodeExample(I18N_PLURALS),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/Internationalization/content.mdx',
+    scope: { i18nSetup, i18nSwitch, i18nPlurals },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

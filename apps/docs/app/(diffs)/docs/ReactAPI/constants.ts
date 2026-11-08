@@ -189,16 +189,6 @@ interface DiffOptions {
   // Lines revealed per click when expanding collapsed regions
   expansionLineCount: 100,
 
-  // Localize the text rendered inside the diff. Any label left out falls
-  // back to its English default (DEFAULT_DIFF_LABELS). Keep this object's
-  // identity stable between renders, since a new object re-renders the diff.
-  labels: {
-    unmodifiedLines: (count) => t('diff.unmodifiedLines', { count }),
-    unknownUnmodifiedLines: t('diff.moreContext'),
-    expandAll: t('diff.expandAll'),
-    noNewlineAtEndOfFile: t('diff.noNewline'),
-  },
-
   // Load full contents for partial changed/renamed diffs parsed from patches.
   // Return both sides for changed diffs and oldFile: null for pure renames.
   // Added/deleted diffs do not need to be hydrated.
