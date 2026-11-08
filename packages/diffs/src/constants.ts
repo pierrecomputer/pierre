@@ -81,6 +81,37 @@ export const DEFAULT_TRANSLATIONS = {
   acceptIncomingChange: 'Accept incoming change',
   /** Merge conflict button that keeps both sides. */
   acceptBoth: 'Accept both',
+  /** Placeholder of the editor search input. */
+  searchPlaceholder: 'Search',
+  /** Placeholder of the editor replace input. */
+  replacePlaceholder: 'Replace',
+  /** Search panel status when the query is empty or matches nothing. */
+  noSearchResults: 'No results',
+  /** Search panel status when no match is selected. Receives `count`. */
+  searchResultCount: '{count, plural, one {# result} other {# results}}',
+  /**
+   * Search panel status for the selected match. Receives the 1-based `index`
+   * and the `count` of matches.
+   */
+  searchResultPosition: '{index} of {count}',
+  /** Search option toggle for case-sensitive matching. */
+  matchCase: 'Match Case',
+  /** Search option toggle for whole-word matching. */
+  wholeWord: 'Whole Word',
+  /** Search option toggle for regular-expression matching. */
+  regularExpression: 'Regexp',
+  /** Button that replaces the selected match. */
+  replaceMatch: 'Replace',
+  /** Button that replaces every match. */
+  replaceAllMatches: 'Replace All',
+  /** Button that selects the previous match. */
+  previousMatch: 'Previous',
+  /** Button that selects the next match. */
+  nextMatch: 'Next',
+  /** Button that closes the search panel. */
+  closeSearch: 'Close',
+  /** Button that shows or hides the replace row. */
+  toggleReplace: 'Toggle Replace',
 };
 
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {

@@ -3,10 +3,10 @@
 <Notice icon={<IconBulbFill />}>Import `i18n` from `@pierre/diffs`.</Notice>
 
 Every piece of text the diff renders itself, such as the collapsed-context
-separators, the "Expand all" button, the no-newline marker, and the merge
-conflict buttons, comes from one package-level store. Configure it once at
-application boot and every component reads from it. There is no per-component
-option.
+separators, the "Expand all" button, the no-newline marker, the merge conflict
+buttons, and the editor's search panel, comes from one package-level store.
+Configure it once at application boot and every component reads from it. There
+is no per-component option.
 
 ### Setup
 
@@ -49,15 +49,29 @@ as `{count}` in `expandAll`, throws at render time.
 
 ### Keys
 
-| Key                      | English default                                                       | Arguments |
-| ------------------------ | --------------------------------------------------------------------- | --------- |
-| `unmodifiedLines`        | `{count, plural, one {# unmodified line} other {# unmodified lines}}` | `count`   |
-| `unknownUnmodifiedLines` | `More unchanged context may be available`                             |           |
-| `expandAll`              | `Expand all`                                                          |           |
-| `noNewlineAtEndOfFile`   | `No newline at end of file`                                           |           |
-| `acceptCurrentChange`    | `Accept current change`                                               |           |
-| `acceptIncomingChange`   | `Accept incoming change`                                              |           |
-| `acceptBoth`             | `Accept both`                                                         |           |
+| Key                      | English default                                                       | Arguments      |
+| ------------------------ | --------------------------------------------------------------------- | -------------- |
+| `unmodifiedLines`        | `{count, plural, one {# unmodified line} other {# unmodified lines}}` | `count`        |
+| `unknownUnmodifiedLines` | `More unchanged context may be available`                             |                |
+| `expandAll`              | `Expand all`                                                          |                |
+| `noNewlineAtEndOfFile`   | `No newline at end of file`                                           |                |
+| `acceptCurrentChange`    | `Accept current change`                                               |                |
+| `acceptIncomingChange`   | `Accept incoming change`                                              |                |
+| `acceptBoth`             | `Accept both`                                                         |                |
+| `searchPlaceholder`      | `Search`                                                              |                |
+| `replacePlaceholder`     | `Replace`                                                             |                |
+| `noSearchResults`        | `No results`                                                          |                |
+| `searchResultCount`      | `{count, plural, one {# result} other {# results}}`                   | `count`        |
+| `searchResultPosition`   | `{index} of {count}`                                                  | `index, count` |
+| `matchCase`              | `Match Case`                                                          |                |
+| `wholeWord`              | `Whole Word`                                                          |                |
+| `regularExpression`      | `Regexp`                                                              |                |
+| `replaceMatch`           | `Replace`                                                             |                |
+| `replaceAllMatches`      | `Replace All`                                                         |                |
+| `previousMatch`          | `Previous`                                                            |                |
+| `nextMatch`              | `Next`                                                                |                |
+| `closeSearch`            | `Close`                                                               |                |
+| `toggleReplace`          | `Toggle Replace`                                                      |                |
 
 `DEFAULT_TRANSLATIONS` exports these defaults, and the `DiffsTranslations` type
 lists the keys.
