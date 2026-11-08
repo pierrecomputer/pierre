@@ -32,7 +32,7 @@
 
 ### How was AI used in generating this PR
 
-<!-- You must disclosed any and all use of AI in PRs to help us asses how to
+<!-- You must disclose any and all use of AI in PRs to help us assess how to
 review it -->
 
 ### Related issues
