@@ -65,6 +65,31 @@ export const DEFAULT_DIFF_LABELS: DiffLabels = Object.freeze({
   noNewlineAtEndOfFile: 'No newline at end of file',
 });
 
+export const DEFAULT_LOCALE = 'en';
+
+// Every user-visible string the diff renders, as ICU MessageFormat templates.
+// This object defines the translation keys; `DiffsTranslations` is derived
+// from it. Supported syntax is `{name}` arguments and one
+// `{name, plural, one {...} other {...}}` block per string, with `#` standing
+// for the number inside a branch.
+export const DEFAULT_TRANSLATIONS = {
+  /**
+   * Hunk separator text for a collapsed region with a known line count.
+   * Receives `count`.
+   */
+  unmodifiedLines:
+    '{count, plural, one {# unmodified line} other {# unmodified lines}}',
+  /**
+   * Hunk separator text for a collapsed region whose size is unknown, which
+   * happens for partial diffs parsed from patches.
+   */
+  unknownUnmodifiedLines: 'More unchanged context may be available',
+  /** Button that expands an entire collapsed region at once. */
+  expandAll: 'Expand all',
+  /** Marker shown after a final line that has no trailing newline. */
+  noNewlineAtEndOfFile: 'No newline at end of file',
+};
+
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 50,
   lineHeight: 20,
