@@ -37,6 +37,7 @@ import {
   getSharedHighlighter,
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
+import { i18n } from '../i18n/I18n';
 import { isLineKey } from '../layout/RowSpec';
 import type { RowKey, RowSpec } from '../layout/RowSpec';
 import {
@@ -465,6 +466,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       )
     );
     this.workerManager?.subscribeToThemeChanges(this);
+    i18n.subscribe(this);
     this.enabled = true;
   }
 
@@ -907,6 +909,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.scrollSyncManager.cleanUp();
     this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
+    i18n.unsubscribe(this);
     this.renderRange = undefined;
     if (!recycle) {
       this.pendingFiles = undefined;
@@ -969,6 +972,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   public virtualizedSetup(): void {
     this.enabled = true;
     this.workerManager?.subscribeToThemeChanges(this);
+    i18n.subscribe(this);
   }
 
   public hydrate({
@@ -1168,6 +1172,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   public onThemeChange(): void {
     this.hunksRenderer.clearRenderCache();
+    this.rerender();
+  }
+
+  public onTranslationsChange(): void {
     this.rerender();
   }
 

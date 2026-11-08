@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { PieceTable } from '../src/editor/pieceTable';
 import { TextDocument } from '../src/editor/textDocument';
 import type { ResolvedTextEdit } from '../src/editor/types';
+import { i18n } from '../src/i18n/I18n';
 import type { MatchRange, SearchParams } from '../src/search';
 import { buildSearchReplacementText } from '../src/search';
 import {
@@ -1522,6 +1523,64 @@ describe('SearchPanelWidget', () => {
       widget.cleanup();
     } finally {
       dom.cleanup();
+    }
+  });
+});
+
+describe('SearchPanelWidget translations', () => {
+  test('uses one result for a single match', async () => {
+    const harness = createWidget('alpha beta', { selectCurrent: false });
+    try {
+      await wait(0);
+      setInputValue(harness.input, 'alpha');
+      expect(harness.matchesText()).toBe('1 result');
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test('reads every string from the i18n store when built', async () => {
+    i18n.set({
+      locale: 'fr',
+      translations: {
+        searchPlaceholder: 'Rechercher',
+        replacePlaceholder: 'Remplacer',
+        noSearchResults: 'Aucun résultat',
+        searchResultCount:
+          '{count, plural, one {# résultat} other {# résultats}}',
+        searchResultPosition: '{index} sur {count}',
+        toggleReplace: 'Afficher le remplacement',
+        closeSearch: 'Fermer',
+      },
+    });
+    try {
+      const harness = createWidget('alpha beta alpha', {
+        selectCurrent: false,
+      });
+      try {
+        await wait(0);
+        const panel = harness.widget.getHostElement().shadowRoot!;
+        expect(harness.input.placeholder).toBe('Rechercher');
+        expect(harness.replaceInput.placeholder).toBe('Remplacer');
+        expect(harness.matchesText()).toBe('Aucun résultat');
+        expect(
+          panel.querySelector<HTMLButtonElement>('[data-replace-toggle]')
+            ?.ariaLabel
+        ).toBe('Afficher le remplacement');
+        expect(
+          panel.querySelector<HTMLButtonElement>('[data-search-close]')
+            ?.ariaLabel
+        ).toBe('Fermer');
+
+        setInputValue(harness.input, 'alpha');
+        expect(harness.matchesText()).toBe('2 résultats');
+        pressKey(harness.input, 'Enter');
+        expect(harness.matchesText()).toBe('1 sur 2');
+      } finally {
+        harness.cleanup();
+      }
+    } finally {
+      i18n.set();
     }
   });
 });
