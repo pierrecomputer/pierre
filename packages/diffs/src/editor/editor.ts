@@ -739,8 +739,10 @@ export class Editor<
   }
 
   // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
-  // document model is not supported by Editor. For a partial diff, await
-  // FileDiff.prepareForEditing() before starting a new session.
+  // document model is not supported by Editor.
+  // When the component may not be ready (a partial diff, or a pool highlight
+  // still in flight), await its prepareForEditing() before starting a new
+  // session.
   edit<T extends EditorComponent<EType, LAnnotation, Caret>>(
     fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
@@ -758,13 +760,9 @@ export class Editor<
         'Editor.edit: a recycled edit session cannot attach to a different component'
       );
     }
-    if (
-      fileInstance.type === 'file-diff' &&
-      this.#editSession == null &&
-      !fileInstance.__canAttachEditor()
-    ) {
+    if (this.#editSession == null && !fileInstance.isReadyToEdit()) {
       throw new Error(
-        'Editor.edit: a complete diff is required before editing'
+        'Editor.edit: the component is not ready to edit; await prepareForEditing() first'
       );
     }
     const initialState = this.#initialState;

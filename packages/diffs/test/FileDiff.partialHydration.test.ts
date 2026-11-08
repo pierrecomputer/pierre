@@ -340,7 +340,7 @@ describe('FileDiff partial hydration', () => {
       });
       expect(() =>
         instance.__attachEditor(createEditorInstance('file-diff'))
-      ).toThrow('a complete diff is required before editing');
+      ).toThrow('the component is not ready to edit');
       const readyForEditing = instance.prepareForEditing();
 
       const partialSession = instance.getWorkingDiffForTest();
