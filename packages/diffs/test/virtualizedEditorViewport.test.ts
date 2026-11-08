@@ -587,6 +587,7 @@ describe('virtualized editor viewport', () => {
       ]);
       expect(heightOf(11)).toBe(40);
       editor.cleanUp();
+      fileDiff.cleanUp();
     } finally {
       HTMLElement.prototype.getBoundingClientRect = rectOf;
       cleanup();

@@ -106,6 +106,14 @@ class I18n {
   unsubscribe(subscriber: TranslationsSubscriber): void {
     this.#subscribers.delete(subscriber);
   }
+
+  /**
+   * @internal Drops every subscriber. For test teardowns. Do not call this
+   * normally
+   */
+  __clearSubscribers(): void {
+    this.#subscribers.clear();
+  }
 }
 
 export const i18n: I18n = new I18n();

@@ -19,6 +19,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
+import { i18n } from '../src/i18n/I18n';
 import type { FileContents, FileDiffMetadata } from '../src/types';
 import { linesFromFileContents } from '../src/utils/computeFileOffsets';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -103,6 +104,8 @@ function installDomConstructors() {
 
   return {
     cleanup() {
+      // Instances hydrated into these fakes must not render after they go.
+      i18n.__clearSubscribers();
       for (const [key, value] of Object.entries(originalValues)) {
         if (value === undefined) {
           Reflect.deleteProperty(globalThis, key);

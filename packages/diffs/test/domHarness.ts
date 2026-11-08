@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
+import { i18n } from '../src/i18n/I18n';
 import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { resetPlatformDetection } from '../src/utils/platform';
@@ -41,6 +42,8 @@ export interface DomHandle {
 // returned cleanup() restores (or deletes) every global it touched.
 export function installDom(options: InstallDomOptions = {}): DomHandle {
   clearRenderQueue();
+  // Components a previous test left mounted belong to a DOM that is gone.
+  i18n.__clearSubscribers();
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
   });
@@ -324,6 +327,8 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     },
     cleanup() {
       clearRenderQueue();
+      i18n.__clearSubscribers();
+      i18n.set();
       for (const timeout of frames.values()) {
         clearTimeout(timeout);
       }
