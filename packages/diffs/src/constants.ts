@@ -55,11 +55,11 @@ export const DEFAULT_TOKENIZE_MAX_LENGTH = 100_000;
 export const DEFAULT_LOCALE = 'en';
 
 // Every user-visible string the diff renders, as ICU MessageFormat templates.
-// This object defines the translation keys; `DiffsTranslations` is derived
+// This object defines the message keys; `DiffsMessages` is derived
 // from it. Supported syntax is `{name}` arguments and one
 // `{name, plural, one {...} other {...}}` block per string, with `#` standing
 // for the number inside a branch.
-export const DEFAULT_TRANSLATIONS = {
+export const DEFAULT_MESSAGES = {
   /**
    * Hunk separator text for a collapsed region with a known line count.
    * Receives `count`.

@@ -27,7 +27,7 @@ import { createRoot, installDom, renderItems, waitFor } from './domHarness';
 
 const FRENCH = {
   locale: 'fr',
-  translations: {
+  messages: {
     unmodifiedLines:
       '{count, plural, one {# ligne inchangée} other {# lignes inchangées}}',
     expandAll: 'Tout déplier',
@@ -83,7 +83,7 @@ describe('i18n subscriptions', () => {
     i18n.set();
   });
 
-  test('a mounted FileDiff re-renders its text when translations change', async () => {
+  test('a mounted FileDiff re-renders its text when messages change', async () => {
     const dom = installDom();
     const instance = new FileDiff<undefined>({
       diffStyle: 'unified',
@@ -168,7 +168,7 @@ describe('i18n subscriptions', () => {
     }
   });
 
-  test('mounted CodeView items re-render when translations change', async () => {
+  test('mounted CodeView items re-render when messages change', async () => {
     const dom = installDom();
     const viewer = new CodeView<undefined, undefined>({
       diffStyle: 'unified',

@@ -128,10 +128,10 @@ describe('i18n', () => {
     expect(i18n.t('noNewlineAtEndOfFile')).toBe('No newline at end of file');
   });
 
-  test('set replaces translations and uses the locale for plurals', () => {
+  test('set replaces messages and uses the locale for plurals', () => {
     i18n.set({
       locale: 'fr',
-      translations: {
+      messages: {
         unmodifiedLines:
           '{count, plural, one {# ligne inchangée} other {# lignes inchangées}}',
         expandAll: 'Tout déplier',
@@ -143,9 +143,9 @@ describe('i18n', () => {
     expect(i18n.t('expandAll')).toBe('Tout déplier');
   });
 
-  test('translations left out or set to undefined fall back to English', () => {
+  test('messages left out or set to undefined fall back to English', () => {
     i18n.set({
-      translations: {
+      messages: {
         expandAll: 'Tout déplier',
         noNewlineAtEndOfFile: undefined,
       },
@@ -158,7 +158,7 @@ describe('i18n', () => {
   });
 
   test('set with no config restores English and the English locale', () => {
-    i18n.set({ locale: 'fr', translations: { expandAll: 'Tout déplier' } });
+    i18n.set({ locale: 'fr', messages: { expandAll: 'Tout déplier' } });
     i18n.set();
     expect(i18n.t('expandAll')).toBe('Expand all');
     // Back on English plural rules, 0 is plural again.
@@ -167,9 +167,9 @@ describe('i18n', () => {
 
   test('version moves only on an effective change', () => {
     const initial = i18n.version;
-    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+    i18n.set({ messages: { expandAll: 'Tout déplier' } });
     expect(i18n.version).toBe(initial + 1);
-    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+    i18n.set({ messages: { expandAll: 'Tout déplier' } });
     expect(i18n.version).toBe(initial + 1);
     i18n.set();
     expect(i18n.version).toBe(initial + 2);
@@ -178,48 +178,44 @@ describe('i18n', () => {
   test('notifies subscribers once per effective change', () => {
     let notified = 0;
     const unsubscribe = i18n.subscribe({
-      onTranslationsChange: () => {
+      onMessagesChange: () => {
         notified++;
       },
     });
-    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+    i18n.set({ messages: { expandAll: 'Tout déplier' } });
     expect(notified).toBe(1);
     // Same config again: nothing changed, nobody is told.
-    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+    i18n.set({ messages: { expandAll: 'Tout déplier' } });
     expect(notified).toBe(1);
     // Locale alone counts as a change because plural forms depend on it.
-    i18n.set({ locale: 'fr', translations: { expandAll: 'Tout déplier' } });
+    i18n.set({ locale: 'fr', messages: { expandAll: 'Tout déplier' } });
     expect(notified).toBe(2);
     unsubscribe();
     i18n.set();
     expect(notified).toBe(2);
   });
 
-  test('a bad translation throws and leaves the previous config in place', () => {
-    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+  test('a bad message throws and leaves the previous config in place', () => {
+    i18n.set({ messages: { expandAll: 'Tout déplier' } });
     expect(() =>
       i18n.set({
-        translations: { unmodifiedLines: '{count, plural, one {# line}}' },
+        messages: { unmodifiedLines: '{count, plural, one {# line}}' },
       })
     ).toThrow('"other"');
     expect(i18n.t('expandAll')).toBe('Tout déplier');
     expect(i18n.t('unmodifiedLines', { count: 1 })).toBe('1 unmodified line');
   });
 
-  test('an unknown translation key throws', () => {
-    const translations: Record<string, string> = { expandAl: 'typo' };
-    expect(() => i18n.set({ translations })).toThrow(
-      'unknown translation "expandAl"'
-    );
+  test('an unknown message key throws', () => {
+    const messages: Record<string, string> = { expandAl: 'typo' };
+    expect(() => i18n.set({ messages })).toThrow('unknown message "expandAl"');
   });
 
-  test('a prototype property name is not a translation key', () => {
-    const translations: Record<string, string> = JSON.parse(
+  test('a prototype property name is not a message key', () => {
+    const messages: Record<string, string> = JSON.parse(
       '{"toString": "x", "constructor": "y"}'
     );
-    expect(() => i18n.set({ translations })).toThrow(
-      'unknown translation "toString"'
-    );
+    expect(() => i18n.set({ messages })).toThrow('unknown message "toString"');
   });
 
   test('an invalid locale throws and leaves the previous config in place', () => {

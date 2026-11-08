@@ -1,9 +1,5 @@
-import { DEFAULT_LOCALE, DEFAULT_TRANSLATIONS } from '../constants';
-import type {
-  DiffsI18nConfig,
-  DiffsTranslationKey,
-  DiffsTranslations,
-} from '../types';
+import { DEFAULT_LOCALE, DEFAULT_MESSAGES } from '../constants';
+import type { DiffsI18nConfig, DiffsMessageKey, DiffsMessages } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import {
   type CompiledMessage,
@@ -11,26 +7,26 @@ import {
   type MessageValues,
 } from './compileMessage';
 
-export interface TranslationsSubscriber {
-  onTranslationsChange(): void;
+export interface MessagesSubscriber {
+  onMessagesChange(): void;
 }
 
-function isTranslationKey(key: string): key is DiffsTranslationKey {
-  return Object.hasOwn(DEFAULT_TRANSLATIONS, key);
+function isMessageKey(key: string): key is DiffsMessageKey {
+  return Object.hasOwn(DEFAULT_MESSAGES, key);
 }
 
-// Fills every translation the app left out with its English default. A key
-// that is not a translation is a typo in the app's config, so it throws.
-function resolveTranslations(
-  translations: Partial<DiffsTranslations> | undefined
-): DiffsTranslations {
-  const resolved: DiffsTranslations = { ...DEFAULT_TRANSLATIONS };
-  if (translations == null) {
+// Fills every message the app left out with its English default. An unknown
+// message key is a typo in the app's config, so it throws.
+function resolveMessages(
+  messages: Partial<DiffsMessages> | undefined
+): DiffsMessages {
+  const resolved: DiffsMessages = { ...DEFAULT_MESSAGES };
+  if (messages == null) {
     return resolved;
   }
-  for (const [key, value] of Object.entries(translations)) {
-    if (!isTranslationKey(key)) {
-      throw new Error(`i18n: unknown translation "${key}"`);
+  for (const [key, value] of Object.entries(messages)) {
+    if (!isMessageKey(key)) {
+      throw new Error(`i18n: unknown message "${key}"`);
     }
     if (value != null) {
       resolved[key] = value;
@@ -39,16 +35,16 @@ function resolveTranslations(
   return resolved;
 }
 
-function compileTranslations(
-  translations: DiffsTranslations,
+function compileMessages(
+  messages: DiffsMessages,
   locale: string
 ): Map<string, CompiledMessage> {
   const pluralRules = new Intl.PluralRules(locale);
-  const messages = new Map<string, CompiledMessage>();
-  for (const [key, template] of Object.entries(translations)) {
-    messages.set(key, compileMessage(template, pluralRules));
+  const compiledMessages = new Map<string, CompiledMessage>();
+  for (const [key, template] of Object.entries(messages)) {
+    compiledMessages.set(key, compileMessage(template, pluralRules));
   }
-  return messages;
+  return compiledMessages;
 }
 
 // The one place every user-visible string comes from. Apps call `set()` once
@@ -56,9 +52,9 @@ function compileTranslations(
 // `set()` re-renders them.
 class I18n {
   #locale: string = DEFAULT_LOCALE;
-  #translations: DiffsTranslations = DEFAULT_TRANSLATIONS;
-  #messages = compileTranslations(DEFAULT_TRANSLATIONS, DEFAULT_LOCALE);
-  #subscribers = new Set<TranslationsSubscriber>();
+  #messages: DiffsMessages = DEFAULT_MESSAGES;
+  #compiledMessages = compileMessages(DEFAULT_MESSAGES, DEFAULT_LOCALE);
+  #subscribers = new Set<MessagesSubscriber>();
   #version = 0;
 
   // Changes once per effective `set()`. Caches that hold formatted text keep
@@ -67,43 +63,40 @@ class I18n {
     return this.#version;
   }
 
-  // Replaces the locale and every translation. Anything left out returns to
+  // Replaces the locale and every message. Anything left out returns to
   // its English default, so `set()` with no config restores English. Bad
   // input throws before anything changes, and nothing is notified unless a
-  // translation or the locale actually changed.
-  set({ locale = DEFAULT_LOCALE, translations }: DiffsI18nConfig = {}): void {
-    const resolved = resolveTranslations(translations);
-    if (
-      locale === this.#locale &&
-      areObjectsEqual(resolved, this.#translations)
-    ) {
+  // message or the locale actually changed.
+  set({ locale = DEFAULT_LOCALE, messages }: DiffsI18nConfig = {}): void {
+    const resolved = resolveMessages(messages);
+    if (locale === this.#locale && areObjectsEqual(resolved, this.#messages)) {
       return;
     }
-    this.#messages = compileTranslations(resolved, locale);
+    this.#compiledMessages = compileMessages(resolved, locale);
     this.#locale = locale;
-    this.#translations = resolved;
+    this.#messages = resolved;
     this.#version++;
     for (const subscriber of this.#subscribers) {
-      subscriber.onTranslationsChange();
+      subscriber.onMessagesChange();
     }
   }
 
-  t(key: DiffsTranslationKey, values?: MessageValues): string {
-    const message = this.#messages.get(key);
+  t(key: DiffsMessageKey, values?: MessageValues): string {
+    const message = this.#compiledMessages.get(key);
     if (message == null) {
-      throw new Error(`i18n: unknown translation "${key}"`);
+      throw new Error(`i18n: unknown message "${key}"`);
     }
     return message(values);
   }
 
-  subscribe(subscriber: TranslationsSubscriber): () => void {
+  subscribe(subscriber: MessagesSubscriber): () => void {
     this.#subscribers.add(subscriber);
     return () => {
       this.unsubscribe(subscriber);
     };
   }
 
-  unsubscribe(subscriber: TranslationsSubscriber): void {
+  unsubscribe(subscriber: MessagesSubscriber): void {
     this.#subscribers.delete(subscriber);
   }
 
