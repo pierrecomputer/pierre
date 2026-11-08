@@ -557,7 +557,11 @@ export class Editor<
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
   #canMountSelectionAction = true;
-  #shouldIgnoreSelectionChange = false;
+  // While a mouse drag crosses an annotation row, WebKit extends the native
+  // selection to the start of the contenteditable instead of the nearest line.
+  // Set for the hover, cleared when the pointer leaves or the gesture ends, so
+  // that selection is not read back into #selections.
+  #isPointerOverAnnotation = false;
   // Set when the browser's native Selection is temporarily not the source of
   // truth for editor text selections. Select-all can only mirror rendered
   // lines, while diff line-selection and gutter-utility gestures can move the
@@ -2262,15 +2266,7 @@ export class Editor<
           // While a host DOM write has the editor waiting to put its caret
           // back, the native selection is the browser's reaction to rows
           // coming and going, not the user's; the restore places the caret.
-          if (
-            this.#isComposing ||
-            this.#shouldIgnoreSelectionChange ||
-            this.#focusRequest != null ||
-            this.#suppressNativeSelectionSync ||
-            this.#replacementFocusRequest != null ||
-            shadowRoot == null ||
-            !this.#contentHasFocus
-          ) {
+          if (shadowRoot == null || !this.#canReadNativeSelection()) {
             return;
           }
 
@@ -2407,7 +2403,7 @@ export class Editor<
   #resetSelectionGesture(): void {
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = undefined;
-    this.#shouldIgnoreSelectionChange = false;
+    this.#isPointerOverAnnotation = false;
     this.#isGutterMouseDown = false;
     this.#isContentMouseDown = false;
     this.#altColumnDrag = undefined;
@@ -2440,6 +2436,20 @@ export class Editor<
     this.#suppressNativeSelectionSync = this.#selections !== undefined;
   }
 
+  // Whether the browser's Selection currently reflects the user's intent and
+  // may be read back into #selections. Each owner below holds the native
+  // selection for its own reasons and releases it on its own schedule.
+  #canReadNativeSelection(): boolean {
+    return (
+      !this.#isComposing &&
+      this.#focusRequest == null &&
+      !this.#isPointerOverAnnotation &&
+      !this.#suppressNativeSelectionSync &&
+      this.#replacementFocusRequest == null &&
+      this.#contentHasFocus
+    );
+  }
+
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
     this.#setComposing(false);
     const { onFocus, onBlur } = this.#options;
@@ -2464,10 +2474,11 @@ export class Editor<
           // remapped #selections (after an applyEdits inserted a line above the
           // unfocused caret). Re-assert the editor's selection so the caret
           // stays anchored. A pointer focus is left to the click, and #focus()
-          // already syncs the selection during an editor-driven focus.
+          // already syncs the selection during an editor-driven focus. During
+          // composition the browser owns the caret and the unfinished text.
           if (
             !this.#isContentMouseDown &&
-            !this.#shouldIgnoreSelectionChange &&
+            !this.#isComposing &&
             this.#focusRequest == null &&
             this.#selections !== undefined &&
             this.#selections.length > 0
@@ -2542,10 +2553,10 @@ export class Editor<
             ]
               .map((el) => [
                 addEventListener(el, 'mouseenter', () => {
-                  this.#shouldIgnoreSelectionChange = true;
+                  this.#isPointerOverAnnotation = true;
                 }),
                 addEventListener(el, 'mouseleave', () => {
-                  this.#shouldIgnoreSelectionChange = false;
+                  this.#isPointerOverAnnotation = false;
                 }),
               ])
               .flat();
@@ -2856,7 +2867,6 @@ export class Editor<
           }
           this.#cancelEditPrediction(true);
           this.#setComposing(true);
-          this.#shouldIgnoreSelectionChange = true;
         },
         { passive: true }
       ),
@@ -2868,7 +2878,6 @@ export class Editor<
           if (!targetIsContentElement(e)) {
             return;
           }
-          this.#shouldIgnoreSelectionChange = false;
           const wasComposing = this.#isComposing;
           this.#setComposing(false);
           // An empty compositionend during a tracked composition means the
