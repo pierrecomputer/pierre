@@ -1684,6 +1684,103 @@ describe('Editor recycle cleanUp', () => {
     }
   });
 
+  test("a focused editor's restore waits for its caret row and lands when it renders", async () => {
+    const dom = installDom();
+    const focused: HTMLElement[] = [];
+    const onAttach = mock((attachedEditor: Editor<'file', undefined>) => {
+      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+    });
+    const editor = new Editor('file', { onAttach });
+    const component = createTestFile(createFile(), {
+      onContentFocus: (content) => focused.push(content),
+    });
+    try {
+      editor.edit(component);
+      await wait(20);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
+      focused.length = 0;
+
+      // The host re-renders a window that no longer contains the caret's
+      // row. The editor keeps its claim but cannot place the caret yet.
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 1,
+          bufferBefore: 0,
+          bufferAfter: 60,
+        },
+      });
+      await wait(20);
+      expect(focused.length).toBe(0);
+
+      // When the row comes back, the caret lands on it.
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 3,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      await wait(20);
+      expect(focused.length).toBe(1);
+      expect(focused[0] === component.contentElement).toBe(true);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a queued focus survives two host renders before its caret row exists', async () => {
+    const dom = installDom();
+    const focused: HTMLElement[] = [];
+    const editor = new Editor('file', {});
+    const component = createTestFile(createFile(), {
+      onContentFocus: (content) => focused.push(content),
+    });
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    try {
+      editor.edit(component);
+      await wait(20);
+      input.focus();
+      expect(document.activeElement).toBe(input);
+
+      // The editor asks for line 2 while the input holds focus. Before the
+      // focus frame runs, the host renders twice: once without row 2, then
+      // with it. The editor's request must still win over the input.
+      editor.focus({ lineNumber: 2, preventScroll: true });
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 1,
+          bufferBefore: 0,
+          bufferAfter: 60,
+        },
+      });
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 3,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      await wait(20);
+
+      expect(focused.length).toBe(1);
+      expect(focused[0] === component.contentElement).toBe(true);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
+    } finally {
+      input.remove();
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('a blur during the deferred attach-focus frame cancels the stale focus', async () => {
     const dom = installDom();
     const restoredFocus = mock((_options?: FocusOptions) => {});

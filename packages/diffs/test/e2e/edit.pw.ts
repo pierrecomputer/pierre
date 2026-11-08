@@ -437,6 +437,44 @@ test.describe('edit mode', () => {
     await expect.poll(() => editorHasFocus(page)).toBe(false);
   });
 
+  test('a queued focus yields to the search panel when the host render lands later', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await clickIntoAdditions(page);
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    await page.keyboard.press('ControlOrMeta+Alt+f');
+    const replacement = page.locator('[data-search-panel] input[data-replace]');
+    await expect(replacement).toBeVisible();
+
+    // The editor asks for focus and the host captures for a DOM write whose
+    // sync has not landed yet. The user moves into the replace input before
+    // it lands; the sync then lands with a full render. The editor's earlier
+    // request must not take focus back from the input.
+    const syncsBefore = await page.evaluate(() => window.__syncCount ?? 0);
+    await page.evaluate(() => {
+      window.__editor?.focus();
+      window.__editor?.__captureFocusForDOMReplacement();
+    });
+    await replacement.focus();
+    await page.evaluate(() => window.__forceEditorFullRender?.());
+    await expect
+      .poll(() => page.evaluate(() => window.__syncCount ?? 0))
+      .toBeGreaterThan(syncsBefore);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        })
+    );
+
+    await expect(replacement).toBeFocused();
+    await page.keyboard.type('Z');
+    await expect(replacement).toHaveValue('Z');
+    expect(await changeCount(page)).toBe(0);
+  });
+
   test('undo and redo round-trip a typed edit', async ({ page }) => {
     await openFixture(page);
 

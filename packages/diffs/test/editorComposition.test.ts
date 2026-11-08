@@ -564,6 +564,135 @@ describe('Editor focus ownership', () => {
       cleanup();
     }
   });
+
+  test('a direct focus call after a host re-render leaves no restore behind', async () => {
+    const { cleanup, content, editor, file, fileContainer } =
+      await createEditorFixture({ contents: 'hello world' });
+    const { frame, restore } = installControlledFrames();
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+
+      // A full host render queues a focus restore. A plain focus() in the
+      // same tick does not go through the restore path.
+      file.render({
+        file: { name: 'editor.ts', contents: 'hello world' },
+        fileContainer,
+        forceRender: true,
+      });
+      editor.focus();
+      frame();
+      frame();
+      frame();
+
+      // Once everything has settled, the browser's selection is the user's
+      // again and must be read back.
+      const current =
+        fileContainer.shadowRoot!.querySelector<HTMLElement>('[data-content]')!;
+      reportNativeCaret(current, 2);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 2,
+      });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a landed restore does not release a keyboard placement that follows it', async () => {
+    const { cleanup, content, editor, file, fileContainer, window } =
+      await createEditorFixture({
+        contents: 'hello world',
+        selections: [caretAt(1)],
+      });
+    const { frame, restore } = installControlledFrames();
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+
+      // A host render queues a restore; its focus frame runs, leaving only
+      // its settle frame pending.
+      file.render({
+        file: { name: 'editor.ts', contents: 'hello world' },
+        fileContainer,
+        forceRender: true,
+      });
+      frame();
+
+      // A keyboard selection extends the caret and places it again before
+      // that settle frame runs. The restore's settle must not release this
+      // newer placement, or the browser's collapsed caret would be read back
+      // over the selection.
+      const current =
+        fileContainer.shadowRoot!.querySelector<HTMLElement>('[data-content]')!;
+      dispatchKeydown(window, current, {
+        key: 'ArrowRight',
+        code: 'ArrowRight',
+        shiftKey: true,
+      });
+      const selection = () => editor.getViewState().selections?.[0];
+      expect(selection()?.end).toEqual({ line: 0, character: 2 });
+      frame();
+      reportNativeCaret(current, 2);
+      expect(selection()?.start).toEqual({ line: 0, character: 1 });
+      expect(selection()?.end).toEqual({ line: 0, character: 2 });
+
+      frame();
+      reportNativeCaret(current, 2);
+      expect(selection()?.start).toEqual({ line: 0, character: 2 });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a queued focus survives a host render that replaces the document', async () => {
+    const { cleanup, editor, file, fileContainer } = await createEditorFixture({
+      contents: 'hello world',
+    });
+    const { frame, restore } = installControlledFrames();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    const focused: HTMLElement[] = [];
+    const focus = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focused.push(this);
+      }
+    );
+
+    try {
+      // The editor asks for focus; the real focus() call is a frame away.
+      editor.focus({ lineNumber: 1, preventScroll: true });
+      // Before that frame, the host renders a different file, replacing the
+      // editor's document and DOM. The editor's request must still win over
+      // the input that held focus until then.
+      file.render({
+        file: { name: 'other.ts', contents: 'alpha' },
+        fileContainer,
+        forceRender: true,
+      });
+      frame();
+      frame();
+
+      const current =
+        fileContainer.shadowRoot!.querySelector<HTMLElement>('[data-content]')!;
+      expect(focused.at(-1) === current).toBe(true);
+    } finally {
+      focus.mockRestore();
+      input.remove();
+      restore();
+      cleanup();
+    }
+  });
 });
 
 describe('Editor keyboard editing', () => {
