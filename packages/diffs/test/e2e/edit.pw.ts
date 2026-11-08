@@ -475,6 +475,81 @@ test.describe('edit mode', () => {
     expect(await changeCount(page)).toBe(0);
   });
 
+  // Drives Chromium's own IME pipeline (the DevTools Input domain), so the
+  // browser produces the real composition events, preedit text, and
+  // selectionchange events an OS input method would.
+  test('a second IME syllable composed while the first commit settles keeps its order', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await clickIntoAdditions(page);
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+
+    await page.evaluate(() => {
+      const editor = window.__editor;
+      if (editor == null) throw new Error('missing editor');
+      const lineLength = editor.getText().split('\n')[0].length;
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: lineLength },
+          },
+          newText: '앞뒤',
+        },
+      ]);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ]);
+    });
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+
+    const cdp = await page.context().newCDPSession(page);
+    const compose = (text: string) =>
+      cdp.send('Input.imeSetComposition', {
+        text,
+        selectionStart: text.length,
+        selectionEnd: text.length,
+      });
+    const frames = (count: number) =>
+      page.evaluate(
+        (count) =>
+          new Promise<void>((resolve) => {
+            const step = (left: number) =>
+              left === 0
+                ? resolve()
+                : requestAnimationFrame(() => step(left - 1));
+            step(count);
+          }),
+        count
+      );
+
+    // Commit 가, then start composing 나 right away. The commit scheduled the
+    // editor's deferred focus frames; the next jamo arrives after they settle,
+    // which is where the caret used to jump past 뒤.
+    await compose('ㄱ');
+    await compose('가');
+    await cdp.send('Input.insertText', { text: '가' });
+    await compose('ㄴ');
+    await frames(3);
+    await compose('나');
+    await frames(1);
+    await cdp.send('Input.insertText', { text: '나' });
+    await frames(3);
+
+    const state = await page.evaluate(() => {
+      const editor = window.__editor;
+      const caret = editor?.getViewState().selections?.[0]?.start;
+      return { text: editor?.getText().split('\n')[0], caret };
+    });
+    expect(state.text).toBe('앞가나뒤');
+    expect(state.caret).toEqual({ line: 0, character: 3 });
+  });
+
   test('undo and redo round-trip a typed edit', async ({ page }) => {
     await openFixture(page);
 
