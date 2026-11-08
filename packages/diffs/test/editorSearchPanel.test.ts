@@ -1527,7 +1527,7 @@ describe('SearchPanelWidget', () => {
   });
 });
 
-describe('SearchPanelWidget translations', () => {
+describe('SearchPanelWidget messages', () => {
   test('uses one result for a single match', async () => {
     const harness = createWidget('alpha beta', { selectCurrent: false });
     try {
@@ -1542,7 +1542,7 @@ describe('SearchPanelWidget translations', () => {
   test('reads every string from the i18n store when built', async () => {
     i18n.set({
       locale: 'fr',
-      translations: {
+      messages: {
         searchPlaceholder: 'Rechercher',
         replacePlaceholder: 'Remplacer',
         noSearchResults: 'Aucun résultat',
