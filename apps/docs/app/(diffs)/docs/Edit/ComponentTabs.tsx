@@ -73,7 +73,10 @@ export function EditComponentTabs({
             <li>
               You supplied <code>loadDiffFiles</code> so a partial diff can load
               its complete old and new files. The editor attaches only after
-              that load finishes.
+              that load finishes: React and <code>CodeView</code> wait on their
+              own, and vanilla code awaits{' '}
+              <code>fileDiffInstance.prepareForEditing()</code> before{' '}
+              <code>editor.edit()</code>.
             </li>
           </ul>
           <p>

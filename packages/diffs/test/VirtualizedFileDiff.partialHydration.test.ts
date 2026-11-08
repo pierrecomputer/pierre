@@ -752,7 +752,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       instance.updateCodeViewLayout(partial, 0);
       expect(() =>
         instance.__attachEditor(createEditorInstance('file-diff'))
-      ).toThrow('a complete diff is required before editing');
+      ).toThrow('the component is not ready to edit');
       void instance.__prepareForEditing();
       const loadPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(loadPromise, 'expected edit hydration to be pending');

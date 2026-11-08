@@ -220,7 +220,8 @@ export class FileRenderer<LAnnotation = undefined> {
     retained?: FileContents
   ): FileContents {
     const model = FileModel.startEditSession(file, retained);
-    const { renderCache, rowSource, model: previous } = this;
+    const { rowSource, model: previous } = this;
+    const renderCache = this.promoteReadyResult(file) ?? this.renderCache;
     this.editSessionActive = true;
     this.model = model;
     this.file = model.file;
@@ -276,6 +277,17 @@ export class FileRenderer<LAnnotation = undefined> {
       this.rowSource = undefined;
     }
     return model.file;
+  }
+
+  // Returns the render cache a ready highlight result for `file` would give,
+  // or undefined when none is ready. Read before a session starts, since a
+  // session does not look at the pool's results.
+  private promoteReadyResult(file: FileContents): FileRenderCache | undefined {
+    const { options } = this.getRenderOptions(file);
+    const ready = this.getReadyRenderResult(file, options);
+    return ready != null
+      ? { ...ready, file, renderRange: undefined }
+      : undefined;
   }
 
   /**
@@ -383,13 +395,16 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Ensures that the DOM is compatible with editor render updates
+   * Whether the rows on screen are ones the editor can update in place: laid
+   * out from a highlighted result that carries the token spans it reads.
    */
   public editorRenderReady(): boolean {
+    const { renderCache, rowSource } = this;
     return (
-      this.renderCache?.options.useTokenTransformer === true &&
-      this.renderCache.highlighted &&
-      this.renderCache.result != null
+      renderCache?.options.useTokenTransformer === true &&
+      renderCache.highlighted &&
+      renderCache.result != null &&
+      rowSource?.result === renderCache.result
     );
   }
 
@@ -445,6 +460,35 @@ export class FileRenderer<LAnnotation = undefined> {
         }
       });
     }
+  }
+
+  /**
+   * Whether a session started now would throw away a pool highlight that is
+   * still on its way: the pool highlights `file` with the token spans the
+   * editor reads, and that result is neither rendered nor ready to render.
+   * The pool task is joined through the file's cache key, so a file without
+   * one is never waited on, and neither is one the pool already refused: a
+   * session highlights that file locally, as a read-only render of it stays
+   * plain.
+   */
+  public awaitsPoolHighlight(file: FileContents): boolean {
+    const workerManager = this.getHighlightWorkerManager(file);
+    if (
+      workerManager == null ||
+      file.cacheKey == null ||
+      workerManager.didHighlightFail(file)
+    ) {
+      return false;
+    }
+    const options = workerManager.getFileRenderOptions();
+    return (
+      options.useTokenTransformer === true &&
+      file.contents.length > 0 &&
+      !isFilePlainText(file) &&
+      !isFileMassive(this.getLineCount(file), this.getTokenizeMaxLength()) &&
+      !this.hasHighlightedRenderCache(file, options) &&
+      this.getReadyRenderResult(file, options) == null
+    );
   }
 
   // Returns the pool when there's a valid worker AND we should use it
