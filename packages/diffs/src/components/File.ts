@@ -1149,9 +1149,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   /**
-   * Whether a new edit session can start now: a file is set and the worker
-   * pool is not still highlighting it. When true, `Editor.edit` can be called
-   * at once; otherwise await `prepareForEditing`.
+   * Whether a new edit session can start now: a file is set and no worker
+   * pool highlight the session would reuse is still in flight. When true,
+   * `Editor.edit` can be called at once; otherwise await `prepareForEditing`.
    */
   public isReadyToEdit(): boolean {
     const file = this.getInputFile();

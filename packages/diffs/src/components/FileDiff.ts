@@ -1231,8 +1231,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   /**
    * Whether a new edit session can start now: the diff is complete (not
-   * `isPartial`) and the worker pool is not still highlighting it. When true,
-   * `Editor.edit` can be called at once; otherwise await `prepareForEditing`.
+   * `isPartial`) and no worker pool highlight the session would reuse is still
+   * in flight. When true, `Editor.edit` can be called at once; otherwise await
+   * `prepareForEditing`.
    */
   public isReadyToEdit(): boolean {
     const fileDiff = this.getInputDiff();
