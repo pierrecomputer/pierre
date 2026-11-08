@@ -143,6 +143,48 @@ describe('i18n', () => {
     expect(i18n.t('expandAll')).toBe('Tout déplier');
   });
 
+  test.each(['en', 'en-US', 'en-GB'])('formats messages for %s', (locale) => {
+    i18n.set({
+      locale,
+      messages: {
+        unmodifiedLines: '{count, plural, one {# line} other {# lines}}',
+      },
+    });
+    expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 lines');
+    expect(i18n.t('unmodifiedLines', { count: 1 })).toBe('1 line');
+    expect(i18n.t('unmodifiedLines', { count: 2 })).toBe('2 lines');
+  });
+
+  test('changing the region updates plural rules and notifies once', () => {
+    const messages = {
+      unmodifiedLines: '{count, plural, one {# linha} other {# linhas}}',
+    };
+    i18n.set({ locale: 'pt-BR', messages });
+    const initialVersion = i18n.version;
+    let notified = 0;
+    const unsubscribe = i18n.subscribe({
+      onMessagesChange: () => {
+        notified++;
+      },
+    });
+    try {
+      // Zero is singular in Brazilian Portuguese and plural in Portugal.
+      expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 linha');
+
+      i18n.set({ locale: 'pt-PT', messages });
+      expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 linhas');
+      expect(i18n.version).toBe(initialVersion + 1);
+      expect(notified).toBe(1);
+
+      i18n.set({ locale: 'pt-PT', messages: { ...messages } });
+      expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 linhas');
+      expect(i18n.version).toBe(initialVersion + 1);
+      expect(notified).toBe(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('messages left out or set to undefined fall back to English', () => {
     i18n.set({
       messages: {
