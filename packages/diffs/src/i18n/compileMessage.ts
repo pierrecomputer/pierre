@@ -3,7 +3,7 @@ export type CompiledMessage = (values?: MessageValues) => string;
 
 // The supported ICU MessageFormat subset: `{name}` arguments and at most one
 // `{name, plural, category {text} ...}` block whose branches may use `#` for
-// the number. Anything a translation does not need is deliberately rejected.
+// the number. Anything a message does not need is deliberately rejected.
 const PLURAL_BLOCK = /\{(\w+)\s*,\s*plural\s*,((?:\s*\w+\s*\{[^{}]*\})+)\s*\}/;
 const PLURAL_BRANCH = /(\w+)\s*\{([^{}]*)\}/g;
 const ARGUMENT = /\{(\w+)\}/g;
@@ -29,7 +29,7 @@ function readArgument(name: string, values: MessageValues | undefined) {
 }
 
 // Turns one message template into a formatter. Template problems throw here so
-// a bad translation fails when it is set, never while rendering.
+// a bad message fails when it is set, never while rendering.
 export function compileMessage(
   template: string,
   pluralRules: Intl.PluralRules
