@@ -423,7 +423,7 @@ describe('Editor document registry surfaces', () => {
     }
   });
 
-  test('File restores a keyed draft when its editor is attached before hydrate', async () => {
+  test('File restores a keyed draft when its editor attaches after hydrate', async () => {
     EditStateManager.clearAll();
     const editStateKey = 'file-hydration';
     const first = await createKeyedEditorFixture(
@@ -445,12 +445,12 @@ describe('Editor document registry surfaces', () => {
     });
     const editor = new Editor('file', {}, editStateKey);
     try {
-      editor.edit(file);
       file.hydrate({
         file: { name: 'edits.ts', contents: 'pristine replacement' },
         fileContainer: container,
         prerenderedHTML,
       });
+      editor.edit(file);
 
       expect(file.getCurrentFile()).toEqual(retainedFile);
       expect(editor.getFile()).toEqual(retainedFile);
@@ -503,7 +503,7 @@ describe('Editor document registry surfaces', () => {
     const externalDiff = parseDiffFromFile(oldFile, newFile);
     try {
       expect(() => editor.edit(fileDiff)).toThrow(
-        'a complete diff is required before editing'
+        'the component is not ready to edit'
       );
       fileDiff.hydrate({
         fileDiff: externalDiff,

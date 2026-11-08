@@ -307,6 +307,13 @@ interface PendingFileLoad {
   promise: Promise<void>;
 }
 
+// The wait before an editor may attach to the input diff: hydration of a
+// partial diff and a pool highlight still in flight. See __prepareForEditing.
+interface PendingEditorAttach {
+  fileDiff: FileDiffMetadata;
+  promise: Promise<void>;
+}
+
 type HydrationSetup<LAnnotation> = {
   fileDiff: FileDiffMetadata | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
@@ -412,6 +419,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected forceRenderOverride: true | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
+  private pendingAttach: PendingEditorAttach | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected headerCache: HeaderCache = {
     lastRenderedHTML: undefined,
@@ -902,6 +910,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.renderRange = undefined;
     if (!recycle) {
       this.pendingFiles = undefined;
+      this.pendingAttach = undefined;
     }
 
     // Clean up the elements
@@ -1221,20 +1230,25 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   /**
-   * In order to start an edit session, you must be using a `fileDiff` that
-   * includes the full contents for both files. In other words, `isPartial`
-   * must be false You can use `prepareForEditing` to hydrate if
-   * `loadDiffFiles` was passed in to `options`
+   * Whether a new edit session can start now: the diff is complete (not
+   * `isPartial`) and the worker pool is not still highlighting it. Use
+   * `prepareForEditing` to wait for both.
    */
   public __canAttachEditor(): boolean {
     const fileDiff = this.getInputDiff();
-    return fileDiff != null && !fileDiff.isPartial;
+    return (
+      fileDiff != null &&
+      !fileDiff.isPartial &&
+      !this.hunksRenderer.awaitsPoolHighlight(fileDiff)
+    );
   }
 
   /**
-   * Load a partial diff before starting a new edit session. Call this before
-   * Editor.edit when the diff may still be partial; it resolves only when this
-   * instance has a complete diff to edit.
+   * Gets the diff ready for a new edit session. Call this before Editor.edit:
+   * it loads a partial diff through `loadDiffFiles` and renders a pool
+   * highlight that is still in flight, so the session starts from highlighted
+   * rows instead of highlighting on the main thread. Resolves once this
+   * instance can start editing.
    */
   public async prepareForEditing(): Promise<void> {
     if (this.__canAttachEditor()) {
@@ -1242,37 +1256,75 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     const pending = this.__prepareForEditing();
     if (pending == null) {
-      const fileDiff = this.getInputDiff();
-      if (fileDiff?.isPartial === true && !canHydrateDiff(fileDiff)) {
-        throw new Error(
-          'FileDiff.prepareForEditing: this partial diff cannot be hydrated; provide a complete diff'
-        );
-      }
       throw new Error(
-        'FileDiff.prepareForEditing: a partial diff requires loadDiffFiles'
+        'FileDiff.prepareForEditing: a diff is required before editing'
       );
     }
     await pending;
     if (!this.__canAttachEditor()) {
       throw new Error(
-        'FileDiff.prepareForEditing: the diff did not finish loading'
+        'FileDiff.prepareForEditing: the diff is not ready to edit'
       );
     }
   }
 
-  /** Hydrate a diff if necessary  */
+  /**
+   * @internal Resolves once an editor may attach to the current input, or
+   * returns undefined when it already may or there is no input. The same
+   * promise is returned while it is pending for the same input.
+   */
   public __prepareForEditing(): Promise<void> | undefined {
-    if (this.__canAttachEditor()) {
+    const fileDiff = this.getInputDiff();
+    if (fileDiff == null || this.__canAttachEditor()) {
       return undefined;
     }
-    const fileDiff = this.getInputDiff();
-    if (fileDiff?.isPartial === true && !canHydrateDiff(fileDiff)) {
+    if (fileDiff.isPartial && !canHydrateDiff(fileDiff)) {
       throw new Error(
         'FileDiff: this partial diff cannot be hydrated; provide a complete diff to edit'
       );
     }
-    this.loadFilesIfNecessary();
-    return this.pendingFiles?.promise;
+    const { pendingAttach } = this;
+    if (pendingAttach?.fileDiff === fileDiff) {
+      return pendingAttach.promise;
+    }
+    const pending: PendingEditorAttach = {
+      fileDiff,
+      promise: this.prepareInputForEditing(fileDiff),
+    };
+    this.pendingAttach = pending;
+    pending.promise = pending.promise.finally(() => {
+      if (this.pendingAttach === pending) {
+        this.pendingAttach = undefined;
+      }
+    });
+    return pending.promise;
+  }
+
+  private async prepareInputForEditing(
+    fileDiff: FileDiffMetadata
+  ): Promise<void> {
+    if (fileDiff.isPartial) {
+      this.loadFilesIfNecessary();
+      await this.pendingFiles?.promise;
+      if (!this.enabled || this.getInputDiff() !== fileDiff) {
+        return;
+      }
+    }
+    await this.awaitPoolHighlight(fileDiff);
+  }
+
+  private async awaitPoolHighlight(fileDiff: FileDiffMetadata): Promise<void> {
+    if (!this.hunksRenderer.awaitsPoolHighlight(fileDiff)) {
+      return;
+    }
+    await this.primeHighlightCache(fileDiff);
+    if (
+      this.enabled &&
+      this.getInputDiff() === fileDiff &&
+      !this.hunksRenderer.awaitsPoolHighlight(fileDiff)
+    ) {
+      this.rerender();
+    }
   }
 
   private async loadFilesForDiff(
@@ -1957,7 +2009,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     if (!this.__canAttachEditor()) {
       throw new Error(
-        'FileDiff.__attachEditor: a complete diff is required before editing'
+        'FileDiff.__attachEditor: the component is not ready to edit; await prepareForEditing() first'
       );
     }
     const detach = () => {

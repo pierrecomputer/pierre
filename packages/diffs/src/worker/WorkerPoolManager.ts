@@ -117,6 +117,9 @@ export class WorkerPoolManager {
   // Tasks that map to highlightKey are essentially singular, so we only
   // need one map to include queued and active
   private taskByHighlightKey = new Map<string, RenderTask>();
+  // Highlight keys whose last task failed. A key carries the render options
+  // version, so a version change starts every input afresh.
+  private failedHighlightKeys = new Set<string>();
 
   // Tasks that have already been sent to a worker and are awaiting a response.
   private activeTaskById = new Map<WorkerRequestId, AllWorkerTasks>();
@@ -181,6 +184,20 @@ export class WorkerPoolManager {
         ? fileOrDiff.contents.length
         : fileOrDiff.deletionCharacterCount + fileOrDiff.additionCharacterCount;
     return characterCount <= mainThreadMaxCharacters;
+  }
+
+  /**
+   * Whether the last highlight of a file or diff failed under the current
+   * render options. Inputs without a cache key are never tracked.
+   */
+  public didHighlightFail(
+    fileOrDiff: FileContents | FileDiffMetadata
+  ): boolean {
+    const highlightKey =
+      'contents' in fileOrDiff
+        ? this.getFileHighlightKey(fileOrDiff)
+        : this.getDiffHighlightKey(fileOrDiff);
+    return highlightKey != null && this.failedHighlightKeys.has(highlightKey);
   }
 
   public getFileResultCache(file: FileContents): RenderFileResult | undefined {
@@ -1012,6 +1029,7 @@ export class WorkerPoolManager {
     }
     this.fileCache.clear();
     this.diffCache.clear();
+    this.failedHighlightKeys.clear();
     this.activeRequestByInstance.clear();
     this.queuedTasks.length = 0;
     this.queuedTaskByInstance.clear();
@@ -1247,6 +1265,7 @@ export class WorkerPoolManager {
       }
       this.executeTask(availableWorker, task);
     } catch (error) {
+      this.notifyHighlightError(task, error);
       this.rejectRenderTaskCallbacks(task, normalizeWorkerError(error));
       this.cleanWorkerAndTask(availableWorker, task);
       this.queueBroadcastStateChanges();
@@ -1604,6 +1623,9 @@ export class WorkerPoolManager {
   }
 
   private resolveRenderTaskCallbacks(task: RenderTask): void {
+    if (task.highlightKey != null) {
+      this.failedHighlightKeys.delete(task.highlightKey);
+    }
     for (const callbacks of task.callbacks) {
       callbacks.resolve();
     }
@@ -1691,6 +1713,9 @@ export class WorkerPoolManager {
   }
 
   private notifyHighlightError(task: RenderTask, error: unknown): void {
+    if (task.highlightKey != null) {
+      this.failedHighlightKeys.add(task.highlightKey);
+    }
     for (const instance of getInstances(task)) {
       if (this.activeRequestByInstance.get(instance) === task.id) {
         instance.onHighlightError(error);

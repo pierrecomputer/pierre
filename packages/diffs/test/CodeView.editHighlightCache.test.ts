@@ -281,8 +281,14 @@ async function withViewer(
   }
 }
 
-function expectedSources(id: string, edit: boolean): string[] {
-  return edit
+// An edit item highlights on the main thread only when the pool markup lacks
+// the transformer; with it, the session waits for the pool and reuses its rows.
+function expectedSources(
+  id: string,
+  edit: boolean,
+  useTokenTransformer = false
+): string[] {
+  return edit && !useTokenTransformer
     ? [
         `export const ${id}_old0 = "before";`,
         `export const ${id}_new0 = "after";`,
@@ -442,7 +448,9 @@ for (const useTokenTransformer of [false, true]) {
             harness;
           // First mounts remain allowed to highlight synchronously. Record
           // both sides to distinguish that work from the later regression.
-          expect(highlightedSources()).toEqual(expectedSources('first', edit));
+          expect(highlightedSources()).toEqual(
+            expectedSources('first', edit, useTokenTransformer)
+          );
           clearHighlights();
           viewer.setItems([
             { ...items[0], collapsed: true, version: 1 },
@@ -453,7 +461,9 @@ for (const useTokenTransformer of [false, true]) {
             'first',
             'second',
           ]);
-          expect(highlightedSources()).toEqual(expectedSources('second', edit));
+          expect(highlightedSources()).toEqual(
+            expectedSources('second', edit, useTokenTransformer)
+          );
 
           clearHighlights();
           viewer.setItems([
@@ -483,7 +493,9 @@ for (const useTokenTransformer of [false, true]) {
         await withViewer(edit, useTokenTransformer, async (harness) => {
           const { viewer, flush, highlightedSources, clearHighlights } =
             harness;
-          expect(highlightedSources()).toEqual(expectedSources('first', edit));
+          expect(highlightedSources()).toEqual(
+            expectedSources('first', edit, useTokenTransformer)
+          );
           clearHighlights();
           // Move beyond overscan so the first item is actually recycled.
           viewer.scrollTo({
@@ -498,7 +510,9 @@ for (const useTokenTransformer of [false, true]) {
           expect(viewer.getRenderedItems().map(({ id }) => id)).toEqual([
             'second',
           ]);
-          expect(highlightedSources()).toEqual(expectedSources('second', edit));
+          expect(highlightedSources()).toEqual(
+            expectedSources('second', edit, useTokenTransformer)
+          );
 
           clearHighlights();
           viewer.scrollTo({

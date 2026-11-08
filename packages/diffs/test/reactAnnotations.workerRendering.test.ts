@@ -763,8 +763,12 @@ for (const type of ['file', 'diff'] as const) {
       await render(element('A', false));
       await respond(type, 'A', 1);
       expect(container.textContent).toContain('annotation A');
-      // B is still highlighting, but the editor shows it once it attaches.
+      // B is still highlighting in the pool; the editor attaches once that
+      // result has rendered and shows B from the session.
       await render(element('B', true));
+      await wait(30);
+      expect(editor).toBeUndefined();
+      await respond(type, 'B', 2);
       await waitFor(() => editor?.getText() === files.B.contents);
       expect(container.textContent).toContain('annotation B');
       expect(container.textContent).not.toContain('annotation A');

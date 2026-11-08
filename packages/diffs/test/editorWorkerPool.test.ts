@@ -1482,7 +1482,7 @@ describe('DiffHunksRenderer edit session', () => {
     }
   });
 
-  test('entering edit mode does not reuse highlighted markup before it renders', async () => {
+  test('entering edit mode reuses highlighted markup that is ready but not yet rendered', async () => {
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
       useTokenTransformer: true,
@@ -1510,13 +1510,26 @@ describe('DiffHunksRenderer edit session', () => {
         expect(manager.getDiffResultCache(externalDiff)).toBeDefined();
       });
 
-      const sessionDiff = renderer.startEditSession(externalDiff);
-      expect(renderer.editorRenderReady()).toBe(false);
+      // The cached result is ready but the plain rows are still on screen,
+      // so the session is not editor-ready until its first render lays the
+      // highlighted rows out; that render reuses the result as is.
+      const highlight = spyOn(sharedHighlighter, 'codeToTokens');
+      try {
+        const sessionDiff = renderer.startEditSession(externalDiff);
+        expect(renderer.editorRenderReady()).toBe(false);
 
-      const result = renderer.renderDiff(sessionDiff);
-      expect(renderer.editorRenderReady()).toBe(true);
-      expect(result?.fileDiff).toBe(sessionDiff);
-      expect(renderedDiffHtml(result)).toContain('data-char');
+        const result = renderer.renderDiff(sessionDiff);
+        expect(renderer.editorRenderReady()).toBe(true);
+        expect(result?.fileDiff).toBe(sessionDiff);
+        expect(renderedDiffHtml(result)).toContain('data-char');
+        expect(
+          highlight.mock.calls.filter(
+            ([, renderOptions]) => renderOptions.lang !== 'text'
+          )
+        ).toEqual([]);
+      } finally {
+        highlight.mockRestore();
+      }
     } finally {
       renderer.cleanUp();
       manager.terminate();
@@ -1881,6 +1894,444 @@ async function respondWithRealFileHighlight(
   });
 }
 
+// The content element the editor owns once it has synced. The editor sets
+// contentEditable as a property, which the DOM harness does not reflect to an
+// attribute, so both are checked.
+function editableElement(fileContainer: HTMLElement): HTMLElement | null {
+  return (
+    Array.from(
+      fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
+        '[data-content]'
+      ) ?? []
+    ).find(
+      (element) =>
+        element.contentEditable === 'true' ||
+        element.getAttribute('contenteditable') === 'true'
+    ) ?? null
+  );
+}
+
+describe('an editor attaching while the pool is highlighting', () => {
+  test('a File waits for the pool result and the session adopts its rows', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const editor = new Editor('file');
+    try {
+      const instance = new File(
+        { theme: 'pierre-dark', disableFileHeader: true },
+        manager
+      );
+      const fileContainer = document.createElement('div');
+      fileContainer.attachShadow({ mode: 'open' });
+      const file = createFile('file:entry-wait');
+
+      instance.render({ file, fileContainer, forceRender: true });
+      await withTimeout(worker.waitForFileRequest());
+      expect(instance.__canAttachEditor()).toBe(false);
+      expect(() => editor.edit(instance)).toThrow('not ready to edit');
+      const ready = instance.prepareForEditing();
+      // Preparing joins the request already in flight.
+      await wait(20);
+      expect(worker.fileRequestCount).toBe(1);
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-line="1"]')?.innerHTML ??
+          ''
+      ).not.toContain('color:');
+
+      await respondWithRealFileHighlight(manager, worker, file);
+      await withTimeout(ready);
+      expect(instance.__canAttachEditor()).toBe(true);
+      const html = fileContainer.shadowRoot?.innerHTML ?? '';
+      expect(html).toContain('data-char');
+      expect(html).toContain('color:');
+      const lineBefore =
+        fileContainer.shadowRoot?.querySelector('[data-line="1"]');
+
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+      });
+      // The rows the pool highlighted are the session's rows: nothing was
+      // rendered again, locally or through the pool.
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-line="1"]') ===
+          lineBefore
+      ).toBe(true);
+      expect(worker.fileRequestCount).toBe(1);
+      expect(editor.getText()).toBe(FILE_CONTENTS);
+      editor.cleanUp();
+      instance.cleanUp();
+    } finally {
+      editor.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+
+  test('a FileDiff waits for the pool result and the session adopts its rows', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const editor = new Editor('file-diff');
+    try {
+      const instance = new FileDiff(
+        { theme: 'pierre-dark', disableFileHeader: true, diffStyle: 'unified' },
+        manager
+      );
+      const fileContainer = document.createElement('div');
+      fileContainer.attachShadow({ mode: 'open' });
+      const fileDiff = createWorkerDiff(
+        'diff:entry-wait',
+        'const after = 1;\n'
+      );
+
+      instance.render({ fileDiff, fileContainer, forceRender: true });
+      const request = await withTimeout(worker.waitForDiffRequest());
+      expect(instance.__canAttachEditor()).toBe(false);
+      expect(() => editor.edit(instance)).toThrow('not ready to edit');
+      const ready = instance.prepareForEditing();
+      await wait(20);
+      expect(worker.diffRequestCount).toBe(1);
+
+      respondWithHighlightedDiff(manager, worker, request, fileDiff);
+      await withTimeout(ready);
+      expect(instance.__canAttachEditor()).toBe(true);
+      const html = fileContainer.shadowRoot?.innerHTML ?? '';
+      expect(html).toContain('data-char');
+      expect(html).toContain('color:');
+      const lineBefore = fileContainer.shadowRoot?.querySelector(
+        '[data-line="1"][data-line-type="change-addition"]'
+      );
+      expect(lineBefore).not.toBeNull();
+
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+      });
+      expect(
+        fileContainer.shadowRoot?.querySelector(
+          '[data-line="1"][data-line-type="change-addition"]'
+        ) === lineBefore
+      ).toBe(true);
+      expect(worker.diffRequestCount).toBe(1);
+      expect(editor.getText()).toBe('const after = 1;\n');
+      editor.cleanUp();
+      instance.cleanUp();
+    } finally {
+      editor.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+
+  test('a VirtualizedFile can attach as soon as the pool result is ready, before its frame renders', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const virtualizer = new Virtualizer();
+    const editor = new Editor('file');
+    const instance = new VirtualizedFile<undefined>(
+      { theme: 'pierre-dark', disableFileHeader: true },
+      virtualizer,
+      undefined,
+      manager
+    );
+    try {
+      const root = createRoot();
+      const content = document.createElement('div');
+      const fileContainer = document.createElement('div');
+      root.appendChild(content);
+      content.appendChild(fileContainer);
+      virtualizer.setup(root, content);
+      const file = createFile('virtualized-file:entry-wait');
+
+      instance.render({ file, fileContainer, forceRender: true });
+      dom.triggerIntersectionObserver(fileContainer, true);
+      await withTimeout(worker.waitForFileRequest());
+      expect(instance.__canAttachEditor()).toBe(false);
+      const ready = instance.prepareForEditing();
+
+      await respondWithRealFileHighlight(manager, worker, file);
+      await withTimeout(ready);
+      // A virtualized render runs in a later frame; the data is what counts.
+      expect(instance.__canAttachEditor()).toBe(true);
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+        expect(
+          fileContainer.shadowRoot?.querySelector('[data-line="1"]')
+            ?.innerHTML ?? ''
+        ).toContain('color:');
+      });
+      expect(worker.fileRequestCount).toBe(1);
+      expect(editor.getText()).toBe(FILE_CONTENTS);
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      virtualizer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+
+  test('a VirtualizedFileDiff can attach as soon as the pool result is ready, before its frame renders', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const virtualizer = new Virtualizer();
+    const editor = new Editor('file-diff');
+    const instance = new VirtualizedFileDiff<undefined>(
+      { theme: 'pierre-dark', disableFileHeader: true, diffStyle: 'unified' },
+      virtualizer,
+      undefined,
+      manager
+    );
+    try {
+      const root = createRoot();
+      const content = document.createElement('div');
+      const fileContainer = document.createElement('div');
+      root.appendChild(content);
+      content.appendChild(fileContainer);
+      virtualizer.setup(root, content);
+      const fileDiff = createWorkerDiff(
+        'virtualized-diff:entry-wait',
+        'const after = 1;\n'
+      );
+
+      instance.render({ fileDiff, fileContainer, forceRender: true });
+      dom.triggerIntersectionObserver(fileContainer, true);
+      const request = await withTimeout(worker.waitForDiffRequest());
+      expect(instance.__canAttachEditor()).toBe(false);
+      const ready = instance.prepareForEditing();
+
+      respondWithHighlightedDiff(manager, worker, request, fileDiff);
+      await withTimeout(ready);
+      expect(instance.__canAttachEditor()).toBe(true);
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+        expect(
+          fileContainer.shadowRoot?.querySelector(
+            '[data-line="1"][data-line-type="change-addition"]'
+          )?.innerHTML ?? ''
+        ).toContain('color:');
+      });
+      expect(worker.diffRequestCount).toBe(1);
+      expect(editor.getText()).toBe('const after = 1;\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      virtualizer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+
+  test('a File stops waiting as soon as new options make it massive, without a render', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    try {
+      const options = { theme: 'pierre-dark', disableFileHeader: true };
+      const instance = new File(options, manager);
+      const fileContainer = document.createElement('div');
+      fileContainer.attachShadow({ mode: 'open' });
+      const file = createFile('file:entry-massive-later');
+
+      instance.render({ file, fileContainer, forceRender: true });
+      await withTimeout(worker.waitForFileRequest());
+      expect(instance.__canAttachEditor()).toBe(false);
+      // A massive file is never highlighted, so there is nothing to wait for.
+      // The renderer sees the new limit at once, not on the next render, as an
+      // offscreen virtualized file may not render for a while.
+      instance.setOptions({ ...options, tokenizeMaxLength: 1 });
+      expect(instance.__canAttachEditor()).toBe(true);
+      instance.cleanUp();
+    } finally {
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+
+  test('a file whose pool highlight failed is not waited for', async () => {
+    const dom = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const editor = new Editor('file');
+    try {
+      const instance = new File(
+        { theme: 'pierre-dark', disableFileHeader: true },
+        manager
+      );
+      const fileContainer = document.createElement('div');
+      fileContainer.attachShadow({ mode: 'open' });
+      const file = createFile('file:entry-failed');
+
+      instance.render({ file, fileContainer, forceRender: true });
+      const request = await withTimeout(worker.waitForFileRequest());
+      expect(instance.__canAttachEditor()).toBe(false);
+      const ready = instance.prepareForEditing();
+
+      // The worker refuses this one file; the pool itself keeps working.
+      worker.respond({
+        type: 'error',
+        id: request.id,
+        error: 'highlight failed',
+        stack: undefined,
+      });
+      await withTimeout(ready);
+      expect(manager.isWorkingPool()).toBe(true);
+      // Nothing to wait for: the session highlights locally, as a read-only
+      // render of this file would stay plain.
+      expect(instance.__canAttachEditor()).toBe(true);
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+        expect(
+          fileContainer.shadowRoot?.querySelector('[data-line="1"]')
+            ?.innerHTML ?? ''
+        ).toContain('color:');
+      });
+      // The render that made the file attachable asked the pool once more,
+      // as any read-only render of an unhighlighted file does; the session
+      // asks no further.
+      instance.rerender();
+      await wait(20);
+      expect(worker.fileRequestCount).toBe(2);
+      expect(consoleError).toHaveBeenCalled();
+      instance.cleanUp();
+    } finally {
+      editor.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+      consoleError.mockRestore();
+    }
+  });
+
+  test('a highlight that failed while nothing was rendered is not waited for either', async () => {
+    const dom = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    try {
+      const file = createFile('file:entry-failed-offscreen');
+      // Only a cache prime is in flight, as for a virtualized file that has
+      // not rendered yet: no renderer is subscribed to hear the failure.
+      const primed = manager.primeFileHighlightCache(file);
+      const request = await withTimeout(worker.waitForFileRequest());
+      worker.respond({
+        type: 'error',
+        id: request.id,
+        error: 'highlight failed',
+        stack: undefined,
+      });
+      let rejection: unknown;
+      await withTimeout(primed).catch((error: unknown) => {
+        rejection = error;
+      });
+      expect(rejection).toBeInstanceOf(Error);
+      expect(manager.isWorkingPool()).toBe(true);
+      expect(manager.didHighlightFail(file)).toBe(true);
+
+      const renderer = new FileRenderer(
+        { theme: 'pierre-dark' },
+        undefined,
+        undefined,
+        manager
+      );
+      expect(renderer.awaitsPoolHighlight(file)).toBe(false);
+      renderer.cleanUp();
+    } finally {
+      manager.terminate();
+      dom.cleanup();
+      consoleError.mockRestore();
+    }
+  });
+
+  test('a file without a cache key is not waited for', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const editor = new Editor('file');
+    try {
+      const instance = new File(
+        { theme: 'pierre-dark', disableFileHeader: true },
+        manager
+      );
+      const fileContainer = document.createElement('div');
+      fileContainer.attachShadow({ mode: 'open' });
+      const file: FileContents = { name: 'demo.ts', contents: FILE_CONTENTS };
+
+      instance.render({ file, fileContainer, forceRender: true });
+      await withTimeout(worker.waitForFileRequest());
+      // Without a key the pool task cannot be joined, so the session starts
+      // now and highlights locally.
+      expect(instance.__canAttachEditor()).toBe(true);
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('color:');
+      });
+      expect(worker.fileRequestCount).toBe(1);
+      instance.cleanUp();
+    } finally {
+      editor.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+
+  test('a file highlighted on the main thread is not waited for', async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager(
+      { theme: 'pierre-dark', useTokenTransformer: true },
+      { mainThreadMaxCharacters: 10_000 }
+    );
+    const editor = new Editor('file');
+    try {
+      const instance = new File(
+        { theme: 'pierre-dark', disableFileHeader: true },
+        manager
+      );
+      const fileContainer = document.createElement('div');
+      fileContainer.attachShadow({ mode: 'open' });
+      const file = createFile('file:entry-main-thread');
+
+      instance.render({ file, fileContainer, forceRender: true });
+      expect(instance.__canAttachEditor()).toBe(true);
+      await instance.prepareForEditing();
+      editor.edit(instance);
+      await waitFor(() => {
+        expect(editableElement(fileContainer)).not.toBeNull();
+      });
+      expect(worker.fileRequestCount).toBe(0);
+      instance.cleanUp();
+    } finally {
+      editor.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+});
+
 describe('rendering when an editor attaches', () => {
   test('reuses an existing editor-compatible worker render for a file', async () => {
     const dom = installDom();
@@ -2015,11 +2466,11 @@ describe('rendering when an editor attaches', () => {
     }
   });
 
-  test('renders locally without waiting for a pending worker result and ignores it when it finishes', async () => {
+  test('a pool highlight without the transformer is not waited for: the session renders locally and refuses the late result', async () => {
     const dom = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
-      useTokenTransformer: true,
     });
     try {
       const instance = new File(
@@ -2033,10 +2484,10 @@ describe('rendering when an editor attaches', () => {
       instance.render({ file, fileContainer, forceRender: true });
       const request = await withTimeout(worker.waitForFileRequest());
 
+      // Pool rows without token spans are useless to the editor, so nothing
+      // is gained by waiting: the editor attaches now.
+      expect(instance.__canAttachEditor()).toBe(true);
       const detach = instance.__attachEditor(createEditorInstance('file'));
-      // The local highlight lands without the pool ever answering. The plain
-      // pool AST already carries data-char (transformer-shaped), so only the
-      // highlight colors prove the attach-time session render ran.
       await waitFor(() => {
         const html = fileContainer.shadowRoot?.innerHTML ?? '';
         expect(html).toContain('data-char');
@@ -2063,6 +2514,7 @@ describe('rendering when an editor attaches', () => {
     } finally {
       manager.terminate();
       dom.cleanup();
+      consoleError.mockRestore();
     }
   });
 

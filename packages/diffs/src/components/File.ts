@@ -222,6 +222,13 @@ interface EditSession<LAnnotation> {
   annotations: EditSessionAnnotations<LineAnnotation<LAnnotation>> | undefined;
 }
 
+// The wait before an editor may attach to the input file: a pool highlight
+// still in flight. See __prepareForEditing.
+interface PendingEditorAttach {
+  file: FileContents;
+  promise: Promise<void>;
+}
+
 // The settings the managers (resize observers, scroll sync, pointer
 // handling) attach to the rendered DOM with. flushManagers compares them
 // with the last render's so the managers only re-attach when a setting or
@@ -294,6 +301,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   private renderedData: FileRenderData<LAnnotation> | undefined;
   // Keep the next file and its annotations together until that file renders.
   private pendingData: FileRenderData<LAnnotation> | undefined;
+  private pendingAttach: PendingEditorAttach | undefined;
   // Forces the next render() call, such as the one the owner makes after
   // requestOwnerRender.
   protected forceRenderOverride: true | undefined;
@@ -494,7 +502,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.editor?.__assertOutsideChangeCallback('File.render');
     const previousAnnotations = this.getLatestAnnotations();
     this.file = incomingFile;
-    const { editSession, editor } = this;
+    const { editSession } = this;
     if (editSession?.annotations != null && lineAnnotations != null) {
       // These annotations arrived with the new file, so their line numbers
       // describe it. The positions the session tracked for the old document
@@ -512,13 +520,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         editSession.annotations?.current ??
           lineAnnotations ??
           previousAnnotations
-      );
-    } else if (editor != null) {
-      // The editor attached before the first file arrived. A document it
-      // kept from an earlier session seeds the new one.
-      this.installEditSession(
-        incomingFile,
-        editor.__getDocumentContents(incomingFile)
       );
     }
     this.pendingData = {
@@ -577,6 +578,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   ): void {
     if (options == null) return;
     this.options = options;
+    this.fileRenderer.setOptions(getFileRendererOptions(options));
     this.cachedHeaderHTML = undefined;
     this.syncInteractionOptions();
     this.managersDirty = true;
@@ -901,6 +903,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (!recycle) {
       this.renderedData = undefined;
       this.pendingData = undefined;
+      this.pendingAttach = undefined;
     }
     this.clearAuxiliaryNodes();
     this.pre?.remove();
@@ -1145,12 +1148,86 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     return undefined;
   }
 
+  /**
+   * Whether a new edit session can start now: a file is set and the worker
+   * pool is not still highlighting it. Use `prepareForEditing` to wait.
+   */
+  public __canAttachEditor(): boolean {
+    const file = this.getInputFile();
+    return file != null && !this.fileRenderer.awaitsPoolHighlight(file);
+  }
+
+  /**
+   * Gets the file ready for a new edit session. Call this before Editor.edit:
+   * it renders a pool highlight that is still in flight, so the session starts
+   * from highlighted rows instead of highlighting on the main thread. Resolves
+   * once this instance can start editing.
+   */
+  public async prepareForEditing(): Promise<void> {
+    if (this.__canAttachEditor()) {
+      return;
+    }
+    const pending = this.__prepareForEditing();
+    if (pending == null) {
+      throw new Error(
+        'File.prepareForEditing: a file is required before editing'
+      );
+    }
+    await pending;
+    if (!this.__canAttachEditor()) {
+      throw new Error('File.prepareForEditing: the file is not ready to edit');
+    }
+  }
+
+  /**
+   * @internal Resolves once an editor may attach to the current input, or
+   * returns undefined when it already may or there is no input. The same
+   * promise is returned while it is pending for the same input.
+   */
+  public __prepareForEditing(): Promise<void> | undefined {
+    const file = this.getInputFile();
+    if (file == null || this.__canAttachEditor()) {
+      return undefined;
+    }
+    const { pendingAttach } = this;
+    if (pendingAttach?.file === file) {
+      return pendingAttach.promise;
+    }
+    const pending: PendingEditorAttach = {
+      file,
+      promise: this.awaitPoolHighlight(file),
+    };
+    this.pendingAttach = pending;
+    pending.promise = pending.promise.finally(() => {
+      if (this.pendingAttach === pending) {
+        this.pendingAttach = undefined;
+      }
+    });
+    return pending.promise;
+  }
+
+  private async awaitPoolHighlight(file: FileContents): Promise<void> {
+    await this.primeHighlightCache(file);
+    if (
+      this.enabled &&
+      this.getInputFile() === file &&
+      !this.fileRenderer.awaitsPoolHighlight(file)
+    ) {
+      this.rerender();
+    }
+  }
+
   /** @internal Associate this component with its editor for a render lifecycle. */
   public __attachEditor(
     editor: Editor<'file', LAnnotation, Caret>
   ): () => void {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
+    }
+    if (!this.__canAttachEditor()) {
+      throw new Error(
+        'File.__attachEditor: the component is not ready to edit; await prepareForEditing() first'
+      );
     }
     this.editor = editor;
     const detach = () => {
@@ -1177,10 +1254,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   private resumeEditorRendering(
     editor: Editor<'file', LAnnotation, Caret>
   ): void {
-    // Start a session unless one is retained from an earlier attach. Without
-    // a file yet, updateInputFile starts it when the file arrives.
-    const inputFile = this.getInputFile();
-    if (this.editSession == null && inputFile != null) {
+    // Start a session unless one is retained from an earlier attach.
+    if (this.editSession == null) {
+      const inputFile = this.getInputFile();
+      if (inputFile == null) {
+        throw new Error(
+          'File.__attachEditor: a file is required before editing'
+        );
+      }
       this.installEditSession(
         inputFile,
         editor.__getDocumentContents(inputFile)
