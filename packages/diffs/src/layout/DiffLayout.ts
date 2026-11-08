@@ -1,5 +1,6 @@
 import type { Element as HASTElement, Properties } from 'hast';
 
+import { i18n } from '../i18n/I18n';
 import type { DiffModel } from '../model/DiffModel';
 import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
 import { LineDiffRangeCache, lineDiffRangesFor } from '../rows/lineDiffRanges';
@@ -920,8 +921,8 @@ export class DiffLayout<LAnnotation = undefined> {
     const expandIndex = isExpandable ? hunkIndex : undefined;
     const content =
       typeof collapsedLines === 'number'
-        ? getModifiedLinesString(collapsedLines)
-        : 'More unchanged context may be available';
+        ? i18n.t('unmodifiedLines', { count: collapsedLines })
+        : i18n.t('unknownUnmodifiedLines');
     const separator = () =>
       createSeparator({
         type: hunkSeparators,
@@ -1243,15 +1244,6 @@ function getSplitAnnotationSpans<LAnnotation>(
     return undefined;
   }
   return { deletionSpan, additionSpan };
-}
-
-// Use the platform's English plural rules to pick "line" vs "lines" so a
-// count of 0 reads as "0 unmodified lines". en-US returns "one" only for 1.
-const EN_PLURAL_RULES = new Intl.PluralRules('en-US');
-
-function getModifiedLinesString(lines: number): string {
-  const suffix = EN_PLURAL_RULES.select(lines) === 'one' ? '' : 's';
-  return `${lines} unmodified line${suffix}`;
 }
 
 function areRangesEqual(
