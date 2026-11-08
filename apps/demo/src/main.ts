@@ -449,7 +449,17 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
             (checked) => {
               isEditing = checked;
               if (isEditing) {
-                editor.edit(instance);
+                // A pool highlight still in flight is waited for first.
+                void instance
+                  .prepareForEditing()
+                  .then(() => {
+                    if (isEditing) {
+                      editor.edit(instance);
+                    }
+                  })
+                  .catch((error: unknown) => {
+                    console.error(error);
+                  });
               } else {
                 editor.cleanUp();
               }
@@ -1095,7 +1105,17 @@ if (renderFileButton != null) {
           (checked) => {
             isEditing = checked;
             if (isEditing) {
-              editor.edit(instance);
+              // A pool highlight still in flight is waited for first.
+              void instance
+                .prepareForEditing()
+                .then(() => {
+                  if (isEditing) {
+                    editor.edit(instance);
+                  }
+                })
+                .catch((error: unknown) => {
+                  console.error(error);
+                });
             } else {
               editor.cleanUp();
             }
