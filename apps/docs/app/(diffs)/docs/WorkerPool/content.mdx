@@ -281,6 +281,16 @@ the same way.
 
 <DocsCodeExample {...cachingExample} />
 
+### Editing
+
+Edit mode starts from the pool's rows when it can. A file or diff with a
+`cacheKey`, rendered by a pool whose highlighter options set
+`useTokenTransformer: true`, waits for a highlight still in flight before its
+session starts, instead of highlighting again on the main thread. React and
+`CodeView` wait for you; vanilla code awaits `instance.prepareForEditing()`
+before `editor.edit()`. See
+[Edit mode → Worker Pool](#edit-mode-performance-and-loading-worker-pool).
+
 ### API Reference
 
 These methods are exposed for advanced use cases. In most scenarios, you should
