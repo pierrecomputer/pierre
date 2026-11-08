@@ -461,9 +461,10 @@ describe('collapsed hydration', () => {
 
   test('VirtualizedFileDiff preserves cached files during off-screen placeholder rerenders', () => {
     const dom = installDomConstructors();
+    let instance: InspectableVirtualizedFileDiff | undefined;
     try {
       const virtualizerState = createVirtualizer();
-      const instance = new InspectableVirtualizedFileDiff(
+      instance = new InspectableVirtualizedFileDiff(
         undefined,
         virtualizerState.virtualizer
       );
@@ -480,15 +481,17 @@ describe('collapsed hydration', () => {
       expect(cachedFiles.deletionFile).toBe(file);
       expect(cachedFiles.additionFile).toBe(modifiedFile);
     } finally {
+      instance?.cleanUp();
       dom.cleanup();
     }
   });
 
   test('VirtualizedFileDiff hydrates a new file from an explicit missing oldFile side', () => {
     const dom = installDomConstructors();
+    let instance: InspectableVirtualizedFileDiff | undefined;
     try {
       const virtualizerState = createVirtualizer();
-      const instance = new InspectableVirtualizedFileDiff(
+      instance = new InspectableVirtualizedFileDiff(
         undefined,
         virtualizerState.virtualizer
       );
@@ -517,15 +520,17 @@ describe('collapsed hydration', () => {
         )
       );
     } finally {
+      instance?.cleanUp();
       dom.cleanup();
     }
   });
 
   test('VirtualizedFileDiff hydrates a deleted file from an explicit missing newFile side', () => {
     const dom = installDomConstructors();
+    let instance: InspectableVirtualizedFileDiff | undefined;
     try {
       const virtualizerState = createVirtualizer();
-      const instance = new InspectableVirtualizedFileDiff(
+      instance = new InspectableVirtualizedFileDiff(
         undefined,
         virtualizerState.virtualizer
       );
@@ -554,6 +559,7 @@ describe('collapsed hydration', () => {
         )
       );
     } finally {
+      instance?.cleanUp();
       dom.cleanup();
     }
   });
