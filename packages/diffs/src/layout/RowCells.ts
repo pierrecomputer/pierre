@@ -21,8 +21,8 @@ interface GutterCell {
 interface FixedRow {
   signature: string;
   // Separators and "no newline" markers carry translated text, so a row
-  // built under an older set of translations is rebuilt.
-  translationsVersion: number;
+  // built under an older set of messages is rebuilt.
+  messagesVersion: number;
   gutter: HASTElement;
   content: HASTElement;
 }
@@ -130,13 +130,13 @@ export class RowCells {
     create: () => { gutter: HASTElement; content: HASTElement }
   ): void {
     let fixed = this.#fixedRows.get(key);
-    const translationsVersion = i18n.version;
+    const messagesVersion = i18n.version;
     if (
       fixed == null ||
       fixed.signature !== signature ||
-      fixed.translationsVersion !== translationsVersion
+      fixed.messagesVersion !== messagesVersion
     ) {
-      fixed = { signature, translationsVersion, ...create() };
+      fixed = { signature, messagesVersion, ...create() };
       this.#fixedRows.set(key, fixed);
     }
     pushRow(column, { key, gutter: fixed.gutter, content: fixed.content });

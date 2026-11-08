@@ -17,7 +17,7 @@ export const I18N_SETUP: PreloadFileOptions<undefined, undefined> = {
 // first diff renders. Every component reads from this store.
 i18n.set({
   locale: 'fr',
-  translations: {
+  messages: {
     unmodifiedLines:
       '{count, plural, one {# ligne inchangée} other {# lignes inchangées}}',
     unknownUnmodifiedLines: 'Plus de contexte peut être disponible',
@@ -40,13 +40,19 @@ export const I18N_SWITCH: PreloadFileOptions<undefined, undefined> = {
 import fr from './locales/fr.json';
 import ru from './locales/ru.json';
 
-// Translation files are plain JSON in the \`DiffsI18nConfig\` shape, so the
+// Message files are plain JSON in the \`DiffsI18nConfig\` shape, so the
 // same file configures the server and the client. English is the default,
 // so it needs no file.
-const LOCALES = { en: {}, fr, ru } satisfies Record<string, DiffsI18nConfig>;
+const LOCALES = {
+  en: {},
+  'en-US': { locale: 'en-US' },
+  'en-GB': { locale: 'en-GB' },
+  fr,
+  ru,
+} satisfies Record<string, DiffsI18nConfig>;
 
 export function switchLanguage(locale: keyof typeof LOCALES): void {
-  // Mounted diffs re-render their text in place. Translations left out
+  // Mounted diffs re-render their text in place. Messages left out
   // fall back to English.
   i18n.set(LOCALES[locale]);
 }`,
@@ -59,7 +65,7 @@ export const I18N_PLURALS: PreloadFileOptions<undefined, undefined> = {
     name: 'locales/ru.json',
     contents: `{
   "locale": "ru",
-  "translations": {
+  "messages": {
     "unmodifiedLines": "{count, plural, one {# неизменённая строка} few {# неизменённые строки} many {# неизменённых строк} other {# неизменённой строки}}",
     "unknownUnmodifiedLines": "Может быть доступен дополнительный контекст",
     "expandAll": "Развернуть всё",
