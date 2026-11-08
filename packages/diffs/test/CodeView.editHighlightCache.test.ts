@@ -23,7 +23,7 @@ import {
   wait,
   waitFor,
 } from './domHarness';
-import { createInitializedManager } from './workerPoolHarness';
+import { createInitializedManager, withTimeout } from './workerPoolHarness';
 
 let highlighter: DiffsHighlighter;
 
@@ -438,6 +438,62 @@ for (const partial of [false, true]) {
     }
   });
 }
+
+test('an edit item whose pool highlight fails attaches on the next render and highlights locally', async () => {
+  const dom = installDom();
+  const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+  const { manager, worker } = await createInitializedManager({
+    theme: 'pierre-dark',
+    useTokenTransformer: true,
+  });
+  const viewer = new CodeView(
+    {
+      theme: 'pierre-dark',
+      createEditor: (type, editorOptions, key) =>
+        new Editor(type, editorOptions, key),
+    },
+    manager
+  );
+  try {
+    viewer.setup(createRoot({ height: 200 }));
+    viewer.setItems([createItem('first', true)]);
+    viewer.render(true);
+    const request = await withTimeout(worker.waitForDiffRequest());
+    await wait(0);
+    expect(viewer.getEditor('first')).toBeUndefined();
+
+    // The worker refuses this diff; the pool keeps working. The item's
+    // prepare marks the failure and renders, and CodeView attaches on that
+    // render pass; the session highlights locally.
+    worker.respond({
+      type: 'error',
+      id: request.id,
+      error: 'highlight failed',
+      stack: undefined,
+    });
+    await waitFor(() => viewer.getEditor('first') != null);
+    expect(manager.isWorkingPool()).toBe(true);
+    const [item] = viewer.getRenderedItems();
+    await waitFor(() =>
+      Boolean(
+        item?.element.shadowRoot?.querySelector('[data-line] [style*="color:"]')
+      )
+    );
+    // The render that made the item attachable asked the pool once more, as
+    // any read-only render of an unhighlighted diff does. The session asks
+    // no further, however often it renders.
+    expect(worker.diffRequestCount).toBe(2);
+    viewer.render(true);
+    await wait(20);
+    expect(worker.diffRequestCount).toBe(2);
+  } finally {
+    viewer.cleanUp();
+    manager.terminate();
+    consoleError.mockRestore();
+    await wait(0);
+    dom.cleanup();
+  }
+});
 
 for (const useTokenTransformer of [false, true]) {
   describe(`CodeView highlight reuse (pool transformer: ${useTokenTransformer})`, () => {

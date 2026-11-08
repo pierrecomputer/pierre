@@ -165,6 +165,7 @@ async function createFixture() {
   };
   return {
     container,
+    dom,
     manager,
     worker,
     options,
@@ -773,6 +774,105 @@ for (const type of ['file', 'diff'] as const) {
       expect(container.textContent).toContain('annotation B');
       expect(container.textContent).not.toContain('annotation A');
     } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+// Places every item container far below the viewport until restored, so a
+// virtualized item mounts as an offscreen placeholder.
+function placeItemsOffscreen(): () => void {
+  const { prototype } = HTMLElement;
+  const getBoundingClientRect = prototype.getBoundingClientRect;
+  prototype.getBoundingClientRect = function (this: HTMLElement): DOMRect {
+    const rect = getBoundingClientRect.call(this);
+    if (this.tagName !== 'DIFFS-CONTAINER') {
+      return rect;
+    }
+    const far: DOMRect = {
+      x: rect.x,
+      y: 10_000,
+      width: rect.width,
+      height: rect.height,
+      top: 10_000,
+      right: rect.right,
+      bottom: 10_000 + rect.height,
+      left: rect.left,
+      toJSON() {
+        return far;
+      },
+    };
+    return far;
+  };
+  return () => {
+    prototype.getBoundingClientRect = getBoundingClientRect;
+  };
+}
+
+for (const type of ['file', 'diff'] as const) {
+  test(`React ${type} attaches its editor once the pool answers while it is an offscreen placeholder`, async () => {
+    const fixture = await createFixture();
+    const { container, options, render, respond, worker } = fixture;
+    const restoreRects = placeItemsOffscreen();
+    let editorCreations = 0;
+    let editor: Editor<'file' | 'file-diff', string> | undefined;
+    const createEditor: EditorFactory<string, undefined> = (
+      editorType,
+      editorOptions
+    ) => {
+      editorCreations++;
+      const instance = new Editor(editorType, editorOptions);
+      editor = instance;
+      return instance;
+    };
+    const element = createElement(
+      Virtualizer,
+      null,
+      createElement(
+        EditProvider<string>,
+        { createEditor },
+        type === 'file'
+          ? createElement(File<string>, { file: files.A, edit: true, options })
+          : createElement(FileDiff<string>, {
+              fileDiff: diffs.A,
+              edit: true,
+              options: { ...options, diffStyle: 'unified' },
+            })
+      )
+    );
+    try {
+      await render(element);
+      const fileContainer = container.querySelector('diffs-container');
+      if (!(fileContainer instanceof HTMLElement)) {
+        throw new Error('Expected the item container');
+      }
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-placeholder]')
+      ).not.toBeNull();
+      expect(editorCreations).toBe(0);
+
+      // The pool answers while the item is still a placeholder. Readiness is
+      // about the data, so the hook attaches on its promise without any
+      // render; the placeholder stays until the item scrolls into view.
+      await respond(type, 'A', 1);
+      await waitFor(() => editorCreations === 1);
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-placeholder]')
+      ).not.toBeNull();
+
+      restoreRects();
+      await act(async () => {
+        fixture.dom.triggerIntersectionObserver(fileContainer, true);
+        await wait(30);
+      });
+      await waitFor(() => editor?.getText() === files.A.contents);
+      expect(editorCreations).toBe(1);
+      expect(
+        type === 'file' ? worker.fileRequestCount : worker.diffRequestCount
+      ).toBe(1);
+      expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('data-char');
+    } finally {
+      restoreRects();
       await fixture.cleanup();
     }
   });
