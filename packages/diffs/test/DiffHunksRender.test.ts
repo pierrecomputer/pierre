@@ -491,7 +491,7 @@ describe('DiffHunksRenderer', () => {
   });
 });
 
-describe('DiffHunksRenderer translations', () => {
+describe('DiffHunksRenderer messages', () => {
   afterEach(() => {
     i18n.set();
   });
@@ -499,17 +499,17 @@ describe('DiffHunksRenderer translations', () => {
   // Twenty lines without a trailing newline, changed near the end so the hunk
   // keeps the final line (and its no-newline marker) and the separator above
   // it collapses the leading context.
-  function parseTranslationFixture(): FileDiffMetadata {
+  function parseMessageFixture(): FileDiffMetadata {
     const oldLines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
     const newLines = oldLines.map((line, i) => (i === 18 ? 'changed' : line));
     return parseDiffFromFile(
-      { name: 'translations.txt', contents: oldLines.join('\n') },
-      { name: 'translations.txt', contents: newLines.join('\n') }
+      { name: 'messages.txt', contents: oldLines.join('\n') },
+      { name: 'messages.txt', contents: newLines.join('\n') }
     );
   }
 
   test('renders the English defaults', async () => {
-    const diff = parseTranslationFixture();
+    const diff = parseMessageFixture();
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       expansionLineCount: 5,
@@ -524,17 +524,17 @@ describe('DiffHunksRenderer translations', () => {
     expect(html).toContain('No newline at end of file');
   });
 
-  test('renders the configured translations', async () => {
+  test('renders the configured messages', async () => {
     i18n.set({
       locale: 'fr',
-      translations: {
+      messages: {
         unmodifiedLines:
           '{count, plural, one {# ligne inchangee} other {# lignes inchangees}}',
         expandAll: 'Tout deplier',
         noNewlineAtEndOfFile: 'Pas de saut de ligne a la fin du fichier',
       },
     });
-    const diff = parseTranslationFixture();
+    const diff = parseMessageFixture();
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       expansionLineCount: 5,
@@ -551,9 +551,9 @@ describe('DiffHunksRenderer translations', () => {
     expect(html).not.toContain('No newline at end of file');
   });
 
-  test('translations left out fall back to English', async () => {
-    i18n.set({ translations: { expandAll: 'Tout deplier' } });
-    const diff = parseTranslationFixture();
+  test('messages left out fall back to English', async () => {
+    i18n.set({ messages: { expandAll: 'Tout deplier' } });
+    const diff = parseMessageFixture();
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       expansionLineCount: 5,
@@ -566,9 +566,9 @@ describe('DiffHunksRenderer translations', () => {
     expect(html).toContain('No newline at end of file');
   });
 
-  test('renders the translation for collapsed context of unknown size', async () => {
+  test('renders the message for collapsed context of unknown size', async () => {
     i18n.set({
-      translations: { unknownUnmodifiedLines: 'Plus de contexte disponible' },
+      messages: { unknownUnmodifiedLines: 'Plus de contexte disponible' },
     });
     const diff = parsePartialDiffWithCollapsedContext();
     const instance = new DiffHunksRenderer({
