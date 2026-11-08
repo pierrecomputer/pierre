@@ -117,9 +117,9 @@ export class WorkerPoolManager {
   // Tasks that map to highlightKey are essentially singular, so we only
   // need one map to include queued and active
   private taskByHighlightKey = new Map<string, RenderTask>();
-  // Highlight keys whose last task failed. A key carries the render options
-  // version, so a version change starts every input afresh.
-  private failedHighlightKeys = new Set<string>();
+  // Highlight keys whose last task failed, bounded like the result caches
+  // and cleared with them when the render options change.
+  private failedHighlightKeys: LRUMap<string, true>;
 
   // Tasks that have already been sent to a worker and are awaiting a response.
   private activeTaskById = new Map<WorkerRequestId, AllWorkerTasks>();
@@ -163,6 +163,9 @@ export class WorkerPoolManager {
     };
     this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
+    this.failedHighlightKeys = new LRUMapPkg.LRUMap(
+      options.totalASTLRUCacheSize ?? 100
+    );
     this.queueInitialization(langs);
   }
 
@@ -345,6 +348,7 @@ export class WorkerPoolManager {
       this.renderOptionsVersion++;
       this.diffCache.clear();
       this.fileCache.clear();
+      this.failedHighlightKeys.clear();
       this.invalidateRenderTasks();
 
       for (const instance of this.themeSubscribers) {
@@ -1714,7 +1718,7 @@ export class WorkerPoolManager {
 
   private notifyHighlightError(task: RenderTask, error: unknown): void {
     if (task.highlightKey != null) {
-      this.failedHighlightKeys.add(task.highlightKey);
+      this.failedHighlightKeys.set(task.highlightKey, true);
     }
     for (const instance of getInstances(task)) {
       if (this.activeRequestByInstance.get(instance) === task.id) {

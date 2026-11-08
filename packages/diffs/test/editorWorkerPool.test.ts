@@ -2264,6 +2264,47 @@ describe('an editor attaching while the pool is highlighting', () => {
     }
   });
 
+  test('the pool forgets failed highlights with its result caches', async () => {
+    const dom = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const { manager, worker } = await createInitializedManager(
+      { theme: 'pierre-dark', useTokenTransformer: true },
+      { totalASTLRUCacheSize: 1 }
+    );
+    try {
+      const failHighlight = async (file: FileContents): Promise<void> => {
+        const requestsBefore = worker.fileRequestCount;
+        const primed = manager.primeFileHighlightCache(file);
+        await waitFor(() => {
+          expect(worker.fileRequestCount).toBe(requestsBefore + 1);
+        });
+        const request = await withTimeout(worker.waitForFileRequest());
+        worker.respond({
+          type: 'error',
+          id: request.id,
+          error: 'highlight failed',
+          stack: undefined,
+        });
+        await withTimeout(primed).catch(() => {});
+      };
+      const first = createFile('file:failed-first');
+      const second = createFile('file:failed-second');
+      await failHighlight(first);
+      expect(manager.didHighlightFail(first)).toBe(true);
+      // The registry is bounded like the result caches.
+      await failHighlight(second);
+      expect(manager.didHighlightFail(second)).toBe(true);
+      expect(manager.didHighlightFail(first)).toBe(false);
+      // Changing the render options starts every input afresh.
+      void manager.setRenderOptions({ tokenizeMaxLineLength: 500 });
+      expect(manager.didHighlightFail(second)).toBe(false);
+    } finally {
+      manager.terminate();
+      dom.cleanup();
+      consoleError.mockRestore();
+    }
+  });
+
   test('a file without a cache key is not waited for', async () => {
     const dom = installDom();
     const { manager, worker } = await createInitializedManager({
