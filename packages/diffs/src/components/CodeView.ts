@@ -3189,7 +3189,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const record = this.itemEditors.get(id);
     let createdEditor: CodeViewEditor<LAnnotation, Caret> | undefined;
     try {
-      if (record == null && !item.instance.__canAttachEditor()) {
+      if (record == null && !item.instance.isReadyToEdit()) {
         void item.instance.__prepareForEditing();
         return;
       }

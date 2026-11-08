@@ -1150,9 +1150,10 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
   /**
    * Whether a new edit session can start now: a file is set and the worker
-   * pool is not still highlighting it. Use `prepareForEditing` to wait.
+   * pool is not still highlighting it. When true, `Editor.edit` can be called
+   * at once; otherwise await `prepareForEditing`.
    */
-  public __canAttachEditor(): boolean {
+  public isReadyToEdit(): boolean {
     const file = this.getInputFile();
     return file != null && !this.fileRenderer.awaitsPoolHighlight(file);
   }
@@ -1164,7 +1165,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
    * once this instance can start editing.
    */
   public async prepareForEditing(): Promise<void> {
-    if (this.__canAttachEditor()) {
+    if (this.isReadyToEdit()) {
       return;
     }
     const pending = this.__prepareForEditing();
@@ -1174,7 +1175,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       );
     }
     await pending;
-    if (!this.__canAttachEditor()) {
+    if (!this.isReadyToEdit()) {
       throw new Error('File.prepareForEditing: the file is not ready to edit');
     }
   }
@@ -1186,7 +1187,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
    */
   public __prepareForEditing(): Promise<void> | undefined {
     const file = this.getInputFile();
-    if (file == null || this.__canAttachEditor()) {
+    if (file == null || this.isReadyToEdit()) {
       return undefined;
     }
     const { pendingAttach } = this;
@@ -1224,7 +1225,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
     }
-    if (!this.__canAttachEditor()) {
+    if (!this.isReadyToEdit()) {
       throw new Error(
         'File.__attachEditor: the component is not ready to edit; await prepareForEditing() first'
       );

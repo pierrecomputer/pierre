@@ -75,13 +75,13 @@ export function useEditorAttach<LAnnotation, Caret>(): EditorAttach<
           return;
         }
         const attach = (): void => {
-          if (current.disposeEditor != null || !instance.__canAttachEditor()) {
+          if (current.disposeEditor != null || !instance.isReadyToEdit()) {
             return;
           }
           current.disposeEditor = applyEdit();
           onAttached();
         };
-        if (instance.__canAttachEditor()) {
+        if (instance.isReadyToEdit()) {
           current.pendingAttach = null;
           attach();
           return;

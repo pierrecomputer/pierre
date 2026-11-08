@@ -760,7 +760,7 @@ export class Editor<
         'Editor.edit: a recycled edit session cannot attach to a different component'
       );
     }
-    if (this.#editSession == null && !fileInstance.__canAttachEditor()) {
+    if (this.#editSession == null && !fileInstance.isReadyToEdit()) {
       throw new Error(
         'Editor.edit: the component is not ready to edit; await prepareForEditing() first'
       );

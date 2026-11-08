@@ -1231,10 +1231,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   /**
    * Whether a new edit session can start now: the diff is complete (not
-   * `isPartial`) and the worker pool is not still highlighting it. Use
-   * `prepareForEditing` to wait for both.
+   * `isPartial`) and the worker pool is not still highlighting it. When true,
+   * `Editor.edit` can be called at once; otherwise await `prepareForEditing`.
    */
-  public __canAttachEditor(): boolean {
+  public isReadyToEdit(): boolean {
     const fileDiff = this.getInputDiff();
     return (
       fileDiff != null &&
@@ -1251,7 +1251,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
    * instance can start editing.
    */
   public async prepareForEditing(): Promise<void> {
-    if (this.__canAttachEditor()) {
+    if (this.isReadyToEdit()) {
       return;
     }
     const pending = this.__prepareForEditing();
@@ -1261,7 +1261,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       );
     }
     await pending;
-    if (!this.__canAttachEditor()) {
+    if (!this.isReadyToEdit()) {
       throw new Error(
         'FileDiff.prepareForEditing: the diff is not ready to edit'
       );
@@ -1275,7 +1275,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
    */
   public __prepareForEditing(): Promise<void> | undefined {
     const fileDiff = this.getInputDiff();
-    if (fileDiff == null || this.__canAttachEditor()) {
+    if (fileDiff == null || this.isReadyToEdit()) {
       return undefined;
     }
     if (fileDiff.isPartial && !canHydrateDiff(fileDiff)) {
@@ -2007,7 +2007,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.editor != null) {
       throw new Error('FileDiff.__attachEditor: an editor is already attached');
     }
-    if (!this.__canAttachEditor()) {
+    if (!this.isReadyToEdit()) {
       throw new Error(
         'FileDiff.__attachEditor: the component is not ready to edit; await prepareForEditing() first'
       );

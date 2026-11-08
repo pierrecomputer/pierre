@@ -1930,7 +1930,7 @@ describe('an editor attaching while the pool is highlighting', () => {
 
       instance.render({ file, fileContainer, forceRender: true });
       await withTimeout(worker.waitForFileRequest());
-      expect(instance.__canAttachEditor()).toBe(false);
+      expect(instance.isReadyToEdit()).toBe(false);
       expect(() => editor.edit(instance)).toThrow('not ready to edit');
       const ready = instance.prepareForEditing();
       // Preparing joins the request already in flight.
@@ -1943,7 +1943,7 @@ describe('an editor attaching while the pool is highlighting', () => {
 
       await respondWithRealFileHighlight(manager, worker, file);
       await withTimeout(ready);
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       const html = fileContainer.shadowRoot?.innerHTML ?? '';
       expect(html).toContain('data-char');
       expect(html).toContain('color:');
@@ -1992,7 +1992,7 @@ describe('an editor attaching while the pool is highlighting', () => {
 
       instance.render({ fileDiff, fileContainer, forceRender: true });
       const request = await withTimeout(worker.waitForDiffRequest());
-      expect(instance.__canAttachEditor()).toBe(false);
+      expect(instance.isReadyToEdit()).toBe(false);
       expect(() => editor.edit(instance)).toThrow('not ready to edit');
       const ready = instance.prepareForEditing();
       await wait(20);
@@ -2000,7 +2000,7 @@ describe('an editor attaching while the pool is highlighting', () => {
 
       respondWithHighlightedDiff(manager, worker, request, fileDiff);
       await withTimeout(ready);
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       const html = fileContainer.shadowRoot?.innerHTML ?? '';
       expect(html).toContain('data-char');
       expect(html).toContain('color:');
@@ -2055,13 +2055,13 @@ describe('an editor attaching while the pool is highlighting', () => {
       instance.render({ file, fileContainer, forceRender: true });
       dom.triggerIntersectionObserver(fileContainer, true);
       await withTimeout(worker.waitForFileRequest());
-      expect(instance.__canAttachEditor()).toBe(false);
+      expect(instance.isReadyToEdit()).toBe(false);
       const ready = instance.prepareForEditing();
 
       await respondWithRealFileHighlight(manager, worker, file);
       await withTimeout(ready);
       // A virtualized render runs in a later frame; the data is what counts.
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       editor.edit(instance);
       await waitFor(() => {
         expect(editableElement(fileContainer)).not.toBeNull();
@@ -2110,12 +2110,12 @@ describe('an editor attaching while the pool is highlighting', () => {
       instance.render({ fileDiff, fileContainer, forceRender: true });
       dom.triggerIntersectionObserver(fileContainer, true);
       const request = await withTimeout(worker.waitForDiffRequest());
-      expect(instance.__canAttachEditor()).toBe(false);
+      expect(instance.isReadyToEdit()).toBe(false);
       const ready = instance.prepareForEditing();
 
       respondWithHighlightedDiff(manager, worker, request, fileDiff);
       await withTimeout(ready);
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       editor.edit(instance);
       await waitFor(() => {
         expect(editableElement(fileContainer)).not.toBeNull();
@@ -2151,12 +2151,12 @@ describe('an editor attaching while the pool is highlighting', () => {
 
       instance.render({ file, fileContainer, forceRender: true });
       await withTimeout(worker.waitForFileRequest());
-      expect(instance.__canAttachEditor()).toBe(false);
+      expect(instance.isReadyToEdit()).toBe(false);
       // A massive file is never highlighted, so there is nothing to wait for.
       // The renderer sees the new limit at once, not on the next render, as an
       // offscreen virtualized file may not render for a while.
       instance.setOptions({ ...options, tokenizeMaxLength: 1 });
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       instance.cleanUp();
     } finally {
       manager.terminate();
@@ -2183,7 +2183,7 @@ describe('an editor attaching while the pool is highlighting', () => {
 
       instance.render({ file, fileContainer, forceRender: true });
       const request = await withTimeout(worker.waitForFileRequest());
-      expect(instance.__canAttachEditor()).toBe(false);
+      expect(instance.isReadyToEdit()).toBe(false);
       const ready = instance.prepareForEditing();
 
       // The worker refuses this one file; the pool itself keeps working.
@@ -2197,7 +2197,7 @@ describe('an editor attaching while the pool is highlighting', () => {
       expect(manager.isWorkingPool()).toBe(true);
       // Nothing to wait for: the session highlights locally, as a read-only
       // render of this file would stay plain.
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       editor.edit(instance);
       await waitFor(() => {
         expect(editableElement(fileContainer)).not.toBeNull();
@@ -2284,7 +2284,7 @@ describe('an editor attaching while the pool is highlighting', () => {
       await withTimeout(worker.waitForFileRequest());
       // Without a key the pool task cannot be joined, so the session starts
       // now and highlights locally.
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       editor.edit(instance);
       await waitFor(() => {
         expect(editableElement(fileContainer)).not.toBeNull();
@@ -2316,7 +2316,7 @@ describe('an editor attaching while the pool is highlighting', () => {
       const file = createFile('file:entry-main-thread');
 
       instance.render({ file, fileContainer, forceRender: true });
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       await instance.prepareForEditing();
       editor.edit(instance);
       await waitFor(() => {
@@ -2486,7 +2486,7 @@ describe('rendering when an editor attaches', () => {
 
       // Pool rows without token spans are useless to the editor, so nothing
       // is gained by waiting: the editor attaches now.
-      expect(instance.__canAttachEditor()).toBe(true);
+      expect(instance.isReadyToEdit()).toBe(true);
       const detach = instance.__attachEditor(createEditorInstance('file'));
       await waitFor(() => {
         const html = fileContainer.shadowRoot?.innerHTML ?? '';
