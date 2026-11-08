@@ -445,6 +445,53 @@ describe('Editor onAttach lifecycle', () => {
     }
   });
 
+  test('a focus frame from before a recycle cannot focus the reattached content', async () => {
+    const dom = installDom();
+    const focusedContents: HTMLElement[] = [];
+    const editor = new Editor('file', {});
+    const component = createTestFile(createFile(), {
+      onContentFocus: (content) => focusedContents.push(content),
+    });
+    const caret = {
+      start: { line: 0, character: 1 },
+      end: { line: 0, character: 1 },
+      direction: 'none',
+    } as const;
+    let reattachedContent: HTMLElement | undefined;
+    try {
+      editor.edit(component);
+      await wait(0);
+
+      // Recycle and reattach inside the render pass that already holds the
+      // old placement's focus frame, then claim focus for the new content.
+      queueRender(() => {
+        editor.cleanUp('recycle');
+        component.cleanUp(true);
+        component.virtualizedSetup();
+        editor.edit(component);
+        component.rerender();
+        reattachedContent = component.contentElement;
+        editor.setSelections([caret]);
+      });
+      editor.setSelections([caret]);
+      focusedContents.length = 0;
+
+      // The stale frame runs after the reattachment and must not focus.
+      await wait(0);
+      expect(reattachedContent).toBeDefined();
+      expect(focusedContents.length).toBe(0);
+
+      // The new placement's own frame focuses the reattached content.
+      await wait(0);
+      expect(focusedContents.length).toBe(1);
+      expect(focusedContents[0] === reattachedContent).toBe(true);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('notifies once for each session separated by full cleanup', async () => {
     const dom = installDom();
     const onAttach = mock(
