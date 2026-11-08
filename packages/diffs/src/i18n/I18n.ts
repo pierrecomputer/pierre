@@ -59,6 +59,13 @@ class I18n {
   #translations: DiffsTranslations = DEFAULT_TRANSLATIONS;
   #messages = compileTranslations(DEFAULT_TRANSLATIONS, DEFAULT_LOCALE);
   #subscribers = new Set<TranslationsSubscriber>();
+  #version = 0;
+
+  // Changes once per effective `set()`. Caches that hold formatted text keep
+  // the version they were built under and rebuild when it moves on.
+  get version(): number {
+    return this.#version;
+  }
 
   // Replaces the locale and every translation. Anything left out returns to
   // its English default, so `set()` with no config restores English. Bad
@@ -75,6 +82,7 @@ class I18n {
     this.#messages = compileTranslations(resolved, locale);
     this.#locale = locale;
     this.#translations = resolved;
+    this.#version++;
     for (const subscriber of this.#subscribers) {
       subscriber.onTranslationsChange();
     }

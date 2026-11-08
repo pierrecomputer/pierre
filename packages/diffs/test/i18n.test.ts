@@ -165,6 +165,16 @@ describe('i18n', () => {
     expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 unmodified lines');
   });
 
+  test('version moves only on an effective change', () => {
+    const initial = i18n.version;
+    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+    expect(i18n.version).toBe(initial + 1);
+    i18n.set({ translations: { expandAll: 'Tout déplier' } });
+    expect(i18n.version).toBe(initial + 1);
+    i18n.set();
+    expect(i18n.version).toBe(initial + 2);
+  });
+
   test('notifies subscribers once per effective change', () => {
     let notified = 0;
     const unsubscribe = i18n.subscribe({
