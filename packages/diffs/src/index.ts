@@ -31,6 +31,7 @@ export * from './highlighter/themes/registerCustomCSSVariableTheme';
 export * from './highlighter/themes/registerCustomTheme';
 export * from './highlighter/themes/resolveTheme';
 export * from './highlighter/themes/resolveThemes';
+export * from './i18n/I18n';
 export * from './layout/DiffLayout';
 export * from './layout/FileLayout';
 export * from './layout/RowCells';

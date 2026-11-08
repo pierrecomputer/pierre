@@ -9,6 +9,7 @@ import {
   SVGSpriteSheet,
 } from '../editor/sprite';
 import { h } from '../editor/utils';
+import { i18n } from '../i18n/I18n';
 import {
   dequeueRender,
   queueRender,
@@ -131,15 +132,20 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // any search runs.
     const matchResultElement = h('div', {
       dataset: { matches: '', noMatches: '' },
-      textContent: 'No results',
+      textContent: i18n.t('noSearchResults'),
     });
 
     const updateCurrentMatch = (currentMatch: TMatch | undefined) => {
       if (currentMatch === undefined) {
-        matchResultElement.textContent = `${matches.all.length} results`;
+        matchResultElement.textContent = i18n.t('searchResultCount', {
+          count: matches.all.length,
+        });
       } else {
         const index = getMatchIndex(currentMatch);
-        matchResultElement.textContent = `${index + 1} of ${matches.all.length}`;
+        matchResultElement.textContent = i18n.t('searchResultPosition', {
+          index: index + 1,
+          count: matches.all.length,
+        });
       }
       matches.current = currentMatch;
     };
@@ -160,7 +166,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       // state. Both push an empty match set through onUpdate so the editor
       // drops #matches and clears the painted highlights.
       if (noMatches) {
-        matchResultElement.textContent = 'No results';
+        matchResultElement.textContent = i18n.t('noSearchResults');
         matchResultElement.dataset.noMatches = '';
         matches.current = undefined;
         onUpdate(result);
@@ -314,15 +320,23 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     const caseSensitiveToggle = makeToggle(
       'case',
-      'Match Case',
+      i18n.t('matchCase'),
       'caseSensitive'
     );
-    const wholeWordToggle = makeToggle('whole-word', 'Whole Word', 'wholeWord');
-    const regexToggle = makeToggle('regex', 'Regexp', 'regex');
+    const wholeWordToggle = makeToggle(
+      'whole-word',
+      i18n.t('wholeWord'),
+      'wholeWord'
+    );
+    const regexToggle = makeToggle(
+      'regex',
+      i18n.t('regularExpression'),
+      'regex'
+    );
 
     this.#inputElement = h('input', {
       type: 'text',
-      placeholder: 'Search',
+      placeholder: i18n.t('searchPlaceholder'),
       dataset: 'search',
       value: defaultQuery,
       oninput: (e: Event) => {
@@ -380,14 +394,14 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // Held so the no-results state can toggle their native disabled flag.
     const prevButton = iconButton({
       icon: 'arrow-up',
-      label: 'Previous',
+      label: i18n.t('previousMatch'),
       onClick: () => {
         findNextMatch(true);
       },
     });
     const nextButton = iconButton({
       icon: 'arrow-down',
-      label: 'Next',
+      label: i18n.t('nextMatch'),
       onClick: () => {
         findNextMatch();
       },
@@ -402,14 +416,14 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     const closeElement = iconButton({
       icon: 'close',
-      label: 'Close',
+      label: i18n.t('closeSearch'),
       onClick: close,
       dataset: { searchClose: '' },
     });
 
     const replaceInputElement = h('input', {
       type: 'text',
-      placeholder: 'Replace',
+      placeholder: i18n.t('replacePlaceholder'),
       dataset: 'replace',
       value: '',
       oninput: (e: Event) => {
@@ -446,12 +460,12 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       children: [
         iconButton({
           icon: 'replace',
-          label: 'Replace',
+          label: i18n.t('replaceMatch'),
           onClick: replaceCurrentMatch,
         }),
         iconButton({
           icon: 'replace-all',
-          label: 'Replace All',
+          label: i18n.t('replaceAllMatches'),
           onClick: replaceAllMatches,
         }),
       ],
@@ -460,7 +474,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // Keep the replace row reachable without its keyboard shortcut.
     const replaceToggleElement = iconButton({
       icon: 'chevron',
-      label: 'Toggle Replace',
+      label: i18n.t('toggleReplace'),
       dataset: { replaceToggle: '' },
       onClick: () => {
         if (gridElement.dataset.mode === 'replace') {
