@@ -1,3 +1,4 @@
+import { i18n } from '../i18n/I18n';
 import { getSelectionPath } from './getSelectionPath';
 
 export type RenameFileTreePathsResult =
@@ -83,10 +84,10 @@ export function renameFileTreePaths({
   const sourcePath = getSelectionPath(path);
   const trimmedBasename = nextBasename.trim();
   if (trimmedBasename.length === 0) {
-    return { error: 'Name cannot be empty.' };
+    return { error: i18n.t('renameEmptyName') };
   }
   if (trimmedBasename.includes('/')) {
-    return { error: 'Name cannot include "/".' };
+    return { error: i18n.t('renameNameWithSlash') };
   }
 
   const { parentPath, baseName } = splitPath(sourcePath);
@@ -109,11 +110,11 @@ export function renameFileTreePaths({
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
       if (file !== sourcePath && file.startsWith(destinationPrefix)) {
-        return { error: `"${destinationPath}" already exists.` };
+        return { error: i18n.t('renamePathExists', { path: destinationPath }) };
       }
       const nextFile = file === sourcePath ? destinationPath : file;
       if (seenPaths.has(nextFile)) {
-        return { error: `"${destinationPath}" already exists.` };
+        return { error: i18n.t('renamePathExists', { path: destinationPath }) };
       }
       seenPaths.add(nextFile);
       nextFiles[index] = nextFile;
@@ -122,7 +123,7 @@ export function renameFileTreePaths({
       }
     }
     if (!renamed) {
-      return { error: 'Could not find the selected file to rename.' };
+      return { error: i18n.t('renameFileNotFound') };
     }
     return {
       nextFiles,
@@ -144,14 +145,14 @@ export function renameFileTreePaths({
       !isWithinRenamedFolder &&
       (file === destinationPath || file.startsWith(destinationPrefix))
     ) {
-      return { error: `"${destinationPath}" already exists.` };
+      return { error: i18n.t('renamePathExists', { path: destinationPath }) };
     }
 
     const nextFile = isWithinRenamedFolder
       ? `${destinationPath}${file.slice(sourcePath.length)}`
       : file;
     if (seenPaths.has(nextFile)) {
-      return { error: `"${destinationPath}" already exists.` };
+      return { error: i18n.t('renamePathExists', { path: destinationPath }) };
     }
 
     seenPaths.add(nextFile);
@@ -162,7 +163,7 @@ export function renameFileTreePaths({
   }
 
   if (renamedPathCount === 0) {
-    return { error: 'Could not find the selected folder to rename.' };
+    return { error: i18n.t('renameFolderNotFound') };
   }
   return {
     nextFiles,

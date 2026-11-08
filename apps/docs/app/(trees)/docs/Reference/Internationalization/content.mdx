@@ -1,0 +1,72 @@
+### Internationalization
+
+This page is the lookup reference for the text the tree renders or reports and
+how to translate it.
+
+#### One store for every string
+
+Every piece of text the tree produces comes from one package-level store that
+you import as `i18n` from `@pierre/trees`. That covers the search placeholder,
+accessible names, git status tooltips, and the rename errors passed to
+`renaming.onError`. Configure it once at application boot and every tree reads
+from it. There is no per-tree option.
+
+Call `i18n.set()` before the first tree renders, on the server and on the
+client. Translations you leave out fall back to their English defaults, and
+calling `i18n.set()` with no arguments restores English entirely.
+
+<DocsCodeExample {...I18N_SETUP_EXAMPLE} />
+
+#### Switching languages
+
+Trees that are already mounted re-render their text when `i18n.set()` is called
+again, so switching languages at runtime needs nothing beyond another call.
+Because every value is a plain string, a translation file is ordinary JSON in
+the `FileTreeI18nConfig` shape and serves both sides of a server/client app.
+
+<DocsCodeExample {...I18N_SWITCH_EXAMPLE} />
+
+#### Message syntax
+
+Translations are
+[ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
+strings, restricted to what the tree text needs:
+
+- Plain text.
+- `{name}` arguments, filled from the values the tree passes.
+- One plural block per string, such as
+  `{count, plural, one {# item} other {# items}}`. Branch names are the CLDR
+  plural categories `zero`, `one`, `two`, `few`, `many`, and `other`. `other` is
+  required and `#` stands for the number.
+
+Anything outside this subset is rejected by `i18n.set()` with an error, so a
+syntax mistake fails at boot rather than on screen. An unknown key also throws.
+
+#### Keys
+
+| Key                    | English default                                 | Arguments |
+| ---------------------- | ----------------------------------------------- | --------- |
+| `searchPlaceholder`    | `Search…`                                       |           |
+| `contextMenuTrigger`   | `Options`                                       |           |
+| `renameItem`           | `Rename {name}`                                 | `name`    |
+| `gitStatusAdded`       | `Git status: added`                             |           |
+| `gitStatusDeleted`     | `Git status: deleted`                           |           |
+| `gitStatusModified`    | `Git status: modified`                          |           |
+| `gitStatusRenamed`     | `Git status: renamed`                           |           |
+| `gitStatusUntracked`   | `Git status: untracked`                         |           |
+| `containsGitStatus`    | `Contains git status items`                     |           |
+| `renameEmptyName`      | `Name cannot be empty.`                         |           |
+| `renameNameWithSlash`  | `Name cannot include "/".`                      |           |
+| `renamePathExists`     | `"{path}" already exists.`                      | `path`    |
+| `renameFileNotFound`   | `Could not find the selected file to rename.`   |           |
+| `renameFolderNotFound` | `Could not find the selected folder to rename.` |           |
+
+`DEFAULT_TRANSLATIONS` exports these defaults, and the `FileTreeTranslations`
+type lists the keys.
+
+#### Server rendering
+
+`preloadFileTree(...)` reads the same store, so call `i18n.set()` on the server
+before it runs. The store is one object per process, which means one language
+per server process. Hydration adopts the server markup as is, so the client must
+call `i18n.set()` with the same configuration before it hydrates.

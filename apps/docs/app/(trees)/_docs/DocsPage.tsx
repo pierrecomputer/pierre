@@ -24,6 +24,7 @@ import {
   OVERVIEW_OPTIONS,
   OVERVIEW_PATHS,
 } from '../docs/Overview/constants';
+import * as internationalizationConstants from '../docs/Reference/Internationalization/constants';
 import * as reactApiConstants from '../docs/Reference/ReactAPI/constants';
 import * as ssrApiConstants from '../docs/Reference/SSRAPI/constants';
 import * as stylingAndThemingConstants from '../docs/Reference/StylingAndTheming/constants';
@@ -108,6 +109,10 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
     constants: stylingAndThemingConstants,
   },
   { filePath: '(trees)/docs/Reference/Icons/content.mdx' },
+  {
+    filePath: '(trees)/docs/Reference/Internationalization/content.mdx',
+    constants: internationalizationConstants,
+  },
 ];
 
 const treesDocsTitle = 'Trees docs';

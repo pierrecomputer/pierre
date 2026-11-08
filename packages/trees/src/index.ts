@@ -1,9 +1,13 @@
 export * from './constants';
 export type {
   ContextMenuAnchorRect,
+  FileTreeI18nConfig,
+  FileTreeTranslationKey,
+  FileTreeTranslations,
   GitStatus,
   GitStatusEntry,
 } from './publicTypes';
+export * from './i18n/I18n';
 export type {
   FileTreeBuiltInIconSet,
   FileTreeIconConfig,
@@ -17,7 +21,6 @@ export type {
   TreeThemeStyles,
 } from './utils/themeToTreeStyles';
 export { themeToTreeStyles } from './utils/themeToTreeStyles';
-export { DEFAULT_FILE_TREE_LABELS } from './utils/fileTreeLabels';
 export type { FileTreePreparedInput } from './preparedInput';
 export {
   prepareFileTreeInput,
@@ -56,8 +59,6 @@ export type {
   FileTreeHydrationProps,
   FileTreeInitialExpansion,
   FileTreeItemHandle,
-  FileTreeLabels,
-  FileTreeLabelsOption,
   FileTreeListener,
   FileTreeMoveEvent,
   FileTreeMoveOptions,

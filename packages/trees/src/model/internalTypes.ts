@@ -2,7 +2,6 @@ import type { FileTreeIcons } from '../iconConfig';
 import type { GitStatus } from '../publicTypes';
 import type {
   FileTreeCompositionOptions,
-  FileTreeLabels,
   FileTreePublicId,
   FileTreeRenderOptions,
   FileTreeRowDecorationRenderer,
@@ -58,7 +57,6 @@ export interface FileTreeViewProps extends Omit<
   gitStatusByPath?: ReadonlyMap<FileTreePublicId, GitStatus>;
   ignoredGitDirectories?: ReadonlySet<FileTreePublicId>;
   icons?: FileTreeIcons;
-  labels?: FileTreeLabels;
   // First-render viewport height in CSS pixels, used as the fallback when the
   // scroll element's clientHeight is still zero. The public option is
   // `initialVisibleRowCount` (rows); the resolver multiplies it by itemHeight

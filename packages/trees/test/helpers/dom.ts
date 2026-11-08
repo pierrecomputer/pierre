@@ -1,5 +1,7 @@
 import { JSDOM } from 'jsdom';
 
+import { i18n } from '../../src/i18n/I18n';
+
 const DOM_GLOBAL_KEYS = [
   'CSS',
   'CSSStyleSheet',
@@ -45,6 +47,8 @@ class MockResizeObserver {
 // Installs the browser globals that the vanilla tree renderer touches, then
 // restores the previous process state when the test calls cleanup().
 export function installDom(): InstalledDom {
+  // Trees a previous test left mounted belong to a DOM that is gone.
+  i18n.__clearSubscribers();
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
   });
@@ -78,6 +82,7 @@ export function installDom(): InstalledDom {
 
   return {
     cleanup() {
+      i18n.__clearSubscribers();
       for (const key of DOM_GLOBAL_KEYS) {
         const value = originalValues[key];
         if (value === undefined) {

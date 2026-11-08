@@ -83,6 +83,7 @@ const TREES_SECTIONS = [
   'Reference/SSRAPI',
   'Reference/StylingAndTheming',
   'Reference/Icons',
+  'Reference/Internationalization',
 ] as const;
 
 const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
@@ -157,6 +158,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'Host styling, CSS variable families, fallback precedence, and theme helpers',
     'Reference/Icons':
       'Icon sets, FileTreeIconConfig, remap precedence, and runtime touchpoints',
+    'Reference/Internationalization':
+      'The i18n store, ICU message syntax, translation keys, and SSR',
   },
 };
 

@@ -1,10 +1,6 @@
 import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
 import type { FileTreePreparedInput } from '../preparedInput';
-import type {
-  ContextMenuAnchorRect,
-  GitStatus,
-  GitStatusEntry,
-} from '../publicTypes';
+import type { ContextMenuAnchorRect, GitStatusEntry } from '../publicTypes';
 import type { FileTreeDensity } from './density';
 
 /**
@@ -235,41 +231,12 @@ export interface FileTreeRenamingConfig {
   onRename?: (event: FileTreeRenameEvent) => void;
 }
 
-/**
- * User-visible text rendered by the tree. Supply translations through the
- * `labels` option or `setLabels()`.
- */
-export interface FileTreeLabels {
-  /** Placeholder of the built-in search input. */
-  searchPlaceholder: string;
-  /** Accessible name of the row action button that opens the context menu. */
-  contextMenuTrigger: string;
-  /** Accessible name of the inline rename input, given the row's name. */
-  renameItem: (itemName: string) => string;
-  /** Tooltip of the git status badge on a row, per status. */
-  gitStatusTitles: Readonly<Record<GitStatus, string>>;
-  /** Tooltip of the dot on a directory that contains git status changes. */
-  containsGitStatusTitle: string;
-}
-
-/**
- * Labels as accepted by the `labels` option and `setLabels()`. Any label left
- * out, including an individual git status title, falls back to its English
- * default from `DEFAULT_FILE_TREE_LABELS`.
- */
-export type FileTreeLabelsOption = Partial<
-  Omit<FileTreeLabels, 'gitStatusTitles'>
-> & {
-  gitStatusTitles?: Partial<Record<GitStatus, string>>;
-};
-
 type FileTreeOptionSurface = FileTreeRenderOptions & {
   composition?: FileTreeCompositionOptions;
   density?: FileTreeDensity;
   gitStatus?: readonly GitStatusEntry[];
   id?: string;
   icons?: FileTreeIcons;
-  labels?: FileTreeLabelsOption;
   onSelectionChange?: FileTreeSelectionChangeListener;
   renderRowDecoration?: FileTreeRowDecorationRenderer;
   search?: boolean;
