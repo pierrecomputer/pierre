@@ -455,7 +455,7 @@ test.describe('edit mode', () => {
     const syncsBefore = await page.evaluate(() => window.__syncCount ?? 0);
     await page.evaluate(() => {
       window.__editor?.focus();
-      window.__editor?.__captureFocusForDOMReplacement();
+      window.__captureEditorFocusForDOMReplacement?.();
     });
     await replacement.focus();
     await page.evaluate(() => window.__forceEditorFullRender?.());
