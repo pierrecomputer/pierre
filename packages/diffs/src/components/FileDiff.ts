@@ -1175,7 +1175,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.rerender();
   }
 
-  public onTranslationsChange(): void {
+  public onMessagesChange(): void {
     this.rerender();
   }
 
