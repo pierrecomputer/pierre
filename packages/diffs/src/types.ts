@@ -3,6 +3,8 @@ import type { CreatePatchOptionsNonabortable as JsdiffCreatePatchOptions } from 
 import type { ElementContent } from 'hast';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
+import type { DEFAULT_TRANSLATIONS } from './constants';
+
 export type { DiffsTheme } from './highlighter/themes/types';
 export type {
   CodeToHtmlOptions,
@@ -499,6 +501,21 @@ export interface BaseDiffOptions extends BaseCodeOptions {
    * and character highlights; a pool uses its own `preferredDiffLib` for them.
    */
   parseDiffOptions?: ParseDiffOptions;
+}
+
+export type DiffsTranslationKey = keyof typeof DEFAULT_TRANSLATIONS;
+
+/**
+ * Every user-visible string the diff renders, keyed like
+ * `DEFAULT_TRANSLATIONS`. Set them through `i18n.set()`.
+ */
+export type DiffsTranslations = Record<DiffsTranslationKey, string>;
+
+export interface DiffsI18nConfig {
+  /** BCP 47 locale used to pick plural forms. Defaults to `en`. */
+  locale?: string;
+  /** Translations to use. Any left out fall back to English. */
+  translations?: Partial<DiffsTranslations>;
 }
 
 export type BaseDiffOptionsWithDefaults = Required<

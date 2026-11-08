@@ -564,7 +564,7 @@ test('search scope follows focus across editors, the panel, and outside CodeView
   await expect(replacement).toBeHidden();
   await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
   await first.click();
-  await expect(count).toHaveText('1 results');
+  await expect(count).toHaveText('1 result');
   await expectSearchHighlights(root.locator('[data-deletions]'), 0);
   await expect(first).toBeFocused();
   await expect(replacement).toBeVisible();
