@@ -259,7 +259,12 @@
   [data-content] {
     caret-color: transparent;
   }
-  [data-content]:focus ~ [data-editor-overlay] [data-caret] {
+  [data-content][data-composing] {
+    caret-color: auto;
+  }
+  [data-content]:not([data-composing]):focus
+    ~ [data-editor-overlay]
+    [data-caret] {
     visibility: visible;
   }
 }
