@@ -16,7 +16,7 @@ export interface TranslationsSubscriber {
 }
 
 function isTranslationKey(key: string): key is DiffsTranslationKey {
-  return key in DEFAULT_TRANSLATIONS;
+  return Object.hasOwn(DEFAULT_TRANSLATIONS, key);
 }
 
 // Fills every translation the app left out with its English default. A key
@@ -59,14 +59,6 @@ class I18n {
   #translations: DiffsTranslations = DEFAULT_TRANSLATIONS;
   #messages = compileTranslations(DEFAULT_TRANSLATIONS, DEFAULT_LOCALE);
   #subscribers = new Set<TranslationsSubscriber>();
-
-  get locale(): string {
-    return this.#locale;
-  }
-
-  get translations(): DiffsTranslations {
-    return this.#translations;
-  }
 
   // Replaces the locale and every translation. Anything left out returns to
   // its English default, so `set()` with no config restores English. Bad

@@ -1,9 +1,10 @@
 import { createTwoFilesPatch } from '@pierre/patches';
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, describe, expect, test } from 'bun:test';
 
 import {
   DiffHunksRenderer,
   disposeHighlighter,
+  i18n,
   parseDiffFromFile,
   parsePatchFiles,
 } from '../src';
@@ -490,21 +491,25 @@ describe('DiffHunksRenderer', () => {
   });
 });
 
-describe('DiffHunksRenderer labels', () => {
+describe('DiffHunksRenderer translations', () => {
+  afterEach(() => {
+    i18n.set();
+  });
+
   // Twenty lines without a trailing newline, changed near the end so the hunk
   // keeps the final line (and its no-newline marker) and the separator above
   // it collapses the leading context.
-  function parseLabelFixture(): FileDiffMetadata {
+  function parseTranslationFixture(): FileDiffMetadata {
     const oldLines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
     const newLines = oldLines.map((line, i) => (i === 18 ? 'changed' : line));
     return parseDiffFromFile(
-      { name: 'labels.txt', contents: oldLines.join('\n') },
-      { name: 'labels.txt', contents: newLines.join('\n') }
+      { name: 'translations.txt', contents: oldLines.join('\n') },
+      { name: 'translations.txt', contents: newLines.join('\n') }
     );
   }
 
-  test('renders English defaults when no labels are given', async () => {
-    const diff = parseLabelFixture();
+  test('renders the English defaults', async () => {
+    const diff = parseTranslationFixture();
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       expansionLineCount: 5,
@@ -519,26 +524,25 @@ describe('DiffHunksRenderer labels', () => {
     expect(html).toContain('No newline at end of file');
   });
 
-  test('renders custom labels in place of the English defaults', async () => {
-    const diff = parseLabelFixture();
-    const counts: number[] = [];
-    const instance = new DiffHunksRenderer({
-      diffStyle: 'unified',
-      expansionLineCount: 5,
-      labels: {
-        unmodifiedLines: (count) => {
-          counts.push(count);
-          return `${count} lignes inchangees`;
-        },
+  test('renders the configured translations', async () => {
+    i18n.set({
+      locale: 'fr',
+      translations: {
+        unmodifiedLines:
+          '{count, plural, one {# ligne inchangee} other {# lignes inchangees}}',
         expandAll: 'Tout deplier',
         noNewlineAtEndOfFile: 'Pas de saut de ligne a la fin du fichier',
       },
+    });
+    const diff = parseTranslationFixture();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      expansionLineCount: 5,
     });
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);
     const collapsed = result.hunkData[0]?.lines;
 
-    expect(counts).toContain(collapsed);
     expect(html).toContain(`${collapsed} lignes inchangees`);
     expect(html).toContain('Tout deplier');
     expect(html).toContain('Pas de saut de ligne a la fin du fichier');
@@ -547,12 +551,12 @@ describe('DiffHunksRenderer labels', () => {
     expect(html).not.toContain('No newline at end of file');
   });
 
-  test('falls back to English for labels left out or set to undefined', async () => {
-    const diff = parseLabelFixture();
+  test('translations left out fall back to English', async () => {
+    i18n.set({ translations: { expandAll: 'Tout deplier' } });
+    const diff = parseTranslationFixture();
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       expansionLineCount: 5,
-      labels: { expandAll: 'Tout deplier', noNewlineAtEndOfFile: undefined },
     });
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);
@@ -562,13 +566,15 @@ describe('DiffHunksRenderer labels', () => {
     expect(html).toContain('No newline at end of file');
   });
 
-  test('renders a custom label for collapsed context of unknown size', async () => {
+  test('renders the translation for collapsed context of unknown size', async () => {
+    i18n.set({
+      translations: { unknownUnmodifiedLines: 'Plus de contexte disponible' },
+    });
     const diff = parsePartialDiffWithCollapsedContext();
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       hunkSeparators: 'line-info',
       loadDiffFiles: () => Promise.resolve(loadedFiles),
-      labels: { unknownUnmodifiedLines: 'Plus de contexte disponible' },
     });
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);

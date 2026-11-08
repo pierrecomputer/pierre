@@ -1,6 +1,6 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
-import { DEFAULT_DIFF_LABELS } from '../constants';
+import { i18n } from '../i18n/I18n';
 import type { ExpansionDirections, HunkSeparators } from '../types';
 import {
   createHastElement,
@@ -11,7 +11,6 @@ import {
 interface CreateSeparatorProps {
   type: HunkSeparators;
   content?: string;
-  expandAllLabel?: string;
   expandIndex?: number;
   chunked?: boolean;
   slotName?: string;
@@ -41,7 +40,6 @@ function createExpandButton(type: ExpansionDirections) {
 export function createSeparator({
   type,
   content,
-  expandAllLabel = DEFAULT_DIFF_LABELS.expandAll,
   expandIndex,
   chunked = false,
   slotName,
@@ -97,7 +95,7 @@ export function createSeparator({
       contentChildren.push(
         createHastElement({
           tagName: 'div',
-          children: [createTextNodeElement(expandAllLabel)],
+          children: [createTextNodeElement(i18n.t('expandAll'))],
           properties: {
             role: 'button',
             'data-expand-button': '',

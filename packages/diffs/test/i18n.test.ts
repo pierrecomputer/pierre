@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { DEFAULT_TRANSLATIONS, i18n } from '../src';
+import { i18n } from '../src';
 import { compileMessage } from '../src/i18n/compileMessage';
 
 const en = new Intl.PluralRules('en');
@@ -61,16 +61,42 @@ describe('compileMessage', () => {
     ).toThrow('unknown plural category "single"');
   });
 
+  test('accepts ICU whitespace around the plural argument', () => {
+    const message = compileMessage(
+      '{count , plural , one {# line} other {# lines}}',
+      en
+    );
+    expect(message({ count: 1 })).toBe('1 line');
+  });
+
   test('rejects a malformed plural block', () => {
     expect(() => compileMessage('{count, plural, one # line}', en)).toThrow(
-      'malformed plural block'
+      'unsupported syntax'
     );
   });
 
   test('rejects more than one plural block', () => {
     expect(() =>
       compileMessage('{a, plural, other {#}} and {b, plural, other {#}}', en)
-    ).toThrow('only one plural block');
+    ).toThrow('unsupported syntax');
+  });
+
+  test('rejects ICU syntax outside the subset at compile time', () => {
+    expect(() =>
+      compileMessage('{mode, select, compact {Short} other {Long}}', en)
+    ).toThrow('unsupported syntax');
+    expect(() => compileMessage('{count, number}', en)).toThrow(
+      'unsupported syntax'
+    );
+    expect(() => compileMessage('stray } brace', en)).toThrow(
+      'unsupported syntax'
+    );
+  });
+
+  test('rejects a duplicate plural category', () => {
+    expect(() =>
+      compileMessage('{count, plural, one {a} one {b} other {c}}', en)
+    ).toThrow('duplicate plural category "one"');
   });
 
   test('throws when an argument is missing at format time', () => {
@@ -90,8 +116,6 @@ describe('i18n', () => {
   });
 
   test('renders the English defaults', () => {
-    expect(i18n.locale).toBe('en');
-    expect(i18n.translations).toEqual(DEFAULT_TRANSLATIONS);
     expect(i18n.t('unmodifiedLines', { count: 1 })).toBe('1 unmodified line');
     expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 unmodified lines');
     expect(i18n.t('unmodifiedLines', { count: 12 })).toBe(
@@ -113,7 +137,6 @@ describe('i18n', () => {
         expandAll: 'Tout déplier',
       },
     });
-    expect(i18n.locale).toBe('fr');
     // French treats 0 as singular.
     expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 ligne inchangée');
     expect(i18n.t('unmodifiedLines', { count: 2 })).toBe('2 lignes inchangées');
@@ -134,11 +157,12 @@ describe('i18n', () => {
     );
   });
 
-  test('set with no config restores English', () => {
-    i18n.set({ locale: 'de', translations: { expandAll: 'Alle aufklappen' } });
+  test('set with no config restores English and the English locale', () => {
+    i18n.set({ locale: 'fr', translations: { expandAll: 'Tout déplier' } });
     i18n.set();
-    expect(i18n.locale).toBe('en');
     expect(i18n.t('expandAll')).toBe('Expand all');
+    // Back on English plural rules, 0 is plural again.
+    expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 unmodified lines');
   });
 
   test('notifies subscribers once per effective change', () => {
@@ -179,8 +203,17 @@ describe('i18n', () => {
     );
   });
 
+  test('a prototype property name is not a translation key', () => {
+    const translations: Record<string, string> = JSON.parse(
+      '{"toString": "x", "constructor": "y"}'
+    );
+    expect(() => i18n.set({ translations })).toThrow(
+      'unknown translation "toString"'
+    );
+  });
+
   test('an invalid locale throws and leaves the previous config in place', () => {
     expect(() => i18n.set({ locale: 'not a locale' })).toThrow();
-    expect(i18n.locale).toBe('en');
+    expect(i18n.t('unmodifiedLines', { count: 0 })).toBe('0 unmodified lines');
   });
 });

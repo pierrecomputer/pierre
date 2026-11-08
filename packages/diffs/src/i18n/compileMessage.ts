@@ -4,8 +4,7 @@ export type CompiledMessage = (values?: MessageValues) => string;
 // The supported ICU MessageFormat subset: `{name}` arguments and at most one
 // `{name, plural, category {text} ...}` block whose branches may use `#` for
 // the number. Anything a translation does not need is deliberately rejected.
-const PLURAL_BLOCK = /\{(\w+),\s*plural,((?:\s*\w+\s*\{[^{}]*\})+)\s*\}/;
-const PLURAL_BLOCK_START = /\{\w+,\s*plural/;
+const PLURAL_BLOCK = /\{(\w+)\s*,\s*plural\s*,((?:\s*\w+\s*\{[^{}]*\})+)\s*\}/;
 const PLURAL_BRANCH = /(\w+)\s*\{([^{}]*)\}/g;
 const ARGUMENT = /\{(\w+)\}/g;
 const PLURAL_CATEGORIES: ReadonlySet<string> = new Set<Intl.LDMLPluralRule>([
@@ -36,27 +35,30 @@ export function compileMessage(
   pluralRules: Intl.PluralRules
 ): CompiledMessage {
   const plural = PLURAL_BLOCK.exec(template);
+  const before = plural == null ? template : template.slice(0, plural.index);
+  const after =
+    plural == null ? '' : template.slice(plural.index + plural[0].length);
+  // Outside the one plural block, a brace may only form a `{name}` argument.
+  // Anything else is ICU syntax this formatter does not implement, or a
+  // typo, and must not reach render time.
+  if (/[{}]/.test((before + after).replace(ARGUMENT, ''))) {
+    throw new Error(`i18n: unsupported syntax in "${template}"`);
+  }
   if (plural == null) {
-    if (PLURAL_BLOCK_START.test(template)) {
-      throw new Error(`i18n: malformed plural block in "${template}"`);
-    }
     return (values) => formatArguments(template, values);
   }
 
-  const [block, name, branchSource] = plural;
-  const before = template.slice(0, plural.index);
-  const after = template.slice(plural.index + block.length);
-  if (PLURAL_BLOCK_START.test(before) || PLURAL_BLOCK_START.test(after)) {
-    throw new Error(
-      `i18n: only one plural block is supported per message, in "${template}"`
-    );
-  }
-
+  const [, name, branchSource] = plural;
   const branches = new Map<Intl.LDMLPluralRule, string>();
   for (const [, category, text] of branchSource.matchAll(PLURAL_BRANCH)) {
     if (!isPluralCategory(category)) {
       throw new Error(
         `i18n: unknown plural category "${category}" in "${template}"`
+      );
+    }
+    if (branches.has(category)) {
+      throw new Error(
+        `i18n: duplicate plural category "${category}" in "${template}"`
       );
     }
     branches.set(category, text);
