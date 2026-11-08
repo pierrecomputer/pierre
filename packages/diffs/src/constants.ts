@@ -75,6 +75,12 @@ export const DEFAULT_TRANSLATIONS = {
   expandAll: 'Expand all',
   /** Marker shown after a final line that has no trailing newline. */
   noNewlineAtEndOfFile: 'No newline at end of file',
+  /** Merge conflict button that keeps the current (ours) side. */
+  acceptCurrentChange: 'Accept current change',
+  /** Merge conflict button that keeps the incoming (theirs) side. */
+  acceptIncomingChange: 'Accept incoming change',
+  /** Merge conflict button that keeps both sides. */
+  acceptBoth: 'Accept both',
 };
 
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {

@@ -1,6 +1,7 @@
 import type { Element as HASTElement, Properties } from 'hast';
 
 import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
+import { i18n } from '../i18n/I18n';
 import type {
   DiffLineAnnotation,
   FileDiffMetadata,
@@ -383,19 +384,19 @@ function createMergeConflictActionsContent(
   return [
     createMergeConflictActionButton({
       resolution: 'current',
-      label: 'Accept current change',
+      label: i18n.t('acceptCurrentChange'),
       conflictIndex,
     }),
     createMergeConflictActionSeparator(),
     createMergeConflictActionButton({
       resolution: 'incoming',
-      label: 'Accept incoming change',
+      label: i18n.t('acceptIncomingChange'),
       conflictIndex,
     }),
     createMergeConflictActionSeparator(),
     createMergeConflictActionButton({
       resolution: 'both',
-      label: 'Accept both',
+      label: i18n.t('acceptBoth'),
       conflictIndex,
     }),
   ];
