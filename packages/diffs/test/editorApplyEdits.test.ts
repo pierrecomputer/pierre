@@ -725,8 +725,8 @@ describe('Editor.applyEdits selection sync', () => {
           direction: 'none',
         },
       ]);
-      // Drain focus frames queued during setup so #shouldIgnoreSelectionChange
-      // is cleared and is not the reason the handler bails below.
+      // Drain focus frames queued during setup so no pending focus request is
+      // the reason the handler bails below.
       for (let i = 0; i < 5; i++) {
         await wait(0);
       }
@@ -806,7 +806,7 @@ describe('Editor.applyEdits selection sync', () => {
           direction: 'none',
         },
       ]);
-      // Drain focus frames so #shouldIgnoreSelectionChange is cleared, then
+      // Drain focus frames so the setup's focus request has settled, then
       // ignore any selection syncs from setup.
       for (let i = 0; i < 5; i++) {
         await wait(0);
