@@ -235,6 +235,19 @@ interface EditorAttachState {
   delivered: boolean;
 }
 
+// One attempt by the editor to focus its content and place the caret.
+// `frame` is the queued callback that will call focus(), kept so it can be
+// dequeued. `restore` is set when the attempt exists because the host is
+// replacing the editor's DOM; `target` is the content element the host put
+// in, so a blur on that element cancels the attempt, and `claimed` records
+// that the editor had already asked for focus when the host replaced the
+// DOM, so whichever control held focus until then does not veto the restore
+// for as long as #contentHasFocus still holds.
+interface FocusRequest {
+  frame?: () => void;
+  restore?: { target?: HTMLElement; claimed?: boolean };
+}
+
 interface AltColumnDrag {
   pointerId: number;
   startClientX: number;
@@ -553,7 +566,11 @@ export class Editor<
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
   #canMountSelectionAction = true;
-  #shouldIgnoreSelectionChange = false;
+  // While a mouse drag crosses an annotation row, WebKit extends the native
+  // selection to the start of the contenteditable instead of the nearest line.
+  // Set for the hover, cleared when the pointer leaves or the gesture ends, so
+  // that selection is not read back into #selections.
+  #isPointerOverAnnotation = false;
   // Set when the browser's native Selection is temporarily not the source of
   // truth for editor text selections. Select-all can only mirror rendered
   // lines, while diff line-selection and gutter-utility gestures can move the
@@ -568,14 +585,11 @@ export class Editor<
   // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
   // editors, without regressing a same-tick setSelections-then-applyEdits flow.
   #contentHasFocus = false;
-  // A render-owned request object prevents an older deferred frame from
-  // consuming a newer replacement's focus intent. Once synchronized, target
-  // identifies the new content so a subsequent user blur can cancel it.
-  #replacementFocusRequest?: { target?: HTMLElement };
-  // The frame callback that applies an explicit #focus() on the next frame.
-  // Until it runs, the control that held focus before the request is not a
-  // newer intent; focus moving elsewhere in the gap cancels it.
-  #queuedFocusFrame?: () => void;
+  // Set while #focus() is placing the caret over two frames. The browser's
+  // selectionchange events in that window are our own move, so they are not
+  // read back into #selections. Each placement gets its own object so a
+  // stale frame from an older placement can tell it has been superseded.
+  #focusRequest?: FocusRequest;
   #isComposing = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
@@ -1282,9 +1296,8 @@ export class Editor<
   }
 
   blur(): void {
-    this.#replacementFocusRequest = undefined;
     this.#contentHasFocus = false;
-    this.#shouldIgnoreSelectionChange = false;
+    this.#cancelFocusRequest();
     this.#contentElement?.blur();
   }
 
@@ -1364,7 +1377,7 @@ export class Editor<
     this.#contentElement?.removeAttribute('contentEditable');
     this.#setComposing(false);
     this.#contentElement = undefined;
-    this.#replacementFocusRequest = undefined;
+    this.#cancelFocusRequest();
     this.#contentHasFocus = false;
     this.#overlayElement?.remove();
     this.#overlayElement = undefined;
@@ -1498,7 +1511,10 @@ export class Editor<
         (shadowActiveElement != null &&
           contentElement.contains(shadowActiveElement)))
     ) {
-      this.#replacementFocusRequest = {};
+      const { frame, restore } = this.#focusRequest ?? {};
+      const claimed = frame != null || restore?.claimed === true;
+      this.#cancelFocusRequest();
+      this.#focusRequest = { restore: { claimed } };
     }
   }
 
@@ -1648,7 +1664,9 @@ export class Editor<
     const gutterEl = columns?.gutter;
     this.#deletionsColumn = columns?.deletions;
     if (codeElement === undefined || contentEl === undefined) {
-      this.#replacementFocusRequest = undefined;
+      if (this.#focusRequest?.restore != null) {
+        this.#cancelFocusRequest();
+      }
       return;
     }
 
@@ -1769,8 +1787,9 @@ export class Editor<
         console.log('[diffs/editor] full re-render triggered !!!');
       }
     }
-    if (this.#replacementFocusRequest != null) {
-      this.#replacementFocusRequest.target = contentEl;
+    const restore = this.#focusRequest?.restore;
+    if (restore != null) {
+      restore.target = contentEl;
     }
 
     // The contenteditable host advertises role="textbox", so without an
@@ -1827,7 +1846,7 @@ export class Editor<
           this.#scrollingToLineChar,
           this.#scrollingToLineNoFocus
         );
-      } else if (this.#replacementFocusRequest !== undefined) {
+      } else if (this.#focusRequest?.restore != null) {
         this.#restoreReplacementFocus();
       } else if (
         this.#selections !== undefined &&
@@ -2184,14 +2203,13 @@ export class Editor<
       );
     };
     const cancelReplacementFocus = () => {
-      if (this.#replacementFocusRequest == null) {
+      if (this.#focusRequest?.restore == null) {
         return;
       }
 
       // A focus or pointer target outside the editor owns the newer intent.
-      this.#replacementFocusRequest = undefined;
+      this.#cancelFocusRequest();
       this.#contentHasFocus = false;
-      this.#shouldIgnoreSelectionChange = false;
     };
     const finishMouseSelection = (event: PointerEvent) => {
       if (event.pointerType !== 'mouse') {
@@ -2222,12 +2240,9 @@ export class Editor<
         'focusin',
         (event) => {
           if (!replacementFocusTargetIsContent(event)) {
-            const queuedFocusFrame = this.#queuedFocusFrame;
-            if (queuedFocusFrame !== undefined) {
-              dequeueRender(queuedFocusFrame);
-              this.#queuedFocusFrame = undefined;
+            if (this.#focusRequest != null) {
+              this.#cancelFocusRequest();
               this.#contentHasFocus = false;
-              this.#shouldIgnoreSelectionChange = false;
             }
             cancelReplacementFocus();
           }
@@ -2238,7 +2253,14 @@ export class Editor<
         document,
         'pointerdown',
         (event) => {
-          if (!replacementFocusTargetIsContent(event)) {
+          if (replacementFocusTargetIsContent(event)) {
+            // A press on the content takes over from any caret placement
+            // that was pending before it: the user now says where the caret
+            // goes, and the browser's selection for this press must be read.
+            // This runs in the capture phase so a placement the press itself
+            // asks for (an annotation's handler calling focus()) survives.
+            this.#cancelFocusRequest();
+          } else {
             // Target handlers can synchronously render and arm the request.
             queueMicrotask(cancelReplacementFocus);
           }
@@ -2259,14 +2281,7 @@ export class Editor<
           // While a host DOM write has the editor waiting to put its caret
           // back, the native selection is the browser's reaction to rows
           // coming and going, not the user's; the restore places the caret.
-          if (
-            this.#isComposing ||
-            this.#shouldIgnoreSelectionChange ||
-            this.#suppressNativeSelectionSync ||
-            this.#replacementFocusRequest != null ||
-            shadowRoot == null ||
-            !this.#contentHasFocus
-          ) {
+          if (shadowRoot == null || !this.#canReadNativeSelection()) {
             return;
           }
 
@@ -2403,7 +2418,7 @@ export class Editor<
   #resetSelectionGesture(): void {
     this.#selectEventDisposes?.forEach((dispose) => dispose());
     this.#selectEventDisposes = undefined;
-    this.#shouldIgnoreSelectionChange = false;
+    this.#isPointerOverAnnotation = false;
     this.#isGutterMouseDown = false;
     this.#isContentMouseDown = false;
     this.#altColumnDrag = undefined;
@@ -2436,6 +2451,19 @@ export class Editor<
     this.#suppressNativeSelectionSync = this.#selections !== undefined;
   }
 
+  // Whether the browser's Selection currently reflects the user's intent and
+  // may be read back into #selections. Each owner below holds the native
+  // selection for its own reasons and releases it on its own schedule.
+  #canReadNativeSelection(): boolean {
+    return (
+      !this.#isComposing &&
+      this.#focusRequest == null &&
+      !this.#isPointerOverAnnotation &&
+      !this.#suppressNativeSelectionSync &&
+      this.#contentHasFocus
+    );
+  }
+
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
     this.#setComposing(false);
     const { onFocus, onBlur } = this.#options;
@@ -2460,10 +2488,12 @@ export class Editor<
           // remapped #selections (after an applyEdits inserted a line above the
           // unfocused caret). Re-assert the editor's selection so the caret
           // stays anchored. A pointer focus is left to the click, and #focus()
-          // already syncs the selection during an editor-driven focus.
+          // already syncs the selection during an editor-driven focus. During
+          // composition the browser owns the caret and the unfinished text.
           if (
             !this.#isContentMouseDown &&
-            !this.#shouldIgnoreSelectionChange &&
+            !this.#isComposing &&
+            this.#focusRequest == null &&
             this.#selections !== undefined &&
             this.#selections.length > 0
           ) {
@@ -2476,9 +2506,8 @@ export class Editor<
         contentEl,
         'blur',
         () => {
-          if (this.#replacementFocusRequest?.target === contentEl) {
-            this.#replacementFocusRequest = undefined;
-            this.#shouldIgnoreSelectionChange = false;
+          if (this.#focusRequest?.restore?.target === contentEl) {
+            this.#cancelFocusRequest();
           }
           this.#contentHasFocus = false;
           onBlur?.();
@@ -2493,7 +2522,9 @@ export class Editor<
           // A press on the content takes over from a pending focus restore:
           // the user, not the host's last DOM write, now says where the
           // caret goes.
-          this.#replacementFocusRequest = undefined;
+          if (this.#focusRequest?.restore != null) {
+            this.#cancelFocusRequest();
+          }
           // Any pointer press — mouse, touch, or pen — moves off the select-all
           // selection, so let selectionchange sync #selections from the new
           // native selection again. This must run before the mouse-only guard
@@ -2537,10 +2568,10 @@ export class Editor<
             ]
               .map((el) => [
                 addEventListener(el, 'mouseenter', () => {
-                  this.#shouldIgnoreSelectionChange = true;
+                  this.#isPointerOverAnnotation = true;
                 }),
                 addEventListener(el, 'mouseleave', () => {
-                  this.#shouldIgnoreSelectionChange = false;
+                  this.#isPointerOverAnnotation = false;
                 }),
               ])
               .flat();
@@ -2851,7 +2882,6 @@ export class Editor<
           }
           this.#cancelEditPrediction(true);
           this.#setComposing(true);
-          this.#shouldIgnoreSelectionChange = true;
         },
         { passive: true }
       ),
@@ -2863,7 +2893,6 @@ export class Editor<
           if (!targetIsContentElement(e)) {
             return;
           }
-          this.#shouldIgnoreSelectionChange = false;
           const wasComposing = this.#isComposing;
           this.#setComposing(false);
           // An empty compositionend during a tracked composition means the
@@ -4015,17 +4044,29 @@ export class Editor<
     }
   }
 
+  // Focuses the content, placing the caret at `position` when given. Each
+  // call replaces any focus request still in flight. `restore` is set when
+  // the call puts focus back after a host DOM replacement.
   #focus(
     position?: Position,
     preventScroll = true,
-    shouldFocus?: () => boolean
+    restore?: FocusRequest['restore']
   ) {
     // Mark focus eagerly: the positional branch defers the real focus() to a
     // rAF, so a same-tick applyEdits would otherwise see the editor as
     // unfocused and skip repositioning while this focus still lands afterward.
     this.#contentHasFocus = true;
+    const contentElement = this.#contentElement;
+    // A restore only lands while focus has not moved to another control.
+    const restoreIsAvailable = () => {
+      return (
+        restore == null ||
+        restore.claimed === true ||
+        (contentElement != null &&
+          this.#replacementFocusIsAvailable(contentElement))
+      );
+    };
     if (position !== undefined) {
-      this.#shouldIgnoreSelectionChange = true;
       this.#setWindowSelection({
         start: position,
         end: position,
@@ -4033,45 +4074,73 @@ export class Editor<
       });
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
-      const queuedFocusFrame = () => {
-        if (this.#queuedFocusFrame === queuedFocusFrame) {
-          this.#queuedFocusFrame = undefined;
-        }
-        // #contentHasFocus was marked eagerly above; a blur (or cleanup) in
-        // the deferred gap cedes focus, and this stale frame must not pull
-        // it back into the current — possibly replaced — content.
-        if (shouldFocus?.() === false || !this.#contentHasFocus) {
-          this.#shouldIgnoreSelectionChange = false;
+      const frame = () => {
+        // A newer placement took over.
+        if (this.#focusRequest !== request) {
           return;
         }
+        request.frame = undefined;
+        // Skip the focus if focus moved elsewhere since this was queued.
+        if (!this.#contentHasFocus || !restoreIsAvailable()) {
+          this.#releaseFocusRequest(request);
+          return;
+        }
+        // The host restore has landed.
+        request.restore = undefined;
         this.#contentElement?.focus({ preventScroll });
         // another request animation frame since the `focus` call
         // may trigger a selectionchange event, which should be ignored
-        queueRender(() => {
-          this.#shouldIgnoreSelectionChange = false;
-        });
+        queueRender(() => this.#releaseFocusRequest(request));
       };
-      this.#queuedFocusFrame = queuedFocusFrame;
-      queueRender(queuedFocusFrame);
-    } else if (shouldFocus?.() !== false) {
+      const request: FocusRequest = { frame, restore };
+      this.#cancelFocusRequest();
+      this.#focusRequest = request;
+      queueRender(frame);
+      return;
+    }
+    if (restore != null) {
+      this.#cancelFocusRequest();
+    }
+    if (restoreIsAvailable()) {
       this.#contentElement?.focus({ preventScroll });
     } else {
       this.#contentHasFocus = false;
     }
   }
 
+  // Ends a focus request's hold on the native Selection, but only while that
+  // request is still the current one; a superseded request has nothing to
+  // release.
+  #releaseFocusRequest(request: FocusRequest): void {
+    if (this.#focusRequest === request) {
+      this.#focusRequest = undefined;
+    }
+  }
+
+  // Drops the in-flight editor-driven focus, including its queued frame if it
+  // has not run yet. Only the focus owner's state changes.
+  #cancelFocusRequest(): void {
+    const request = this.#focusRequest;
+    if (request == null) {
+      return;
+    }
+    if (request.frame != null) {
+      dequeueRender(request.frame);
+    }
+    this.#focusRequest = undefined;
+  }
+
   // A full host render can remove the focused contenteditable before the
   // replacement view synchronizes. Restore only after the new content is live
   // and only while focus has not moved to another real control in the gap.
   #restoreReplacementFocus(position?: Position): void {
-    const request = this.#replacementFocusRequest;
-    if (request == null) {
+    const restore = this.#focusRequest?.restore;
+    if (restore == null) {
       return;
     }
     if (this.#retainSearchPanelFocus) {
-      this.#replacementFocusRequest = undefined;
+      this.#cancelFocusRequest();
       this.#contentHasFocus = false;
-      this.#shouldIgnoreSelectionChange = false;
       return;
     }
     const contentElement = this.#contentElement;
@@ -4079,26 +4148,18 @@ export class Editor<
       contentElement == null ||
       !this.#replacementFocusIsAvailable(contentElement)
     ) {
-      this.#replacementFocusRequest = undefined;
+      this.#cancelFocusRequest();
       this.#contentHasFocus = false;
       return;
     }
 
-    const shouldFocus = () => {
-      if (this.#replacementFocusRequest !== request) {
-        return false;
-      }
-      const shouldRestore = this.#replacementFocusIsAvailable(contentElement);
-      this.#replacementFocusRequest = undefined;
-      return shouldRestore;
-    };
     if (position != null) {
-      this.#focus(position, true, shouldFocus);
+      this.#focus(position, true, restore);
       return;
     }
     const primarySelection = this.#selections?.at(-1);
     if (primarySelection == null) {
-      this.#focus(undefined, true, shouldFocus);
+      this.#focus(undefined, true, restore);
       return;
     }
     const primaryPosition =
@@ -4111,7 +4172,7 @@ export class Editor<
     if (this.#getLineElement(primaryPosition.line) == null) {
       return;
     }
-    this.#focus(primaryPosition, true, shouldFocus);
+    this.#focus(primaryPosition, true, restore);
   }
 
   #replacementFocusIsAvailable(contentElement: HTMLElement): boolean {
@@ -4125,7 +4186,10 @@ export class Editor<
     ) {
       return false;
     }
-    if (this.#queuedFocusFrame !== undefined) {
+    // A pending placement, or a claim it left behind that no blur has ended,
+    // is the editor's own intent and outranks whatever else holds focus.
+    const { frame, restore } = this.#focusRequest ?? {};
+    if (frame != null || (restore?.claimed === true && this.#contentHasFocus)) {
       return true;
     }
     const { activeElement: shadowActiveElement } = shadowRoot;
@@ -4327,7 +4391,7 @@ export class Editor<
   };
 
   #focusAt(position: Position): void {
-    if (this.#replacementFocusRequest !== undefined) {
+    if (this.#focusRequest?.restore != null) {
       this.#restoreReplacementFocus(position);
     } else {
       this.#focus(position);
