@@ -516,6 +516,16 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         event
       );
     }
+    // A mouse button held outside of a selection gesture means the browser is
+    // dragging, usually to select text. That is not hover, so hover ends until
+    // the button is released. A press on the gutter utility leaves it in place
+    // so its click can still land.
+    if (event.buttons !== 0 && this.pointerSession.mode === 'idle') {
+      if (!isGutterUtilityPath(event.composedPath())) {
+        this.endHover(event);
+      }
+      return;
+    }
     // should we perhaps throttle this a bit because move can be fast as fuk
     // boiiii
     this.handlePointerEvent({ eventType: 'move', event });
@@ -546,20 +556,30 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       }
       return;
     }
+    this.endHover(event);
+  };
+
+  // Ends hover: tells the host the pointer left the hovered token and line,
+  // then places the gutter utility as if nothing is hovered.
+  private endHover(event: PointerEvent): void {
+    if (this.hoveredLine == null && this.hoveredToken == null) {
+      return;
+    }
+    const { onTokenLeave, onLineLeave } = this.options;
     if (this.hoveredToken != null) {
-      this.options.onTokenLeave?.(this.hoveredToken, event);
+      onTokenLeave?.(this.hoveredToken, event);
       this.clearHoveredToken();
     }
 
     if (this.hoveredLine != null) {
-      this.options.onLineLeave?.({
+      onLineLeave?.({
         ...this.hoveredLine,
         event,
       } as PointerEventEnterLeaveProps<TMode>);
       this.clearHoveredLine();
     }
     this.placeUtility();
-  };
+  }
 
   private handlePointerEvent({ eventType, event }: HandlePointerEventProps) {
     const { __debugPointerEvents } = this.options;
@@ -1240,16 +1260,27 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     return true;
   }
 
+  // Shows the utility on a line, moving it only when the line changes.
   private showUtilityOnLine(line: EventBaseProps<TMode>): void {
-    if (this.gutterUtilityContainer == null) {
+    const { gutterUtilityContainer } = this;
+    if (gutterUtilityContainer == null) {
       return;
     }
     this.gutterUtilityLine = line;
-    line.numberElement.appendChild(this.gutterUtilityContainer);
+    gutterUtilityContainer.style.visibility = '';
+    if (gutterUtilityContainer.parentNode !== line.numberElement) {
+      line.numberElement.appendChild(gutterUtilityContainer);
+    }
   }
 
+  // Hides the utility where it sits instead of detaching it. Hover can end in
+  // the middle of a mouse drag, and Safari crashes when a slot is added or
+  // removed during one: https://bugs.webkit.org/show_bug.cgi?id=330739
   private hideUtility(): void {
-    this.gutterUtilityContainer?.remove();
+    const { gutterUtilityContainer } = this;
+    if (gutterUtilityContainer != null) {
+      gutterUtilityContainer.style.visibility = 'hidden';
+    }
     this.gutterUtilityLine = undefined;
   }
 
