@@ -106,6 +106,7 @@ import {
   finishEditSessionForDiff,
   rebuildExpansionFromAnchors,
 } from '../utils/editSessionHunks';
+import { DEFAULT_EXPANSION_LINE_COUNT } from '../utils/expansionLineCount';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -2535,7 +2536,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const {
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      expansionLineCount = 100,
+      expansionLineCount = DEFAULT_EXPANSION_LINE_COUNT,
     } = this.options;
     if (fileDiff == null || fileDiff.isPartial || expandUnchanged) {
       return false;

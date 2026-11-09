@@ -2,6 +2,8 @@ export * from './components/CodeView';
 export * from './components/File';
 export * from './components/FileDiff';
 export * from './components/FileStream';
+export * from './components/SnippetFile';
+export * from './components/SnippetFileDiff';
 export * from './components/UnresolvedFile';
 export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
@@ -106,6 +108,12 @@ export * from './utils/resolveConflict';
 export * from './utils/resolveRegion';
 export * from './utils/setLanguageOverride';
 export * from './utils/setWrapperNodeProps';
+export type {
+  SnippetExpandEvent,
+  SnippetFold,
+  SnippetFolds,
+  SnippetLineRange,
+} from './utils/snippetClip';
 export * from './utils/tokenStyle';
 export * from './utils/tokensToHtml';
 export * from './utils/trimPatchContext';

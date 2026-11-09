@@ -285,23 +285,32 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     public options: FileOptions<LAnnotation, Caret> = {
       theme: DEFAULT_THEMES,
     },
-    private workerManager?: WorkerPoolManager | undefined,
+    protected workerManager?: WorkerPoolManager | undefined,
     // Set when an owner such as React manages the container. Internal renders
     // call it, and the owner must call render().
     private requestOwnerRender?: () => void
   ) {
-    this.fileRenderer = new FileRenderer<LAnnotation>(
-      options,
-      this.getAnnotationSlotName,
-      this.handleHighlightRender,
-      this.workerManager
-    );
+    this.fileRenderer = this.createFileRenderer(options);
     this.resizeManager = new ResizeManager();
     this.interactionManager = new InteractionManager(
       'file',
       pluckInteractionOptions(options)
     );
     this.workerManager?.subscribeToThemeChanges(this);
+  }
+
+  // Builds the renderer this component draws with; a subclass that renders
+  // a different row set returns a FileRenderer subclass. Mirrors
+  // FileDiff.createHunksRenderer.
+  protected createFileRenderer(
+    options: FileOptions<LAnnotation, Caret>
+  ): FileRenderer<LAnnotation> {
+    return new FileRenderer<LAnnotation>(
+      options,
+      this.getAnnotationSlotName,
+      this.handleHighlightRender,
+      this.workerManager
+    );
   }
 
   public getAnnotationSlotName = (
@@ -314,7 +323,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     );
   };
 
-  private handleHighlightRender = (): void => {
+  protected handleHighlightRender = (): void => {
     this.rerender();
   };
 

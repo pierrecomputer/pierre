@@ -60,6 +60,129 @@ The `CodeView` tab above is the quick-start version. For the full guide on
 controlled `items`, imperative `initialItems`, ids, `version`, selection, and
 `scrollTo`, see [CodeView](#codeview).
 
+### Snippets
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  `SnippetFileDiff`, `SnippetFile` and their SSR preload functions are
+  experimental and may change in a minor release.
+</Notice>
+
+`SnippetFileDiff` and `SnippetFile` show only a line range of a complete diff or
+file. Everything outside `options.lineRange` sits behind an above and a below
+fold that open in place when clicked. Inside the range the snippet is an
+ordinary `FileDiff`: unchanged runs between changes fold by
+`parseDiffOptions.context` and `collapsedContextThreshold`, every
+`hunkSeparators` mode and `expandUnchanged` work, and those folds open like any
+hunk separator. Snippets are read-only and cannot render inside a `Virtualizer`
+(they throw there).
+
+```tsx
+import { parseDiffFromFile } from '@pierre/diffs';
+import { SnippetFileDiff } from '@pierre/diffs/react';
+
+const fileDiff = parseDiffFromFile(oldFile, newFile);
+const options = {
+  lineRange: { start: 40, end: 70 },
+  // Telemetry: the fold still opens unless you call event.preventDefault().
+  onSnippetExpand({ fold, lineCount }) {
+    track('snippet-expand', fold.boundary, lineCount);
+  },
+};
+
+<SnippetFileDiff fileDiff={fileDiff} options={options} />;
+```
+
+- `lineRange` addresses new-file lines (old-file lines for a deleted file). A
+  modification (removed and added lines together) cut by the range edge is shown
+  whole, so unified and split agree: a range inside one large modification (a
+  rewritten function, a re-indented file) shows all of it. A new `lineRange`
+  lays the snippet out afresh: open edge folds and expanded hunk separators
+  close again. An equal range or an equal diff passed as a new object keeps
+  them. A range past the end of the content shows its last line and logs a
+  `console.warn`.
+- A diff without hunks (identical files) shows its range as plain lines between
+  the two folds.
+- Every snippet count is in source lines (an unchanged line counts once, a
+  removed and an added line once each), so unified and split agree: the edge
+  fold's label, `SnippetFold.hiddenLines`, the event's `lineCount`,
+  `expansionLineCount` and `expandSnippet`'s `lineCount`. An edge fold of
+  unchanged lines reads "N unmodified lines"; one that also hides changes reads
+  "N lines, includes changes" followed by "-D" and "+A" pills (removed and added
+  lines; a 0 count is left out). `SnippetFold.hiddenDeletions` and
+  `SnippetFold.hiddenAdditions` carry the two pill counts, in the same unit, so
+  a host handling the click can show the same counts; `containsChanges` is true
+  when either is above 0. `SnippetFile` folds never hide changes. See
+  [Snippet folds](#hunk-separators-snippet-folds) for the pill CSS hooks. An
+  edge fold no larger than `collapsedContextThreshold` is shown instead of
+  folded, as for hunk gaps.
+- `onSnippetExpand(event)` fires only for the above and below folds (a click on
+  the label, a pill or an expand button). The event carries `fold` (`boundary`,
+  `hiddenLines`, `hiddenAdditions`, `hiddenDeletions`, `containsChanges`,
+  `lineRange`), the `lineCount` the click would open (Infinity for "Expand all"
+  or shift-click) and the native `event`; call `event.preventDefault()` to
+  handle the click yourself and keep the fold closed.
+- To drive the snippet from your own markup, keep the instance from
+  `onPostRender` and call
+  `instance.expandSnippet('above' | 'below', lineCount?)`; see
+  [Snippet folds](#hunk-separators-snippet-folds) to hide the built-in edge
+  separators. `instance.getSnippetFolds()` returns `{ above?, below? }`, the
+  current `SnippetFold` of each side (a side with nothing hidden has no key), so
+  your edge markup can show the same counts. It is ready on the first
+  `onPostRender`, before any click, and follows every reveal and a new
+  `lineRange`; it returns copies, and `{}` while `collapsed`. Skip the
+  `'unmount'` phase, when there is nothing left to draw.
+
+```tsx
+import type { SnippetFold } from '@pierre/diffs';
+
+// "-D" / "+A" like the built-in pills: a 0 count is left out.
+function describe(fold: SnippetFold | undefined): string {
+  if (fold == null) return '';
+  const counts = [
+    fold.hiddenDeletions > 0 ? `-${fold.hiddenDeletions}` : '',
+    fold.hiddenAdditions > 0 ? `+${fold.hiddenAdditions}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return `${fold.hiddenLines} lines ${counts}`.trim();
+}
+
+function Snippet({ fileDiff }) {
+  const [above, setAbove] = useState('');
+  // Stable options: a new onPostRender on every render forces a re-render.
+  const options = useMemo(
+    () => ({
+      lineRange: { start: 40, end: 70 },
+      unsafeCSS: '[data-snippet-boundary] { display: none; }',
+      onPostRender(_node, instance, phase) {
+        if (phase === 'unmount') return;
+        setAbove(describe(instance.getSnippetFolds().above));
+      },
+    }),
+    []
+  );
+  return (
+    <>
+      <div>{above}</div>
+      <SnippetFileDiff fileDiff={fileDiff} options={options} />
+    </>
+  );
+}
+```
+
+- File-level annotations (line 0) render only while the snippet shows its first
+  line, in both components.
+- The diff must be complete: a partial diff parsed from a patch throws.
+- `preloadSnippetFileDiff` and `preloadSnippetFile` from `@pierre/diffs/ssr`
+  produce `prerenderedHTML` that these components hydrate without re-rendering;
+  hydrating with a different `lineRange` than the server used re-renders. With a
+  worker pool, a click made before the client's highlight arrives draws the new
+  rows as plain text until it does.
+- The whole diff is highlighted once. The snippet's row layout is cached per
+  diff, range and expansion, so a re-render with nothing changed skips it;
+  memoize `fileDiff` (or give it a `cacheKey`) so a new object does not cost a
+  comparison.
+
 ### Partial Diff Hydration
 
 When `loadDiffFiles` is configured, partial `FileDiffMetadata` passed to

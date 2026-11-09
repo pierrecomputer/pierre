@@ -58,10 +58,12 @@ import {
   remapExpandedHunksForRegionChange,
   type SessionRegionChange,
 } from '../utils/editSessionHunks';
+import { DEFAULT_EXPANSION_LINE_COUNT } from '../utils/expansionLineCount';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getModifiedLinesString } from '../utils/getModifiedLinesString';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import {
   createGutterGap,
@@ -541,6 +543,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.expandedHunks;
   }
 
+  /**
+   * @internal Replaces every hunk expansion at once, invalidating an
+   * unhighlighted render cache exactly as expandHunk does. Keys are gap
+   * indexes: gap i sits before hunk i and the trailing gap is hunks.length.
+   * The snippet renderer seeds its gaps through this; the map is copied.
+   * Unlike setExpandedHunksMap (the edit session's remap, which keeps the
+   * reference and the cache), this is for a map change the cache did not
+   * see.
+   */
+  public replaceExpandedHunks(
+    expandedHunks: ReadonlyMap<number, HunkExpansionRegion>
+  ): void {
+    if (this.renderCache?.highlighted !== true) {
+      this.clearRenderCache();
+    }
+    this.expandedHunks = new Map(expandedHunks);
+  }
+
   /** Replace the whole expansion map (session-exit expansion remapping). */
   public setExpandedHunksMap(
     expandedHunks: Map<number, HunkExpansionRegion>
@@ -930,7 +950,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       collapsed = false,
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      expansionLineCount = 100,
+      expansionLineCount = DEFAULT_EXPANSION_LINE_COUNT,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
@@ -2348,15 +2368,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
     });
   }
-}
-
-// Use the platform's English plural rules to pick "line" vs "lines" so a
-// count of 0 reads as "0 unmodified lines". en-US returns "one" only for 1.
-const EN_PLURAL_RULES = new Intl.PluralRules('en-US');
-
-function getModifiedLinesString(lines: number) {
-  const suffix = EN_PLURAL_RULES.select(lines) === 'one' ? '' : 's';
-  return `${lines} unmodified line${suffix}`;
 }
 
 function pushUnifiedInjectedRows(

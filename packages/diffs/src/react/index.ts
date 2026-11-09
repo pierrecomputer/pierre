@@ -8,6 +8,8 @@ export * from './FileDiff';
 export * from './UnresolvedFile';
 export * from './MultiFileDiff';
 export * from './PatchDiff';
+export * from './SnippetFile';
+export * from './SnippetFileDiff';
 export * from './Virtualizer';
 export * from './WorkerPoolContext';
 export * from './EditContext';

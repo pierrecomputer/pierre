@@ -133,6 +133,73 @@ elements:
 
 <DocsCodeExample {...customHunk} />
 
+#### Snippets
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  `SnippetFileDiff` and `SnippetFile` are experimental and may change in a minor
+  release.
+</Notice>
+
+`SnippetFileDiff` and `SnippetFile` are read-only subclasses of `FileDiff` and
+`File` that show only `lineRange`. See
+[React API → Snippets](#react-api-snippets) for the behavior; the vanilla
+classes add the imperative methods:
+
+```ts
+import { SnippetFileDiff } from '@pierre/diffs';
+
+const snippet = new SnippetFileDiff({
+  lineRange: { start: 40, end: 70 },
+  hunkSeparators: 'line-info-basic', // any FileDiff mode
+});
+snippet.render({ fileDiff, containerWrapper });
+
+snippet.expandSnippet('above', 20); // false when no fold is left there
+snippet.expandSnippet('below', Infinity); // open the whole fold
+snippet.revealLine(12); // show new-file line 12, plus one expansion step
+snippet.expandHunk(2, 'both'); // a hunk separator inside the range, as in FileDiff
+```
+
+`expandSnippet` and `revealLine` open folds in place and do not call
+`onSnippetExpand`. `revealLine` matches `FileDiff.revealLine`: the fold hiding
+the line (an edge fold or a hunk separator inside the range) opens to the line
+plus one `expansionLineCount` step. `SnippetFile` has the same two methods and
+an `expansionLineCount` option.
+
+The `fold` passed to `onSnippetExpand` reports `hiddenLines` and, among them,
+`hiddenAdditions` and `hiddenDeletions` (all in source lines), which the
+built-in fold shows as "N lines, includes changes" with "-D" / "+A" pills, so a
+host handling the click itself can show the same counts.
+
+To draw your own edge markup before any click, read the same folds with
+`getSnippetFolds()`. It returns `{ above?, below? }` (a side with nothing hidden
+has no key, and `{}` before content is given), follows `expandSnippet`, clicks,
+`revealLine` and a new `lineRange` at once, and returns copies. Redraw from
+`onPostRender`, which runs after every render (skip its `'unmount'` phase):
+
+```ts
+const snippet = new SnippetFileDiff({
+  lineRange: { start: 40, end: 70 },
+  unsafeCSS: '[data-snippet-boundary] { display: none; }',
+  onPostRender(_node, instance, phase) {
+    if (phase === 'unmount') return;
+    const { above, below } = instance.getSnippetFolds();
+    aboveBar.hidden = above == null;
+    if (above != null) {
+      // "-D" / "+A" only when the count is above 0, like the pills.
+      const counts = [
+        above.hiddenDeletions > 0 ? `-${above.hiddenDeletions}` : '',
+        above.hiddenAdditions > 0 ? `+${above.hiddenAdditions}` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      aboveBar.textContent = `${above.hiddenLines} lines ${counts}`.trim();
+    }
+    belowBar.hidden = below == null;
+  },
+});
+```
+
 ### Renderers
 
 <Notice icon={<IconInfoFill />}>

@@ -51,6 +51,7 @@ import {
 import './style.css';
 import mdContent from './mocks/example_md.txt?raw';
 import tsContent from './mocks/example_ts.txt?raw';
+import { renderSnippetDemo, type SnippetDemo } from './snippetDemo';
 import { createFakeContentStream } from './utils/createFakeContentStream';
 import { createHeaderFilenameSuffixBadge } from './utils/createHeaderFilenameSuffixBadge';
 import { createHighlighterCleanup } from './utils/createHighlighterCleanup';
@@ -141,7 +142,11 @@ interface CodeViewRenderData extends HydratableRenderOptions {
   parsedPatches: ParsedPatch[];
 }
 
+let snippetDemo: SnippetDemo | undefined;
+
 function cleanupInstances(container: HTMLElement) {
+  snippetDemo?.cleanUp();
+  snippetDemo = undefined;
   for (const instances of [
     diffInstances,
     fileInstances,
@@ -1368,3 +1373,15 @@ function createToggle(
 //   const parsed = parseDiffFromFile(oldFile, newFile);
 //   renderDiff([{ files: [parsed] }], poolManager);
 // })();
+
+const renderSnippetsButton = document.getElementById('render-snippets');
+const snippetWrapper = document.getElementById('wrapper');
+if (renderSnippetsButton != null && snippetWrapper != null) {
+  renderSnippetsButton.addEventListener('click', () => {
+    cleanupInstances(snippetWrapper);
+    snippetDemo = renderSnippetDemo(
+      snippetWrapper,
+      getUnified() ? 'unified' : 'split'
+    );
+  });
+}

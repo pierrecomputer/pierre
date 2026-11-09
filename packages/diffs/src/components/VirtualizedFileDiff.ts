@@ -29,6 +29,7 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
+import { DEFAULT_EXPANSION_LINE_COUNT } from '../utils/expansionLineCount';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
@@ -1082,7 +1083,7 @@ export class VirtualizedFileDiff<
       return false;
     }
     const {
-      expansionLineCount = 100,
+      expansionLineCount = DEFAULT_EXPANSION_LINE_COUNT,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
     const staged = new Map(this.hunksRenderer.getExpandedHunksMap());

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Snippet fixture</title>
+    <style>
+      [data-mount] {
+        width: 700px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-mount="snippet"></div>
+    <div data-mount="full"></div>
+    <script type="module">
+      import {
+        File,
+        FileDiff,
+        parseDiffFromFile,
+        SnippetFile,
+        SnippetFileDiff,
+      } from '/dist/index.js';
+
+      const params = new URLSearchParams(location.search);
+      const type = params.get('type') ?? 'unified';
+      const lines = Array.from(
+        { length: 60 },
+        (_, i) => `const v${i + 1} = ${i};`
+      );
+      const changed = lines.map((line, i) =>
+        i === 4 || i === 29 ? `${line} // changed` : line
+      );
+      const oldFile = { name: 'a.ts', contents: lines.join('\n') + '\n' };
+      const newFile = { name: 'a.ts', contents: changed.join('\n') + '\n' };
+      const options = {
+        disableFileHeader: true,
+        diffStyle: type === 'split' ? 'split' : 'unified',
+        ...(params.has('theme')
+          ? {
+              theme:
+                params.get('themeType') === 'light'
+                  ? { dark: 'pierre-dark', light: params.get('theme') }
+                  : { dark: params.get('theme'), light: 'pierre-light' },
+              themeType: params.get('themeType') ?? 'dark',
+            }
+          : {}),
+        unsafeCSS: params.has('hide')
+          ? '[data-snippet-boundary] { display: none; }'
+          : undefined,
+      };
+      const mount = (name) => document.querySelector(`[data-mount="${name}"]`);
+      const lineRange = { start: 25, end: 35 };
+      if (type === 'file') {
+        new SnippetFile({ ...options, lineRange }).render({
+          file: newFile,
+          containerWrapper: mount('snippet'),
+        });
+        new File(options).render({
+          file: newFile,
+          containerWrapper: mount('full'),
+        });
+      } else {
+        const fileDiff = parseDiffFromFile(oldFile, newFile);
+        new SnippetFileDiff({ ...options, lineRange }).render({
+          fileDiff,
+          containerWrapper: mount('snippet'),
+        });
+        // Reference: the same diff with every line shown and no separators.
+        new FileDiff({ ...options, expandUnchanged: true }).render({
+          fileDiff,
+          containerWrapper: mount('full'),
+        });
+      }
+    </script>
+  </body>
+</html>

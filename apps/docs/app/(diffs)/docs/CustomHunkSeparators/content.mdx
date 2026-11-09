@@ -35,6 +35,57 @@ tweaks it with CSS.
   controls.
 - `simple`: Minimal separator bar.
 
+### Snippet Folds
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  Snippets and the `data-snippet-*` attributes are experimental and may change
+  in a minor release.
+</Notice>
+
+Inside a `SnippetFileDiff`'s line range, folds are ordinary hunk separators and
+follow `hunkSeparators` like any `FileDiff`. The two folds at the edges of the
+range always draw with the `line-info` markup (`line-info-basic` when that is
+the mode; `SnippetFile` always uses `line-info`), and carry
+`data-snippet-boundary="above"` or `"below"` on every separator element so you
+can hide them and render your own edge markup outside the component (calling
+`expandSnippet`, with `getSnippetFolds()` for the counts). Hidden separators
+leave no gap; folds inside the range keep theirs. Their label counts the source
+lines they hide: "N unmodified lines", or "N lines, includes changes" when the
+fold also hides changes. A fold that hides changes is followed by two tinted
+pills, "-D" (removed lines, in the deletion color) then "+A" (added lines, in
+the addition color), removed first like the file header's stats; a pill whose
+count is 0 is left out, so a fold hiding only added lines shows just "+A". The
+signs carry the meaning without color, and the pill group's accessible name
+reads like "1 removed, 1 added". The pill text is the theme's
+`--diffs-deletion-base` / `--diffs-addition-base` color mixed toward
+`--diffs-fg` so the small numbers reach WCAG AA contrast (4.5:1; measured for
+pierre-dark, github-dark, nord, pierre-light and github-light). A theme whose
+own foreground has little contrast with its background can fall short; adjust it
+with `--diffs-deletion-color-override` / `--diffs-addition-color-override`. The
+tint is `--diffs-bg-deletion-emphasis` / `--diffs-bg-addition-emphasis` in light
+mode (the inline change highlight colors) and `--diffs-bg-deletion` /
+`--diffs-bg-addition` in dark mode (the changed-line backgrounds), so their
+`-override` variables restyle the pills too.
+
+The DOM hooks for your own styling:
+
+- `data-snippet-boundary="above" | "below"`: every edge separator element.
+- `data-snippet-changes`: an edge separator whose fold hides changes.
+- `data-snippet-change-counts`: the pill group (inside
+  `[data-separator-content]`, after the label).
+- `data-snippet-deletions-count` / `data-snippet-additions-count`: the "-D" and
+  "+A" pills.
+
+```ts
+const options = {
+  lineRange: { start: 40, end: 70 },
+  // Hide the edge folds entirely...
+  unsafeCSS: '[data-snippet-boundary] { display: none; }',
+  // ...or restyle the change pills:
+  // unsafeCSS: '[data-snippet-additions-count], [data-snippet-deletions-count] { border-radius: 4px; }',
+};
+```
+
 ### Custom CSS Example
 
 <DocsCodeExample {...customHunkSeparatorsSwitcher} />

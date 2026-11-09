@@ -1044,12 +1044,13 @@
     margin-bottom: 0;
   }
 
-  [data-expand-index] [data-separator-wrapper] {
+  :is([data-expand-index], [data-snippet-boundary]) [data-separator-wrapper] {
     display: grid;
     grid-template-columns: 32px auto;
   }
 
-  [data-expand-index] [data-separator-wrapper][data-separator-multi-button] {
+  :is([data-expand-index], [data-snippet-boundary])
+    [data-separator-wrapper][data-separator-multi-button] {
     grid-template-columns: 32px 32px auto;
   }
 
@@ -1061,7 +1062,8 @@
     background-color: var(--diffs-bg-separator);
   }
 
-  [data-expand-index] [data-separator-content]:hover {
+  :is([data-expand-index], [data-snippet-boundary])
+    [data-separator-content]:hover {
     text-decoration: underline;
     cursor: pointer;
   }
@@ -1116,6 +1118,59 @@
     flex: 0 1 auto;
   }
 
+  /* Snippet boundary folds that hide changes: "-D" / "+A" pills after the
+   * label, tinted with the same deletion / addition colors as the file
+   * header's stats and the changed-line backgrounds. The pills are atomic
+   * inline boxes so the separator's hover underline does not reach them. The
+   * text is mixed toward the foreground so the small bold numbers reach WCAG
+   * AA contrast (4.5:1) in themes whose own foreground does (snippet.pw.ts
+   * measures five): in light mode on a translucent tint, in dark mode on the
+   * opaque changed-line background, usually darker than the separator, since
+   * a translucent tint over the separator leaves too little room for light
+   * text. */
+  [data-snippet-change-counts] {
+    display: block;
+    flex: 0 0 auto;
+    margin-inline-start: 1ch;
+    white-space: nowrap;
+  }
+
+  [data-snippet-deletions-count],
+  [data-snippet-additions-count] {
+    display: inline-block;
+    padding-inline: 0.75ch;
+    border-radius: 999px;
+    font-size: 0.85em;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+
+  [data-snippet-deletions-count] + [data-snippet-additions-count] {
+    margin-inline-start: 0.5ch;
+  }
+
+  [data-snippet-deletions-count] {
+    color: light-dark(
+      color-mix(in lab, var(--diffs-deletion-base) 70%, var(--diffs-fg)),
+      color-mix(in lab, var(--diffs-deletion-base) 45%, var(--diffs-fg))
+    );
+    background-color: light-dark(
+      var(--diffs-bg-deletion-emphasis),
+      var(--diffs-bg-deletion)
+    );
+  }
+
+  [data-snippet-additions-count] {
+    color: light-dark(
+      color-mix(in lab, var(--diffs-addition-base) 55%, var(--diffs-fg)),
+      color-mix(in lab, var(--diffs-addition-base) 45%, var(--diffs-fg))
+    );
+    background-color: light-dark(
+      var(--diffs-bg-addition-emphasis),
+      var(--diffs-bg-addition)
+    );
+  }
+
   @supports (width: 1cqi) {
     [data-unified] {
       [data-separator='line-info'] [data-separator-wrapper] {
@@ -1127,7 +1182,10 @@
         }
       }
 
-      [data-separator='line-info'][data-expand-index]
+      [data-separator='line-info']:is(
+          [data-expand-index],
+          [data-snippet-boundary]
+        )
         [data-separator-wrapper]
         [data-separator-content] {
         border-top-left-radius: unset;
@@ -1145,7 +1203,11 @@
         border-bottom-left-radius: 6px;
       }
 
-      [data-separator='line-info'][data-expand-index] [data-separator-content] {
+      [data-separator='line-info']:is(
+          [data-expand-index],
+          [data-snippet-boundary]
+        )
+        [data-separator-content] {
         border-top-left-radius: unset;
         border-bottom-left-radius: unset;
       }
@@ -1283,7 +1345,10 @@
       grid-template-columns: 34px auto;
     }
 
-    [data-separator='line-info-basic'][data-expand-index]
+    [data-separator='line-info-basic']:is(
+        [data-expand-index],
+        [data-snippet-boundary]
+      )
       [data-separator-wrapper] {
       grid-template-columns: 100% auto;
     }
