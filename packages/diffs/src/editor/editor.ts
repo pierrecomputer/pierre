@@ -4547,9 +4547,22 @@ export class Editor<
     if (selection == null) {
       return undefined;
     }
-    return typeof selection.getComposedRanges === 'function'
-      ? selection.getComposedRanges({ shadowRoots: [shadowRoot] })?.[0]
-      : getShadowRootRange(shadowRoot);
+    if (typeof selection.getComposedRanges !== 'function') {
+      return getShadowRootRange(shadowRoot);
+    }
+    try {
+      return selection.getComposedRanges({ shadowRoots: [shadowRoot] })?.[0];
+    } catch (error) {
+      // Older Safari takes shadow roots as separate arguments.
+      const legacy = selection.getComposedRanges as unknown as (
+        ...shadowRoots: ShadowRoot[]
+      ) => StaticRange[];
+      try {
+        return legacy.call(selection, shadowRoot)?.[0];
+      } catch {
+        throw error;
+      }
+    }
   }
 
   // A plain click on text the editor cannot edit (the deletions column in

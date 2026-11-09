@@ -4166,6 +4166,47 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
 }
 
 describe('Editor native text selection', () => {
+  test('reads selections with the legacy getComposedRanges signature', async () => {
+    const { cleanup, content, editor } = await createEditorFixture('alpha');
+    const originalGetSelection = document.getSelection.bind(document);
+
+    try {
+      content.dispatchEvent(new Event('focus'));
+      const shadowRoot = content.getRootNode();
+      const line = content.querySelector<HTMLElement>('[data-line]')!;
+      const [startContainer, startOffset] = getSelectionAnchor(line, 1);
+      const [endContainer, endOffset] = getSelectionAnchor(line, 4);
+      const range = composedRange(
+        startContainer,
+        startOffset,
+        endContainer,
+        endOffset
+      );
+      const nativeSelection = {
+        getComposedRanges(argument: unknown) {
+          if (this !== nativeSelection) {
+            throw new TypeError('Invalid receiver');
+          }
+          if (argument !== shadowRoot) {
+            throw new TypeError('Expected a ShadowRoot');
+          }
+          return [range];
+        },
+      };
+      document.getSelection = (() =>
+        nativeSelection) as unknown as typeof document.getSelection;
+
+      document.dispatchEvent(new Event('selectionchange'));
+
+      expect(editor.getViewState().selections).toEqual([
+        createSelection(0, 1, 0, 4),
+      ]);
+    } finally {
+      document.getSelection = originalGetSelection;
+      cleanup();
+    }
+  });
+
   test.each([
     {
       name: 'whole line',
