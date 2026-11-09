@@ -653,6 +653,81 @@ describe('Editor focus ownership', () => {
     }
   });
 
+  test('a press on the content takes over from a pending caret placement', async () => {
+    const { cleanup, content, editor } = await createEditorFixture({
+      contents: 'hello world',
+      selections: [caretAt(1)],
+    });
+    const { restore } = installControlledFrames();
+
+    try {
+      content.focus();
+      editor.focus();
+      // The placement's frames have not run. The user presses in the content
+      // before they do; the browser's selection for that press must win.
+      content.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      reportNativeCaret(content, 5);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 5,
+      });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a focus requested by the press itself is not dropped by that press', async () => {
+    const { cleanup, content, editor } = await createEditorFixture({
+      contents: 'hello world',
+    });
+    const { frame, restore } = installControlledFrames();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    const focused: HTMLElement[] = [];
+    const focus = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focused.push(this);
+      }
+    );
+
+    try {
+      // A control inside the content (an annotation's button) handles the
+      // press itself, keeps the browser from focusing anything, and asks the
+      // editor for focus. That request is newer than the press, so it stands.
+      const line = content.querySelector<HTMLElement>('[data-line="1"]')!;
+      line.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        editor.focus({ lineNumber: 1, preventScroll: true });
+      });
+      line.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      frame();
+      frame();
+      expect(focused.at(-1) === content).toBe(true);
+    } finally {
+      focus.mockRestore();
+      input.remove();
+      restore();
+      cleanup();
+    }
+  });
+
   test('a queued focus survives a host render that replaces the document', async () => {
     const { cleanup, editor, file, fileContainer } = await createEditorFixture({
       contents: 'hello world',

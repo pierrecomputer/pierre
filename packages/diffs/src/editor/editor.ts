@@ -2253,7 +2253,14 @@ export class Editor<
         document,
         'pointerdown',
         (event) => {
-          if (!replacementFocusTargetIsContent(event)) {
+          if (replacementFocusTargetIsContent(event)) {
+            // A press on the content takes over from any caret placement
+            // that was pending before it: the user now says where the caret
+            // goes, and the browser's selection for this press must be read.
+            // This runs in the capture phase so a placement the press itself
+            // asks for (an annotation's handler calling focus()) survives.
+            this.#cancelFocusRequest();
+          } else {
             // Target handlers can synchronously render and arm the request.
             queueMicrotask(cancelReplacementFocus);
           }
