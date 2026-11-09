@@ -172,6 +172,12 @@ export default value;
         forcedThemeType = forcedThemeType === 'dark' ? 'light' : 'dark';
         instance.setThemeType(forcedThemeType);
       };
+      // What every host render path tells the editor right before it swaps
+      // the editable DOM, exposed on its own so a spec can open the gap
+      // between that capture and the sync that follows it.
+      window.__captureEditorFocusForDOMReplacement = () => {
+        editor.__captureFocusForDOMReplacement();
+      };
       window.__moveEditorContainer = () => {
         const previousContainer = mount.querySelector('diffs-container');
         const nextContainer = document.createElement('diffs-container');

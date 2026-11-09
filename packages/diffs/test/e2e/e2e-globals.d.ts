@@ -126,6 +126,9 @@ interface Window {
   __completeEdit?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
+  // edit.html: the capture every host render path makes before swapping the
+  // editable DOM, on its own so a spec can act between it and the sync.
+  __captureEditorFocusForDOMReplacement?: () => void;
   __syncCount?: number;
   // editable.html: force a full render, optionally moving its bounded window.
   __renderEditorWindow?: (startingLine: number) => void;
