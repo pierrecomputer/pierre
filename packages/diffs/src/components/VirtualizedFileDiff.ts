@@ -316,13 +316,26 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Whether a line has a "No newline" marker row after it. Markers are hidden
-  // while editing.
+  // Whether a row has a "No newline" marker row after it. Markers are hidden
+  // while editing. A closed fold's row only has one in split view, for the
+  // new side, when the fold hides the hunk's last row.
   private hasNoNewlineMarker(rows: DiffRowCursor): boolean {
+    if (!this.hunksRenderer.showsNoNewlineMarkers()) {
+      return false;
+    }
+    const { closedFold, hunk } = rows;
+    if (closedFold != null) {
+      return (
+        this.getDiffStyle() === 'split' &&
+        hunk != null &&
+        hunk.noEOFCRAdditions &&
+        rows.lastSplitLineIndex ===
+          hunk.splitLineStart + hunk.splitLineCount - 1
+      );
+    }
     return (
-      this.hunksRenderer.showsNoNewlineMarkers() &&
-      ((rows.hasAddition && rows.additionNoEOFCR) ||
-        (rows.hasDeletion && rows.deletionNoEOFCR))
+      (rows.hasAddition && rows.additionNoEOFCR) ||
+      (rows.hasDeletion && rows.deletionNoEOFCR)
     );
   }
 
@@ -779,6 +792,7 @@ export class VirtualizedFileDiff<
           this.hunksRenderer.getExpandedHunksMap()),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
     });
     while (rows.next()) {
       const { hunkIndex, hunk, collapsedBefore, collapsedAfter } = rows;
@@ -813,7 +827,12 @@ export class VirtualizedFileDiff<
         rows.hasAddition ? rows.additionLineIndex : undefined,
         this.hasNoNewlineMarker(rows)
       );
-      if (lineIndex === targetLineIndex) {
+      // A closed fold's row stands for every line it hides.
+      const lastLineIndex =
+        diffStyle === 'split'
+          ? rows.lastSplitLineIndex
+          : rows.lastUnifiedLineIndex;
+      if (targetLineIndex >= lineIndex && targetLineIndex <= lastLineIndex) {
         position = {
           top,
           height: lineHeight,
@@ -829,8 +848,8 @@ export class VirtualizedFileDiff<
         });
         if (separator != null) {
           if (
-            targetLineIndex > lineIndex &&
-            targetLineIndex <= lineIndex + collapsedAfter
+            targetLineIndex > lastLineIndex &&
+            targetLineIndex <= lastLineIndex + collapsedAfter
           ) {
             position = {
               top: top + separator.gapBefore,
@@ -956,6 +975,7 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
     });
     while (rows.next()) {
       const { hunkIndex, hunk, collapsedBefore, collapsedAfter } = rows;
@@ -2202,6 +2222,7 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
     });
     while (rows.next()) {
       const {
@@ -2211,14 +2232,17 @@ export class VirtualizedFileDiff<
         collapsedAfter,
         splitLineIndex,
         unifiedLineIndex,
+        // A closed fold's row is the hunk's last row when it hides it.
+        lastSplitLineIndex,
+        lastUnifiedLineIndex,
       } = rows;
       const hasMetadata = this.hasNoNewlineMarker(rows);
       const isFinalHunkRow =
         hunkIndex === fileDiff.hunks.length - 1 &&
         hunk != null &&
         (diffStyle === 'split'
-          ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
-          : unifiedLineIndex ===
+          ? lastSplitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
+          : lastUnifiedLineIndex ===
             hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
       const leadingSeparator =
         collapsedBefore > 0
