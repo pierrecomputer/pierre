@@ -62,7 +62,7 @@ import type {
   RenderDiffResult,
   RenderedDiffASTCache,
   RenderRange,
-  SemanticDiffCollapsibleRegion,
+  SemanticDiffFold,
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
@@ -201,7 +201,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
   private semanticLineCache: SemanticLineCache | undefined;
-  private expandedSemanticRegions = new Set<number>();
+  // The semantic folds the reader opened, by first old line. Every other
+  // fold of the diff is closed.
+  private openSemanticFolds = new Set<number>();
 
   public readonly lineCuts: LineCuts = new LineCuts();
   private expandedHunks = new Map<number, HunkExpansionRegion>();
@@ -665,10 +667,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.layout?.invalidateLines();
   }
 
-  public toggleSemanticRegion(start: number): void {
-    const { expandedSemanticRegions } = this;
-    if (!expandedSemanticRegions.delete(start)) {
-      expandedSemanticRegions.add(start);
+  public toggleSemanticFold(start: number): void {
+    const { openSemanticFolds } = this;
+    if (!openSemanticFolds.delete(start)) {
+      openSemanticFolds.add(start);
     }
     // Toggling moves rows; the set is changed in place, so the layout cannot
     // see that on its own.
@@ -722,7 +724,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { semanticOperations } = diff;
     if (semanticOperations == null) {
       this.semanticLineCache = undefined;
-      this.expandedSemanticRegions.clear();
+      this.openSemanticFolds.clear();
       return;
     }
     const { semanticLineCache: cached } = this;
@@ -740,19 +742,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diff,
       lookup: createSemanticDiffLineLookup(semanticOperations),
     };
-    this.expandedSemanticRegions.clear();
+    this.openSemanticFolds.clear();
   }
 
-  // The decoration of a collapsible region's first old line, which the region's
-  // collapsed row shares so collapsing keeps the same icon. The line shows the
+  // The decoration of a semantic fold's first old line, which the fold's row
+  // shares while closed so closing keeps the same icon. The line shows the
   // moved icon when the icon rules gave it none, since it carries the toggle.
-  public getSemanticRegionDecoration(
-    region: SemanticDiffCollapsibleRegion
+  public getSemanticFoldDecoration(
+    fold: SemanticDiffFold
   ): LineDecoration & { gutterIcon: SVGSpriteNames } {
     const decoration = this.getSplitLineDecoration({
       side: 'deletions',
       type: 'change',
-      lineNumber: region.old.start,
+      lineNumber: fold.old.start,
     });
     return {
       ...decoration,
@@ -1669,7 +1671,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionAnnotations: this.additionAnnotations,
       annotationSlotName: this.annotationSlotName,
       semanticFocus: getSemanticDiffFocus(model.diff),
-      expandedSemanticRegions: this.expandedSemanticRegions,
+      openSemanticFolds: this.openSemanticFolds,
       includeTrailingNewline: this.includesTrailingNewline(),
       showNoNewlineMarkers: this.showsNoNewlineMarkers(),
     };

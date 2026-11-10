@@ -4,14 +4,17 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
+import {
+  DiffHunksRenderer,
+  type HunksRenderResult,
+} from '../src/renderers/DiffHunksRenderer';
 import { preloadFileDiff } from '../src/ssr';
 import type {
   DiffLineAnnotation,
   FileDiffMetadata,
-  SemanticDiffCollapsibleRegion,
+  SemanticDiffFold,
 } from '../src/types';
-import { formatCollapsedMoveSummary } from '../src/utils/createSemanticRegionRow';
+import { formatSemanticFoldSummary } from '../src/utils/createSemanticFoldRow';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait, waitFor } from './domHarness';
 import {
@@ -31,15 +34,13 @@ afterAll(async () => {
 const OLD = 'a\nb\nmoved one\nmoved two\nmoved three\nc\nd\ne\nf\n';
 const NEW = 'a\nb\nc\nd\ne\nf\nmoved one\nmoved two\nmoved three\n';
 
-const MOVE: SemanticDiffCollapsibleRegion = {
+const FOLD: SemanticDiffFold = {
   old: { start: 3, end: 5 },
   operations: [0],
   counts: { moved: 3, edited: 0, removed: 0 },
 };
 
-function movedDiff(
-  collapsibleRegions: SemanticDiffCollapsibleRegion[] = [MOVE]
-): FileDiffMetadata {
+function movedDiff(folds: SemanticDiffFold[] = [FOLD]): FileDiffMetadata {
   const fileDiff = parseDiffFromFile(
     { name: 'moves.txt', contents: OLD },
     { name: 'moves.txt', contents: NEW }
@@ -72,12 +73,13 @@ function movedDiff(
       },
     },
   ];
-  fileDiff.semanticCollapsibleRegions = collapsibleRegions;
+  fileDiff.semanticFolds = folds;
   return fileDiff;
 }
 
 // One summary per content row of a column, in row order: a line number, a
-// gap with its height in rows, or a collapsed move's row.
+// gap with its height in rows, a closed fold's row, or a "No newline at
+// end of file" marker.
 function columnRows(content: ElementContent[] | undefined): string[] {
   assertDefined(content, 'content AST should be defined');
   return content.flatMap((node) => {
@@ -89,9 +91,10 @@ function columnRows(content: ElementContent[] | undefined): string[] {
     if ('data-content-buffer' in properties) {
       return [`gap×${String(properties['data-buffer-size'])}`];
     }
-    if ('data-semantic-region' in properties) {
+    if ('data-no-newline' in properties) return ['no newline'];
+    if ('data-semantic-fold' in properties) {
       return [
-        `collapsed ${String(properties['data-semantic-region-start'])}-${String(properties['data-semantic-region-end'])}`,
+        `fold ${String(properties['data-semantic-fold-start'])}-${String(properties['data-semantic-fold-end'])}`,
       ];
     }
     return [];
@@ -113,10 +116,10 @@ function renderedOldLines(container: HTMLElement): (string | null)[] {
   ].map((row) => row.getAttribute('data-line'));
 }
 
-// Click the collapsed row's button, or the expanded move's first-line icon.
-function clickSemanticRegionToggle(container: HTMLElement): void {
+// Click the closed fold's button, or the open fold's first-line icon.
+function clickSemanticFoldToggle(container: HTMLElement): void {
   const toggle = container.shadowRoot?.querySelector(
-    '[data-semantic-region-toggle]'
+    '[data-semantic-fold-toggle]'
   );
   assertDefined(toggle, 'toggle should be rendered');
   toggle.dispatchEvent(
@@ -124,8 +127,8 @@ function clickSemanticRegionToggle(container: HTMLElement): void {
   );
 }
 
-describe('collapsed moves', () => {
-  test('a collapsed move shows one row beside a one-row gap', async () => {
+describe('semantic folds', () => {
+  test('a closed fold shows one row beside a one-row gap', async () => {
     const result = await new DiffHunksRenderer({
       diffStyle: 'split',
     }).asyncRender(movedDiff());
@@ -133,7 +136,7 @@ describe('collapsed moves', () => {
     expect(columnRows(contentAST(result, 'deletions'))).toEqual([
       '1',
       '2',
-      'collapsed 3-5',
+      'fold 3-5',
       '6',
       '7',
       '8',
@@ -155,25 +158,25 @@ describe('collapsed moves', () => {
 
     const gutter = collectAllElements(gutterAST(result, 'deletions'));
     const cell = gutter.find(
-      (node) => node.properties['data-gutter-buffer'] === 'semantic-region'
+      (node) => node.properties['data-gutter-buffer'] === 'semantic-fold'
     );
-    assertDefined(cell, 'collapsed move gutter cell should be rendered');
+    assertDefined(cell, "the fold row's gutter cell should be rendered");
     expect(cell.properties['data-line-type']).toBe('change-moved');
     expect(hastTextContent(cell)).toBe('Moved 3 lines');
     const toggle = collectAllElements(cell.children).find(
-      (node) => 'data-semantic-region-toggle' in node.properties
+      (node) => 'data-semantic-fold-toggle' in node.properties
     );
-    expect(toggle?.properties['data-semantic-region-toggle']).toBe(3);
+    expect(toggle?.properties['data-semantic-fold-toggle']).toBe(3);
     expect(toggle?.properties['aria-expanded']).toBe('false');
-    // The row shows the icon its first line shows when expanded.
+    // The row shows the icon its first line shows when open.
     expect(iconHref(cell)).toBe('#diffs-icon-symbol-moved-duo');
   });
 
-  test('an expanded move shows its lines, and its first icon collapses it', async () => {
+  test('an open fold shows its lines, and its first icon closes it', async () => {
     const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
     const fileDiff = movedDiff();
     await renderer.asyncRender(fileDiff);
-    renderer.toggleSemanticRegion(3);
+    renderer.toggleSemanticFold(3);
     const result = await renderer.asyncRender(fileDiff);
 
     expect(columnRows(contentAST(result, 'deletions'))).toEqual([
@@ -205,54 +208,179 @@ describe('collapsed moves', () => {
       'gutter AST should be defined'
     );
     const toggles = collectAllElements(gutterAST(result, 'deletions')).filter(
-      (node) => 'data-semantic-region-toggle' in node.properties
+      (node) => 'data-semantic-fold-toggle' in node.properties
     );
     expect(toggles.map(iconHref)).toEqual(['#diffs-icon-symbol-moved-duo']);
     expect(toggles.map((node) => node.properties)).toEqual([
       expect.objectContaining({
         type: 'button',
         'data-semantic-icon-button': '',
-        'data-semantic-region-toggle': 3,
+        'data-semantic-fold-toggle': 3,
         'aria-expanded': 'true',
       }),
     ]);
   });
 
-  test('moves render in full in unified view, windowed renders, and around annotations', async () => {
-    const unified = await new DiffHunksRenderer({
-      diffStyle: 'unified',
-    }).asyncRender(movedDiff());
-    expect(
-      collectAllElements(contentAST(unified, 'unified') ?? []).some(
-        (node) => 'data-semantic-region' in node.properties
-      )
-    ).toBe(false);
+  test('a windowed render keeps folds closed wherever the window starts', async () => {
+    const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
+    const fileDiff = movedDiff();
+    const renderWindow = (startingLine: number, totalLines: number) =>
+      renderer.asyncRender(fileDiff, {
+        startingLine,
+        totalLines,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
 
-    const windowed = await new DiffHunksRenderer({
+    // The fold's row is the window's third row.
+    const fromTop = await renderWindow(0, 4);
+    expect(columnRows(contentAST(fromTop, 'deletions'))).toEqual([
+      '1',
+      '2',
+      'fold 3-5',
+      '6',
+    ]);
+    expect(columnRows(contentAST(fromTop, 'additions'))).toEqual([
+      '1',
+      '2',
+      'gap×1',
+      '3',
+    ]);
+
+    // The window starts on the fold's row.
+    const fromFold = await renderWindow(2, 2);
+    expect(columnRows(contentAST(fromFold, 'deletions'))).toEqual([
+      'fold 3-5',
+      '6',
+    ]);
+
+    // The window starts on the row after it: the lines the fold hides take
+    // up no rows.
+    const afterFold = await renderWindow(3, 3);
+    expect(columnRows(contentAST(afterFold, 'deletions'))).toEqual([
+      '6',
+      '7',
+      '8',
+    ]);
+    expect(columnRows(contentAST(afterFold, 'additions'))).toEqual([
+      '3',
+      '4',
+      '5',
+    ]);
+  });
+
+  test("a closed fold on a hunk's last rows keeps the new side's no-newline marker", async () => {
+    // Neither file ends with a newline, and the old file's last two lines are
+    // gone from the new one. The hunk's last row is one the fold hides.
+    const fileDiff = parseDiffFromFile(
+      { name: 'eof.txt', contents: 'a\nb\nc\nd\nmoved one\nmoved two' },
+      { name: 'eof.txt', contents: 'a\nb\nc\nd' }
+    );
+    fileDiff.semanticOperations = [];
+    fileDiff.semanticFolds = [
+      {
+        old: { start: 5, end: 6 },
+        operations: [0],
+        counts: { moved: 2, edited: 0, removed: 0 },
+      },
+    ];
+    const result = await new DiffHunksRenderer({
       diffStyle: 'split',
-    }).asyncRender(movedDiff(), {
-      startingLine: 0,
-      totalLines: 100,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    });
-    expect(columnRows(contentAST(windowed, 'deletions'))).toContain('4');
+    }).asyncRender(fileDiff);
+    expect(columnRows(contentAST(result, 'deletions'))).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      'fold 5-6',
+      'gap×1',
+    ]);
+    expect(columnRows(contentAST(result, 'additions'))).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      'gap×1',
+      'no newline',
+    ]);
+  });
 
-    const annotated = new DiffHunksRenderer<string>({ diffStyle: 'split' });
+  test('a fold closes and opens in the unified view', async () => {
+    const renderer = new DiffHunksRenderer({ diffStyle: 'unified' });
+    const fileDiff = movedDiff();
+    const closed = await renderer.asyncRender(fileDiff);
+    // Old lines 3-5 are one row; the unchanged lines after them show their
+    // new line numbers.
+    expect(columnRows(contentAST(closed, 'unified'))).toEqual([
+      '1',
+      '2',
+      'fold 3-5',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+    ]);
+    const cell = collectAllElements(gutterAST(closed, 'unified')).find(
+      (node) => node.properties['data-gutter-buffer'] === 'semantic-fold'
+    );
+    assertDefined(cell, "the fold row's gutter cell should be rendered");
+    expect(hastTextContent(cell)).toBe('Moved 3 lines');
+
+    renderer.toggleSemanticFold(3);
+    const open = await renderer.asyncRender(fileDiff);
+    expect(columnRows(contentAST(open, 'unified'))).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+    ]);
+    const toggles = collectAllElements(gutterAST(open, 'unified')).filter(
+      (node) => 'data-semantic-fold-toggle' in node.properties
+    );
+    expect(toggles.map((node) => node.properties)).toEqual([
+      expect.objectContaining({
+        'data-semantic-fold-toggle': 3,
+        'aria-expanded': 'true',
+      }),
+    ]);
+  });
+
+  test('an annotation inside a fold shows only while the fold is open', async () => {
+    const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
     const annotations: DiffLineAnnotation<string>[] = [
       { side: 'deletions', lineNumber: 4, metadata: 'note' },
     ];
-    annotated.setLineAnnotations(annotations);
-    const result = await annotated.asyncRender(movedDiff());
-    expect(columnRows(contentAST(result, 'deletions'))).toContain('4');
-    expect(columnRows(contentAST(result, 'deletions'))).not.toContain(
-      'collapsed 3-5'
-    );
+    renderer.setLineAnnotations(annotations);
+    const fileDiff = movedDiff();
+    const hasAnnotation = (result: HunksRenderResult) =>
+      collectAllElements(contentAST(result, 'deletions') ?? []).some(
+        (node) => 'data-line-annotation' in node.properties
+      );
+
+    const closed = await renderer.asyncRender(fileDiff);
+    expect(columnRows(contentAST(closed, 'deletions'))).toContain('fold 3-5');
+    expect(hasAnnotation(closed)).toBe(false);
+
+    renderer.toggleSemanticFold(3);
+    const open = await renderer.asyncRender(fileDiff);
+    expect(columnRows(contentAST(open, 'deletions'))).toContain('4');
+    expect(hasAnnotation(open)).toBe(true);
   });
 
-  test('each region collapses or expands on its own', async () => {
-    // The same moved lines, split into two adjacent regions.
-    const regions: SemanticDiffCollapsibleRegion[] = [
+  test('each fold opens or closes on its own', async () => {
+    // The same moved lines, split into two adjacent folds.
+    const twoFolds: SemanticDiffFold[] = [
       {
         old: { start: 3, end: 3 },
         operations: [0],
@@ -265,37 +393,28 @@ describe('collapsed moves', () => {
       },
     ];
     const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
-    const fileDiff = movedDiff(regions);
-    const collapsed = await renderer.asyncRender(fileDiff);
-    expect(columnRows(contentAST(collapsed, 'deletions')).slice(0, 5)).toEqual([
+    const fileDiff = movedDiff(twoFolds);
+    const closed = await renderer.asyncRender(fileDiff);
+    expect(columnRows(contentAST(closed, 'deletions')).slice(0, 5)).toEqual([
       '1',
       '2',
-      'collapsed 3-3',
-      'collapsed 4-5',
+      'fold 3-3',
+      'fold 4-5',
       '6',
     ]);
 
-    renderer.toggleSemanticRegion(3);
-    const firstExpanded = await renderer.asyncRender(fileDiff);
-    expect(
-      columnRows(contentAST(firstExpanded, 'deletions')).slice(0, 5)
-    ).toEqual(['1', '2', '3', 'collapsed 4-5', '6']);
+    renderer.toggleSemanticFold(3);
+    const firstOpen = await renderer.asyncRender(fileDiff);
+    expect(columnRows(contentAST(firstOpen, 'deletions')).slice(0, 5)).toEqual([
+      '1',
+      '2',
+      '3',
+      'fold 4-5',
+      '6',
+    ]);
   });
 
-  test('a collapsed move over a row with a new-side line is an error', async () => {
-    const badMove: SemanticDiffCollapsibleRegion = {
-      old: { start: 1, end: 2 },
-      operations: [0],
-      counts: { moved: 2, edited: 0, removed: 0 },
-    };
-    expect(
-      new DiffHunksRenderer({ diffStyle: 'split' }).asyncRender(
-        movedDiff([badMove])
-      )
-    ).rejects.toThrow('has a new-side line beside old line 1');
-  });
-
-  test('the toggle expands and collapses the move in a FileDiff', async () => {
+  test('the toggle opens and closes the fold in a FileDiff', async () => {
     const dom = installDom();
     const consoleError = spyOn(console, 'error');
     const container = document.createElement('div');
@@ -306,7 +425,7 @@ describe('collapsed moves', () => {
       diffStyle: 'split',
     });
     const oldLines = () => renderedOldLines(container);
-    const clickToggle = () => clickSemanticRegionToggle(container);
+    const clickToggle = () => clickSemanticFoldToggle(container);
     try {
       instance.render({
         fileDiff: movedDiff(),
@@ -332,7 +451,7 @@ describe('collapsed moves', () => {
     }
   });
 
-  test('a selection over any hidden line selects the collapsed row', async () => {
+  test("a selection over any hidden line selects the closed fold's row", async () => {
     const dom = installDom();
     const consoleError = spyOn(console, 'error');
     const container = document.createElement('div');
@@ -343,7 +462,7 @@ describe('collapsed moves', () => {
       diffStyle: 'split',
     });
     // The selected-line value of each deletions-side content row, keyed by
-    // its line number or 'region' for the collapsed row; unselected rows are
+    // its line number or 'fold' for the closed fold's row; unselected rows are
     // left out.
     const selectedRows = () =>
       Object.fromEntries(
@@ -352,13 +471,13 @@ describe('collapsed moves', () => {
             '[data-deletions] [data-content] > [data-selected-line]'
           ) ?? []),
         ].map((row) => [
-          row.getAttribute('data-line') ?? 'region',
+          row.getAttribute('data-line') ?? 'fold',
           row.getAttribute('data-selected-line'),
         ])
       );
-    const regionGutterSelection = () =>
+    const foldGutterSelection = () =>
       container.shadowRoot
-        ?.querySelector("[data-gutter-buffer='semantic-region']")
+        ?.querySelector("[data-gutter-buffer='semantic-fold']")
         ?.getAttribute('data-selected-line');
     try {
       instance.render({
@@ -370,26 +489,26 @@ describe('collapsed moves', () => {
 
       // A hidden line alone.
       instance.setSelectedLines({ start: 4, end: 4, side: 'deletions' });
-      await waitFor(() => 'region' in selectedRows());
-      expect(selectedRows()).toEqual({ region: 'single' });
-      expect(regionGutterSelection()).toBe('single');
+      await waitFor(() => 'fold' in selectedRows());
+      expect(selectedRows()).toEqual({ fold: 'single' });
+      expect(foldGutterSelection()).toBe('single');
 
-      // A range that starts above the region and ends below it.
+      // A range that starts above the fold and ends below it.
       instance.setSelectedLines({ start: 2, end: 6, side: 'deletions' });
       await waitFor(() => '6' in selectedRows());
-      expect(selectedRows()).toEqual({ '2': 'first', region: '', '6': 'last' });
-      expect(regionGutterSelection()).toBe('');
+      expect(selectedRows()).toEqual({ '2': 'first', fold: '', '6': 'last' });
+      expect(foldGutterSelection()).toBe('');
 
-      // A range that ends inside the region.
+      // A range that ends inside the fold.
       instance.setSelectedLines({ start: 1, end: 3, side: 'deletions' });
       await waitFor(() => '1' in selectedRows());
-      expect(selectedRows()).toEqual({ '1': 'first', '2': '', region: 'last' });
+      expect(selectedRows()).toEqual({ '1': 'first', '2': '', fold: 'last' });
 
-      // A range that misses the region.
+      // A range that misses the fold.
       instance.setSelectedLines({ start: 7, end: 8, side: 'deletions' });
       await waitFor(() => '7' in selectedRows());
       expect(selectedRows()).toEqual({ '7': 'first', '8': 'last' });
-      expect(regionGutterSelection()).toBeNull();
+      expect(foldGutterSelection()).toBeNull();
       expect(consoleError).not.toHaveBeenCalled();
     } finally {
       consoleError.mockRestore();
@@ -399,7 +518,71 @@ describe('collapsed moves', () => {
     }
   });
 
-  test('focus stays on the toggle when a button expands or collapses the move', async () => {
+  test('the unified view toggles a fold and selects its row in a FileDiff', async () => {
+    const dom = installDom();
+    const consoleError = spyOn(console, 'error');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const instance = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'unified',
+    });
+    // The unified column's content rows: a line number, or 'fold' for the
+    // closed fold's row.
+    const rows = () =>
+      [
+        ...(container.shadowRoot?.querySelectorAll(
+          '[data-unified] [data-content] > :is([data-line], [data-semantic-fold])'
+        ) ?? []),
+      ].map((row) => row.getAttribute('data-line') ?? 'fold');
+    const foldSelection = () =>
+      container.shadowRoot
+        ?.querySelector('[data-semantic-fold]')
+        ?.getAttribute('data-selected-line');
+    try {
+      instance.render({
+        fileDiff: movedDiff(),
+        fileContainer: container,
+        forceRender: true,
+      });
+      await waitFor(() => rows().length > 0);
+      expect(rows()).toEqual([
+        '1',
+        '2',
+        'fold',
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+      ]);
+
+      // A hidden line selects the fold's row.
+      instance.setSelectedLines({ start: 4, end: 4, side: 'deletions' });
+      await waitFor(() => foldSelection() != null);
+      expect(foldSelection()).toBe('single');
+      instance.setSelectedLines(null);
+
+      clickSemanticFoldToggle(container);
+      await waitFor(() => rows().length === 12);
+      expect(rows()).not.toContain('fold');
+
+      clickSemanticFoldToggle(container);
+      await waitFor(() => rows().length === 10);
+      expect(rows()).toContain('fold');
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      await wait(10);
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('focus stays on the toggle when a button opens or closes the fold', async () => {
     const dom = installDom();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -429,16 +612,16 @@ describe('collapsed moves', () => {
       });
       await waitFor(() => renderedOldLines(container).length > 0);
 
-      const expand = root().querySelector<HTMLButtonElement>(
-        'button[data-semantic-region-button]'
+      const openButton = root().querySelector<HTMLButtonElement>(
+        'button[data-semantic-fold-button]'
       );
-      assertDefined(expand, 'expand button should be rendered');
-      expand.focus();
+      assertDefined(openButton, "the fold's open button should be rendered");
+      openButton.focus();
       pressFocused();
       await waitFor(() => renderedOldLines(container).length === 9);
       expect(
         root().activeElement?.matches(
-          'button[data-semantic-icon-button][data-semantic-region-toggle="3"]'
+          'button[data-semantic-icon-button][data-semantic-fold-toggle="3"]'
         )
       ).toBe(true);
 
@@ -446,7 +629,7 @@ describe('collapsed moves', () => {
       await waitFor(() => renderedOldLines(container).length === 6);
       expect(
         root().activeElement?.matches(
-          'button[data-semantic-region-button][data-semantic-region-toggle="3"]'
+          'button[data-semantic-fold-button][data-semantic-fold-toggle="3"]'
         )
       ).toBe(true);
     } finally {
@@ -456,7 +639,7 @@ describe('collapsed moves', () => {
     }
   });
 
-  test('the first toggle after hydrating server markup expands the move', async () => {
+  test('the first toggle after hydrating server markup opens the fold', async () => {
     const options = {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
@@ -487,7 +670,7 @@ describe('collapsed moves', () => {
         '9',
       ]);
 
-      clickSemanticRegionToggle(container);
+      clickSemanticFoldToggle(container);
       await waitFor(() => renderedOldLines(container).length === 9);
       expect(renderedOldLines(container)).toEqual([
         '1',
@@ -509,7 +692,7 @@ describe('collapsed moves', () => {
     }
   });
 
-  test('pressing a collapsed row or the collapse icon never selects lines', async () => {
+  test("pressing a closed fold's row or the close icon never selects lines", async () => {
     const dom = installDom();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -549,17 +732,17 @@ describe('collapsed moves', () => {
       });
       await waitFor(() => oldLineCount() > 0);
 
-      // Anywhere on the collapsed row expands it: here its content cell.
-      const row = root().querySelector('[data-semantic-region]');
-      assertDefined(row, 'collapsed row should be rendered');
+      // Anywhere on the closed fold's row opens it: here its content cell.
+      const row = root().querySelector('[data-semantic-fold]');
+      assertDefined(row, "the closed fold's row should be rendered");
       press(row);
       await waitFor(() => oldLineCount() === 9);
       expect(oldLineCount()).toBe(9);
 
       const icon = root().querySelector(
-        '[data-semantic-icon-button][data-semantic-region-toggle]'
+        '[data-semantic-icon-button][data-semantic-fold-toggle]'
       );
-      assertDefined(icon, 'collapse icon should be rendered');
+      assertDefined(icon, 'the close icon should be rendered');
       press(icon);
       await waitFor(() => oldLineCount() === 6);
       expect(oldLineCount()).toBe(6);
@@ -574,14 +757,14 @@ describe('collapsed moves', () => {
   });
 
   test('the summary counts every line moved, then the edits and removals', () => {
-    expect(
-      formatCollapsedMoveSummary({ moved: 2, edited: 0, removed: 0 })
-    ).toBe('Moved 2 lines');
-    expect(
-      formatCollapsedMoveSummary({ moved: 2, edited: 1, removed: 0 })
-    ).toBe('Moved 3 lines, edited 1 line');
-    expect(
-      formatCollapsedMoveSummary({ moved: 3, edited: 1, removed: 2 })
-    ).toBe('Moved 6 lines, edited 1 line, removed 2 lines');
+    expect(formatSemanticFoldSummary({ moved: 2, edited: 0, removed: 0 })).toBe(
+      'Moved 2 lines'
+    );
+    expect(formatSemanticFoldSummary({ moved: 2, edited: 1, removed: 0 })).toBe(
+      'Moved 3 lines, edited 1 line'
+    );
+    expect(formatSemanticFoldSummary({ moved: 3, edited: 1, removed: 2 })).toBe(
+      'Moved 6 lines, edited 1 line, removed 2 lines'
+    );
   });
 });
