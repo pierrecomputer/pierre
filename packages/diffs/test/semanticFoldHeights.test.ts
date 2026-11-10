@@ -831,3 +831,157 @@ describe('render windows below a closed fold', () => {
     }
   });
 });
+
+describe('toggling a fold in a virtualized view', () => {
+  const { lineHeight } = DEFAULT_VIRTUAL_FILE_METRICS;
+
+  // Old lines 2-4 are gone from the new file and one fold covers them, so
+  // the closed fold hides two rows.
+  function toggleDiff(): FileDiffMetadata {
+    const fileDiff = parseDiffFromFile(
+      { name: 'a.txt', contents: 'keep\nmoved1\nmoved2\nmoved3\nlast\n' },
+      { name: 'a.txt', contents: 'keep\nlast\n' }
+    );
+    fileDiff.semanticOperations = [];
+    fileDiff.semanticFolds = [fold(2, 4)];
+    return fileDiff;
+  }
+
+  function pressToggle(shadowRoot: ShadowRoot | null | undefined): void {
+    shadowRoot
+      ?.querySelector('[data-semantic-fold-toggle]')
+      ?.dispatchEvent(
+        new window.MouseEvent('click', { bubbles: true, composed: true })
+      );
+  }
+
+  test('the Virtualizer follows the fold, and forgets what its lines measured', async () => {
+    const dom = installDom();
+    // Every row measures one line high, except the one holding "moved2",
+    // which measures two.
+    const rects = spyOn(
+      Element.prototype,
+      'getBoundingClientRect'
+    ).mockImplementation(function (this: Element) {
+      const height =
+        this instanceof HTMLElement &&
+        this.dataset.lineIndex != null &&
+        this.textContent?.includes('moved2') === true
+          ? lineHeight * 2
+          : lineHeight;
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 100,
+        bottom: height,
+        width: 100,
+        height,
+        toJSON: () => ({}),
+      };
+    });
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const fileContainer = document.createElement('div');
+    root.appendChild(fileContainer);
+    const virtualizer = new Virtualizer();
+    virtualizer.setup(root);
+    const instance = new VirtualizedFileDiff<undefined>(
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        diffStyle: 'split',
+        expandUnchanged: true,
+        // Rows are only measured when they can wrap.
+        overflow: 'wrap',
+      },
+      virtualizer
+    );
+    const foldRows = () =>
+      fileContainer.shadowRoot?.querySelectorAll('[data-semantic-fold]')
+        .length ?? 0;
+    const settle = async () => {
+      await wait(20);
+      instance.reconcileHeights();
+      return instance.getVirtualizedHeight();
+    };
+    try {
+      instance.render({
+        fileDiff: toggleDiff(),
+        fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => foldRows() === 1);
+      const closedHeight = await settle();
+
+      pressToggle(fileContainer.shadowRoot);
+      await waitFor(() => foldRows() === 0);
+      // Two more rows show, and one of them is two lines high.
+      expect(await settle()).toBe(closedHeight + 3 * lineHeight);
+
+      pressToggle(fileContainer.shadowRoot);
+      await waitFor(() => foldRows() === 1);
+      expect(await settle()).toBe(closedHeight);
+    } finally {
+      rects.mockRestore();
+      instance.cleanUp();
+      await wait(0);
+      dom.cleanup();
+    }
+  });
+
+  test('CodeView follows the fold and keeps its scroll position', async () => {
+    const dom = installDom();
+    const viewer = new CodeView<undefined>({
+      disableFileHeader: true,
+      expandUnchanged: true,
+      diffStyle: 'split',
+    });
+    const root = createRoot({ height: 120 });
+    const diffShadowRoot = () =>
+      viewer.getRenderedItems().find((item) => item.id === 'diff')?.element
+        .shadowRoot;
+    const foldRows = () =>
+      diffShadowRoot()?.querySelectorAll('[data-semantic-fold]').length;
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [
+        makeFileItem('above', 30),
+        { id: 'diff', type: 'diff', fileDiff: toggleDiff() },
+        makeFileItem('below', 600),
+      ]);
+      // Bring the diff into view, below a file that is taller than the root.
+      root.scrollTop = 30 * lineHeight;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => foldRows() === 1);
+      viewer.render(true);
+      await wait(30);
+      const closedScrollHeight = viewer.getScrollHeight();
+      const { scrollTop } = root;
+
+      pressToggle(diffShadowRoot());
+      viewer.render(true);
+      await waitFor(() => foldRows() === 0);
+      viewer.render(true);
+      await wait(30);
+      expect(viewer.getScrollHeight()).toBe(
+        closedScrollHeight + 2 * lineHeight
+      );
+      expect(root.scrollTop).toBe(scrollTop);
+
+      pressToggle(diffShadowRoot());
+      viewer.render(true);
+      await waitFor(() => foldRows() === 1);
+      viewer.render(true);
+      await wait(30);
+      expect(viewer.getScrollHeight()).toBe(closedScrollHeight);
+      expect(root.scrollTop).toBe(scrollTop);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      dom.cleanup();
+    }
+  });
+});
