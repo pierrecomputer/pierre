@@ -7,6 +7,7 @@ import type {
   HunkExpansionRegion,
   SemanticDiffFold,
 } from '../types';
+import { createFoldCursor, takeHiddenRows } from './foldCursor';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import {
   getExpandedRegion,
@@ -868,12 +869,11 @@ function getIterationStartState({
     return start;
   }
 
-  const folds = openSemanticFolds != null ? diff.semanticFolds : undefined;
+  const foldCursor = createFoldCursor(diff, openSemanticFolds);
   const finalHunkIndex = diff.hunks.length - 1;
-  // The row counts and the fold index after the hunks passed so far.
+  // The row counts after the hunks passed so far.
   let splitCount = 0;
   let unifiedCount = 0;
-  let foldIndex = 0;
 
   for (let index = 0; index < diff.hunks.length; index++) {
     const hunk = diff.hunks[index];
@@ -883,7 +883,7 @@ function getIterationStartState({
     start.hunkIndex = index;
     start.splitCount = splitCount;
     start.unifiedCount = unifiedCount;
-    start.foldIndex = foldIndex;
+    start.foldIndex = foldCursor?.index ?? 0;
 
     const leadingRegion = getExpandedRegion({
       isPartial: diff.isPartial,
@@ -893,23 +893,8 @@ function getIterationStartState({
       collapsedContextThreshold,
     });
     const leadingCount = leadingRegion.fromStart + leadingRegion.fromEnd;
-    // The rows the hunk's closed folds hide. A closed fold shows one row
-    // for all of its old lines, so every line after its first is hidden.
-    let foldedCount = 0;
-    if (folds != null && foldIndex < folds.length) {
-      const lastOldLine =
-        getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) +
-        hunk.deletionCount;
-      for (
-        let fold = folds[foldIndex];
-        fold != null && fold.old.start <= lastOldLine;
-        fold = folds[++foldIndex]
-      ) {
-        if (openSemanticFolds?.has(fold.old.start) !== true) {
-          foldedCount += fold.old.end - fold.old.start;
-        }
-      }
-    }
+    const foldedCount =
+      foldCursor != null ? takeHiddenRows(foldCursor, hunk) : 0;
     splitCount += leadingCount + hunk.splitLineCount - foldedCount;
     unifiedCount += leadingCount + hunk.unifiedLineCount - foldedCount;
 
@@ -940,7 +925,12 @@ function getIterationStartState({
   if (includeTrailingNewline && diff.hunks.length > 0) {
     return start;
   }
-  return { hunkIndex: diff.hunks.length, splitCount, unifiedCount, foldIndex };
+  return {
+    hunkIndex: diff.hunks.length,
+    splitCount,
+    unifiedCount,
+    foldIndex: foldCursor?.index ?? 0,
+  };
 }
 
 function isRowInWindow(state: IterationState, row: number): boolean {

@@ -10,6 +10,7 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from './computeVirtualFileMetrics';
+import { createFoldCursor, takeHiddenRows } from './foldCursor';
 import { endsWithNewline } from './iterateOverDiff';
 import {
   getExpandedRegion,
@@ -32,6 +33,9 @@ export interface ComputeEstimatedDiffHeightsOptions {
   includeTrailingNewline?: boolean;
   // Count the "No newline at end of file" marker rows.
   showNoNewlineMarkers?: boolean;
+  // The semantic folds the reader opened; see
+  // IterateOverDiffProps.openSemanticFolds.
+  openSemanticFolds?: ReadonlySet<number>;
 }
 
 export interface EstimatedDiffHeights {
@@ -52,17 +56,21 @@ export function computeEstimatedDiffHeights({
   canHydratePartialDiff,
   includeTrailingNewline = false,
   showNoNewlineMarkers = true,
+  openSemanticFolds,
 }: ComputeEstimatedDiffHeightsOptions): EstimatedDiffHeights {
   let splitHeight = getVirtualFileHeaderRegion(metrics, disableFileHeader);
   let unifiedHeight = splitHeight;
   const expandedHunks = expandUnchanged ? true : configuredExpandedHunks;
   const finalHunkIndex = fileDiff.hunks.length - 1;
+  const foldCursor = createFoldCursor(fileDiff, openSemanticFolds);
 
   for (let hunkIndex = 0; hunkIndex < fileDiff.hunks.length; hunkIndex++) {
     const hunk = fileDiff.hunks[hunkIndex];
     if (hunk == null) {
       throw new Error('computeEstimatedDiffHeights: invalid hunk index');
     }
+    const hiddenRows =
+      foldCursor != null ? takeHiddenRows(foldCursor, hunk) : 0;
 
     const leadingRegion = getExpandedRegion({
       isPartial: fileDiff.isPartial,
@@ -88,11 +96,14 @@ export function computeEstimatedDiffHeights({
       unifiedHeight += separatorHeight;
     }
 
-    splitHeight += hunk.splitLineCount * metrics.lineHeight;
-    unifiedHeight += hunk.unifiedLineCount * metrics.lineHeight;
+    splitHeight += (hunk.splitLineCount - hiddenRows) * metrics.lineHeight;
+    unifiedHeight += (hunk.unifiedLineCount - hiddenRows) * metrics.lineHeight;
 
     if (showNoNewlineMarkers) {
-      const metadataLineCounts = getNoNewlineMetadataLineCounts(hunk);
+      const metadataLineCounts = getNoNewlineMetadataLineCounts(
+        hunk,
+        foldCursor?.hidesLastOldLine === true
+      );
       splitHeight += metadataLineCounts.split * metrics.lineHeight;
       unifiedHeight += metadataLineCounts.unified * metrics.lineHeight;
     }
@@ -157,7 +168,13 @@ export function computeEstimatedDiffHeights({
   return { splitHeight, unifiedHeight };
 }
 
-function getNoNewlineMetadataLineCounts(hunk: Hunk): {
+// The "No newline at end of file" marker rows a hunk shows in each view.
+// `hidesLastOldLine` is whether a closed semantic fold hides the hunk's last
+// old line, which leaves the old side without a marker.
+function getNoNewlineMetadataLineCounts(
+  hunk: Hunk,
+  hidesLastOldLine: boolean
+): {
   split: number;
   unified: number;
 } {
@@ -175,12 +192,26 @@ function getNoNewlineMetadataLineCounts(hunk: Hunk): {
     return { split: metadataRows, unified: metadataRows };
   }
 
-  return getChangeNoNewlineMetadataLineCounts(hunk, lastContent);
+  return getChangeNoNewlineMetadataLineCounts(
+    hunk,
+    lastContent,
+    hidesLastOldLine
+  );
 }
+
 function getChangeNoNewlineMetadataLineCounts(
   hunk: Hunk,
-  content: ChangeContent
+  content: ChangeContent,
+  hidesLastOldLine: boolean
 ): { split: number; unified: number } {
+  if (hidesLastOldLine) {
+    // The fold's row is the hunk's last row in the split view, and the new
+    // side's marker hangs under it.
+    return {
+      split: hunk.noEOFCRAdditions ? 1 : 0,
+      unified: content.additions > 0 && hunk.noEOFCRAdditions ? 1 : 0,
+    };
+  }
   const unified =
     (content.deletions > 0 && hunk.noEOFCRDeletions ? 1 : 0) +
     (content.additions > 0 && hunk.noEOFCRAdditions ? 1 : 0);

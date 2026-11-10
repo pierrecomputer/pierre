@@ -37,6 +37,12 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
+import {
+  type ClosedFoldRows,
+  createFoldCursor,
+  takeClosedFoldRows,
+  takeHiddenRows,
+} from '../utils/foldCursor';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
@@ -1502,6 +1508,7 @@ export class VirtualizedFileDiff<
       ),
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       showNoNewlineMarkers: this.hunksRenderer.showsNoNewlineMarkers(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
     });
     this.cache.estimatedSplitHeight = splitHeight;
     this.cache.estimatedUnifiedHeight = unifiedHeight;
@@ -1705,14 +1712,20 @@ export class VirtualizedFileDiff<
       this.hunksRenderer.getDiffForNextRender(workingDiff);
 
     this.pendingRender = { workingDiff, diff: pendingRenderDiff };
+    const layoutDiffChanged = !areDiffTargetsEqual(
+      previousLayoutDiff,
+      pendingRenderDiff
+    );
+    if (layoutDiffChanged) {
+      // The open folds were the last diff's. Layout reads them before the
+      // render, so they are closed here, not when the new diff renders.
+      this.hunksRenderer.clearOpenSemanticFolds();
+    }
 
     return {
       pendingRenderDiff,
       annotationsChanged: this.syncLineAnnotations(lineAnnotations),
-      layoutDiffChanged: !areDiffTargetsEqual(
-        previousLayoutDiff,
-        pendingRenderDiff
-      ),
+      layoutDiffChanged,
       renderedDiffChanged: !areDiffTargetsEqual(
         previousRenderedDiff,
         pendingRenderDiff
@@ -1795,6 +1808,10 @@ export class VirtualizedFileDiff<
       this.cache.heightDeltas,
       this.ghostTextRowsByIndex(fileDiff),
       this.metrics.lineHeight
+    );
+    const foldCursor = createFoldCursor(
+      fileDiff,
+      this.hunksRenderer.getOpenSemanticFolds()
     );
     let top =
       getVirtualFileHeaderRegion(this.metrics, disableFileHeader) +
@@ -1932,20 +1949,69 @@ export class VirtualizedFileDiff<
         diffStyle === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
       const hunkBodyStartLineIndex =
         diffStyle === 'split' ? hunk.splitLineStart : hunk.unifiedLineStart;
-      processRows({
-        rowCount: hunkBodyRowCount,
-        startLineIndex: hunkBodyStartLineIndex,
-        preSeparatorHeight: pendingLeadingSeparatorHeight,
-        postSeparatorHeight:
-          trailingExpandedCount === 0 ? trailingSeparatorHeight : 0,
-        metadataOffsets: this.hunksRenderer.showsNoNewlineMarkers()
+      const showsNoNewlineMarkers = this.hunksRenderer.showsNoNewlineMarkers();
+      const closedFolds =
+        foldCursor != null
+          ? takeClosedFoldRows(foldCursor, hunk, diffStyle)
+          : undefined;
+      if (closedFolds != null && foldCursor != null) {
+        // Closed folds break the hunk's rows into runs. The separators sit
+        // before the first run and after the last, and each marker row goes
+        // with the run that holds its line.
+        const bodyRuns = getHunkBodyRuns(
+          hunkBodyStartLineIndex,
+          hunkBodyRowCount,
+          closedFolds
+        );
+        let shownRowCount = 0;
+        for (const run of bodyRuns) {
+          shownRowCount += run.rowCount;
+        }
+        const metadataOffsets = showsNoNewlineMarkers
           ? getHunkMetadataOffsets({
               diffStyle,
               hunk,
-              rowCount: hunkBodyRowCount,
+              rowCount: shownRowCount,
+              hidesLastOldLine: foldCursor.hidesLastOldLine,
             })
-          : [],
-      });
+          : [];
+        let runStart = 0;
+        for (const [runIndex, run] of bodyRuns.entries()) {
+          const runEnd = runStart + run.rowCount;
+          processRows({
+            rowCount: run.rowCount,
+            startLineIndex: run.startLineIndex,
+            preSeparatorHeight:
+              runIndex === 0 ? pendingLeadingSeparatorHeight : 0,
+            postSeparatorHeight:
+              runIndex === bodyRuns.length - 1 && trailingExpandedCount === 0
+                ? trailingSeparatorHeight
+                : 0,
+            metadataOffsets: getMetadataOffsetsInRun(
+              metadataOffsets,
+              runStart,
+              runEnd
+            ),
+          });
+          runStart = runEnd;
+        }
+      } else {
+        processRows({
+          rowCount: hunkBodyRowCount,
+          startLineIndex: hunkBodyStartLineIndex,
+          preSeparatorHeight: pendingLeadingSeparatorHeight,
+          postSeparatorHeight:
+            trailingExpandedCount === 0 ? trailingSeparatorHeight : 0,
+          metadataOffsets: showsNoNewlineMarkers
+            ? getHunkMetadataOffsets({
+                diffStyle,
+                hunk,
+                rowCount: hunkBodyRowCount,
+                hidesLastOldLine: false,
+              })
+            : [],
+        });
+      }
 
       if (trailingRegion != null && trailingExpandedCount > 0) {
         processRows({
@@ -2041,10 +2107,17 @@ export class VirtualizedFileDiff<
     diffStyle: 'split' | 'unified'
   ): number {
     let count = 0;
+    const foldCursor = createFoldCursor(
+      fileDiff,
+      this.hunksRenderer.getOpenSemanticFolds()
+    );
     if (fileDiff.isPartial) {
       for (const hunk of fileDiff.hunks) {
         count +=
-          diffStyle === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
+          (diffStyle === 'split'
+            ? hunk.splitLineCount
+            : hunk.unifiedLineCount) -
+          (foldCursor != null ? takeHiddenRows(foldCursor, hunk) : 0);
       }
       return count;
     }
@@ -2060,7 +2133,8 @@ export class VirtualizedFileDiff<
     for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
       const hunkCount =
         diffStyle === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
-      count += hunkCount;
+      count +=
+        hunkCount - (foldCursor != null ? takeHiddenRows(foldCursor, hunk) : 0);
       const collapsedBefore = Math.max(hunk.collapsedBefore, 0);
       const { fromStart, fromEnd, renderAll } = getExpandedRegion({
         isPartial: fileDiff.isPartial,
@@ -2457,15 +2531,76 @@ function countMetadataOffsetsBefore(
   return count;
 }
 
+// A run of a hunk's rows that show one after another: `rowCount` rows from
+// row index `startLineIndex`.
+interface HunkBodyRun {
+  rowCount: number;
+  startLineIndex: number;
+}
+
+// Splits a hunk's rows into the runs that show around its closed folds. A
+// closed fold ends a run at its own row, and the next run starts after the
+// rows it hides.
+function getHunkBodyRuns(
+  startLineIndex: number,
+  rowCount: number,
+  closedFolds: ClosedFoldRows[]
+): HunkBodyRun[] {
+  const runs: HunkBodyRun[] = [];
+  // The hunk row the next run starts on.
+  let row = 0;
+  for (const fold of closedFolds) {
+    runs.push({
+      rowCount: fold.row + 1 - row,
+      startLineIndex: startLineIndex + row,
+    });
+    row = fold.row + 1 + fold.hiddenRows;
+  }
+  if (row < rowCount) {
+    runs.push({
+      rowCount: rowCount - row,
+      startLineIndex: startLineIndex + row,
+    });
+  }
+  return runs;
+}
+
+// The marker offsets that fall on rows `runStart` up to `runEnd` of a hunk's
+// shown rows, counted from the run's first row.
+function getMetadataOffsetsInRun(
+  metadataOffsets: number[],
+  runStart: number,
+  runEnd: number
+): number[] {
+  const offsets: number[] = [];
+  for (const offset of metadataOffsets) {
+    if (offset >= runStart && offset < runEnd) {
+      offsets.push(offset - runStart);
+    }
+  }
+  return offsets;
+}
+
+interface HunkMetadataOffsetsProps {
+  diffStyle: 'split' | 'unified';
+  hunk: Hunk;
+  /** The rows the hunk shows. */
+  rowCount: number;
+  /**
+   * Whether a closed semantic fold hides the hunk's last old line, which
+   * leaves the old side without a marker.
+   */
+  hidesLastOldLine: boolean;
+}
+
+// The rows of a hunk that a "No newline at end of file" marker row follows,
+// counted from the hunk's first row among the rows it shows.
 function getHunkMetadataOffsets({
   diffStyle,
   hunk,
   rowCount,
-}: {
-  diffStyle: 'split' | 'unified';
-  hunk: Hunk;
-  rowCount: number;
-}): number[] {
+  hidesLastOldLine,
+}: HunkMetadataOffsetsProps): number[] {
   if (rowCount <= 0 || (!hunk.noEOFCRAdditions && !hunk.noEOFCRDeletions)) {
     return [];
   }
@@ -2480,17 +2615,19 @@ function getHunkMetadataOffsets({
   }
 
   const splitCount = Math.max(lastContent.deletions, lastContent.additions);
-  const unifiedCount = lastContent.deletions + lastContent.additions;
   if (diffStyle === 'split') {
-    return splitCount > 0 && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions)
+    // With the last old line hidden, only the new side's marker shows, under
+    // the fold's row.
+    return splitCount > 0 &&
+      (hunk.noEOFCRAdditions || (hunk.noEOFCRDeletions && !hidesLastOldLine))
       ? [rowCount - 1]
       : [];
   }
 
   const offsets: number[] = [];
-  const contentStartOffset = rowCount - unifiedCount;
-  if (lastContent.deletions > 0 && hunk.noEOFCRDeletions) {
-    offsets.push(contentStartOffset + lastContent.deletions - 1);
+  if (lastContent.deletions > 0 && hunk.noEOFCRDeletions && !hidesLastOldLine) {
+    // The last removed line sits right above the block's added lines.
+    offsets.push(rowCount - lastContent.additions - 1);
   }
   if (lastContent.additions > 0 && hunk.noEOFCRAdditions) {
     offsets.push(rowCount - 1);
