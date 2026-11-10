@@ -41,13 +41,13 @@ Input MiB per second. Higher is better.
 
 | Fixture                          | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
 | -------------------------------- | ------------: | ------------: | ----------: | ----------: |
-| `tiny.md` (1.3 KiB)              |         318.1 |         143.9 |       105.4 |        14.2 |
-| `assistant-review.md` (5.4 KiB)  |         384.8 |         208.7 |       166.6 |        23.4 |
-| `assistant-explain.md` (6.0 KiB) |         441.0 |         221.4 |       178.8 |        32.8 |
-| `simd.md` (39.0 KiB)             |         371.5 |         190.1 |       132.8 |        22.8 |
-| `gfm-spec.md` (211.3 KiB)        |         370.3 |         175.7 |       126.6 |        31.0 |
+| `tiny.md` (1.3 KiB)              |         338.4 |         145.7 |       107.2 |        14.5 |
+| `assistant-review.md` (5.4 KiB)  |         394.9 |         207.0 |       163.5 |        22.8 |
+| `assistant-explain.md` (6.0 KiB) |         448.7 |         219.7 |       175.5 |        32.2 |
+| `simd.md` (39.0 KiB)             |         374.8 |         183.3 |       127.6 |        21.6 |
+| `gfm-spec.md` (211.3 KiB)        |         354.7 |         166.0 |       119.7 |        29.5 |
 
-> Measured on **2026-11-02** at commit `6b6adede` with Node 24.11.0 on an Apple
+> Measured on **2026-11-10** at commit `caa4e490` with Node 24.11.0 on an Apple
 > M4 Pro with 48 GiB RAM.
 
 ## Streaming
@@ -57,11 +57,11 @@ Streamdown time divided by the Words time.
 
 | Fixture                | Chunks | @pierre/words/react | streamdown | Speedup |
 | ---------------------- | -----: | ------------------: | ---------: | ------: |
-| `tiny.md`              |      6 |                3.35 |       6.84 |   2.04× |
-| `assistant-review.md`  |     22 |               11.27 |      31.56 |   2.80× |
-| `assistant-explain.md` |     24 |                6.53 |      10.92 |   1.67× |
-| `simd.md`              |    156 |               45.25 |     181.71 |   4.02× |
-| `gfm-spec.md`          |    844 |              281.06 |    4385.23 |  15.60× |
+| `tiny.md`              |      6 |                3.40 |       7.82 |   2.30× |
+| `assistant-review.md`  |     22 |               10.48 |      35.11 |   3.35× |
+| `assistant-explain.md` |     24 |                6.38 |      11.75 |   1.84× |
+| `simd.md`              |    156 |               44.18 |     197.74 |   4.48× |
+| `gfm-spec.md`          |    844 |              291.40 |    4763.05 |  16.35× |
 
 Each replay creates one production React root and passes growing Markdown
 prefixes to the same component, with `flushSync` after every update. Streamdown
@@ -86,25 +86,25 @@ for those.
 ## Memory usage
 
 Median peak RSS growth in MiB. Lower is better. Each process subtracts its own
-peak RSS before the engine import, which is mostly Node itself (75.8 to 79.5
+peak RSS before the engine import, which is mostly Node itself (75.8 to 79.8
 MiB). Each entry uses five fresh Node processes, for 150 in total. React
 processes also include JSDOM and the React runtime, so React has its own table.
 
 | Fixture → HTML         | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
 | ---------------------- | ------------: | ------------: | ----------: | ----------: |
-| `tiny.md`              |           3.2 |           0.9 |         7.7 |         6.2 |
-| `assistant-review.md`  |           3.1 |           0.9 |         7.7 |         6.0 |
-| `assistant-explain.md` |           3.2 |           0.9 |         7.7 |         5.7 |
-| `simd.md`              |           3.5 |           1.4 |        11.5 |         8.7 |
-| `gfm-spec.md`          |           8.7 |           2.6 |        22.1 |        17.7 |
+| `tiny.md`              |           3.2 |           0.9 |         7.5 |         6.1 |
+| `assistant-review.md`  |           3.2 |           0.9 |         7.6 |         6.0 |
+| `assistant-explain.md` |           3.2 |           0.9 |         7.6 |         5.8 |
+| `simd.md`              |           3.5 |           1.4 |        11.0 |         8.7 |
+| `gfm-spec.md`          |           7.5 |           2.6 |        20.1 |        17.7 |
 
 | Fixture → React stream | @pierre/words/react | streamdown |
 | ---------------------- | ------------------: | ---------: |
-| `tiny.md`              |                75.6 |       87.0 |
-| `assistant-review.md`  |                85.0 |      121.7 |
-| `assistant-explain.md` |                76.3 |       94.4 |
-| `simd.md`              |               109.6 |      145.5 |
-| `gfm-spec.md`          |               201.4 |      328.9 |
+| `tiny.md`              |                76.5 |       89.3 |
+| `assistant-review.md`  |                84.5 |      122.0 |
+| `assistant-explain.md` |                76.7 |       94.2 |
+| `simd.md`              |               111.5 |      145.1 |
+| `gfm-spec.md`          |               204.1 |      328.6 |
 
 Samples run in sequence, with a different engine first each round. Growth covers
 engine import through the first HTML call or complete stream replay. It includes
@@ -119,14 +119,14 @@ better.
 
 | Document           | Words update | Streamdown update | Words frame | Streamdown frame | Words heap | Streamdown heap |
 | ------------------ | -----------: | ----------------: | ----------: | ---------------: | ---------: | --------------: |
-| 1× plain           |          0.4 |               1.1 |         9.1 |              9.2 |        0.6 |             3.1 |
-| 1× highlighting    |          1.7 |               2.2 |         9.2 |              9.1 |        0.7 |             3.9 |
-| 1× fades           |          1.5 |               4.7 |         9.3 |              9.2 |        0.9 |             6.0 |
-| 100× plain         |          1.7 |              25.6 |         9.3 |             16.7 |        3.6 |           126.0 |
-| 100× highlighting  |          2.2 |              25.2 |         9.9 |             16.7 |        6.0 |           142.3 |
-| 100× fades         |         13.2 |              44.7 |        16.8 |             91.6 |        8.2 |           237.3 |
-| 1000× highlighting |          4.1 |             228.9 |       141.6 |            291.6 |       51.2 |          1397.9 |
-| 1000× fades        |        208.3 |         timed out |       234.1 |                — |       67.3 |               — |
+| 1× plain           |          1.1 |               3.9 |         9.2 |              9.1 |        0.6 |             3.1 |
+| 1× highlighting    |          1.5 |               4.0 |         9.0 |              9.1 |        0.7 |             3.9 |
+| 1× fades           |          1.4 |               4.7 |         9.1 |              9.1 |        0.8 |             6.0 |
+| 100× plain         |          1.9 |              26.3 |         9.1 |             16.7 |        4.0 |           126.0 |
+| 100× highlighting  |          3.3 |              26.4 |         8.8 |             16.7 |        5.7 |           142.9 |
+| 100× fades         |         13.1 |              43.9 |        16.7 |             91.7 |        7.9 |           236.6 |
+| 1000× highlighting |          3.2 |             226.9 |       141.7 |            291.6 |       36.0 |          1397.3 |
+| 1000× fades        |        221.4 |         timed out |       249.9 |                — |       52.1 |               — |
 
 The 1× document has 8,524 characters: 100 paragraphs and one TypeScript code
 block with 40 lines. Larger documents repeat it. Fades include highlighting. The
@@ -154,8 +154,8 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 
 | Download, gzip KB              | @pierre/words | streamdown |
 | ------------------------------ | ------------: | ---------: |
-| Base React renderer            |          50.4 |      165.3 |
-| With TypeScript and two themes |         254.4 |      244.9 |
+| Base React renderer            |          50.7 |      165.3 |
+| With TypeScript and two themes |         254.7 |      244.9 |
 | CSS                            |           1.2 |        0.4 |
 
 Download size uses minified `Bun.build` output with React external, with each JS
@@ -163,8 +163,8 @@ file gzipped at level 9. The base row counts static imports only. The second row
 adds the chunks that Streamdown loads on demand for TypeScript, its two themes,
 and highlighted code. Words keeps all grammars in one file.
 
-> Measured on **2026-11-03** at commit `43311732` with uncommitted changes, Bun
-> 1.4.0, and Chromium 134.0.6998.35 on an Apple M4 Pro with 48 GiB RAM.
+> Measured on **2026-11-10** at commit `caa4e490` with Bun 1.4.0 and Chromium
+> 134.0.6998.35 on an Apple M4 Pro with 48 GiB RAM.
 
 ## Sampling
 

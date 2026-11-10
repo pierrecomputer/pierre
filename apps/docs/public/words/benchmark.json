@@ -1,8 +1,8 @@
 {
   "browser": {
-    "date": "2026-11-03T01:50:39.089Z",
-    "commit": "43311732c363647f5b98a5971b1fdc8ba1946d2c",
-    "dirty": true,
+    "date": "2026-11-10T03:41:50.483Z",
+    "commit": "caa4e490f105963c5687d9bb26a98594302cbb55",
+    "dirty": false,
     "bun": "1.4.0",
     "platform": "darwin/arm64",
     "cpu": "Apple M4 Pro",
@@ -33,17 +33,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 0.4,
-          "frameP95Ms": 9.1,
-          "heapBytes": 603992,
+          "updateP95Ms": 1.1,
+          "frameP95Ms": 9.2,
+          "heapBytes": 610860,
           "elements": 409
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.1,
-          "frameP95Ms": 9.2,
-          "heapBytes": 3125072,
+          "updateP95Ms": 3.9,
+          "frameP95Ms": 9.1,
+          "heapBytes": 3124924,
           "elements": 590
         }
       },
@@ -55,17 +55,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.7,
-          "frameP95Ms": 9.2,
-          "heapBytes": 735084,
+          "updateP95Ms": 1.5,
+          "frameP95Ms": 9,
+          "heapBytes": 735468,
           "elements": 929
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 2.2,
+          "updateP95Ms": 4,
           "frameP95Ms": 9.1,
-          "heapBytes": 3929452,
+          "heapBytes": 3924492,
           "elements": 950
         }
       },
@@ -77,17 +77,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.5,
-          "frameP95Ms": 9.3,
-          "heapBytes": 871156,
+          "updateP95Ms": 1.4,
+          "frameP95Ms": 9.1,
+          "heapBytes": 845980,
           "elements": 929
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
           "updateP95Ms": 4.7,
-          "frameP95Ms": 9.2,
-          "heapBytes": 6033512,
+          "frameP95Ms": 9.1,
+          "heapBytes": 6034176,
           "elements": 950
         }
       },
@@ -99,17 +99,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.7,
-          "frameP95Ms": 9.3,
-          "heapBytes": 3554000,
+          "updateP95Ms": 1.9,
+          "frameP95Ms": 9.1,
+          "heapBytes": 4047328,
           "elements": 40801
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 25.6,
+          "updateP95Ms": 26.3,
           "frameP95Ms": 16.7,
-          "heapBytes": 126035852,
+          "heapBytes": 126040756,
           "elements": 58901
         }
       },
@@ -121,17 +121,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 2.2,
-          "frameP95Ms": 9.9,
-          "heapBytes": 6023900,
+          "updateP95Ms": 3.3,
+          "frameP95Ms": 8.8,
+          "heapBytes": 5731424,
           "elements": 90961
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 25.2,
+          "updateP95Ms": 26.4,
           "frameP95Ms": 16.7,
-          "heapBytes": 142327284,
+          "heapBytes": 142920108,
           "elements": 94901
         }
       },
@@ -143,17 +143,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 13.2,
-          "frameP95Ms": 16.8,
-          "heapBytes": 8196844,
+          "updateP95Ms": 13.1,
+          "frameP95Ms": 16.7,
+          "heapBytes": 7896764,
           "elements": 90961
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 44.7,
-          "frameP95Ms": 91.6,
-          "heapBytes": 237340916,
+          "updateP95Ms": 43.9,
+          "frameP95Ms": 91.7,
+          "heapBytes": 236578028,
           "elements": 94901
         }
       }
@@ -167,17 +167,17 @@
         "words": {
           "status": "completed",
           "runs": 1,
-          "updateP95Ms": 4.1,
-          "frameP95Ms": 141.6,
-          "heapBytes": 51198988,
+          "updateP95Ms": 3.2,
+          "frameP95Ms": 141.7,
+          "heapBytes": 36002124,
           "elements": 890281
         },
         "streamdown": {
           "status": "completed",
           "runs": 1,
-          "updateP95Ms": 228.9,
+          "updateP95Ms": 226.9,
           "frameP95Ms": 291.6,
-          "heapBytes": 1397858724,
+          "heapBytes": 1397319716,
           "elements": 949001
         }
       },
@@ -189,9 +189,9 @@
         "words": {
           "status": "completed",
           "runs": 1,
-          "updateP95Ms": 208.3,
-          "frameP95Ms": 234.1,
-          "heapBytes": 67320292,
+          "updateP95Ms": 221.4,
+          "frameP95Ms": 249.9,
+          "heapBytes": 52075128,
           "elements": 890281
         },
         "streamdown": {
@@ -201,23 +201,23 @@
     ],
     "download": {
       "base": {
-        "words": 50350,
+        "words": 50690,
         "streamdown": 165295
       },
       "highlight": {
-        "words": 254401,
+        "words": 254731,
         "streamdown": 244940
       },
       "css": {
-        "words": 1232,
+        "words": 1197,
         "streamdown": 449
       }
     }
   },
   "packageRun": {
-    "head": "6b6adede21c2ff1f77527c8c749fc70c607ce4e7",
+    "head": "caa4e490f105963c5687d9bb26a98594302cbb55",
     "environment": {
-      "date": "2026-11-02T15:11:35.130Z",
+      "date": "2026-11-10T03:37:50.280Z",
       "node": "v24.11.0",
       "platform": "darwin",
       "arch": "arm64",
@@ -248,46 +248,46 @@
           {
             "fixture": "tiny.md",
             "values": [
-              318.1,
-              143.9,
-              105.4,
-              14.2
+              338.4,
+              145.7,
+              107.2,
+              14.5
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              384.8,
-              208.7,
-              166.6,
-              23.4
+              394.9,
+              207,
+              163.5,
+              22.8
             ]
           },
           {
             "fixture": "assistant-explain.md",
             "values": [
-              441,
-              221.4,
-              178.8,
-              32.8
+              448.7,
+              219.7,
+              175.5,
+              32.2
             ]
           },
           {
             "fixture": "simd.md",
             "values": [
-              371.5,
-              190.1,
-              132.8,
-              22.8
+              374.8,
+              183.3,
+              127.6,
+              21.6
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              370.3,
-              175.7,
-              126.6,
-              31
+              354.7,
+              166,
+              119.7,
+              29.5
             ]
           }
         ]
@@ -305,36 +305,36 @@
           {
             "fixture": "tiny.md",
             "values": [
-              3.35,
-              6.84
+              3.4,
+              7.82
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              11.27,
-              31.56
+              10.48,
+              35.11
             ]
           },
           {
             "fixture": "assistant-explain.md",
             "values": [
-              6.53,
-              10.92
+              6.38,
+              11.75
             ]
           },
           {
             "fixture": "simd.md",
             "values": [
-              45.25,
-              181.71
+              44.18,
+              197.74
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              281.06,
-              4385.23
+              291.4,
+              4763.05
             ]
           }
         ]
@@ -356,16 +356,16 @@
             "values": [
               3.2,
               0.9,
-              7.7,
-              6.2
+              7.5,
+              6.1
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              3.1,
+              3.2,
               0.9,
-              7.7,
+              7.6,
               6
             ]
           },
@@ -374,8 +374,8 @@
             "values": [
               3.2,
               0.9,
-              7.7,
-              5.7
+              7.6,
+              5.8
             ]
           },
           {
@@ -383,16 +383,16 @@
             "values": [
               3.5,
               1.4,
-              11.5,
+              11,
               8.7
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              8.7,
+              7.5,
               2.6,
-              22.1,
+              20.1,
               17.7
             ]
           }
@@ -411,36 +411,36 @@
           {
             "fixture": "tiny.md",
             "values": [
-              75.6,
-              87
+              76.5,
+              89.3
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              85,
-              121.7
+              84.5,
+              122
             ]
           },
           {
             "fixture": "assistant-explain.md",
             "values": [
-              76.3,
-              94.4
+              76.7,
+              94.2
             ]
           },
           {
             "fixture": "simd.md",
             "values": [
-              109.6,
-              145.5
+              111.5,
+              145.1
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              201.4,
-              328.9
+              204.1,
+              328.6
             ]
           }
         ]
