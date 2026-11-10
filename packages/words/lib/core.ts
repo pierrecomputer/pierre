@@ -180,17 +180,15 @@ export function createHtmlSession(): {
     render(input, options) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
-      if (
-        input === previous &&
-        incomplete === options?.incomplete &&
-        result != null
-      )
+      // A missing option and `false` are the same mode.
+      const wanted = options?.incomplete === true;
+      if (input === previous && incomplete === wanted && result != null)
         return result;
-      // startsWith takes a slow path for two-byte and rope strings in V8.
+      // V8 compares slices with memcmp, but its startsWith reads each character.
       let reset =
         input.length < previous.length ||
         input.slice(0, previous.length) !== previous ||
-        incomplete !== options?.incomplete ||
+        incomplete !== wanted ||
         definitions;
       if (offset !== 0 && input.charCodeAt(offset) === 0xfeff) reset = true;
       // A render can throw, so session state changes only after it succeeds.
@@ -198,7 +196,7 @@ export function createHtmlSession(): {
       let nextOffset = reset ? 0 : offset;
       const renderOptions = {
         skipHtml: true,
-        incomplete: options?.incomplete,
+        incomplete: wanted,
         boundary: true,
       };
       let tail = input.slice(nextOffset);
@@ -225,7 +223,7 @@ export function createHtmlSession(): {
       stable = nextStable;
       offset = nextOffset;
       previous = input;
-      incomplete = options?.incomplete;
+      incomplete = wanted;
       const completedHtml = stable;
       let fullHtml: string | undefined;
       result = {

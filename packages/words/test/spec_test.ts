@@ -19,13 +19,14 @@ interface SpecExample {
 
 export function loadSpec(...names: string[]): SpecExample[] {
   if (names.length === 0) names = ['commonmark', 'gfm'];
-  return names.flatMap((name) =>
-    JSON.parse(
-      readFileSync(
-        new URL(`./spec/${name}-spec.json`, import.meta.url),
-        'utf-8'
-      )
-    )
+  return names.flatMap(
+    (name) =>
+      JSON.parse(
+        readFileSync(
+          new URL(`./spec/${name}-spec.json`, import.meta.url),
+          'utf-8'
+        )
+      ) as SpecExample[]
   );
 }
 

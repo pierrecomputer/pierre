@@ -16,8 +16,10 @@
   ;; A new record of $type; bits 8..15 of $type may carry its flags.
   (func $recNew (param $type i32) (result i32)
     (local $r i32)
-    (call $ensureRec (i32.const $R.header))
     (local.set $r (global.get $rec))
+    ;; test the room here: growing is rare, and the call would cost every record
+    (if (i32.gt_u (i32.add (local.get $r) (i32.const $R.header)) (global.get $outCap))
+      (then (call $ensureRec (i32.const $R.header))))
     (i64.store (local.get $r) (i64.or
       (i64.extend_i32_u (local.get $type))
       ;; default line offset (u16 at byte 2), then initial record size
@@ -50,8 +52,9 @@
   (func $linePad (param $line i32) (result i32)
     (i32.shr_u (i32.load offset=4 (local.get $line)) (i32.const 30)))
 
-  ;; Alias an exact LF-separated input span when possible. Otherwise rebuild
-  ;; the content in scratch with virtual tab padding and normalized newlines.
+  ;; The content of a paragraph or heading, whose lines never carry tab
+  ;; padding. Alias an exact LF-separated input span when possible. Otherwise
+  ;; rebuild the content in scratch with normalized newlines.
   (func $blockContent (param $r i32) (result i32)
     (local $n i32)
     (local $i i32)
@@ -61,7 +64,6 @@
     (local $end i32)
     (local $total i32)
     (local $dst i32)
-    (local $pad i32)
     (local $first i32)
     (local $prevEnd i32)
     (local $alias i32)
@@ -76,24 +78,17 @@
         (local.set $line (i32.add (local.get $lines)
           (i32.mul (local.get $i) (i32.const $R.line))))
         (local.set $beg (call $lineBeg (local.get $line)))
-        (local.set $end (call $lineEndOf (local.get $line)))
-        (local.set $pad (call $linePad (local.get $line)))
+        (local.set $end (i32.load offset=4 (local.get $line)))
         (local.set $total (i32.add (local.get $total) (i32.add
-          (i32.add (local.get $pad) (i32.sub (local.get $end) (local.get $beg)))
-          (i32.const 1))))
-        (if (local.get $alias)
-          (then
-            (if (local.get $pad)
-              (then (local.set $alias (i32.const 0)))
-              (else
-                (if (i32.eqz (local.get $i))
-                  (then (local.set $first (local.get $beg)))
-                  (else
-                    (if (i32.eqz (i32.and
-                          (i32.eq (local.get $beg)
-                            (i32.add (local.get $prevEnd) (i32.const 1)))
-                          (i32.eq (i32.load8_u (local.get $prevEnd)) (i32.const 10))))
-                      (then (local.set $alias (i32.const 0))))))))))
+          (i32.sub (local.get $end) (local.get $beg)) (i32.const 1))))
+        (if (i32.eqz (local.get $i))
+          (then (local.set $first (local.get $beg)))
+          (else
+            (if (i32.eqz (i32.and
+                  (i32.eq (local.get $beg)
+                    (i32.add (local.get $prevEnd) (i32.const 1)))
+                  (i32.eq (i32.load8_u (local.get $prevEnd)) (i32.const 10))))
+              (then (local.set $alias (i32.const 0))))))
         (local.set $prevEnd (local.get $end))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))
@@ -113,13 +108,8 @@
         (br_if $copied (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $line (i32.add (local.get $lines)
           (i32.mul (local.get $i) (i32.const $R.line))))
-        (local.set $pad (call $linePad (local.get $line)))
-        (if (local.get $pad)
-          (then
-            (memory.fill (i32.add (local.get $dst) (local.get $total)) (i32.const 32) (local.get $pad))
-            (local.set $total (i32.add (local.get $total) (local.get $pad)))))
         (local.set $beg (call $lineBeg (local.get $line)))
-        (local.set $end (call $lineEndOf (local.get $line)))
+        (local.set $end (i32.load offset=4 (local.get $line)))
         (memory.copy (i32.add (local.get $dst) (local.get $total)) (local.get $beg)
           (i32.sub (local.get $end) (local.get $beg)))
         (local.set $total (i32.add (local.get $total)

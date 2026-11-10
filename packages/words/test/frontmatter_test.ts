@@ -64,6 +64,16 @@ void test('mappings, sequences and comments', () => {
   assert.deepStrictEqual(meta('a: # c\n  - 1'), { a: [1] });
 });
 
+void test('a comment that holds a colon does not make a key', () => {
+  assert.deepStrictEqual(meta('tags:\n  - foo # note: first\n  - bar'), {
+    tags: ['foo', 'bar'],
+  });
+  assert.deepStrictEqual(meta('hello # a: b'), 'hello');
+  assert.deepStrictEqual(meta('a: 1 # b: c\nd: 2'), { a: 1, d: 2 });
+  // `#` inside a quoted key or without a space before it is no comment
+  assert.deepStrictEqual(meta('"k # x": 1\nb#c: 2'), { 'k # x': 1, 'b#c': 2 });
+});
+
 void test('a sequence may sit in its key column', () => {
   assert.deepStrictEqual(meta('tags:\n- a\n- b\ntitle: t'), {
     tags: ['a', 'b'],
@@ -110,6 +120,20 @@ void test('flow collections and scalars continue on more indented lines', () => 
   });
 });
 
+void test('a flow collection may close in the column of its key', () => {
+  assert.deepStrictEqual(
+    meta('tags: [\n  a,\n  b # last\n]\nobj: {\n  k: 1\n}\nnext: 2'),
+    { tags: ['a', 'b'], obj: { k: 1 }, next: 2 }
+  );
+  assert.deepStrictEqual(
+    meta('a:\n  - [\n    1\n  ]\n  - {\n    k: v\n  }\nb: 2'),
+    { a: [[1], { k: 'v' }], b: 2 }
+  );
+  // only a collection takes the line: a quoted scalar ends at its indentation
+  assert.deepStrictEqual(meta('a: "x\n]"\nb: 1'), { a: 'x' });
+  assert.deepStrictEqual(meta('a: [1]\n]\nb: 2'), { a: [1] });
+});
+
 void test('flow collections and block scalars', () => {
   assert.deepEqual(meta('a: [1, 2, x]'), { a: [1, 2, 'x'] });
   assert.deepEqual(meta('a: {b: 1, c: two}'), { a: { b: 1, c: 'two' } });
@@ -125,6 +149,14 @@ void test('flow collections and block scalars', () => {
   // an indentation indicator keeps deeper indentation
   assert.deepStrictEqual(meta('a: |2\n    x\n  y'), { a: '  x\ny\n' });
   assert.deepStrictEqual(meta('a: |-2\n    x\n  y'), { a: '  x\ny' });
+});
+
+void test('a folded scalar keeps the breaks around more indented lines', () => {
+  assert.deepStrictEqual(meta('a: >\n  x\n    y\n  z'), { a: 'x\n  y\nz\n' });
+  assert.deepStrictEqual(meta('a: >\n  x\n\n    y\n    y\n\n  z\n  z'), {
+    a: 'x\n\n  y\n  y\n\nz z\n',
+  });
+  assert.deepStrictEqual(meta('a: >-\n  x\n  \ty\n  z'), { a: 'x\n\ty\nz' });
 });
 
 void test('the frontmatter is removed from the body', () => {
@@ -217,6 +249,26 @@ void test('a malformed flow collection still yields parseable metadata', () => {
   assert.deepEqual(meta('a: [{]'), { a: [{ ']': null }] });
   // `k: v` inside a flow sequence is the one-pair mapping YAML says it is
   assert.deepEqual(meta('a: [x: 1, y]'), { a: [{ x: 1 }, 'y'] });
+});
+
+void test('a nested flow collection keeps its comments and quoted `#`', () => {
+  assert.deepStrictEqual(
+    meta('a: [{title: "Issue #12", url: /x}, ["r # y"], z]'),
+    { a: [{ title: 'Issue #12', url: '/x' }, ['r # y'], 'z'] }
+  );
+  assert.deepStrictEqual(
+    meta('a: [\n  [1, 2], # one\n  [3, # three\n   4],\n]\nb: 1'),
+    {
+      a: [
+        [1, 2],
+        [3, 4],
+      ],
+      b: 1,
+    }
+  );
+  assert.deepStrictEqual(meta('a: {k: [1, # c\n  2], l: 3}'), {
+    a: { k: [1, 2], l: 3 },
+  });
 });
 
 void test('deeply nested frontmatter does not overflow the stack', () => {

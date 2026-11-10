@@ -2,6 +2,8 @@
   (import "./memory.wat")
   (import "./scan.wat")
 
+  ;; Nibble classification for the bytes $outText has to escape: NUL, `"`, `&`,
+  ;; `<` and `>`. One swizzle and high-nibble equality classify sixteen bytes.
   ;; Load this classifier once per writer. Some Wasm backends reconstruct
   ;; vector immediates inside each iteration instead of retaining a register.
   (data (i32.const $mem.escapeNibbles)
@@ -11,8 +13,6 @@
   ;; immediate for each occurrence while retaining immediate dispatch otherwise.
   (data (i32.const $mem.quoteEscape) "&quot;\00\00")
 
-  ;; Nibble classification for the bytes $outText has to escape: NUL, `"`, `&`,
-  ;; `<` and `>`. One swizzle and high-nibble equality classify sixteen bytes.
   ;; Four regions live above the input, in the order they stop growing:
   ;;
   ;;   [$metaBase   .. $recBase)   frontmatter JSON, written before block analysis
@@ -196,12 +196,21 @@
     (global.set $out (local.get $p))
     (drop (call $digitsBefore (local.get $p) (local.get $v))))
 
-  ;; Reserve, then copy [$lhs,$rhs) as escaped text.
+  ;; Reserve, then copy [$lhs,$rhs) as escaped text. The worst case is six
+  ;; output bytes per byte. Reserve it for 64 KiB of text at a time: for a
+  ;; whole code block of many megabytes it would claim six times the memory,
+  ;; and past 715 MB it would overflow.
   (func $outText (param $lhs i32) (param $rhs i32)
-    (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
-    (call $ensureOut
-      (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 6)))
-    (call $outTextReserved (local.get $lhs) (local.get $rhs)))
+    (local $end i32)
+    (loop $chunk
+      (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
+      (local.set $end (select (local.get $rhs) (i32.add (local.get $lhs) (i32.const 65536))
+        (i32.le_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 65536))))
+      (call $ensureOut
+        (i32.mul (i32.sub (local.get $end) (local.get $lhs)) (i32.const 6)))
+      (call $outTextReserved (local.get $lhs) (local.get $end))
+      (local.set $lhs (local.get $end))
+      (br $chunk)))
 
   ;; Copy escaped text after the caller has reserved the worst-case output.
   ;; This entry point is what lets scratch-backed callers reserve before they
@@ -226,6 +235,7 @@
     (local $quote i64)
     (local $w v128)
     (local $lo v128)
+    (local $hit v128)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return (local.get $dst))))
     ;; Each escaping byte has a distinct low nibble. Look up its required high
     ;; nibble, using 255 for impossible rows, then compare with the source byte.
@@ -237,28 +247,33 @@
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
-            (local.set $mask (i8x16.bitmask (i8x16.eq
+            (local.set $hit (i8x16.eq
               (i8x16.swizzle (local.get $lo)
                 (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
-              (i8x16.shr_u (local.get $w) (i32.const 4)))))
+              (i8x16.shr_u (local.get $w) (i32.const 4))))
             (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
-            ;; Clip the final vector once, rather than bounds-checking every
-            ;; escaping byte while consuming its cached mask below.
-            (if (i32.lt_u (local.get $rem) (i32.const 16))
-              (then (local.set $mask (i32.and (local.get $mask)
-                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-            (if (local.get $mask)
+            ;; Most vectors hold no escaping byte: test for any before paying
+            ;; for the lane mask.
+            (if (v128.any_true (local.get $hit))
               (then
-                ;; The bits through the first match are mask^(mask-1). Keep
-                ;; mask-1 for clearing that match without another subtraction.
-                (local.set $belowMask (i32.sub (local.get $mask) (i32.const 1)))
-                (local.set $k (i32.sub (i32.const 31)
-                  (i32.clz (i32.xor (local.get $mask) (local.get $belowMask)))))
-                (local.set $scanBase (local.get $lhs))
-                (v128.store (local.get $dst) (local.get $w))
-                (local.set $dst (i32.add (local.get $dst) (local.get $k)))
-                (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
-                (br $special)))
+                (local.set $mask (i8x16.bitmask (local.get $hit)))
+                ;; Clip the final vector once, rather than bounds-checking every
+                ;; escaping byte while consuming its cached mask below.
+                (if (i32.lt_u (local.get $rem) (i32.const 16))
+                  (then (local.set $mask (i32.and (local.get $mask)
+                    (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
+                (if (local.get $mask)
+                  (then
+                    ;; The bits through the first match are mask^(mask-1). Keep
+                    ;; mask-1 for clearing that match without another subtraction.
+                    (local.set $belowMask (i32.sub (local.get $mask) (i32.const 1)))
+                    (local.set $k (i32.sub (i32.const 31)
+                      (i32.clz (i32.xor (local.get $mask) (local.get $belowMask)))))
+                    (local.set $scanBase (local.get $lhs))
+                    (v128.store (local.get $dst) (local.get $w))
+                    (local.set $dst (i32.add (local.get $dst) (local.get $k)))
+                    (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
+                    (br $special)))))
             (v128.store (local.get $dst) (local.get $w))
             (if (i32.le_u (local.get $rem) (i32.const 16))
               (then

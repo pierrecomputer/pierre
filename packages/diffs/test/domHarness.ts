@@ -403,7 +403,6 @@ export function makeFileItem(
   };
 }
 
-// Pushes items into the viewer and flushes the rAF-scheduled render pass.
 // CodeView skips renders until the shared highlighter loads. Files that assert
 // right after a render call this in beforeAll, so they don't depend on an
 // earlier test file having loaded it. CI file order changes between runs.
@@ -414,6 +413,7 @@ export function preloadTestHighlighter(): Promise<void> {
   });
 }
 
+// Pushes items into the viewer and flushes the rAF-scheduled render pass.
 export async function renderItems<LAnnotation, Caret>(
   viewer: CodeView<LAnnotation, Caret>,
   items: readonly CodeViewItem<LAnnotation>[]

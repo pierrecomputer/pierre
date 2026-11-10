@@ -33,6 +33,12 @@ function text(source: string, incomplete = false): string {
     document.window.close();
   }
 }
+/** Run a React update and wait for the effects it starts. */
+const flush = (update: () => void): Promise<void> =>
+  act(() => {
+    update();
+    return Promise.resolve();
+  });
 let root: Root | undefined;
 let dom: JSDOM | undefined;
 const originalWindow = globalThis.window;
@@ -340,7 +346,7 @@ describe('HTML rendering and the React wrapper', () => {
       },
     };
     const render = async (value: string): Promise<void> => {
-      await act(async () => {
+      await flush(() => {
         root?.render(<Markdown components={components}>{value}</Markdown>);
       });
     };
@@ -359,7 +365,7 @@ describe('HTML rendering and the React wrapper', () => {
     let calls = 0;
     let transforms = 0;
     const render = async (value: string, hooks = ['p']): Promise<void> => {
-      await act(async () => {
+      await flush(() => {
         root?.render(
           <Markdown
             controls={{ code: { download: false } }}
@@ -415,7 +421,7 @@ describe('HTML rendering and the React wrapper', () => {
     expect(calls).toBe(1);
     const container = mountDOM(markup);
     const anchor = container.querySelector('a');
-    await act(async () => {
+    await flush(() => {
       root = hydrateRoot(container, element);
     });
     expect(calls).toBe(2);
@@ -445,7 +451,7 @@ describe('HTML rendering and the React wrapper', () => {
       },
     };
     const render = async (value: string): Promise<void> => {
-      await act(async () => {
+      await flush(() => {
         root?.render(
           <StrictMode>
             <Markdown plugins={plugins} isAnimating>
@@ -461,7 +467,7 @@ describe('HTML rendering and the React wrapper', () => {
     await render('```text\nHello world');
     expect(calls).toBe(3);
     expect(live).toBe(1);
-    await act(async () => {
+    await flush(() => {
       root?.unmount();
     });
     root = undefined;
@@ -507,6 +513,21 @@ describe('HTML rendering and the React wrapper', () => {
     expect(html('ftp://example.com/x')).toContain('href="ftp://example.com/x"');
     expect(html('<ftp://a.b>')).toContain('href="ftp://a.b"');
     expect(html('xmpp:a@b.co')).toContain('href="xmpp:a@b.co"');
+  });
+  test('attribute text that reads like another attribute is left alone', () => {
+    // A rewrite of ` src="` inside the alt text would unquote the title.
+    const output = html('![a src= id=](u "x onerror=bad() y")', {
+      urlTransform: (url) => `/proxy?u=${encodeURIComponent(url)}`,
+      idPrefix: 'm-',
+    });
+    expect(output).toContain(
+      'src="/proxy?u=u" alt="a src= id=" title="x onerror=bad() y"'
+    );
+    const document = new JSDOM(output);
+    expect(
+      document.window.document.querySelector('img')!.getAttributeNames()
+    ).toEqual(['data-markdown', 'src', 'alt', 'title', 'loading']);
+    document.window.close();
   });
   test('runs HTML hooks on generated markup and keeps inline code separate', () => {
     const components: Components = {
@@ -585,6 +606,10 @@ describe('HTML rendering and the React wrapper', () => {
     expect(output).toContain('href="#m-fn-1" id="m-fnref-1"');
     expect(output).toContain('id="m-fn-1"');
     expect(output).toContain('href="#m-fnref-1"');
+    // A title that reads like the footnote attribute is not one.
+    expect(
+      html('[a](#top " data-footnote-ref")', { idPrefix: 'm-' })
+    ).toContain('href="#top"');
   });
   test('highlights through HTML output and falls back for unknown languages', () => {
     const plugins = {
@@ -635,7 +660,7 @@ describe('HTML rendering and the React wrapper', () => {
       await Promise.resolve();
     });
     expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-    await act(async () => {
+    await flush(() => {
       root?.render(element(source + ' grows'));
     });
     expect(
@@ -656,7 +681,7 @@ describe('HTML rendering and the React wrapper', () => {
       },
     };
     const render = async (value: string) => {
-      await act(async () => {
+      await flush(() => {
         root?.render(<Markdown components={components}>{value}</Markdown>);
       });
     };
@@ -678,7 +703,7 @@ describe('HTML rendering and the React wrapper', () => {
     const container = mountDOM();
     root = createRoot(container);
     const render = async (value: string) => {
-      await act(async () => {
+      await flush(() => {
         root?.render(<Markdown>{value}</Markdown>);
       });
     };
@@ -696,7 +721,7 @@ describe('HTML rendering and the React wrapper', () => {
     const container = mountDOM();
     root = createRoot(container);
     const render = async (value: string, active = true) => {
-      await act(async () => {
+      await flush(() => {
         root?.render(<Markdown isAnimating={active}>{value}</Markdown>);
       });
     };
@@ -775,7 +800,7 @@ describe('HTML rendering and the React wrapper', () => {
       },
     };
     const render = async (value: string) => {
-      await act(async () => {
+      await flush(() => {
         root?.render(
           <Markdown plugins={plugins} isAnimating>
             {value}
@@ -795,7 +820,7 @@ describe('HTML rendering and the React wrapper', () => {
     expect(live).toBe(0);
     await render('```ts\nlet next = 2;');
     expect(live).toBe(1);
-    await act(async () => {
+    await flush(() => {
       root?.unmount();
     });
     root = undefined;
@@ -927,7 +952,7 @@ describe('native DOM token fades', () => {
     globalThis.setTimeout = new Proxy(timeout, {
       apply(target, receiver, args) {
         scheduled.push(Number(args[1]));
-        return Reflect.apply(target, receiver, args);
+        return Reflect.apply(target, receiver, args) as unknown;
       },
     });
     try {
@@ -1191,7 +1216,7 @@ describe('direct HTML sessions', () => {
             throw new Error(
               'Consecutive updates must only consume HTML additions'
             );
-          return Reflect.get(target, property, receiver);
+          return Reflect.get(target, property, receiver) as unknown;
         },
       });
     };
@@ -1292,6 +1317,17 @@ describe('direct HTML sessions', () => {
           JSON.stringify(value)
         ).toBe(true);
       }
+    renderer.disconnect();
+  });
+  test('unwrapped block text keeps the checkpoint before streamed text', () => {
+    const options = { allowedElements: ['p'], unwrapDisallowed: true };
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, options);
+    // The heading is root-level text here, and it starts as a lone line break.
+    for (const source of ['# ', '# a', '# ab\n\n-', '# ab\n\n- c']) {
+      renderer.update(source, true, true);
+      expectFreshDom(container, source, options);
+    }
     renderer.disconnect();
   });
   test('plain streaming does not retain one DOM text node per delivery', () => {
@@ -1572,7 +1608,7 @@ describe('incremental streaming', () => {
       }
     root = createRoot(host);
     for (const value of ['```\n\n', '```\n\nx'])
-      await act(async () => {
+      await flush(() => {
         root?.render(
           <Markdown mode="static" controls={false} lineNumbers={false}>
             {value}
@@ -1715,6 +1751,24 @@ describe('incremental streaming', () => {
       renderer.disconnect();
     }
   });
+  test('a root outside the document still patches only the changed code lines', () => {
+    mountDOM();
+    const options = { controls: false };
+    const container = document.createElement('div');
+    const renderer = createDomRenderer(container, options);
+    let source = '```ts\n' + 'const value = 1;\n'.repeat(200);
+    renderer.update(source, true, true);
+    const fullLength = container.innerHTML.length;
+    const parsed = parsedLengths(() => {
+      for (const chunk of ['const', ' next = 2;\n', 'last']) {
+        source += chunk;
+        renderer.update(source, true, true);
+      }
+    });
+    expect(Math.max(...parsed)).toBeLessThan(fullLength / 20);
+    expectFreshDom(container, source, options);
+    renderer.disconnect();
+  });
   test('the live code path updates code attributes when a language appears', () => {
     const options = {
       plugins: { code: createHighlightsPlugin({ theme: pierreLight }) },
@@ -1818,6 +1872,59 @@ describe('incremental streaming', () => {
       renderer.disconnect();
     }
   });
+  test('a live fence that loses its final empty line patches from the right line', () => {
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    const session = plugin.createSession!();
+    const lines = (code: string) =>
+      session.highlightLines!({ code, language: 'ts', isIncomplete: true })!;
+    lines('a\nb\n\n');
+    // Line 1 is now the last line with content, so the update starts there.
+    expect(lines('a\nb\n').firstLine).toBe(1);
+    session.dispose();
+    // This session reports the lines after the last line with content.
+    const careless = {
+      highlight: ({ code }: { code: string }) => code,
+      createSession() {
+        let previous: string[] = [];
+        return {
+          highlight: ({ code }: { code: string }) => code,
+          highlightLines({ code }: { code: string }) {
+            const next = code.split('\n');
+            let first = 0;
+            while (first < next.length && next[first] === previous[first])
+              first++;
+            first = Math.min(first, Math.max(0, previous.length - 2));
+            previous = next;
+            return {
+              firstLine: first,
+              lineCount: next.length,
+              html: next.slice(first).join('\n'),
+              lastLineOffset: 0,
+              fullHtml: code,
+            };
+          },
+          dispose() {},
+        };
+      },
+    };
+    for (const code of [plugin, careless]) {
+      // With a gutter, fewer lines already take the full path.
+      const options = { lineNumbers: false, plugins: { code } };
+      const container = mountDOM();
+      const renderer = createDomRenderer(container, options);
+      for (const source of [
+        '```ts\na\nb\n\n',
+        '```ts\na\nb\n',
+        '```ts\na\nb\nc',
+      ]) {
+        renderer.update(source, true, true);
+        expectFreshDom(container, source, options);
+      }
+      expect(container.querySelector('code')!.textContent).toBe('a\nb\nc\n');
+      renderer.disconnect();
+      dom?.window.close();
+    }
+  });
   test('large live fences parse only their changed tail and keep settled token nodes', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     let fullReads = 0;
@@ -1838,7 +1945,11 @@ describe('incremental streaming', () => {
                   : new Proxy(update, {
                       get(target, property, receiver) {
                         if (property === 'fullHtml') fullReads++;
-                        return Reflect.get(target, property, receiver);
+                        return Reflect.get(
+                          target,
+                          property,
+                          receiver
+                        ) as unknown;
                       },
                     });
               },

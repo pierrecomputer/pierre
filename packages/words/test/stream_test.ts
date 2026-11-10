@@ -89,6 +89,17 @@ void test('only inputs that extend the previous one reuse its prefix', () => {
   }
 });
 
+void test('a missing incomplete option and false are the same mode', () => {
+  const session = createHtmlSession();
+  session.render('one\n\ntw');
+  const update = session.render('one\n\ntwo', { incomplete: false });
+  assert.equal(update.reset, false);
+  assert.equal(update.stable, '<p>one</p>\n');
+  assert.equal(session.render('one\n\ntwo'), update);
+  assert.equal(session.render('one\n\ntwo', {}), update);
+  assert.equal(session.render('one\n\ntwo!', { incomplete: true }).reset, true);
+});
+
 void test('ordinary paragraph runs keep append boundaries through table conversion', () => {
   const source =
     'Alpha.\nBeta.\nGamma.\n\nBefore.\nMore.\nA | B\n' +
@@ -154,6 +165,58 @@ void test('synthetic emphasis closers preserve whitespace, nesting, and inline c
       fullPending(completed),
       JSON.stringify(source)
     );
+});
+
+void test('completion pairs delimiter runs like the parser', () => {
+  // Nothing is open here, so no closer may show as text.
+  for (const source of [
+    // one run closes two openers
+    '**bold *italic***',
+    '**bold *italic*** and',
+    '*a **b***',
+    // `*` closes inside a word
+    '**bold**text',
+    '**加粗**文字',
+    '他说：**重要**的事',
+    // a run after a word and before punctuation cannot open
+    '5*(3+2)',
+    'a = b*(c',
+    'the foo_.',
+    'x**-1',
+    // a closer takes the nearest opener of its character and ends the ones between
+    '*a _b* c',
+    '__a *b__ c',
+    '~~a **b~~ c',
+    // tildes pair only at equal lengths
+    '~~a ~5 b',
+    '~~x ~y',
+    '~~a ~~b~~',
+    '~~a ~',
+  ])
+    assert.equal(full(source, { incomplete: true }), full(source), source);
+  for (const [source, completed] of [
+    // the rule of three keeps an intraword `*` out of a `**` pair
+    ['**2*3', '**2*3**'],
+    // after punctuation a run can open
+    ['*a (*b', '*a (*b**'],
+    // a lone `~` is text that closers can follow
+    ['**a ~', '**a ~**'],
+    // a run or an opener that cannot close waits when closers are pending
+    ['**- *\r\n![_', '**-**'],
+    ['*a **<b', '*a* '],
+    // emphasis opened in a closed label cannot close after it
+    ['[**a]', '[\\*\\*a](streamdown:incomplete-link)'],
+    ['[__]', '[\\_\\_](streamdown:incomplete-link)'],
+    // an escaped `!` starts no image
+    ['*\\![- __[^1]', '*\\![- __[^1]__](streamdown:incomplete-link)*'],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      fullPending(completed),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
 });
 
 /** Stream every prefix and compare each update with a fresh full render. */
@@ -240,6 +303,14 @@ void test('repair follows the parser on fences, escapes, and tildes', () => {
     ['~~del', '~~del~~'],
     // code ticks stay on the last line, where they cannot start a fence
     ['x ```a\n', 'x ```a```\n'],
+    // but not after the space of a bare list marker, which they would fill
+    ['a `b\n1. ', 'a `b\n1.`'],
+    ['a ```\n* ', 'a ```\n*```'],
+    // ticks that cannot be closed are text, and what follows them still counts
+    ['__]`**__``', '__]`**__``'],
+    // delimiters in an unfinished code span are code
+    ['*a ``b\n1. \n*', '*a ``b\n1. \n*``*'],
+    ['_~~``_x\n`\n~~', '_~~``_x\n`\n~~``~~_'],
   ]) {
     assert.equal(
       full(source, { incomplete: true }),
@@ -381,6 +452,53 @@ void test('completion flags never change authored sentinel URLs or static bracke
   assert.equal(full('See [pending]'), '<p>See [pending]</p>\n');
 });
 
+void test('completion never completes a link reference definition', () => {
+  // The placeholder must not balance the `(` of a definition's destination.
+  for (const source of [
+    '## x [a]\n[a]: /u===[](',
+    '[a]: [b](',
+    '[a]: x[b](http://y',
+    // `[label]:` still waits for a destination, and closers would be one
+    '[a *b]:',
+    '[a *b]: ',
+    '[\\*y*`` \\[a]:    \n',
+    // `[^1][a` can still be a reference with the label `a`
+    '[a]: /u\n\nx [^1][a',
+    // `[^1](...)` is a link when no footnote has that label
+    '[^1](titlex[)',
+    // after `][` the placeholder would end a reference label
+    '[a]: /u\n\n[a][![x',
+    '[b]: /u\n\n[x][b ![c',
+  ]) {
+    const html = full(source, { incomplete: true });
+    assert.ok(!html.includes('streamdown'), JSON.stringify(source));
+    assert.ok(!html.includes('href="%5B'), JSON.stringify(source));
+    streamMatches(source, true);
+  }
+  // closing ticks would be a destination too, and the placeholder a paragraph
+  for (const source of [
+    '[a *b]:',
+    '[`x]:',
+    '[`x]:\n',
+    '[``]:\n',
+    '[*`]:\n',
+    '- [`]:\n',
+  ])
+    assert.equal(full(source, { incomplete: true }), full(source), source);
+  // A source that writes the placeholder's URL keeps it next to a pending link.
+  assert.equal(
+    full('[x](streamdown:incomplete-link)\n\n[y', { incomplete: true }),
+    '<p><a href="streamdown:incomplete-link">x</a></p>\n' +
+      '<p><a data-markdown-incomplete>y</a></p>\n'
+  );
+  // also in rebuilt content, where the placeholder is known by its position
+  assert.equal(
+    full('> [x](streamdown:incomplete-link) y\n> [z', { incomplete: true }),
+    '<blockquote>\n<p><a href="streamdown:incomplete-link">x</a> y\n' +
+      '<a data-markdown-incomplete>z</a></p>\n</blockquote>\n'
+  );
+});
+
 void test('internal streaming markers stay out of other APIs', () => {
   const plain = (source: string, options?: HtmlSessionOptions) =>
     decoder.decode(renderToHtml(source, options));
@@ -480,6 +598,27 @@ void test('closers that could not close are not appended', () => {
     full('[a\\', { incomplete: true }),
     '<p><a data-markdown-incomplete>a</a></p>\n'
   );
+});
+
+void test('a final backslash after whitespace stays behind the closers', () => {
+  for (const [source, completed] of [
+    ['*a\n\\    ', '*a*\n\\'],
+    ['*a\n\\', '*a*\n\\'],
+    ['*a \\', '*a* \\'],
+    // before whitespace a `\` is text or a hard break
+    ['*a\\ <b', '*a*\\ '],
+    ['**a\\\n<b', '**a**\\\n'],
+    // a placeholder right after it would be escaped
+    ['[*a\n\\    ', '[*a*\n](streamdown:incomplete-link)'],
+    ['[*a\n\\', '[*a*\n](streamdown:incomplete-link)'],
+  ]) {
+    assert.equal(
+      full(source, { incomplete: true }),
+      fullPending(completed),
+      JSON.stringify(source)
+    );
+    streamMatches(source, true);
+  }
 });
 
 void test('repair leaves code and raw HTML blocks alone', () => {
@@ -648,6 +787,9 @@ void test('nested brackets pair like the parser', () => {
     ['[a][b c', `[a${placeholder}`],
     // A failed inner bracket leaves the outer one open.
     ['[a [b] c', `[a [b] c${placeholder}`],
+    // An escaped `!` opens no image: the bracket after it is a link.
+    ['use \\![alt](ur', `use \\![alt${placeholder}`],
+    ['\\![b', `\\![b${placeholder}`],
   ]) {
     assert.equal(
       full(source, { incomplete: true }),
@@ -663,6 +805,14 @@ void test('nested brackets pair like the parser', () => {
     // A footnote reference takes the next `]`.
     '[a [^1',
     '[^1]: n\n\n[a [^1',
+    // `[^x]` with no definition is a link once its destination is whole.
+    '[^1]([)',
+    '[[^1]()',
+    '[a [^x](b) c',
+    '![^1]([)',
+    '[a [^x][b] c\n\n[b]: /u',
+    // A link after an escaped `!` closes the brackets around it.
+    '[see \\![alt](url) x',
     // A resolved reference stops the bracket around it from being a link.
     '[1]: /u\n\n[see [1] for',
     '[1]: /u\n\n[see [1]',
@@ -779,6 +929,12 @@ void test('completion stays linear on long runs', () => {
     '- '.repeat(40_000) + '~~~ '.repeat(40_000),
     ' '.repeat(200_000) + '~~~ '.repeat(40_000),
     'a'.repeat(100_000) + '`'.repeat(100_000),
+    // runs that wait, backslashes behind the closers, and a full opener stack
+    '**a ' + '* '.repeat(200_000),
+    '*a ' + '\\ '.repeat(200_000),
+    '**a ' + '\\'.repeat(400_001) + ' ',
+    '_a '.repeat(60) + 'b* '.repeat(200_000),
+    '*a '.repeat(200_000),
   ]) {
     const start = performance.now();
     renderToHtml(source, { incomplete: true });

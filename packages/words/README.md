@@ -130,7 +130,7 @@ and `html` holds both. Sessions omit raw HTML.
 
 Pass `{ incomplete: true }` as the second argument to complete unfinished
 syntax. A link with no destination yet renders as
-`<a data-markdown-incomplete>`, and an open code fence as
+`<a data-markdown-incomplete>`. A session always renders an open code fence as
 `<pre data-markdown-incomplete>`.
 
 Appended text reuses completed blocks. An edit, a changed `incomplete` option,

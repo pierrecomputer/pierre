@@ -40,7 +40,9 @@ UTF-8 input
   part of the ABI.
 - `out.str` writes a literal. Short literals become immediate stores, and longer
   ones go in a string pool.
-- Table forms generate the HTML entity, Unicode, and tag name data.
+- Table forms generate the HTML entity, Unicode, and tag name data. The Unicode
+  range tables are stored packed, and the module expands them when it is
+  instantiated.
 - A string operand of `i32.const` or `i64.const` packs its bytes into an
   integer.
 
@@ -92,8 +94,8 @@ an opener record and a closer record around their children.
 
 The line ranges of a leaf must stay contiguous, so no other record can start
 while a leaf is open. Removing trailing lines reduces `nLines` but not the
-record size. Line ranges also encode the virtual spaces of partial tabs, so the
-input never changes.
+record size. The line ranges of code and HTML blocks also encode the virtual
+spaces of partial tabs, so the input never changes.
 
 This pass also decides list tightness and records link and footnote definitions.
 A hash table maps normalized labels to their first definition. Footnotes render
@@ -107,8 +109,7 @@ that needs no inline analysis or HTML escapes.
 ## Inline analysis and output
 
 The inline parser takes one contiguous range per leaf. It reads the input
-directly when it can. Other leaves use scratch space for tab expansion and
-normalized line breaks.
+directly when it can. Other leaves join their lines in scratch space.
 
 A scan creates 32-byte inline marks. Code spans, links, images, and entities
 resolve during the scan. Emphasis resolves afterward with the CommonMark
@@ -137,8 +138,10 @@ so those documents always render in full.
 
 [`complete.wat`](./src/complete.wat) repairs a display copy of unfinished
 syntax. It never changes the source. It runs after block analysis and looks only
-at the last block, and the parser runs again only when the copy changed. React
-asks for repairs only while the stream is active.
+at the last block, and the parser runs again only when the copy changed. It
+pairs delimiter runs as the parser does, and it writes no closer that might not
+pair, because that closer would show as text. React asks for repairs only while
+the stream is active.
 
 [`html/render.ts`](./html/render.ts) adds URL checks, element filters, code
 plugins, and hooks. [`html/dom.ts`](./html/dom.ts) patches DOM nodes:
@@ -148,7 +151,10 @@ plugins, and hooks. [`html/dom.ts`](./html/dom.ts) patches DOM nodes:
   revision reconciles the whole completed prefix.
 - A second comment marks the last line of an open code fence, so updates touch
   only the changed lines. This also works inside lists and quotes.
-- Code lines sit in groups of 64, so the browser lays out only the last group.
+- Code lines sit in groups, 64 lines each in plain and open fences, so the
+  browser lays out only the last group.
+- A native deep compare (`isEqualNode`) skips each unchanged element of the part
+  that can still change.
 - Fades wrap new text in spans and remove the spans when the animation ends.
 
 The Highlights plugin uses `codeToHtml` for completed fences. An open fence
@@ -172,6 +178,6 @@ does not reconcile individual Markdown nodes.
   only while the caller stays within its size budget. A large phase in a hot
   loop needs two call sites to stay out of line (see `$addBlockLine`).
 - Limits: 250 container levels, 999 characters per link or footnote label, nine
-  digits per ordered-list start, 255 characters per code fence, 255 backticks
-  per code span, 256 open brackets per leaf, and 1,073,610,752 bytes (2^30 − 128
-  KiB) of input.
+  digits per ordered-list start, 512 table columns, 255 backticks per code span,
+  256 open brackets per leaf, 64 open delimiter runs in the block that
+  completion repairs, and 1,073,610,752 bytes (2^30 − 128 KiB) of input.

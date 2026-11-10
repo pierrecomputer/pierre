@@ -4,8 +4,81 @@
   (global $src (mut i32) (i32.const $mem.input)) ;; start of the markdown, past any frontmatter
   (global $eof (mut i32) (i32.const 0)) ;; end of the input text (the NUL sentinel sits there)
 
-  ;; Code point ranges >= U+0080 in the Unicode P and S general categories.
-  (unicode-punct-table $mem.punct $mem.punctEnd)
+  ;; Unicode punctuation (the P and S general categories from U+0080), then
+  ;; the zero-width and the wide code points, as packed ranges.
+  (unicode-range-tables $mem.packed $mem.packedEnd
+    $mem.punct $mem.punctEnd $mem.width $mem.wide $mem.wide $mem.widthEnd)
+
+  ;; Expand the packed set of code point ranges at $src into the table at $dst:
+  ;; a u32 count, then sorted u32 entries of first:21 and span:11. Per range the
+  ;; set holds a varint with the distance from the end of the range before it
+  ;; to its start, then a varint with its length; a 0 byte ends the set. A
+  ;; range longer than a span takes several entries. Returns the position
+  ;; after the set.
+  (func $unpackRanges (param $src i32) (param $dst i32) (result i32)
+    (local $at i32)
+    (local $cp i32)
+    (local $first i32)
+    (local $v i32)
+    (local $shift i32)
+    (local $b i32)
+    (local.set $at (local.get $dst))
+    (loop $boundary
+      (local.set $v (i32.const 0))
+      (local.set $shift (i32.const 0))
+      (loop $byte
+        (local.set $b (i32.load8_u (local.get $src)))
+        (local.set $src (i32.add (local.get $src) (i32.const 1)))
+        (local.set $v (i32.or (local.get $v)
+          (i32.shl (i32.and (local.get $b) (i32.const 0x7f)) (local.get $shift))))
+        (local.set $shift (i32.add (local.get $shift) (i32.const 7)))
+        (br_if $byte (i32.ge_u (local.get $b) (i32.const 0x80))))
+      (if (local.get $v)
+        (then
+          (local.set $cp (i32.add (local.get $cp) (local.get $v)))
+          ;; $first is the start of an open range, which is never U+0000
+          (if (local.get $first)
+            (then
+              (loop $entry
+                (local.set $at (i32.add (local.get $at) (i32.const 4)))
+                (local.set $v (i32.sub (i32.sub (local.get $cp) (local.get $first)) (i32.const 1)))
+                (i32.store (local.get $at) (i32.or (local.get $first)
+                  (i32.shl
+                    (select (local.get $v) (i32.const 0x7ff) (i32.lt_u (local.get $v) (i32.const 0x800)))
+                    (i32.const 21))))
+                (local.set $first (i32.add (local.get $first) (i32.const 0x800)))
+                (br_if $entry (i32.lt_u (local.get $first) (local.get $cp))))
+              (local.set $first (i32.const 0)))
+            (else (local.set $first (local.get $cp))))
+          (br $boundary))))
+    (i32.store (local.get $dst)
+      (i32.shr_u (i32.sub (local.get $at) (local.get $dst)) (i32.const 2)))
+    (local.get $src))
+
+  ;; whether $cp is in the range table at $table, by binary search
+  (func $inRanges (param $table i32) (param $cp i32) (result i32)
+    (local $lo i32)
+    (local $hi i32)
+    (local $mid i32)
+    (local $first i32)
+    (local $range i32)
+    (local.set $hi (i32.load (local.get $table)))
+    (block $done
+      (loop $search
+        (br_if $done (i32.ge_u (local.get $lo) (local.get $hi)))
+        (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $hi)) (i32.const 1)))
+        (local.set $range (i32.load offset=4
+          (i32.add (local.get $table) (i32.shl (local.get $mid) (i32.const 2)))))
+        (local.set $first (i32.and (local.get $range) (i32.const 0x1fffff)))
+        (if (i32.lt_u (local.get $cp) (local.get $first))
+          (then (local.set $hi (local.get $mid)))
+          (else
+            (if (i32.le_u (i32.sub (local.get $cp) (local.get $first))
+                  (i32.shr_u (local.get $range) (i32.const 21)))
+              (then (return (i32.const 1))))
+            (local.set $lo (i32.add (local.get $mid) (i32.const 1)))))
+        (br $search)))
+    (i32.const 0))
 
   ;; Return the lowest set-bit index, or -1 for zero. Callers either guard a
   ;; nonzero mask or select a separate zero-mask result. This clz identity stays
@@ -70,34 +143,11 @@
       (i32.wrap_i64 (i64.shr_u (select (local.get $hi) (local.get $lo)
         (i32.ge_u (local.get $c) (i32.const 64))) (i64.extend_i32_u (local.get $c))))))
 
-  ;; a Unicode punctuation character (general category P or S), ASCII fast path
-  ;; then a binary search over the generated range table
+  ;; a Unicode punctuation character (general category P or S)
   (func $isPunctCp (param $cp i32) (result i32)
-    (local $lo i32)
-    (local $hi i32)
-    (local $mid i32)
-    (local $at i32)
-    (local $first i32)
-    (local $range i32)
     (if (i32.lt_u (local.get $cp) (i32.const 128))
       (then (return (call $isAsciiPunct (local.get $cp)))))
-    (local.set $hi (i32.load (i32.const $mem.punct)))
-    (block $done
-      (loop $search
-        (br_if $done (i32.ge_u (local.get $lo) (local.get $hi)))
-        (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $hi)) (i32.const 1)))
-        (local.set $at (i32.add (i32.const $mem.punct+4) (i32.mul (local.get $mid) (i32.const 4))))
-        (local.set $range (i32.load (local.get $at)))
-        (local.set $first (i32.and (local.get $range) (i32.const 0x1fffff)))
-        (if (i32.lt_u (local.get $cp) (local.get $first))
-          (then (local.set $hi (local.get $mid)))
-          (else
-            (if (i32.le_u (i32.sub (local.get $cp) (local.get $first))
-                  (i32.shr_u (local.get $range) (i32.const 21)))
-              (then (return (i32.const 1))))
-            (local.set $lo (i32.add (local.get $mid) (i32.const 1)))))
-        (br $search)))
-    (i32.const 0))
+    (call $inRanges (i32.const $mem.punct) (local.get $cp)))
 
   ;; a Unicode whitespace character: the Zs category plus tab, LF, FF and CR
   (func $isWhiteCp (param $cp i32) (result i32)

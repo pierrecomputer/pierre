@@ -120,6 +120,20 @@
     (select (i32.sub (local.get $i) (local.get $p)) (i32.const 0)
       (i32.or (local.get $allowShort) (local.get $np))))
 
+  ;; Mark the URL that starts at $beg, with its domain at $host, and return
+  ;; its end, or 0 when it is none. $www is 1 for a bare `www.` domain, which
+  ;; needs a second segment and something after `www.`, and gets `http://`.
+  (func $urlAutolink (param $beg i32) (param $host i32) (param $end i32) (param $www i32) (result i32)
+    (local $n i32)
+    (local.set $n (call $checkDomain (local.get $host) (local.get $end) (i32.eqz (local.get $www))))
+    (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+    (local.set $n (call $autolinkDelim
+      (local.get $beg) (i32.add (local.get $host) (local.get $n)) (local.get $end)))
+    (if (i32.le_u (local.get $n) (i32.add (local.get $host) (i32.shl (local.get $www) (i32.const 2))))
+      (then (return (i32.const 0))))
+    (drop (call $markNew (enum.get $Mk.extlink) (local.get $beg) (local.get $n) (local.get $www)))
+    (local.get $n))
+
   ;; The $n bytes (at most 8) at content offset $off as a little-endian word,
   ;; with ASCII letters folded to lowercase.
   (func $foldedWord (param $off i32) (param $n i32) (result i64)
@@ -149,11 +163,7 @@
           (i64.const 0x50100003e00) (i64.const 0x4000000080000000))))))
       (br_if $no (i32.lt_u (local.get $beg) (global.get $wwwRejectBefore)))
       (br_if $no (i32.eqz (local.tee $n
-        (call $checkDomain (local.get $beg) (local.get $end) (i32.const 0)))))
-      (local.set $n (call $autolinkDelim
-        (local.get $beg) (i32.add (local.get $beg) (local.get $n)) (local.get $end)))
-      (br_if $no (i32.le_u (local.get $n) (i32.add (local.get $beg) (i32.const 4))))
-      (drop (call $markNew (enum.get $Mk.extlink) (local.get $beg) (local.get $n) (i32.const 1)))
+        (call $urlAutolink (local.get $beg) (local.get $beg) (local.get $end) (i32.const 1)))))
       (return (local.get $n)))
     (i32.add (local.get $p) (i32.const 1)))
 
@@ -183,17 +193,18 @@
       (br_if $no (i32.eqz (i32.or (i64.eq (local.get $w) (i64.const "http:"))
         (i32.or (i64.eq (local.get $w) (i64.const "https:"))
           (i64.eq (local.get $w) (i64.const "ftp:"))))))
-      ;; the first character of the host must be alphanumeric
-      (br_if $no (i32.eqz (call $isAlnum
-        (i32.load8_u offset=3 (i32.add (local.get $base) (local.get $p))))))
-      (br_if $no (i32.eqz (local.tee $n (call $checkDomain
-        (i32.add (local.get $p) (i32.const 3)) (local.get $end) (i32.const 1)))))
-      (local.set $n (call $autolinkDelim
-        (local.get $beg)
-        (i32.add (i32.add (local.get $p) (i32.const 3)) (local.get $n))
-        (local.get $end)))
-      (br_if $no (i32.le_u (local.get $n) (i32.add (local.get $p) (i32.const 3))))
-      (drop (call $markNew (enum.get $Mk.extlink) (local.get $beg) (local.get $n) (i32.const 0)))
+      ;; The host starts with a letter or digit. Past ASCII that is any
+      ;; character other than whitespace or punctuation.
+      (local.set $n (i32.load8_u offset=3 (i32.add (local.get $base) (local.get $p))))
+      (br_if $no (if (result i32) (i32.lt_u (local.get $n) (i32.const 0x80))
+        (then (i32.eqz (call $isAlnum (local.get $n))))
+        (else
+          (local.set $n (call $utf8At
+            (i32.add (i32.add (local.get $base) (local.get $p)) (i32.const 3))
+            (i32.add (local.get $base) (local.get $end))))
+          (i32.or (call $isWhiteCp (local.get $n)) (call $isPunctCp (local.get $n))))))
+      (br_if $no (i32.eqz (local.tee $n (call $urlAutolink (local.get $beg)
+        (i32.add (local.get $p) (i32.const 3)) (local.get $end) (i32.const 0)))))
       (return (local.get $n)))
     (i32.add (local.get $p) (i32.const 1)))
 
@@ -212,7 +223,6 @@
     (local.set $base (global.get $contentBase))
     (block $no
       (br_if $no (global.get $bracketSp))
-      (local.set $kind (i32.const 2))
       (local.set $beg (local.get $p))
       ;; Marks [$k, $nSlots) are `_` runs that the local part absorbs. They are
       ;; the newest marks and still unresolved, since no bracket is open.
@@ -243,30 +253,23 @@
           (local.set $beg (i32.sub (local.get $beg) (i32.const 1)))
           (br $l)))
       (br_if $no (i32.eq (local.get $beg) (local.get $p)))
-      ;; an explicit scheme keeps the address verbatim
-      (if (i32.and (i32.ge_u (local.get $beg) (i32.add (local.get $stop) (i32.const 7)))
-            (i64.eq (call $foldedWord (i32.sub (local.get $beg) (i32.const 7)) (i32.const 7))
-              (i64.const "mailto:")))
-        (then
-          (local.set $beg (i32.sub (local.get $beg) (i32.const 7)))
-          (local.set $kind (i32.const 0)))
-        (else
-          (if (i32.and (i32.ge_u (local.get $beg) (i32.add (local.get $stop) (i32.const 5)))
-                (i64.eq (call $foldedWord (i32.sub (local.get $beg) (i32.const 5)) (i32.const 5))
-                  (i64.const "xmpp:")))
-            (then
-              (local.set $beg (i32.sub (local.get $beg) (i32.const 5)))
-              (local.set $kind (i32.const 0))
-              (local.set $xmpp (i32.const 1))))))
-      ;; a scheme glued to a preceding word is text before a bare address
-      (if (i32.and (i32.eqz (local.get $kind)) (i32.and (i32.ne (local.get $beg) (i32.const 0))
-            (call $isAlnum (i32.load8_u
-              (i32.sub (i32.add (local.get $base) (local.get $beg)) (i32.const 1))))))
-        (then
-          (local.set $beg (i32.add (local.get $beg)
-            (select (i32.const 5) (i32.const 7) (local.get $xmpp))))
-          (local.set $kind (i32.const 2))
-          (local.set $xmpp (i32.const 0))))
+      ;; An explicit scheme of $m bytes keeps the address verbatim. Glued to
+      ;; a word before it, the scheme is text before a bare address.
+      (local.set $m (select (i32.const 7)
+        (select (i32.const 5) (i32.const 0)
+          (i32.and (i32.ge_u (local.get $beg) (i32.add (local.get $stop) (i32.const 5)))
+            (i64.eq (call $foldedWord (i32.sub (local.get $beg) (i32.const 5)) (i32.const 5))
+              (i64.const "xmpp:"))))
+        (i32.and (i32.ge_u (local.get $beg) (i32.add (local.get $stop) (i32.const 7)))
+          (i64.eq (call $foldedWord (i32.sub (local.get $beg) (i32.const 7)) (i32.const 7))
+            (i64.const "mailto:")))))
+      (if (i32.and (i32.ne (local.get $beg) (local.get $m))
+            (call $isAlnum (i32.load8_u (i32.sub
+              (i32.add (local.get $base) (i32.sub (local.get $beg) (local.get $m))) (i32.const 1)))))
+        (then (local.set $m (i32.const 0))))
+      (local.set $beg (i32.sub (local.get $beg) (local.get $m)))
+      (local.set $kind (i32.shl (i32.eqz (local.get $m)) (i32.const 1)))
+      (local.set $xmpp (i32.eq (local.get $m) (i32.const 5)))
       (local.set $q (i32.add (local.get $p) (i32.const 1)))
       (block $host
         (loop $l

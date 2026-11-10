@@ -1,3 +1,4 @@
+/* oxlint-disable no-control-regex -- ANSI output is escape sequences, and these tests match them */
 import assert from 'node:assert';
 import test from 'node:test';
 
@@ -73,6 +74,32 @@ void test('an empty list item keeps its marker, and only its own', () => {
   assert.equal(plain('-\n\n  foo'), '•\n\nfoo\n');
 });
 
+void test('an item that opens inside another keeps both markers', () => {
+  assert.equal(plain('- - a'), '• ◦ a\n');
+  assert.equal(plain('1. - a\n   - b\n2. c'), '1. ◦ a\n   ◦ b\n2. c\n');
+  assert.equal(plain('1. 2. 3. a'), '1. 2. 3. a\n');
+  assert.equal(plain('- > - a'), '• │ ◦ a\n');
+  assert.equal(plain('- -\n- b'), '• ◦\n• b\n');
+  assert.equal(
+    plain('- - a b c d', { width: 7 }),
+    '• ◦ a b\n    c d\n',
+    'the text wraps under the inner item'
+  );
+  assert.equal(ansi('- - a'), '\x1b[1m• ◦ \x1b[0ma\n', 'one style for both');
+  // the outer marker is not bold: its style ends before the inner one
+  assert.equal(ansi('1. - a'), '1. \x1b[1m◦ \x1b[0ma\n');
+});
+
+void test('a block that writes nothing leaves no blank line', () => {
+  assert.equal(plain('- >\n\n  text'), '• text\n', 'an empty quote in an item');
+  assert.equal(plain('- >\n  - a'), '• ◦ a\n');
+  // inline content that renders nothing, such as dropped raw HTML
+  assert.equal(plain('<a name="x"></a>\n\ntext'), 'text\n');
+  assert.equal(plain('a\n\n<b></b>\n\nb'), 'a\n\nb\n');
+  assert.equal(plain('a\n\n#\n\nb'), 'a\n\nb\n');
+  assert.equal(plain('- <b></b>\n- x'), '•\n• x\n');
+});
+
 void test('a task box goes to its item’s first paragraph only', () => {
   assert.equal(plain('- [ ] foo\n  ---\n\nlater'), '• [ ] foo\n\nlater\n');
   for (const item of [
@@ -120,9 +147,38 @@ void test('wide tables align every column and cell', () => {
   assert.equal(row, Array(cols).fill('x').join(' │ '));
 });
 
+void test('a cell renders the same when measured and when written', () => {
+  // the space before a link target must not depend on the cell's column
+  assert.equal(
+    plain('> | a | b |\n> |-|-|\n> | [l](/u) | x |\n> | y | z |'),
+    '│ a      │ b\n│ ───────┼──\n│ l (/u) │ x\n│ y      │ z\n'
+  );
+  assert.equal(
+    plain('- | a | b |\n  |-|-|\n  | [l](/u) | []() |\n  | y | zzz |'),
+    '• a      │ b\n  ───────┼────\n  l (/u) │ ()\n  y      │ zzz\n'
+  );
+  assert.equal(
+    plain('| a | b |\n|-|-:|\n| x | []() |\n| y | zzz |'),
+    'a │   b\n──┼────\nx │  ()\ny │ zzz\n'
+  );
+});
+
 void test('links show their target', () => {
   assert.equal(plain('[text](/url)'), 'text (/url)\n');
   assert.equal(plain('<https://x.test/>'), 'https://x.test/\n');
+});
+
+void test('alt text line breaks are spaces that wrap like any other', () => {
+  assert.equal(plain('![a\nb](/i)'), 'a b (/i)\n');
+  assert.equal(plain('![a\\\nb](/i)'), 'a b (/i)\n');
+  assert.equal(plain('> ![\n> b](/i)'), '│ b (/i)\n', 'none at the line start');
+  assert.equal(
+    plain('![aaa\nbbb  \nccc](/i)', { width: 7 }),
+    'aaa bbb\nccc\n(/i)\n'
+  );
+  assert.equal(plain('![a\n](/i) b', { width: 1 }), 'a\n(/i)\nb\n');
+  // the space is a column: the target no longer fits behind it
+  assert.equal(plain('![a\nb](/i)', { width: 7 }), 'a b\n(/i)\n');
 });
 
 void test('wrapping respects the requested width', () => {
@@ -134,6 +190,13 @@ void test('wrapping respects the requested width', () => {
     plain(words).trimEnd().split('\n').length === 1,
     'no wrapping without a width'
   );
+});
+
+void test('a thematic break shows at any width', () => {
+  assert.equal(plain('---', { width: 10 }), `${'─'.repeat(10)}\n`);
+  assert.equal(plain('> ---', { width: 5 }), '│ ───\n');
+  assert.equal(plain('> ---', { width: 2 }), '│ ─\n');
+  assert.equal(plain('---', { width: 1 }), '─\n');
 });
 
 void test('a line wraps only at a break opportunity', () => {
@@ -156,6 +219,27 @@ void test('a line wraps only at a break opportunity', () => {
     plain('你好世界你好世界你好世界', { width: 10 }),
     '你好世界你\n好世界你好\n世界\n'
   );
+});
+
+void test('words of non-ASCII letters wrap like any other', () => {
+  assert.equal(
+    plain('Привет мир ещё раз', { width: 10 }),
+    'Привет мир\nещё раз\n'
+  );
+  assert.equal(
+    plain('naïve café déjà vu', { width: 10 }),
+    'naïve café\ndéjà vu\n'
+  );
+  assert.equal(
+    plain('да **нет**да ещё', { width: 8 }),
+    'да нетда\nещё\n',
+    'a styled part stays glued'
+  );
+  assert.equal(
+    plain('日本語のテキスト', { width: 7 }),
+    '日本語\nのテキ\nスト\n'
+  );
+  assert.equal(plain('한국어 텍스트', { width: 6 }), '한국어\n텍스트\n');
 });
 
 void test('a word wider than the line stays after its marker', () => {
@@ -203,6 +287,8 @@ void test('footnotes are collected at the end', () => {
   const out = plain('see[^1]\n\n[^1]: the note');
   assert.match(out, /see\[1\]/);
   assert.match(out, /\[1\] the note/);
+  // `![^1]` that is no image is `!` and a reference
+  assert.match(plain('wow![^1]\n\n[^1]: the note'), /^wow!\[1\]\n/);
 });
 
 void test('wide characters count as two columns', () => {
@@ -210,6 +296,11 @@ void test('wide characters count as two columns', () => {
   const lines = out.trimEnd().split('\n');
   assert.equal(lines[0], 'a    │ b');
   assert.equal(lines[2], '你好 │ x');
+});
+
+void test('a combining mark stays with its wide base character', () => {
+  assert.equal(plain('かかか\u3099かか', { width: 6 }), 'かかか\u3099\nかか\n');
+  assert.equal(plain('a 你\u0301好', { width: 3 }), 'a\n你\u0301\n好\n');
 });
 
 void test('a list marker stays in its own column when a quote follows it', () => {
@@ -301,9 +392,30 @@ void test('a held-back space never ends a wrapped line', () => {
   }
 });
 
+void test('a line does not start with a space', () => {
+  // the space follows raw HTML that is dropped, or opens a styled span
+  assert.equal(ansi('# <b> e'), '\x1b[1m\x1b[4m\x1b[38;5;39me\x1b[0m\n');
+  assert.equal(ansi('~~<b> d~~'), '\x1b[9md\x1b[0m\n');
+  assert.equal(plain('[ x](/u)'), 'x (/u)\n');
+  assert.equal(plain('<b> x'), 'x\n');
+  assert.equal(plain('- [ ] <b> x'), '• [ ] x\n');
+});
+
 void test('quoted content is dim', () => {
   assert.match(ansi('> quoted'), /\x1b\[2mquoted/);
   assert.equal(plain('> quoted\n'), '│ quoted\n');
+});
+
+void test('a line that starts with a style change opens with one sequence', () => {
+  const bar = '\x1b[38;5;240m│\x1b[0m ';
+  assert.equal(
+    ansi('> # h'),
+    `${bar}\x1b[1m\x1b[4m\x1b[2m\x1b[38;5;39mh\x1b[0m\n`
+  );
+  assert.equal(
+    ansi('> **a** b'),
+    `${bar}\x1b[1m\x1b[2ma\x1b[0m\x1b[2m b\x1b[0m\n`
+  );
 });
 
 void test('a table cell that holds back a space keeps its style', () => {
@@ -374,6 +486,12 @@ void test('invalid UTF-8 from bytes input cannot reach the terminal', () => {
     const output = raw(bytes('a', ...invalid, 'b'));
     assert.ok(output.includes(fffd), invalid.join());
     assert.ok(!output.includes('\x9b'), invalid.join());
+  }
+  // The scan skips ASCII eight bytes at a time: every offset in a block.
+  for (let i = 0; i < 20; i++) {
+    const pad = 'a'.repeat(i);
+    assert.equal(raw(bytes(pad, 0x9b, 'b', 0xc2)), `${pad}${fffd}b${fffd}\n`);
+    assert.equal(ansi(Buffer.from(`${pad}é€😀`)), `${pad}é€😀\n`);
   }
   // Valid sequences hold bytes in the same range, and stay as they are.
   const valid = 'é € ’ 😀 \u{10ffff} \ud7ff \ue000';
