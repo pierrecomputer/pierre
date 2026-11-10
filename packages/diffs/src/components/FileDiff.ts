@@ -502,7 +502,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           : undefined,
         this.getLineIndex,
         this.renderSemanticSelection,
-        this.toggleSemanticFold
+        this.handleSemanticFoldToggle
       )
     );
     this.enabled = true;
@@ -610,7 +610,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           : undefined,
         this.getLineIndex,
         this.renderSemanticSelection,
-        this.toggleSemanticFold
+        this.handleSemanticFoldToggle
       )
     );
   }
@@ -1301,11 +1301,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.expandHunk(hunkIndex, direction, expansionLineCountOverride);
   };
 
+  // `InteractionManager` is created in this base constructor, so it needs a
+  // stable callback that resolves `this.toggleSemanticFold` at click time.
+  private handleSemanticFoldToggle = (start: number): void => {
+    this.toggleSemanticFold(start);
+  };
+
   // Open a semantic fold, or close it again, by its first old line.
-  private toggleSemanticFold = (start: number): void => {
+  protected toggleSemanticFold(start: number): void {
     this.hunksRenderer.toggleSemanticFold(start);
     this.rerender();
-  };
+  }
 
   public expandHunk = (
     hunkIndex: number,

@@ -167,6 +167,7 @@ export class VirtualizedFileDiff<
   // CodeView applies expansions at its next layout pass. Until then this is
   // the expansion state as it will be once they are applied.
   private pendingExpandedHunks: ExpandedHunksMap | undefined;
+  private pendingFoldToggles: number[] | undefined;
   // Remember which diff the layout was calculated from, even when only a
   // placeholder is rendered. Async highlighting clears this through rerender()
   // so layout can use the newly available content. CodeView updates it during
@@ -666,6 +667,7 @@ export class VirtualizedFileDiff<
     let resetEstimatedHeights = false;
     const {
       pendingExpandedHunks,
+      pendingFoldToggles,
       pendingHydratedDiff,
       options: { collapsed = false },
     } = this;
@@ -689,6 +691,16 @@ export class VirtualizedFileDiff<
     if (pendingExpandedHunks != null) {
       this.pendingExpandedHunks = undefined;
       this.hunksRenderer.setExpandedHunksMap(pendingExpandedHunks);
+      this.forceRenderOverride = true;
+      resetEstimatedHeights = true;
+    }
+
+    // And any queued fold toggles
+    if (pendingFoldToggles != null) {
+      this.pendingFoldToggles = undefined;
+      for (const start of pendingFoldToggles) {
+        this.applySemanticFoldToggle(start);
+      }
       this.forceRenderOverride = true;
       resetEstimatedHeights = true;
     }
@@ -1087,6 +1099,7 @@ export class VirtualizedFileDiff<
       this.resetMeasurements();
       this.invalidateLayout({ includeEstimatedHeights: true });
       this.pendingExpandedHunks = undefined;
+      this.pendingFoldToggles = undefined;
       this.pendingHydratedDiff = undefined;
     }
     this.pendingRender = undefined;
@@ -1132,6 +1145,56 @@ export class VirtualizedFileDiff<
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
   };
+
+  // A toggle moves rows. In CodeView it waits for the next layout, like an
+  // expansion, so the scroll anchor is read before the rows move.
+  protected override toggleSemanticFold(start: number): void {
+    if (this.getInputDiff() == null) {
+      return;
+    }
+    if (this.isAdvancedMode()) {
+      this.pendingFoldToggles ??= [];
+      this.pendingFoldToggles.push(start);
+    } else {
+      this.applySemanticFoldToggle(start);
+      this.invalidateLayout({ includeEstimatedHeights: true });
+      this.computeApproximateSize();
+    }
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
+  }
+
+  // Toggles the fold and drops what its rows measured. A closed fold shows
+  // one row that is never measured, so the heights its lines had while open
+  // must not count.
+  private applySemanticFoldToggle(start: number): void {
+    this.hunksRenderer.toggleSemanticFold(start);
+    const fileDiff = this.getRenderedDiff();
+    const fold = fileDiff?.semanticFolds?.find(
+      (candidate) => candidate.old.start === start
+    );
+    if (fileDiff == null || fold == null) {
+      return;
+    }
+    const first = this.getLineIndexForDiff(
+      fileDiff,
+      fold.old.start,
+      'deletions'
+    );
+    const last = this.getLineIndexForDiff(fileDiff, fold.old.end, 'deletions');
+    if (first == null || last == null) {
+      return;
+    }
+    const column = this.getDiffStyle() === 'split' ? 1 : 0;
+    const { cache } = this;
+    for (let row = first[column]; row <= last[column]; row++) {
+      const delta = cache.heightDeltas.get(row);
+      if (delta != null) {
+        cache.heightDeltas.delete(row);
+        cache.measuredHeightDeltaTotal -= delta;
+      }
+    }
+  }
 
   protected override async handleFilesLoaded(
     expectedDiff: FileDiffMetadata,
