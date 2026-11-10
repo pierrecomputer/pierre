@@ -5,6 +5,7 @@ import type {
   FileDiffMetadata,
   Hunk,
   HunkExpansionRegion,
+  SemanticDiffFold,
 } from '../types';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import {
@@ -20,11 +21,30 @@ export interface DiffLineMetadata {
   noEOFCR: boolean;
 }
 
+/**
+ * The one row shown in place of a closed semantic fold's old lines. It sits
+ * on the row of the fold's first old line.
+ */
+export interface FoldRow {
+  fold: SemanticDiffFold;
+  /** The split row of the fold's last old line. */
+  lastSplitLineIndex: number;
+  /** The unified row of the fold's last old line. */
+  lastUnifiedLineIndex: number;
+}
+
 export interface DiffLineCallbackBase {
   hunkIndex: number;
   hunk: Hunk | undefined; // undefined for trailing expansion region
   collapsedBefore: number; // > 0 means separator before this line, value = hidden lines
   collapsedAfter: number; // > 0 only on final line if trailing collapsed content
+  /**
+   * Set when this row stands in for a closed semantic fold. `deletionLine`
+   * is the fold's first old line; its other lines get no row.
+   */
+  foldRow?: FoldRow;
+  /** Set on the first old line of a semantic fold the reader opened. */
+  openFold?: SemanticDiffFold;
 }
 
 interface DiffLineCallbackContext extends DiffLineCallbackBase {
@@ -85,6 +105,21 @@ interface IterationState {
   splitCount: number;
   unifiedCount: number;
   finalHunkIndex: number;
+  /**
+   * The diff's semantic folds, in old-line order, when the walk folds. Folds
+   * only cover removed lines that have no new line beside them.
+   */
+  folds: readonly SemanticDiffFold[] | undefined;
+  /** Index of the next fold in `folds` the walk has not gone past. */
+  foldIndex: number;
+  /** Moves `foldIndex` past the folds that end before old line `line`. */
+  skipFoldsBefore(line: number): void;
+  /**
+   * Counts the rows that closed folds hide among old lines `firstLine`
+   * through `lastLine`. A closed fold shows one row for all of its lines, so
+   * every line after its first is hidden.
+   */
+  countHiddenRows(firstLine: number, lastLine: number): number;
   shouldBreak(): boolean;
   shouldSkip(unifiedHeight: number, splitHeight: number): boolean;
   incrementCounts(unifiedValue: number, splitValue: number): void;
@@ -98,11 +133,8 @@ interface IterationStartState {
   hunkIndex: number;
   splitCount: number;
   unifiedCount: number;
-}
-
-interface HunkPrefixCounts {
-  splitCount: number;
-  unifiedCount: number;
+  /** Index of the first semantic fold at or after the hunk. */
+  foldIndex: number;
 }
 
 interface IterationStartStateProps extends Omit<
@@ -112,11 +144,6 @@ interface IterationStartStateProps extends Omit<
   startingLine: number;
   collapsedContextThreshold: number;
 }
-
-interface HunkPrefixCountsProps extends Pick<
-  IterationStartStateProps,
-  'diff' | 'expandedHunks' | 'collapsedContextThreshold'
-> {}
 
 export type DiffLineCallback = (props: DiffLineCallbackProps) => boolean | void;
 
@@ -133,6 +160,12 @@ export interface IterateOverDiffProps {
    * an edit session shows it so the caret has a row there.
    */
   includeTrailingNewline?: boolean;
+  /**
+   * The semantic folds the reader opened, by first old line. Every other
+   * fold of the diff is closed: one row shows in place of its old lines, and
+   * rows are counted that way. Leave it out to show every line.
+   */
+  openSemanticFolds?: ReadonlySet<number>;
   callback: DiffLineCallback;
 }
 
@@ -144,6 +177,7 @@ export function iterateOverDiff({
   expandedHunks,
   collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   includeTrailingNewline = false,
+  openSemanticFolds,
   callback,
 }: IterateOverDiffProps): void {
   const iterationStart = getIterationStartState({
@@ -153,6 +187,7 @@ export function iterateOverDiff({
     expandedHunks,
     collapsedContextThreshold,
     includeTrailingNewline,
+    openSemanticFolds,
   });
   const state: IterationState = {
     viewportStart: startingLine,
@@ -161,6 +196,36 @@ export function iterateOverDiff({
     splitCount: iterationStart.splitCount,
     unifiedCount: iterationStart.unifiedCount,
     finalHunkIndex: diff.hunks.length - 1,
+    folds: openSemanticFolds != null ? diff.semanticFolds : undefined,
+    foldIndex: iterationStart.foldIndex,
+    skipFoldsBefore(line: number) {
+      const { folds } = state;
+      while (
+        folds != null &&
+        state.foldIndex < folds.length &&
+        folds[state.foldIndex].old.end < line
+      ) {
+        state.foldIndex++;
+      }
+    },
+    countHiddenRows(firstLine: number, lastLine: number) {
+      const { folds } = state;
+      if (folds == null) {
+        return 0;
+      }
+      state.skipFoldsBefore(firstLine);
+      let count = 0;
+      for (
+        let index = state.foldIndex, fold = folds[index];
+        fold != null && fold.old.start <= lastLine;
+        fold = folds[++index]
+      ) {
+        if (openSemanticFolds?.has(fold.old.start) !== true) {
+          count += fold.old.end - fold.old.start;
+        }
+      }
+      return count;
+    },
     shouldBreak() {
       if (!state.isWindowedHighlight) {
         return false;
@@ -495,13 +560,29 @@ export function iterateOverDiff({
       else {
         const splitCount = Math.max(content.deletions, content.additions);
         const unifiedCount = content.deletions + content.additions;
-        const shouldSkipChange = state.shouldSkip(unifiedCount, splitCount);
+        const lastOldLine = deletionLineNumber + content.deletions - 1;
+        // The rows of the block that closed folds hide. Each view loses the
+        // same rows.
+        const hiddenCount = state.countHiddenRows(
+          deletionLineNumber,
+          lastOldLine
+        );
+        const nextFold = state.folds?.[state.foldIndex];
+        const hasFolds = nextFold != null && nextFold.old.start <= lastOldLine;
+        const shownUnifiedCount = unifiedCount - hiddenCount;
+        const shownSplitCount = splitCount - hiddenCount;
+        const shouldSkipChange = state.shouldSkip(
+          shownUnifiedCount,
+          shownSplitCount
+        );
         if (!shouldSkipChange) {
-          const iterationRanges = getChangeIterationRanges(
-            state,
-            content,
-            diffStyle
-          );
+          // The window's rows in the block are found by arithmetic. Hidden
+          // rows throw that off, so a block that has them is walked from its
+          // first row, counting the rows it shows.
+          const iterationRanges: LineIterationBounds[] =
+            hiddenCount > 0
+              ? [[0, diffStyle === 'unified' ? unifiedCount : splitCount]]
+              : getChangeIterationRanges(state, content, diffStyle);
           const firstRangeStart = iterationRanges[0]?.[0] ?? 0;
           if (firstRangeStart > 0) {
             // Change rows can be windowed from the middle of the block too. In
@@ -509,10 +590,64 @@ export function iterateOverDiff({
             // the first visible deletion/addition row.
             consumePendingCollapsed();
           }
+          // The rows of the block hidden before the current row.
+          let hiddenBefore = 0;
           // Change ranges are already clipped to the active window. Counts move
           // once for the whole change block after the selected rows emit.
-          for (const [rangeStart, rangeEnd] of iterationRanges) {
-            for (let index = rangeStart; index < rangeEnd; index++) {
+          rangeIterator: for (const [rangeStart, rangeEnd] of iterationRanges) {
+            rowIterator: for (
+              let index = rangeStart;
+              index < rangeEnd;
+              index++
+            ) {
+              // The fold that starts on this row, and whether it is closed.
+              let fold: SemanticDiffFold | undefined;
+              let isClosed = false;
+              if (hasFolds && index < content.deletions) {
+                const oldLine = deletionLineNumber + index;
+                state.skipFoldsBefore(oldLine);
+                fold = state.folds?.[state.foldIndex];
+                if (fold != null && fold.old.start <= oldLine) {
+                  isClosed = openSemanticFolds?.has(fold.old.start) !== true;
+                  if (fold.old.start !== oldLine) {
+                    // A closed fold's lines after its first get no row.
+                    if (isClosed) {
+                      hiddenBefore++;
+                      continue rowIterator;
+                    }
+                    fold = undefined;
+                  }
+                } else {
+                  fold = undefined;
+                }
+              }
+              if (hiddenCount > 0 && state.isWindowedHighlight) {
+                const shownIndex = index - hiddenBefore;
+                if (
+                  !isFoldedChangeRowInWindow(
+                    state,
+                    content,
+                    diffStyle,
+                    index,
+                    shownIndex,
+                    hiddenCount
+                  )
+                ) {
+                  // Past the window's last row, nothing more of the block
+                  // shows.
+                  const row =
+                    (diffStyle === 'unified'
+                      ? state.unifiedCount
+                      : state.splitCount) + shownIndex;
+                  if (diffStyle !== 'both' && row >= state.viewportEnd) {
+                    break rangeIterator;
+                  }
+                  // The leading separator belongs to the rows skipped before
+                  // the window.
+                  consumePendingCollapsed();
+                  continue rowIterator;
+                }
+              }
               const unifiedRowIndex = unifiedLineIndex + index;
               const splitRowIndex =
                 diffStyle === 'unified'
@@ -521,33 +656,44 @@ export function iterateOverDiff({
                       ? index
                       : index - content.deletions)
                   : splitLineIndex + index;
+              // A closed fold's row stands in for its hidden rows too, so
+              // what follows the last of them follows it.
+              const hiddenRows =
+                fold != null && isClosed ? fold.old.end - fold.old.start : 0;
+              const lastUnifiedRowIndex = unifiedRowIndex + hiddenRows;
+              const lastSplitRowIndex = splitRowIndex + hiddenRows;
               const collapsedAfter = getTrailingCollapsedAfter(
-                unifiedRowIndex,
-                splitRowIndex
+                lastUnifiedRowIndex,
+                lastSplitRowIndex
               );
-              if (
-                state.emit(
-                  getChangeLineData({
-                    hunkIndex,
-                    hunk,
-                    collapsedBefore: consumePendingCollapsed(),
-                    collapsedAfter,
-                    diffStyle,
-                    index,
-                    unifiedLineIndex,
-                    splitLineIndex,
-                    additionLineIndex,
-                    deletionLineIndex,
-                    additionLineNumber,
-                    deletionLineNumber,
-                    content,
-                    isLastContent,
-                    unifiedCount,
-                    splitCount,
-                  }),
-                  true
-                )
-              ) {
+              const emitProps = getChangeLineData({
+                hunkIndex,
+                hunk,
+                collapsedBefore: consumePendingCollapsed(),
+                collapsedAfter,
+                diffStyle,
+                index,
+                unifiedLineIndex,
+                splitLineIndex,
+                additionLineIndex,
+                deletionLineIndex,
+                additionLineNumber,
+                deletionLineNumber,
+                content,
+                isLastContent,
+                unifiedCount,
+                splitCount,
+              });
+              if (fold != null && isClosed) {
+                emitProps.foldRow = {
+                  fold,
+                  lastSplitLineIndex: lastSplitRowIndex,
+                  lastUnifiedLineIndex: lastUnifiedRowIndex,
+                };
+              } else if (fold != null) {
+                emitProps.openFold = fold;
+              }
+              if (state.emit(emitProps, true)) {
                 break hunkIterator;
               }
             }
@@ -555,7 +701,7 @@ export function iterateOverDiff({
         }
 
         consumePendingCollapsed();
-        state.incrementCounts(unifiedCount, splitCount);
+        state.incrementCounts(shownUnifiedCount, shownSplitCount);
         unifiedLineIndex += unifiedCount;
         splitLineIndex += splitCount;
         deletionLineIndex += content.deletions;
@@ -698,13 +844,11 @@ export function endsWithNewline(
   return lines.at(-1)?.endsWith('\n') === true;
 }
 
-// Seek the iterator to the hunk that contains `startingLine` without changing
-// the public meaning of `startingLine`: it is a dense rendered-row index, not
-// a raw split/unified line index. We first build prefix counts for each hunk
-// under the current expansion/collapse settings, binary-search those counts to
-// find the first hunk whose rendered rows cross `startingLine`, then seed the
-// running split/unified counters as if every prior hunk had already been
-// walked.
+// Finds the hunk a window starts in. `startingLine` is a dense rendered-row
+// index, so this adds up the rows of each hunk from the top, under the
+// current expansion and fold state, and stops at the first hunk that reaches
+// `startingLine`. The walk then starts at that hunk with the row counts and
+// the fold index as they stand before it. Hunks after it are never looked at.
 function getIterationStartState({
   diff,
   diffStyle,
@@ -712,93 +856,34 @@ function getIterationStartState({
   expandedHunks,
   collapsedContextThreshold,
   includeTrailingNewline = false,
+  openSemanticFolds,
 }: IterationStartStateProps): IterationStartState {
-  if (startingLine <= 0 || diffStyle === 'both') {
-    return { hunkIndex: 0, splitCount: 0, unifiedCount: 0 };
-  }
-
-  const prefixCounts = getHunkPrefixCounts({
-    diff,
-    expandedHunks,
-    collapsedContextThreshold,
-  });
-
-  let low = 0;
-  let high = diff.hunks.length - 1;
-  let result = diff.hunks.length;
-
-  while (low <= high) {
-    const mid = (low + high) >> 1;
-    const counts = prefixCounts[mid + 1];
-    if (counts == null) {
-      throw new Error('iterateOverDiff: invalid hunk prefix index');
-    }
-    const selectedCount =
-      diffStyle === 'unified' ? counts.unifiedCount : counts.splitCount;
-
-    if (selectedCount > startingLine) {
-      result = mid;
-      high = mid - 1;
-    } else {
-      low = mid + 1;
-    }
-  }
-
-  if (result >= diff.hunks.length) {
-    // A window past every hunk's rows still starts at the final hunk when it
-    // can include the trailing newline row: that iteration skips the hunk's
-    // rows and emits the row after them.
-    if (includeTrailingNewline && diff.hunks.length > 0) {
-      result = diff.hunks.length - 1;
-    } else {
-      const counts = prefixCounts[diff.hunks.length];
-      if (counts == null) {
-        throw new Error('iterateOverDiff: invalid terminal hunk prefix index');
-      }
-      return {
-        hunkIndex: diff.hunks.length,
-        splitCount: counts.splitCount,
-        unifiedCount: counts.unifiedCount,
-      };
-    }
-  }
-
-  const counts = prefixCounts[result];
-  if (counts == null) {
-    throw new Error('iterateOverDiff: invalid selected hunk prefix index');
-  }
-  return {
-    hunkIndex: result,
-    splitCount: counts.splitCount,
-    unifiedCount: counts.unifiedCount,
+  const start: IterationStartState = {
+    hunkIndex: 0,
+    splitCount: 0,
+    unifiedCount: 0,
+    foldIndex: 0,
   };
-}
+  if (startingLine <= 0 || diffStyle === 'both') {
+    return start;
+  }
 
-// Build cumulative rendered-row counts at every hunk boundary for the current
-// expansion state. Entry 0 is always zero rows before the first hunk; entry N
-// is the split/unified row count after hunks [0, N). These counts let
-// getIterationStartState binary-search by dense rendered row without replaying
-// every prior hunk.
-function getHunkPrefixCounts({
-  diff,
-  expandedHunks,
-  collapsedContextThreshold,
-}: HunkPrefixCountsProps): HunkPrefixCounts[] {
+  const folds = openSemanticFolds != null ? diff.semanticFolds : undefined;
+  const finalHunkIndex = diff.hunks.length - 1;
+  // The row counts and the fold index after the hunks passed so far.
   let splitCount = 0;
   let unifiedCount = 0;
-  const finalHunkIndex = diff.hunks.length - 1;
-  const prefixCounts: HunkPrefixCounts[] = [
-    {
-      splitCount: 0,
-      unifiedCount: 0,
-    },
-  ];
+  let foldIndex = 0;
 
   for (let index = 0; index < diff.hunks.length; index++) {
     const hunk = diff.hunks[index];
     if (hunk == null) {
       throw new Error('iterateOverDiff: invalid hunk summary index');
     }
+    start.hunkIndex = index;
+    start.splitCount = splitCount;
+    start.unifiedCount = unifiedCount;
+    start.foldIndex = foldIndex;
 
     const leadingRegion = getExpandedRegion({
       isPartial: diff.isPartial,
@@ -808,8 +893,25 @@ function getHunkPrefixCounts({
       collapsedContextThreshold,
     });
     const leadingCount = leadingRegion.fromStart + leadingRegion.fromEnd;
-    splitCount += leadingCount + hunk.splitLineCount;
-    unifiedCount += leadingCount + hunk.unifiedLineCount;
+    // The rows the hunk's closed folds hide. A closed fold shows one row
+    // for all of its old lines, so every line after its first is hidden.
+    let foldedCount = 0;
+    if (folds != null && foldIndex < folds.length) {
+      const lastOldLine =
+        getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) +
+        hunk.deletionCount;
+      for (
+        let fold = folds[foldIndex];
+        fold != null && fold.old.start <= lastOldLine;
+        fold = folds[++foldIndex]
+      ) {
+        if (openSemanticFolds?.has(fold.old.start) !== true) {
+          foldedCount += fold.old.end - fold.old.start;
+        }
+      }
+    }
+    splitCount += leadingCount + hunk.splitLineCount - foldedCount;
+    unifiedCount += leadingCount + hunk.unifiedLineCount - foldedCount;
 
     const trailingRegion =
       index === finalHunkIndex
@@ -827,10 +929,56 @@ function getHunkPrefixCounts({
       unifiedCount += trailingCount;
     }
 
-    prefixCounts.push({ splitCount, unifiedCount });
+    if ((diffStyle === 'unified' ? unifiedCount : splitCount) > startingLine) {
+      return start;
+    }
   }
 
-  return prefixCounts;
+  // A window past every hunk's rows still starts at the final hunk when it
+  // can include the trailing newline row: that iteration skips the hunk's
+  // rows and emits the row after them.
+  if (includeTrailingNewline && diff.hunks.length > 0) {
+    return start;
+  }
+  return { hunkIndex: diff.hunks.length, splitCount, unifiedCount, foldIndex };
+}
+
+function isRowInWindow(state: IterationState, row: number): boolean {
+  return row >= state.viewportStart && row < state.viewportEnd;
+}
+
+// Whether a row of a change block with hidden rows is inside the window.
+// `index` is the row's place in the block and `shownIndex` its place among
+// the rows the block shows.
+function isFoldedChangeRowInWindow(
+  state: IterationState,
+  content: ChangeContent,
+  diffStyle: DiffStyle,
+  index: number,
+  shownIndex: number,
+  hiddenCount: number
+): boolean {
+  if (diffStyle === 'unified') {
+    return isRowInWindow(state, state.unifiedCount + shownIndex);
+  }
+  if (isRowInWindow(state, state.splitCount + shownIndex)) {
+    return true;
+  }
+  if (diffStyle === 'split') {
+    return false;
+  }
+  // 'both' walks split rows, which can hold an old and a new line. The
+  // unified view shows the old line among the block's removed lines and the
+  // new line after all of them.
+  return (
+    (index < content.deletions &&
+      isRowInWindow(state, state.unifiedCount + shownIndex)) ||
+    (index < content.additions &&
+      isRowInWindow(
+        state,
+        state.unifiedCount + content.deletions - hiddenCount + index
+      ))
+  );
 }
 
 // Clip a run of context rows to a single bounded hull around the active rendered

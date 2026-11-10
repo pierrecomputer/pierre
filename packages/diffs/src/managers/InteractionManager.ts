@@ -176,9 +176,9 @@ export interface MergeConflictActionTarget {
   conflictIndex: number;
 }
 
-/** The expand/collapse toggle of a collapsible region, by its first line. */
-interface SemanticRegionToggleTarget {
-  kind: 'semantic-region-toggle';
+/** The toggle that opens or closes a semantic fold, by its first old line. */
+interface SemanticFoldToggleTarget {
+  kind: 'semantic-fold-toggle';
   start: number;
 }
 
@@ -187,7 +187,7 @@ type ResolvedPointerTarget<TMode extends InteractionManagerMode> =
   | ResolvedTokenTarget<TMode>
   | ExpandoEventProps
   | MergeConflictActionTarget
-  | SemanticRegionToggleTarget;
+  | SemanticFoldToggleTarget;
 
 type LinePointerTarget<TMode extends InteractionManagerMode> =
   ResolvedLineTarget<TMode>;
@@ -263,7 +263,7 @@ export interface InteractionManagerOptions<
   ): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
   onSelectedLinesRender?(): void;
-  onSemanticRegionToggle?(start: number): void;
+  onSemanticFoldToggle?(start: number): void;
 }
 
 interface HandlePointerEventProps {
@@ -476,14 +476,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineNumberClick,
       onTokenClick,
       onMergeConflictActionClick,
-      onSemanticRegionToggle,
+      onSemanticFoldToggle,
     } = this.options;
     if (
       onHunkExpand == null &&
       onLineClick == null &&
       onLineNumberClick == null &&
       onMergeConflictActionClick == null &&
-      onSemanticRegionToggle == null &&
+      onSemanticFoldToggle == null &&
       onTokenClick == null
     ) {
       return;
@@ -646,7 +646,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave,
       onHunkExpand,
       onMergeConflictActionClick,
-      onSemanticRegionToggle,
+      onSemanticFoldToggle,
     } = this.options;
 
     switch (eventType) {
@@ -707,10 +707,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           break;
         }
         if (
-          isSemanticRegionTogglePointerTarget(target) &&
-          onSemanticRegionToggle != null
+          isSemanticFoldTogglePointerTarget(target) &&
+          onSemanticFoldToggle != null
         ) {
-          onSemanticRegionToggle(target.start);
+          onSemanticFoldToggle(target.start);
           break;
         }
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
@@ -760,7 +760,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave,
       onHunkExpand,
       onMergeConflictActionClick,
-      onSemanticRegionToggle,
+      onSemanticFoldToggle,
       enableGutterUtility = false,
       enableLineSelection = false,
       onGutterUtilityClick,
@@ -777,7 +777,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave != null ||
       onHunkExpand != null ||
       onMergeConflictActionClick != null ||
-      onSemanticRegionToggle != null ||
+      onSemanticFoldToggle != null ||
       enableGutterUtility ||
       enableLineSelection ||
       enableGutterSelection;
@@ -1544,8 +1544,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (excludeUtility && isGutterUtilityPath(path)) {
       return undefined;
     }
-    // A collapsible region's toggle expands or collapses the region instead.
-    if (isSemanticRegionTogglePath(path)) {
+    // A semantic fold's toggle opens or closes the fold instead.
+    if (isSemanticFoldTogglePath(path)) {
       return undefined;
     }
     // Selection is row-based, not child-element-based. Lateral movement over
@@ -1904,13 +1904,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           continue;
         }
 
-        // A collapsed semantic region's row and a gap each stand in for a
-        // range of split rows. The collapsed row is selected when the selection
-        // covers any row it hides; a gap only when the selection covers all of
-        // its rows, so a selection that runs through it fills it.
-        const splitRows = getSplitRows(contentElement);
-        if (splitRows != null) {
-          const [firstRow, lastRow] = splitRows;
+        // A closed semantic fold's row and a gap each stand in for a range of
+        // the view's rows. The fold's row is selected when the selection
+        // covers any row it hides; a gap only when the selection covers all
+        // of its rows, so a selection that runs through it fills it.
+        const rowRange = getRowRange(contentElement);
+        if (rowRange != null) {
+          const [firstRow, lastRow] = rowRange;
           if (firstRow > finalLineIndex) {
             break;
           }
@@ -1918,7 +1918,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             renderSelectedLines &&
             selectedFirst != null &&
             selectedLast != null &&
-            (contentElement.hasAttribute('data-semantic-region')
+            (contentElement.hasAttribute('data-semantic-fold')
               ? firstRow <= selectedLast && lastRow >= selectedFirst
               : firstRow >= selectedFirst && lastRow <= selectedLast)
           ) {
@@ -2148,23 +2148,23 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     let expandInfo: ExpandCache | undefined;
     let lineNumber: number | undefined;
     let mergeConflictActionTarget: MergeConflictActionTarget | undefined;
-    let semanticRegionToggleTarget: SemanticRegionToggleTarget | undefined;
+    let semanticFoldToggleTarget: SemanticFoldToggleTarget | undefined;
 
     for (const element of path) {
-      // A collapsible region's toggle can be an SVG icon, so it is matched on
+      // A semantic fold's toggle can be an SVG icon, so it is matched on
       // any element, ahead of the HTML-only checks below.
       if (
-        semanticRegionToggleTarget == null &&
+        semanticFoldToggleTarget == null &&
         element instanceof Element &&
-        element.hasAttribute('data-semantic-region-toggle')
+        element.hasAttribute('data-semantic-fold-toggle')
       ) {
         const start = Number.parseInt(
-          element.getAttribute('data-semantic-region-toggle') ?? '',
+          element.getAttribute('data-semantic-fold-toggle') ?? '',
           10
         );
         if (Number.isFinite(start)) {
-          semanticRegionToggleTarget = {
-            kind: 'semantic-region-toggle',
+          semanticFoldToggleTarget = {
+            kind: 'semantic-fold-toggle',
             start,
           };
         }
@@ -2290,8 +2290,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (mergeConflictActionTarget != null) {
       return mergeConflictActionTarget;
     }
-    if (semanticRegionToggleTarget != null) {
-      return semanticRegionToggleTarget;
+    if (semanticFoldToggleTarget != null) {
+      return semanticFoldToggleTarget;
     }
 
     if (expandInfo?.hunkIndex != null) {
@@ -2492,7 +2492,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
   onSelectedLinesRender?: () => void,
-  onSemanticRegionToggle?: (start: number) => void,
+  onSemanticFoldToggle?: (start: number) => void,
   onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
 ): InteractionManagerOptions<TMode> {
   return {
@@ -2509,7 +2509,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onHunkExpand,
     onMergeConflictActionClick,
     onSelectedLinesRender,
-    onSemanticRegionToggle,
+    onSemanticFoldToggle,
     onLineClick,
     onLineEnter,
     onLineLeave,
@@ -2578,20 +2578,20 @@ function isMergeConflictActionPointerTarget<
   return 'kind' in target && target.kind === 'merge-conflict-action';
 }
 
-function isSemanticRegionTogglePath(
+function isSemanticFoldTogglePath(
   path: readonly (EventTarget | undefined)[]
 ): boolean {
   return path.some(
     (element) =>
       element instanceof Element &&
-      element.hasAttribute('data-semantic-region-toggle')
+      element.hasAttribute('data-semantic-fold-toggle')
   );
 }
 
-function isSemanticRegionTogglePointerTarget<
+function isSemanticFoldTogglePointerTarget<
   TMode extends InteractionManagerMode,
->(target: ResolvedPointerTarget<TMode>): target is SemanticRegionToggleTarget {
-  return 'kind' in target && target.kind === 'semantic-region-toggle';
+>(target: ResolvedPointerTarget<TMode>): target is SemanticFoldToggleTarget {
+  return 'kind' in target && target.kind === 'semantic-fold-toggle';
 }
 
 function isMergeConflictResolution(
@@ -2727,10 +2727,10 @@ function areLineRenderStatesEqual(
   );
 }
 
-// The first and last split rows a collapsed semantic region's row or a gap
-// stands for, or undefined for any other row.
-function getSplitRows(element: HTMLElement): [number, number] | undefined {
-  const rows = element.getAttribute('data-split-rows');
+// The first and last rows a closed semantic fold's row or a gap stands for,
+// in the view's own row numbering, or undefined for any other row.
+function getRowRange(element: HTMLElement): [number, number] | undefined {
+  const rows = element.getAttribute('data-row-range');
   if (rows == null) {
     return undefined;
   }

@@ -479,7 +479,7 @@
   [data-column-number],
   [data-line-annotation],
   [data-no-newline],
-  [data-semantic-region],
+  [data-semantic-fold],
   [data-content-buffer],
   [data-merge-conflict],
   [data-merge-conflict-actions],
@@ -830,7 +830,7 @@
   [data-merge-conflict],
   [data-merge-conflict-actions],
   [data-no-newline],
-  [data-semantic-region],
+  [data-semantic-fold],
   [data-content-buffer],
   [data-editor-overlay] {
     --diffs-selection-mix-target: var(
@@ -846,7 +846,7 @@
         [data-merge-conflict],
         [data-merge-conflict-actions],
         [data-no-newline],
-        [data-semantic-region],
+        [data-semantic-fold],
         [data-content-buffer]
       ) {
       --mix-selection-light: 82%;
@@ -865,9 +865,9 @@
       --diffs-hover-mix-target: var(--diffs-selection-mix-target);
     }
 
-    /* A collapsed region's row reads as one row across the gutter and the
+    /* A closed fold's row reads as one row across the gutter and the
      * content column, so its gutter cell mixes a selection like content. */
-    &[data-selected-line]:where([data-gutter-buffer='semantic-region']) {
+    &[data-selected-line]:where([data-gutter-buffer='semantic-fold']) {
       --mix-selection-light: 82%;
       --mix-selection-dark: 75%;
       --diffs-selection-mix-target: var(
@@ -1897,13 +1897,13 @@
     pointer-events: none;
   }
 
-  /* A collapsed region's row. Its gutter cell holds the moved icon, the summary
+  /* A closed fold's row. Its gutter cell holds the moved icon, the summary
    * and the toggle, extending past the gutter into the content column. The
    * content cell draws the connector line across the rest of the row. The row
    * keeps the plain background, or the selection's, without its line type's
    * tint, and the label takes the same background so it covers the line where
    * they overlap. */
-  [data-gutter-buffer='semantic-region'] {
+  [data-gutter-buffer='semantic-fold'] {
     cursor: pointer;
 
     &[data-line-type] {
@@ -1911,7 +1911,7 @@
     }
   }
 
-  [data-semantic-region] {
+  [data-semantic-fold] {
     position: relative;
     min-height: 1lh;
     cursor: pointer;
@@ -1930,7 +1930,7 @@
     }
   }
 
-  [data-semantic-region-label] {
+  [data-semantic-fold-label] {
     position: absolute;
     top: 0;
     left: var(--diffs-semantic-icon-inset);
@@ -1951,8 +1951,8 @@
     user-select: none;
   }
 
-  /* An expanded region's first-line icon sits in a button that collapses the
-   * region again. The button takes the icon's place. */
+  /* An open fold's first-line icon sits in a button that closes the fold
+   * again. The button takes the icon's place. */
   [data-semantic-icon-button] {
     position: absolute;
     top: calc((1lh - var(--diffs-semantic-icon-size)) / 2);
@@ -1971,12 +1971,12 @@
     }
   }
 
-  [data-semantic-region-icon] {
+  [data-semantic-fold-icon] {
     width: var(--diffs-semantic-icon-size);
     height: var(--diffs-semantic-icon-size);
   }
 
-  [data-semantic-region-button] {
+  [data-semantic-fold-button] {
     display: flex;
     align-items: center;
     justify-content: center;

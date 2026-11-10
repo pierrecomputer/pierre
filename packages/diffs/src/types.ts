@@ -378,8 +378,8 @@ export interface FileDiffMetadata {
    * semantic changes were found.
    */
   semanticOperations?: SemanticDiffOperation[];
-  /** The file's collapsible moved regions, sorted by `old.start`. Absent when there are none. */
-  semanticCollapsibleRegions?: SemanticDiffCollapsibleRegion[];
+  /** The file's semantic folds, sorted by `old.start`. Absent when there are none. */
+  semanticFolds?: SemanticDiffFold[];
   /**
    * Set while an attached editor's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit
@@ -457,8 +457,8 @@ export interface SemanticDiffLineRegion {
   end: number;
 }
 
-/** Counts shown in a collapsed region's summary. Each old line in the region counts once. */
-export interface SemanticDiffCollapsibleRegionCounts {
+/** Counts shown in a closed fold's summary. Each old line in the fold counts once. */
+export interface SemanticDiffFoldCounts {
   /** Old lines that moved unchanged. */
   moved: number;
   /** Old lines a change touches: an edit nested in the move, or a focus of the move. */
@@ -468,15 +468,15 @@ export interface SemanticDiffCollapsibleRegionCounts {
 }
 
 /**
- * Old lines of moved code that Diffs collapses into one row by default. Every row in the region
- * is one-sided: no new-side line sits beside it.
+ * Old lines of moved code that Diffs folds into one row by default. Every row in the fold is
+ * one-sided: no new-side line sits beside it.
  */
-export interface SemanticDiffCollapsibleRegion {
-  /** The old lines hidden while collapsed, both ends included. */
+export interface SemanticDiffFold {
+  /** The old lines hidden while the fold is closed, both ends included. */
   old: SemanticDiffLineRegion;
-  /** The moves the region covers, as indexes into `semanticOperations`, in old-line order. */
+  /** The moves the fold covers, as indexes into `semanticOperations`, in old-line order. */
   operations: number[];
-  counts: SemanticDiffCollapsibleRegionCounts;
+  counts: SemanticDiffFoldCounts;
 }
 
 /** These old lines correspond to these new lines within one span. */

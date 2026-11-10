@@ -19,17 +19,16 @@ import type {
   LineDiffTypes,
   LineTypes,
   RenderRange,
-  SemanticDiffCollapsibleRegion,
-  SemanticDiffLineRegion,
+  SemanticDiffFold,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import {
-  createSemanticRegionContent,
-  createSemanticRegionGutter,
-  getSemanticRegionCollapseButtonProperties,
-} from '../utils/createSemanticRegionRow';
+  createSemanticFoldContent,
+  createSemanticFoldGutter,
+  getSemanticFoldCloseButtonProperties,
+} from '../utils/createSemanticFoldRow';
 import { createSeparator } from '../utils/createSeparator';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
@@ -40,7 +39,6 @@ import {
   getFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
-import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import type { SemanticDiffFocus } from '../utils/semanticDiffFocus';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
@@ -86,10 +84,10 @@ export interface DiffLayoutInput<LAnnotation> {
   /** Focus marks of a semantic diff, which replace its word diff marks. */
   semanticFocus?: SemanticDiffFocus;
   /**
-   * The first old lines of the collapsible semantic regions that are
-   * expanded. Every other region collapses into one row.
+   * The semantic folds the reader opened, by first old line. The diff's
+   * other folds are closed. Left out, every line shows.
    */
-  expandedSemanticRegions?: ReadonlySet<number>;
+  openSemanticFolds?: ReadonlySet<number>;
   /**
    * Give the empty line after the new file's final line break a row of its
    * own; see IterateOverDiffProps.includeTrailingNewline.
@@ -137,7 +135,7 @@ function sameInputs<LAnnotation>(
     last.additionAnnotations === next.additionAnnotations &&
     last.annotationSlotName === next.annotationSlotName &&
     last.semanticFocus === next.semanticFocus &&
-    last.expandedSemanticRegions === next.expandedSemanticRegions &&
+    last.openSemanticFolds === next.openSemanticFolds &&
     last.includeTrailingNewline === next.includeTrailingNewline &&
     last.showNoNewlineMarkers === next.showNoNewlineMarkers &&
     areRenderRangesEqual(last.renderRange, next.renderRange)
@@ -168,14 +166,6 @@ interface LineRowInputs {
   gutterIconButton: Properties | undefined;
 }
 
-// A collapsible region the walk is in, and whether it is collapsed.
-interface SemanticRegionState {
-  region: SemanticDiffCollapsibleRegion;
-  collapsed: boolean;
-  // The split row of a collapsed region's row, once the walk has pushed it.
-  firstRow?: number;
-}
-
 // Filler rows a split view owes one column so both columns stay aligned.
 interface PendingSplitBuffer {
   size: number;
@@ -187,34 +177,27 @@ interface PendingSplitBuffer {
   rows: { first: number; last: number } | undefined;
 }
 
-// Add one row to the gap. `row` is that row's split index, which selection
-// uses; injected rows don't have one.
+// Add one row to the gap. `row` is the split row it sits beside, which
+// selection uses; injected rows don't have one. The row beside a closed
+// fold stands for every split row through `lastRow`.
 function incrementBuffer(
   buffer: PendingSplitBuffer,
-  row: number | undefined
+  row: number | undefined,
+  lastRow: number | undefined = row
 ): void {
-  if (row == null) {
+  if (row == null || lastRow == null) {
     buffer.rows = undefined;
   } else if (buffer.size === 0) {
-    buffer.rows = { first: row, last: row };
+    buffer.rows = { first: row, last: lastRow };
   } else if (buffer.rows != null) {
-    extendBuffer(buffer, row);
+    if (row !== buffer.rows.last + 1) {
+      throw new Error(
+        `DiffLayout.layout: a gap's rows must be consecutive, but row ${row} came after row ${buffer.rows.last}`
+      );
+    }
+    buffer.rows.last = lastRow;
   }
   buffer.size += 1;
-}
-
-// Add a hidden row to the gap's rows without making the gap taller. Used for
-// the rows a collapsed region hides.
-function extendBuffer(buffer: PendingSplitBuffer, row: number): void {
-  if (buffer.rows == null) {
-    return;
-  }
-  if (row !== buffer.rows.last && row !== buffer.rows.last + 1) {
-    throw new Error(
-      `DiffLayout.layout: a gap's rows must be consecutive, but row ${row} came after row ${buffer.rows.last}`
-    );
-  }
-  buffer.rows.last = row;
 }
 
 interface SeparatorProps {
@@ -342,6 +325,7 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks: expandUnchanged ? true : input.expandedHunks,
       collapsedContextThreshold,
       includeTrailingNewline: input.includeTrailingNewline,
+      openSemanticFolds: input.openSemanticFolds,
       callback: ({ additionLine }) => {
         if (additionLine != null) {
           first ??= additionLine.lineNumber;
@@ -368,6 +352,7 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks,
       includeTrailingNewline,
       showNoNewlineMarkers,
+      openSemanticFolds,
     } = input;
     const { diff } = model;
     const {
@@ -407,14 +392,14 @@ export class DiffLayout<LAnnotation = undefined> {
       pendingBuffer.rows = undefined;
       if (size <= 0 || side == null) return;
       const column = columns[side];
-      const splitRows = rows != null ? `${rows.first},${rows.last}` : undefined;
+      const rowRange = rows != null ? `${rows.first},${rows.last}` : undefined;
       this.#cells.fixedRow(
         column,
         bufferKey(column),
-        `${size}|${splitRows}`,
+        `${size}|${rowRange}`,
         () => {
           const content = createEmptyRowBuffer(size);
-          content.properties['data-split-rows'] = splitRows;
+          content.properties['data-row-range'] = rowRange;
           return {
             gutter: createGutterGap(undefined, 'buffer', size),
             content,
@@ -470,97 +455,40 @@ export class DiffLayout<LAnnotation = undefined> {
       errorPrefix: 'DiffLayout.layout',
     });
 
-    // Collapsible regions only collapse in a split, full render. A windowed
-    // render counts rows from the hunks, which still include every hidden line.
-    const { semanticCollapsibleRegions } = diff;
-    const canCollapseSemanticRegions =
-      // TODO: Figure out unified diffs
-      !unified &&
-      diff.semanticOperations != null &&
-      semanticCollapsibleRegions != null &&
-      // TODO: Figure out when we implement virtualization
-      isDefaultRenderRange(renderRange);
-    // The collapsible region covering an old line, and whether it is
-    // collapsed. A region with an annotation on any of its lines never
-    // collapses. The walk visits old lines in ascending order, so a cursor
-    // into the sorted regions only moves forward, and each region's state is
-    // worked out once, when the walk reaches it.
-    let regionIndex = 0;
-    let currentRegion: SemanticDiffCollapsibleRegion | undefined;
-    let currentRegionState: SemanticRegionState | undefined;
-    let previousOldLine = 0;
-    const getSemanticRegionState = (
-      lineNumber: number
-    ): SemanticRegionState | undefined => {
-      if (!canCollapseSemanticRegions) {
-        return undefined;
-      }
-      if (lineNumber < previousOldLine) {
-        throw new Error(
-          `DiffLayout.layout: old line ${lineNumber} follows old line ${previousOldLine}; collapsible regions need old lines in ascending order`
-        );
-      }
-      previousOldLine = lineNumber;
-      while (
-        regionIndex < semanticCollapsibleRegions.length &&
-        semanticCollapsibleRegions[regionIndex].old.end < lineNumber
-      ) {
-        regionIndex++;
-      }
-      const region = semanticCollapsibleRegions[regionIndex];
-      if (region == null || lineNumber < region.old.start) {
-        return undefined;
-      }
-      if (region !== currentRegion) {
-        currentRegion = region;
-        currentRegionState = !hasAnnotationsIn(
-          input.deletionAnnotations,
-          region.old
-        )
-          ? {
-              region,
-              collapsed:
-                input.expandedSemanticRegions?.has(region.old.start) !== true,
-            }
-          : undefined;
-      }
-      return currentRegionState;
-    };
-    // A collapsed region's row: one deletions-side row, so the additions
-    // column takes a one-row gap beside it. The row records the split rows it
-    // hides, one per old line from `firstRow`, so a line selection over them
-    // can mark it.
-    const pushSemanticRegionRow = (
-      region: SemanticDiffCollapsibleRegion,
-      firstRow: number
+    // A closed fold's row. It records the rows the fold's lines would take
+    // in this view, `firstRow` through `lastRow`, so a line selection over
+    // them can mark it. In split view it is a deletions-side row, so the
+    // additions column takes a one-row gap beside it, which records the
+    // same rows.
+    const pushFoldRow = (
+      fold: SemanticDiffFold,
+      firstRow: number,
+      lastRow: number
     ) => {
-      if (pendingBuffer.side === 'deletions') {
-        flushBuffer();
+      if (!unified) {
+        if (pendingBuffer.side === 'deletions') {
+          flushBuffer();
+        }
+        pendingBuffer.side = 'additions';
+        incrementBuffer(pendingBuffer, firstRow, lastRow);
       }
-      pendingBuffer.side = 'additions';
-      incrementBuffer(pendingBuffer, firstRow);
       const { gutterLineType, gutterIcon } =
-        host.getSemanticRegionDecoration(region);
-      const { moved, edited, removed } = region.counts;
-      const splitRows = `${firstRow},${firstRow + region.old.end - region.old.start}`;
+        host.getSemanticFoldDecoration(fold);
+      const { moved, edited, removed } = fold.counts;
+      const rowRange = `${firstRow},${lastRow}`;
       this.#cells.fixedRow(
-        columns.deletions,
-        `sem:${region.old.start}`,
-        `${gutterLineType}|${gutterIcon}|${splitRows}|${moved},${edited},${removed}`,
+        unified ? columns.unified : columns.deletions,
+        `fold:${fold.old.start}`,
+        `${gutterLineType}|${gutterIcon}|${rowRange}|${moved},${edited},${removed}`,
         () => {
-          const content = createSemanticRegionContent(region, gutterLineType);
-          content.properties['data-split-rows'] = splitRows;
+          const content = createSemanticFoldContent(fold, gutterLineType);
+          content.properties['data-row-range'] = rowRange;
           return {
-            gutter: createSemanticRegionGutter(
-              region,
-              gutterLineType,
-              gutterIcon
-            ),
+            gutter: createSemanticFoldGutter(fold, gutterLineType, gutterIcon),
             content,
           };
         }
       );
-      rowCount++;
     };
 
     iterateOverDiff({
@@ -571,6 +499,7 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks: expandUnchanged ? true : expandedHunks,
       collapsedContextThreshold,
       includeTrailingNewline,
+      openSemanticFolds,
       callback: ({
         hunkIndex,
         hunk,
@@ -579,6 +508,8 @@ export class DiffLayout<LAnnotation = undefined> {
         additionLine,
         deletionLine,
         type,
+        foldRow,
+        openFold,
       }) => {
         if (additionLine != null) {
           firstNewFileLine ??= additionLine.lineNumber;
@@ -609,49 +540,12 @@ export class DiffLayout<LAnnotation = undefined> {
           });
         }
 
-        const regionState =
-          deletionLine != null
-            ? getSemanticRegionState(deletionLine.lineNumber)
-            : undefined;
-        if (regionState != null) {
-          // The converter only marks old lines on one-sided rows.
-          if (additionLine != null) {
-            throw new Error(
-              `DiffLayout.layout: collapsible region ${regionState.region.old.start}-${regionState.region.old.end} has a new-side line beside old line ${deletionLine?.lineNumber}`
-            );
-          }
-          if (regionState.collapsed) {
-            const { region } = regionState;
-            if (deletionLine?.lineNumber === region.old.start) {
-              regionState.firstRow = splitLineIndex;
-              pushSemanticRegionRow(region, splitLineIndex);
-            }
-            const { firstRow } = regionState;
-            if (firstRow == null || deletionLine == null) {
-              throw new Error(
-                `DiffLayout.layout: collapsible region ${region.old.start}-${region.old.end} was entered after its first line`
-              );
-            }
-            // The collapsed row was given one split row per old line it hides.
-            const expectedRow =
-              firstRow + deletionLine.lineNumber - region.old.start;
-            if (splitLineIndex !== expectedRow) {
-              throw new Error(
-                `DiffLayout.layout: collapsible region ${region.old.start}-${region.old.end} hides old line ${deletionLine.lineNumber} on split row ${splitLineIndex}, not ${expectedRow}`
-              );
-            }
-            // The gap beside the collapsed row covers the same split rows.
-            extendBuffer(pendingBuffer, splitLineIndex);
-          }
-        }
-        const isHiddenBySemanticRegion = regionState?.collapsed === true;
-        // An expanded region's first line carries the icon that collapses it.
-        const expandedRegionStart =
-          regionState != null &&
-          !regionState.collapsed &&
-          deletionLine?.lineNumber === regionState.region.old.start
-            ? regionState.region
-            : undefined;
+        // A closed fold's row stands for the rows of every line it hides, so
+        // it is the hunk's last row when one of them is.
+        const lastSplitLineIndex =
+          foldRow != null ? foldRow.lastSplitLineIndex : splitLineIndex;
+        const lastUnifiedLineIndex =
+          foldRow != null ? foldRow.lastUnifiedLineIndex : unifiedLineIndex;
 
         const lineIndex = unified ? unifiedLineIndex : splitLineIndex;
         const lineContext: RenderedLineContext = {
@@ -682,7 +576,13 @@ export class DiffLayout<LAnnotation = undefined> {
         const deletionsKey = deletionKey ?? additionKey!;
         const additionsKey = additionKey ?? deletionKey!;
 
-        if (unified) {
+        if (foldRow != null) {
+          pushFoldRow(
+            foldRow.fold,
+            lineIndex,
+            unified ? lastUnifiedLineIndex : lastSplitLineIndex
+          );
+        } else if (unified) {
           const injected = host.getUnifiedInjectedRowsForLine?.(lineContext);
           if (injected?.before != null) {
             rowCount += pushUnifiedInjectedRows(
@@ -697,12 +597,20 @@ export class DiffLayout<LAnnotation = undefined> {
                 ? 'change-addition'
                 : 'change-deletion'
               : type;
-          const decoration = host.getUnifiedLineDecoration({
-            type,
-            lineType,
-            additionLineNumber: additionLine?.lineNumber,
-            deletionLineNumber: deletionLine?.lineNumber,
-          });
+          // An open fold's first line carries the button that closes it.
+          const decoration =
+            openFold != null
+              ? {
+                  ...host.getSemanticFoldDecoration(openFold),
+                  gutterIconButton:
+                    getSemanticFoldCloseButtonProperties(openFold),
+                }
+              : host.getUnifiedLineDecoration({
+                  type,
+                  lineType,
+                  additionLineNumber: additionLine?.lineNumber,
+                  deletionLineNumber: deletionLine?.lineNumber,
+                });
           const lineIndexText = `${unifiedLineIndex},${splitLineIndex}`;
           // A unified row shows the new line when there is one.
           this.#pushLineRow(
@@ -767,7 +675,7 @@ export class DiffLayout<LAnnotation = undefined> {
               `${lineKey}:after`
             );
           }
-        } else if (!isHiddenBySemanticRegion) {
+        } else {
           const injected = host.getSplitInjectedRowsForLine?.(lineContext);
           if (injected?.before != null) {
             rowCount += pushSplitInjectedRows(
@@ -778,14 +686,13 @@ export class DiffLayout<LAnnotation = undefined> {
               flushBuffer
             );
           }
+          // An open fold's first line carries the button that closes it.
           const deletionDecoration =
-            expandedRegionStart != null
+            openFold != null
               ? {
-                  ...host.getSemanticRegionDecoration(expandedRegionStart),
+                  ...host.getSemanticFoldDecoration(openFold),
                   gutterIconButton:
-                    getSemanticRegionCollapseButtonProperties(
-                      expandedRegionStart
-                    ),
+                    getSemanticFoldCloseButtonProperties(openFold),
                 }
               : host.getSplitLineDecoration({
                   side: 'deletions',
@@ -901,16 +808,18 @@ export class DiffLayout<LAnnotation = undefined> {
         const isFinalSplitHunkRow =
           !unified &&
           hunk != null &&
-          splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
+          lastSplitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
         const isFinalHunkRow =
           hunkIndex === diff.hunks.length - 1 &&
           hunk != null &&
           (unified
-            ? unifiedLineIndex ===
+            ? lastUnifiedLineIndex ===
               hunk.unifiedLineStart + hunk.unifiedLineCount - 1
-            : splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1);
+            : lastSplitLineIndex ===
+              hunk.splitLineStart + hunk.splitLineCount - 1);
+        // A closed fold's row shows no marker for the lines it hides.
         const noEOFCRDeletion =
-          !isHiddenBySemanticRegion &&
+          foldRow == null &&
           ((deletionLine?.noEOFCR ?? false) ||
             (isFinalSplitHunkRow && hunk.noEOFCRDeletions));
         const noEOFCRAddition =
@@ -999,9 +908,7 @@ export class DiffLayout<LAnnotation = undefined> {
             isExpandable: isExpandableDiff,
           });
         }
-        if (!isHiddenBySemanticRegion) {
-          rowCount++;
-        }
+        rowCount++;
       },
     });
 
@@ -1489,20 +1396,6 @@ function getSplitAnnotationSpans<LAnnotation>(
     return undefined;
   }
   return { deletionSpan, additionSpan };
-}
-
-// Whether any old line of a collapsible region has an annotation. Such a
-// region stays expanded, so collapsing never hides an annotation.
-function hasAnnotationsIn<LAnnotation>(
-  annotations: AnnotationLineMap<LAnnotation>,
-  { start, end }: SemanticDiffLineRegion
-): boolean {
-  for (let line = start; line <= end; line++) {
-    if ((annotations[line]?.length ?? 0) > 0) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function areRangesEqual(a: readonly RowMark[], b: readonly RowMark[]): boolean {

@@ -131,7 +131,7 @@ export class DiffModel {
     delete diff.cacheKey;
     // The editor uses ordinary diff rows.
     delete diff.semanticOperations;
-    delete diff.semanticCollapsibleRegions;
+    delete diff.semanticFolds;
     if (inputContents !== inputDiff.additionLines.join('')) {
       // Editing starts on the file with one line ending. The lines whose
       // ending changed differ from the old file now, so the hunks say so

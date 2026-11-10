@@ -29,8 +29,8 @@ export type LineKey = `a${number}` | `d${number}`;
  * kind can never equal a key of another: `ann:` for an annotation row under a
  * line (or `ann:file` for the file-level one), `sep:` for a hunk separator,
  * `buf:` for a filler row after the row it follows, `eof:` for a "no newline"
- * marker, `inj:` for a row a host injects, and `sem:` for the row a collapsed
- * semantic region shows in place of its old lines.
+ * marker, `inj:` for a row a host injects, and `fold:` for the row a closed
+ * semantic fold shows in place of its old lines.
  */
 export type RowKey =
   | LineKey
@@ -41,7 +41,7 @@ export type RowKey =
   | 'eof:a'
   | 'eof:d'
   | `inj:${string}`
-  | `sem:${number}`;
+  | `fold:${number}`;
 
 /** Whether a key is a line's: every other kind of row carries a `:` prefix. */
 export function isLineKey(key: RowKey): key is LineKey {

@@ -498,7 +498,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           : undefined,
         this.getLineIndex,
         this.renderSemanticSelection,
-        this.toggleSemanticRegion
+        this.toggleSemanticFold
       )
     );
     this.workerManager?.subscribeToThemeChanges(this);
@@ -666,7 +666,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           : undefined,
         this.getLineIndex,
         this.renderSemanticSelection,
-        this.toggleSemanticRegion
+        this.toggleSemanticFold
       )
     );
   }
@@ -1351,9 +1351,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.expandHunk(hunkIndex, direction, expansionLineCountOverride);
   };
 
-  // Expand a collapsible region, or collapse it again, by its first line.
-  private toggleSemanticRegion = (start: number): void => {
-    this.hunksRenderer.toggleSemanticRegion(start);
+  // Open a semantic fold, or close it again, by its first old line.
+  private toggleSemanticFold = (start: number): void => {
+    this.hunksRenderer.toggleSemanticFold(start);
     this.rerender();
   };
 

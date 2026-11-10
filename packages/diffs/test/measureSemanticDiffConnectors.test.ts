@@ -321,14 +321,14 @@ describe('measureSemanticDiffConnectors', () => {
     ]);
   });
 
-  test('ends bands on a collapsed move at its 1px center line', () => {
-    // Old lines 3-5 are collapsed into the row between lines 2 and 6.
+  test("ends bands on a closed fold's row at its 1px center line", () => {
+    // Old lines 3-5 are folded into the row between lines 2 and 6.
     const deletions = column([1, 2, 'gap', 6], ORIGIN_TOP);
     const placeholder = deletions.children[2];
     placeholder.removeAttribute('data-content-buffer');
-    placeholder.setAttribute('data-semantic-region', '');
-    placeholder.setAttribute('data-semantic-region-start', '3');
-    placeholder.setAttribute('data-semantic-region-end', '5');
+    placeholder.setAttribute('data-semantic-fold', '');
+    placeholder.setAttribute('data-semantic-fold-start', '3');
+    placeholder.setAttribute('data-semantic-fold-end', '5');
     const additions = column(lines(9), ORIGIN_TOP);
     const measure = (base: { start: number; end: number }) =>
       measureSemanticDiffConnectors(
@@ -356,14 +356,14 @@ describe('measureSemanticDiffConnectors', () => {
     expect(measure({ start: 2, end: 6 })).toEqual([{ top: 20, bottom: 80 }]);
   });
 
-  test('merges same-colored bands that end on one collapsed row', () => {
-    // Old lines 3-5 are collapsed into the row between lines 2 and 6.
+  test("merges same-colored bands that end on one closed fold's row", () => {
+    // Old lines 3-5 are folded into the row between lines 2 and 6.
     const deletions = column([1, 2, 'gap', 6], ORIGIN_TOP);
     const placeholder = deletions.children[2];
     placeholder.removeAttribute('data-content-buffer');
-    placeholder.setAttribute('data-semantic-region', '');
-    placeholder.setAttribute('data-semantic-region-start', '3');
-    placeholder.setAttribute('data-semantic-region-end', '5');
+    placeholder.setAttribute('data-semantic-fold', '');
+    placeholder.setAttribute('data-semantic-fold-start', '3');
+    placeholder.setAttribute('data-semantic-fold-end', '5');
     const additions = column(lines(12), ORIGIN_TOP);
     const band = (
       id: string,

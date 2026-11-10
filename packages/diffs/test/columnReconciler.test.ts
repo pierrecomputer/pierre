@@ -341,7 +341,7 @@ describe('ColumnReconciler', () => {
       },
       content: cell(label, { 'data-line': key }),
     });
-    reconciler.reconcile([row('a1', 'one'), buttonRow('sem:2', 'expand')]);
+    reconciler.reconcile([row('a1', 'one'), buttonRow('fold:2', 'expand')]);
     const expand = gutter.querySelector('button');
     expect(expand).not.toBeNull();
     expand?.focus();
