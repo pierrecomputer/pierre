@@ -248,6 +248,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.recycle();
     this.lineCuts.clear();
     this.expandedHunks.clear();
+    this.openSemanticFolds.clear();
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
   }
@@ -696,6 +697,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.expandedHunks;
   }
 
+  /** The semantic folds the reader opened, by first old line. */
+  public getOpenSemanticFolds(): ReadonlySet<number> {
+    return this.openSemanticFolds;
+  }
+
+  /** Closes every semantic fold again. */
+  public clearOpenSemanticFolds(): void {
+    this.openSemanticFolds.clear();
+  }
+
   /** Replace the whole expansion state, such as with a pending one. */
   public setExpandedHunksMap(expandedHunks: ExpandedHunksMap): void {
     this.expandedHunks = expandedHunks;
@@ -749,11 +760,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       return;
     }
+    // A diff that replaces another starts with its folds closed. A recycled
+    // renderer comes back to the diff it had, so its open folds stay.
+    if (cached != null) {
+      this.openSemanticFolds.clear();
+    }
     this.semanticLineCache = {
       diff,
       lookup: createSemanticDiffLineLookup(semanticOperations),
     };
-    this.openSemanticFolds.clear();
   }
 
   // The decoration of a semantic fold's first old line, which the fold's row

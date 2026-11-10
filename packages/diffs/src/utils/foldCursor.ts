@@ -59,3 +59,60 @@ export function takeHiddenRows(cursor: FoldCursor, hunk: Hunk): number {
   }
   return hiddenRows;
 }
+
+/** A closed fold's place among a hunk's rows. */
+export interface ClosedFoldRows {
+  /** The fold's row, counted from the hunk's first row in the view's rows. */
+  row: number;
+  /** The rows after it that the fold hides. */
+  hiddenRows: number;
+}
+
+// Finds the hunk's closed folds among its rows, in order, and moves the
+// cursor past the hunk's folds. Undefined when the hunk has none. Unlike
+// takeHiddenRows this goes through the hunk's blocks, to turn each fold's old
+// line number into a row.
+export function takeClosedFoldRows(
+  cursor: FoldCursor,
+  hunk: Hunk,
+  diffStyle: 'split' | 'unified'
+): ClosedFoldRows[] | undefined {
+  const { folds, openSemanticFolds } = cursor;
+  cursor.hidesLastOldLine = false;
+  // The old line and the row the next block starts on.
+  let oldLine =
+    getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) + 1;
+  const lastOldLine = oldLine + hunk.deletionCount - 1;
+  const firstFold = folds[cursor.index];
+  if (firstFold == null || firstFold.old.start > lastOldLine) {
+    return undefined;
+  }
+  let closedFolds: ClosedFoldRows[] | undefined;
+  let row = 0;
+  for (const content of hunk.hunkContent) {
+    if (content.type === 'context') {
+      row += content.lines;
+      oldLine += content.lines;
+      continue;
+    }
+    for (
+      let fold = folds[cursor.index];
+      fold != null && fold.old.start < oldLine + content.deletions;
+      fold = folds[++cursor.index]
+    ) {
+      if (!openSemanticFolds.has(fold.old.start)) {
+        (closedFolds ??= []).push({
+          row: row + fold.old.start - oldLine,
+          hiddenRows: fold.old.end - fold.old.start,
+        });
+        cursor.hidesLastOldLine = fold.old.end === lastOldLine;
+      }
+    }
+    row +=
+      diffStyle === 'split'
+        ? Math.max(content.deletions, content.additions)
+        : content.deletions + content.additions;
+    oldLine += content.deletions;
+  }
+  return closedFolds;
+}
