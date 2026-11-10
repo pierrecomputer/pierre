@@ -12,6 +12,7 @@ moonx words:bench --ignore-ci-checks
 moonx words:bench-stream --ignore-ci-checks
 moonx words:bench-memory --ignore-ci-checks
 moonx words:bench-browser --ignore-ci-checks
+moonx words:bench-download --ignore-ci-checks
 ```
 
 - `bench`: HTML strings against md4x (native), md4x (wasm), and markdown-it.
@@ -19,18 +20,20 @@ moonx words:bench-browser --ignore-ci-checks
 - `bench-memory`: memory use of all HTML engines and both React engines.
 - `bench-browser`: React streams against Streamdown in Chromium, and download
   size. These results feed the charts on the `/words` page.
+- `bench-download`: download size only, using the same production bundles as the
+  browser benchmark. This leaves the recorded browser timings unchanged.
 
 Pass options after `--`:
 
-| Option              | Tasks                 | Purpose                                                                   |
-| ------------------- | --------------------- | ------------------------------------------------------------------------- |
-| `--quick`           | timing, browser       | Short check that the scripts work. Do not compare these numbers.          |
-| `--samples 1`       | memory                | Short check that the script works.                                        |
-| `--fixture tiny.md` | bench, stream, memory | Use one input.                                                            |
-| `--chunk-size 256`  | stream, memory        | UTF-16 code units per chunk.                                              |
-| `--mode html`       | memory                | Run only `html` or `stream`.                                              |
-| `--json out.json`   | all                   | Save raw samples and environment data. Use a separate file for each task. |
-| `--docs`            | browser               | Write `apps/docs/public/words/benchmark.json` and `benchmark-raw.json`.   |
+| Option              | Tasks                 | Purpose                                                                                     |
+| ------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
+| `--quick`           | timing, browser       | Short check that the scripts work. Do not compare these numbers.                            |
+| `--samples 1`       | memory                | Short check that the script works.                                                          |
+| `--fixture tiny.md` | bench, stream, memory | Use one input.                                                                              |
+| `--chunk-size 256`  | stream, memory        | UTF-16 code units per chunk.                                                                |
+| `--mode html`       | memory                | Run only `html` or `stream`.                                                                |
+| `--json out.json`   | all                   | Save raw samples and environment data. Use a separate file for each task.                   |
+| `--docs`            | browser, download     | Write charts and raw results; download updates only size measurements and their provenance. |
 
 `bench-browser` uses the Chromium build that Playwright pins. Install it once
 with `pnpm --filter @pierre/words exec playwright install chromium`.
@@ -153,19 +156,23 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
   paragraph and code block counts are correct, every code block is highlighted,
   and both libraries show the same text.
 
-| Download, gzip KB              | @pierre/words | streamdown |
-| ------------------------------ | ------------: | ---------: |
-| Base React renderer            |          50.7 |      165.3 |
-| With TypeScript and two themes |         254.7 |      244.9 |
-| CSS                            |           1.2 |        0.4 |
+> Browser timing and heap measured on **2026-11-10** at commit `28632178` with
+> Bun 1.4.0 and Chromium 134.0.6998.35 on Apple M4 Max with 128 GiB RAM.
+
+| Download, gzip KB                | @pierre/words | streamdown |
+| -------------------------------- | ------------: | ---------: |
+| Base React renderer              |          50.7 |      165.3 |
+| With highlighting and two themes |         247.3 |      244.9 |
+| CSS                              |           1.2 |        0.4 |
 
 Download size uses minified `Bun.build` output with React external, with each JS
 file gzipped at level 9. The base row counts static imports only. The second row
 adds the chunks that Streamdown loads on demand for TypeScript, its two themes,
 and highlighted code. Words keeps all grammars in one file.
 
-> Measured on **2026-11-10** at commit `28632178` with Bun 1.4.0 and Chromium
-> 134.0.6998.35 on Apple M4 Max with 128 GiB RAM.
+Download sizes are measured independently of browser timings. The `downloadRun`
+in [`benchmark.json`](../../../apps/docs/public/words/benchmark.json) records
+their date, source commit, Bun version, and dependency versions.
 
 ## Sampling
 

@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 import { createStressFixture } from '../fixtures/index.ts';
 import { environment, median, p95 } from '../shared.ts';
 import type { ReplayResult } from './app.ts';
+import { measureDownload, printDownload } from './download.ts';
 
 const { values: flags } = parseArgs({
   options: {
@@ -223,81 +224,7 @@ const summarize = ({ scale, mode }: { scale: number; mode: string }) => {
   };
 };
 
-// Minified ESM with React external; each JS file gzipped on its own.
-const variants = {
-  base: {
-    words: "export { Markdown } from '@pierre/words/react';",
-    streamdown: "export { Streamdown } from 'streamdown';",
-  },
-  highlight: {
-    words: `export { Markdown } from '@pierre/words/react';
-      export { createHighlightsPlugin } from '@pierre/words/highlights';
-      export { default as light } from '@pierre/highlights/themes/pierre-light';
-      export { default as dark } from '@pierre/highlights/themes/pierre-dark';`,
-    streamdown: `export { Streamdown } from 'streamdown';
-      export { code } from '@streamdown/code';`,
-  },
-};
-const entry = join(directory, 'entry.js');
-const download: Record<string, Record<string, number>> = {};
-for (const [id, entries] of Object.entries(variants)) {
-  download[id] = {};
-  for (const [library, contents] of Object.entries(entries)) {
-    const { outputs, metafile } = await Bun.build({
-      entrypoints: [entry],
-      files: { [entry]: contents },
-      target: 'browser',
-      format: 'esm',
-      splitting: true,
-      minify: true,
-      external: ['react', 'react/*', 'react-dom', 'react-dom/*'],
-      metafile: true,
-    });
-    const chunks = metafile!.outputs;
-    const sizes = new Map<string, number>();
-    for (const file of outputs)
-      sizes.set(
-        file.path,
-        Bun.gzipSync(new Uint8Array(await file.arrayBuffer()), { level: 9 })
-          .length
-      );
-    const loaded = new Set<string>();
-    const visit = (path: string) => {
-      if (loaded.has(path)) return;
-      loaded.add(path);
-      for (const { path: next, kind } of chunks[path].imports)
-        if (kind !== 'dynamic-import') visit(next);
-    };
-    visit(outputs.find((file) => file.kind === 'entry-point')!.path);
-    // Streamdown loads the TypeScript grammar, its default themes, and the highlighted body on demand.
-    if (id === 'highlight' && library === 'streamdown')
-      for (const input of [
-        /langs\/dist\/typescript\.mjs$/,
-        /themes\/dist\/github-light\.mjs$/,
-        /themes\/dist\/github-dark\.mjs$/,
-        /\/highlighted-body-\w+\.js$/,
-      ]) {
-        const lazy = Object.keys(chunks).filter((path) =>
-          Object.keys(chunks[path].inputs).some((name) => input.test(name))
-        );
-        assert.equal(lazy.length, 1, `${input}: lazy chunk`);
-        visit(lazy[0]);
-      }
-    download[id][library] = [...loaded].reduce(
-      (sum, path) => sum + sizes.get(path)!,
-      0
-    );
-  }
-}
-download.css = {};
-for (const [library, specifier] of [
-  ['words', '@pierre/words/styles.css'],
-  ['streamdown', 'streamdown/styles.css'],
-])
-  download.css[library] = Bun.gzipSync(
-    await Bun.file(Bun.resolveSync(specifier, directory)).bytes(),
-    { level: 9 }
-  ).length;
+const { download, downloadRun } = await measureDownload();
 
 const report = {
   date: system.date,
@@ -313,6 +240,7 @@ const report = {
   rows: cases.filter((entry) => !entry.stress).map(summarize),
   stress: cases.filter((entry) => entry.stress).map(summarize),
   download,
+  downloadRun,
 };
 console.log(`\nChromium ${chrome}: median of per-run p95 (lower is better)`);
 console.table(
@@ -332,20 +260,7 @@ console.table(
     ),
   }))
 );
-console.log('Download, gzip KB');
-console.table(
-  Object.fromEntries(
-    Object.entries(download).map(([id, sizes]) => [
-      id,
-      Object.fromEntries(
-        Object.entries(sizes).map(([library, bytes]) => [
-          library,
-          (bytes / 1000).toFixed(1),
-        ])
-      ),
-    ])
-  )
-);
+printDownload(download);
 
 if (flags.json != null)
   await Bun.write(

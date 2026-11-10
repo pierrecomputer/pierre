@@ -20,11 +20,11 @@ import { pathToFileURL } from 'url';
 
 export { wasmToText, wat2wasm } from '@pierre/wat-tools';
 
-/** Optimize for speed, with wider inlining. */
+/** Keep wider inlining while reducing the all-language browser download. */
 export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
   return optimize(wasmBytes, {
     filename: 'highlights.wat',
-    shrinkLevel: 0,
+    shrinkLevel: 1,
     flexibleInlineMaxSize: 60,
     oneCallerInlineMaxSize: 200,
   });

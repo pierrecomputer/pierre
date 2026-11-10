@@ -205,12 +205,24 @@
         "streamdown": 165295
       },
       "highlight": {
-        "words": 254731,
+        "words": 247326,
         "streamdown": 244940
       },
       "css": {
         "words": 1197,
         "streamdown": 449
+      }
+    },
+    "downloadRun": {
+      "date": "2026-11-10T23:42:40.145Z",
+      "commit": "7984d6aef9940110d5a6bd6381f29e6cd11d6127",
+      "dirty": true,
+      "bun": "1.4.0",
+      "versions": {
+        "react": "19.2.7",
+        "streamdown": "2.7.1",
+        "@streamdown/code": "2.0.0",
+        "@playwright/test": "1.51.1"
       }
     }
   },
@@ -258,9 +270,9 @@
             "fixture": "assistant-review.md",
             "values": [
               397.5,
-              205.0,
+              205,
               163.5,
-              23.0
+              23
             ]
           },
           {
@@ -276,9 +288,9 @@
             "fixture": "simd.md",
             "values": [
               377.2,
-              185.0,
+              185,
               128.8,
-              22.0
+              22
             ]
           },
           {
@@ -366,7 +378,7 @@
               3.2,
               0.9,
               7.7,
-              6.0
+              6
             ]
           },
           {
@@ -412,13 +424,13 @@
             "fixture": "tiny.md",
             "values": [
               75.7,
-              86.0
+              86
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              84.0,
+              84,
               121.5
             ]
           },

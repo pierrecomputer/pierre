@@ -112,6 +112,7 @@ export function WordsBenchmarks() {
     (row) => row.scale === 100 && row.mode === memoryMode
   )!;
   const footprint = run.download[footprintId === 'base' ? 'base' : 'highlight'];
+  const downloadRun = run.downloadRun;
   const date = new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
@@ -365,7 +366,7 @@ export function WordsBenchmarks() {
             >
               <option value="base">Base renderer · initial load</option>
               <option value="highlight">
-                TypeScript + two themes · loaded total
+                Syntax highlighting · loaded total
               </option>
             </ChartSelect>
           </label>
@@ -381,14 +382,28 @@ export function WordsBenchmarks() {
             React is external. CSS is separate:{' '}
             {decimal.format(run.download.css.words / 1000)} KB for Words,{' '}
             {decimal.format(run.download.css.streamdown / 1000)} KB for
-            Streamdown. Grammar and theme coverage differ.
+            Streamdown.
+            {footprintId === 'highlight' && (
+              <>
+                {' '}
+                Words includes all built-in languages and two Pierre themes.
+                Streamdown loads TypeScript and two default themes.
+              </>
+            )}
+          </p>
+          <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
+            Download measured {date.format(new Date(downloadRun.date))} at
+            commit {downloadRun.commit.slice(0, 8)}
+            {downloadRun.dirty ? ' with uncommitted changes' : ''} · Bun{' '}
+            {downloadRun.bun}.
           </p>
         </figure>
       </div>
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded {measuredDate} at commit {run.commit.slice(0, 8)}
+          Browser timings recorded {measuredDate} at commit{' '}
+          {run.commit.slice(0, 8)}
           {run.dirty ? ' with uncommitted changes' : ''} · {run.cpu} ·{' '}
           {Math.round(run.memoryBytes / 1024 ** 3)} GiB RAM · Chromium{' '}
           {run.chrome} · React {run.versions.react} · Streamdown{' '}
