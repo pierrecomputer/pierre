@@ -1005,7 +1005,8 @@ export class WorkerPoolManager {
     startingLine: number,
     totalLines: number,
     expandedHunks?: Map<number, HunkExpansionRegion> | true,
-    collapsedContextThreshold?: number
+    collapsedContextThreshold?: number,
+    openSemanticFolds?: ReadonlySet<number>
   ): ThemedDiffResult | undefined {
     const highlighter = getHighlighterIfLoaded({
       theme: this.renderOptions.theme,
@@ -1020,6 +1021,7 @@ export class WorkerPoolManager {
       totalLines,
       expandedHunks,
       collapsedContextThreshold,
+      openSemanticFolds,
     });
   }
 

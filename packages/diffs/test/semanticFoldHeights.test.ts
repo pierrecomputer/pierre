@@ -521,3 +521,313 @@ describe('a new diff starts with its folds closed', () => {
     }
   });
 });
+
+describe('positions around a closed fold', () => {
+  const layoutMetrics: VirtualFileMetrics = {
+    ...DEFAULT_VIRTUAL_FILE_METRICS,
+    hunkLineCount: 1,
+    lineHeight: 10,
+    diffHeaderHeight: 30,
+    spacing: 4,
+  };
+  const { lineHeight, diffHeaderHeight } = layoutMetrics;
+
+  // A 12,000-line file with old lines 100-119 gone and a fold over them, so
+  // the closed fold hides 19 rows near the top. Rendered with every
+  // unchanged line, it is tall enough to have layout checkpoints after the
+  // fold.
+  function tallFoldedDiff(): FileDiffMetadata {
+    const oldLines = Array.from(
+      { length: 12_000 },
+      (_, index) => `line ${index + 1}`
+    );
+    const newLines = oldLines.filter(
+      (_, index) => !(index + 1 >= 100 && index + 1 <= 119)
+    );
+    const fileDiff = parseDiffFromFile(
+      { name: 'tall.txt', contents: `${oldLines.join('\n')}\n` },
+      { name: 'tall.txt', contents: `${newLines.join('\n')}\n` }
+    );
+    fileDiff.semanticOperations = [];
+    fileDiff.semanticFolds = [fold(100, 119)];
+    return fileDiff;
+  }
+
+  // The top of the row `rows` rows down from the first.
+  const topOfRow = (rows: number) => diffHeaderHeight + rows * lineHeight;
+
+  function layOut(diffStyle: 'split' | 'unified') {
+    const dom = installDom();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const virtualizer = new Virtualizer();
+    virtualizer.setup(root);
+    const instance = new VirtualizedFileDiff<undefined>(
+      { diffStyle, expandUnchanged: true },
+      virtualizer,
+      layoutMetrics
+    );
+    instance.updateCodeViewLayout(tallFoldedDiff(), 0);
+    return {
+      instance,
+      cleanUp() {
+        instance.cleanUp();
+        dom.cleanup();
+      },
+    };
+  }
+
+  test.each(VIEWS)(
+    'a line the fold hides is at the fold row, in the %s view',
+    (diffStyle) => {
+      const { instance, cleanUp } = layOut(diffStyle);
+      try {
+        const foldRow = { top: topOfRow(99), height: lineHeight };
+        expect(instance.getLinePosition(99, 'deletions')).toEqual({
+          top: topOfRow(98),
+          height: lineHeight,
+        });
+        expect(instance.getLinePosition(100, 'deletions')).toEqual(foldRow);
+        expect(instance.getLinePosition(110, 'deletions')).toEqual(foldRow);
+        expect(instance.getLinePosition(119, 'deletions')).toEqual(foldRow);
+        // The first line after the fold is on the next row.
+        expect(instance.getLinePosition(120, 'deletions')).toEqual({
+          top: topOfRow(100),
+          height: lineHeight,
+        });
+      } finally {
+        cleanUp();
+      }
+    }
+  );
+
+  test.each(VIEWS)(
+    'a line far below the fold is found from a checkpoint, in the %s view',
+    (diffStyle) => {
+      const { instance, cleanUp } = layOut(diffStyle);
+      try {
+        // New line 10,000 is old line 10,020: 10,000 rows down, with the
+        // fold's 19 hidden rows left out.
+        expect(instance.getLinePosition(10_000, 'additions')?.top).toBe(
+          topOfRow(10_000)
+        );
+        expect(instance.getLinePosition(10_020, 'deletions')?.top).toBe(
+          topOfRow(10_000)
+        );
+        expect(instance.getNumericScrollAnchor(topOfRow(10_000))).toEqual({
+          lineNumber: 10_020,
+          side: 'deletions',
+          top: topOfRow(10_000),
+        });
+      } finally {
+        cleanUp();
+      }
+    }
+  );
+
+  test.each(VIEWS)(
+    "a scroll anchor on the fold's row is the fold's first line, in the %s view",
+    (diffStyle) => {
+      const { instance, cleanUp } = layOut(diffStyle);
+      try {
+        expect(instance.getNumericScrollAnchor(topOfRow(99))).toEqual({
+          lineNumber: 100,
+          side: 'deletions',
+          top: topOfRow(99),
+        });
+        // The row after it is the first line the fold does not hide.
+        expect(instance.getNumericScrollAnchor(topOfRow(100))).toEqual({
+          lineNumber: 120,
+          side: 'deletions',
+          top: topOfRow(100),
+        });
+      } finally {
+        cleanUp();
+      }
+    }
+  );
+});
+
+describe('collapsed lines after a fold that ends the last hunk', () => {
+  const layoutMetrics: VirtualFileMetrics = {
+    ...DEFAULT_VIRTUAL_FILE_METRICS,
+    hunkLineCount: 1,
+    lineHeight: 10,
+    diffHeaderHeight: 30,
+    spacing: 4,
+  };
+
+  // 25 lines with old lines 3-5 gone and no context lines kept, so the only
+  // hunk is those three lines and old lines 6-25 are collapsed below it.
+  function tailDiff(withFold: boolean): FileDiffMetadata {
+    const oldLines = Array.from({ length: 25 }, (_, index) => `${index + 1}`);
+    const newLines = oldLines.filter((_, index) => index < 2 || index > 4);
+    const fileDiff = parseDiffFromFile(
+      { name: 'tail.txt', contents: `${oldLines.join('\n')}\n` },
+      { name: 'tail.txt', contents: `${newLines.join('\n')}\n` },
+      { context: 0 }
+    );
+    fileDiff.semanticOperations = [];
+    fileDiff.semanticFolds = withFold ? [fold(3, 5)] : undefined;
+    return fileDiff;
+  }
+
+  test.each(VIEWS)(
+    'they resolve to the separator below the fold, in the %s view',
+    (diffStyle) => {
+      const dom = installDom();
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const virtualizer = new Virtualizer();
+      virtualizer.setup(root);
+      const layOut = (withFold: boolean) => {
+        const instance = new VirtualizedFileDiff<undefined>(
+          { diffStyle },
+          virtualizer,
+          layoutMetrics
+        );
+        instance.updateCodeViewLayout(tailDiff(withFold), 0);
+        return instance;
+      };
+      const folded = layOut(true);
+      const unfolded = layOut(false);
+      try {
+        for (const line of [6, 24, 25]) {
+          const expected = unfolded.getLinePosition(line, 'deletions');
+          assertDefined(expected, 'the separator should have a position');
+          // The fold shows one row where the unfolded hunk shows three.
+          expect(folded.getLinePosition(line, 'deletions')).toEqual({
+            top: expected.top - 2 * layoutMetrics.lineHeight,
+            height: expected.height,
+          });
+        }
+      } finally {
+        folded.cleanUp();
+        unfolded.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+});
+
+describe('render windows below a closed fold', () => {
+  const { lineHeight } = DEFAULT_VIRTUAL_FILE_METRICS;
+
+  // A 12,000-line file with old lines 100-1,100 gone and a fold over them:
+  // the closed fold hides 1,000 rows near the top.
+  function deepFoldDiff(): FileDiffMetadata {
+    const oldLines = Array.from(
+      { length: 12_000 },
+      (_, index) => `line ${index + 1}`
+    );
+    const newLines = oldLines.filter(
+      (_, index) => !(index + 1 >= 100 && index + 1 <= 1_100)
+    );
+    const fileDiff = parseDiffFromFile(
+      { name: 'deep.ts', contents: `${oldLines.join('\n')}\n` },
+      { name: 'deep.ts', contents: `${newLines.join('\n')}\n` }
+    );
+    fileDiff.semanticOperations = [];
+    fileDiff.semanticFolds = [fold(100, 1_100)];
+    return fileDiff;
+  }
+
+  // The old line numbers the CodeView's diff item has rendered.
+  function renderedOldLines(viewer: CodeView<undefined>): number[] {
+    const rows =
+      viewer
+        .getRenderedItems()
+        .find((item) => item.id === 'diff')
+        ?.element.shadowRoot?.querySelectorAll(
+          '[data-deletions] [data-content] > [data-line]'
+        ) ?? [];
+    return [...rows].map((row) => Number(row.getAttribute('data-line')));
+  }
+
+  // Old line 5,000 is 3,999 rows down once the fold's 1,000 rows are left
+  // out. Scrolling there must render it, not the line 1,000 rows earlier.
+  async function scrollToOldLine5000(
+    viewer: CodeView<undefined>,
+    root: HTMLElement
+  ): Promise<number[]> {
+    root.scrollTop = 3_999 * lineHeight;
+    dispatchScroll(root);
+    viewer.render(true);
+    await waitFor(() => renderedOldLines(viewer).includes(5_000));
+    return renderedOldLines(viewer);
+  }
+
+  const options = {
+    theme: 'pierre-dark',
+    disableFileHeader: true,
+    expandUnchanged: true,
+    diffStyle: 'split' as const,
+  };
+
+  test('the window at a scroll position holds the lines at that position', async () => {
+    const dom = installDom();
+    const consoleError = spyOn(console, 'error');
+    const viewer = new CodeView<undefined>(options);
+    const root = createRoot({ height: 400 });
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [
+        { id: 'diff', type: 'diff', fileDiff: deepFoldDiff() },
+      ]);
+      await waitFor(() => renderedOldLines(viewer).length > 0);
+      const lines = await scrollToOldLine5000(viewer, root);
+      expect(lines).toContain(5_000);
+      expect(lines).not.toContain(4_000);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      viewer.cleanUp();
+      await wait(0);
+      dom.cleanup();
+    }
+  });
+
+  test('a plain windowed render holds the lines of the folded window', async () => {
+    // The worker pool, which the render options come from, needs a DOM.
+    const dom = installDom();
+    const highlighter = await getSharedHighlighter({
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+      preferredHighlighter: 'shiki-js',
+    });
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    try {
+      const fileDiff = deepFoldDiff();
+      // Ten rows from row 3,999: old lines 5,000-5,009 with the fold closed,
+      // and old lines 4,000-4,009 when every line is counted.
+      const renderWindow = (openSemanticFolds?: ReadonlySet<number>) =>
+        renderDiffWithHighlighter(
+          fileDiff,
+          highlighter,
+          manager.getDiffRenderOptions(),
+          {
+            forcePlainText: true,
+            startingLine: 3_999,
+            totalLines: 10,
+            expandedHunks: true,
+            openSemanticFolds,
+          }
+        ).code.deletionLines;
+
+      const folded = renderWindow(NONE_OPEN);
+      expect(folded[4_999]).toBeDefined();
+      expect(folded[5_008]).toBeDefined();
+      expect(folded[3_999]).toBeUndefined();
+
+      const unfolded = renderWindow(undefined);
+      expect(unfolded[3_999]).toBeDefined();
+      expect(unfolded[4_999]).toBeUndefined();
+    } finally {
+      manager.terminate();
+      await wait(0);
+      dom.cleanup();
+    }
+  });
+});

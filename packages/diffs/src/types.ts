@@ -1082,6 +1082,7 @@ export interface ForceDiffPlainTextOptions {
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
   collapsedContextThreshold?: number;
+  openSemanticFolds?: ReadonlySet<number>;
 }
 
 export interface ForceFilePlainTextOptions {

@@ -34,6 +34,7 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks,
     collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    openSemanticFolds,
   }: ForceDiffPlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedDiffResult {
   if (forcePlainText) {
@@ -101,6 +102,9 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
     collapsedContextThreshold,
+    // A window counts rows with folds closed, so it lines up with the rows
+    // the layout asks for. A full render keeps every line.
+    openSemanticFolds: isWindowedHighlight ? openSemanticFolds : undefined,
     callback: ({ hunkIndex, additionLine, deletionLine, type }) => {
       const bucket = getBucketForHunk(hunkIndex);
       const splitLineIndex =

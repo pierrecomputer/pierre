@@ -656,6 +656,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (!openSemanticFolds.delete(start)) {
       openSemanticFolds.add(start);
     }
+    // A plain windowed result only holds the lines its window showed, and
+    // toggling changes which lines that is, so it is built again.
+    if (this.renderCache?.highlighted !== true) {
+      this.clearRenderCache();
+    }
     // Toggling moves rows; the set is changed in place, so the layout cannot
     // see that on its own.
     this.layout?.invalidateLines();
@@ -1231,7 +1236,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               : expandUnchanged
                 ? true
                 : this.expandedHunks,
-            collapsedContextThreshold
+            collapsedContextThreshold,
+            this.openSemanticFolds
           );
           // A plain result for the same diff keeps its rows as the window
           // moves, so rows that stay on screen stay the same objects.

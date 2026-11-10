@@ -53,6 +53,7 @@ import {
 } from '../utils/includesFileAnnotations';
 import {
   type DiffLineMetadata,
+  type FoldRow,
   iterateOverDiff,
 } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -322,16 +323,28 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Whether a line has a "No newline" marker row after it. Markers are hidden
-  // while editing.
+  // Whether a row has a "No newline" marker row after it. Markers are hidden
+  // while editing. A closed fold's row only has one in split view, for the
+  // new side, when the fold hides the hunk's last row.
   private hasNoNewlineMarker(
     additionLine: DiffLineMetadata | undefined,
-    deletionLine: DiffLineMetadata | undefined
+    deletionLine: DiffLineMetadata | undefined,
+    foldRow?: FoldRow,
+    hunk?: Hunk
   ): boolean {
-    return (
-      this.hunksRenderer.showsNoNewlineMarkers() &&
-      ((additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false))
-    );
+    if (!this.hunksRenderer.showsNoNewlineMarkers()) {
+      return false;
+    }
+    if (foldRow != null) {
+      return (
+        this.getDiffStyle() === 'split' &&
+        hunk != null &&
+        hunk.noEOFCRAdditions &&
+        foldRow.lastSplitLineIndex ===
+          hunk.splitLineStart + hunk.splitLineCount - 1
+      );
+    }
+    return (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
   }
 
   override setOptions(
@@ -796,6 +809,7 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
       callback: ({
         hunkIndex,
         hunk,
@@ -803,6 +817,7 @@ export class VirtualizedFileDiff<
         collapsedAfter,
         deletionLine,
         additionLine,
+        foldRow,
       }) => {
         const lineIndex =
           diffStyle === 'split'
@@ -841,9 +856,16 @@ export class VirtualizedFileDiff<
         const lineHeight = this.getLineHeight(
           lineIndex,
           additionLine?.lineIndex,
-          this.hasNoNewlineMarker(additionLine, deletionLine)
+          this.hasNoNewlineMarker(additionLine, deletionLine, foldRow, hunk)
         );
-        if (lineIndex === targetLineIndex) {
+        // A closed fold's row stands for every line it hides.
+        const lastLineIndex =
+          foldRow != null
+            ? diffStyle === 'split'
+              ? foldRow.lastSplitLineIndex
+              : foldRow.lastUnifiedLineIndex
+            : lineIndex;
+        if (targetLineIndex >= lineIndex && targetLineIndex <= lastLineIndex) {
           position = {
             top,
             height: lineHeight,
@@ -859,8 +881,8 @@ export class VirtualizedFileDiff<
           });
           if (separator != null) {
             if (
-              targetLineIndex > lineIndex &&
-              targetLineIndex <= lineIndex + collapsedAfter
+              targetLineIndex > lastLineIndex &&
+              targetLineIndex <= lastLineIndex + collapsedAfter
             ) {
               position = {
                 top: top + separator.gapBefore,
@@ -989,6 +1011,7 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
       callback: ({
         hunkIndex,
         hunk,
@@ -996,6 +1019,7 @@ export class VirtualizedFileDiff<
         collapsedAfter,
         deletionLine,
         additionLine,
+        foldRow,
       }) => {
         const lineIndex =
           diffStyle === 'split'
@@ -1042,7 +1066,7 @@ export class VirtualizedFileDiff<
         const lineHeight = this.getLineHeight(
           lineIndex,
           additionLine?.lineIndex,
-          this.hasNoNewlineMarker(additionLine, deletionLine)
+          this.hasNoNewlineMarker(additionLine, deletionLine, foldRow, hunk)
         );
         top += lineHeight;
 
@@ -2285,6 +2309,7 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      openSemanticFolds: this.hunksRenderer.getOpenSemanticFolds(),
       callback: ({
         hunkIndex,
         hunk,
@@ -2292,6 +2317,7 @@ export class VirtualizedFileDiff<
         collapsedAfter,
         deletionLine,
         additionLine,
+        foldRow,
       }) => {
         const splitLineIndex =
           additionLine != null
@@ -2301,13 +2327,24 @@ export class VirtualizedFileDiff<
           additionLine != null
             ? additionLine.unifiedLineIndex
             : deletionLine.unifiedLineIndex;
-        const hasMetadata = this.hasNoNewlineMarker(additionLine, deletionLine);
+        const hasMetadata = this.hasNoNewlineMarker(
+          additionLine,
+          deletionLine,
+          foldRow,
+          hunk
+        );
+        // A closed fold's row is the hunk's last row when it hides it.
+        const lastSplitLineIndex =
+          foldRow != null ? foldRow.lastSplitLineIndex : splitLineIndex;
+        const lastUnifiedLineIndex =
+          foldRow != null ? foldRow.lastUnifiedLineIndex : unifiedLineIndex;
         const isFinalHunkRow =
           hunkIndex === fileDiff.hunks.length - 1 &&
           hunk != null &&
           (diffStyle === 'split'
-            ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
-            : unifiedLineIndex ===
+            ? lastSplitLineIndex ===
+              hunk.splitLineStart + hunk.splitLineCount - 1
+            : lastUnifiedLineIndex ===
               hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
         const leadingSeparator =
           collapsedBefore > 0
