@@ -214,9 +214,9 @@
       }
     },
     "downloadRun": {
-      "date": "2026-11-10T23:42:40.145Z",
-      "commit": "7984d6aef9940110d5a6bd6381f29e6cd11d6127",
-      "dirty": true,
+      "date": "2026-11-10T23:46:28.572Z",
+      "commit": "babf827b888f419735c0e9f55040798ac1738041",
+      "dirty": false,
       "bun": "1.4.0",
       "versions": {
         "react": "19.2.7",
