@@ -5,8 +5,14 @@ import type {
   ExpandedHunksMap,
   FileDiffMetadata,
   Hunk,
+  SemanticDiffFold,
 } from '../types';
 import { endsWithNewline } from './endsWithNewline';
+import {
+  createFoldCursor,
+  type FoldCursor,
+  takeHiddenRows,
+} from './foldCursor';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import {
   getExpandedRegion,
@@ -26,6 +32,12 @@ export interface DiffRowCursorOptions {
    * an edit session shows it so the caret has a row there.
    */
   includeTrailingNewline?: boolean;
+  /**
+   * The semantic folds the reader opened, by first old line. Every other
+   * fold of the diff is closed: one row shows in place of its old lines, and
+   * rows are counted that way. Leave it out to show every line.
+   */
+  openSemanticFolds?: ReadonlySet<number>;
 }
 
 // Fails a read of a side the current row does not have.
@@ -39,9 +51,11 @@ const LEADING_START = 1;
 const LEADING_END = 2;
 const CONTENT = 3;
 const CHANGE_REST = 4;
-const TRAILING = 5;
-const TRAILING_NEWLINE = 6;
-const DONE = 7;
+const CHANGE_END = 5;
+const FOLD_PIECES = 6;
+const TRAILING = 7;
+const TRAILING_NEWLINE = 8;
+const DONE = 9;
 
 // Walks the rows of a diff in the order they render. The caller pulls rows:
 //
@@ -57,12 +71,20 @@ const DONE = 7;
 // Inside, rows are handled a run at a time. A run is a series of rows that all
 // have the same type and the same sides, so a row's positions are the run's
 // first positions plus the row's place in the run.
+//
+// Semantic folds cover old lines of a change that have no new line beside
+// them. A run of such rows is yielded a piece at a time: the rows before a
+// fold, then the one row of a closed fold, or the first line of an open fold
+// and the rows after it. A closed fold's other lines get no row.
 export class DiffRowCursor {
   private readonly diff: FileDiffMetadata;
   private readonly diffStyle: DiffRowCursorOptions['diffStyle'];
   private readonly expandedHunks: ExpandedHunksMap | true | undefined;
   private readonly collapsedContextThreshold: number;
   private readonly includeTrailingNewline: boolean;
+  // The diff's semantic folds and the first of them the walk has not gone
+  // past. Undefined when the diff has none, or when every line shows.
+  private readonly foldCursor: FoldCursor | undefined;
   // The row window: rows from `startingLine` up to `windowEnd` are yielded.
   private readonly startingLine: number;
   private readonly windowEnd: number;
@@ -97,6 +119,13 @@ export class DiffRowCursor {
   private collapsedAfterRow = -1;
   private deletionNoEOFCRRow = -1;
   private additionNoEOFCRRow = -1;
+  // The closed fold the current row stands in for, and how many rows after
+  // the row it hides.
+  private rowClosedFold: SemanticDiffFold | undefined = undefined;
+  private rowHiddenRows = 0;
+  // An open fold, and the row of the run that shows its first line.
+  private rowOpenFold: SemanticDiffFold | undefined = undefined;
+  private openFoldRow = -1;
 
   // Where the walk is: the hunk, the part of it, and the block inside it.
   private part = ENTER_HUNK;
@@ -122,6 +151,19 @@ export class DiffRowCursor {
   private additionNumberAt = 0;
   // Where the hunk's last row sits when hidden lines follow it, else -1.
   private collapsedAfterAt = -1;
+  // Whether a semantic fold starts in the current change block, and how many
+  // of the block's rows closed folds hide.
+  private changeHasFolds = false;
+  private changeHiddenRows = 0;
+  // A run that folds cut into pieces: its next row, its row count, the rows
+  // it has shown so far, how many rows come before it in each view, and the
+  // part the walk moves to after its last piece.
+  private pieceRow = 0;
+  private pieceEnd = 0;
+  private piecesShown = 0;
+  private piecesUnifiedStart = 0;
+  private piecesSplitStart = 0;
+  private partAfterPieces = CONTENT;
 
   // Sets the row window and finds the first hunk that can contain its rows.
   constructor({
@@ -132,6 +174,7 @@ export class DiffRowCursor {
     expandedHunks,
     collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     includeTrailingNewline = false,
+    openSemanticFolds,
   }: DiffRowCursorOptions) {
     this.diff = diff;
     this.diffStyle = diffStyle;
@@ -140,6 +183,7 @@ export class DiffRowCursor {
     this.expandedHunks = expandedHunks;
     this.collapsedContextThreshold = collapsedContextThreshold;
     this.includeTrailingNewline = includeTrailingNewline;
+    this.foldCursor = createFoldCursor(diff, openSemanticFolds);
     if (totalLines === 0) {
       this.part = DONE;
     } else if (startingLine > 0) {
@@ -230,6 +274,26 @@ export class DiffRowCursor {
     const { splitStart, index } = this;
     return splitStart + index;
   }
+  // The closed semantic fold this row stands in for. The row sits on the
+  // fold's first old line.
+  get closedFold(): SemanticDiffFold | undefined {
+    return this.rowClosedFold;
+  }
+  // The open semantic fold whose first old line this row shows.
+  get openFold(): SemanticDiffFold | undefined {
+    const { index, openFoldRow, rowOpenFold } = this;
+    return index === openFoldRow ? rowOpenFold : undefined;
+  }
+  // The positions of the last line the row stands for. Only a closed fold's
+  // row stands for more lines than its own.
+  get lastUnifiedLineIndex(): number {
+    const { unifiedLineIndex, rowHiddenRows } = this;
+    return unifiedLineIndex + rowHiddenRows;
+  }
+  get lastSplitLineIndex(): number {
+    const { splitStart, index, rowHiddenRows } = this;
+    return splitStart + index + rowHiddenRows;
+  }
   get collapsedBefore(): number {
     const { index, firstRowCollapsedBefore } = this;
     return index === 0 ? firstRowCollapsedBefore : 0;
@@ -241,10 +305,14 @@ export class DiffRowCursor {
 
   // Skips the hunks that end before the window starts, adding up their rows.
   private findStartingHunk(): void {
-    const { diff, diffStyle, startingLine } = this;
+    const { diff, diffStyle, startingLine, foldCursor } = this;
     const lastHunkIndex = diff.hunks.length - 1;
     let hunkIndex = 0;
     for (const hunk of diff.hunks) {
+      // The fold the hunk starts at, and the rows of it closed folds hide.
+      const foldIndex = foldCursor?.index ?? 0;
+      const hiddenRows =
+        foldCursor != null ? takeHiddenRows(foldCursor, hunk) : 0;
       const leading = this.getLeadingRegion(hunk, hunkIndex);
       let contextRows = leading.fromStart + leading.fromEnd;
       if (hunkIndex === lastHunkIndex) {
@@ -254,14 +322,20 @@ export class DiffRowCursor {
           contextRows++;
         }
       }
-      const unifiedRows = contextRows + hunk.unifiedLineCount;
-      const splitRows = contextRows + hunk.splitLineCount;
+      const unifiedRows = contextRows + hunk.unifiedLineCount - hiddenRows;
+      const splitRows = contextRows + hunk.splitLineCount - hiddenRows;
       const { unifiedCount, splitCount } = this;
       const afterHunk =
         diffStyle !== 'split'
           ? unifiedCount + unifiedRows
           : splitCount + splitRows;
-      if (afterHunk > startingLine) break;
+      if (afterHunk > startingLine) {
+        // The walk enters this hunk, so its folds are still to come.
+        if (foldCursor != null) {
+          foldCursor.index = foldIndex;
+        }
+        break;
+      }
       this.unifiedCount += unifiedRows;
       this.splitCount += splitRows;
       hunkIndex++;
@@ -469,6 +543,9 @@ export class DiffRowCursor {
             if (this.startContextRun(hunk, content, isLast)) return true;
             break;
           }
+          if (this.foldCursor != null) {
+            this.readChangeFolds(content.deletions);
+          }
           this.part = CHANGE_REST;
           if (this.startChangeRun(hunk, content, isLast, false)) return true;
           break;
@@ -483,19 +560,26 @@ export class DiffRowCursor {
             throw new Error('DiffRowCursor: missing change content');
           }
           const isLast = this.contentIndex === hunk.hunkContent.length - 1;
-          this.part = CONTENT;
-          this.contentIndex++;
+          this.part = CHANGE_END;
           const started = this.startChangeRun(hunk, content, isLast, true);
-          const { deletions, additions } = content;
-          this.unifiedCount += deletions + additions;
-          this.splitCount += Math.max(deletions, additions);
-          this.unifiedAt += deletions + additions;
-          this.splitAt += Math.max(deletions, additions);
-          this.deletionIndexAt += deletions;
-          this.additionIndexAt += additions;
-          this.deletionNumberAt += deletions;
-          this.additionNumberAt += additions;
+          // A run that folds cut up has more pieces to come before the block
+          // ends.
+          if (this.part === CHANGE_END) {
+            this.endChange(content);
+          }
           if (started) return true;
+          break;
+        }
+        case CHANGE_END: {
+          const content = this.walkHunk?.hunkContent[this.contentIndex];
+          if (content == null || content.type !== 'change') {
+            throw new Error('DiffRowCursor: missing change content');
+          }
+          this.endChange(content);
+          break;
+        }
+        case FOLD_PIECES: {
+          if (this.startFoldPiece()) return true;
           break;
         }
         case TRAILING: {
@@ -535,14 +619,20 @@ export class DiffRowCursor {
       const unifiedRows =
         content.type === 'context' ? content.lines : deletions + additions;
       const splitRows = Math.max(deletions, additions);
+      // The rows of the block that closed folds hide.
+      let hiddenRows = 0;
+      if (content.type === 'change' && this.foldCursor != null) {
+        this.readChangeFolds(deletions);
+        hiddenRows = this.changeHiddenRows;
+      }
       const { unifiedCount, splitCount } = this;
       const blockEnd =
         diffStyle === 'split'
-          ? splitCount + splitRows
-          : unifiedCount + unifiedRows;
+          ? splitCount + splitRows - hiddenRows
+          : unifiedCount + unifiedRows - hiddenRows;
       if (blockEnd > startingLine) break;
-      this.unifiedCount += unifiedRows;
-      this.splitCount += splitRows;
+      this.unifiedCount += unifiedRows - hiddenRows;
+      this.splitCount += splitRows - hiddenRows;
       this.unifiedAt += unifiedRows;
       this.splitAt += splitRows;
       this.deletionIndexAt += deletions;
@@ -768,15 +858,167 @@ export class DiffRowCursor {
       isLast && hasAddition && endsBlock && hunk.noEOFCRAdditions
         ? count - 1
         : -1;
-    // Where this run's deletions and additions sit in the unified view.
+    // Where this run's deletions and additions sit in the unified view. The
+    // additions come after the block's deletions, less the rows closed folds
+    // hide.
     const unifiedDeletionStart = unifiedCount + skipped;
-    const unifiedAdditionStart = unifiedCount + deletions + sideOffset;
+    const unifiedAdditionStart =
+      unifiedCount + deletions - this.changeHiddenRows + sideOffset;
+    if (this.changeHasFolds && hasDeletion && !hasAddition) {
+      this.pieceRow = 0;
+      this.pieceEnd = count;
+      this.piecesShown = 0;
+      this.piecesUnifiedStart = unifiedDeletionStart;
+      this.piecesSplitStart = splitCount + skipped;
+      this.partAfterPieces = this.part;
+      this.part = FOLD_PIECES;
+      return this.startFoldPiece();
+    }
     return this.clipRun(
       count,
       hasDeletion ? unifiedDeletionStart : unifiedAdditionStart,
       splitCount + skipped,
       hasDeletion && hasAddition ? unifiedAdditionStart : undefined
     );
+  }
+
+  // Moves the walk past a change block. Its rows are counted without the
+  // ones closed folds hide.
+  private endChange({ deletions, additions }: ChangeContent): void {
+    const { changeHiddenRows } = this;
+    this.part = CONTENT;
+    this.contentIndex++;
+    this.unifiedCount += deletions + additions - changeHiddenRows;
+    this.splitCount += Math.max(deletions, additions) - changeHiddenRows;
+    this.unifiedAt += deletions + additions;
+    this.splitAt += Math.max(deletions, additions);
+    this.deletionIndexAt += deletions;
+    this.additionIndexAt += additions;
+    this.deletionNumberAt += deletions;
+    this.additionNumberAt += additions;
+  }
+
+  // Finds what semantic folds do to the change block the walk is at: whether
+  // one starts among its `deletions` old lines, and how many of its rows
+  // closed folds hide. A closed fold shows one row for all of its lines.
+  private readChangeFolds(deletions: number): void {
+    const { foldCursor, deletionNumberAt } = this;
+    if (foldCursor == null) {
+      throw new Error('DiffRowCursor: missing semantic folds');
+    }
+    const { folds, openSemanticFolds } = foldCursor;
+    let { index } = foldCursor;
+    while (index < folds.length && folds[index].old.end < deletionNumberAt) {
+      index++;
+    }
+    foldCursor.index = index;
+    const lastOldLine = deletionNumberAt + deletions - 1;
+    let hiddenRows = 0;
+    let fold = folds[index];
+    this.changeHasFolds = fold != null && fold.old.start <= lastOldLine;
+    while (fold != null && fold.old.start <= lastOldLine) {
+      if (!openSemanticFolds.has(fold.old.start)) {
+        hiddenRows += fold.old.end - fold.old.start;
+      }
+      fold = folds[++index];
+    }
+    this.changeHiddenRows = hiddenRows;
+  }
+
+  // Starts the next piece of a run that folds cut up: the rows before a fold,
+  // a closed fold's one row, or an open fold's first line with the rows after
+  // it. A piece is rows of the same run, so the run's positions stand. False
+  // when the window holds none of the run's remaining rows.
+  private startFoldPiece(): boolean {
+    const {
+      foldCursor,
+      deletionNumberStart,
+      pieceEnd,
+      piecesUnifiedStart,
+      piecesSplitStart,
+    } = this;
+    if (foldCursor == null) {
+      throw new Error('DiffRowCursor: missing semantic folds');
+    }
+    const { folds, openSemanticFolds } = foldCursor;
+    while (this.pieceRow < pieceEnd) {
+      const { pieceRow: row, piecesShown: shown } = this;
+      const oldLine = deletionNumberStart + row;
+      while (
+        foldCursor.index < folds.length &&
+        folds[foldCursor.index].old.end < oldLine
+      ) {
+        foldCursor.index++;
+      }
+      const fold = folds[foldCursor.index];
+      // The row of the run the next fold starts on.
+      const foldRow =
+        fold != null ? fold.old.start - deletionNumberStart : pieceEnd;
+      // How many rows the piece shows, and how many of the run it takes up.
+      let count: number;
+      let hiddenRows = 0;
+      this.rowClosedFold = undefined;
+      this.rowOpenFold = undefined;
+      if (fold == null || foldRow > row) {
+        count = Math.min(foldRow, pieceEnd) - row;
+      } else if (!openSemanticFolds.has(fold.old.start)) {
+        if (foldRow < row) {
+          // The run starts inside a closed fold, whose lines get no row.
+          this.pieceRow = fold.old.end - deletionNumberStart + 1;
+          continue;
+        }
+        count = 1;
+        hiddenRows = fold.old.end - fold.old.start;
+        this.rowClosedFold = fold;
+        // The row reports the hidden lines after the hunk when it hides the
+        // hunk's last row, and shows no "no newline" marker.
+        const { collapsedAfterRow } = this;
+        if (collapsedAfterRow > row && collapsedAfterRow <= row + hiddenRows) {
+          this.collapsedAfterRow = row;
+        }
+        if (this.deletionNoEOFCRRow === row) {
+          this.deletionNoEOFCRRow = -1;
+        }
+      } else {
+        // An open fold's lines show, up to the fold after it.
+        const nextFold = folds[foldCursor.index + 1];
+        const nextRow =
+          nextFold != null
+            ? nextFold.old.start - deletionNumberStart
+            : pieceEnd;
+        count = Math.min(nextRow, pieceEnd) - row;
+        if (foldRow === row) {
+          this.rowOpenFold = fold;
+          this.openFoldRow = row;
+        }
+      }
+      this.rowHiddenRows = hiddenRows;
+      this.pieceRow = row + count + hiddenRows;
+      this.piecesShown = shown + count;
+      if (
+        this.clipRun(
+          count,
+          piecesUnifiedStart + shown,
+          piecesSplitStart + shown
+        )
+      ) {
+        // The window was matched against the piece. Its rows are these rows
+        // of the run.
+        this.index += row;
+        this.end += row;
+        if (this.secondStretchFirst < this.secondStretchEnd) {
+          this.secondStretchFirst += row;
+          this.secondStretchEnd += row;
+        }
+        return true;
+      }
+    }
+    // The rows that follow have nothing to do with a fold.
+    this.rowClosedFold = undefined;
+    this.rowHiddenRows = 0;
+    this.rowOpenFold = undefined;
+    this.part = this.partAfterPieces;
+    return false;
   }
 
   // Starts a run of unchanged lines revealed below the last hunk.

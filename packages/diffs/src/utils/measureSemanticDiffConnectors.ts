@@ -6,8 +6,8 @@ import type {
   SemanticDiffConnectorRange,
 } from './semanticDiffConnectors';
 
-// Half the height of the line a collapsed region's row draws (see style.css).
-const COLLAPSED_LINE_HALF_HEIGHT = 0.5;
+// Half the height of the line a closed fold's row draws (see style.css).
+const FOLD_LINE_HALF_HEIGHT = 0.5;
 
 // How far apart, in pixels, two band ends can be and still count as touching.
 // Adjacent rows share an edge, up to sub-pixel rounding.
@@ -22,11 +22,11 @@ interface MountedLine {
    */
   end: HTMLElement;
   /**
-   * Set when a collapsed region hides the line: `element` and `end` are then
-   * the region's row, and connectors meet the line at the row's 1px center
+   * Set when a closed fold hides the line: `element` and `end` are then
+   * the fold's row, and connectors meet the line at the row's 1px center
    * line.
    */
-  collapsed?: true;
+  folded?: true;
 }
 
 // Measure endpoint runs whose rows are mounted in one uninterrupted stretch.
@@ -75,21 +75,21 @@ export function measureSemanticDiffConnectors(
         base,
         target,
       },
-      collapsedRows: {
+      foldRows: {
         base:
           region.base != null
-            ? getCollapsedRow(oldLines, region.base.start, region.base.end)
-            : getAttachmentCollapsedRow(oldLines, region.attachment),
+            ? getFoldRow(oldLines, region.base.start, region.base.end)
+            : getAttachmentFoldRow(oldLines, region.attachment),
         target:
           region.target != null
-            ? getCollapsedRow(newLines, region.target.start, region.target.end)
-            : getAttachmentCollapsedRow(newLines, region.attachment),
+            ? getFoldRow(newLines, region.target.start, region.target.end)
+            : getAttachmentFoldRow(newLines, region.attachment),
       },
       merged: false,
     });
   }
-  mergeOnCollapsedRows(measured, 'base');
-  mergeOnCollapsedRows(measured, 'target');
+  mergeOnFoldRows(measured, 'base');
+  mergeOnFoldRows(measured, 'target');
   return measured
     .filter((entry) => !entry.merged)
     .map((entry) => entry.connector);
@@ -97,39 +97,39 @@ export function measureSemanticDiffConnectors(
 
 interface MeasuredConnector {
   connector: Connector;
-  /** The collapsed region row each end lies on, when it lies on one. */
-  collapsedRows: { base?: HTMLElement; target?: HTMLElement };
-  /** Folded into another connector by `mergeOnCollapsedRows`. */
+  /** The closed fold's row each end lies on, when it lies on one. */
+  foldRows: { base?: HTMLElement; target?: HTMLElement };
+  /** Merged into another connector by `mergeOnFoldRows`. */
   merged: boolean;
 }
 
-// The collapsed region row that hides every line from `start` to `end`, if one
+// The closed fold's row that hides every line from `start` to `end`, if one
 // does.
-function getCollapsedRow(
+function getFoldRow(
   lines: Map<number, MountedLine>,
   start: number,
   end: number
 ): HTMLElement | undefined {
   const first = lines.get(start);
-  return first?.collapsed === true && lines.get(end)?.element === first.element
+  return first?.folded === true && lines.get(end)?.element === first.element
     ? first.element
     : undefined;
 }
 
-function getAttachmentCollapsedRow(
+function getAttachmentFoldRow(
   lines: Map<number, MountedLine>,
   attachment: SemanticDiffConnectorAttachment
 ): HTMLElement | undefined {
   return 'empty' in attachment
     ? undefined
-    : getCollapsedRow(lines, attachment.line, attachment.line);
+    : getFoldRow(lines, attachment.line, attachment.line);
 }
 
-// Connectors whose `side` ends lie on one collapsed region's row all narrow to
+// Connectors whose `side` ends lie on one closed fold's row all narrow to
 // its 1px line, where their translucent fills would stack. Merge the ones of
 // one kind whose other ends touch into a single band spanning those ends.
 // Ends that don't touch stay separate, so a band never covers unrelated rows.
-function mergeOnCollapsedRows(
+function mergeOnFoldRows(
   entries: MeasuredConnector[],
   side: 'base' | 'target'
 ): void {
@@ -139,7 +139,7 @@ function mergeOnCollapsedRows(
     Map<Connector['kind'], MeasuredConnector[]>
   >();
   for (const entry of entries) {
-    const row = entry.collapsedRows[side];
+    const row = entry.foldRows[side];
     if (row == null || entry.merged) continue;
     let byKind = groups.get(row);
     if (byKind == null) {
@@ -200,13 +200,13 @@ function indexMountedLines(content: HTMLElement): Map<number, MountedLine> {
       previousLine = line;
       continue;
     }
-    // A collapsed region's row stands in for every old line it hides.
-    if (element.hasAttribute('data-semantic-region')) {
+    // A closed fold's row stands in for every old line it hides.
+    if (element.hasAttribute('data-semantic-fold')) {
       adjacent = undefined;
-      const start = Number(element.getAttribute('data-semantic-region-start'));
-      const end = Number(element.getAttribute('data-semantic-region-end'));
+      const start = Number(element.getAttribute('data-semantic-fold-start'));
+      const end = Number(element.getAttribute('data-semantic-fold-end'));
       if (start !== previousLine + 1) run++;
-      previous = { element, run, end: element, collapsed: true };
+      previous = { element, run, end: element, folded: true };
       for (let line = start; line <= end; line++) {
         lines.set(line, previous);
       }
@@ -313,16 +313,15 @@ export function measureSemanticDiffSelection(
   return selection;
 }
 
-// Where a line's rows start and end. A line inside a collapsed region has no
-// row of its own, so it spans the 1px line drawn through the region's row
-// center.
+// Where a line's rows start and end. A line inside a closed fold has no row
+// of its own, so it spans the 1px line drawn through the fold's row center.
 function getLineTop(
   line: MountedLine,
   rects: Map<HTMLElement, DOMRect>
 ): number {
   const rect = getRowRect(line.element, rects);
-  return line.collapsed === true
-    ? (rect.top + rect.bottom) / 2 - COLLAPSED_LINE_HALF_HEIGHT
+  return line.folded === true
+    ? (rect.top + rect.bottom) / 2 - FOLD_LINE_HALF_HEIGHT
     : rect.top;
 }
 
@@ -331,8 +330,8 @@ function getLineBottom(
   rects: Map<HTMLElement, DOMRect>
 ): number {
   const rect = getRowRect(line.end, rects);
-  return line.collapsed === true
-    ? (rect.top + rect.bottom) / 2 + COLLAPSED_LINE_HALF_HEIGHT
+  return line.folded === true
+    ? (rect.top + rect.bottom) / 2 + FOLD_LINE_HALF_HEIGHT
     : rect.bottom;
 }
 
