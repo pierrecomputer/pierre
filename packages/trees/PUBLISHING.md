@@ -19,10 +19,14 @@ git checkout -b release/trees-<version>
 - `packages/trees/package.json` — bump `version`.
 - `packages/trees/CHANGELOG.md` — add an entry (create if missing).
 
-Trees is on a `1.0.0-beta.<n>` track. Bump `<n>` for beta-only changes.
+Trees starts its stable release line at `1.0.0`. Use normal semver bumps for
+subsequent stable releases. Reserve prerelease versions and `--tag=beta` for
+beta releases.
 
 Run `pnpm install` to update `pnpm-lock.yaml`, commit, open a PR, merge.
 Releases must come from merged commits on `main`.
+
+Run `moon run root:format root:lint trees:typecheck trees:test` before merging.
 
 ## 1. Confirm auth
 
@@ -42,8 +46,12 @@ generated classic OTP; the script forwards it to both `pnpm publish` and
 From `packages/trees`:
 
 ```bash
-moonx trees:publish -- --dry-run
+CI= moonx trees:publish --ignore-ci-checks -- --dry-run --tag=latest
 ```
+
+Pass `--tag=latest` explicitly for stable releases; the script defaults to
+`beta`. While preparing an uncommitted release, add `--dirty` to this dry-run
+command only. Repeat the rehearsal from clean `main` before publishing.
 
 The script will:
 
@@ -65,16 +73,15 @@ release-only scripts that are meaningless inside the packed artifact.
 ## 3. Consumer smoke tests
 
 Create fresh consumer apps **outside** the monorepo so workspace resolution does
-not mask packaging bugs. Do this against a beta publish (step 4 with
-`--tag=beta`) or by installing the final tarball printed by `--dry-run`.
+not mask packaging bugs. Install the final tarball printed by `--dry-run`.
 
 - React `18.3.1`
 - React `19`
 
 In each:
 
-1. Install `@pierre/trees@<version>` from npm.
-2. Confirm `ls node_modules/@pierre` shows **only** `trees` (no `path-store`).
+1. Install the final `pierre-trees-<version>.tgz` with `pnpm add`.
+2. Confirm `@pierre/path-store` is absent from the installed dependencies.
 3. Typecheck the consumer against its own `tsconfig`.
 4. Run a production build.
 5. Render a simple tree in a real browser.
@@ -86,11 +93,17 @@ In each:
 be added to `minimumReleaseAgeExclude`; do not lower the workspace policy for a
 release.
 
-## 4. Publish to `beta`
+## 4. Publish the stable release
+
+After the release PR is merged and the consumer checks pass, run from clean
+`main`:
 
 ```bash
-moonx trees:publish -- --tag=beta
+CI= moonx trees:publish --ignore-ci-checks -- --tag=latest --tag-release --release-branch=main
 ```
+
+This uploads the version once under `latest`, then creates and pushes the
+annotated git tag `@pierre/trees@<version>`. Do not use `--dirty` for uploads.
 
 Verify on npm:
 
@@ -99,21 +112,21 @@ pnpm view @pierre/trees@<version> version
 pnpm view @pierre/trees dist-tags --json
 ```
 
-## 5. Promote to `latest`
+## 5. Prereleases and existing uploads
 
-After smoke tests pass on the beta tarball:
+For a prerelease version, use `--tag=beta` instead of `--tag=latest`. A stable
+release needs a stable version in `package.json`; moving a beta version to
+`latest` does not change its version.
+
+If you already uploaded the intended stable version under `beta`, promote it
+without running the publish script again. The script always uploads a tarball,
+even with `--promote-latest`, and npm does not allow publishing the same version
+twice.
+
+After verifying that published version and checking out its merged release
+commit on `main`:
 
 ```bash
-moonx trees:publish -- --tag=latest --promote-latest --tag-release
-```
-
-`--promote-latest` moves the `latest` dist-tag to this version. `--tag-release`
-creates and pushes a git tag (`@pierre/trees@<version>`).
-
-You can also split these into separate invocations:
-
-```bash
-moonx trees:publish -- --tag=latest     # publish under latest
 pnpm dist-tag add @pierre/trees@<version> latest
 git tag -a "@pierre/trees@<version>" -m "@pierre/trees <version>"
 git push origin "@pierre/trees@<version>"
@@ -130,26 +143,28 @@ moonx root:wt -- clean
 
 ## Recovering from a failed publish
 
-Publish is atomic per tarball — the script either uploads the final artifact or
-it doesn't. If `pnpm publish` fails inside the script, nothing was uploaded: fix
-the issue, commit, and re-run.
+If the script fails, check `pnpm view @pierre/trees@<version> version` and
+`pnpm view @pierre/trees dist-tags --json` before retrying. An upload may have
+succeeded before a later dist-tag or git-tag step failed. Complete only the
+missing steps for an existing version.
 
-If the publish succeeded but smoke tests fail afterwards, **do not
-`pnpm unpublish`**. Bump to the next `1.0.0-beta.<n+1>`, publish again, and
-leave the broken version stranded on npm with its bad `beta` tag.
+If an uploaded release has a defect, **do not `pnpm unpublish`**. Fix the defect
+and publish a new version: a patch release after a stable release, or the next
+prerelease number while on a beta track.
 
 ## Quick checklist
 
 - [ ] release branch cut, `version` bumped, `CHANGELOG.md` updated
 - [ ] release PR merged into `main`
 - [ ] `pnpm whoami` confirms publish access to `@pierre`
-- [ ] `moonx trees:publish -- --dry-run` reviewed (`@pierre/path-store` and
-      release-only scripts should disappear from `package.json`)
+- [ ] `CI= moonx trees:publish --ignore-ci-checks -- --dry-run --tag=latest`
+      reviewed (`@pierre/path-store` and release-only scripts should disappear
+      from `package.json`)
 - [ ] React 18.3.1 consumer smoke test passed (all four subpaths, no
       `@pierre/path-store` in `node_modules`)
 - [ ] React 19 consumer smoke test passed (all four subpaths, no
       `@pierre/path-store` in `node_modules`)
-- [ ] `moonx trees:publish -- --tag=beta` succeeded
-- [ ] `--tag=latest --promote-latest` run after smoke verification
+- [ ] stable version published with `--tag=latest --release-branch=main`
+- [ ] npm version and `latest` dist-tag verified
 - [ ] git tag pushed (`@pierre/trees@<version>`)
 - [ ] `moonx root:wt -- clean` from the monorepo root
