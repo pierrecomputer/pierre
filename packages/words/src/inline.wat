@@ -233,9 +233,15 @@
                     (local.set $p (call $tryEmailAutolink (local.get $p) (local.get $end)))
                     (br $dispatched)))
                 (br $delimiters)))
+            ;; Most dots and colons start no autolink: test for `www.` and
+            ;; `://` here, without a call.
             (if (i32.eq (local.get $c) (i32.const "."))
               (then
-                (local.set $p (call $tryWwwAutolink (local.get $p) (local.get $end)))
+                (local.set $p (if (result i32) (i32.eq (i32.and
+                      (i32.load (i32.sub (i32.add (local.get $base) (local.get $p)) (i32.const 3)))
+                      (i32.const 0xdfdfdf)) (i32.const "WWW"))
+                  (then (call $tryWwwAutolink (local.get $p) (local.get $end)))
+                  (else (i32.add (local.get $p) (i32.const 1)))))
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const 10))
               (then
@@ -243,7 +249,10 @@
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const ":"))
               (then
-                (local.set $p (call $tryUrlAutolink (local.get $p) (local.get $end)))
+                (local.set $p (if (result i32) (i32.eq
+                      (i32.load16_u offset=1 (i32.add (local.get $base) (local.get $p))) (i32.const "//"))
+                  (then (call $tryUrlAutolink (local.get $p) (local.get $end)))
+                  (else (i32.add (local.get $p) (i32.const 1)))))
                 (br $dispatched)))
             ;; These bytes are literal text, but prevent copying unmarked gaps
             ;; without HTML escaping. Once that is required, stop finding them.
@@ -275,7 +284,9 @@
                 (br $dispatched))))
           (local.set $p (call $handleDelim (local.get $p) (local.get $end))))
         (br $l)))
-    (call $processEmphasis (i32.const 0) (i32.const -1)))
+    ;; most leaves hold no delimiter run
+    (if (i32.ge_s (global.get $delimHead) (i32.const 0))
+      (then (call $processEmphasis (i32.const 0) (i32.const -1)))))
 
   (func $handleBackslash (param $p i32) (param $end i32) (result i32)
     (local $c i32)
@@ -304,10 +315,7 @@
               (i32.or
                 (call $isSpaceByte (i32.load8_u (i32.sub (local.get $at) (i32.const 1))))
                 (call $isSpaceByte (i32.load8_u offset=1 (local.get $at))))))
-          (then
-            ;; Extended autolinks still cannot reach back across this break.
-            (global.set $lastMarkEnd (i32.add (local.get $p) (i32.const 1)))
-            (return (global.get $lastMarkEnd))))))
+          (then (return (i32.add (local.get $p) (i32.const 1)))))))
     ;; leading spaces of the next line are never content
     (local.set $q (i32.sub
       (call $skipSpace (i32.add (local.get $at) (i32.const 1))
@@ -362,6 +370,7 @@
     (local $base i32)
     (local $q i32)
     (local $close i32)
+    (local $i i32)
     (local.set $base (global.get $contentBase))
     (local.set $q (local.get $p))
     (block $counted
@@ -371,9 +380,29 @@
           (i32.const "\60")))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))
-    (local.set $close (call $scanToClosingBackticks (local.get $q) (local.get $end)
-      (i32.sub (local.get $q) (local.get $p))))
-    (if (i32.eqz (local.get $close)) (then (return (local.get $q))))
+    ;; Most spans close within sixteen bytes: test the first run there before
+    ;; the full scan, which also refuses runs over 255. A run found here needs
+    ;; no memo entry, because it ends before any scan that reaches the content
+    ;; end starts.
+    (local.set $i (i32.add (local.get $q) (call $firstLane
+      (i8x16.eq (v128.load (i32.add (local.get $base) (local.get $q)))
+        (i8x16.splat (i32.const "\60")))
+      (v128.load (i32.const $mem.lanePack)))))
+    (local.set $close (local.get $i))
+    (block $counted
+      (loop $run
+        (br_if $counted (i32.ge_u (local.get $close) (local.get $end)))
+        (br_if $counted (i32.ne (i32.load8_u (i32.add (local.get $base) (local.get $close)))
+          (i32.const "\60")))
+        (local.set $close (i32.add (local.get $close) (i32.const 1)))
+        (br $run)))
+    (if (i32.or
+          (i32.ne (i32.sub (local.get $close) (local.get $i)) (i32.sub (local.get $q) (local.get $p)))
+          (i32.gt_u (i32.sub (local.get $q) (local.get $p)) (i32.const 255)))
+      (then
+        (local.set $close (call $scanToClosingBackticks (local.get $q) (local.get $end)
+          (i32.sub (local.get $q) (local.get $p))))
+        (if (i32.eqz (local.get $close)) (then (return (local.get $q))))))
     (drop (call $markNew (enum.get $Mk.code) (local.get $p) (local.get $close) (local.get $q)))
     (local.get $close))
 
@@ -454,21 +483,34 @@
       (then (return (local.get $q))))
     ;; $k is the class of the character before the run times four plus the
     ;; class after it: 2 for whitespace, 1 for punctuation, else 0. The text
-    ;; boundaries count as whitespace. Two bits per
-    ;; $k give left and right flanking, which for `*` and `~` are canOpen and
-    ;; canClose. `_` differs only between two other characters: it is
-    ;; intraword and can do neither.
+    ;; boundaries count as whitespace. Two bits per $k give left and right
+    ;; flanking, which for `*` and `~` are canOpen and canClose. `_` differs
+    ;; only between two other characters: it is intraword and can do neither.
     (local.set $k (select (i32.const 10)
-      (call $utf8Before (i32.add (local.get $base) (local.get $p)) (local.get $base))
+      (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $p)) (i32.const 1)))
       (i32.eqz (local.get $p))))
     (local.set $flags (select (i32.const 10)
-      (call $utf8At (i32.add (local.get $base) (local.get $q))
-        (i32.add (local.get $base) (local.get $end)))
+      (i32.load8_u (i32.add (local.get $base) (local.get $q)))
       (i32.ge_u (local.get $q) (local.get $end))))
-    (local.set $k (i32.or
-      (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
-        (i32.const 2))
-      (select (i32.const 2) (call $isPunctCp (local.get $flags)) (call $isWhiteCp (local.get $flags)))))
+    ;; Only NUL and bytes past ASCII need decoding.
+    (if (i32.or (i32.ge_u (i32.or (local.get $k) (local.get $flags)) (i32.const 0x80))
+          (i32.eqz (i32.mul (local.get $k) (local.get $flags))))
+      (then
+        (if (local.get $p)
+          (then (local.set $k
+            (call $utf8Before (i32.add (local.get $base) (local.get $p)) (local.get $base)))))
+        (if (i32.lt_u (local.get $q) (local.get $end))
+          (then (local.set $flags (call $utf8At (i32.add (local.get $base) (local.get $q))
+            (i32.add (local.get $base) (local.get $end))))))
+        (local.set $k (i32.or
+          (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
+            (i32.const 2))
+          (select (i32.const 2) (call $isPunctCp (local.get $flags)) (call $isWhiteCp (local.get $flags))))))
+      (else
+        (local.set $k (i32.or
+          (i32.shl (select (i32.const 2) (call $isAsciiPunct (local.get $k)) (call $isWhiteByte (local.get $k)))
+            (i32.const 2))
+          (select (i32.const 2) (call $isAsciiPunct (local.get $flags)) (call $isWhiteByte (local.get $flags)))))))
     (local.set $flags (i32.and
       (i32.shr_u (i32.const 0x52d2b) (i32.shl (local.get $k) (i32.const 1))) (i32.const 3)))
     (if (i32.or (i32.eqz (local.get $flags))
@@ -705,6 +747,7 @@
     (local $open i32)
     (local $bottom i32)
     (local $delimBottom i32)
+    (local $note i32)
     (local.set $initial (i32.add (local.get $p) (i32.const 1)))
     (if (i32.eqz (global.get $bracketSp)) (then (return (local.get $initial))))
     (block $fail
@@ -719,25 +762,18 @@
       (local.set $bottom (i32.load offset=$M.end (call $slotAt (local.get $open))))
       (local.set $delimBottom (i32.load offset=4 (local.get $b)))
       (local.set $q (local.get $initial))
+      ;; `[^label]` is a GFM footnote reference when the label is defined, even
+      ;; before `(`. `![^label]` is an image first, and else `!` and a
+      ;; reference. A label that holds a bracket matches no definition.
+      (if (i32.gt_u
+            (i32.eq (i32.load8_u (i32.add (global.get $contentBase) (local.get $bottom)))
+              (i32.const "^"))
+            (i32.load8_u offset=10 (local.get $b)))
+        (then (local.set $note (call $lookupLabel
+          (i32.add (local.get $bottom) (i32.const 1)) (local.get $p) (i32.const 1)))))
       (block $resolved
-        ;; a GFM footnote reference
-        (if (i32.and (i32.eqz (local.get $image))
-              (i32.and
-                (i32.gt_u (local.get $p) (local.get $bottom))
-                (i32.eq (i32.load8_u (i32.add (global.get $contentBase) (local.get $bottom)))
-                  (i32.const "^"))))
-          (then
-            (local.set $def (call $lookupLabel
-              (i32.add (local.get $bottom) (i32.const 1)) (local.get $p) (i32.const 1)))
-            (if (local.get $def)
-              (then
-                (local.set $t (call $slotAt (local.get $open)))
-                (i32.store8 offset=$M.type (local.get $t) (enum.get $Mk.footnote))
-                (i32.store offset=$M.end (local.get $t) (local.get $initial))
-                (i32.store offset=$M.data (local.get $t) (local.get $def))
-                ;; enclosing brackets stay active
-                (local.set $image (i32.const 1))
-                (br $resolved)))))
+       (block $footnote
+        (br_if $footnote (i32.gt_u (i32.ne (local.get $note) (i32.const 0)) (local.get $image)))
         (block $link
           ;; The inline form works on absolute positions: nothing here can
           ;; move scratch. $e is the absolute content end.
@@ -792,12 +828,16 @@
           ;; Repair only the original document's trailing label, after real
           ;; references have failed. Code blocks and definition destinations never
           ;; reach this inline path; rebuilt nested content retains its source end.
-          (br_if $fail (i32.or (local.get $image)
+          (if (local.get $image)
+            (then
+              (br_if $footnote (local.get $note))
+              (br $fail)))
+          (br_if $fail
             (i32.or (i32.eqz (i32.and (i32.load8_u (i32.const 1)) (i32.const 4)))
               (i32.or (i32.ne (global.get $contentInputEnd) (global.get $eof))
                 (i32.ne (local.get $initial)
                   (i32.sub (global.get $contentLen)
-                    (i32.sub (global.get $eof) (global.get $completeClosedLabelEnd))))))))
+                    (i32.sub (global.get $eof) (global.get $completeClosedLabelEnd)))))))
           (local.set $q (local.get $initial))
           (local.set $flags (i32.const $LF.pending)))
         (local.set $n (call $markNew
@@ -811,7 +851,16 @@
         (i32.store offset=$L.urlBeg (local.get $t) (local.get $urlB))
         (i32.store offset=$L.titleBeg (local.get $t) (local.get $titleB))
         (i32.store offset=$L.titleEnd (local.get $t) (local.get $titleE))
-        (i32.store offset=$L.def (local.get $t) (local.get $def)))
+        (i32.store offset=$L.def (local.get $t) (local.get $def))
+        (br $resolved))
+       ;; The bracket mark becomes the reference. It starts at the `[`, so the
+       ;; `!` of an image opener is text. Enclosing brackets stay active.
+       (local.set $t (call $slotAt (local.get $open)))
+       (i32.store offset=$M.beg (local.get $t) (i32.sub (local.get $bottom) (i32.const 1)))
+       (i32.store offset=$M.end (local.get $t) (local.get $initial))
+       (i32.store8 offset=$M.type (local.get $t) (enum.get $Mk.footnote))
+       (i32.store offset=$M.data (local.get $t) (local.get $note))
+       (local.set $image (i32.const 1)))
       (call $processEmphasis (local.get $bottom) (local.get $delimBottom))
       (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
       ;; A link may not contain another link: every bracket still open below this
@@ -833,8 +882,8 @@
     (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
     (local.get $initial))
 
-  ;; normalize [$b,$e) of the content buffer and look it up in the reference map.
-  ;; A footnote label is prefixed so the two namespaces never collide.
+  ;; Normalize [$b,$e) of the content buffer and look it up in the reference
+  ;; map, as a footnote label or as a link label.
   (func $lookupLabel (param $b i32) (param $e i32) (param $footnote i32) (result i32)
     (local $tmp i32)
     (local $normalized i64)
@@ -901,11 +950,8 @@
         (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 0))))
         (local.set $c (i32.load8_u (local.get $q)))
         (br_if $local (i32.eq (local.get $c) (i32.const "@")))
-        (if (i32.eqz (i32.and (i32.lt_u (local.get $c) (i32.const 128))
-              (i32.wrap_i64 (i64.shr_u
-                (select (i64.const 0x7fffffffc7fffffe) (i64.const 0xa3ffecfa00000000)
-                  (i32.ge_u (local.get $c) (i32.const 64)))
-                (i64.extend_i32_u (local.get $c))))))
+        (if (i32.eqz (call $byteIn (local.get $c)
+              (i64.const 0xa3ffecfa00000000) (i64.const 0x7fffffffc7fffffe)))
           (then (return (i32.const 0))))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))

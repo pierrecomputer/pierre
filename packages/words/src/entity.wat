@@ -39,16 +39,16 @@
     (local.get $n))
 
   ;; write the UTF-8 text of an entity value code at $p and return its length:
-  ;; a code point in bits 0-23, plus a second code point from the entity table
-  ;; when bits 24-27 hold its 1-based index
+  ;; a code point in bits 0-21, plus the second code point of a pair from the
+  ;; entity table when bits 24-30 hold the pair's 1-based index
   (func $entityEncode (param $p i32) (param $v i32) (result i32)
     (local $n i32)
     (local.set $n (call $utf8Encode (local.get $p) (i32.and (local.get $v) (i32.const 0xffffff))))
     (if (i32.shr_u (local.get $v) (i32.const 24))
       (then (local.set $n (i32.add (local.get $n)
         (call $utf8Encode (i32.add (local.get $p) (local.get $n))
-          (i32.load16_u offset=$mem.entities+2
-            (i32.shr_u (local.get $v) (i32.const 23))))))))
+          (i32.load16_u offset=2 (i32.sub (i32.const $mem.entitiesEnd)
+            (i32.shr_u (local.get $v) (i32.const 22)))))))))
     (local.get $n))
 
   ;; match an entity or numeric character reference at $p (which points at `&`).
@@ -140,7 +140,7 @@
                 (if (i32.gt_u (i32.sub (local.get $hi) (local.get $lo)) (i32.const 1))
                   (then
                     (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $hi)) (i32.const 1)))
-                    (local.set $s (i32.load16_u offset=$mem.entities+20 (i32.shl (local.get $mid) (i32.const 1))))
+                    (local.set $s (i32.load16_u offset=$mem.entities+4 (i32.shl (local.get $mid) (i32.const 1))))
                     (local.set $m (i32.const 0))
                     ;; 0x2f past the key's end sorts above a name's end byte
                     ;; and below its letters and digits
@@ -154,7 +154,7 @@
                       (then (local.set $lo (local.get $mid)))
                       (else (local.set $hi (local.get $mid))))
                     (br $search))))
-              (local.set $s (i32.load16_u offset=$mem.entities+20 (i32.shl (local.get $lo) (i32.const 1))))
+              (local.set $s (i32.load16_u offset=$mem.entities+4 (i32.shl (local.get $lo) (i32.const 1))))
               (local.set $i (i32.sub (i32.shl (local.get $lo) (i32.const 6)) (i32.const 1)))
               (local.set $m (i32.const 0))
               (block $found
@@ -184,14 +184,21 @@
                     (local.set $s (i32.add (local.get $s) (i32.const 1)))
                     (br_if $skip (i32.ge_u (i32.load8_u (local.get $s)) (i32.const 0x30))))
                   (br $entry)))
-              ;; three value planes after the names
+              ;; Two value planes after the names give a u16. A surrogate is
+              ;; an escape: a high one is a letter from U+1D400, a low one is
+              ;; the 1-based index of a pair, counted down from the table end.
               (local.set $s (i32.add (i32.load16_u (i32.const $mem.entities)) (local.get $i)))
-              (local.set $d (i32.load8_u (i32.add (local.get $s) (i32.shl (local.get $n) (i32.const 1)))))
-              (i32.or
-                (i32.or (i32.load8_u (local.get $s))
-                  (i32.shl (i32.load8_u (i32.add (local.get $s) (local.get $n))) (i32.const 8)))
-                (i32.or (i32.shl (i32.and (local.get $d) (i32.const 1)) (i32.const 16))
-                  (i32.shl (i32.shr_u (local.get $d) (i32.const 1)) (i32.const 24))))))
+              (local.set $d (i32.or (i32.load8_u (local.get $s))
+                (i32.shl (i32.load8_u (i32.add (local.get $s) (local.get $n))) (i32.const 8))))
+              (local.set $c (i32.sub (local.get $d) (i32.const 0xd800)))
+              (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x400))
+                (then (i32.add (local.get $c) (i32.const 0x1d400)))
+                (else
+                  (if (result i32) (i32.lt_u (local.tee $c (i32.sub (local.get $c) (i32.const 0x400))) (i32.const 0x400))
+                    (then (i32.or
+                      (i32.load16_u (i32.sub (i32.const $mem.entitiesEnd) (i32.shl (local.get $c) (i32.const 2))))
+                      (i32.shl (local.get $c) (i32.const 24))))
+                    (else (local.get $d)))))))
           (if (i32.le_u (local.get $len) (i32.const 8))
             (then
               (v128.store offset=16 (local.get $slot) (v128.load (local.get $slot)))

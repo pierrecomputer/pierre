@@ -24,7 +24,7 @@
   (func (export "seed") (param $seed i32)
     (global.set $hashSeed (local.get $seed)))
 
-  ;; The last of $n sorted 8-byte fold entries at $at whose low 21 bits are at
+  ;; The last of $n sorted u32 fold entries at $at whose low 17 bits are at
   ;; most $cp, or the entry before $at when there is none.
   (func $foldFind (param $at i32) (param $n i32) (param $cp i32) (result i32)
     (local $lo i32)
@@ -34,15 +34,16 @@
         (br_if $done (i32.ge_u (local.get $lo) (local.get $n)))
         (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $n)) (i32.const 1)))
         ;; entry key <= $cp
-        (if (i32.ge_u (local.get $cp) (i32.and (i32.const 0x1fffff)
-              (i32.load (i32.add (local.get $at) (i32.shl (local.get $mid) (i32.const 3))))))
+        (if (i32.ge_u (local.get $cp) (i32.and (i32.const 0x1ffff)
+              (i32.load (i32.add (local.get $at) (i32.shl (local.get $mid) (i32.const 2))))))
           (then (local.set $lo (i32.add (local.get $mid) (i32.const 1))))
           (else (local.set $n (local.get $mid))))
         (br $search)))
-    (i32.add (local.get $at) (i32.shl (i32.sub (local.get $lo) (i32.const 1)) (i32.const 3))))
+    (i32.add (local.get $at) (i32.shl (i32.sub (local.get $lo) (i32.const 1)) (i32.const 2))))
 
   ;; Case fold [$src,$end), trim it, and collapse internal whitespace runs to a
-  ;; single space. A nonzero prefix keeps footnotes in their own namespace.
+  ;; single space. A $prefix of 1 goes first in a footnote label, which keeps
+  ;; most of them apart from link labels in the reference table.
   ;; Returns hash in the high word and normalized length in the low word.
   (func $normalizeLabel
     (param $src i32) (param $end i32) (param $dst i32) (param $prefix i32) (result i64)
@@ -72,7 +73,8 @@
             (local.set $space (i32.const 1))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $l)))
-        (if (i32.and (local.get $space) (i32.gt_u (local.get $out) (local.get $dst)))
+        (if (i32.and (local.get $space)
+              (i32.gt_u (local.get $out) (i32.add (local.get $dst) (local.get $prefix))))
           (then
             (i32.store8 (local.get $out) (i32.const 32))
             (local.set $out (i32.add (local.get $out) (i32.const 1)))))
@@ -90,28 +92,36 @@
         (local.set $cp (call $utf8At (local.get $p) (local.get $end)))
         (local.set $p (global.get $utf8Next))
         ;; Most non-ASCII folds map to one code point: find the run that may
-        ;; hold $cp. Runs start at U+0041, so one always precedes it.
+        ;; hold $cp. Runs start at U+0041, so one always precedes it. A run is
+        ;; start:17, span:8, and the index of its delta:24 and stride:8.
         (local.set $header (i32.load (i32.const $mem.fold)))
-        (local.set $at (call $foldFind (i32.const $mem.fold+4)
+        (local.set $at (call $foldFind (i32.const $mem.fold+8)
           (i32.and (local.get $header) (i32.const 0xffff)) (local.get $cp)))
         (local.set $range (i32.load (local.get $at)))
-        (local.set $n (i32.sub (local.get $cp) (i32.and (local.get $range) (i32.const 0x1fffff))))
-        (local.set $packed (i32.load offset=4 (local.get $at)))
-        (if (i32.and (i32.le_u (local.get $n) (i32.shr_u (local.get $range) (i32.const 21)))
+        (local.set $n (i32.sub (local.get $cp) (i32.and (local.get $range) (i32.const 0x1ffff))))
+        (local.set $packed (i32.load (i32.add (i32.load16_u (i32.const $mem.fold+4))
+          (i32.shl (i32.shr_u (local.get $range) (i32.const 25)) (i32.const 2)))))
+        (if (i32.and
+              (i32.le_u (local.get $n)
+                (i32.and (i32.shr_u (local.get $range) (i32.const 17)) (i32.const 0xff)))
               (i32.eqz (i32.and (local.get $n)
                 (i32.sub (i32.shr_u (local.get $packed) (i32.const 24)) (i32.const 1)))))
           (then (local.set $cp (i32.add (local.get $cp)
             (i32.shr_s (i32.shl (local.get $packed) (i32.const 8)) (i32.const 8)))))
           (else
-            ;; The remaining folds expand to multiple code points.
-            (local.set $at (call $foldFind
-              (i32.add (i32.const $mem.fold+4)
-                (i32.shl (i32.and (local.get $header) (i32.const 0xffff)) (i32.const 3)))
-              (i32.shr_u (local.get $header) (i32.const 16)) (local.get $cp)))
-            (if (i32.eq (i32.load (local.get $at)) (local.get $cp))
+            ;; The remaining folds expand to multiple code points: code
+            ;; point:17, then the offset:9 and length:3 of their UTF-8 text.
+            (local.set $range (i32.load (call $foldFind
+              (i32.add (i32.const $mem.fold+8)
+                (i32.shl (i32.and (local.get $header) (i32.const 0xffff)) (i32.const 2)))
+              (i32.shr_u (local.get $header) (i32.const 16)) (local.get $cp))))
+            (if (i32.eq (i32.and (local.get $range) (i32.const 0x1ffff)) (local.get $cp))
               (then
-                (local.set $n (i32.load8_u offset=6 (local.get $at)))
-                (memory.copy (local.get $out) (i32.load16_u offset=4 (local.get $at)) (local.get $n))
+                (local.set $n (i32.shr_u (local.get $range) (i32.const 26)))
+                (memory.copy (local.get $out)
+                  (i32.add (i32.load16_u (i32.const $mem.fold+6))
+                    (i32.and (i32.shr_u (local.get $range) (i32.const 17)) (i32.const 0x1ff)))
+                  (local.get $n))
                 (local.set $out (i32.add (local.get $out) (local.get $n)))
                 (br $l)))))
         (local.set $out (i32.add (local.get $out) (call $utf8Encode (local.get $out) (local.get $cp))))
@@ -319,14 +329,11 @@
     (local $trimLine i32)
     (local $acc i32)
     (local $lineLen i32)
-    (local $pad i32)
-    (local $rel i32)
-    ;; Every paragraph comes here: only an unpadded first line that starts
-    ;; with `[` can hold a definition.
+    ;; Every paragraph comes here: only a first line that starts with `[` can
+    ;; hold a definition. Paragraph lines never carry tab padding.
     (if (i32.eqz (i32.load offset=$R.nLines (local.get $r))) (then (return)))
     (local.set $line (call $lineAt (local.get $r) (i32.const 0)))
-    (if (i32.or (call $linePad (local.get $line))
-          (i32.ne (i32.load8_u (call $lineBeg (local.get $line))) (i32.const "[")))
+    (if (i32.ne (i32.load8_u (call $lineBeg (local.get $line))) (i32.const "["))
       (then (return)))
     ;; A label closed on the first line must be followed by `:`. Rejecting
     ;; `[text](...)` here avoids rebuilding the paragraph content.
@@ -443,26 +450,15 @@
             (br_if $trimmed (i32.ge_u (local.get $lineIndex) (local.get $lineCount)))
             (local.set $trimLine
               (call $lineAt (local.get $r) (local.get $lineIndex)))
-            (local.set $pad (call $linePad (local.get $trimLine)))
-            (local.set $lineLen (i32.add (local.get $pad)
-              (i32.sub
-                (call $lineEndOf (local.get $trimLine))
-                (call $lineBeg (local.get $trimLine)))))
+            (local.set $lineLen (i32.sub
+              (call $lineEndOf (local.get $trimLine))
+              (call $lineBeg (local.get $trimLine))))
             (if (i32.le_u (local.get $off)
                   (i32.add (local.get $acc) (local.get $lineLen)))
               (then
-                (local.set $rel (i32.sub (local.get $off) (local.get $acc)))
-                (if (i32.lt_u (local.get $rel) (local.get $pad))
-                  (then (i32.store offset=4 (local.get $trimLine) (i32.or
-                    (call $lineEndOf (local.get $trimLine))
-                    (i32.shl
-                      (i32.sub (local.get $pad) (local.get $rel)) (i32.const 30)))))
-                  (else
-                    (i32.store (local.get $trimLine)
-                      (i32.add (call $lineBeg (local.get $trimLine))
-                        (i32.sub (local.get $rel) (local.get $pad))))
-                    (i32.store offset=4 (local.get $trimLine)
-                      (call $lineEndOf (local.get $trimLine)))))
+                (i32.store (local.get $trimLine)
+                  (i32.add (call $lineBeg (local.get $trimLine))
+                    (i32.sub (local.get $off) (local.get $acc))))
                 (br $trimmed)))
             (local.set $acc
               (i32.add

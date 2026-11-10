@@ -21,20 +21,19 @@
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch
       [64:80)         hex digits
-      [80:1088)       pooled output string literals
-      [1088:21632)    HTML5 named character references
-      [21632:23168)   Unicode P|S code point ranges
-      [23168:26496)   Unicode case folding
-      [26496:27264)   HTML block tag names and the GFM tag filter list
-      [27264:30592)   Unicode display width ranges
-      [30592:30664)   ansi marker fragments, constants, and SGR depth counters
-      [30664:36664)   block analysis container stack; render reuses it as the
-                      type/tightness stack, then opener bottoms, tick memo, and
-                      the bracket stack
-      [36664:37944)   table column widths and alignments
-      [37944:38968)   ansi line prefix and pending marker
-      [38968:40504)   ansi list state
-      [40504:65536)   cached ansi table-cell widths
+      [80:65536)      static tables and fixed work areas, in this order (see
+                      memory.wat for the addresses): pooled output string
+                      literals, scanner byte tables, HTML5 named character
+                      references and their lookup cache, Unicode P|S ranges,
+                      Unicode case folding, HTML block tag names and the GFM
+                      tag filter list, Unicode display width ranges, ansi marker
+                      fragments and SGR depth counters, the block analysis
+                      container stack (render reuses it as the type/tightness
+                      stack, then opener bottoms, tick memo, and the bracket
+                      stack; completion uses it for its two stacks), table
+                      column widths, the ansi line prefix and pending marker,
+                      ansi list state, the packed Unicode range tables, cached
+                      ansi table-cell widths
     [] pages 2..N (text buffer)
       [65536:EOF)     input, a NUL sentinel, then at least 32 bytes of slack
       [meta:rec)      frontmatter JSON
@@ -85,16 +84,18 @@
         (br $wide)))
     (local.get $n))
 
-  ;; Render the input in [$mem.input, $mem.input + length) and publish the result.
-  (func $render (export "render")
+  ;; Analyze the blocks of the input in [$mem.input, $mem.input + length).
+  ;; Returns the input length before the last safe append boundary. Bit 31 is
+  ;; set when completion is on and the last block is the first one in a list
+  ;; item. $render calls this twice, which also keeps the hot line loop in a
+  ;; function of its own.
+  (func $analyze (result i32)
     (local $start i32)
     (local $fmClose i32)
     (local $fmMeta i32)
     (local $blockStart i32)
     (local $blockEnd i32)
     (local $safeEnd i32)
-    (local $repair i32)
-    (local $firstItemBlock i32)
     (global.set $boundaryRec (i32.const 0))
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
@@ -221,8 +222,8 @@
           ;; Freeze only newline-terminated blank lines at document depth. EOF
           ;; closures and open lists/code remain mutable; inline repair touches
           ;; only the last block, so it cannot reach across this boundary.
-          ;; $blank also holds after a thematic break or an empty heading, so
-          ;; the line itself must be blank.
+          ;; $blank also holds after a thematic break or a heading, so the
+          ;; line itself must be blank.
           (if (i32.and (i32.and (global.get $blank) (i32.eqz (global.get $sp)))
                 (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.none))
                   (i32.lt_u (local.get $blockEnd) (global.get $eof))))
@@ -245,13 +246,15 @@
           (i32.ne (global.get $codeFenceCh) (i32.const 0)))
       (then (global.set $incompleteCodeRec (global.get $leafRec))))
     (call $closeLeaf)
-    (local.set $repair (i32.and (i32.load8_u (i32.const 1)) (i32.const 64)))
-    (if (i32.and (i32.ne (local.get $repair) (i32.const 0)) (i32.ne (global.get $sp) (i32.const 0)))
+    (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 64)) (i32.const 0))
+          (i32.ne (global.get $sp) (i32.const 0)))
       (then
         (local.set $blockEnd (call $containerAt (global.get $sp)))
-        (local.set $firstItemBlock (i32.and
-          (i32.eq (i32.load8_u (local.get $blockEnd)) (enum.get $Blk.li))
-          (i32.eq (i32.load offset=$CS.children (local.get $blockEnd)) (i32.const 1))))))
+        (local.set $safeEnd (i32.or (local.get $safeEnd) (i32.shl
+          (i32.and
+            (i32.eq (i32.load8_u (local.get $blockEnd)) (enum.get $Blk.li))
+            (i32.eq (i32.load offset=$CS.children (local.get $blockEnd)) (i32.const 1)))
+          (i32.const 31))))))
     (block $containersDone
       (loop $closeContainers
         (br_if $containersDone (i32.eqz (global.get $sp)))
@@ -259,15 +262,28 @@
         (br $closeContainers)))
     (call $linkIndex)
     (i32.store8 (i32.const 30) (i32.ne (global.get $linkHash) (i32.const 0)))
+    (local.get $safeEnd))
+
+  ;; Unpack the Unicode range tables once, at instantiation.
+  (func $init
+    (drop (call $unpackRanges
+      (call $unpackRanges
+        (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))
+        (i32.const $mem.width))
+      (i32.const $mem.wide))))
+  (start $init)
+
+  ;; Render the input in [$mem.input, $mem.input + length) and publish the result.
+  (func $render (export "render")
+    (local $safeEnd i32)
+    (local.set $safeEnd (call $analyze))
     ;; Completion reads the finished block structure and definitions. When it
-    ;; changes the input, those are stale, so parse the repaired input.
-    (if (local.get $repair)
+    ;; changes the input, those are stale, so analyze the repaired input.
+    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 64))
       (then
         (i32.store8 (i32.const 1) (i32.and (i32.load8_u (i32.const 1)) (i32.const 191)))
-        (if (call $complete (local.get $firstItemBlock))
-          (then
-            (call $render)
-            (return)))))
+        (if (call $complete (i32.shr_u (local.get $safeEnd) (i32.const 31)))
+          (then (local.set $safeEnd (call $analyze))))))
     (global.set $out (i32.and (i32.add (global.get $rec) (i32.const 15)) (i32.const -16)))
     (global.set $outBase (global.get $out))
     (call $setOutCap)
@@ -281,6 +297,6 @@
           (i32.eqz (global.get $linkHash)))
       (then
         (i32.store (i32.const 36) (call $utf16Length (i32.const $mem.input)
-          (i32.add (i32.const $mem.input) (local.get $safeEnd))))
+          (i32.add (i32.const $mem.input) (i32.and (local.get $safeEnd) (i32.const 0x7fffffff)))))
         (i32.store (i32.const 40) (call $utf16Length (global.get $outBase) (global.get $boundaryOut))))))
 )

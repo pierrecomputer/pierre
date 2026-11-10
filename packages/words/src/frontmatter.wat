@@ -74,9 +74,17 @@
     (if (i32.and
           (i32.eqz (i32.or (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
             (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const ">")))))
-          (i32.lt_u (call $yFind (global.get $ylBeg) (global.get $ylEnd) (i32.const ":")) (global.get $ylEnd)))
+          (i32.lt_u (call $yKeyEnd) (global.get $ylEnd)))
       (then (call $yParseBlock (global.get $ylIndent) (i32.const 1)) (return)))
     (call $yInlineValue (global.get $ylBeg) (local.get $parent)))
+
+  ;; The `:` that ends the key on the current line, or $ylEnd. A comment before
+  ;; it ends the search: `- a # b: c` is a scalar.
+  (func $yKeyEnd (result i32)
+    (local $q i32)
+    (local.set $q (call $yFind (global.get $ylBeg) (global.get $ylEnd) (i32.const ":")))
+    (select (global.get $ylEnd) (local.get $q)
+      (i32.lt_u (call $yFind (global.get $ylBeg) (local.get $q) (i32.const "#")) (local.get $q))))
 
   ;; the current line starts with a `-` item marker
   (func $yIsSeqItem (result i32)
@@ -103,7 +111,7 @@
         (local.set $colon (global.get $ylBeg))
         (if (local.get $map)
           (then
-            (local.set $colon (call $yFind (global.get $ylBeg) (global.get $ylEnd) (i32.const ":")))
+            (local.set $colon (call $yKeyEnd))
             (br_if $done (i32.ge_u (local.get $colon) (global.get $ylEnd)))))
         (if (local.get $first)
           (then (local.set $first (i32.const 0)))
@@ -155,11 +163,14 @@
     (local $chomp i32)
     (local $base i32)
     (local $first i32)
+    (local $more i32)
     (local.set $c (i32.load8_u (local.get $p)))
     (local.set $first (i32.const 1))
     (local.set $fold (i32.const 1))
     (local.set $end (global.get $ylEnd))
-    (local.set $flow (i32.or (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
+    ;; 2 for a flow collection, 1 for a quoted scalar
+    (local.set $flow (i32.or
+      (i32.shl (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{")) (i32.const 1))
       (call $yIsQuote (local.get $c))))
     (if (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const ">")))
       (then
@@ -185,10 +196,13 @@
       (else
         (if (i32.eqz (local.get $flow))
           (then (local.set $end (call $yTrimComment (local.get $p) (global.get $ylEnd)))))))
-    ;; Later lines indented past $indent continue the scalar. Block scalar lines
-    ;; are raw from their indentation on; plain lines lose spaces and comments.
-    ;; Folded and plain line breaks become spaces, and blank lines between
-    ;; lines become line feeds.
+    ;; Later lines indented past $indent continue the scalar, and so does one
+    ;; line that starts with the closer of a flow collection, which often sits
+    ;; in the column of its key. Block scalar lines are raw from their
+    ;; indentation on; plain lines lose spaces and comments. Folded and plain
+    ;; line breaks become spaces, and blank lines between lines become line
+    ;; feeds. A folded scalar keeps the line breaks around a line that is
+    ;; indented further ($more is 1 on such a line and 2 on the line after).
     (local.set $q (global.get $yNext))
     (block $done
       (loop $more
@@ -198,7 +212,15 @@
         (local.set $e (call $findLineEnd (local.get $q)))
         (local.set $s (call $skipSpace (local.get $q) (local.get $e)))
         (if (i32.lt_u (local.get $s) (local.get $e))
-          (then (br_if $done (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent))))
+          (then
+            (if (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent))
+              (then
+                ;; Only the first such closer line is taken, so a document of
+                ;; closer lines cannot be scanned once per key.
+                (if (i32.and (i32.eq (local.get $flow) (i32.const 2))
+                      (i32.eq (i32.or (i32.load8_u (local.get $s)) (i32.const 32)) (i32.const "}")))
+                  (then (local.set $end (local.get $e))))
+                (br $done))))
           (else (local.set $n (i32.add (local.get $n) (i32.const 1)))))
         ;; a flow collection or quoted scalar spans blank lines too
         (if (i32.or (local.get $flow) (i32.ge_u (local.get $s) (local.get $e)))
@@ -211,7 +233,9 @@
             (if (i32.lt_s (local.get $base) (i32.const 0))
               (then (local.set $base (i32.sub (local.get $s) (local.get $q)))))
             (br_if $done (i32.lt_s (i32.sub (local.get $s) (local.get $q)) (local.get $base)))
-            (local.set $s (i32.add (local.get $q) (local.get $base))))
+            (local.set $s (i32.add (local.get $q) (local.get $base)))
+            (local.set $more (i32.or (i32.shl (i32.and (local.get $more) (i32.const 1)) (i32.const 1))
+              (call $isSpaceByte (i32.load8_u (local.get $s))))))
           (else
             (br_if $done (i32.eq (i32.load8_u (local.get $s)) (i32.const "#")))
             ;; a plain scalar becomes a string once a second line joins it
@@ -222,10 +246,11 @@
                 (local.set $first (i32.const 0))))))
         (local.set $q (call $lineAfter (local.get $e)))
         (global.set $yNext (local.get $q))
-        (if (i32.and (i32.and (local.get $fold) (i32.eqz (local.get $n))) (i32.eqz (local.get $first)))
+        (local.set $c (i32.and (local.get $fold) (i32.eqz (local.get $more))))
+        (if (i32.and (i32.and (local.get $c) (i32.eqz (local.get $n))) (i32.eqz (local.get $first)))
           (then (call $outByte (i32.const 32))))
         (call $yNewlines (i32.add (local.get $n)
-          (i32.eqz (i32.or (local.get $fold) (local.get $first)))))
+          (i32.eqz (i32.or (local.get $c) (local.get $first)))))
         (local.set $n (i32.const 0))
         (local.set $first (i32.const 0))
         (local.set $end (local.get $e))
@@ -238,14 +263,14 @@
         (br $more)))
     (if (local.get $flow)
       (then
-        (local.set $q (if (result i32) (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "{"))
+        (local.set $q (if (result i32) (i32.and (local.get $flow) (i32.const 2))
           (then (call $yFlow (local.get $p) (local.get $end)))
           (else (call $yQuoted (local.get $p) (local.get $end)))))
         (if (i32.gt_u (local.get $q) (global.get $ylEnd))
           (then (global.set $yNext (call $lineAfter (call $findLineEnd (local.get $q)))))))
       (else
         (if (i32.and (local.get $first) (i32.eqz (local.get $block)))
-          (then (call $yValue (local.get $p) (global.get $ylEnd)))
+          (then (call $yValue (local.get $p) (local.get $end)))
           (else
             (if (i32.and (local.get $block) (i32.eqz (local.get $first)))
               (then (call $yNewlines (select (i32.add (local.get $n) (i32.const 1))
@@ -320,6 +345,8 @@
       (else (local.get $end))))
 
   ;; A scalar or flow collection in [$p, $end), with YAML 1.2 core schema types.
+  ;; The caller has cut a trailing comment: a nested collection may hold ` #`
+  ;; in a quoted scalar.
   (func $yValue (param $p i32) (param $end i32)
     (local $c i32)
     (local $q i32)
@@ -328,7 +355,6 @@
     (local $frac i32)
     (local $exp i32)
     (local $v i64)
-    (local.set $end (call $yTrimComment (local.get $p) (local.get $end)))
     (if (i32.ge_u (local.get $p) (local.get $end)) (then (call $yNull) (return)))
     (local.set $c (i32.load8_u (local.get $p)))
     (if (call $yIsQuote (local.get $c))

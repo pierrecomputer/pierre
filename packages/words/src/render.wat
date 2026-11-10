@@ -442,9 +442,7 @@
                   (if (i32.lt_u (local.get $q) (local.get $e))
                     (then
                       (if (global.get $mode)
-                        (then
-                          (if (i32.eqz (global.get $atLineStart))
-                            (then (global.set $pendingSpace (i32.const 1)))))
+                        (then (call $ansiSpace))
                         (else (call $outByte (i32.const 32))))))
                   (local.set $b (i32.add (local.get $q) (i32.const 1)))
                   (br $codeLine)))
@@ -464,25 +462,21 @@
               (call $contentAt (local.get $b))
               (call $contentAt (local.get $e)) (i32.const 0))
             (return))
-           ;; soft break
-           (if (global.get $plain)
-             (then (call $outByte (i32.const 32)))
-             (else
-               (if (global.get $mode)
-                 (then
-                   (if (global.get $wrap)
-                     (then
-                       (if (i32.eqz (global.get $atLineStart))
-                         (then (global.set $pendingSpace (i32.const 1)))))
-                     (else (call $ansiEol))))
-                 (else (call $outByte (i32.const 10))))))
+           ;; soft break: ANSI holds back the space of alt text and of wrapped text
+           (if (global.get $mode)
+             (then
+               (if (i32.or (global.get $plain) (global.get $wrap))
+                 (then (call $ansiSpace))
+                 (else (call $ansiEol))))
+             (else (call $outByte (select (i32.const 32) (i32.const 10) (global.get $plain)))))
            (return))
           ;; hard break
-          (if (global.get $plain)
-            (then (call $outByte (i32.const 32)))
+          (if (global.get $mode)
+            (then
+              (if (global.get $plain) (then (call $ansiSpace)) (else (call $ansiEol))))
             (else
-              (if (global.get $mode)
-                (then (call $ansiEol))
+              (if (global.get $plain)
+                (then (call $outByte (i32.const 32)))
                 (else (out.str "<br />\n")))))
           (return))
          ;; link opener: an image's label becomes plain alt text
@@ -530,10 +524,15 @@
        (local.set $k (i32.eq (local.get $t) (enum.get $Mk.autolink)))
        (local.set $b (i32.add (local.get $b) (local.get $k)))
        (local.set $e (i32.sub (local.get $e) (local.get $k)))
-       (br_if $text (global.get $plain))
        (global.set $linkInContent (i32.const 1))
        (global.set $linkUrlBeg (local.get $b))
        (global.set $linkUrlEnd (local.get $e))
+       (if (global.get $plain)
+         (then
+           ;; In alt text an autolink's entities decode as in its link text.
+           (br_if $text (i32.or (global.get $mode) (i32.eqz (local.get $k))))
+           (call $htmlLinkText (local.get $b) (local.get $e) (i32.const 1))
+           (return)))
        (if (global.get $mode)
          (then (call $ansiAutolink))
          (else (call $htmlAutolink
@@ -638,17 +637,23 @@
       (local.get $n))))
 
   ;; $b and $e are offsets into the current content. Resolve them only after
-  ;; reserving output, because copied content can move with scratch.
+  ;; reserving output, because copied content can move with scratch. Like
+  ;; $outText, reserve for 64 KiB of text at a time.
   (func $rText (param $b i32) (param $e i32)
+    (local $end i32)
     (if (i32.ge_u (local.get $b) (local.get $e)) (then (return)))
     (if (global.get $mode)
       (then (call $ansiRaw (local.get $b) (local.get $e) (i32.const 1)))
       (else
-        (call $ensureOut
-          (i32.mul (i32.sub (local.get $e) (local.get $b)) (i32.const 6)))
-        (call $outTextReserved
-          (call $contentAt (local.get $b))
-          (call $contentAt (local.get $e))))))
+        (loop $chunk
+          (local.set $end (select (local.get $e) (i32.add (local.get $b) (i32.const 65536))
+            (i32.le_u (i32.sub (local.get $e) (local.get $b)) (i32.const 65536))))
+          (call $ensureOut
+            (i32.mul (i32.sub (local.get $end) (local.get $b)) (i32.const 6)))
+          (call $outTextReserved
+            (call $contentAt (local.get $b))
+            (call $contentAt (local.get $end)))
+          (br_if $chunk (i32.lt_u (local.tee $b (local.get $end)) (local.get $e)))))))
 
   ;; text that is already decoded and lives outside the content buffer
   (func $rRaw (param $p i32) (param $len i32)

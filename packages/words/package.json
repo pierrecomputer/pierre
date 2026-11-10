@@ -21,15 +21,18 @@
     },
     "./react": {
       "types": "./dist/react.d.ts",
-      "import": "./dist/react.js"
+      "import": "./dist/react.js",
+      "default": "./dist/react.js"
     },
     "./highlights": {
       "types": "./dist/highlights.d.ts",
-      "import": "./dist/highlights.js"
+      "import": "./dist/highlights.js",
+      "default": "./dist/highlights.js"
     },
     "./html": {
       "types": "./dist/html.d.ts",
-      "import": "./dist/html.js"
+      "import": "./dist/html.js",
+      "default": "./dist/html.js"
     },
     "./styles.css": "./dist/styles.css"
   },

@@ -118,17 +118,6 @@
   opacity: 0.35;
   user-select: none;
 }
-[data-markdown='code-line'] {
-  display: block;
-  white-space: pre;
-}
-[data-markdown='line-number'] {
-  display: inline-block;
-  min-width: 2.5em;
-  padding-inline-end: 1em;
-  opacity: 0.35;
-  user-select: none;
-}
 /* Zero width: a moving caret must not change line widths, or a long code fence lays out all its lines again. */
 [data-markdown='caret'] {
   display: inline-block;

@@ -1,4 +1,4 @@
-import { createHtmlRenderer } from './render';
+import { controlFlags, createHtmlRenderer } from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
 
 const isFade = (node: Node): node is HTMLElement =>
@@ -182,6 +182,7 @@ function patchChildren(
           ? value.slice(previous.length)
           : value.slice(previous.length - 1, -1);
         if (suffix !== '') {
+          const lead = current!.previousSibling;
           let before = end;
           if (lineAppend) {
             // Insert before the run's final LF, split out of its text node or fade span.
@@ -196,6 +197,8 @@ function patchChildren(
             }
           }
           fades.append(parent, suffix, before);
+          // A run that was only its final LF now starts at the new text.
+          actual = (lead === null ? parent.firstChild : lead.nextSibling)!;
         }
       } else {
         while (current !== end) {
@@ -225,23 +228,27 @@ function patchChildren(
       actual = current;
       const element = current as Element;
       const wanted = target as Element;
-      for (let at = element.attributes.length - 1; at >= 0; at--) {
-        const attribute = element.attributes[at];
-        if (!wanted.hasAttribute(attribute.name))
-          element.removeAttribute(attribute.name);
+      // A native deep compare skips an unchanged element. The last element
+      // holds the open end of the stream, so it is patched without the compare.
+      if (wanted.nextElementSibling === null || !element.isEqualNode(wanted)) {
+        for (let at = element.attributes.length - 1; at >= 0; at--) {
+          const attribute = element.attributes[at];
+          if (!wanted.hasAttribute(attribute.name))
+            element.removeAttribute(attribute.name);
+        }
+        for (const attribute of wanted.attributes)
+          if (element.getAttribute(attribute.name) !== attribute.value)
+            element.setAttribute(attribute.name, attribute.value);
+        patchChildren(
+          element,
+          wanted,
+          element.firstChild,
+          fades,
+          -1,
+          marker,
+          revising
+        );
       }
-      for (const attribute of wanted.attributes)
-        if (element.getAttribute(attribute.name) !== attribute.value)
-          element.setAttribute(attribute.name, attribute.value);
-      patchChildren(
-        element,
-        wanted,
-        element.firstChild,
-        fades,
-        -1,
-        marker,
-        revising
-      );
       current = element.nextSibling;
     } else {
       actual = target;
@@ -289,19 +296,6 @@ function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
   code.insertBefore(marker, before);
   return marker;
 }
-
-const blockTags =
-  /^(?:BLOCKQUOTE|DIV|H[1-6]|LI|OL|P|PRE|SECTION|TABLE|TBODY|TD|TH|THEAD|TR|UL)$/;
-
-/** Compare controls by the buttons they produce, so equal inline objects match. */
-const controlFlags = (controls: HtmlOptions['controls']): number => {
-  const code = typeof controls === 'object' ? controls.code : controls;
-  return code === false
-    ? 0
-    : typeof code === 'object'
-      ? (code.copy === false ? 0 : 1) | (code.download === false ? 0 : 2)
-      : 3;
-};
 
 /** Render Markdown into `root`, and patch its DOM nodes on each update. */
 export function createDomRenderer(
@@ -359,8 +353,14 @@ export function createDomRenderer(
       );
       const link = document.createElement('a');
       link.href = url;
-      const language = block?.getAttribute('data-language') ?? 'txt';
-      link.download = `code.${/^[a-z0-9]+$/i.test(language) ? language : 'txt'}`;
+      // Only letters and digits make a file extension.
+      let language = block?.getAttribute('data-language') ?? '';
+      for (let at = 0; at < language.length; at++) {
+        const code = language.charCodeAt(at);
+        if (((code | 32) < 97 || (code | 32) > 122) && (code < 48 || code > 57))
+          language = '';
+      }
+      link.download = `code.${language === '' ? 'txt' : language}`;
       link.click();
       // Some browsers cancel a download whose URL is revoked during the click.
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
@@ -457,9 +457,10 @@ export function createDomRenderer(
         codeState !== undefined &&
         update.addition === '' &&
         codeState.key === codeUpdate.key &&
-        codeState.marker.isConnected &&
+        root.contains(codeState.marker) &&
         (codeUpdate.firstLine === codeUpdate.lineCount ||
-          codeUpdate.firstLine === codeState.line) &&
+          (codeUpdate.firstLine === codeState.line &&
+            codeUpdate.firstLine <= codeUpdate.lastLine)) &&
         (codeUpdate.numbers === undefined) === (codeState.numbers === null) &&
         (codeUpdate.numbers ?? 0) >= codeState.numberCount
       ) {
@@ -615,7 +616,32 @@ export function createDomRenderer(
             node = node.previousSibling;
             continue;
           }
-          if (node.nodeType !== 1 || !blockTags.test(node.nodeName)) {
+          let block = false;
+          if (node.nodeType === 1)
+            switch (node.nodeName) {
+              case 'BLOCKQUOTE':
+              case 'DIV':
+              case 'H1':
+              case 'H2':
+              case 'H3':
+              case 'H4':
+              case 'H5':
+              case 'H6':
+              case 'LI':
+              case 'OL':
+              case 'P':
+              case 'PRE':
+              case 'SECTION':
+              case 'TABLE':
+              case 'TBODY':
+              case 'TD':
+              case 'TH':
+              case 'THEAD':
+              case 'TR':
+              case 'UL':
+                block = true;
+            }
+          if (!block) {
             before = node.nextSibling;
             break;
           }

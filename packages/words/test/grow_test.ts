@@ -120,6 +120,37 @@ void test(
   }
 );
 
+void test('a large code block reserves output as it goes, not six times its size', () => {
+  // escaped text can take six bytes per byte, but this text takes one
+  const input = new TextEncoder().encode(
+    '```\n' + 'code line\n'.repeat(800_000)
+  );
+  const renderer = init(wasm);
+  const output = renderer.render(input, 0, {}).output;
+  assert.equal(output.length, input.length + 21);
+  assert.ok(
+    renderer.pages * 65536 < 4.5 * input.length,
+    `${renderer.pages} pages for ${input.length} bytes`
+  );
+});
+
+void test(
+  'a code block past 715 MB does not overflow its output reservation',
+  {
+    skip:
+      process.env.WORDS_HUGE !== '1' &&
+      'set WORDS_HUGE=1 to render 716 MB of code into 2.7 GiB of memory',
+  },
+  () => {
+    // six times this length is 704 modulo 2 ** 32
+    const input = new Uint8Array(715_828_000).fill(97);
+    for (let i = 99; i < input.length; i += 100) input[i] = 10;
+    input.set(new TextEncoder().encode('```\n'));
+    const output = init(wasm).render(input, 0, {}).output;
+    assert.equal(output.length, input.length + 21);
+  }
+);
+
 for (const [name, doc] of Object.entries(docs)) {
   for (const [label, mode] of [
     ['html', 0],

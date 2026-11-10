@@ -64,12 +64,6 @@
       (i32.shr_u (local.get $group) (i32.const 9)) (local.get $len) (local.get $p) (i32.const 32))
       (i32.const 0)))
 
-  ;; spacechar in the HTML grammar: space, tab, and the vertical whitespace
-  (func $isTagSpace (param $c i32) (result i32)
-    (i32.or
-      (i32.eq (local.get $c) (i32.const 32))
-      (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))
-
   ;; Set when a tag scan failed only because the input ended, so more bytes could
   ;; finish the tag. Completion clears and reads this.
   (global $tagAtEnd (mut i32) (i32.const 0))

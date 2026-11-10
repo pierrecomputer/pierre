@@ -16,10 +16,11 @@
   ;;
   ;; `size` makes the stream walkable without knowing any type's layout, and
   ;; keeping the variable-length part *before* the lines means dropping
-  ;; trailing lines never moves anything. A line's `end` carries the number of
-  ;; virtual spaces a partially consumed tab left in front of it in its top two
-  ;; bits, which limits the input to 1 GiB (the output would pass the wasm32
-  ;; ceiling long before that).
+  ;; trailing lines never moves anything. A code or HTML line's `end` carries
+  ;; the number of virtual spaces a partially consumed tab left in front of it
+  ;; in its top two bits, which limits the input to 1 GiB (the output would
+  ;; pass the wasm32 ceiling long before that). Other lines start at their
+  ;; first byte that is not a space or tab, so their top bits are zero.
   (const $R.header 24)
   (const $R.line 8)
   (const $R.nLines 16)     ;; u32 line/range count, not limited to 65535

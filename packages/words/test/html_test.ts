@@ -39,6 +39,32 @@ void test('leaf blocks', () => {
   assert.equal(html('<div>\nraw\n</div>'), '<div>\nraw\n</div>\n');
 });
 
+void test('headings end on their own line', () => {
+  assert.equal(
+    html('# a ##\n#\n# b\\#\n## c #\t\nd\n===\ne\n'),
+    '<h1>a</h1>\n<h1></h1>\n<h1>b#</h1>\n<h2>c</h2>\n<h1>d</h1>\n<p>e</p>\n'
+  );
+  // The line after a heading starts like the first line of a document.
+  const blocks = [
+    'plain text',
+    '*em*',
+    '- item',
+    '```\ncode\n```',
+    '| a |\n|-|',
+  ];
+  for (const next of blocks) {
+    for (const heading of ['# h', 'h\n===']) {
+      assert.equal(
+        html(`${heading}\n${next}\n`),
+        html(`${heading}\n\n${next}\n`),
+        JSON.stringify({ heading, next })
+      );
+    }
+    assert.match(html(`- # h\n${next}\n`), /^<ul>\n<li>\n<h1>h<\/h1>\n<\/li>/);
+    assert.match(html(`> # h\n${next}\n`), /^<blockquote>\n<h1>h<\/h1>\n/);
+  }
+});
+
 void test('plain paragraph runs stop at syntax, whitespace, and block boundaries', () => {
   const tails = [
     ['ordinary. Unicode 界é.', 'ordinary. Unicode 界é.'],
@@ -238,6 +264,20 @@ void test('merged fenced code lines keep the virtual spaces of a split tab', () 
     '<ul>\n<li>\n<p>Example:</p>\n<pre><code class="language-go">  func main() {\n\n  }\n' +
       '</code></pre>\n</li>\n</ul>\n'
   );
+});
+
+void test('a closing fence is at least as long as its opening fence, at any length', () => {
+  for (const n of [3, 255, 256, 300, 1000]) {
+    for (const fence of ['`', '~']) {
+      const open = fence.repeat(n);
+      const short = fence.repeat(n - 1);
+      assert.equal(
+        html(`${open}\n${short}\nx\n${open}${fence}\ny\n`),
+        `<pre><code>${short}\nx\n</code></pre>\n<p>y</p>\n`,
+        JSON.stringify({ fence, n })
+      );
+    }
+  }
 });
 
 void test('single-line code writers keep escaped content between their tags', () => {
@@ -676,6 +716,31 @@ void test('code spans pair after a failed scan, and up to 255 backticks', () => 
     html('`a ``x\n\n``b`` `c`'),
     '<p>`a ``x</p>\n<p><code>b</code> <code>c</code></p>\n'
   );
+  // a closing run at every distance and alignment, near and past one vector
+  for (const ticks of ['`', '``', '```']) {
+    for (let pad = 0; pad < 18; pad++) {
+      for (let size = 1; size < 36; size += pad % 3 === 0 ? 1 : 5) {
+        const code = 'c'.repeat(size);
+        assert.equal(
+          html(`x${'x'.repeat(pad)} ${ticks}${code}${ticks} y`),
+          `<p>x${'x'.repeat(pad)} <code>${code}</code> y</p>\n`
+        );
+        // a nearer run of another length is content
+        const other = ticks === '`' ? '``' : '`';
+        assert.equal(
+          html(`${ticks}${code}${other}d${ticks}`),
+          `<p><code>${code}${other}d</code></p>\n`
+        );
+      }
+    }
+  }
+  // a run past the content end closes nothing
+  assert.equal(
+    html('| `a | b` |\n| - | - |\n| ``c | `` |'),
+    '<table>\n<thead>\n<tr>\n<th>`a</th>\n<th>b`</th>\n</tr>\n</thead>\n' +
+      '<tbody>\n<tr>\n<td>``c</td>\n<td>``</td>\n</tr>\n</tbody>\n</table>\n'
+  );
+  assert.equal(html('# `a\n`'), '<h1>`a</h1>\n<p>`</p>\n');
 });
 
 void test('raw HTML comments end at the first -->', () => {
@@ -742,6 +807,15 @@ void test('links and images', () => {
     '<p><img src="/i.png" alt="alt" /></p>\n'
   );
   assert.equal(html('![a *b*](/i)'), '<p><img src="/i" alt="a b" /></p>\n');
+  // alt text decodes an autolink's entities like its link text
+  assert.equal(
+    html('![<http://a/?b&amp;c> &copy; <d@e.fg>](/i)'),
+    '<p><img src="/i" alt="http://a/?b&amp;c © d@e.fg" /></p>\n'
+  );
+  assert.equal(
+    html('<http://a/?b&amp;c>'),
+    '<p><a href="http://a/?b&amp;c">http://a/?b&amp;c</a></p>\n'
+  );
   assert.equal(
     html('[a](/x?y=1&z=2)'),
     '<p><a href="/x?y=1&amp;z=2">a</a></p>\n'
@@ -921,6 +995,35 @@ void test('GFM tables', () => {
   );
 });
 
+void test('a table row that starts with a pipe still obeys its containers and indentation', () => {
+  const table = (body: string) =>
+    `<table>\n<thead>\n<tr>\n<th>a</th>\n</tr>\n</thead>\n${body}</table>\n`;
+  const row = (cell: string) => `<tr>\n<td>${cell}</td>\n</tr>\n`;
+  const body = (rows: string) => `<tbody>\n${rows}</tbody>\n`;
+  assert.equal(
+    html('| a |\n|---|\n   | b |\n\t| c |\n'),
+    `${table(body(row('b')))}<pre><code>| c |\n</code></pre>\n`
+  );
+  assert.equal(
+    html('> | a |\n> |---|\n> | b |\n| c |\n'),
+    `<blockquote>\n${table(body(row('b')))}</blockquote>\n<p>| c |</p>\n`
+  );
+  assert.equal(
+    html('- | a |\n  |---|\n  | b |\n | c |\n'),
+    `<ul>\n<li>\n${table(body(row('b')))}</li>\n</ul>\n<p>| c |</p>\n`
+  );
+  assert.equal(html('| a |\n|---|\n|\n| b\n'), table(body(row('') + row('b'))));
+});
+
+void test('a table has at most 512 columns', () => {
+  const row = (cell: string) => `${`|${cell}`.repeat(512)}|\n`;
+  const source = row('h') + row(':-:') + row('c');
+  const out = html(source);
+  assert.equal(out.match(/<th align="center">h<\/th>/g)?.length, 512);
+  assert.equal(out.match(/<td align="center">c<\/td>/g)?.length, 512);
+  assert.doesNotMatch(html(source.replaceAll('\n', '|x\n')), /<table>/);
+});
+
 void test('GFM task lists, strikethrough and autolinks', () => {
   assert.equal(
     html('- [x] done\n- [ ] todo'),
@@ -1043,6 +1146,45 @@ void test('footnote definition labels hold at most 999 characters, like link lab
       assert.equal(out.includes(`<p>[^${label}]: note</p>`), !defined, ch + n);
     }
   }
+});
+
+void test('a footnote reference follows `!` when `![^label]` is not an image', () => {
+  const ref =
+    '<sup class="footnote-ref"><a href="#fn-1" id="fnref-1" data-footnote-ref>1</a></sup>';
+  const body = (source: string) => html(source).split('\n<section')[0];
+  assert.equal(body('Wow![^1]\n\n[^1]: note'), `<p>Wow!${ref}</p>`);
+  assert.equal(
+    body('![^1]![^2]\n\n[^1]: a\n\n[^2]: b').match(/!<sup/g)?.length,
+    2
+  );
+  assert.equal(
+    body('[x![^1]](/u)\n\n[^1]: note'),
+    `<p><a href="/u">x!${ref}</a></p>`
+  );
+  // the reference counts, but alt text holds no markup
+  assert.equal(
+    body('![x![^1]](/u)\n\n[^1]: note'),
+    '<p><img src="/u" alt="x!" /></p>'
+  );
+  // an image still wins, and a link does not
+  assert.equal(
+    html('![^1](/u)\n\n[^1]: note'),
+    '<p><img src="/u" alt="^1" /></p>\n'
+  );
+  assert.equal(
+    html('![^1][r]\n\n[^1]: note\n\n[r]: /u'),
+    '<p><img src="/u" alt="^1" /></p>\n'
+  );
+  assert.equal(body('[^1](/u)\n\n[^1]: note'), `<p>${ref}(/u)</p>`);
+  assert.equal(html('a![^1]'), '<p>a![^1]</p>\n');
+  assert.equal(html('a![^1]\n\n[^2]: note'), '<p>a![^1]</p>\n');
+  // a label that holds a bracket is no reference
+  assert.equal(body('[^[^1]]\n\n[^1]: note'), `<p>[^${ref}]</p>`);
+  // whitespace around a reference label is trimmed, on both sides
+  for (const label of ['1 ', ' 1', '\t1\n']) {
+    assert.equal(body(`[^${label}]\n\n[^1]: note`), `<p>${ref}</p>`, label);
+  }
+  assert.equal(html('[^1 2]\n\n[^1]: note'), '<p>[^1 2]</p>\n');
 });
 
 void test('tabs expand to four-column stops', () => {
@@ -1263,6 +1405,32 @@ void test('extended autolinks reject underscores in the last two domain segments
     '<p>www.a.b_c.www.d_e.f <a href="http://www.g.h">www.g.h</a></p>\n'
   );
   assert.equal(html('http://a._www.b_c.d x'), '<p>http://a._www.b_c.d x</p>\n');
+});
+
+void test('extended URL autolinks accept a host that starts past ASCII', () => {
+  assert.equal(
+    html('see https://пример.рф/путь now'),
+    '<p>see <a href="https://%D0%BF%D1%80%D0%B8%D0%BC%D0%B5%D1%80.%D1%80%D1%84/' +
+      '%D0%BF%D1%83%D1%82%D1%8C">https://пример.рф/путь</a> now</p>\n'
+  );
+  assert.match(html('http://例え.jp'), /^<p><a href="http:\/\/%E4%BE%8B/);
+  assert.match(html('ftp://é'), /^<p><a href="ftp:\/\/%C3%A9">/);
+  // whitespace, punctuation and ill-formed bytes still start no host
+  for (const host of [
+    '\u00a0a.b',
+    '\u3000a.b',
+    '—a.b',
+    '€a.b',
+    '-a.b',
+    '_a.b',
+    '.a.b',
+  ]) {
+    assert.equal(html(`http://${host}`), `<p>http://${host}</p>\n`, host);
+  }
+  assert.equal(
+    html(Uint8Array.of(0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0xbf, 0x61)),
+    '<p>http://\ufffda</p>\n'
+  );
 });
 
 void test('email autolinks take underscore runs into the local part', () => {

@@ -335,7 +335,7 @@
             (local.set $q (i32.add (local.get $q) (local.get $n)))
             (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 6))))
             (if (i32.or
-                  (call $isTagSpace (i32.load8_u (local.get $q)))
+                  (call $isWhiteByte (i32.load8_u (local.get $q)))
                   (i32.eq (i32.load8_u (local.get $q)) (i32.const ">")))
               (then (return (i32.const 6))))
             (if (i32.eq (i32.load16_u (local.get $q)) (i32.const "/>"))
@@ -366,7 +366,7 @@
     (local.set $q (i32.add (local.get $p) (local.get $n)))
     (if (i32.ge_u (local.get $q) (local.get $end)) (then (return (i32.const 1))))
     (i32.or
-      (call $isTagSpace (i32.load8_u (local.get $q)))
+      (call $isWhiteByte (i32.load8_u (local.get $q)))
       (i32.eq (i32.load8_u (local.get $q)) (i32.const ">"))))
 
   ;; Is [$p,$p+$n) `pre`, `script`, `style` or `textarea`, in any case? The
@@ -432,8 +432,9 @@
         (br $l)))
     (i32.const 0))
 
-  ;; a GFM table delimiter row; returns the column count and writes one
-  ;; alignment byte per column to $mem.align
+  ;; a GFM table delimiter row of at most 512 columns; returns the column
+  ;; count and writes one alignment byte per column to $mem.column, which is
+  ;; free until ANSI rendering measures a table
   (func $scanTableDelimRow (param $p i32) (result i32)
     (local $end i32)
     (local $cols i32)
@@ -463,7 +464,7 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))))
         (local.set $p (call $skipSpace (local.get $p) (local.get $end)))
         (if (i32.ge_u (local.get $cols) (i32.const 512)) (then (return (i32.const 0))))
-        (i32.store8 (i32.add (i32.const $mem.align) (local.get $cols))
+        (i32.store8 (i32.add (i32.const $mem.column) (local.get $cols))
           (i32.xor (local.get $align)
             (i32.shr_u (local.get $align) (i32.const 1))))
         (local.set $cols (i32.add (local.get $cols) (i32.const 1)))

@@ -81,6 +81,8 @@ export function createHighlightsPlugin(
             },
           };
         }
+        // The prefix checks below compare slices: V8 uses memcmp for them, but
+        // its startsWith reads each character.
         let ansiLines: string[] | undefined;
         if (nextLanguage.toLowerCase() === 'ansi') {
           // Warning: LiveTokenizer keeps escape sequences as text, so ANSI
@@ -90,19 +92,17 @@ export function createHighlightsPlugin(
             language: nextLanguage,
             isIncomplete,
           })!.split('\n');
-          if (
-            code.startsWith(
-              previous.endsWith('\n') ? previous.slice(0, -1) : previous
-            )
-          )
-            first = previousContentLine;
+          const head = previous.endsWith('\n')
+            ? previous.slice(0, -1)
+            : previous;
+          if (code.slice(0, head.length) === head) first = previousContentLine;
         } else if (tokenizer === undefined) {
           tokenizer = new LiveTokenizer({
             ...options,
             lang: nextLanguage,
             code,
           } as LiveTokenizerOptions);
-        } else if (code.startsWith(previous)) {
+        } else if (code.slice(0, previous.length) === previous) {
           const line = tokenizer.lineCount - 1;
           const end = { line, character: tokenizer.getLineLength(line) };
           const update = tokenizer.applyEdits([
@@ -115,7 +115,7 @@ export function createHighlightsPlugin(
           first = Math.min(first, previousContentLine);
         } else if (
           previous.endsWith('\n') &&
-          code.startsWith(previous.slice(0, -1))
+          code.slice(0, previous.length - 1) === previous.slice(0, -1)
         ) {
           // Wasm supplies a final LF even while the source's last code line is still growing.
           const line = tokenizer.lineCount - 2;
@@ -134,6 +134,13 @@ export function createHighlightsPlugin(
           );
         } else tokenizer.reset(code);
 
+        const lineCount = ansiLines?.length ?? tokenizer!.lineCount;
+        const lastContentLine = Math.max(
+          0,
+          lineCount - (code.endsWith('\n') ? 2 : 1)
+        );
+        // Code that lost its final empty line ends before the changed lines.
+        first = Math.min(first, lastContentLine);
         // Keep strings, not the line cache, so older lazy results stay valid.
         if (first < prefixLineCount) {
           prefixHtml = '';
@@ -145,11 +152,6 @@ export function createHighlightsPlugin(
         lines.length = first;
         let html = '';
         let lastLineOffset = 0;
-        const lineCount = ansiLines?.length ?? tokenizer!.lineCount;
-        const lastContentLine = Math.max(
-          0,
-          lineCount - (code.endsWith('\n') ? 2 : 1)
-        );
         for (let line = first; line < lineCount; line++) {
           const value = ansiLines?.[line] ?? tokenizer!.getLineHtml(line);
           lines.push(value);

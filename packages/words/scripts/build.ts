@@ -89,15 +89,18 @@ function codePointRanges(
 
 // HTML5 named character references, read by $entityMatch:
 //   [base+0]   values pointer u16, name count u16
-//   [base+4]   second code points of two-code-point values, u16 each
-//   [base+20]  u16 per block of 64 names: where its first name starts
+//   [base+4]   u16 per block of 64 names: where its first name starts
 //   names      sorted by byte and front-coded. Each name is a byte below '0'
 //              with the length it shares with the previous name (0 at a block
 //              start), then its other bytes. A 0 byte and 0x7f end the list.
-//   values     three planes of one byte per name: bits 0-7 of the first code
-//              point, bits 8-15, then bit 16 in bit 0 and the 1-based index of
-//              the second code point in bits 1-4 (0 = none)
-table('entity-table', (base) => {
+//   values     two planes of one byte per name: the low and high byte of a
+//              u16. It is a code point, or a surrogate as an escape: 0xD800
+//              plus the offset of a letter from U+1D400, or 0xDC00 plus the
+//              1-based index of a pair.
+//   pairs      two u16 code points each. Pair i ends 4 * (i - 1) bytes before
+//              `end`, so its address needs no pointer.
+table('entity-table', (base, inner) => {
+  const end = Number(inner.match(/^\s*\d+\s+(\d+)/)![1]);
   const entities: Record<string, string> = {};
   for (const line of fs
     .readFileSync(new URL('../src/entities.txt', import.meta.url), 'utf-8')
@@ -119,11 +122,11 @@ table('entity-table', (base) => {
   }
   const names = Object.keys(entities).sort();
   const n = names.length;
-  const second: number[] = [];
+  const pairs: string[] = [];
   const stream: number[] = [];
   const blocks: number[] = [];
-  const blockStart = base + 20 + Math.ceil(n / 64) * 2;
-  const values = new Uint8Array(n * 3);
+  const blockStart = base + 4 + Math.ceil(n / 64) * 2;
+  const values = new Uint8Array(n * 2);
   let prev = '';
   names.forEach((name, i) => {
     if (!/^[a-zA-Z][a-zA-Z0-9]{0,30}$/.test(name))
@@ -134,49 +137,38 @@ table('entity-table', (base) => {
     stream.push(shared);
     for (let j = shared; j < name.length; j++) stream.push(name.charCodeAt(j));
     prev = name;
-    const cps = [...entities[name]].map((c) => c.codePointAt(0)!);
-    if (cps.length === 2 && !second.includes(cps[1])) second.push(cps[1]);
+    const cps = Array.from(entities[name], (c) => c.codePointAt(0)!);
+    let value = cps[0];
+    if (cps.length === 2) {
+      if (!pairs.includes(entities[name])) pairs.push(entities[name]);
+      value = 0xdc00 + pairs.indexOf(entities[name]) + 1;
+    } else if (value > 0xffff) value += 0xd800 - 0x1d400;
     if (
       cps.length > 2 ||
-      cps[0] > 0x1ffff ||
-      second.length > 8 ||
-      (cps[1] ?? 0) > 0xffff
+      cps.some((cp) => cp >= 0xd800 && cp <= 0xdfff) ||
+      (cps.length === 2 ? cps[0] > 0xffff || cps[1] > 0xffff : false) ||
+      (cps[0] > 0xffff && (value < 0xd800 || value > 0xdbff)) ||
+      pairs.length > 0x3ff
     )
       throw new Error(`entity ${name} exceeds packed format`);
-    values[i] = cps[0] & 0xff;
-    values[n + i] = (cps[0] >> 8) & 0xff;
-    values[n * 2 + i] =
-      (cps[0] >> 16) |
-      (cps.length === 2 ? (second.indexOf(cps[1]) + 1) << 1 : 0);
+    values[i] = value & 0xff;
+    values[n + i] = value >> 8;
   });
   stream.push(0, 0x7f);
   const valuesPtr = blockStart + stream.length;
   if (valuesPtr > 0xffff) throw new Error(`entity-table pointers exceed u16`);
-  const bytes = new Uint8Array(valuesPtr + values.length - base);
+  if (valuesPtr + values.length > end - pairs.length * 4)
+    throw new Error(`entity-table needs more than [${base}:${end})`);
+  const bytes = new Uint8Array(end - base);
   const dv = new DataView(bytes.buffer);
   dv.setUint16(0, valuesPtr, true);
   dv.setUint16(2, n, true);
-  second.forEach((cp, i) => dv.setUint16(4 + i * 2, cp, true));
-  blocks.forEach((at, i) => dv.setUint16(20 + i * 2, at, true));
+  blocks.forEach((at, i) => dv.setUint16(4 + i * 2, at, true));
   bytes.set(stream, blockStart - base);
   bytes.set(values, valuesPtr - base);
-  return bytes;
-});
-
-// Unicode P and S code points from U+0080, which CommonMark calls punctuation,
-// read by $isPunctCp: a u32 range count, then sorted lo:21 + span:11 ranges.
-table('unicode-punct-table', () => {
-  const ranges = codePointRanges(0x80, (char) => /[\p{P}\p{S}]/u.test(char));
-  const bytes = new Uint8Array(4 + ranges.length * 4);
-  const dv = new DataView(bytes.buffer);
-  dv.setUint32(0, ranges.length, true);
-  ranges.forEach(([lo, hi], i) => {
-    if (lo > 0x1fffff || hi - lo > 0x7ff) {
-      throw new Error(
-        `unicode-punct-table range exceeds packed format: ${lo}-${hi}`
-      );
-    }
-    dv.setUint32(4 + i * 4, lo + (hi - lo) * 0x200000, true);
+  pairs.forEach((pair, i) => {
+    dv.setUint16(bytes.length - (i + 1) * 4, pair.charCodeAt(0), true);
+    dv.setUint16(bytes.length - (i + 1) * 4 + 2, pair.charCodeAt(1), true);
   });
   return bytes;
 });
@@ -186,7 +178,7 @@ table('unicode-punct-table', () => {
 // offset:9 + count:7), then the names, grouped by length and sorted.
 table('word-table', (_, inner) => {
   const words: string[] = (inner.match(/"[\w-]+"/g) ?? [])
-    .map((w) => JSON.parse(w))
+    .map((w) => w.slice(1, -1))
     .sort((a, b) =>
       a.length !== b.length ? a.length - b.length : a < b ? -1 : a > b ? 1 : 0
     );
@@ -215,9 +207,13 @@ table('word-table', (_, inner) => {
   return bytes;
 });
 
-// Full Unicode case folding from U+0041, used to normalize link labels: a u16
-// run count and u16 multi count, then 8-byte runs (start:21 + span:11, then
-// signed delta:24 + stride:8). Multi-code-point folds point into a UTF-8 blob.
+// Full Unicode case folding from U+0041, used to normalize link labels:
+//   [base+0]  u16 run count, u16 multi count, u16 pairs pointer, u16 blob pointer
+//   runs      u32 each: start:17, span:8, pair index:7. A run folds each of
+//             its code points, or every second one, by the same delta.
+//   multis    u32 each: code point:17, blob offset:9, UTF-8 length:3
+//   pairs     u32 each: signed delta:24, stride:8
+//   blob      the UTF-8 text of the folds that take several code points
 table('unicode-fold-table', (base) => {
   const runs: { lo: number; hi: number; delta: number; stride: number }[] = [];
   const multi: [number, string][] = [];
@@ -227,7 +223,7 @@ table('unicode-fold-table', (base) => {
     // This round trip gives the full fold: U+1E9E becomes "ss", U+03C2 becomes U+03C3.
     const fold = char.toLowerCase().toUpperCase().toLowerCase();
     if (fold === char) continue;
-    const points = [...fold];
+    const points = Array.from(fold);
     if (points.length > 1) {
       multi.push([cp, fold]);
       continue;
@@ -246,84 +242,91 @@ table('unicode-fold-table', (base) => {
       last.hi = cp;
     } else runs.push({ lo: cp, hi: cp, delta, stride: 1 });
   }
-  if (
-    runs.some(
-      (r) =>
-        r.lo > 0x1fffff ||
-        r.hi - r.lo > 0x7ff ||
-        r.delta < -0x800000 ||
-        r.delta > 0x7fffff ||
-        (r.stride !== 1 && r.stride !== 2)
+  const pairs: number[] = [];
+  const words = runs.map((r) => {
+    const pair = (r.stride << 24) | (r.delta & 0xffffff);
+    if (!pairs.includes(pair)) pairs.push(pair);
+    if (
+      r.lo > 0x1ffff ||
+      r.hi - r.lo > 0xff ||
+      r.delta < -0x800000 ||
+      r.delta > 0x7fffff ||
+      (r.stride !== 1 && r.stride !== 2) ||
+      pairs.length > 0x80
     )
-  ) {
-    throw new Error(`unicode-fold-table run exceeds packed format`);
-  }
+      throw new Error(`unicode-fold-table run exceeds packed format`);
+    return r.lo + (r.hi - r.lo) * 0x20000 + pairs.indexOf(pair) * 0x2000000;
+  });
   const blob = multi.map(([, f]) => Buffer.from(f, 'utf-8'));
-  const blobLen = blob.reduce((n, b) => n + b.length, 0);
-  const header = 4;
-  const bytes = new Uint8Array(
-    header + runs.length * 8 + multi.length * 8 + blobLen
-  );
+  let at = 0;
+  for (const [i, [cp]] of multi.entries()) {
+    if (cp > 0x1ffff || at > 0x1ff || blob[i].length > 7)
+      throw new Error(`unicode-fold-table fold exceeds packed format`);
+    words.push(cp + at * 0x20000 + blob[i].length * 0x4000000);
+    at += blob[i].length;
+  }
+  const header = 8;
+  const pairsAt = header + words.length * 4;
+  const blobAt = pairsAt + pairs.length * 4;
+  if (base + blobAt > 0xffff)
+    throw new Error(`unicode-fold-table pointers exceed u16`);
+  const bytes = new Uint8Array(blobAt + at);
   const dv = new DataView(bytes.buffer);
-  const blobPtr = base + header + runs.length * 8 + multi.length * 8;
   dv.setUint16(0, runs.length, true);
   dv.setUint16(2, multi.length, true);
-  runs.forEach((r, i) => {
-    dv.setUint32(header + i * 8, r.lo + (r.hi - r.lo) * 0x200000, true);
-    dv.setUint32(
-      header + i * 8 + 4,
-      (r.stride << 24) | (r.delta & 0xffffff),
-      true
-    );
-  });
-  let at = 0;
-  multi.forEach(([cp], i) => {
-    const off = header + runs.length * 8 + i * 8;
-    dv.setUint32(off, cp, true);
-    dv.setUint16(off + 4, blobPtr + at, true);
-    bytes[off + 6] = blob[i].length;
-    bytes.set(blob[i], header + runs.length * 8 + multi.length * 8 + at);
-    at += blob[i].length;
-  });
+  dv.setUint16(4, base + pairsAt, true);
+  dv.setUint16(6, base + blobAt, true);
+  [...words, ...pairs].forEach((word, i) =>
+    dv.setUint32(header + i * 4, word, true)
+  );
+  bytes.set(Buffer.concat(blob), blobAt);
   return bytes;
 });
 
-// Terminal display widths, read by $displayWidth: code points that take no cell
-// (combining marks, format characters, conjoining jamo) as lo:21 + span:11, and
-// wide ones as [lo:u32, span:u16].
-table('unicode-width-table', (base) => {
-  const zero = codePointRanges(
-    0,
-    (char, cp) =>
-      cp !== 0xad &&
-      (/[\p{Mn}\p{Me}\p{Cf}]/u.test(char) || (cp >= 0x1160 && cp <= 0x11ff))
-  );
-  const wide = WIDE_RANGES.split(',').map((r) => {
-    const [lo, hi] = r.split('-');
-    return [parseInt(lo, 16), parseInt(hi ?? lo, 16)];
-  });
-  const bytes = new Uint8Array(16 + zero.length * 4 + wide.length * 6);
-  const dv = new DataView(bytes.buffer);
-  dv.setUint32(0, zero.length, true);
-  dv.setUint32(4, wide.length, true);
-  dv.setUint32(8, base + 16, true);
-  dv.setUint32(12, base + 16 + zero.length * 4, true);
-  zero.forEach(([lo, hi], i) => {
-    if (lo > 0x1fffff || hi - lo > 0x7ff) {
-      throw new Error(
-        `unicode-width-table zero-width range is too wide: ${lo}-${hi}`
-      );
+// (unicode-range-tables <base> <end> <table> <tableEnd> ...): three sets of
+// code points, read by $isPunctCp and $cpWidth. The P and S general categories
+// from U+0080, the code points that take no terminal cell (combining marks,
+// format characters, conjoining jamo), and the wide ones. The binary stores
+// them packed: per range, a varint with the distance from the end of the
+// range before it to its start, then a varint with its length. A 0 byte ends
+// a set. $unpackRanges expands each set into its table at instantiation.
+table('unicode-range-tables', (_, inner) => {
+  const room = inner.trim().split(/\s+/).slice(2).map(Number);
+  const sets = [
+    codePointRanges(0x80, (char) => /[\p{P}\p{S}]/u.test(char)),
+    codePointRanges(
+      0,
+      (char, cp) =>
+        cp !== 0xad &&
+        (/[\p{Mn}\p{Me}\p{Cf}]/u.test(char) || (cp >= 0x1160 && cp <= 0x11ff))
+    ),
+    WIDE_RANGES.split(',').map((r) => {
+      const [lo, hi] = r.split('-');
+      return [parseInt(lo, 16), parseInt(hi ?? lo, 16)];
+    }),
+  ];
+  const bytes: number[] = [];
+  sets.forEach((ranges, i) => {
+    let at = 0;
+    let entries = 0;
+    for (const [lo, hi] of ranges) {
+      // A table entry holds a span of 11 bits, so a longer range takes several.
+      entries += Math.ceil((hi - lo + 1) / 0x800);
+      if (lo <= at || lo > 0x1fffff)
+        throw new Error(
+          `unicode-range-tables range exceeds packed format: ${lo}-${hi}`
+        );
+      for (let v of [lo - at, hi + 1 - lo]) {
+        for (; v > 0x7f; v >>>= 7) bytes.push((v & 0x7f) | 0x80);
+        bytes.push(v);
+      }
+      at = hi + 1;
     }
-    dv.setUint32(16 + i * 4, lo + (hi - lo) * 0x200000, true);
+    bytes.push(0);
+    if (4 + entries * 4 > room[i * 2 + 1] - room[i * 2])
+      throw new Error(`unicode-range-tables set ${i} needs ${entries} entries`);
   });
-  wide.forEach(([lo, hi], i) => {
-    if (hi - lo > 0xffff)
-      throw new Error(`unicode-width-table range is too wide: ${lo}-${hi}`);
-    const off = 16 + zero.length * 4 + i * 6;
-    dv.setUint32(off, lo, true);
-    dv.setUint16(off + 4, hi - lo, true);
-  });
-  return bytes;
+  return Uint8Array.from(bytes);
 });
 
 // (out.str "...") writes a literal to the output. Short literals become one

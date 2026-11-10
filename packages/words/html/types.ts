@@ -14,7 +14,10 @@ export interface CodeOptions {
 
 /** Changed lines of a code block. Lines before `firstLine` did not change. */
 export interface CodeHighlightUpdate {
-  /** First changed line, zero-based. Equals `lineCount` when nothing changed. */
+  /**
+   * First changed line, zero-based, and not after the last line with content.
+   * Equals `lineCount` when nothing changed.
+   */
   firstLine: number;
   /** Total lines, including an empty final line after a trailing LF. */
   lineCount: number;

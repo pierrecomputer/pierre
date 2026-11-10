@@ -25,7 +25,9 @@
   (const $mem.blockTagsEnd $mem.blockTags+512)
   (const $mem.filterTags $mem.blockTagsEnd)
   (const $mem.filterTagsEnd $mem.filterTags+256)
+  ;; zero-width ranges, then wide ones
   (const $mem.width $mem.filterTagsEnd)
+  (const $mem.wide $mem.width+1664)
   (const $mem.widthEnd $mem.width+3328)
   (const $mem.quoteBar $mem.widthEnd)
   (const $mem.bullet $mem.quoteBar+19)
@@ -42,22 +44,25 @@
   (const $mem.tickMemo $mem.opener+128)
   (const $mem.bracket $mem.opener+1152)
   ;; Completion runs when block analysis is done and inline analysis has not
-  ;; started, so its 64-entry delimiter and bracket stacks use this space too.
+  ;; started, so its 64-entry delimiter (16 bytes each) and bracket (8 bytes)
+  ;; stacks use this space too.
   (const $mem.completeDelims $mem.bracket)
-  (const $mem.completeLinks $mem.completeDelims+512)
+  (const $mem.completeLinks $mem.completeDelims+1024)
   (const $mem.column $mem.containerEnd)
   (const $mem.columnEnd $mem.column+1024)
-  (const $mem.align $mem.columnEnd)
-  (const $mem.alignEnd $mem.align+256)
-  (const $mem.prefix $mem.alignEnd)
+  (const $mem.prefix $mem.columnEnd)
   (const $mem.prefixEnd $mem.prefix+1024)
   (const $mem.pending $mem.prefixEnd-256)
   (const $mem.listNum $mem.prefixEnd)
   (const $mem.listKind $mem.listNum+1024)
   (const $mem.itemIndent $mem.listKind+256)
+  ;; The Unicode range tables as the binary stores them. $unpackRanges expands
+  ;; them into $mem.punct, $mem.width and $mem.wide at instantiation.
+  (const $mem.packed $mem.itemIndent+256)
+  (const $mem.packedEnd $mem.packed+2048)
   ;; ANSI table rendering caches measured cell widths in the otherwise unused
   ;; fixed-memory gap below the input. Inline rendering owns no bytes here.
-  (const $mem.cellWidth $mem.itemIndent+256)
-  (const $mem.cellWidthSlots 6264) ;; (65536 - $mem.cellWidth) / 4
+  (const $mem.cellWidth $mem.packedEnd)
+  (const $mem.cellWidthSlots 5816) ;; (65536 - $mem.cellWidth) / 4
   (const $mem.input 65536)
 )
