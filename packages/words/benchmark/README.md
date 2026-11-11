@@ -16,7 +16,7 @@ moonx words:bench-browser --ignore-ci-checks
 moonx words:bench-download --ignore-ci-checks
 ```
 
-- `bench`: HTML strings against md4x (native), md4x (wasm), and markdown-it.
+- `bench`: HTML strings against md4x (NAPI), md4x (wasm), and markdown-it.
 - `bench-stream`: React streams against Streamdown in JSDOM.
 - `bench-memory`: memory use of all HTML engines and both React engines.
 - `bench-browser`: React streams against Streamdown in Chromium, and download
@@ -43,13 +43,13 @@ with `pnpm --filter @pierre/words exec playwright install chromium`.
 
 Input MiB per second. Higher is better.
 
-| Fixture                          | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
-| -------------------------------- | ------------: | ------------: | ----------: | ----------: |
-| `tiny.md` (1.3 KiB)              |         326.9 |         139.7 |       102.6 |        13.6 |
-| `assistant-review.md` (5.4 KiB)  |         382.6 |         198.9 |       158.6 |        21.8 |
-| `assistant-explain.md` (6.0 KiB) |         437.5 |         212.5 |       170.3 |        30.5 |
-| `simd.md` (39.0 KiB)             |         366.1 |         178.4 |       123.9 |        20.9 |
-| `gfm-spec.md` (211.3 KiB)        |         366.1 |         168.5 |       121.9 |        29.7 |
+| Fixture                          | @pierre/words | md4x (NAPI) | md4x (wasm) | markdown-it |
+| -------------------------------- | ------------: | ----------: | ----------: | ----------: |
+| `tiny.md` (1.3 KiB)              |         326.9 |       139.7 |       102.6 |        13.6 |
+| `assistant-review.md` (5.4 KiB)  |         382.6 |       198.9 |       158.6 |        21.8 |
+| `assistant-explain.md` (6.0 KiB) |         437.5 |       212.5 |       170.3 |        30.5 |
+| `simd.md` (39.0 KiB)             |         366.1 |       178.4 |       123.9 |        20.9 |
+| `gfm-spec.md` (211.3 KiB)        |         366.1 |       168.5 |       121.9 |        29.7 |
 
 > Measured on **2026-11-10** at commit `8b0ad8f3` with Node 24.11.0 on Apple M4
 > Max with 128 GiB RAM.
@@ -94,13 +94,13 @@ peak RSS before the engine import, which is mostly Node itself (76.0 to 80.0
 MiB). Each entry uses five fresh Node processes, for 150 in total. React
 processes also include JSDOM and the React runtime, so React has its own table.
 
-| Fixture → HTML         | @pierre/words | md4x (native) | md4x (wasm) | markdown-it |
-| ---------------------- | ------------: | ------------: | ----------: | ----------: |
-| `tiny.md`              |           3.2 |           1.0 |         7.7 |         6.2 |
-| `assistant-review.md`  |           3.2 |           1.0 |         7.8 |         5.9 |
-| `assistant-explain.md` |           3.2 |           0.9 |         7.8 |         6.0 |
-| `simd.md`              |           3.5 |           1.4 |        11.8 |         8.6 |
-| `gfm-spec.md`          |           8.6 |           2.7 |        20.7 |        18.0 |
+| Fixture → HTML         | @pierre/words | md4x (NAPI) | md4x (wasm) | markdown-it |
+| ---------------------- | ------------: | ----------: | ----------: | ----------: |
+| `tiny.md`              |           3.2 |         1.0 |         7.7 |         6.2 |
+| `assistant-review.md`  |           3.2 |         1.0 |         7.8 |         5.9 |
+| `assistant-explain.md` |           3.2 |         0.9 |         7.8 |         6.0 |
+| `simd.md`              |           3.5 |         1.4 |        11.8 |         8.6 |
+| `gfm-spec.md`          |           8.6 |         2.7 |        20.7 |        18.0 |
 
 | Fixture → React stream | @pierre/words/react | streamdown |
 | ---------------------- | ------------------: | ---------: |

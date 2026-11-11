@@ -10,6 +10,17 @@ const options = {
 } as const;
 
 export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
+  highlightsDiff: {
+    file: {
+      name: 'diff.tsx',
+      contents: `<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ preferredHighlighter: 'highlights' }}
+/>`,
+    },
+    options,
+  },
   highlightsInstall: {
     file: {
       name: 'pnpm.sh',
@@ -20,6 +31,13 @@ export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
       disableFileHeader: true,
       unsafeCSS: CustomScrollbarCSS,
     },
+  },
+  highlightsSkill: {
+    file: {
+      name: 'skill.sh',
+      contents: 'npx skills add pierrecomputer/pierre --skill highlights',
+    },
+    options,
   },
   highlightsHtml: {
     file: {
@@ -314,11 +332,13 @@ export const {
   highlightsApiRuntime: HIGHLIGHTS_API_RUNTIME,
   highlightsApiTypes: HIGHLIGHTS_API_TYPES,
   highlightsCssVariables: HIGHLIGHTS_CSS_VARIABLES,
+  highlightsDiff: HIGHLIGHTS_DIFF,
   highlightsDualThemes: HIGHLIGHTS_DUAL_THEMES,
   highlightsDualThemesCss: HIGHLIGHTS_DUAL_THEMES_CSS,
   highlightsHtml: HIGHLIGHTS_HTML,
   highlightsInstall: HIGHLIGHTS_INSTALL,
   highlightsLive: HIGHLIGHTS_LIVE,
+  highlightsSkill: HIGHLIGHTS_SKILL,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsStreamPipe: HIGHLIGHTS_STREAM_PIPE,
   highlightsThemeLoader: HIGHLIGHTS_THEME_LOADER,

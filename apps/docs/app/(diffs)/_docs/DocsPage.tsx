@@ -65,11 +65,13 @@ import {
   HIGHLIGHTS_API_RUNTIME,
   HIGHLIGHTS_API_TYPES,
   HIGHLIGHTS_CSS_VARIABLES,
+  HIGHLIGHTS_DIFF,
   HIGHLIGHTS_DUAL_THEMES,
   HIGHLIGHTS_DUAL_THEMES_CSS,
   HIGHLIGHTS_HTML,
   HIGHLIGHTS_INSTALL,
   HIGHLIGHTS_LIVE,
+  HIGHLIGHTS_SKILL,
   HIGHLIGHTS_STREAM,
   HIGHLIGHTS_STREAM_PIPE,
   HIGHLIGHTS_THEME_LOADER,
@@ -155,6 +157,7 @@ import {
   VIRTUALIZATION_REACT_CONFIG,
   VIRTUALIZATION_VANILLA_DIFF,
 } from '../docs/Virtualization/constants';
+import { WORDS_DOC_FILES } from '../docs/Words/constants';
 import {
   WORKER_POOL_API_REFERENCE,
   WORKER_POOL_ARCHITECTURE_ASCII,
@@ -180,7 +183,7 @@ import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
-import { renderMDX } from '@/lib/mdx';
+import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
 import { preloadCodeExample } from '@/lib/preloadCodeExample';
 
@@ -219,6 +222,7 @@ export default function DocsPage() {
           <WorkerPoolSection />
           <SSRSection />
           <HighlightsHighlighterSection />
+          <WordsSection />
         </div>
       </DocsLayout>
       <Footer />
@@ -675,7 +679,9 @@ async function ThemingSection() {
 
 async function HighlightsHighlighterSection() {
   const [
+    highlightsDiff,
     highlightsInstall,
+    highlightsSkill,
     highlightsHtml,
     highlightsTokens,
     highlightsStreamPipe,
@@ -690,7 +696,9 @@ async function HighlightsHighlighterSection() {
     highlightsApiRuntime,
     highlightsApiTypes,
   ] = await Promise.all([
+    preloadCodeExample(HIGHLIGHTS_DIFF),
     preloadCodeExample(HIGHLIGHTS_INSTALL),
+    preloadCodeExample(HIGHLIGHTS_SKILL),
     preloadCodeExample(HIGHLIGHTS_HTML),
     preloadCodeExample(HIGHLIGHTS_TOKENS),
     preloadCodeExample(HIGHLIGHTS_STREAM_PIPE),
@@ -708,7 +716,9 @@ async function HighlightsHighlighterSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
     scope: {
+      highlightsDiff,
       highlightsInstall,
+      highlightsSkill,
       highlightsHtml,
       highlightsTokens,
       highlightsStreamPipe,
@@ -724,6 +734,14 @@ async function HighlightsHighlighterSection() {
       highlightsApiTypes,
     },
   });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function WordsSection() {
+  const content = await renderMDXWithPreloadedFiles(
+    '(diffs)/docs/Words/content.mdx',
+    WORDS_DOC_FILES
+  );
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
