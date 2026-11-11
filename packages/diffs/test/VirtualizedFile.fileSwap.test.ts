@@ -1,9 +1,17 @@
-import { expect, test } from 'bun:test';
+import { beforeAll, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import type { FileContents } from '../src/types';
-import { createRoot, installDom, wait, waitFor } from './domHarness';
+import {
+  createRoot,
+  installDom,
+  preloadTestHighlighter,
+  wait,
+  waitFor,
+} from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 function makeNamedFile(name: string, label = 'line'): FileContents {
   return {

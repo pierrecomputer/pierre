@@ -1,6 +1,6 @@
 {
   "name": "@pierre/highlights",
-  "version": "0.4.0",
+  "version": "0.5.1",
   "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
   "license": "apache-2.0",
   "files": [
@@ -33,15 +33,14 @@
     "prepublishOnly": "moon run highlights:prepublish"
   },
   "devDependencies": {
-    "binaryen": "catalog:",
+    "@pierre/wat-tools": "workspace:*",
     "shiki": "catalog:",
     "tree-sitter-highlight": "catalog:",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "wabt": "catalog:"
+    "typescript": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 332924,
-    "highlights.wasm.gz": 146985
+    "highlights.wasm": 303015,
+    "highlights.wasm.gz": 142794
   }
 }

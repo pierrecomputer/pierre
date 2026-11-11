@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from 'bun:test';
+import { beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import {
   CodeView,
@@ -8,9 +8,12 @@ import {
   createRoot,
   installDom,
   makeFileItem,
+  preloadTestHighlighter,
   renderItems,
   wait,
 } from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 describe('CodeView.removeItem', () => {
   test('removes an item while preserving the remaining order', async () => {

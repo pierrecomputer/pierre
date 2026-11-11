@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_CODE_VIEW_LAYOUT } from '../src/constants';
@@ -10,9 +10,12 @@ import {
   installDom,
   makeFile,
   makeFileItem,
+  preloadTestHighlighter,
   renderItems,
   wait,
 } from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 const ROOT_HEIGHT = 800;
 

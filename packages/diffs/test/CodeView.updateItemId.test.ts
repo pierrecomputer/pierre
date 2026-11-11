@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import {
   CodeView,
@@ -10,9 +10,12 @@ import {
   createRoot,
   installDom,
   makeFileItem,
+  preloadTestHighlighter,
   renderItems,
   wait,
 } from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 describe('CodeView item id updates', () => {
   test('emits a selected line change when renaming the selected item', async () => {

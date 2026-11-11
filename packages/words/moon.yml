@@ -1,0 +1,95 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['publishable']
+
+tasks:
+  build:
+    script:
+      'node scripts/build.ts && tsdown && cp react/styles.css dist/styles.css'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'lib/**/*'
+      - 'scripts/build.ts'
+      - '/packages/wat-tools/index.ts'
+      - 'react/**/*'
+      - 'html/**/*'
+      # The docs demo imports this source; invalidate downstream builds too.
+      - 'benchmark/fixtures/index.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # Self-imports resolve through this package's dist exports, so typecheck must
+  # wait for its own build as well as the inherited workspace dependency builds.
+  typecheck:
+    deps:
+      - 'build'
+
+  test:
+    script: 'node --test test/*_test.ts && bun test test/react_test.tsx'
+    deps:
+      - 'build'
+    options:
+      merge: 'replace'
+
+  test-spec:
+    command: 'node --test test/spec_test.ts'
+    deps:
+      - 'build'
+
+  # Build-connected timing tasks must stay out of the affected CI graph.
+  bench:
+    command: 'node benchmark/bench.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-stream:
+    command: 'node benchmark/bench.ts --stream'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-memory:
+    command: 'node benchmark/bench-memory.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-browser:
+    command: 'bun benchmark/browser/bench.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-download:
+    command: 'bun benchmark/browser/download.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  gen-spec:
+    command: 'node scripts/gen-spec.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  prepublish:
+    deps:
+      - 'test'
+      - 'typecheck'

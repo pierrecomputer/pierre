@@ -1,0 +1,9 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+
+workspace:
+  inheritedTasks:
+    # The packages that build with these tools test them through their output.
+    exclude: ['test']
