@@ -43,7 +43,9 @@ so it is ready for the next render. When the prerendered content rarely changes,
 set `lazyHighlighter: true` in the options you preload and hydrate with:
 hydration then keeps the prerendered markup as is, and the highlighter (with its
 engine, themes and languages) loads only once a render needs it, such as new
-contents or options.
+contents or options. The option applies to `File` and `FileDiff` hydration; it
+has no effect with a worker pool, or inside a `Virtualizer`, whose first render
+loads the highlighter.
 
 ```tsx
 const preloaded = await preloadFile({
