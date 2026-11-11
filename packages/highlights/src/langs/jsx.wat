@@ -1,4 +1,8 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.jsxStack 4096)
+
   ;; Markup scanner and mode stack shared by JSX and TSX.
   ;; Modes:
   ;; 1 TAG: scan attributes. TSRX stores the raw-text kind in target until `>`.

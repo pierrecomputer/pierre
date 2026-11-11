@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.pascalWords 576)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Pascal is case-insensitive, so the table holds lowercase words and
   ;; $pasWordHl probes it with a lowercased copy of the input word. Group
@@ -9,7 +13,7 @@
   ;; property directives, which are ordinary names outside a property
   ;; declaration and carry bit 12. `result` shares its hash features with
   ;; `repeat` and is matched directly.
-  (keyword-table $pascalWords $mem.pascalWords $mem.perlWords
+  (keyword-table $pascalWords $mem.pascalWords $mem.pascalWords+576
     (group $Token.keyword.control ;; 1: control flow
       "if" "then" "else" "case" "of" "for" "to" "downto" "while" "do" "repeat" "until" "with"
       "goto" "break" "continue" "exit" "try" "except" "finally" "raise" "on")

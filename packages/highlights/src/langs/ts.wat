@@ -1,4 +1,8 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.jsTokenHighlightMap 144)
+
   ;; TypeScript-aware semantic classification shared by TS and TSX.
   (enum-map $LexHl $Lex $mem.jsTokenHighlightMap $Token.operator
     (value 253

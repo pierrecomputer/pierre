@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Any byte of a non-ASCII code point counts, so `日本*語*` is no markup.
   (func $rstIsAlnum (param $c i32) (result i32)

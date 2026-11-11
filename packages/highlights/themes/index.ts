@@ -148,80 +148,380 @@ export function getFontStyle(token: ThemedToken): string | undefined {
   return undefined;
 }
 
-export const andromeeda: Theme = andromeedaJson;
-export const auroraX: Theme = auroraXJson;
-export const ayuDark: Theme = ayuDarkJson;
-export const ayuLight: Theme = ayuLightJson;
-export const ayuMirage: Theme = ayuMirageJson;
-export const catppuccinFrappe: Theme = catppuccinFrappeJson;
-export const catppuccinLatte: Theme = catppuccinLatteJson;
-export const catppuccinMacchiato: Theme = catppuccinMacchiatoJson;
-export const catppuccinMocha: Theme = catppuccinMochaJson;
-export const darkPlus: Theme = darkPlusJson;
-export const dracula: Theme = draculaJson;
-export const draculaSoft: Theme = draculaSoftJson;
-export const everforestDark: Theme = everforestDarkJson;
-export const everforestLight: Theme = everforestLightJson;
-export const githubDark: Theme = githubDarkJson;
-export const githubDarkDefault: Theme = githubDarkDefaultJson;
-export const githubDarkDimmed: Theme = githubDarkDimmedJson;
-export const githubDarkHighContrast: Theme = githubDarkHighContrastJson;
-export const githubLight: Theme = githubLightJson;
-export const githubLightDefault: Theme = githubLightDefaultJson;
-export const githubLightHighContrast: Theme = githubLightHighContrastJson;
-export const gruvboxDarkHard: Theme = gruvboxDarkHardJson;
-export const gruvboxDarkMedium: Theme = gruvboxDarkMediumJson;
-export const gruvboxDarkSoft: Theme = gruvboxDarkSoftJson;
-export const gruvboxLightHard: Theme = gruvboxLightHardJson;
-export const gruvboxLightMedium: Theme = gruvboxLightMediumJson;
-export const gruvboxLightSoft: Theme = gruvboxLightSoftJson;
-export const horizon: Theme = horizonJson;
-export const horizonBright: Theme = horizonBrightJson;
-export const houston: Theme = houstonJson;
-export const kanagawaDragon: Theme = kanagawaDragonJson;
-export const kanagawaLotus: Theme = kanagawaLotusJson;
-export const kanagawaWave: Theme = kanagawaWaveJson;
-export const laserwave: Theme = laserwaveJson;
-export const lightPlus: Theme = lightPlusJson;
-export const materialTheme: Theme = materialThemeJson;
-export const materialThemeDarker: Theme = materialThemeDarkerJson;
-export const materialThemeLighter: Theme = materialThemeLighterJson;
-export const materialThemeOcean: Theme = materialThemeOceanJson;
-export const materialThemePalenight: Theme = materialThemePalenightJson;
-export const minDark: Theme = minDarkJson;
-export const minLight: Theme = minLightJson;
-export const monokai: Theme = monokaiJson;
-export const nightOwl: Theme = nightOwlJson;
-export const nightOwlLight: Theme = nightOwlLightJson;
-export const nord: Theme = nordJson;
-export const oneDarkPro: Theme = oneDarkProJson;
-export const oneLight: Theme = oneLightJson;
-export const plastic: Theme = plasticJson;
-export const poimandres: Theme = poimandresJson;
-export const red: Theme = redJson;
-export const rosePine: Theme = rosePineJson;
-export const rosePineDawn: Theme = rosePineDawnJson;
-export const rosePineMoon: Theme = rosePineMoonJson;
-export const slackDark: Theme = slackDarkJson;
-export const slackOchin: Theme = slackOchinJson;
-export const snazzyLight: Theme = snazzyLightJson;
-export const solarizedDark: Theme = solarizedDarkJson;
-export const solarizedLight: Theme = solarizedLightJson;
-export const synthwave84: Theme = synthwave84Json;
-export const tokyoNight: Theme = tokyoNightJson;
-export const vesper: Theme = vesperJson;
-export const vitesseBlack: Theme = vitesseBlackJson;
-export const vitesseDark: Theme = vitesseDarkJson;
-export const vitesseLight: Theme = vitesseLightJson;
-export const pierreDark: Theme = pierreDarkJson;
+export const andromeeda: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'andromeeda' },
+  andromeedaJson
+);
+export const auroraX: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'aurora-x' },
+  auroraXJson
+);
+export const ayuDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'ayu-dark' },
+  ayuDarkJson
+);
+export const ayuLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'ayu-light' },
+  ayuLightJson
+);
+export const ayuMirage: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'ayu-mirage' },
+  ayuMirageJson
+);
+export const catppuccinFrappe: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'catppuccin-frappe' },
+  catppuccinFrappeJson
+);
+export const catppuccinLatte: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'catppuccin-latte' },
+  catppuccinLatteJson
+);
+export const catppuccinMacchiato: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'catppuccin-macchiato' },
+  catppuccinMacchiatoJson
+);
+export const catppuccinMocha: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'catppuccin-mocha' },
+  catppuccinMochaJson
+);
+export const darkPlus: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'dark-plus' },
+  darkPlusJson
+);
+export const dracula: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'dracula' },
+  draculaJson
+);
+export const draculaSoft: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'dracula-soft' },
+  draculaSoftJson
+);
+export const everforestDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'everforest-dark' },
+  everforestDarkJson
+);
+export const everforestLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'everforest-light' },
+  everforestLightJson
+);
+export const githubDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-dark' },
+  githubDarkJson
+);
+export const githubDarkDefault: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-dark-default' },
+  githubDarkDefaultJson
+);
+export const githubDarkDimmed: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-dark-dimmed' },
+  githubDarkDimmedJson
+);
+export const githubDarkHighContrast: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-dark-high-contrast' },
+  githubDarkHighContrastJson
+);
+export const githubLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-light' },
+  githubLightJson
+);
+export const githubLightDefault: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-light-default' },
+  githubLightDefaultJson
+);
+export const githubLightHighContrast: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'github-light-high-contrast' },
+  githubLightHighContrastJson
+);
+export const gruvboxDarkHard: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'gruvbox-dark-hard' },
+  gruvboxDarkHardJson
+);
+export const gruvboxDarkMedium: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'gruvbox-dark-medium' },
+  gruvboxDarkMediumJson
+);
+export const gruvboxDarkSoft: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'gruvbox-dark-soft' },
+  gruvboxDarkSoftJson
+);
+export const gruvboxLightHard: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'gruvbox-light-hard' },
+  gruvboxLightHardJson
+);
+export const gruvboxLightMedium: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'gruvbox-light-medium' },
+  gruvboxLightMediumJson
+);
+export const gruvboxLightSoft: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'gruvbox-light-soft' },
+  gruvboxLightSoftJson
+);
+export const horizon: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'horizon' },
+  horizonJson
+);
+export const horizonBright: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'horizon-bright' },
+  horizonBrightJson
+);
+export const houston: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'houston' },
+  houstonJson
+);
+export const kanagawaDragon: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'kanagawa-dragon' },
+  kanagawaDragonJson
+);
+export const kanagawaLotus: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'kanagawa-lotus' },
+  kanagawaLotusJson
+);
+export const kanagawaWave: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'kanagawa-wave' },
+  kanagawaWaveJson
+);
+export const laserwave: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'laserwave' },
+  laserwaveJson
+);
+export const lightPlus: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'light-plus' },
+  lightPlusJson
+);
+export const materialTheme: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'material-theme' },
+  materialThemeJson
+);
+export const materialThemeDarker: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'material-theme-darker' },
+  materialThemeDarkerJson
+);
+export const materialThemeLighter: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'material-theme-lighter' },
+  materialThemeLighterJson
+);
+export const materialThemeOcean: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'material-theme-ocean' },
+  materialThemeOceanJson
+);
+export const materialThemePalenight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'material-theme-palenight' },
+  materialThemePalenightJson
+);
+export const minDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'min-dark' },
+  minDarkJson
+);
+export const minLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'min-light' },
+  minLightJson
+);
+export const monokai: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'monokai' },
+  monokaiJson
+);
+export const nightOwl: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'night-owl' },
+  nightOwlJson
+);
+export const nightOwlLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'night-owl-light' },
+  nightOwlLightJson
+);
+export const nord: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'nord' },
+  nordJson
+);
+export const oneDarkPro: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'one-dark-pro' },
+  oneDarkProJson
+);
+export const oneLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'one-light' },
+  oneLightJson
+);
+export const plastic: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'plastic' },
+  plasticJson
+);
+export const poimandres: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'poimandres' },
+  poimandresJson
+);
+export const red: Theme = /* @__PURE__ */ Object.assign({ id: 'red' }, redJson);
+export const rosePine: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'rose-pine' },
+  rosePineJson
+);
+export const rosePineDawn: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'rose-pine-dawn' },
+  rosePineDawnJson
+);
+export const rosePineMoon: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'rose-pine-moon' },
+  rosePineMoonJson
+);
+export const slackDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'slack-dark' },
+  slackDarkJson
+);
+export const slackOchin: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'slack-ochin' },
+  slackOchinJson
+);
+export const snazzyLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'snazzy-light' },
+  snazzyLightJson
+);
+export const solarizedDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'solarized-dark' },
+  solarizedDarkJson
+);
+export const solarizedLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'solarized-light' },
+  solarizedLightJson
+);
+export const synthwave84: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'synthwave-84' },
+  synthwave84Json
+);
+export const tokyoNight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'tokyo-night' },
+  tokyoNightJson
+);
+export const vesper: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'vesper' },
+  vesperJson
+);
+export const vitesseBlack: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'vitesse-black' },
+  vitesseBlackJson
+);
+export const vitesseDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'vitesse-dark' },
+  vitesseDarkJson
+);
+export const vitesseLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'vitesse-light' },
+  vitesseLightJson
+);
+export const pierreDark: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-dark' },
+  pierreDarkJson
+);
 export const pierreDarkProtanopiaDeuteranopia: Theme =
-  pierreDarkProtanopiaDeuteranopiaJson;
-export const pierreDarkSoft: Theme = pierreDarkSoftJson;
-export const pierreDarkTritanopia: Theme = pierreDarkTritanopiaJson;
-export const pierreDarkVibrant: Theme = pierreDarkVibrantJson;
-export const pierreLight: Theme = pierreLightJson;
+  /* @__PURE__ */ Object.assign(
+    { id: 'pierre-dark-protanopia-deuteranopia' },
+    pierreDarkProtanopiaDeuteranopiaJson
+  );
+export const pierreDarkSoft: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-dark-soft' },
+  pierreDarkSoftJson
+);
+export const pierreDarkTritanopia: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-dark-tritanopia' },
+  pierreDarkTritanopiaJson
+);
+export const pierreDarkVibrant: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-dark-vibrant' },
+  pierreDarkVibrantJson
+);
+export const pierreLight: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-light' },
+  pierreLightJson
+);
 export const pierreLightProtanopiaDeuteranopia: Theme =
-  pierreLightProtanopiaDeuteranopiaJson;
-export const pierreLightSoft: Theme = pierreLightSoftJson;
-export const pierreLightTritanopia: Theme = pierreLightTritanopiaJson;
-export const pierreLightVibrant: Theme = pierreLightVibrantJson;
+  /* @__PURE__ */ Object.assign(
+    { id: 'pierre-light-protanopia-deuteranopia' },
+    pierreLightProtanopiaDeuteranopiaJson
+  );
+export const pierreLightSoft: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-light-soft' },
+  pierreLightSoftJson
+);
+export const pierreLightTritanopia: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-light-tritanopia' },
+  pierreLightTritanopiaJson
+);
+export const pierreLightVibrant: Theme = /* @__PURE__ */ Object.assign(
+  { id: 'pierre-light-vibrant' },
+  pierreLightVibrantJson
+);
+
+export const themes: readonly Theme[] = [
+  andromeeda,
+  auroraX,
+  ayuDark,
+  ayuLight,
+  ayuMirage,
+  catppuccinFrappe,
+  catppuccinLatte,
+  catppuccinMacchiato,
+  catppuccinMocha,
+  darkPlus,
+  dracula,
+  draculaSoft,
+  everforestDark,
+  everforestLight,
+  githubDark,
+  githubDarkDefault,
+  githubDarkDimmed,
+  githubDarkHighContrast,
+  githubLight,
+  githubLightDefault,
+  githubLightHighContrast,
+  gruvboxDarkHard,
+  gruvboxDarkMedium,
+  gruvboxDarkSoft,
+  gruvboxLightHard,
+  gruvboxLightMedium,
+  gruvboxLightSoft,
+  horizon,
+  horizonBright,
+  houston,
+  kanagawaDragon,
+  kanagawaLotus,
+  kanagawaWave,
+  laserwave,
+  lightPlus,
+  materialTheme,
+  materialThemeDarker,
+  materialThemeLighter,
+  materialThemeOcean,
+  materialThemePalenight,
+  minDark,
+  minLight,
+  monokai,
+  nightOwl,
+  nightOwlLight,
+  nord,
+  oneDarkPro,
+  oneLight,
+  plastic,
+  poimandres,
+  red,
+  rosePine,
+  rosePineDawn,
+  rosePineMoon,
+  slackDark,
+  slackOchin,
+  snazzyLight,
+  solarizedDark,
+  solarizedLight,
+  synthwave84,
+  tokyoNight,
+  vesper,
+  vitesseBlack,
+  vitesseDark,
+  vitesseLight,
+  pierreDark,
+  pierreDarkProtanopiaDeuteranopia,
+  pierreDarkSoft,
+  pierreDarkTritanopia,
+  pierreDarkVibrant,
+  pierreLight,
+  pierreLightProtanopiaDeuteranopia,
+  pierreLightSoft,
+  pierreLightTritanopia,
+  pierreLightVibrant,
+];

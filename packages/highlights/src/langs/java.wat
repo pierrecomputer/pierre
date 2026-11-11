@@ -1,5 +1,10 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.javaWords 224)
+  (memory-region $mem.apexWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $javaByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -7,7 +12,7 @@
   ;; Group order is the dispatch order in $javaWordHl below. The module
   ;; directives `exports`/`opens`/`requires` stay out: `exports` shares its
   ;; hash features with `extends`, and module descriptors are rare.
-  (keyword-table $javaWords $mem.javaWords $mem.juliaWords
+  (keyword-table $javaWords $mem.javaWords $mem.javaWords+224
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "break" "catch" "throw" "while" "yield" "assert"
       "return" "switch" "default" "finally" "continue")
@@ -36,7 +41,7 @@
   ;; Lowercase. Bits 8-9: the $javaWords captures. Bit 11: a SOQL word, a keyword
   ;; only inside `[...]`. Bit 12: `select` and `find`, which open a query.
   ;; `where` collides with `while` and is matched directly.
-  (keyword-table $apexWords $mem.apexWords $mem.haxeWords
+  (keyword-table $apexWords $mem.apexWords $mem.apexWords+416
     (group $Token.keyword.control
       "if" "else" "for" "while" "do" "try" "catch" "finally" "throw" "return" "break" "continue"
       "switch" "when")

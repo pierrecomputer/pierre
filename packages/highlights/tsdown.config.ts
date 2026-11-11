@@ -33,7 +33,7 @@ const config: UserConfig[] = defineConfig([
     unbundle: true,
     platform: 'neutral',
     deps: {
-      neverBundle: [/^\.\/highlights\.wasm/, /^node:/],
+      neverBundle: [/^\.\/(?:highlights|emitter)\.wasm/, /^node:/],
     },
   },
   // Bundle named theme exports into one module. scripts/build.ts writes the
@@ -48,7 +48,7 @@ const config: UserConfig[] = defineConfig([
       tsgo: true,
     },
     platform: 'neutral',
-    deps: { neverBundle: [tokenTypesPath] },
+    deps: { neverBundle: [tokenTypesPath, /^\.\/emitter\.wasm/] },
     outputOptions: { paths: { [tokenTypesPath]: './token-types.js' } },
   },
 ]);

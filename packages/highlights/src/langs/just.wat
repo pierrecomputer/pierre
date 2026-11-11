@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.justWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Values above 255 mark the keywords that start a line; their high byte
   ;; names what the next name is (see $justExpectHl).
-  (keyword-table $justWords $mem.justWords $mem.puppetWords
+  (keyword-table $justWords $mem.justWords $mem.justWords+96
     (group $Token.keyword+768 "set")
     (group $Token.keyword.declaration+256 "export" "unexport")
     (group $Token.keyword.declaration+512 "alias")

@@ -6,11 +6,20 @@ Zed-compatible object with the same ID and display name. The
 [third-party notices](../NOTICE.md) list source versions and attribution.
 
 ```js
-import { codeToHtml } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { vitesseDark } from '@pierre/highlights/themes';
 
-codeToHtml('const a = 1', { lang: 'js', theme: vitesseDark });
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [vitesseDark],
+});
+highlighter.codeToHtml('const a = 1', { lang: 'js', theme: 'vitesse-dark' });
 ```
+
+Pass theme objects to `createHighlighter({ themes })`. Output methods accept
+these objects or their IDs. Import `themes` from `@pierre/highlights/themes` to
+select the complete theme array.
 
 The Shiki catalog and Pierre themes have camel-case named exports:
 `vitesse-dark.json` becomes `vitesseDark`.

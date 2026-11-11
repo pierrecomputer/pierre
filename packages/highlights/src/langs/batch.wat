@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.batchWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $batchByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  (keyword-table $batchWords $mem.batchWords $mem.cWords
+  (keyword-table $batchWords $mem.batchWords $mem.batchWords+256
     (group $Token.keyword.control "if" "else" "for" "in" "do" "goto" "call" "exit" "not" "exist" "defined" "errorlevel")
     (group $Token.keyword.operator "equ" "neq" "lss" "leq" "gtr" "geq")
     (group $Token.keyword.declaration "set" "setlocal" "endlocal")

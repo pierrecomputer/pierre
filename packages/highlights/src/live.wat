@@ -1,4 +1,8 @@
 (module
+  (const $mem.liveChanges $mem.input)
+  (const $mem.liveFree $mem.input+16016)
+  (const $mem.liveLocals $mem.input+16144)
+  (const $mem.liveHeapStart $mem.input+16656)
   (;;
     Native incremental tokenizer core.
 
@@ -6,10 +10,10 @@
     line table, per-line token blocks, and interned per-line lexer states in
     linear memory:
 
-      [0:81920)                 control, static data, lexer scratch
-      [81920:98576)             line-change list, size-class free-list heads,
+      [0:$mem.input)            control, static data, lexer scratch
+      [$mem.input:$mem.liveHeapStart) line-change list, size-class free-list heads,
                                 and suspended lexer locals
-      [98576:$lvHeapCeil)       size-class heap: staged text, line text
+      [$mem.liveHeapStart:$lvHeapCeil) size-class heap: staged text, line text
                                 blocks, token blocks, state blobs, line table
       [$lvHeapCeil:mem end)     transient per-line scratch: the line's bytes,
                                 terminator, NUL sentinel, then the standard
@@ -24,8 +28,8 @@
 
   (import "./memory.wat")
   (import "./token.wat")
-  (import "./scan.wat")
-  (import "./emit.wat")
+  (import "@pierre/wat-tools/scan.wat")
+  (import "./emitter.wat")
 
   ;; allocator
   (global $lvHeapEnd (mut i32) (i32.const 0))   ;; bump cursor
@@ -509,16 +513,16 @@
         (i32.eq (local.get $lang) (enum.get $Language.jsonl)))))
 
   ;; Find the nesting stack used by the current fence body from its language
-  ;; register. Bit 8 marks a lexer that has run. JSON and TOML use their own
+  ;; register. Bit 15 marks a lexer that has run. JSON and TOML use their own
   ;; stacks. Other bodies return 0. Markdown/MDX can suspend JavaScript
   ;; inside JSON fences, including nested Markdown fences.
   (func $lvFenceStack (param $reg i32) (result i32)
-    (if
-      (i32.and
-        (i32.eq (i32.and (local.get $reg) (i32.const -256)) (i32.const 0x100))
-        (call $lvIsJson (i32.and (local.get $reg) (i32.const 0xff))))
+    (if (i32.eqz (i32.and (local.get $reg) (i32.const 0x8000)))
+      (then (return (i32.const 0))))
+    (local.set $reg (i32.and (local.get $reg) (i32.const 0x7fff)))
+    (if (call $lvIsJson (local.get $reg))
       (then (return (i32.const $mem.jsonStack))))
-    (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.toml) (i32.const 0x100)))
+    (if (i32.eq (local.get $reg) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
     (i32.const 0))
 

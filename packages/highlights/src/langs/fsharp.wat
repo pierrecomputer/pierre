@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.fsharpWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./ocaml.wat")
 
   (func $fsByte (param $p i32) (result i32)
@@ -9,7 +13,7 @@
   ;; declaration value names the pending capture: 1 a value binding whose
   ;; name is a function when arguments follow, 2 a type, 3 a module or
   ;; namespace line, 5 a member whose self identifier and name follow.
-  (keyword-table $fsharpWords $mem.fsharpWords $mem.gdTypes
+  (keyword-table $fsharpWords $mem.fsharpWords $mem.fsharpWords+384
     (group $Token.keyword.control ;; 1: control flow
       "if" "then" "elif" "else" "match" "with" "when" "for" "to" "downto" "while" "do" "done" "try"
       "finally" "raise" "failwith" "yield" "return" "begin" "end" "function" "fun" "lazy" "assert"

@@ -1,4 +1,7 @@
 (module
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
   (import "./markdown.wat")
   (import "./tsx.wat")
 
@@ -19,6 +22,7 @@
     (local $save i32)
     (local $p i32)
     (local $dotted i32)
+    (local $saved i64)
     ;; A close tag is a complete MDX token even when this bounded range starts
     ;; at `</`; open tags and expressions delegate to the TSX lexer below.
     (if
@@ -88,10 +92,14 @@
             (br $tag)))
         (global.set $ptr (local.get $to))
         (return)))
+    (local.set $saved (call $embedScanSave))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
     (call $hlTsx)
+    (call $embedScanRestore
+      (local.get $saved) (enum.get $Language.tsx) (local.get $from) (local.get $to)
+      (i32.const -1) (i32.const -5))
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
@@ -307,8 +315,11 @@
     (local $p i32)
     (local $saveEof i32)
     (local $saveStreaming i32)
+    (local $saveEnd i32)
+    (local $saved i64)
     (local.set $saveEof (global.get $eof))
     (local.set $saveStreaming (global.get $streaming))
+    (local.set $saveEnd (global.get $end))
     (global.set $streaming (i32.const 1))
     (block $done
       (loop $lines
@@ -326,11 +337,23 @@
                     (i32.or (global.get $tsxStreamMode) (global.get $jsTemplateLexSp))))))))
         (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
         (global.set $eof (local.get $p))
-        (call $markdownCodeRange
-          (enum.get $Language.tsx)
-          (local.get $from)
-          (local.get $p)
-          (local.get $resume))
+        (if (global.get $externalEmbedding)
+          (then
+            (local.set $saved (call $embedScanSave))
+            (global.set $ptr (local.get $from))
+            (global.set $end (local.get $p))
+            (call $hlTsxStream (i32.eqz (local.get $resume)))
+            (call $embedScanRestore
+              (local.get $saved) (enum.get $Language.tsx) (local.get $from) (local.get $p)
+              (i32.eqz (local.get $resume)) (i32.const -5))
+            (global.set $end (local.get $saveEnd))
+            (global.set $markdownBodyRan (i32.const 1)))
+          (else
+            (call $markdownCodeRange
+              (enum.get $Language.tsx)
+              (local.get $from)
+              (local.get $p)
+              (local.get $resume))))
         (local.set $resume (global.get $markdownBodyRan))
         (local.set $from (local.get $p))
         (br $lines)))
@@ -341,7 +364,7 @@
         (call $markdownFenceSet
           (i32.const 1)
           (i32.const 0)
-          (i32.or (enum.get $Language.tsx) (i32.shl (local.get $resume) (i32.const 8)))))
+          (i32.or (enum.get $Language.tsx) (i32.shl (local.get $resume) (i32.const 15)))))
       (else (call $markdownClearEmbeddedStream)))
     (global.set $ptr (local.get $from))
     (local.get $from))
@@ -352,7 +375,7 @@
       (i32.eq
         (call $mdxEsmRange
           (global.get $ptr)
-          (i32.ne (i32.and (local.get $reg) (i32.const 0x100)) (i32.const 0)))
+          (i32.ne (i32.and (local.get $reg) (i32.const 0x8000)) (i32.const 0)))
         (global.get $end))
       (then (return (i32.const 1))))
     (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
@@ -431,6 +454,7 @@
     (local $noClose i32)
     (local $p i32)
     (local $to i32)
+    (local $saved i64)
     (call $lexEmitLeadingContinuation)
     ;; the memo describes the previous chunk's bytes once restored; the scan
     ;; below restarts from $ptr, so start every call without it
@@ -560,7 +584,11 @@
                 (call $streamSetRegion (i32.const 5))
                 (local.set $to (global.get $end))
                 (global.set $ptr (local.get $p))
+                (local.set $saved (call $embedScanSave))
                 (call $hlTsxStream (i32.const 1))
+                (call $embedScanRestore
+                  (local.get $saved) (enum.get $Language.tsx) (local.get $p) (local.get $to)
+                  (i32.const 1) (i32.const -6))
                 (global.set $ptr (local.get $to))
                 (global.set $streamRegionStarted (i32.const 1))
                 (local.set $from (local.get $to))

@@ -1,7 +1,8 @@
 (module
   (import "./memory.wat")
   (import "./token.wat")
-  (import "./scan.wat")
+  (import "@pierre/wat-tools/input.wat")
+  (import "@pierre/wat-tools/output.wat")
 
   ;; Emitter HTML fragments, packed into the reserved static region.
   (data (i32.const $mem.emitterHtml)
@@ -17,8 +18,6 @@
     "light-dark("                           ;; 11
   )
 
-  (global $out (mut i32) (i32.const 0))     ;; write cursor
-  (global $cap (mut i32) (i32.const 0))     ;; highest safe write position (16 bytes of slack below memory end)
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
@@ -30,33 +29,8 @@
   (global $spanCacheMode (mut i32) (i32.const -1))
   (global $spanReserve (mut i32) (i32.const 96))
   (global $tokens (mut i32) (i32.const 0))
-  (global $recCarryHl (mut i32) (i32.const -1))
-  (global $streaming (mut i32) (i32.const 0))
-  (global $streamReset (mut i32) (i32.const 0))
-  (global $streamDepth (mut i32) (i32.const 0))
-  (global $streamMode (mut i32) (i32.const 0))
-  (global $streamA (mut i32) (i32.const 0))
-  (global $streamB (mut i32) (i32.const 0))
-  (global $streamC (mut i32) (i32.const 0))
-  (global $streamHl (mut i32) (i32.const 0))
-  (global $streamRegionKind (mut i32) (i32.const 0))
-  (global $streamRegionStarted (mut i32) (i32.const 0))
-  (global $streamWindow (mut i32) (i32.const 0))
-  ;; The saved range [Lo, Hi) of $mem.streamState; every byte outside it is
-  ;; zero. Lo is $streamStateUsed and Hi 0 when nothing is saved.
-  (global $streamStateLo (mut i32) (i32.const $streamStateUsed))
-  (global $streamStateHi (mut i32) (i32.const 0))
+  (global $recordInputEnd (mut i32) (i32.const 0))
 
-  (func $streamClearCheckpoints
-    (if (i32.lt_u (global.get $streamStateLo) (global.get $streamStateHi))
-      (then
-        (memory.fill
-          (i32.add (i32.const $mem.streamState) (global.get $streamStateLo))
-          (i32.const 0)
-          (i32.sub (global.get $streamStateHi) (global.get $streamStateLo)))))
-    (global.set $streamStateLo (i32.const $streamStateUsed))
-    (global.set $streamStateHi (i32.const 0)))
-  (global $liveStackBytes (mut i32) (i32.const 0))
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
@@ -118,27 +92,6 @@
         (i32.store8 (global.get $out) (i32.add (i32.const "0") (local.get $w)))
         (i32.store16 offset=1 (global.get $out) (i32.const 0x3030)) ;; `00`
         (global.set $out (i32.add (global.get $out) (i32.const 3))))))
-
-  ;; make room for $n more output bytes, growing memory when needed.
-  ;; every store to $out is gated by this, so wide stores never trap.
-  (func $ensureCap (param $n i32)
-    (if (i32.le_u (i32.add (global.get $out) (local.get $n)) (global.get $cap))
-      (then (return)))
-    ;; a failed grow (output would pass the wasm32 4 GB ceiling) traps here on
-    ;; purpose: the host sees a RuntimeError and the instance stays reusable
-    (if
-      (i32.eq
-        (memory.grow
-          (i32.add
-            (i32.shr_u
-              (i32.sub
-                (i32.add (i32.add (global.get $out) (local.get $n)) (i32.const 65551))
-                (i32.mul (memory.size) (i32.const 65536)))
-              (i32.const 16))
-            (i32.const 4)))
-        (i32.const -1))
-      (then (unreachable)))
-    (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16))))
 
   ;; close the open span, if any
   (func $closeSpan
@@ -335,43 +288,6 @@
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
         (br $outer)))
     (global.set $out (local.get $dst)))
-
-  ;; Append an (end:u32, hl:u32) record through input offset $rhs.
-  ;; If $hl matches the previous record, extend that record instead.
-  ;; Records cover the input without gaps. Each starts at the previous
-  ;; record's end, or 0 for the first record.
-  (func $recTok (param $hl i32) (param $rhs i32)
-    (if
-      (i32.and
-        (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-        (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
-      (then
-        (i32.store
-          (i32.sub (global.get $out) (i32.const 8))
-          (i32.sub (local.get $rhs) (global.get $srcBase)))
-        (return)))
-    (call $ensureCap (i32.const 16))
-    (i32.store (global.get $out) (i32.sub (local.get $rhs) (global.get $srcBase)))
-    (i32.store offset=4 (global.get $out) (local.get $hl))
-    (global.set $out (i32.add (global.get $out) (i32.const 8))))
-
-  ;; Preserve the open token-record style between incremental lexer calls so
-  ;; leading whitespace in the next chunk keeps the same span.
-  (func $recStreamBegin (param $reset i32)
-    (if (local.get $reset)
-      (then
-        (global.set $recCarryHl (i32.const -1))
-        (return)))
-    (if (i32.ge_s (global.get $recCarryHl) (i32.const 0))
-      (then
-        (call $ensureCap (i32.const 16))
-        (i32.store (global.get $out) (i32.const 0))
-        (i32.store offset=4 (global.get $out) (global.get $recCarryHl))
-        (global.set $out (i32.add (global.get $out) (i32.const 8))))))
-
-  (func $recStreamEnd
-    (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-      (then (global.set $recCarryHl (i32.load (i32.sub (global.get $out) (i32.const 4)))))))
 
   ;; The next LF or non-ASCII byte at or after $p, or $eof - 16 bytes per
   ;; step. Wide loads may pass $eof into the buffer slack; matches there are
@@ -590,15 +506,6 @@
       (then (v128.store (global.get $out) (v128.load (local.get $lhs))))
       (else (memory.copy (global.get $out) (local.get $lhs) (local.get $len))))
     (global.set $out (i32.add (global.get $out) (local.get $len))))
-
-  ;; Keep a span open when a bounded range resumes inside a UTF-8 code point.
-  ;; Lives here rather than in common.wat so the lexers that import only
-  ;; token/scan/emit can reach it too.
-  (func $lexEmitLeadingContinuation
-    (local $lhs i32)
-    (local.set $lhs (global.get $ptr))
-    (global.set $ptr (call $utf8SpanEnd (global.get $ptr) (global.get $end)))
-    (call $emitGap (local.get $lhs) (global.get $ptr)))
 
   ;; ---- multi-theme HTML ----
   ;; The host packs a theme set into a blob that sits where output would
@@ -1012,6 +919,8 @@
     (if (i32.or (global.get $cssVariables) (global.get $themeBlob))
       (then
         (global.set $out (i32.add (global.get $out) (i32.load (i32.const 18))))))
+    (if (i32.gt_u (global.get $recordInputEnd) (global.get $out))
+      (then (global.set $out (global.get $recordInputEnd))))
     (i32.store (i32.const 6) (global.get $out))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
     (global.set $spanHl (i32.const -1))
@@ -1104,4 +1013,25 @@
     (if (global.get $tokens)
       (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
+
+  (func $emit (export "emit")
+    (local $record i32)
+    (local $recordsEnd i32)
+    (local $lhs i32)
+    (local $rhs i32)
+    (local.set $record (i32.load (i32.const 22)))
+    (local.set $recordsEnd (i32.add (local.get $record) (i32.load (i32.const 26))))
+    (global.set $recordInputEnd (local.get $recordsEnd))
+    (global.set $srcBase (i32.const $mem.input))
+    (call $hlBegin)
+    (local.set $lhs (i32.const $mem.input))
+    (block $done
+      (loop $records
+        (br_if $done (i32.ge_u (local.get $record) (local.get $recordsEnd)))
+        (local.set $rhs (i32.add (i32.const $mem.input) (i32.load (local.get $record))))
+        (call $emitTok (i32.load offset=4 (local.get $record)) (local.get $lhs) (local.get $rhs))
+        (local.set $lhs (local.get $rhs))
+        (local.set $record (i32.add (local.get $record) (i32.const 8)))
+        (br $records)))
+    (call $hlEnd))
 )

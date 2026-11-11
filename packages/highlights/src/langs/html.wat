@@ -1,7 +1,10 @@
 (module
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
   (import "../token.wat")
-  (import "../scan.wat")
-  (import "../emit.wat")
+  (import "@pierre/wat-tools/scan.wat")
+  (import "../emitter.wat")
   (import "./tsx.wat")
   (import "./css.wat")
   (import "./xml.wat")
@@ -413,6 +416,15 @@
       (i32.and (global.get $streaming) (i32.eq (local.get $to) (local.get $save))))
     (if (local.get $continued)
       (then (call $streamSetRegion (local.get $kind))))
+    (if (global.get $externalEmbedding)
+      (then
+        (call $embedRegion
+          (local.get $kind) (local.get $from) (local.get $to)
+          (select (i32.const 1) (i32.const -1) (local.get $continued)))
+        (global.set $ptr (local.get $to))
+        (if (local.get $continued)
+          (then (global.set $streamRegionStarted (i32.const 1))))
+        (return)))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
     (if (i32.eq (local.get $kind) (i32.const 1))

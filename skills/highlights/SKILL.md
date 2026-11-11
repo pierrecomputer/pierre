@@ -19,10 +19,16 @@ editable document.
 pnpm add @pierre/highlights
 ```
 
-Import from `@pierre/highlights`. Conditional exports initialize WebAssembly
-automatically for Node.js, browsers, and Cloudflare Workers. Highlighting is
-synchronous after import; ordinary usage needs no `init()` or language
-registration.
+Import `createHighlighter` from `@pierre/highlights`, select language modules
+from `@pierre/highlights/langs/*`, and supply theme objects. Await the factory
+once. Its output methods then run synchronously. The core entry imports no
+language or theme bundle. Use the combined `langs` export from
+`@pierre/highlights/langs` when the application needs all languages.
+
+Import shared output functions, `StreamTokenizer`, and `LiveTokenizer` from
+`@pierre/highlights/full`. This entry initializes the shared WebAssembly module
+at import. `createHighlighter` requires `{ langs, themes }` and returns a
+promise through either entry. Do not pass a Wasm module or omit the options.
 
 ## Select a reference
 

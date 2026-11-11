@@ -1,11 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.glslWords 288)
+  (memory-region $mem.gdshaderWords 832)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Exact keyword words live in a shared perfect-hash table; the families with
   ;; open-ended dimensional suffixes stay as prefix checks below, and the few
   ;; words the table hash cannot separate get direct compares in $glslWordHl.
   ;; Group order is the dispatch order in $glslWordHl.
-  (keyword-table $glslWords $mem.glslWords $mem.goWords
+  (keyword-table $glslWords $mem.glslWords $mem.glslWords+288
     (group $Token.boolean "true" "false") ;; 1: booleans
     (group $Token.keyword.control ;; 2: control flow, including the ray-tracing control statements
       "break" "case" "continue" "default" "do" "else" "for" "if" "return" "switch" "while"
@@ -167,7 +172,7 @@
 
   ;; Keep mode names out of this table: `sky` and `fog` also name functions.
   ;; The +256 flag starts a mode list in $hlGlslImpl.
-  (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdresourceWords
+  (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdshaderWords+832
     (group $Token.keyword+256 "shader_type" "render_mode")
     (group $Token.keyword
       "group_uniforms" "global" "instance"

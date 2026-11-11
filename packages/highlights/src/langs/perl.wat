@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.perlWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $perlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -11,7 +15,7 @@
   ;; shares its hash features with `require` and stays out, and `undef` and
   ;; `splice` share slot bits with `not` and `return` in every geometry that
   ;; fits the range.
-  (keyword-table $perlWords $mem.perlWords $mem.phpWords
+  (keyword-table $perlWords $mem.perlWords $mem.perlWords+256
     (group ;; 1: control
       "do" "if" "for" "else" "last" "next" "redo" "goto" "until" "elsif" "while" "unless" "return"
       "foreach")

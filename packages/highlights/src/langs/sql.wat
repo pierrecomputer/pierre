@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.plsqlWords 480)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $sqlWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $c i32)
@@ -188,7 +192,7 @@
 
   ;; Lowercase words $sqlWordHl does not know. Bits 8-9 capture the next name:
   ;; 1 a routine, 2 a package, 3 a type. Bit 10 (`body`) keeps a capture armed.
-  (keyword-table $plsqlWords $mem.plsqlWords $mem.cobolWords
+  (keyword-table $plsqlWords $mem.plsqlWords $mem.plsqlWords+480
     (group $Token.keyword.control
       "if" "elsif" "loop" "while" "for" "exit" "continue" "return" "goto" "raise"
       "forall")

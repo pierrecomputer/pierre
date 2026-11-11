@@ -1,10 +1,10 @@
 import type { Lang as LexerLang } from './languages';
 
 /**
- * A built-in language name or alias. `ansi` is terminal output with escape
- * sequences, as in Shiki.
+ * A built-in or registered custom language name. `ansi` is terminal output
+ * with escape sequences, as in Shiki.
  */
-export type Lang = LexerLang | 'ansi';
+export type Lang = LexerLang | 'ansi' | (string & {});
 
 /**
  * Styles for a Zed syntax scope. The `& {}` unions preserve literal
@@ -75,6 +75,7 @@ export interface ThemeStyle {
 
 /** A Zed-compatible color theme. */
 export interface Theme {
+  id?: string;
   /** Display name of the theme. */
   name: string;
   /** Light or dark appearance. Accepts other names from bundled themes. */
@@ -172,15 +173,17 @@ export interface CodeToTokensBaseOptions extends CodeToHtmlBaseOptions {
  * schemes such as `{ dark, light }`. `themes` uses CSS custom properties.
  * A `ThemeFamily` in either place resolves to its first member (`themes[0]`).
  */
-export type ThemeOptions =
-  | { theme: Theme | ThemeFamily; themes?: undefined }
-  | { theme?: undefined; themes: Record<string, Theme | ThemeFamily> };
+export type ThemeOptions<T = Theme | ThemeFamily> =
+  | { theme: T; themes?: undefined }
+  | { theme?: undefined; themes: Record<string, T> };
 
 /** Options for highlighting source code as HTML. */
-export type CodeToHtmlOptions = CodeToHtmlBaseOptions & ThemeOptions;
+export type CodeToHtmlOptions<T = Theme | ThemeFamily> = CodeToHtmlBaseOptions &
+  ThemeOptions<T>;
 
 /** Options for tokenizing source code. */
-export type CodeToTokensOptions = CodeToTokensBaseOptions & ThemeOptions;
+export type CodeToTokensOptions<T = Theme | ThemeFamily> =
+  CodeToTokensBaseOptions & ThemeOptions<T>;
 
 /** Result of `codeToTokens`, matching Shiki's `TokensResult`. */
 export interface TokensResult {
@@ -196,8 +199,8 @@ export interface TokensResult {
   rootStyle?: string;
 }
 
-/** An initialized highlighter backed by one WebAssembly instance. */
-export interface Highlighter {
+/** An initialized highlighter with isolated WebAssembly memory. */
+export interface Highlighter<T = Theme | ThemeFamily> {
   /**
    * Return highlighted HTML as UTF-8 bytes. Byte input must use UTF-8.
    * The result can share WebAssembly memory that the next call overwrites.
@@ -205,7 +208,7 @@ export interface Highlighter {
    */
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
-    options: CodeToHtmlOptions
+    options: CodeToHtmlOptions<T>
   ): Uint8Array;
   /**
    * Return themed tokens for each line and the root theme styles.
@@ -213,9 +216,22 @@ export interface Highlighter {
    */
   codeToTokens(
     input: string | Uint8Array | ArrayBuffer,
-    options: CodeToTokensOptions
+    options: CodeToTokensOptions<T>
   ): TokensResult;
 }
+
+export interface Language {
+  name: string;
+  aliases: Readonly<Record<string, number>>;
+  wasm: string;
+}
+
+export interface HighlighterOptions {
+  langs: readonly Language[];
+  themes: readonly (Theme | ThemeFamily)[];
+}
+
+export type RegisteredHighlighter = Highlighter<Theme | ThemeFamily | string>;
 
 export {
   codeToHtml,

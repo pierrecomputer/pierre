@@ -1,8 +1,11 @@
 (module
   (import "./token.wat")
   (import "./scan.wat")
-  (import "./emit.wat")
   (import "./sig.wat")
+
+  (memory-region $mem.lexLowerScratch 64)
+  (memory-region $mem.keywordPool 16384)
+  (const $mem.keywordPoolEnd $mem.keywordPool+16384)
 
   ;; Shared ASCII predicates. Bytes >= 0x80 stay identifier bytes so a lexer
   ;; never puts a span boundary inside a UTF-8 code point.

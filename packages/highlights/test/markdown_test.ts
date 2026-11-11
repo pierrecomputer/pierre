@@ -233,7 +233,7 @@ void t.test(
       const body = sampleOf.get(id)!.split('\n').slice(0, 6).join('\n') + '\n';
       if (body.includes('```')) continue;
       const own = codeToTokens(body, {
-        lang: name as Lang,
+        lang: name,
         theme: distinctTheme,
       }).tokens.slice(0, -1);
       const fenced = codeToTokens(`\`\`\`${name}\n${body}\`\`\``, {

@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.wolframWords 576)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Common built-ins only: other capitalized symbols are classified by
   ;; shape (a call or a `...Q` predicate is a function, the rest constants).
-  (keyword-table $wolframWords $mem.wolframWords $mem.jsonnetWords
+  (keyword-table $wolframWords $mem.wolframWords $mem.wolframWords+576
     (group $Token.keyword.control
       "If" "Which" "Switch" "Do" "For" "While" "Return" "Break" "Continue" "Throw" "Catch")
     (group $Token.keyword "Module" "Block" "With" "Function")

@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.dockerfileWords 64)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Instructions are case-insensitive, so the table holds lowercase words
   ;; and $dockerWordGroup probes it with a lowercased copy of the input word.
   ;; Group order is the dispatch order in $hlDockerfile: shell-form
   ;; instructions, other instructions, the `AS` of a stage name, and the
   ;; instructions that wrap another one after their options.
-  (keyword-table $dockerfileWords $mem.dockerfileWords $mem.elixirWords
+  (keyword-table $dockerfileWords $mem.dockerfileWords $mem.dockerfileWords+64
     (group "run" "cmd" "entrypoint" "shell") ;; 1: shell command follows
     (group ;; 2: other instructions
       "from" "add" "arg" "env" "copy" "user" "label" "expose" "volume" "workdir"

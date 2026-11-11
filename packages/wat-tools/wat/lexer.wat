@@ -1,0 +1,43 @@
+(module
+  (import "./memory.wat")
+  (import "./common.wat")
+  (import "./records.wat")
+
+  (func $lexerRun (param $stream i32) (param $reset i32)
+    (global.set $srcBase (i32.const $mem.input))
+    (global.set $docStart (select (i32.const $mem.input) (i32.const 0) (local.get $reset)))
+    (global.set $streaming (local.get $stream))
+    (global.set $streamReset (local.get $reset))
+    (global.set $streamDepth (i32.const 0))
+    (if (local.get $reset)
+      (then
+        (call $sigReset)
+        (call $streamClearCheckpoints)
+        (global.set $streamMode (i32.const 0))
+        (global.set $streamA (i32.const 0))
+        (global.set $streamB (i32.const 0))
+        (global.set $streamC (i32.const 0))))
+    (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
+    (global.set $end (global.get $eof))
+    (global.set $ptr (i32.const $mem.input))
+    (global.set $out (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
+    (i32.store (i32.const 6) (global.get $out))
+    (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
+    (call $recStreamBegin (local.get $reset))
+    (if (i32.eqz (call $streamResumeCommon))
+      (then (call $highlight)))
+    (call $recStreamEnd)
+    (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
+
+  (func (export "lex")
+    (call $lexerRun (i32.const 0) (i32.const 1)))
+
+  (func (export "lexStream") (param $reset i32)
+    (call $lexerRun (i32.const 1) (local.get $reset)))
+
+  (func (export "record") (param $type i32) (param $end i32)
+    (call $recTok (local.get $type) (local.get $end)))
+
+  (func (export "gap") (param $end i32)
+    (call $emitGap (global.get $srcBase) (local.get $end)))
+)

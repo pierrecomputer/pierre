@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.tclWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bit 8: `proc`, whose next words are a definition and its parameters. Bit 9:
   ;; the next word names a variable. Bit 10: a keyword in any position.
-  (keyword-table $tclWords $mem.tclWords $mem.vimlWords
+  (keyword-table $tclWords $mem.tclWords $mem.tclWords+320
     (group $Token.keyword.control
       "if" "while" "for" "foreach" "switch" "return" "break" "continue" "catch" "try" "throw"
       "error" "exit" "default")

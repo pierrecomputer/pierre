@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.nimWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group values carry the token. Routine words add 256: the next name is a
   ;; definition and its parameter list is marked. Import words add 512: names
   ;; are modules until the statement ends. `raise` shares its hash features
   ;; with `range`, and `export` with `except`, so $hlNim matches those two
   ;; directly.
-  (keyword-table $nimWords $mem.nimWords $mem.nixWords
+  (keyword-table $nimWords $mem.nimWords $mem.nimWords+384
     (group $Token.keyword.declaration+256
       "proc" "func" "method" "iterator" "converter" "macro" "template")
     (group $Token.keyword.declaration "var" "let" "const" "type")

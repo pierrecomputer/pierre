@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; whether [$lhs,$rhs) names a machine register: `r`/`x`/`w` followed by a
   ;; digit, a RISC-V ABI name - `a0`..`a7`, `t0`..`t6`, `s0`..`s11`, `ra`,

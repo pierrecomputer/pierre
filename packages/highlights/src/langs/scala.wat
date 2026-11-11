@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.scalaWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $scalaWordHl below.
-  (keyword-table $scalaWords $mem.scalaWords $mem.solidityWords
+  (keyword-table $scalaWords $mem.scalaWords $mem.scalaWords+224
     (group $Token.keyword.control ;; 1: control
       "if" "else" "then" "match" "case" "do" "while" "for" "yield" "return" "throw" "try" "catch"
       "finally" "end")

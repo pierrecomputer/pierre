@@ -1,6 +1,8 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
   ;; TSRX https://tsrx.dev
-  (import "../common.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./css.wat")
   (import "./tsx.wat")
 
@@ -222,6 +224,7 @@
     (local $saveStreaming i32)
     (local $saveDialect i32)
     (local $slot i32)
+    (local $context i32)
     (local.set $from (global.get $ptr))
     (local.set $p (local.get $from))
     (block $done
@@ -236,20 +239,33 @@
         (br $find)))
     (if (i32.gt_u (local.get $p) (local.get $from))
       (then
-        (local.set $savePtr (global.get $ptr))
-        (local.set $saveEnd (global.get $end))
-        (local.set $saveStreaming (global.get $streaming))
-        (local.set $saveDialect (global.get $cssDialect))
-        (global.set $ptr (local.get $from))
-        (global.set $end (local.get $p))
-        (global.set $streaming (i32.const 0))
-        (global.set $cssDialect (i32.const 0))
         (local.set $slot (call $jsxTopSlot))
-        (i32.store offset=4 (local.get $slot) (call $hlCssImpl (i32.load offset=4 (local.get $slot))))
-        (global.set $cssDialect (local.get $saveDialect))
-        (global.set $streaming (local.get $saveStreaming))
-        (global.set $end (local.get $saveEnd))
-        (global.set $ptr (local.get $savePtr))))
+        (if (global.get $externalEmbedding)
+          (then
+            (local.set $context (i32.shr_u (i32.load offset=4 (local.get $slot)) (i32.const 9)))
+            (i32.store offset=4
+              (local.get $slot)
+              (i32.or
+                (i32.const 260)
+                (i32.shl
+                  (call $embedLanguage
+                    (enum.get $Language.css) (local.get $from) (local.get $p)
+                    (i32.eqz (local.get $context)) (local.get $context))
+                  (i32.const 9)))))
+          (else
+            (local.set $savePtr (global.get $ptr))
+            (local.set $saveEnd (global.get $end))
+            (local.set $saveStreaming (global.get $streaming))
+            (local.set $saveDialect (global.get $cssDialect))
+            (global.set $ptr (local.get $from))
+            (global.set $end (local.get $p))
+            (global.set $streaming (i32.const 0))
+            (global.set $cssDialect (i32.const 0))
+            (i32.store offset=4 (local.get $slot) (call $hlCssImpl (i32.load offset=4 (local.get $slot))))
+            (global.set $cssDialect (local.get $saveDialect))
+            (global.set $streaming (local.get $saveStreaming))
+            (global.set $end (local.get $saveEnd))
+            (global.set $ptr (local.get $savePtr))))))
     (global.set $ptr (local.get $p))
     (if (i32.eqz (local.get $found))
       (then (return)))

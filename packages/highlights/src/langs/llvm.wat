@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.llvmWords 704)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Instructions are keywords and terminators control keywords. Linkage,
   ;; flags, and the function and parameter attributes are attributes, as
   ;; LLVM names them. Integer types `iN`, the vector `x`, and the `c"..."`
   ;; prefix are matched by shape in $hlLlvm, and `fptoui` and `norecurse`,
   ;; which share hash features with `fptosi` and `nocapture`, in $llvmWordHl.
-  (keyword-table $llvmWords $mem.llvmWords $mem.openscadWords
+  (keyword-table $llvmWords $mem.llvmWords $mem.llvmWords+704
     (group $Token.keyword.declaration
       "asm" "type" "alias" "define" "global" "module" "target" "triple" "declare" "constant"
       "attributes" "datalayout" "source_filename")

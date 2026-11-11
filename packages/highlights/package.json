@@ -8,14 +8,29 @@
     "NOTICE.md"
   ],
   "type": "module",
-  "main": "./dist/default.js",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./full": {
+      "types": "./dist/index.d.ts",
       "workerd": "./dist/workerd.js",
       "import": "./dist/default.js",
       "default": "./dist/default.js"
+    },
+    "./langs": {
+      "types": "./dist/langs.d.ts",
+      "import": "./dist/langs.js",
+      "default": "./dist/langs.js"
+    },
+    "./langs/*": {
+      "types": "./dist/langs/*.d.ts",
+      "import": "./dist/langs/*.js",
+      "default": "./dist/langs/*.js"
     },
     "./themes": {
       "types": "./dist/themes.d.ts",
@@ -40,7 +55,7 @@
     "typescript": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 303015,
-    "highlights.wasm.gz": 142794
+    "highlights.wasm": 303311,
+    "highlights.wasm.gz": 142898
   }
 }

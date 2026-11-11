@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.dWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each group's value is its token; the high byte marks what follows:
   ;; 1 the next name is a type, 2 names are module path parts until `;` or
   ;; `:`, 3 the word acts as a type, so `name(` after it defines a function.
   ;; `__FILE__` and the other special tokens share hash features, so
   ;; $dWordKind matches them by shape instead.
-  (keyword-table $dWords $mem.dWords $mem.llvmWords
+  (keyword-table $dWords $mem.dWords $mem.dWords+384
     (group $Token.keyword.control
       "if" "do" "for" "try" "case" "else" "goto" "with" "break" "catch" "throw" "while"
       "return" "switch" "default" "finally" "foreach" "continue" "foreach_reverse")

@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.jsonnetWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The high byte primes the next name: 1 a `local` binding, 2 a
   ;; parameter list after `function`.
-  (keyword-table $jsonnetWords $mem.jsonnetWords $mem.mermaidWords
+  (keyword-table $jsonnetWords $mem.jsonnetWords $mem.jsonnetWords+224
     (group $Token.keyword.declaration+256 "local")
     (group $Token.keyword.declaration+512 "function")
     (group $Token.keyword.control "if" "then" "else" "for" "in" "assert" "error")

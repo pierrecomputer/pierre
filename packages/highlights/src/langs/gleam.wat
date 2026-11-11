@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gleamWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $gleamWordHl below.
-  (keyword-table $gleamWords $mem.gleamWords $mem.glslWords
+  (keyword-table $gleamWords $mem.gleamWords $mem.gleamWords+128
     (group $Token.keyword.control ;; 1: control
       "case" "if" "else" "panic" "todo" "assert" "echo" "use")
     (group $Token.keyword.declaration+256 "fn")   ;; 2: declaration, next name is a function

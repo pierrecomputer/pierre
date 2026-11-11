@@ -1,4 +1,5 @@
 (module
+  (memory-region $mem.languageNames 3072)
   ;; The language table: every language's names, its lexer, and the
   ;; dispatch by language id. The build derives the $Language enum, the
   ;; $hlDispatch table, the JavaScript name lookup, and the packed name list

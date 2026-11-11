@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.hlslWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each group's value is its token, with the next-name capture of the
   ;; declaration groups in the high byte (see $hlslWordHl). The scalar
@@ -7,7 +11,7 @@
   ;; `sampler2D`, `int16_t` - are prefix checks in $hlslTypeHl: their members
   ;; share hash features the table cannot separate. The capitalized resource
   ;; types such as `Texture2D` fall to the capitalization rule.
-  (keyword-table $hlslWords $mem.hlslWords $mem.javaWords
+  (keyword-table $hlslWords $mem.hlslWords $mem.hlslWords+256
     (group $Token.boolean "true" "false") ;; 1: booleans
     (group $Token.keyword.control ;; 2: control
       "if" "do" "for" "case" "else" "break" "while" "return" "switch" "default" "discard"

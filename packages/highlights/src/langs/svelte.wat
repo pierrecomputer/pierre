@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
   ;; Svelte: html with `{...}` expressions and `{#if}`-style blocks (see

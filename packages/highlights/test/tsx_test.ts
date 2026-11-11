@@ -1,14 +1,9 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { inputPtr } from '../lib/highlighter';
+import { HighlightsHighlighter } from '../lib/highlighter';
 import type { Lang, Theme, ThemedToken } from '../lib/index';
-import {
-  codeToTokens,
-  createHighlighter,
-  init,
-  StreamTokenizer,
-} from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -52,6 +47,7 @@ void t.test(
     const memory = new Uint8Array(
       (exports.memory as WebAssembly.Memory).buffer
     );
+    const inputPtr = Number((exports.inputPtr as WebAssembly.Global).value);
     const keyword = exports.keyword as (start: number, end: number) => number;
     const lex = enumMap.get('$Lex')!;
     const enc = new TextEncoder();
@@ -1415,7 +1411,7 @@ void t.test(
     (call $hlEnd))
 )`;
     const { code } = transformWat(watUrl, src);
-    const highlighter = createHighlighter(
+    const highlighter = new HighlightsHighlighter(
       new WebAssembly.Module(wat2wasm(watUrl.href, code))
     );
     const dec = new TextDecoder();
