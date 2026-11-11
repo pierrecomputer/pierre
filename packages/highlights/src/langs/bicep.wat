@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.bicepWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bits 8 and up queue the next declaration words, four bits each: 1 a name, 2
   ;; a type, 3 a resource type string, 4 a type name, 5 a function name.
-  (keyword-table $bicepWords $mem.bicepWords $mem.plsqlWords
+  (keyword-table $bicepWords $mem.bicepWords $mem.bicepWords+160
     (group $Token.keyword.declaration+8448 "param" "output")
     (group $Token.keyword.declaration+12544 "resource" "module")
     (group $Token.keyword.declaration+256 "var" "metadata")

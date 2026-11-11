@@ -5,7 +5,7 @@
   ;; highlights.wat resumes them in HTML-like documents. markdown.wat
   ;; resumes them inside streamed fences. Their import cycle is safe
   ;; because the build inlines each module once.
-  (import "./common.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./langs/tsx.wat")
   (import "./langs/html.wat")
   (import "./langs/css.wat")
@@ -13,6 +13,73 @@
   (import "./langs/svelte.wat")
   (import "./langs/astro.wat")
   (import "./langs/markdown.wat")
+
+  ;; WARNING: Modular builds enable this flag and replace these host callbacks.
+  (global $externalEmbedding i32 (i32.const 0))
+
+  (func $embedLanguage
+    (param $lang i32) (param $from i32) (param $to i32)
+    (param $reset i32) (param $context i32) (result i32)
+    (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
+    (i32.const 0))
+
+  (func $embedLanguageByName (param $from i32) (param $to i32) (result i32)
+    (call $languageByName (local.get $from) (local.get $to)))
+
+  ;; WARNING: Boundary scans can extend the preceding token. Restore its end
+  ;; before replacing scanner output with tokens from the registered lexer.
+  (func $embedScanSave (result i64)
+    (if (global.get $externalEmbedding)
+      (then
+        (return
+          (i64.or
+            (i64.extend_i32_u (global.get $out))
+            (i64.shl
+              (i64.extend_i32_u
+                (if (result i32) (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+                  (then (i32.load (i32.sub (global.get $out) (i32.const 8))))
+                  (else (i32.const 0))))
+              (i64.const 32))))))
+    (i64.const 0))
+
+  (func $embedScanRestore
+    (param $saved i64) (param $lang i32) (param $from i32) (param $to i32)
+    (param $reset i32) (param $context i32)
+    (if (i64.eqz (local.get $saved))
+      (then (return)))
+    (global.set $out (i32.wrap_i64 (local.get $saved)))
+    (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+      (then
+        (i32.store
+          (i32.sub (global.get $out) (i32.const 8))
+          (i32.wrap_i64 (i64.shr_u (local.get $saved) (i64.const 32))))))
+    (drop
+      (call $embedLanguage
+        (local.get $lang) (local.get $from) (local.get $to)
+        (local.get $reset) (local.get $context))))
+
+  (func $embedRegionLanguage (param $kind i32) (result i32)
+    (if (i32.eq (local.get $kind) (i32.const 1))
+      (then (return (enum.get $Language.js))))
+    (if (i32.eq (local.get $kind) (i32.const 2))
+      (then (return (enum.get $Language.css))))
+    (if (i32.eq (local.get $kind) (i32.const 4))
+      (then (return (enum.get $Language.yaml))))
+    (if (i32.eq (local.get $kind) (i32.const 14))
+      (then (return (enum.get $Language.less))))
+    (if (i32.eq (local.get $kind) (i32.const 15))
+      (then (return (enum.get $Language.scss))))
+    (if (i32.eq (local.get $kind) (i32.const 16))
+      (then (return (enum.get $Language.sass))))
+    (if (i32.eq (local.get $kind) (i32.const 42))
+      (then (return (enum.get $Language.stylus))))
+    (enum.get $Language.tsx))
+
+  (func $embedRegion (param $kind i32) (param $from i32) (param $to i32) (param $reset i32)
+    (drop
+      (call $embedLanguage
+        (call $embedRegionLanguage (local.get $kind))
+        (local.get $from) (local.get $to) (local.get $reset) (i32.const -1))))
 
   ;; Clear what an embedded body leaves behind once it ends: the ECMAScript
   ;; machine, the stream registers, the saved delimiter, and saved locals.
@@ -24,6 +91,8 @@
   ;; bodies keep none, except Markdown's $listStart: an address in the
   ;; current line that every LF resets.
   (func $streamClearEmbedded
+    (if (global.get $externalEmbedding)
+      (then (return)))
     (call $ecmaReset)
     (global.set $tsxStreamExpressionClose (i32.const 0))
     (global.set $tsxStreamExpressionClosed (i32.const 0))
@@ -42,6 +111,12 @@
     (local $saveEnd i32)
     (local $saveReset i32)
     (local.set $reset (i32.eqz (global.get $streamRegionStarted)))
+    (if (global.get $externalEmbedding)
+      (then
+        (call $embedRegion (local.get $kind) (local.get $from) (local.get $to) (local.get $reset))
+        (global.set $ptr (local.get $to))
+        (global.set $streamRegionStarted (i32.const 1))
+        (return)))
     (local.set $saveDepth (global.get $streamDepth))
     (local.set $saveEnd (global.get $end))
     (local.set $saveReset (global.get $streamReset))
@@ -111,6 +186,7 @@
     (local $p i32)
     (local $found i32)
     (local $tag i32)
+    (local $saved i64)
     (local.set $kind (global.get $streamRegionKind))
     (local.set $close (global.get $end))
     (local.set $p (global.get $ptr))
@@ -150,7 +226,15 @@
         (global.set $jsxRootEnd (i32.const 1))
         (if (call $jsxRootDone (call $jsxTopMode))
           (then (global.set $jsxRootEnd (local.get $p)))
-          (else (call $streamEmbedRange (local.get $kind) (local.get $p) (local.get $close))))
+          (else
+            (if (global.get $externalEmbedding)
+              (then
+                (local.set $saved (call $embedScanSave))
+                (call $hlTsxStream (i32.const 0))
+                (call $embedScanRestore
+                  (local.get $saved) (enum.get $Language.tsx) (local.get $p) (global.get $ptr)
+                  (i32.const 0) (i32.const -6)))
+              (else (call $streamEmbedRange (local.get $kind) (local.get $p) (local.get $close))))))
         (local.set $close (global.get $jsxRootEnd))
         (global.set $jsxRootEnd (i32.const 0))
         (if (i32.eq (local.get $close) (i32.const 1))

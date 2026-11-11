@@ -1,4 +1,8 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.objcWords 288)
+
   (import "./c.wat")
 
   (func $objcByte (param $p i32) (result i32)
@@ -8,7 +12,7 @@
   ;; Group 1 holds the words that follow `@`; group 6 the property
   ;; attributes, which are keywords only inside the parens after `@property`.
   ;; Everything C keeps its classification from c.wat.
-  (keyword-table $objcWords $mem.objcWords $mem.ocamlWords
+  (keyword-table $objcWords $mem.objcWords $mem.objcWords+288
     (group $Token.keyword+256 ;; 1: compiler directives after `@`
       "end" "try" "defs" "catch" "class" "throw" "encode" "import" "public" "dynamic" "finally"
       "package" "private" "optional" "property" "protocol" "required" "selector" "available"

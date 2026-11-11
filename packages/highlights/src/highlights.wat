@@ -1,6 +1,6 @@
 (module
   (import "./languages.wat")
-  (import "./emit.wat")
+  (import "./emitter.wat")
   (import "./memory.wat")
   (import "./live.wat")
   (import "./token.wat")

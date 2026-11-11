@@ -1,5 +1,10 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.phpWords 256)
+  (memory-region $mem.hackWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
   (global $phpStreamingCode (mut i32) (i32.const 0))
@@ -98,7 +103,7 @@
       (then (return (enum.get $Token.constant))))
     (local.get $plain))
 
-  (keyword-table $phpWords $mem.phpWords $mem.powershellWords
+  (keyword-table $phpWords $mem.phpWords $mem.phpWords+256
     (group $Token.keyword.control
       "break" "catch" "while" "throw" "match" "print" "isset" "empty" "unset" "return" "switch" "elseif" "foreach" "default" "finally" "continue")
     (group $Token.keyword
@@ -111,7 +116,7 @@
       "class" "const" "trait" "extends" "function" "interface" "namespace" "implements"))
 
   ;; Hack words that PHP lacks, matched case-sensitively after $phpWordHl misses.
-  (keyword-table $hackWords $mem.hackWords $mem.abapWords
+  (keyword-table $hackWords $mem.hackWords $mem.hackWords+128
     (group $Token.keyword.control "await" "concurrent")
     (group $Token.keyword "async" "inout" "where" "super" "using" "upcast" "reify" "internal")
     (group $Token.keyword.declaration "type" "newtype")
@@ -831,6 +836,20 @@
         (br $l)))
     (local.get $p))
 
+  (global $phpHtmlStarted (mut i32) (i32.const 0))
+
+  (func $phpHtml
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.html) (global.get $ptr) (global.get $end)
+            (i32.eqz (global.get $phpHtmlStarted)) (i32.const -7)))
+        (global.set $phpHtmlStarted (i32.const 1))
+        (global.set $ptr (global.get $end))
+        (return)))
+    (call $hlHtml))
+
   ;; A PHP file is markup with `<?php ... ?>` islands; input without an
   ;; opener is a bare code snippet unless its first visible byte starts
   ;; markup. Streaming decides that on the first non-blank chunk and keeps
@@ -843,6 +862,10 @@
     (local $p i32)
     (local $saveEnd i32)
     (local $snippet i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (if (i32.or (i32.eqz (global.get $streaming)) (global.get $streamReset))
+          (then (global.set $phpHtmlStarted (i32.const 0))))))
     (call $lexEmitLeadingContinuation)
     (local.set $snippet (i32.const 0))
     (block $out
@@ -852,7 +875,7 @@
           (if
             (i32.and (global.get $streaming) (i32.eq (global.get $phpStreamingCode) (i32.const 2)))
             (then
-              (call $hlHtml)
+              (call $phpHtml)
               (br $out)))
           (local.set $p (call $phpSkipWhitespaceAt (global.get $ptr)))
           (if (i32.ge_u (local.get $p) (global.get $end))
@@ -863,7 +886,7 @@
           (if (call $phpLooksLikeMarkup (local.get $p))
             (then
               (global.set $phpStreamingCode (i32.const 2))
-              (call $hlHtml)
+              (call $phpHtml)
               (br $out)))
           (local.set $snippet (i32.const 1))))
       (block $done
@@ -875,7 +898,7 @@
                 (then
                   (local.set $saveEnd (global.get $end))
                   (global.set $end (local.get $open))
-                  (call $hlHtml)
+                  (call $phpHtml)
                   (global.set $end (local.get $saveEnd))))
               (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
               (local.set $open (global.get $ptr))

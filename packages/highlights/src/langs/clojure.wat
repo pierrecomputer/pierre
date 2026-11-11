@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.clojureWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $cljWordHl. The high byte of a
   ;; declaration value names what the next symbol is: 1 a function, 2 a
   ;; variable, 3 a type, 4 a namespace. `defonce`, `declare`, `defrecord`,
   ;; `if-let`, and `when-let` share hash features with table words and are
   ;; matched directly; `refer` is left out for the same reason.
-  (keyword-table $clojureWords $mem.clojureWords $mem.cmakeWords
+  (keyword-table $clojureWords $mem.clojureWords $mem.clojureWords+224
     (group $Token.keyword.declaration+256 ;; 1: the next symbol is a function
       "defn" "defn-" "defmacro" "defmulti" "defmethod" "definline")
     (group $Token.keyword.declaration+512 "def")      ;; 2: a variable

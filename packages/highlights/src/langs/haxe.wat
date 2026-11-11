@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.haxeWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; High byte: capture the next name as 1 a type, 2 a function, 3 a module path
   ;; up to `;`, 4 a variable (no call before `(`).
-  (keyword-table $haxeWords $mem.haxeWords $mem.qmlWords
+  (keyword-table $haxeWords $mem.haxeWords $mem.haxeWords+224
     (group $Token.keyword.control
       "if" "else" "for" "while" "do" "switch" "case" "default" "break" "continue" "return" "try"
       "catch" "throw")

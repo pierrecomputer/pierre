@@ -1,11 +1,18 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.twigWords 256)
+  (memory-region $mem.jinjaWords 256)
+  (memory-region $mem.liquidWords 224)
+  (memory-region $mem.handlebarsWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
   ;; Token in the low byte; 256 a tag name that is a plain word elsewhere
   ;; (Liquid's `section`); 512 * the raw block its tag opens; 2048 * the context
   ;; it gives the next word (9 starts Liquid line mode).
-  (keyword-table $twigWords $mem.twigWords $mem.jinjaWords
+  (keyword-table $twigWords $mem.twigWords $mem.twigWords+256
     (group $Token.keyword.control "if" "elseif" "else" "endif" "for" "endfor")
     (group $Token.keyword.import "extends" "include" "import" "from" "use" "embed")
     (group $Token.keyword.operator "and" "or" "not" "in" "matches" "starts" "ends")
@@ -17,7 +24,7 @@
     (group $Token.keyword+10496 "macro")
     (group $Token.keyword+1280 "verbatim"))
 
-  (keyword-table $jinjaWords $mem.jinjaWords $mem.liquidWords
+  (keyword-table $jinjaWords $mem.jinjaWords $mem.jinjaWords+256
     (group $Token.keyword.control "if" "elif" "else" "endif" "for" "endfor" "break" "continue")
     (group $Token.keyword.import "extends" "include" "import" "from")
     (group $Token.keyword.operator "and" "or" "not" "in")
@@ -29,7 +36,7 @@
     (group $Token.keyword+10496 "macro")
     (group $Token.keyword+768 "raw"))
 
-  (keyword-table $liquidWords $mem.liquidWords $mem.handlebarsWords
+  (keyword-table $liquidWords $mem.liquidWords $mem.liquidWords+224
     (group $Token.keyword.control
       "if" "elsif" "else" "endif" "unless" "endunless" "case" "when" "endcase" "for" "endfor"
       "break" "continue" "tablerow" "endtablerow")
@@ -43,7 +50,7 @@
     (group $Token.keyword+1792 "comment")
     (group $Token.keyword+18688 "liquid"))
 
-  (keyword-table $handlebarsWords $mem.handlebarsWords $mem.pugWords
+  (keyword-table $handlebarsWords $mem.handlebarsWords $mem.handlebarsWords+96
     (group $Token.keyword.control "else" "if" "unless")
     (group $Token.keyword "as")
     (group $Token.boolean "true" "false")

@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.daxWords 640)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Functions such as CALCULATE are names before `(`.
-  (keyword-table $daxWords $mem.daxWords $mem.powerqueryWords
+  (keyword-table $daxWords $mem.daxWords $mem.daxWords+640
     (group $Token.keyword.declaration "var" "define" "measure" "column" "table" "function")
     (group $Token.keyword.control "return")
     (group $Token.keyword "evaluate" "order" "by" "asc" "desc" "start" "at")

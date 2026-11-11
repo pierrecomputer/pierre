@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.jsonStack 1024)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $hlJson
     (call $hlJsonImpl (i32.const 0)))

@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.swiftWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $swiftWordHl below. `where` is
   ;; absent on purpose: the table hash sees only the first two bytes, the last
   ;; byte, and the length, which are identical for `while`, so the two words
   ;; can never share a table and `where` is matched directly in $swiftWordHl.
-  (keyword-table $swiftWords $mem.swiftWords $mem.terraformWords
+  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+256
     (group $Token.keyword.control ;; 1: control
       "do" "try" "case" "else" "defer" "break" "throw" "async" "await" "repeat" "return" "default"
       "continue")

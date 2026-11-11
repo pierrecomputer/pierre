@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.codeqlWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bits 8 and up: the name a declaration keyword expects next, 1 a module,
   ;; 2 a type, 3 a predicate definition.
-  (keyword-table $codeqlWords $mem.codeqlWords $mem.sasWords
+  (keyword-table $codeqlWords $mem.codeqlWords $mem.codeqlWords+416
     (group $Token.keyword.import+256 "import")
     (group $Token.keyword.declaration+256 "module")
     (group $Token.keyword.declaration+512 "class" "newtype")

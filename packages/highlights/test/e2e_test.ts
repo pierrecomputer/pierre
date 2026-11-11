@@ -74,7 +74,7 @@ void t.test(
       'hasOwnProperty',
     ]) {
       assert.equal(isSupportedLanguage(lang), false, lang);
-      const options = { lang: lang as Lang, theme: pierreDark };
+      const options = { lang, theme: pierreDark };
       assert.throws(
         () => highlighter.codeToHtml('x', options),
         RangeError,
@@ -121,18 +121,22 @@ void t.test(
     const { code } = transformWat(
       url,
       `(module
-      (import "../src/emit.wat")
+      (import "../src/emitter.wat")
       (func (export "escape") (param $len i32) (result i32)
-        (global.set $out (i32.const 131072))
+        (global.set $out (i32.const $mem.input+128))
+        (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
         (call $escCopy
-          (i32.const 65536)
-          (i32.add (i32.const 65536) (local.get $len)))
-        (i32.sub (global.get $out) (i32.const 131072))))`
+          (i32.const $mem.input)
+          (i32.add (i32.const $mem.input) (local.get $len)))
+        (i32.sub (global.get $out) (i32.const $mem.input+128))))`
     );
     const instance = new WebAssembly.Instance(
       new WebAssembly.Module(wat2wasm(url.pathname, code))
     );
     const memory = instance.exports.memory as WebAssembly.Memory;
+    const inputPtr = Number(
+      (instance.exports.inputPtr as WebAssembly.Global).value
+    );
     const escape = instance.exports.escape as (length: number) => number;
     const bytes = new Uint8Array(memory.buffer);
     for (let length = 0; length <= 33; length++) {
@@ -151,11 +155,13 @@ void t.test(
           length + 14,
         ]) {
           if (at < 0) continue;
-          bytes.fill(0x78, 65536, 65600);
-          bytes[65536 + at] = special.charCodeAt(0);
+          bytes.fill(0x78, inputPtr, inputPtr + 64);
+          bytes[inputPtr + at] = special.charCodeAt(0);
           const end = escape(length);
           assert.equal(
-            decoder.decode(bytes.subarray(131072, 131072 + end)),
+            decoder.decode(
+              bytes.subarray(inputPtr + 128, inputPtr + 128 + end)
+            ),
             at < length
               ? 'x'.repeat(at) + escaped + 'x'.repeat(length - at - 1)
               : 'x'.repeat(length),
@@ -171,7 +177,7 @@ void t.test(
   'languages: aliases and uppercase names match their canonical lexer',
   () => {
     for (const [name, id] of Object.entries(languageEnum)) {
-      const lang = name as Lang;
+      const lang = name;
       const code = name === 'plain' ? '<&> é🙂\r\nplain\0' : samples[name].code;
       const html = decoder.decode(
         highlighter.codeToHtml(code, { lang, theme: distinctTheme })

@@ -1,12 +1,8 @@
 import assert from 'node:assert';
 
+import { HighlightsHighlighter } from '../lib/highlighter';
 import type { Lang, Theme, ThemedToken, ThemeFamily } from '../lib/index';
-import {
-  codeToTokens,
-  createHighlighter,
-  init,
-  StreamTokenizer,
-} from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { prepareTheme } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { listTokenTypes, transformWat, wat2wasm } from '../scripts/build';
@@ -74,7 +70,7 @@ export function loadLang(
       : name === 'sparql' || name === 'turtle'
         ? 'rdf'
         : name;
-  let highlighter: TestHighlighter;
+  let highlighter: HighlightsHighlighter;
   let enumMap: Map<string, Record<string, number>>;
   let setSplit: ((splitBytes: number) => void) | undefined;
   if (splitBytes === undefined) {
@@ -89,7 +85,7 @@ export function loadLang(
     const transformed = transformWat(watUrl, src);
     enumMap = transformed.enumMap;
     // Do not replace the shared highlighter used by token tests.
-    highlighter = createHighlighter(
+    highlighter = new HighlightsHighlighter(
       new WebAssembly.Module(wat2wasm(watUrl.href, transformed.code))
     );
   } else {
@@ -116,10 +112,8 @@ export function loadLang(
   };
 }
 
-type TestHighlighter = ReturnType<typeof createHighlighter>;
-
 interface SplitLexer {
-  highlighter: TestHighlighter;
+  highlighter: HighlightsHighlighter;
   enumMap: Map<string, Record<string, number>>;
   setSplit(splitBytes: number): void;
 }
@@ -150,15 +144,14 @@ function compileSplitLexer(
     (call ${entry})
     (call $hlEnd)))`;
   const { code, enumMap } = transformWat(watUrl, src);
-  const highlighter = createHighlighter(
+  const highlighter = new HighlightsHighlighter(
     new WebAssembly.Module(wat2wasm(watUrl.href, code))
   );
   // Read dv on every call because memory growth replaces the DataView.
-  const internals = highlighter as unknown as { dv: DataView };
   const lexer: SplitLexer = {
     highlighter,
     enumMap,
-    setSplit: (splitBytes) => internals.dv.setUint32(32, splitBytes, true),
+    setSplit: (splitBytes) => highlighter.dv.setUint32(32, splitBytes, true),
   };
   splitLexers.set(key, lexer);
   return lexer;

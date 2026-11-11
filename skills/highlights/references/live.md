@@ -9,7 +9,7 @@ empty), `renderRange`, and `onDeferTokenize`.
 ## Apply edits
 
 ```ts
-import { LiveTokenizer } from '@pierre/highlights';
+import { LiveTokenizer } from '@pierre/highlights/full';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const live = new LiveTokenizer({
@@ -65,7 +65,7 @@ before the viewport must also be processed to establish lexer state; the
 remaining work runs in background slices.
 
 ```ts
-import { LiveTokenizer } from '@pierre/highlights';
+import { LiveTokenizer } from '@pierre/highlights/full';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const live = new LiveTokenizer({

@@ -1,11 +1,20 @@
 (module
+  (import "../embed.wat")
+  (memory-region $mem.tsxWords 544)
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.jsBracketStack 1024)
+  (memory-region $mem.jsTokenFlags 144)
+  (memory-region $mem.jsTemplateBracketStack 1024)
+  (memory-region $mem.jsTemplateFn 1024)
+
   (import "env" "is_id_start" (func $is_id_start (param $ptr i32) (param $bits i32) (result i32)))
   (import "env" "is_id_continue" (func $is_id_continue (param $ptr i32) (param $bits i32) (result i32)))
 
   (import "../token.wat")
-  (import "../scan.wat")
-  (import "../emit.wat")
-  (import "../sig.wat")
+  (import "@pierre/wat-tools/scan.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/sig.wat")
 
   ;; $Lex enum - member order is ABI for the keyword
   ;; hash table below, which stores token ids as raw bytes. NOTE: no parens
@@ -1303,7 +1312,13 @@
           (then
             (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $p))))
-        (if (i32.ge_s (global.get $jsTemplateState) (i32.const 256))
+        (if
+          (i32.ge_s
+            (select
+              (i32.and (global.get $jsTemplateState) (i32.const 511))
+              (global.get $jsTemplateState)
+              (global.get $externalEmbedding))
+            (i32.const 256))
           (then
             (call $emitCssTemplateBody (local.get $p) (i32.sub (local.get $e) (local.get $closed))))
           (else

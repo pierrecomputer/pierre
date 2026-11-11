@@ -1,9 +1,9 @@
+import type { CodeToHtmlBaseOptions, ThemeOptions } from '@pierre/highlights';
 import {
   codeToHtml,
   isSupportedLanguage,
   LiveTokenizer,
-} from '@pierre/highlights';
-import type { CodeToHtmlBaseOptions, ThemeOptions } from '@pierre/highlights';
+} from '@pierre/highlights/full';
 
 import type {
   CodeHighlighterPlugin,

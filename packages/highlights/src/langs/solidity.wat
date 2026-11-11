@@ -1,7 +1,11 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.solidityWords 416)
 
-  (keyword-table $solidityWords $mem.solidityWords $mem.swiftWords
+  (import "@pierre/wat-tools/common.wat")
+
+  (keyword-table $solidityWords $mem.solidityWords $mem.solidityWords+416
     (group $Token.keyword.declaration+256 "function" "modifier" "event" "error")
     (group $Token.keyword.declaration+512 "contract" "interface" "library" "struct" "enum" "type")
     (group $Token.keyword.declaration "constructor" "fallback" "receive" "let")

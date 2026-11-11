@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.wgslWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $wgslByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -8,7 +12,7 @@
   ;; declaration groups in the high byte (see $wgslWordHl). The vector,
   ;; matrix, and texture families are prefix checks in $wgslTypeHl: `mat2x2`
   ;; and `mat3x2` share every hash feature the table can use.
-  (keyword-table $wgslWords $mem.wgslWords $mem.zigWords
+  (keyword-table $wgslWords $mem.wgslWords $mem.wgslWords+192
     (group $Token.keyword.control ;; 1: control
       "if" "for" "case" "else" "loop" "break" "while" "return" "switch" "default" "discard"
       "continue" "continuing")

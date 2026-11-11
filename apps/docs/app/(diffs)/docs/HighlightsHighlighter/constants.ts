@@ -42,12 +42,14 @@ export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
   highlightsHtml: {
     file: {
       name: 'html.ts',
-      contents: `import { codeToHtml } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
-const html = codeToHtml("console.log('Hello world!')", {
+const highlighter = await createHighlighter({ langs: [ts], themes: [pierreDark] });
+const html = highlighter.codeToHtml("console.log('Hello world!')", {
   lang: 'js',
-  theme: pierreDark,
+  theme: 'pierre-dark',
 });
 
 const markup = new TextDecoder().decode(html);
@@ -58,14 +60,16 @@ console.log(markup); // <pre class="highlights" ...><code>...</code></pre>`,
   highlightsTokens: {
     file: {
       name: 'tokens.ts',
-      contents: `import { codeToTokens } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const source = 'const answer = 42;';
 
-const { tokens, fg, bg } = codeToTokens(source, {
+const highlighter = await createHighlighter({ langs: [ts], themes: [pierreDark] });
+const { tokens, fg, bg } = highlighter.codeToTokens(source, {
   lang: 'ts',
-  theme: pierreDark,
+  theme: 'pierre-dark',
 });
 
 console.log(tokens[0]); // ThemedToken[] for the first line
@@ -90,7 +94,7 @@ for await (const tokens of lines) {
   highlightsStream: {
     file: {
       name: 'stream.ts',
-      contents: `import { StreamTokenizer } from '@pierre/highlights';
+      contents: `import { StreamTokenizer } from '@pierre/highlights/full';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
@@ -110,7 +114,7 @@ try {
   highlightsLive: {
     file: {
       name: 'editor.ts',
-      contents: `import { LiveTokenizer } from '@pierre/highlights';
+      contents: `import { LiveTokenizer } from '@pierre/highlights/full';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const live = new LiveTokenizer({
@@ -146,7 +150,7 @@ try {
   highlightsViewport: {
     file: {
       name: 'viewport.ts',
-      contents: `import { LiveTokenizer } from '@pierre/highlights';
+      contents: `import { LiveTokenizer } from '@pierre/highlights/full';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const live = new LiveTokenizer({
@@ -185,11 +189,13 @@ try {
   highlightsThemes: {
     file: {
       name: 'themes.ts',
-      contents: `import { codeToHtml } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
 const source = 'const answer = 42;';
-const html = codeToHtml(source, { lang: 'ts', theme: vitesseDark });
+const highlighter = await createHighlighter({ langs: [ts], themes: [vitesseDark] });
+const html = highlighter.codeToHtml(source, { lang: 'ts', theme: 'vitesse-dark' });
 const markup = new TextDecoder().decode(html);`,
     },
     options,
@@ -197,11 +203,13 @@ const markup = new TextDecoder().decode(html);`,
   highlightsCssVariables: {
     file: {
       name: 'css-variables.ts',
-      contents: `import { codeToHtml } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { cssVariables, toCSS } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
-const html = codeToHtml('const answer = 42;', {
+const highlighter = await createHighlighter({ langs: [ts], themes: [cssVariables] });
+const html = highlighter.codeToHtml('const answer = 42;', {
   lang: 'ts',
   theme: cssVariables,
 });
@@ -216,22 +224,27 @@ const page = '<style>' + stylesheet + '</style>' + markup;`,
   highlightsDualThemes: {
     file: {
       name: 'dual-themes.ts',
-      contents: `import { codeToHtml, codeToTokens } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreLight } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [vitesseDark, pierreLight],
+});
 const options = {
   lang: 'ts',
-  themes: { dark: vitesseDark, light: pierreLight },
+  themes: { dark: 'vitesse-dark', light: 'pierre-light' },
   cssVariablePrefix: '--code-',
   defaultColor: false,
 } as const;
 
-const html = new TextDecoder().decode(codeToHtml('const answer = 42;', options));
+const html = new TextDecoder().decode(highlighter.codeToHtml('const answer = 42;', options));
 // <pre class="highlights" style="--code-dark:...;--code-light:...;--code-dark-bg:...;...">
 //   <code><span style="--code-dark:...;--code-light:...">const</span> ...
 
-const { tokens, rootStyle } = codeToTokens('const answer = 42;', options);
+const { tokens, rootStyle } = highlighter.codeToTokens('const answer = 42;', options);
 console.log(rootStyle); // --code-dark:...;--code-light:...;--code-dark-bg:...;...
 console.log(tokens[0][0].htmlStyle); // { '--code-dark': '...', '--code-light': '...' }`,
     },
@@ -278,16 +291,15 @@ const { default: theme } = await themes['pierre-dark']();`,
   highlightsApiRuntime: {
     file: {
       name: 'runtime-api.ts',
-      contents: `import {
+      contents: `import { createHighlighter, isSupportedLanguage } from '@pierre/highlights';
+import {
   codeToHtml,
   codeToTokens,
-  createHighlighter,
   init,
-  isSupportedLanguage,
   LiveTokenizer,
   tokenNames,
   StreamTokenizer,
-} from '@pierre/highlights';`,
+} from '@pierre/highlights/full';`,
     },
     options,
   },
@@ -300,6 +312,9 @@ const { default: theme } = await themes['pierre-dark']();`,
   CodeToTokensBaseOptions,
   CodeToTokensOptions,
   Highlighter,
+  HighlighterOptions,
+  RegisteredHighlighter,
+  Language,
   Lang,
   ThemedToken,
   TokensResult,

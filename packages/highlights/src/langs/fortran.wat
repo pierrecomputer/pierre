@@ -1,7 +1,11 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.fortranWords 512)
 
-  (keyword-table $fortranWords $mem.fortranWords $mem.fsharpWords
+  (import "@pierre/wat-tools/common.wat")
+
+  (keyword-table $fortranWords $mem.fortranWords $mem.fortranWords+512
     (group $Token.keyword.control
       "if" "then" "else" "elseif" "endif" "do" "enddo" "while" "concurrent" "select" "case"
       "endselect" "elsewhere" "endwhere" "forall" "endforall" "cycle" "exit"

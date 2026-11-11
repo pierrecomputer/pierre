@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.applescriptWords 864)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; AppleScript ignores case, so the table holds lowercase words and the
   ;; lookup uses a lowercased copy. The high byte of a value: 1 at a line
@@ -7,7 +11,7 @@
   ;; `end greet`; 2 the next name is a variable; 3 the word takes the next
   ;; one, as in `missing value` and `shell script`; 4 the rest of the line
   ;; names variables; 5 `with` then names a loop variable.
-  (keyword-table $applescriptWords $mem.applescriptWords $mem.sparqlWords
+  (keyword-table $applescriptWords $mem.applescriptWords $mem.applescriptWords+864
     (group $Token.keyword.control+256 "end")
     (group $Token.keyword.declaration+256 "on" "to")
     (group $Token.keyword.control+1280 "repeat")

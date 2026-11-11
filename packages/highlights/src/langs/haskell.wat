@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.haskellWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; A character literal starts at the tick $p when a single character - an
   ;; escape, or one code point - sits between it and a closing tick. Any other
@@ -24,7 +28,7 @@
 
   ;; Each group's value is its token; bit 8 marks `let` and `where`, which
   ;; prime the next name as a definition.
-  (keyword-table $hsWords $mem.haskellWords $mem.hlslWords
+  (keyword-table $hsWords $mem.haskellWords $mem.haskellWords+224
     (group $Token.boolean "True" "False")
     (group $Token.keyword.import "module" "import" "qualified" "hiding")
     (group $Token.keyword.declaration "data" "newtype" "type" "class" "instance")

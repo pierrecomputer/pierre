@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gherkinWords 64)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./dockerfile.wat")
   (import "./bicep.wat")
 
   ;; group 1 opens a section with `:` right after it; group 2 starts a step
-  (keyword-table $gherkinWords $mem.gherkinWords $mem.gnuplotWords
+  (keyword-table $gherkinWords $mem.gherkinWords $mem.gherkinWords+64
     (group "Feature" "Background" "Rule" "Scenario" "Example" "Examples" "Scenarios" "Ability")
     (group "Given" "When" "Then" "And" "But"))
 

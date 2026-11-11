@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.sasWords 640)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Bits above the token: 256 a statement whose `name=`
   ;; pairs are options, 512 a word that is a function before a glued `(`,
@@ -8,7 +12,7 @@
   ;; name is a procedure or macro reference, 8192 the next name defines a
   ;; macro, 16384 a statement that starts data lines. `while` and `return` share their
   ;; hash features with `where` and `retain` and are matched directly.
-  (keyword-table $sasWords $mem.sasWords $mem.stataWords
+  (keyword-table $sasWords $mem.sasWords $mem.sasWords+640
     (group $Token.keyword.control
       "if" "then" "else" "do" "end" "to" "until" "select" "when" "otherwise" "leave" "continue"
       "stop" "abort" "goto" "link")
