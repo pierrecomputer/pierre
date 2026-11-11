@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { codeToTokens } from '../lib/index';
+import { codeToTokens } from '../lib/core';
 import { samples } from './_samples';
 import {
   assertLineFedParity,

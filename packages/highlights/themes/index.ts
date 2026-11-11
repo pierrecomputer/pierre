@@ -1,4 +1,4 @@
-import type { Theme, ThemedToken } from '../lib/index';
+import type { Theme, ThemedToken } from '../lib/core';
 import {
   ansiNames,
   defaultCssVariablePrefix,

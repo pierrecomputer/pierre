@@ -1,4 +1,10 @@
-import { createHighlighter, type Language } from '@pierre/highlights';
+import {
+  codeToHtml,
+  codeToTokens,
+  createHighlighter,
+  type Language,
+  registerLanguages,
+} from '@pierre/highlights';
 import c from '@pierre/highlights/langs/c';
 import markdown from '@pierre/highlights/langs/markdown';
 import { cssVariables } from '@pierre/highlights/themes';
@@ -197,4 +203,41 @@ test('a custom alias takes only its own name from a built-in language', async ()
   }).catch((error: unknown) => error);
   expect(reserved).toBeInstanceOf(RangeError);
   expect(String(reserved)).toMatch(/reserved/);
+});
+
+test('registerLanguages adds lexers to the shared functions of the full bundle', async () => {
+  const override = buildHighlightsLexer({
+    name: 'shared-override',
+    alias: { go: 0 },
+    wat: `(module
+      (func $highlight
+        (call $emitTok
+          (enum.get $Token.string)
+          (global.get $ptr)
+          (global.get $end))))`,
+  });
+  const options = { theme: cssVariables } as const;
+  const builtIn = codeToTokens('hello', { ...options, lang: 'go' });
+  expect(() => codeToTokens('hello', { ...options, lang: 'example' })).toThrow(
+    /unknown lang/
+  );
+  registerLanguages([custom]);
+  registerLanguages([override, custom]);
+  const reference = await createHighlighter({
+    langs: [custom, override],
+    themes: [cssVariables],
+  });
+  for (const lang of ['example', 'EXAMPLE-LANGUAGE', 'go']) {
+    for (const input of ['hello <&>\n你好🙂', new TextEncoder().encode('x')]) {
+      expect(codeToTokens(input, { ...options, lang })).toEqual(
+        reference.codeToTokens(input, { ...options, lang })
+      );
+      expect(codeToHtml(input, { ...options, lang })).toEqual(
+        reference.codeToHtml(input, { ...options, lang })
+      );
+    }
+  }
+  expect(codeToTokens('hello', { ...options, lang: 'go' })).not.toEqual(
+    builtIn
+  );
 });

@@ -3,7 +3,7 @@ import {
   codeToHtml,
   isSupportedLanguage,
   LiveTokenizer,
-} from '@pierre/highlights/full';
+} from '@pierre/highlights';
 
 import type {
   CodeHighlighterPlugin,

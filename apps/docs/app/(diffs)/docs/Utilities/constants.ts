@@ -231,7 +231,15 @@ registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [
 ]);
 
 // Option 2: No extension mapping (use setLanguageOverride instead)
-registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));`,
+registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));
+
+// Option 3: A Highlights lexer built with @pierre/wat-tools
+registerCustomLanguage(
+  'my-lang',
+  () => import('./my-lang.highlights.js'),
+  ['mylang'],
+  'highlights'
+);`,
   },
   options,
 };

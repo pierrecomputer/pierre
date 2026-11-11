@@ -1,13 +1,13 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 
-import type { Lang, ThemedToken } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
 import {
   codeToHtml,
   codeToTokens,
   LiveTokenizer,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
 import { samples, zonSample } from './_samples';
 import {
   assertLineFedParity,

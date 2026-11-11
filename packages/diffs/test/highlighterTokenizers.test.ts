@@ -1,4 +1,4 @@
-import { LiveTokenizer } from '@pierre/highlights/full';
+import { LiveTokenizer } from '@pierre/highlights';
 import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';

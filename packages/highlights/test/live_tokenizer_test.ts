@@ -1,21 +1,21 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { LANGS } from '../lib/highlighter';
 import type {
   HighlightedToken,
   Lang,
   LiveLineChange,
   LiveTextEdit,
   ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import {
   codeToTokens,
   init,
   LiveTokenizer,
   StreamTokenizer,
   tokenNames,
-} from '../lib/index';
+} from '../lib/core';
+import { LANGS } from '../lib/highlighter';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };

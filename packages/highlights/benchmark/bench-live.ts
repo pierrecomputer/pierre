@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import type { LiveTextEdit, LiveUpdateOptions } from '../lib/index';
-import { codeToTokens, init, LiveTokenizer } from '../lib/index';
+import type { LiveTextEdit, LiveUpdateOptions } from '../lib/core';
+import { codeToTokens, init, LiveTokenizer } from '../lib/core';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { measure, type Measurement } from './measure';

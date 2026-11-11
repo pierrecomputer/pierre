@@ -23,7 +23,7 @@ const { default: lazyTheme } = await themes['pierre-dark']();
 Pass theme objects to `createHighlighter({ themes })`. Output methods accept
 these objects or their registered IDs. A custom theme can supply `id` for a
 stable name. The shared functions and tokenizer constructors from
-`@pierre/highlights/full` require theme objects.
+`@pierre/highlights` require theme objects.
 
 `createHighlighter({ themes })` registers each member of a `ThemeFamily`, and
 the family name selects the first member. As an output option, a `ThemeFamily`
@@ -78,7 +78,7 @@ Each `style.syntax` value can be a color string or `ThemeSyntaxSettings`.
 ## Switch colors with CSS variables
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { cssVariables, pierreDark, toCSS } from '@pierre/highlights/themes';
 
@@ -115,7 +115,7 @@ selects how it renders:
 | `'light-dark()'` | Requires `light` and `dark`; merges colors into CSS `light-dark()` values following the page's `color-scheme`                |
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark, pierreLight } from '@pierre/highlights/themes';
 

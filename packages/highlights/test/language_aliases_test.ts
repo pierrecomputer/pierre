@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { codeToTokens, type Lang } from '../lib/index';
+import { codeToTokens, type Lang } from '../lib/core';
 import languages from '../lib/languages';
 import { samples, zonSample } from './_samples';
 import {

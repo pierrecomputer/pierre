@@ -8,20 +8,20 @@
     "NOTICE.md"
   ],
   "type": "module",
-  "main": "./dist/core.js",
-  "types": "./dist/core.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/workerd.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./core": {
       "types": "./dist/core.d.ts",
       "workerd": "./dist/core-workerd.js",
       "import": "./dist/core.js",
       "default": "./dist/core.js"
-    },
-    "./full": {
-      "types": "./dist/index.d.ts",
-      "workerd": "./dist/workerd.js",
-      "import": "./dist/default.js",
-      "default": "./dist/default.js"
     },
     "./langs": {
       "types": "./dist/langs.d.ts",

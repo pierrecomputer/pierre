@@ -3,8 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { bundledThemesInfo } from 'shiki';
 
+import type { Theme } from '../lib/core';
 import { HighlightsHighlighter } from '../lib/highlighter';
-import type { Theme } from '../lib/index';
 import {
   isThemeColor,
   resolveThemeStyle,

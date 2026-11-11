@@ -12,10 +12,10 @@ Each module under `@pierre/highlights/langs/*` contains a standalone lexer Wasm
 as base64 in JavaScript. The TypeScript module includes the TypeScript,
 JavaScript, TSX, and JSX dialects. The `langs` export from
 `@pierre/highlights/langs` contains one combined Wasm for all languages. The
-core entry imports neither that bundle nor the themes.
+`/core` entry imports neither that bundle nor the themes.
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
@@ -33,8 +33,8 @@ const html = highlighter.codeToHtml('const a = 1', {
 themes. Subsequent output calls are synchronous. Theme selection does not change
 the lexer records.
 
-The `@pierre/highlights/full` entry uses a combined lexer/emitter module for
-shared calls, streams, and editable documents:
+The `@pierre/highlights` entry uses a combined lexer/emitter module for shared
+calls, streams, and editable documents:
 
 ```text
 Whole input ───── highlight ─────────┬─ HTML bytes
@@ -74,25 +74,28 @@ and UTF-16 conversion cannot overwrite records that it has not read. It clamps
 each record end to the input and emits uncovered bytes as plain text, so a
 custom lexer with wrong ends cannot drop text or read past the input.
 
-[`lib/core.ts`](./lib/core.ts) is the main entry. It exports
-`createHighlighter`, `isSupportedLanguage`, and the types. The shared functions
-and tokenizers need the combined module, so only `/full` exports them. A lexer
-or emitter instance above 8 MiB is replaced when small inputs resume.
+[`lib/core.ts`](./lib/core.ts) is the `/core` entry. It loads no Wasm, so the
+shared functions and tokenizers need `init(module)` first.
+[`lib/index.ts`](./lib/index.ts) is the main entry. It initializes the combined
+module at import and re-exports all themes. A lexer or emitter instance above 8
+MiB is replaced when small inputs resume.
 
 Cloudflare Workers cannot compile WebAssembly from bytes. The `workerd` export
 condition selects modules that import the compiled emitter and lexer `.wasm`
 files, and `Language.wasm` accepts a `WebAssembly.Module`.
 
-The following combined-module details apply to the `/full` entry. Its export
+The following combined-module details apply to the main entry. Its export
 conditions select an embedded-byte loader or a native Wasm import for workerd.
 Each loader calls `init` and exports the shared API.
 
 `init(module)` creates the shared instance used by `codeToHtml` and
 `codeToTokens`. `createHighlighter({ langs, themes })` always uses the separate
-lexer/emitter modules and returns a promise. Each active stream or live document
-owns its instance and lexer state. A completed stream can return its instance to
-a pool with one slot. A new stream can reuse that instance. Live documents do
-not share a pool.
+lexer/emitter modules and returns a promise. `registerLanguages(langs)` builds
+the same registered pipeline synchronously, but its emitter is the combined
+module, which also exports `emit`. The shared functions send registered names to
+it. Each active stream or live document owns its instance and lexer state. A
+completed stream can return its instance to a pool with one slot. A new stream
+can reuse that instance. Live documents do not share a pool.
 
 Each module reserves its own static memory with
 `(memory-region $mem.name bytes)`. The compiler aligns these regions after the
@@ -216,10 +219,11 @@ Some framework grammars need an intrinsic scanner to find a closing brace or
 tag. That scanner determines the boundary and preserves the parent state. The
 registered child lexer supplies the token styles within that boundary.
 
-The combined `/full` runtime calls child functions in the same Wasm instance. A
-parent sets `$end` to the end of a body, then restores the outer boundary. The
-child must stop at that boundary, even inside an unfinished construct. For
-example, a script comment must not consume the script's closing tag.
+The combined runtime of the main entry calls child functions in the same Wasm
+instance. A parent sets `$end` to the end of a body, then restores the outer
+boundary. The child must stop at that boundary, even inside an unfinished
+construct. For example, a script comment must not consume the script's closing
+tag.
 
 `embed.wat` resumes script/style bodies, front matter, and framework
 expressions. Markup lexers resume their own unfinished start tags. Markdown and

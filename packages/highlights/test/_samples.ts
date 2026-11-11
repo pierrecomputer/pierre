@@ -1,4 +1,4 @@
-import type { Lang } from '../lib/index';
+import type { Lang } from '../lib/core';
 
 /**
  * One realistic, multi-line source sample per built-in lexer, shared by the

@@ -3,7 +3,7 @@ import type {
   ThemeFamily,
   ThemeStyle,
   ThemeSyntaxSettings,
-} from './index';
+} from './core';
 import tokenTypes from './token-types';
 
 export const defaultCssVariablePrefix = '--hls-';

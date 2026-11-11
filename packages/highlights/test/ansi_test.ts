@@ -11,7 +11,7 @@ import {
   StreamTokenizer,
   type Theme,
   type ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import { ansiNames, isThemeColor } from '../lib/theme';
 import * as themes from '../themes/index';
 import { initFullModule, makeRand, textOf } from './_util';

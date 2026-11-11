@@ -29,7 +29,19 @@ package includes the lexers, so it does not download language grammars.
 
 <DocsCodeExample {...highlightsInstall} />
 
-The core package imports no language or theme bundle. Select the languages and
+`@pierre/highlights` contains all lexers in one Wasm module, initialized at
+import, and all themes. Its `codeToHtml()` and `codeToTokens()` functions run
+synchronously:
+
+```ts
+import { codeToHtml, pierreDark } from '@pierre/highlights';
+
+const html = new TextDecoder().decode(
+  codeToHtml('const a = 1', { lang: 'ts', theme: pierreDark })
+);
+```
+
+`@pierre/highlights/core` contains no lexers or themes. Select the languages and
 themes that your application needs, then await `createHighlighter()` once. Its
 `codeToHtml()` and `codeToTokens()` methods run synchronously.
 
@@ -42,22 +54,23 @@ register CSS.
 Use `buildHighlightsLexer` from `@pierre/wat-tools` at build time to add a
 custom WAT lexer. Save the returned `Language` descriptor in a JavaScript module
 and include it in `langs`. Markdown fences also accept its registered names and
-aliases.
+aliases. With the main entry, `registerLanguages([language])` adds it to the
+shared `codeToHtml()` and `codeToTokens()` functions, where its names override
+built-in names. Built-in lexers do not embed registered languages, and the
+tokenizer classes use built-in lexers only.
 
 For all languages and themes, use the combined lexer bundle:
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import { langs } from '@pierre/highlights/langs';
 import { themes } from '@pierre/highlights/themes';
 
 const highlighter = await createHighlighter({ langs, themes });
 ```
 
-The `@pierre/highlights/full` entry initializes a shared highlighter at import.
-It provides top-level output functions, `StreamTokenizer`, and `LiveTokenizer`.
-The main entry exports only `createHighlighter`, `isSupportedLanguage`, and the
-types.
+Both entries export the same functions. In `/core`, call `init(module)` before
+the shared functions and tokenizer classes.
 
 Both entries run in Node.js, browsers, and Cloudflare Workers.
 
@@ -138,7 +151,7 @@ those lines to preserve state for later lines.
 
 ### Streaming
 
-Import `StreamTokenizer` from `@pierre/highlights/full`. It extends
+Import `StreamTokenizer` from `@pierre/highlights`. It extends
 [`TransformStream`](https://developer.mozilla.org/en-US/docs/Web/API/TransformStream).
 It accepts UTF-8 `Uint8Array` chunks and emits one `ThemedToken[]` per complete
 line. It works directly with `readable.pipeThrough(tokenizer)`. When the
@@ -175,9 +188,9 @@ final line if the input ends with a line break. Repeated disposal is safe.
 
 ### Incremental editing
 
-Import `LiveTokenizer` from `@pierre/highlights/full`. It keeps a document and
-its lexer state in a separate WebAssembly instance. It tokenizes edited lines
-and continues through later lines whose syntax changes. It stops when the lexer
+Import `LiveTokenizer` from `@pierre/highlights`. It keeps a document and its
+lexer state in a separate WebAssembly instance. It tokenizes edited lines and
+continues through later lines whose syntax changes. It stops when the lexer
 state matches the saved state.
 
 Edit positions use zero-based line numbers and UTF-16 character offsets. Every
@@ -515,8 +528,7 @@ Built-in languages and their aliases are included in the `Lang` type:
 
 #### `@pierre/highlights`
 
-The main entry exports `createHighlighter()`, language checks, and public types.
-The `/full` entry supplies shared functions and tokenizer classes:
+Both entries export these functions. The main entry also exports all themes:
 
 <DocsCodeExample {...highlightsApiRuntime} />
 
@@ -524,10 +536,10 @@ The `/full` entry supplies shared functions and tokenizer classes:
 Its output methods accept registered theme names or theme objects. They reject
 languages absent from `langs`.
 
-The `/full` entry initializes a shared instance. Its `init(module)` accepts a
-compiled combined `WebAssembly.Module`. Its `createHighlighter` export uses the
-same options-only async API as the main entry. The previous no-argument and
-Wasm-module factory forms are no longer supported.
+The main entry initializes a shared instance at import. `init(module)` accepts a
+compiled combined `WebAssembly.Module`. `registerLanguages(langs)` adds custom
+lexers to the shared output functions. The previous no-argument and Wasm-module
+factory forms of `createHighlighter` are no longer supported.
 
 The same entry exports the public types:
 

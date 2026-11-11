@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { codeToTokens, LiveTokenizer, StreamTokenizer } from '../lib/index';
+import { codeToTokens, LiveTokenizer, StreamTokenizer } from '../lib/core';
 import { samples } from './_samples';
 import {
   assertLineFedParity,

@@ -2,15 +2,15 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import t from 'node:test';
 
-import { LANGS } from '../lib/highlighter';
-import type { Lang, ThemedToken } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
 import {
   codeToHtml,
   codeToTokens,
   init,
   isSupportedLanguage,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
+import { LANGS } from '../lib/highlighter';
 import tokenTypes from '../lib/token-types';
 import { generateLanguages, transformWat, wat2wasm } from '../scripts/build';
 import { samples } from './_samples';

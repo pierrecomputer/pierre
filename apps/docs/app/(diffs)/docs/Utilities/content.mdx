@@ -190,10 +190,14 @@ registers a shared palette using `--diffs-*` variables automatically.
 
 ### registerCustomLanguage [toc-ignore]
 
-Register a custom Shiki language loader and optionally map it to file names or
-extensions. Highlights bundles its lexers and ignores custom TextMate grammars.
-Select `preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` when using custom
-highlighting grammars.
+Register a custom language loader and optionally map it to file names or
+extensions. By default the loader returns a TextMate grammar for Shiki. Pass
+`'highlights'` as the fourth argument for a loader that returns a Highlights
+lexer, such as `@pierre/wat-tools` output or a `@pierre/highlights/langs/*`
+module. Its `aliases` must include the registered name. Highlights ignores
+TextMate grammars, and Shiki ignores Highlights lexers. Highlights uses
+registered lexers for rendered code; its stream and editor tokenizers use
+built-in lexers only.
 
 The grammar file or object returned by your loader has a `name` field and can
 have an `aliases` array. An alias is an additional language ID that uses the

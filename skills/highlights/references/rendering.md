@@ -3,7 +3,7 @@
 ## HTML
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
@@ -24,12 +24,12 @@ const html = new TextDecoder().decode(
 HTML-escaped and theme styles are applied inline. Decode the bytes immediately,
 or call `.slice()` before retaining them across another highlighting or
 tokenization call on the same highlighter. The shared functions from
-`@pierre/highlights/full` share one instance.
+`@pierre/highlights` share one instance.
 
 ## Tokens
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
@@ -92,7 +92,7 @@ Language names and aliases are case-insensitive. Unknown or unloaded names throw
 resolution. Validate external labels and choose an explicit fallback:
 
 ```ts
-import { isSupportedLanguage } from '@pierre/highlights';
+import { isSupportedLanguage } from '@pierre/highlights/core';
 
 const requestedLanguage: string = 'typescript';
 const lang = isSupportedLanguage(requestedLanguage)
@@ -105,8 +105,11 @@ catalog, not the languages selected for one highlighter. For those, use
 `highlighter.getLoadedLanguages()`, which also lists custom names. Plain text
 aliases include `plain`, `text`, `plaintext`, and `txt`. `ansi` reads terminal
 SGR colors, as in Shiki, and removes escape sequences from token content;
-`LiveTokenizer` treats it as `plain`. Lexers are built in; custom TextMate
-grammar registration belongs to the Shiki APIs in `@pierre/diffs`.
+`LiveTokenizer` treats it as `plain`. Custom lexers from `@pierre/wat-tools` go
+in `createHighlighter({ langs })`, or in `registerLanguages(langs)` for the
+shared `codeToHtml` and `codeToTokens` functions. Registered names override
+built-in names there. Built-in lexers do not embed them, and the tokenizer
+classes use built-in lexers only.
 
 ## Runtime and types
 
@@ -118,7 +121,7 @@ application needs. The TypeScript module supports `ts`, `tsx`, `cts`, `mts`,
 For the full language and theme bundle:
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import { langs } from '@pierre/highlights/langs';
 import { themes } from '@pierre/highlights/themes';
 
@@ -129,11 +132,11 @@ const highlighter = await createHighlighter({ langs, themes });
 standalone Wasm as base64 in JavaScript. Each lexer supplies source bytes and
 token records to the separate emitter Wasm.
 
-The `@pierre/highlights/full` entry initializes a shared highlighter at import.
-Its `init(module)` accepts an existing combined `WebAssembly.Module` and runs
-synchronously. Its `createHighlighter` export uses the same options-only async
-API as the main entry. The factory does not accept a Wasm module or omitted
-options.
+The `@pierre/highlights` entry initializes a shared highlighter at import and
+re-exports all themes. `@pierre/highlights/core` exports the same functions but
+loads no Wasm; call `init(module)` with a compiled combined module before its
+shared functions. `init` runs synchronously. `createHighlighter` does not accept
+a Wasm module or omitted options.
 
 Core public types are `Highlighter`, `RegisteredHighlighter`,
 `HighlighterOptions`, `Language`, `Lang`, `CodeToHtmlBaseOptions`,

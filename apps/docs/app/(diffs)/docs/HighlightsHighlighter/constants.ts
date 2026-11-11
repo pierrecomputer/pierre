@@ -42,7 +42,7 @@ export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
   highlightsHtml: {
     file: {
       name: 'html.ts',
-      contents: `import { createHighlighter } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
@@ -60,7 +60,7 @@ console.log(markup); // <pre class="highlights" ...><code>...</code></pre>`,
   highlightsTokens: {
     file: {
       name: 'tokens.ts',
-      contents: `import { createHighlighter } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
@@ -94,7 +94,7 @@ for await (const tokens of lines) {
   highlightsStream: {
     file: {
       name: 'stream.ts',
-      contents: `import { StreamTokenizer } from '@pierre/highlights/full';
+      contents: `import { StreamTokenizer } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
@@ -114,7 +114,7 @@ try {
   highlightsLive: {
     file: {
       name: 'editor.ts',
-      contents: `import { LiveTokenizer } from '@pierre/highlights/full';
+      contents: `import { LiveTokenizer } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const live = new LiveTokenizer({
@@ -150,7 +150,7 @@ try {
   highlightsViewport: {
     file: {
       name: 'viewport.ts',
-      contents: `import { LiveTokenizer } from '@pierre/highlights/full';
+      contents: `import { LiveTokenizer } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const live = new LiveTokenizer({
@@ -189,7 +189,7 @@ try {
   highlightsThemes: {
     file: {
       name: 'themes.ts',
-      contents: `import { createHighlighter } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
@@ -203,7 +203,7 @@ const markup = new TextDecoder().decode(html);`,
   highlightsCssVariables: {
     file: {
       name: 'css-variables.ts',
-      contents: `import { createHighlighter } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { cssVariables, toCSS } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
@@ -224,7 +224,7 @@ const page = '<style>' + stylesheet + '</style>' + markup;`,
   highlightsDualThemes: {
     file: {
       name: 'dual-themes.ts',
-      contents: `import { createHighlighter } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreLight } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
@@ -291,15 +291,19 @@ const { default: theme } = await themes['pierre-dark']();`,
   highlightsApiRuntime: {
     file: {
       name: 'runtime-api.ts',
-      contents: `import { createHighlighter, isSupportedLanguage } from '@pierre/highlights';
+      contents: `// All lexers, initialized at import, and all themes.
+// '@pierre/highlights/core' exports the same functions without them.
 import {
   codeToHtml,
   codeToTokens,
+  createHighlighter,
   init,
+  isSupportedLanguage,
   LiveTokenizer,
-  tokenNames,
+  registerLanguages,
   StreamTokenizer,
-} from '@pierre/highlights/full';`,
+  tokenNames,
+} from '@pierre/highlights';`,
     },
     options,
   },

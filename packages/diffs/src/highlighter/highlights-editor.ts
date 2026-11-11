@@ -2,7 +2,7 @@ import {
   type CodeToTokensOptions as HighlightsOptions,
   LiveTokenizer,
   type LiveTokenizerUpdate,
-} from '@pierre/highlights/full';
+} from '@pierre/highlights';
 
 import type { TextDocumentChange } from '../editor/textDocument';
 import type { HighlightedToken, RenderRange } from '../types';

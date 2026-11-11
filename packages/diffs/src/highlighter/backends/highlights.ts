@@ -2,12 +2,16 @@ import {
   codeToTokens,
   type CodeToTokensOptions as HighlightsOptions,
   isSupportedLanguage,
+  registerLanguages,
   type Theme,
-} from '@pierre/highlights/full';
+} from '@pierre/highlights';
 
+import type { ResolvedLanguage } from '../../worker';
 import { DiffsHighlighter } from '../DiffsHighlighter';
 import { HighlightsEditorTokenizer } from '../highlights-editor';
 import { HighlightsStreamTokenizer } from '../highlights-stream';
+import { RegisteredHighlightsLanguages } from '../languages/constants';
+import { resolveHighlightsLanguages } from '../languages/resolveHighlightsLanguages';
 import { createDiffsThemeResolver } from '../themes/themeResolver';
 import type { DiffsTheme } from '../themes/types';
 import type {
@@ -17,11 +21,14 @@ import type {
 import type { CodeToTokensOptions, TokensResult } from '../types';
 
 /**
- * Highlights uses bundled lexers. Unsupported and custom languages render as text.
+ * Highlights uses bundled lexers and lexers registered with the `'highlights'`
+ * type. Other languages render as text, and stream and editor tokenizers use
+ * bundled lexers only.
  */
 export class HighlightsHighlighter extends DiffsHighlighter {
   // Independent instances need their themes after the shared cache is cleared.
   private readonly usedThemes = new Map<string, DiffsTheme>();
+  private readonly attachedLanguages = new Set<string>();
 
   constructor() {
     super('highlights', createDiffsThemeResolver('highlights'));
@@ -42,7 +49,13 @@ export class HighlightsHighlighter extends DiffsHighlighter {
     this.assertNotDisposed();
     // Warning: use the library's shared Wasm instance. It replaces instances
     // above 8 MiB; a private instance keeps its peak memory.
-    return codeToTokens(code, this.resolveOptions(options));
+    const resolved = this.resolveOptions(options);
+    return codeToTokens(
+      code,
+      this.attachedLanguages.has(options.lang)
+        ? { ...resolved, lang: options.lang }
+        : resolved
+    );
   }
 
   createEditorTokenizer(
@@ -58,21 +71,54 @@ export class HighlightsHighlighter extends DiffsHighlighter {
     return new HighlightsStreamTokenizer(this.resolveOptions(options));
   }
 
-  loadLanguages(): Promise<void> {
+  async loadLanguages(languages: readonly string[]): Promise<void> {
     this.assertNotDisposed();
-    return Promise.resolve();
+    this.attachLanguages(
+      await resolveHighlightsLanguages(
+        languages.filter((lang) => !this.attachedLanguages.has(lang))
+      )
+    );
   }
 
-  hasLoadedLanguages(): boolean {
-    return !this.disposed;
+  hasLoadedLanguages(languages: readonly string[]): boolean {
+    return (
+      !this.disposed &&
+      languages.every(
+        (lang) =>
+          this.attachedLanguages.has(lang) ||
+          !RegisteredHighlightsLanguages.has(lang)
+      )
+    );
   }
 
-  attachLanguages(): void {
+  attachLanguages(languages: readonly ResolvedLanguage[]): void {
     this.assertNotDisposed();
+    const names: string[] = [];
+    const lexers = [];
+    for (const { name, highlights } of languages) {
+      if (highlights == null || this.attachedLanguages.has(name)) continue;
+      const lower = name.toLowerCase();
+      if (
+        !Object.keys(highlights.aliases).some(
+          (alias) => alias.toLowerCase() === lower
+        )
+      ) {
+        throw new Error(
+          `attachResolvedLanguages: The Highlights lexer "${highlights.name}" does not declare "${name}" as an alias.`
+        );
+      }
+      names.push(name);
+      lexers.push(highlights);
+    }
+    if (lexers.length === 0) return;
+    // Registration is global, so every instance shares the lexers.
+    registerLanguages(lexers);
+    for (const name of names) this.attachedLanguages.add(name);
   }
 
   protected releaseResources(): void {
     this.usedThemes.clear();
+    this.attachedLanguages.clear();
   }
 
   // Omit the unused theme key; callers may pass both keys with one undefined.

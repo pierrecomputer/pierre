@@ -32,8 +32,8 @@ const html = highlighter.codeToHtml('const value = 1;', {
 `getTheme`, `codeToHtml`, `codeToTokens`, `createEditorTokenizer`,
 `createStreamTokenizer`, `loadLanguages`, `hasLoadedLanguages`,
 `attachLanguages`, and `dispose`. Highlights bundles its lexers, so its language
-methods do nothing and `hasLoadedLanguages` is true until disposal. Import
-backend-specific Shiki APIs and types from `shiki` directly.
+methods load and attach only lexers registered with the `'highlights'` type.
+Import backend-specific Shiki APIs and types from `shiki` directly.
 
 | Export                                                             | Purpose                                                                                                            |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -83,14 +83,17 @@ across backends, use `createCSSVariablesTheme` or a `DiffsTheme` containing both
 
 ## Languages
 
-`registerCustomLanguage(name, loader, extensions?)` registers TextMate grammars
-for Shiki. Highlights includes its supported lexers and ignores custom grammar
-registrations. Explicit unknown languages fall back to plain text in Highlights.
+`registerCustomLanguage(name, loader, extensions?, type?)` registers TextMate
+grammars for Shiki. With `type: 'highlights'`, the loader returns a Highlights
+`Language` lexer, such as `@pierre/wat-tools` output. Highlights ignores
+TextMate grammars. Explicit unknown languages fall back to plain text in
+Highlights.
 
 `resolveLanguage(s)`, `getResolvedLanguages`, `hasResolvedLanguages`,
 `getResolvedOrResolveLanguage`, `attachResolvedLanguages`,
-`areLanguagesAttached`, and `cleanUpResolvedLanguages` support Shiki grammar
-loading. Language loader/cache maps remain available for compatibility.
+`areLanguagesAttached`, and `cleanUpResolvedLanguages` support grammar and lexer
+loading. A `ResolvedLanguage` carries a Highlights lexer in `highlights`.
+Language loader/cache maps remain available for compatibility.
 
 ## Rendering and streams
 
