@@ -160,21 +160,16 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 > Browser timing and heap measured on **2026-11-10** at commit `8b0ad8f3` with
 > Bun 1.4.0 and Chromium 134.0.6998.35 on Apple M4 Max with 128 GiB RAM.
 
-| Download, gzip KB                      | @pierre/words | streamdown |
-| -------------------------------------- | ------------: | ---------: |
-| Base React renderer · initial load     |          50.7 |      165.3 |
-| TypeScript highlighting · loaded total |         247.3 |      244.9 |
-| 148 shared languages · loaded total    |         247.0 |     1057.8 |
-| CSS                                    |           1.2 |        0.4 |
+| Download, gzip KB                   | @pierre/words | streamdown |
+| ----------------------------------- | ------------: | ---------: |
+| Base React renderer · initial load  |          50.7 |      165.3 |
+| 148 shared languages · loaded total |         247.0 |     1057.8 |
+| CSS                                 |           1.2 |        0.4 |
 
 Download size uses minified `Bun.build` output with React external, with each JS
 file gzipped at level 9. Each loaded chunk is counted once, including its static
 dependencies. Unrequested dynamic imports are excluded. The base row counts
 static imports only.
-
-The TypeScript row adds the chunks Streamdown loads on demand for TypeScript,
-GitHub light/dark, and highlighted code. Words includes all 152 built-in
-languages and Pierre light/dark, matching the browser timing workload above.
 
 The shared-language row requests the 148 canonical languages supported by both
 libraries, resolving aliases without counting them as extra languages. Both use
@@ -183,10 +178,10 @@ PromQL, and TSRX have no matching Shiki language. Streamdown also loads the
 required embedded grammar dependencies of those 148 requests. Its remaining
 languages, optional embedded languages, and unused themes are excluded.
 
-The highlighting rows measure cumulative transfer after the specified languages
-have loaded. Streamdown loads languages on demand, so a page using fewer
-languages downloads less than the shared-language total. This comparison matches
-language requests, not each highlighter's tokenization or grammar
+The shared-language row measures cumulative transfer after the specified
+languages have loaded. Streamdown loads languages on demand, so a page using
+fewer languages downloads less than the shared-language total. This comparison
+matches language requests, not each highlighter's tokenization or grammar
 implementation.
 
 Download sizes are measured independently of browser timings. The `downloadRun`

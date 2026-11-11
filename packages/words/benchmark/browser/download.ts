@@ -51,14 +51,6 @@ export async function measureDownload(): Promise<DownloadReport> {
       words: "export { Markdown } from '@pierre/words/react';",
       streamdown: "export { Streamdown } from 'streamdown';",
     },
-    highlight: {
-      words: `export { Markdown } from '@pierre/words/react';
-      export { createHighlightsPlugin } from '@pierre/words/highlights';
-      export { default as light } from '@pierre/highlights/themes/pierre-light';
-      export { default as dark } from '@pierre/highlights/themes/pierre-dark';`,
-      streamdown: `export { Streamdown } from 'streamdown';
-      export { code } from '@streamdown/code';`,
-    },
     shared: {
       words: `export { Markdown } from '@pierre/words/react';
       export { createHighlightsPlugin } from '@pierre/words/highlights';
@@ -92,10 +84,9 @@ export async function measureDownload(): Promise<DownloadReport> {
             .length
         );
       const roots = [outputs.find((file) => file.kind === 'entry-point')!.path];
-      // Streamdown loads the TypeScript grammar, its default themes, and the highlighted body on demand.
-      if (id !== 'base' && library === 'streamdown')
+      // Shared highlighting loads both themes and the highlighted body on demand.
+      if (id === 'shared' && library === 'streamdown')
         for (const input of [
-          /langs\/dist\/typescript\.mjs$/,
           /themes\/dist\/github-light\.mjs$/,
           /themes\/dist\/github-dark\.mjs$/,
           /\/highlighted-body-\w+\.js$/,

@@ -16,7 +16,7 @@
     },
     "settings": {
       "intervalMs": 40,
-      "charactersPerUpdate": "32 × scale",
+      "charactersPerUpdate": "32 \u00d7 scale",
       "viewport": {
         "width": 1280,
         "height": 960
@@ -203,10 +203,6 @@
       "base": {
         "words": 50690,
         "streamdown": 165295
-      },
-      "highlight": {
-        "words": 247326,
-        "streamdown": 244940
       },
       "shared": {
         "words": 246996,

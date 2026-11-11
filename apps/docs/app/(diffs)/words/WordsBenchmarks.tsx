@@ -111,14 +111,7 @@ export function WordsBenchmarks() {
   const memory = run.rows.find(
     (row) => row.scale === 100 && row.mode === memoryMode
   )!;
-  const footprint =
-    run.download[
-      footprintId === 'base'
-        ? 'base'
-        : footprintId === 'shared'
-          ? 'shared'
-          : 'highlight'
-    ];
+  const footprint = run.download[footprintId === 'base' ? 'base' : 'shared'];
   const coverage = run.downloadCoverage;
   const downloadRun = run.downloadRun;
   const date = new Intl.DateTimeFormat('en-US', {
@@ -373,7 +366,6 @@ export function WordsBenchmarks() {
               onChange={(event) => setFootprintId(event.target.value)}
             >
               <option value="base">Base renderer · initial load</option>
-              <option value="highlight">TypeScript · loaded total</option>
               <option value="shared">
                 {coverage.sharedLanguages.length} shared languages · loaded
                 total
@@ -393,14 +385,6 @@ export function WordsBenchmarks() {
             {decimal.format(run.download.css.words / 1000)} KB for Words,{' '}
             {decimal.format(run.download.css.streamdown / 1000)} KB for
             Streamdown.
-            {footprintId === 'highlight' && (
-              <>
-                {' '}
-                Words includes all {coverage.wordsLanguages.length} built-in
-                languages and Pierre light/dark. Streamdown loads TypeScript and
-                GitHub light/dark.
-              </>
-            )}
             {footprintId === 'shared' && (
               <>
                 {' '}
