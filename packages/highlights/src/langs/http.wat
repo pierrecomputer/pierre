@@ -93,13 +93,15 @@
     (local.set $kind (i32.and (local.get $info) (i32.const 3)))
     (local.set $save (global.get $end))
     (local.set $stop (call $httpBodyEnd (global.get $ptr)))
-    (if (global.get $externalEmbedding)
+    ;; WARNING: Only JSON and XML bodies have a host lexer. Other bodies need
+    ;; the text scan below for `{{variable}}`.
+    (if (i32.and (global.get $externalEmbedding) (i32.ge_u (local.get $kind) (i32.const 2)))
       (then
         (drop
           (call $embedLanguage
             (select
               (enum.get $Language.json)
-              (select (enum.get $Language.xml) (i32.const 0) (i32.eq (local.get $kind) (i32.const 3)))
+              (enum.get $Language.xml)
               (i32.eq (local.get $kind) (i32.const 2)))
             (global.get $ptr) (local.get $stop)
             (select (i32.eqz (local.get $resume)) (i32.const -1) (global.get $streaming))
@@ -124,17 +126,21 @@
     (block $run
       (if (local.get $resume)
         (then
-          (if (global.get $streamRegionKind)
-            (then (br_if $run (call $xmlStreamResumeTag))))
+          (if (i32.eqz (global.get $externalEmbedding))
+            (then
+              (if (global.get $streamRegionKind)
+                (then (br_if $run (call $xmlStreamResumeTag))))))
           (br_if $run (call $streamResumeCommon))))
-      (if (i32.eq (local.get $kind) (i32.const 2))
+      (if (i32.eqz (global.get $externalEmbedding))
         (then
-          (call $hlJson)
-          (br $run)))
-      (if (i32.eq (local.get $kind) (i32.const 3))
-        (then
-          (call $hlXml)
-          (br $run)))
+          (if (i32.eq (local.get $kind) (i32.const 2))
+            (then
+              (call $hlJson)
+              (br $run)))
+          (if (i32.eq (local.get $kind) (i32.const 3))
+            (then
+              (call $hlXml)
+              (br $run)))))
       (call $httpText (enum.get $Token.none) (local.get $stop)))
     (global.set $streamDepth (local.get $depth))
     (global.set $streamReset (local.get $reset))

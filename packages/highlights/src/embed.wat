@@ -26,6 +26,15 @@
   (func $embedLanguageByName (param $from i32) (param $to i32) (result i32)
     (call $languageByName (local.get $from) (local.get $to)))
 
+  ;; WARNING: The host keeps one child lexer for each open stream context.
+  ;; End the context when its body closes, or the host cannot reuse the lexer.
+  (func $embedEnd (param $context i32)
+    (if (local.get $context)
+      (then
+        (drop
+          (call $embedLanguage
+            (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 2) (local.get $context))))))
+
   ;; WARNING: Boundary scans can extend the preceding token. Restore its end
   ;; before replacing scanner output with tokens from the registered lexer.
   (func $embedScanSave (result i64)

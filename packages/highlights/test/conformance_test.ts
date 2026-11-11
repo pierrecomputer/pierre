@@ -64,8 +64,8 @@ const lexers = Object.keys(languageEnum).filter((name) => name !== 'plain');
 for (let round = 0; round < 240; round++) {
   for (const name of lexers) {
     const { code } = samples[name];
-    codeToHtml(code, { lang: name, theme: distinct });
-    codeToTokens(code, { lang: name, theme: distinct });
+    codeToHtml(code, { lang: name as Lang, theme: distinct });
+    codeToTokens(code, { lang: name as Lang, theme: distinct });
   }
 }
 
@@ -311,7 +311,7 @@ void t.test('conformance: every lexer has a corpus sample', () => {
 });
 
 for (const name of lexers) {
-  const lang = name;
+  const lang = name as Lang;
   const { code: sample, kinds } = samples[name];
 
   void t.test(`${name}: the sample reaches every promised token kind`, () => {

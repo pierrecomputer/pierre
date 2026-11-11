@@ -78,7 +78,10 @@ function foldLexerForms(source: string): string {
   return output.filter(Boolean).join(' ');
 }
 
-export function transformLexer(names?: readonly string[]): TransformedWat {
+export function transformLexer(
+  names?: readonly string[],
+  regions = false
+): TransformedWat {
   const url = new URL('../src/lexer.wat', import.meta.url);
   const tools = new URL(
     '.',
@@ -100,23 +103,6 @@ export function transformLexer(names?: readonly string[]): TransformedWat {
   ]);
   const flattened = flattenWat(url, readFileSync(url, 'utf-8'), { overrides });
   const selected = names === undefined ? undefined : new Set(names);
-  const markup = [
-    'html',
-    'angular-html',
-    'xml',
-    'vue',
-    'svelte',
-    'astro',
-    'markdown',
-    'mdx',
-    'blade',
-    'razor',
-    'erb',
-    'haml',
-    'pug',
-    'php',
-    'hack',
-  ];
   const forms = splitTopLevelForms(
     flattened.code
       .replace(/^\s*\(module/, '')
@@ -138,7 +124,7 @@ export function transformLexer(names?: readonly string[]): TransformedWat {
       (form) =>
         !form.text.includes('(export ') ||
         form.head === 'memory' ||
-        /\(export "(?:inputPtr|lex|lexStream|record|gap)"\)/.test(form.text)
+        /\(export "(?:inputPtr|lex|lexStream|reserve|append)"\)/.test(form.text)
     )
     .map((form) => {
       let text = form.text;
@@ -188,12 +174,12 @@ export function transformLexer(names?: readonly string[]): TransformedWat {
           text = text.replace(/\(global\.set \$php\w+ \(i32\.const 0\)\)/g, '');
       }
       if (selected !== undefined && name === '$streamResumeLang') {
-        for (const [call, languages] of [
-          ['$httpStreamResume', ['http']],
-          ['$shaderlabStreamResume', ['shaderlab']],
-          ['$streamResumeAnyRegion', markup],
+        for (const [call, needed] of [
+          ['$httpStreamResume', selected.has('http')],
+          ['$shaderlabStreamResume', selected.has('shaderlab')],
+          ['$streamResumeAnyRegion', regions],
         ] as const) {
-          if (languages.some((language) => selected.has(language))) continue;
+          if (needed) continue;
           const parts = splitTopLevelForms(text.slice(1, -1));
           text = `(${parts
             .filter(
@@ -303,13 +289,23 @@ export function transformLexer(names?: readonly string[]): TransformedWat {
     if (
       text.startsWith('(language-table') ||
       text.startsWith('(memory ') ||
-      /\(export "(?:inputPtr|lex|lexStream|record|gap)"\)/.test(text)
+      /\(export "(?:inputPtr|lex|lexStream|reserve|append)"\)/.test(text)
     )
       visit(text);
   }
   for (const name of used)
     for (const text of definitions.get(name) ?? []) visit(text);
   entries = entries.filter((text) => keep.has(text));
+  // WARNING: A lexer that still opens a stream region needs the region
+  // resume branch dropped above, or it is wrong when streamed. Build again
+  // and keep it. ShaderLab resumes its own regions.
+  if (
+    selected !== undefined &&
+    !regions &&
+    used.has('$streamSetRegion') &&
+    !selected.has('shaderlab')
+  )
+    return transformLexer(names, true);
   return transformWat(url, `(module\n${entries.join('\n')}\n)`);
 }
 
@@ -396,12 +392,24 @@ if (import.meta.main) {
       new URL(`${entry}.js`, languageDir),
       `export default ${JSON.stringify({ name: entry, aliases, wasm: Buffer.from(binary).toString('base64') })};\n`
     );
+    // WARNING: workerd cannot compile Wasm from bytes. Its export condition
+    // selects these modules, which import the compiled `.wasm` file.
+    writeFileSync(new URL(`${entry}.wasm`, languageDir), binary);
+    writeFileSync(
+      new URL(`${entry}.workerd.js`, languageDir),
+      `import wasm from './${entry}.wasm';\n` +
+        `export default { name: ${JSON.stringify(entry)}, aliases: ${JSON.stringify(aliases)}, wasm };\n`
+    );
     writeFileSync(new URL(`${entry}.d.ts`, languageDir), languageDts);
     if (name === 'ts') {
       for (const alias of ['ts', 'tsx', 'js', 'jsx', 'javascript']) {
         writeFileSync(
           new URL(`${alias}.js`, languageDir),
           "export { default } from './typescript.js';\n"
+        );
+        writeFileSync(
+          new URL(`${alias}.workerd.js`, languageDir),
+          "export { default } from './typescript.workerd.js';\n"
         );
         writeFileSync(new URL(`${alias}.d.ts`, languageDir), languageDts);
       }
@@ -410,6 +418,12 @@ if (import.meta.main) {
   writeFileSync(
     new URL('../dist/langs.js', moduleUrl),
     `export const langs = [${JSON.stringify({ name: 'all', aliases: languages, wasm: Buffer.from(combinedLexer).toString('base64') })}];\n`
+  );
+  writeFileSync(new URL('../dist/langs.wasm', moduleUrl), combinedLexer);
+  writeFileSync(
+    new URL('../dist/langs.workerd.js', moduleUrl),
+    "import wasm from './langs.wasm';\n" +
+      `export const langs = [{ name: 'all', aliases: ${JSON.stringify(languages)}, wasm }];\n`
   );
   writeFileSync(
     new URL('../dist/langs.d.ts', moduleUrl),

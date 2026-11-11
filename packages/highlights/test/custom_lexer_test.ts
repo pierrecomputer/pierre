@@ -1,8 +1,12 @@
 import { createHighlighter, type Language } from '@pierre/highlights';
+import c from '@pierre/highlights/langs/c';
 import markdown from '@pierre/highlights/langs/markdown';
 import { cssVariables } from '@pierre/highlights/themes';
 import { buildHighlightsLexer } from '@pierre/wat-tools';
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+
+import { HighlightsHighlighter } from '../lib/highlighter';
 
 const custom: Language = buildHighlightsLexer({
   name: 'example-language',
@@ -76,4 +80,121 @@ test('Markdown fences resolve registered custom names and aliases', async () => 
     theme: 'css-variables',
   });
   expect(result.tokens[1][0].color).toBe('var(--hls-text-literal)');
+});
+
+test.each([
+  ['short', '(i32.add (global.get $ptr) (i32.const 3))'],
+  ['long', '(i32.add (global.get $end) (i32.const 40))'],
+  ['silent', '(global.get $ptr)'],
+])(
+  'output covers the input once when a custom lexer reports a %s end',
+  async (kind, end) => {
+    const language = buildHighlightsLexer({
+      name: `${kind}-language`,
+      wat: `(module
+        (func $highlight
+          (call $emitTok (enum.get $Token.keyword) (global.get $ptr) ${end})))`,
+    });
+    const highlighter = await createHighlighter({
+      langs: [markdown, language],
+      themes: [cssVariables],
+    });
+    const options = { lang: language.name, theme: 'css-variables' };
+    // A longer input first: its bytes must not show up in the next output.
+    highlighter.codeToHtml('previous input that must not leak', options);
+    const code = 'abcdef <ghi>';
+    const html = new TextDecoder().decode(
+      highlighter.codeToHtml(code, options)
+    );
+    expect(
+      html
+        .replace(/<[^>]+>/g, '')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+    ).toBe(code);
+    const { tokens } = highlighter.codeToTokens(code, options);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0].map((token) => token.content).join('')).toBe(code);
+    const fenced = highlighter.codeToTokens(
+      `\`\`\`${language.name}\n${code}\n\`\`\`\ntail`,
+      { lang: 'markdown', theme: 'css-variables' }
+    ).tokens;
+    expect(fenced[1].map((token) => token.content).join('')).toBe(code);
+    expect(fenced[2]).toEqual([
+      { ...fenced[0][0], content: '```', offset: fenced[2][0].offset },
+    ]);
+    expect(fenced[3].map((token) => token.content).join('')).toBe('tail');
+  }
+);
+
+test('a custom lexer that reports ends out of order still covers the input once', async () => {
+  const language = buildHighlightsLexer({
+    name: 'backward-language',
+    wat: `(module
+      (func $highlight
+        (call $emitTok (enum.get $Token.keyword)
+          (i32.add (global.get $ptr) (i32.const 6)) (global.get $end))
+        (call $emitTok (enum.get $Token.string)
+          (global.get $ptr) (i32.add (global.get $ptr) (i32.const 3)))))`,
+  });
+  const highlighter = await createHighlighter({
+    langs: [language],
+    themes: [cssVariables],
+  });
+  const code = 'abcdef ghi';
+  const { tokens } = highlighter.codeToTokens(code, {
+    lang: language.name,
+    theme: 'css-variables',
+  });
+  expect(tokens[0].map((token) => token.content).join('')).toBe(code);
+});
+
+test('a custom alias takes only its own name from a built-in language', async () => {
+  const header = buildHighlightsLexer({
+    name: 'header-language',
+    alias: { h: 0, text: 0 },
+    wat: `(module
+      (func $highlight
+        (call $emitTok (enum.get $Token.keyword) (global.get $ptr) (global.get $end))))`,
+  });
+  const reference = new HighlightsHighlighter(
+    new WebAssembly.Module(
+      readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
+    )
+  );
+  const code = 'int a = 1; // x';
+  const builtIn = reference.codeToTokens(code, {
+    lang: 'c',
+    theme: cssVariables,
+  });
+  const custom = [
+    { content: code, offset: 0, color: 'var(--hls-keyword)', fontStyle: 0 },
+  ];
+  const tokens = (
+    highlighter: Awaited<ReturnType<typeof createHighlighter>>,
+    lang: string
+  ) => highlighter.codeToTokens(code, { lang, theme: 'css-variables' });
+  // `c` and `h` share one built-in ID.
+  const after = await createHighlighter({
+    langs: [c, header],
+    themes: [cssVariables],
+  });
+  expect(tokens(after, 'c')).toEqual(builtIn);
+  expect(tokens(after, 'h').tokens[0]).toEqual(custom);
+  expect(tokens(after, 'header-language').tokens[0]).toEqual(custom);
+  expect(tokens(after, 'text').tokens[0]).toEqual(custom);
+  // The later registration wins a name.
+  const before = await createHighlighter({
+    langs: [header, c],
+    themes: [cssVariables],
+  });
+  expect(tokens(before, 'c')).toEqual(builtIn);
+  expect(tokens(before, 'h')).toEqual(builtIn);
+  expect(tokens(before, 'header-language').tokens[0]).toEqual(custom);
+  const reserved = await createHighlighter({
+    langs: [{ ...header, aliases: { ansi: 0 } }],
+    themes: [cssVariables],
+  }).catch((error: unknown) => error);
+  expect(reserved).toBeInstanceOf(RangeError);
+  expect(String(reserved)).toMatch(/reserved/);
 });

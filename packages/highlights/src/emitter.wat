@@ -1025,13 +1025,20 @@
     (global.set $srcBase (i32.const $mem.input))
     (call $hlBegin)
     (local.set $lhs (i32.const $mem.input))
+    ;; WARNING: A custom lexer can report ends that go backward, pass the
+    ;; input, or stop before it. Emit each input byte exactly once.
     (block $done
       (loop $records
         (br_if $done (i32.ge_u (local.get $record) (local.get $recordsEnd)))
         (local.set $rhs (i32.add (i32.const $mem.input) (i32.load (local.get $record))))
-        (call $emitTok (i32.load offset=4 (local.get $record)) (local.get $lhs) (local.get $rhs))
-        (local.set $lhs (local.get $rhs))
+        (if (i32.gt_u (local.get $rhs) (global.get $eof))
+          (then (local.set $rhs (global.get $eof))))
+        (if (i32.gt_u (local.get $rhs) (local.get $lhs))
+          (then
+            (call $emitTok (i32.load offset=4 (local.get $record)) (local.get $lhs) (local.get $rhs))
+            (local.set $lhs (local.get $rhs))))
         (local.set $record (i32.add (local.get $record) (i32.const 8)))
         (br $records)))
+    (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $eof))
     (call $hlEnd))
 )

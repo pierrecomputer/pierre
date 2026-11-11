@@ -48,8 +48,10 @@ highlighter.codeToHtml('example code', {
 
 `buildHighlightsLexer` returns `{ name, aliases, wasm }`, which is assignable to
 the Highlights `Language` type. `wasm` contains the compiled module as base64.
-Each descriptor has one lexer entry, so every alias maps to `0`. The canonical
-name is added automatically.
+Cloudflare Workers cannot compile WebAssembly from bytes. There, write the
+decoded bytes to a `.wasm` file, import it, and pass the module as `wasm`. Each
+descriptor has one lexer entry, so every alias maps to `0`. The canonical name
+is added automatically.
 
 ## Writing a lexer
 

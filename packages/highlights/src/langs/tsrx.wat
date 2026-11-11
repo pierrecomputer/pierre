@@ -269,6 +269,10 @@
     (global.set $ptr (local.get $p))
     (if (i32.eqz (local.get $found))
       (then (return)))
+    (if (global.get $externalEmbedding)
+      (then
+        (call $embedEnd
+          (i32.shr_u (i32.load offset=4 (call $jsxTopSlot)) (i32.const 9)))))
     (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
     (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $p) (global.get $ptr))
     (drop (call $jsxEmitName))

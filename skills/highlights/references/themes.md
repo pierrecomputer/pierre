@@ -25,9 +25,11 @@ these objects or their registered IDs. A custom theme can supply `id` for a
 stable name. The shared functions and tokenizer constructors from
 `@pierre/highlights/full` require theme objects.
 
-A `ThemeFamily` resolves to its first member. Pass `family.themes[index]` to
-select another. Highlights caches prepared themes by object identity. Create a
-new object when its values change.
+`createHighlighter({ themes })` registers each member of a `ThemeFamily`, and
+the family name selects the first member. As an output option, a `ThemeFamily`
+resolves to its first member. Pass `family.themes[index]` to select another.
+Highlights caches prepared themes by object identity. Create a new object when
+its values change.
 
 For `@pierre/diffs` components, load these objects through
 `registerCustomTheme(name, loader, 'zed')` and select

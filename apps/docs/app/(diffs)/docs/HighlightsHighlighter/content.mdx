@@ -56,6 +56,10 @@ const highlighter = await createHighlighter({ langs, themes });
 
 The `@pierre/highlights/full` entry initializes a shared highlighter at import.
 It provides top-level output functions, `StreamTokenizer`, and `LiveTokenizer`.
+The main entry exports only `createHighlighter`, `isSupportedLanguage`, and the
+types.
+
+Both entries run in Node.js, browsers, and Cloudflare Workers.
 
 ### Build with agents
 
@@ -263,8 +267,10 @@ named theme from `@pierre/highlights/themes` or use a per-theme default export:
 
 Pass theme objects to `createHighlighter({ themes })`. Output options accept
 those objects or their registered names, such as `'pierre-dark'`. The shared
-functions and tokenizer constructors require theme objects. A `ThemeFamily` uses
-its first member. Highlights caches themes by object identity.
+functions and tokenizer constructors require theme objects. A `ThemeFamily` in
+`createHighlighter({ themes })` registers each member. As an output option, a
+`ThemeFamily` uses its first member. Highlights caches themes by object
+identity.
 
 Pass `family.themes[index]` to choose another member. Create a new theme object
 when you change its values.
@@ -326,8 +332,9 @@ Unsupported or unloaded names cause a `RangeError`. Highlights does not detect
 the language from the code or filename.
 
 Use `isSupportedLanguage(value)` to validate a string and narrow its type to
-`Lang`. Use `plain` for text without syntax colors. Its aliases are `text`,
-`plaintext`, and `txt`.
+`Lang`. It checks the built-in catalog. Use `highlighter.getLoadedLanguages()`
+for the names that one configured highlighter accepts. Use `plain` for text
+without syntax colors. Its aliases are `text`, `plaintext`, and `txt`.
 
 #### ANSI output
 

@@ -8,13 +8,14 @@
     "NOTICE.md"
   ],
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/core.js",
+  "types": "./dist/core.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/core.d.ts",
+      "workerd": "./dist/core-workerd.js",
+      "import": "./dist/core.js",
+      "default": "./dist/core.js"
     },
     "./full": {
       "types": "./dist/index.d.ts",
@@ -24,11 +25,13 @@
     },
     "./langs": {
       "types": "./dist/langs.d.ts",
+      "workerd": "./dist/langs.workerd.js",
       "import": "./dist/langs.js",
       "default": "./dist/langs.js"
     },
     "./langs/*": {
       "types": "./dist/langs/*.d.ts",
+      "workerd": "./dist/langs/*.workerd.js",
       "import": "./dist/langs/*.js",
       "default": "./dist/langs/*.js"
     },
@@ -55,7 +58,7 @@
     "typescript": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 303311,
-    "highlights.wasm.gz": 142898
+    "highlights.wasm": 303343,
+    "highlights.wasm.gz": 142917
   }
 }

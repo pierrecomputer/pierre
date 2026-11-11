@@ -1327,6 +1327,12 @@
               (i32.sub (local.get $e) (local.get $closed)))))
         (if (local.get $closed)
           (then
+            (if (global.get $externalEmbedding)
+              (then
+                (call $embedEnd
+                  (i32.shr_u
+                    (i32.and (global.get $jsTemplateState) (i32.const 0x7fffffff))
+                    (i32.const 9)))))
             (call $emitTok
               (enum.get $Token.string)
               (i32.sub (local.get $e) (i32.const 1))
