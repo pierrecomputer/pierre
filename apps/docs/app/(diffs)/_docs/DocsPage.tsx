@@ -70,6 +70,7 @@ import {
   HIGHLIGHTS_HTML,
   HIGHLIGHTS_INSTALL,
   HIGHLIGHTS_LIVE,
+  HIGHLIGHTS_SKILL,
   HIGHLIGHTS_STREAM,
   HIGHLIGHTS_STREAM_PIPE,
   HIGHLIGHTS_THEME_LOADER,
@@ -678,6 +679,7 @@ async function ThemingSection() {
 async function HighlightsHighlighterSection() {
   const [
     highlightsInstall,
+    highlightsSkill,
     highlightsHtml,
     highlightsTokens,
     highlightsStreamPipe,
@@ -693,6 +695,7 @@ async function HighlightsHighlighterSection() {
     highlightsApiTypes,
   ] = await Promise.all([
     preloadCodeExample(HIGHLIGHTS_INSTALL),
+    preloadCodeExample(HIGHLIGHTS_SKILL),
     preloadCodeExample(HIGHLIGHTS_HTML),
     preloadCodeExample(HIGHLIGHTS_TOKENS),
     preloadCodeExample(HIGHLIGHTS_STREAM_PIPE),
@@ -711,6 +714,7 @@ async function HighlightsHighlighterSection() {
     filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
     scope: {
       highlightsInstall,
+      highlightsSkill,
       highlightsHtml,
       highlightsTokens,
       highlightsStreamPipe,

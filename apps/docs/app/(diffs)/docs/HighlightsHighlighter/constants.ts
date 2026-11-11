@@ -21,6 +21,13 @@ export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
       unsafeCSS: CustomScrollbarCSS,
     },
   },
+  highlightsSkill: {
+    file: {
+      name: 'skill.sh',
+      contents: 'npx skills add pierrecomputer/pierre --skill highlights',
+    },
+    options,
+  },
   highlightsHtml: {
     file: {
       name: 'html.ts',
@@ -319,6 +326,7 @@ export const {
   highlightsHtml: HIGHLIGHTS_HTML,
   highlightsInstall: HIGHLIGHTS_INSTALL,
   highlightsLive: HIGHLIGHTS_LIVE,
+  highlightsSkill: HIGHLIGHTS_SKILL,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsStreamPipe: HIGHLIGHTS_STREAM_PIPE,
   highlightsThemeLoader: HIGHLIGHTS_THEME_LOADER,

@@ -31,7 +31,7 @@ package includes the lexers, so it does not download language grammars.
 | Append code as it arrives    | `StreamTokenizer` | Completed lines from each chunk      |
 | Update an editable document  | `LiveTokenizer`   | Changed lines and tokens after edits |
 
-Install Highlights from npm:
+### Installation
 
 <DocsCodeExample {...highlightsInstall} />
 
@@ -39,6 +39,17 @@ The package runs in Node.js, browsers, and Cloudflare Workers. It selects and
 initializes the WebAssembly loader for your runtime at import. `codeToHtml()`
 and `codeToTokens()` run synchronously after import. You do not need to call
 `init()` or register languages.
+
+### Build with agents
+
+Install the
+[Highlights skill](https://github.com/pierrecomputer/pierre/tree/main/skills/highlights)
+to give your agent the API reference and integration recipes:
+
+<DocsCodeExample {...highlightsSkill} />
+
+The skill covers HTML, tokens, themes, streams, and incremental edits. Agents
+can also read the [plain-text docs](/llms-full.txt).
 
 ### HTML
 
