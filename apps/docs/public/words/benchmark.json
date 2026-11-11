@@ -1572,7 +1572,7 @@
         "higherIsBetter": true,
         "engines": [
           "Words",
-          "md4x (native)",
+          "md4x (NAPI)",
           "md4x (Wasm)",
           "markdown-it"
         ],
@@ -1678,7 +1678,7 @@
         "unit": "MiB",
         "engines": [
           "Words",
-          "md4x (native)",
+          "md4x (NAPI)",
           "md4x (Wasm)",
           "markdown-it"
         ],

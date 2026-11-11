@@ -58,7 +58,7 @@ function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
 // Section headings whose `## ` slug should render a "Beta" badge. The badge is
 // appended after the heading text (not part of the markdown) so the slug—and
 // therefore the anchor and any child heading ids—stays unchanged.
-const BETA_DOC_HEADING_IDS = new Set(['highlights', 'edit-mode']);
+const BETA_DOC_HEADING_IDS = new Set(['highlights', 'edit-mode', 'words']);
 
 function MdxHeading2({
   id,
@@ -143,9 +143,9 @@ export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
 // preloaded result to the MDX scope under its original export key. Authors can
 // then use `<DocsCodeExample {...foo} />` inside MDX, where `foo` is the name
 // of the exported `PreloadFileOptions` constant in a sibling `constants.ts`.
-export async function renderMDXWithPreloadedFiles(
+export async function renderMDXWithPreloadedFiles<LAnnotation>(
   filePath: string,
-  files: Readonly<Record<string, PreloadFileOptions<unknown, undefined>>>
+  files: Readonly<Record<string, PreloadFileOptions<LAnnotation, undefined>>>
 ) {
   const entries = Object.entries(files);
   const results = await Promise.all(

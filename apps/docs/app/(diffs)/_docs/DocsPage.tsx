@@ -155,6 +155,7 @@ import {
   VIRTUALIZATION_REACT_CONFIG,
   VIRTUALIZATION_VANILLA_DIFF,
 } from '../docs/Virtualization/constants';
+import { WORDS_DOC_FILES } from '../docs/Words/constants';
 import {
   WORKER_POOL_API_REFERENCE,
   WORKER_POOL_ARCHITECTURE_ASCII,
@@ -180,7 +181,7 @@ import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
-import { renderMDX } from '@/lib/mdx';
+import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
 import { preloadCodeExample } from '@/lib/preloadCodeExample';
 
@@ -219,6 +220,7 @@ export default function DocsPage() {
           <WorkerPoolSection />
           <SSRSection />
           <HighlightsHighlighterSection />
+          <WordsSection />
         </div>
       </DocsLayout>
       <Footer />
@@ -724,6 +726,14 @@ async function HighlightsHighlighterSection() {
       highlightsApiTypes,
     },
   });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function WordsSection() {
+  const content = await renderMDXWithPreloadedFiles(
+    '(diffs)/docs/Words/content.mdx',
+    WORDS_DOC_FILES
+  );
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 

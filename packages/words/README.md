@@ -5,7 +5,8 @@ supports CommonMark 0.31.2 and GFM 0.29, and writes HTML or ANSI. The core has
 no runtime dependencies. A React component for streaming text and a code
 highlighting plugin are optional.
 
-Try the [demo](https://diffs.com/words).
+[Demo](https://diffs.com/words) · [Documentation](https://diffs.com/docs#words)
+· [Agent skill](../../skills/words/SKILL.md)
 
 ## Installation
 

@@ -15,7 +15,7 @@ export type Engine = (typeof parsers)[number] | (typeof streamers)[number];
 
 export const labels: Record<Engine, string> = {
   words: 'Words',
-  'md4x-native': 'md4x native',
+  'md4x-native': 'md4x (NAPI)',
   'md4x-wasm': 'md4x Wasm',
   'markdown-it': 'markdown-it',
   'words-react': 'Words React',
