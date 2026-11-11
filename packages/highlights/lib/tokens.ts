@@ -1,4 +1,10 @@
-import type { CodeToHtmlOptions, ThemedToken, TokensResult } from './index';
+import type {
+  CodeToHtmlOptions,
+  Theme,
+  ThemedToken,
+  ThemeFamily,
+  TokensResult,
+} from './index';
 import type { PreparedTheme } from './theme';
 import {
   escapeAttribute,
@@ -119,7 +125,7 @@ function tagTheme(
  * Reuse cached list objects so their style caches remain available.
  */
 export function resolveOptionThemes(
-  options: CodeToHtmlOptions
+  options: CodeToHtmlOptions<Theme | ThemeFamily, string>
 ): ResolvedTheme[] {
   const { cssVariablePrefix } = options;
   if (options.themes == null) {

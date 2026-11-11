@@ -101,9 +101,10 @@ const lang = isSupportedLanguage(requestedLanguage)
 ```
 
 `isSupportedLanguage()` narrows a string to `Lang`. It checks the full language
-catalog, not the languages selected for one highlighter. Plain text aliases
-include `plain`, `text`, `plaintext`, and `txt`. `ansi` reads terminal SGR
-colors, as in Shiki, and removes escape sequences from token content;
+catalog, not the languages selected for one highlighter. For those, use
+`highlighter.getLoadedLanguages()`, which also lists custom names. Plain text
+aliases include `plain`, `text`, `plaintext`, and `txt`. `ansi` reads terminal
+SGR colors, as in Shiki, and removes escape sequences from token content;
 `LiveTokenizer` treats it as `plain`. Lexers are built in; custom TextMate
 grammar registration belongs to the Shiki APIs in `@pierre/diffs`.
 

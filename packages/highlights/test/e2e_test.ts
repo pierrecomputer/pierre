@@ -74,7 +74,7 @@ void t.test(
       'hasOwnProperty',
     ]) {
       assert.equal(isSupportedLanguage(lang), false, lang);
-      const options = { lang, theme: pierreDark };
+      const options = { lang: lang as Lang, theme: pierreDark };
       assert.throws(
         () => highlighter.codeToHtml('x', options),
         RangeError,
@@ -177,7 +177,7 @@ void t.test(
   'languages: aliases and uppercase names match their canonical lexer',
   () => {
     for (const [name, id] of Object.entries(languageEnum)) {
-      const lang = name;
+      const lang = name as Lang;
       const code = name === 'plain' ? '<&> é🙂\r\nplain\0' : samples[name].code;
       const html = decoder.decode(
         highlighter.codeToHtml(code, { lang, theme: distinctTheme })

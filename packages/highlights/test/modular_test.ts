@@ -1,4 +1,5 @@
 import {
+  type CodeToHtmlOptions,
   createHighlighter,
   type HighlighterOptions,
   type Lang,
@@ -209,10 +210,11 @@ test('modular emission handles memory growth, byte input, and repeated calls', a
 
 test('standalone language modules embed smaller Wasm and the full bundle embeds one module', () => {
   expect(langs).toHaveLength(1);
-  expect(typescript.wasm.length).toBeLessThan(langs[0].wasm.length);
-  expect(json.wasm.length).toBeLessThan(typescript.wasm.length);
+  const size = (language: Language): number => (language.wasm as string).length;
+  expect(size(typescript)).toBeLessThan(size(langs[0]));
+  expect(size(json)).toBeLessThan(size(typescript));
   for (const language of [typescript, json, html, ...langs]) {
-    const bytes = Buffer.from(language.wasm, 'base64');
+    const bytes = Buffer.from(language.wasm as string, 'base64');
     expect(WebAssembly.validate(bytes)).toBe(true);
     const imports = WebAssembly.Module.imports(new WebAssembly.Module(bytes));
     expect(imports.every((entry) => entry.module === 'env')).toBe(true);
@@ -303,8 +305,8 @@ test('selective browser bundles omit the combined Wasm and unused theme data', a
   ]);
   expect(errors).toBe('');
   expect(exitCode).toBe(0);
-  expect(output.includes(typescript.wasm)).toBe(true);
-  expect(output.includes(langs[0].wasm)).toBe(false);
+  expect(output.includes(typescript.wasm as string)).toBe(true);
+  expect(output.includes(langs[0].wasm as string)).toBe(false);
   expect(
     output.includes(
       readFileSync(
@@ -554,3 +556,308 @@ test('plain text and ANSI work without loading language modules', async () => {
     }
   }
 });
+
+test('the main entry exports only the registered-highlighter API', async () => {
+  expect(Object.keys(await import('@pierre/highlights')).sort()).toEqual([
+    'createHighlighter',
+    'isSupportedLanguage',
+  ]);
+  const full = await import('@pierre/highlights/full');
+  for (const name of [
+    'codeToHtml',
+    'codeToTokens',
+    'createHighlighter',
+    'init',
+    'isSupportedLanguage',
+    'LiveTokenizer',
+    'StreamTokenizer',
+    'tokenNames',
+  ]) {
+    expect(full).toHaveProperty(name);
+  }
+});
+
+test('shared options reject unknown names while a registered highlighter accepts them', async () => {
+  expectTypeOf<CodeToHtmlOptions['lang']>().toEqualTypeOf<Lang>();
+  expectTypeOf<'typescrip'>().not.toExtend<Lang>();
+  const highlighter = await createHighlighter({
+    langs: [json],
+    themes: [pierreDark],
+  });
+  expectTypeOf<
+    Parameters<RegisteredHighlighter['codeToHtml']>[1]['lang']
+  >().toEqualTypeOf<Lang | (string & {})>();
+  const loaded = highlighter.getLoadedLanguages();
+  expect(loaded).toContain('json');
+  expect(loaded).toContain('plain');
+  expect(loaded).toContain('ansi');
+  expect(loaded).not.toContain('python');
+  for (const lang of loaded) {
+    expect(() =>
+      highlighter.codeToTokens('1', { lang, theme: 'pierre-dark' })
+    ).not.toThrow();
+  }
+});
+
+test('a theme family registers every member and its own name', async () => {
+  const highlighter = await createHighlighter({
+    langs: [json],
+    themes: [{ name: 'Pierre', themes: [pierreDark, pierreLight] }],
+  });
+  for (const [name, theme] of [
+    ['pierre-dark', pierreDark],
+    ['Pierre Dark', pierreDark],
+    ['pierre-light', pierreLight],
+    ['Pierre Light', pierreLight],
+    ['Pierre', pierreDark],
+    ['pierre', pierreDark],
+  ] as const) {
+    expect(
+      highlighter.codeToTokens('{"a": 1}', { lang: 'json', theme: name })
+    ).toEqual(reference.codeToTokens('{"a": 1}', { lang: 'json', theme }));
+  }
+  expect(() =>
+    highlighter.codeToTokens('1', { lang: 'json', theme: 'pierre-soft' })
+  ).toThrow(/theme/i);
+});
+
+test('language descriptors accept a compiled module', async () => {
+  const highlighter = await createHighlighter({
+    langs: [
+      {
+        ...json,
+        wasm: await WebAssembly.compile(
+          Buffer.from(json.wasm as string, 'base64')
+        ),
+      },
+    ],
+    themes: [pierreDark],
+  });
+  const code = '{"message": "你好🙂<&>", "answer": 42}\n';
+  expect(
+    highlighter.codeToTokens(code, { lang: 'json', theme: 'pierre-dark' })
+  ).toEqual(reference.codeToTokens(code, { lang: 'json', theme: pierreDark }));
+});
+
+test('workerd entries import compiled Wasm instead of embedding bytes', async () => {
+  const result = await Bun.build({
+    entrypoints: [new URL('./_workerd_entry.ts', import.meta.url).pathname],
+    conditions: ['workerd'],
+    external: ['*.wasm'],
+    target: 'browser',
+  });
+  expect(result.success).toBe(true);
+  const output = await result.outputs[0].text();
+  for (const name of ['emitter', 'typescript', 'langs']) {
+    expect(output).toMatch(new RegExp(`from "[^"]*${name}\\.wasm"`));
+  }
+  expect(output.includes(typescript.wasm as string)).toBe(false);
+  expect(output.includes(langs[0].wasm as string)).toBe(false);
+});
+
+test('embedded languages reuse child lexer instances', async () => {
+  const highlighter = await createHighlighter({
+    langs: [markdown, typescript, css, html],
+    themes: [pierreDark],
+  });
+  const inputs = [
+    [
+      'markdown',
+      '# t\n\n```ts\nconst a = 1\n```\n\n```css\na{b:c}\n```\n\n> ```html\n> <b>\n> </b>\n> ```\n'.repeat(
+        20
+      ),
+    ],
+    [
+      'ts',
+      'const a = css`a{b:c}`; const b = html`<i>${css`a{b:${c}}`}</i>`;\n'.repeat(
+        100
+      ),
+    ],
+    ['html', '<script>var a = 1</script><style>a{b:c}</style>\n'.repeat(50)],
+  ] as const;
+  const Instance = WebAssembly.Instance;
+  let created = 0;
+  WebAssembly.Instance = function (
+    ...args: ConstructorParameters<typeof WebAssembly.Instance>
+  ) {
+    created++;
+    return new Instance(...args);
+  } as unknown as typeof WebAssembly.Instance;
+  try {
+    for (const [lang, code] of inputs) {
+      expect(
+        highlighter.codeToTokens(code, { lang, theme: 'pierre-dark' })
+      ).toEqual(reference.codeToTokens(code, { lang, theme: pierreDark }));
+    }
+    // Three root lexers and one child for each language open at a time.
+    expect(created).toBeLessThan(16);
+    created = 0;
+    for (const [lang, code] of inputs) {
+      expect(
+        decoder.decode(
+          highlighter.codeToHtml(code, { lang, theme: 'pierre-dark' })
+        )
+      ).toBe(
+        decoder.decode(reference.codeToHtml(code, { lang, theme: pierreDark }))
+      );
+    }
+    expect(created).toBe(0);
+  } finally {
+    WebAssembly.Instance = Instance;
+  }
+});
+
+test('a reused child lexer does not continue its last stream', async () => {
+  const { default: astro }: { default: Language } =
+    await import('@pierre/highlights/langs/astro');
+  const highlighter = await createHighlighter({
+    langs: [markdown, astro, typescript],
+    themes: [pierreDark],
+  });
+  // The first fence leaves a comment open in the stream lexer of `{...}`.
+  // The second fence starts its front matter stream with an empty body.
+  for (const code of [
+    '> ```astro\n>     nt(T) {/*',
+    "> ```astro\n> ---\n> import Layout from '../layouts/Layout.astro';",
+  ]) {
+    expect(
+      highlighter.codeToTokens(code, { lang: 'markdown', theme: 'pierre-dark' })
+    ).toEqual(
+      reference.codeToTokens(code, { lang: 'markdown', theme: pierreDark })
+    );
+  }
+});
+
+test('HTTP keeps its own lexer for bodies that are not JSON or XML', async () => {
+  const modules = await Promise.all(
+    ['http', 'json', 'xml'].map(
+      async (name) =>
+        (
+          (await import(`@pierre/highlights/langs/${name}`)) as {
+            default: Language;
+          }
+        ).default
+    )
+  );
+  const highlighter = await createHighlighter({
+    langs: modules,
+    themes: [pierreDark],
+  });
+  for (const code of [
+    'POST /a\n\nuser={{name}}&x={{y}}',
+    'POST /a\nContent-Type: text/plain\n\nhello {{name}}\n',
+    'POST /a\nContent-Type: application/x-www-form-urlencoded\n\na={{b}}&c=d\n',
+    'POST /a\nContent-Type: application/json\n\n{"a": "{{b}}", "c": {{d}}}\n',
+    'POST /a\nContent-Type: application/xml\n\n<a b="{{c}}">d</a>\n',
+  ]) {
+    expect(
+      highlighter.codeToTokens(code, { lang: 'http', theme: 'pierre-dark' })
+    ).toEqual(
+      reference.codeToTokens(code, { lang: 'http', theme: pierreDark })
+    );
+  }
+  const { code } = transformLexer(['http']);
+  expect(code).toContain('(func $httpText');
+  expect(code).not.toContain('(func $hlJson');
+  expect(code).not.toContain('(func $hlXml');
+});
+
+test('an ansi fence is literal text, as an unknown language', async () => {
+  const highlighter = await createHighlighter({
+    langs: [markdown],
+    themes: [pierreDark],
+  });
+  const code =
+    '```ansi\n\x1b[31mred\x1b[0m\n```\n\n> ```ANSI\n> a "b"\n> c\n> ```\n';
+  expect(
+    highlighter.codeToTokens(code, { lang: 'markdown', theme: 'pierre-dark' })
+  ).toEqual(
+    reference.codeToTokens(code, { lang: 'markdown', theme: pierreDark })
+  );
+});
+
+test('a large input does not pin the emitter memory', async () => {
+  const highlighter = await createHighlighter({
+    langs: [json],
+    themes: [pierreDark],
+  });
+  const options = { lang: 'json', theme: 'pierre-dark' } as const;
+  const limit = 8 * 1024 * 1024;
+  expect(
+    highlighter.codeToHtml('[1, 2, 3]\n'.repeat(200_000), options).buffer
+      .byteLength
+  ).toBeGreaterThan(limit);
+  const html = highlighter.codeToHtml('[1, 2, 3]', options);
+  expect(html.buffer.byteLength).toBeLessThanOrEqual(limit);
+  expect(decoder.decode(html)).toBe(
+    decoder.decode(
+      reference.codeToHtml('[1, 2, 3]', { lang: 'json', theme: pierreDark })
+    )
+  );
+});
+
+// WARNING: A quoted fence streams its body line by line. That is the only
+// path through the resume branches that the build drops from a standalone
+// lexer, so a wrong drop shows only here.
+test.each(Object.entries(languageSamples))(
+  'standalone %s matches the combined lexer when streamed',
+  async (name, { code }) => {
+    const entry = ['ts', 'tsx', 'js', 'jsx'].includes(name)
+      ? 'typescript'
+      : name;
+    const { default: language }: { default: Language } = await import(
+      `@pierre/highlights/langs/${entry}`
+    );
+    const selective = await createHighlighter({
+      langs: [...langs, markdown, language],
+      themes: [cssVariables],
+    });
+    const combined = await combinedPromise;
+    const lines = code.split('\n');
+    for (const quoted of [
+      `> \`\`\`${name}\n${lines.map((line) => `> ${line}\n`).join('')}> \`\`\`\n`,
+      `- item\n  \`\`\`${name}\n${lines.map((line) => `  ${line}\n`).join('')}  \`\`\`\n`,
+    ]) {
+      const options = { lang: 'markdown', theme: cssVariables };
+      expect(selective.codeToTokens(quoted, options)).toEqual(
+        combined.codeToTokens(quoted, options)
+      );
+    }
+  }
+);
+
+test.each(['handlebars', 'jinja', 'liquid', 'twig', 'mermaid'])(
+  'standalone %s resumes an embedded region when streamed',
+  async (name) => {
+    const { default: language }: { default: Language } = await import(
+      `@pierre/highlights/langs/${name}`
+    );
+    const selective = await createHighlighter({
+      langs: [...langs, language],
+      themes: [cssVariables],
+    });
+    const combined = await combinedPromise;
+    const body =
+      name === 'mermaid'
+        ? '---\ntitle: Checkout\n---\nflowchart TD\n  A --> B'
+        : '<script>\nconst a = 1;\n</script>\n<style>\na { color: red }\n</style>';
+    const code = `> \`\`\`${name}\n${body
+      .split('\n')
+      .map((line) => `> ${line}\n`)
+      .join('')}> \`\`\`\n`;
+    const options = { lang: 'markdown', theme: cssVariables };
+    const result = selective.codeToTokens(code, options);
+    expect(result).toEqual(combined.codeToTokens(code, options));
+    expect(
+      result.tokens
+        .flat()
+        .find((token) =>
+          token.content.startsWith(name === 'mermaid' ? 'title' : 'const')
+        )?.color
+    ).toBe(
+      name === 'mermaid'
+        ? 'var(--hls-property)'
+        : 'var(--hls-keyword-declaration)'
+    );
+  }
+);
