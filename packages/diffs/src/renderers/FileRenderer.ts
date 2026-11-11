@@ -449,8 +449,10 @@ export class FileRenderer<LAnnotation = undefined> {
         workerManager.highlightFileAST(this, file);
       }
     }
-    // Lets attempt to get the highlighter/languages ready immediately
+    // Lets attempt to get the highlighter/languages ready immediately, unless
+    // lazyHighlighter defers it to the first render that needs it
     else if (
+      this.options.lazyHighlighter !== true &&
       getHighlighterIfLoaded({ theme: this.getLocalHighlightTheme() }) == null
     ) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);

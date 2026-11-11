@@ -16,6 +16,7 @@ export function getDiffHunksRendererOptions<LAnnotation, Caret>(
     disableVirtualizationBuffers: options?.disableVirtualizationBuffers,
     stickyHeader: options?.stickyHeader,
     preferredHighlighter: options?.preferredHighlighter,
+    lazyHighlighter: options?.lazyHighlighter,
     useCSSClasses: options?.useCSSClasses,
     useTokenTransformer: shouldUseTokenTransformer<'diff'>(options),
     tokenizeMaxLineLength: options?.tokenizeMaxLineLength,
