@@ -50,12 +50,12 @@ function extractExamples(text: string) {
 const commonmark = JSON.parse(await fetchText(COMMONMARK));
 writeFileSync(
   new URL('../test/spec/commonmark-spec.json', import.meta.url),
-  JSON.stringify(commonmark, null, 1)
+  JSON.stringify(commonmark, null, 1) + '\n'
 );
 const gfm = extractExamples(await fetchText(GFM));
 writeFileSync(
   new URL('../test/spec/gfm-spec.json', import.meta.url),
-  JSON.stringify(gfm, null, 1)
+  JSON.stringify(gfm, null, 1) + '\n'
 );
 console.log(
   `commonmark: ${commonmark.length} examples, gfm: ${gfm.length} examples`

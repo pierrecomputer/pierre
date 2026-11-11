@@ -1,7 +1,7 @@
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
 import pierreLight from '@pierre/highlights/themes/pierre-light';
 import { createHtmlSession, renderToHtml } from '@pierre/words';
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, expectTypeOf, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { act, StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
@@ -624,6 +624,23 @@ describe('HTML rendering and the React wrapper', () => {
     expect(html('```unknown\n<literal>\n```', { plugins })).toContain(
       '&lt;literal&gt;'
     );
+  });
+  test('highlighting options require one theme selection and exclude tokenization-only settings', () => {
+    type Options = Parameters<typeof createHighlightsPlugin>[0];
+    expectTypeOf<{}>().not.toExtend<Options>();
+    expectTypeOf<{
+      theme: typeof pierreLight;
+      themes: { light: typeof pierreLight };
+    }>().not.toExtend<Options>();
+    expectTypeOf<{
+      theme: typeof pierreLight;
+      cssVariablePrefix: string;
+    }>().toExtend<Options>();
+    expectTypeOf<{
+      themes: { light: typeof pierreLight; dark: typeof pierreDark };
+      defaultColor: 'light-dark()';
+    }>().toExtend<Options>();
+    expectTypeOf<'tokenizeMaxLineLength'>().not.toExtend<keyof Options>();
   });
   test('hydrates the opaque HTML region and preserves its anchors', async () => {
     const element = (
@@ -2055,16 +2072,13 @@ describe('incremental streaming', () => {
     const options = {
       controls: false,
       plugins: {
-        code: createHighlightsPlugin({
-          theme: pierreLight,
-          tokenizeMaxLineLength: 1,
-        }),
+        code: createHighlightsPlugin({ theme: pierreLight }),
       },
     };
     const container = mountDOM();
     const renderer = createDomRenderer(container, options);
     const animated = { duration: 10_000 };
-    const source = 'Earlier\n\n```ts\nfirst\nsecond';
+    const source = 'Earlier\n\n```text\nfirst\nsecond';
     try {
       renderer.update('Earlier', true, true, animated);
       renderer.update(source, true, true, animated);

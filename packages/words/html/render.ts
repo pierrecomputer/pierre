@@ -421,9 +421,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let stable = '';
   let stableRaw = '';
   let nextCode = 0;
-  let live: CodeHighlighterSession | undefined;
-  let liveIndex = -1;
-  let liveLanguage = '';
+  let live:
+    | { session: CodeHighlighterSession; index: number; language: string }
+    | undefined;
   let liveUses = 0;
   let previousUpdate: HtmlUpdate | undefined;
   let result: RenderedHtmlUpdate | undefined;
@@ -458,9 +458,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       }
     | undefined;
   const dispose = (): void => {
-    live?.dispose();
+    const session = live?.session;
     live = undefined;
-    liveIndex = -1;
+    session?.dispose();
   };
 
   /** Drop all state after an option change or a hook error, so the next render starts clean. */
@@ -526,19 +526,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       if (isIncomplete) {
         if (
           live !== undefined &&
-          (liveIndex !== number || liveLanguage !== language)
+          (live.index !== number || live.language !== language)
         )
           dispose();
         if (live === undefined) {
-          live = plugin?.createSession?.();
-          liveIndex = number;
-          liveLanguage = language;
+          const session = plugin?.createSession?.();
+          if (session !== undefined)
+            live = { session, index: number, language };
         }
       }
       let highlighted: string | null | undefined;
-      if (live !== undefined && liveIndex === number) {
+      if (live !== undefined && live.index === number) {
         liveUses++;
-        highlighted = live.highlight({ code, language, isIncomplete });
+        highlighted = live.session.highlight({ code, language, isIncomplete });
       } else if (plugin !== undefined) {
         const key = language + '\0' + code;
         highlighted = isIncomplete
@@ -552,7 +552,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       }
       if (highlighted != null && typeof highlighted !== 'string')
         throw new TypeError('Code highlighters must return HTML strings');
-      if (!isIncomplete && liveIndex === number) dispose();
+      if (!isIncomplete && live?.index === number) dispose();
       let count = 1;
       for (
         let line = code.indexOf('\n');
@@ -687,16 +687,17 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (
       live !== undefined &&
-      (liveIndex !== fence.index || liveLanguage !== language)
+      (live.index !== fence.index || live.language !== language)
     )
       dispose();
     if (live === undefined && plugin !== undefined) {
-      live = plugin.createSession?.();
-      liveIndex = fence.index;
-      liveLanguage = language;
+      const session = plugin.createSession?.();
+      if (session !== undefined)
+        live = { session, index: fence.index, language };
     }
     // Plugins without line updates re-highlight the whole fence through format().
-    if (plugin !== undefined && live?.highlightLines === undefined) return;
+    if (plugin !== undefined && live?.session.highlightLines === undefined)
+      return;
     // Appended source changes the escaped code only from its previous last
     // line, so decode and count lines from there. V8 compares slices with
     // memcmp, but its startsWith reads each character.
@@ -730,7 +731,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (live !== undefined) liveUses++;
     let lines =
-      live?.highlightLines?.({ code, language, isIncomplete: true }) ?? null;
+      live?.session.highlightLines?.({ code, language, isIncomplete: true }) ??
+      null;
     // Highlighted and plain lines are different markup for the same code.
     if (fence.highlighted !== (lines !== null)) {
       fence.highlighted = lines !== null;
@@ -752,6 +754,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const count = Math.max(1, update.lineCount - (code.endsWith('\n') ? 1 : 0));
     const numbers = options.lineNumbers === false ? undefined : count;
     const context = fence;
+    const renderOptions = options;
     let fullPending: string | undefined;
     return {
       key: context.key,
@@ -764,11 +767,11 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       get pending() {
         if (fullPending !== undefined) return fullPending;
         const [before, after] = codeWrapper(
-          decorate(`<code${attributes}>`, options).slice(5, -1),
+          decorate(`<code${attributes}>`, renderOptions).slice(5, -1),
           language,
           true,
           numbers,
-          options
+          renderOptions
         );
         return (fullPending =
           context.before +

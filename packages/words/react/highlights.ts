@@ -3,11 +3,7 @@ import {
   isSupportedLanguage,
   LiveTokenizer,
 } from '@pierre/highlights';
-import type {
-  CodeToHtmlOptions,
-  CodeToTokensOptions,
-  LiveTokenizerOptions,
-} from '@pierre/highlights';
+import type { CodeToHtmlBaseOptions, ThemeOptions } from '@pierre/highlights';
 
 import type {
   CodeHighlighterPlugin,
@@ -19,12 +15,12 @@ const decoder = new TextDecoder();
 
 /** Highlight code with `@pierre/highlights`. An open fence keeps a live tokenizer. */
 export function createHighlightsPlugin(
-  options: Omit<CodeToTokensOptions, 'lang'>
+  options: Omit<CodeToHtmlBaseOptions, 'lang'> & ThemeOptions
 ): CodeHighlighterPlugin {
   const highlight = ({ code, language }: CodeOptions): string | null => {
     if (!isSupportedLanguage(language)) return null;
     const html = decoder.decode(
-      codeToHtml(code, { ...options, lang: language } as CodeToHtmlOptions)
+      codeToHtml(code, { ...options, lang: language })
     );
     const start = html.indexOf('<code>') + 6;
     return html.slice(start, html.lastIndexOf('</code>'));
@@ -101,7 +97,7 @@ export function createHighlightsPlugin(
             ...options,
             lang: nextLanguage,
             code,
-          } as LiveTokenizerOptions);
+          });
         } else if (code.slice(0, previous.length) === previous) {
           const line = tokenizer.lineCount - 1;
           const end = { line, character: tokenizer.getLineLength(line) };

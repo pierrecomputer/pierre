@@ -43,6 +43,7 @@
     (local $line i32)
     (local $pad i32)
     (local $r i32)
+    (local $missing i32)
     (local.set $r (global.get $leafRec))
     (i32.store8 offset=1 (local.get $r)
       (i32.and (i32.load8_u offset=1 (local.get $r))
@@ -52,6 +53,13 @@
       (then
         (local.set $pad (i32.sub (i32.const 4) (i32.and (global.get $col) (i32.const 3))))
         (local.set $beg (i32.add (local.get $beg) (i32.const 1)))))
+    (if (i32.eq (global.get $leaf) (enum.get $Blk.table))
+      (then
+        (local.set $missing (i32.sub (i32.load offset=8 (local.get $r))
+          (call $countRowCells (local.get $beg) (global.get $lineEnd))))
+        (if (i32.gt_s (local.get $missing) (i32.const 0))
+          (then (i32.store offset=12 (local.get $r)
+            (i32.add (i32.load offset=12 (local.get $r)) (local.get $missing)))))))
     ;; HTML can retain an unindented LF-separated fenced block as one input
     ;; span. ANSI keeps individual lines so it can reapply their prefixes.
     (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
@@ -608,6 +616,10 @@
               (br_if $unmatched (i32.and (global.get $blank)
                 (i32.or (i32.ne (local.get $t) (enum.get $Blk.html))
                   (i32.gt_u (global.get $htmlKind) (i32.const 5)))))
+              ;; Warning: sparse rows can amplify tiny input into gigabytes of
+              ;; output. Match cmark-gfm's budget and close the table afterward.
+              (br_if $unmatched (i32.and (i32.eq (local.get $t) (enum.get $Blk.table))
+                (i32.gt_u (i32.load offset=12 (global.get $leafRec)) (i32.const $MaxTableAutoCells))))
               ;; A pipe starts no block, so the line is the next table row.
               (if (i32.and (i32.eq (local.get $t) (enum.get $Blk.table))
                     (i32.and (i32.lt_u (global.get $indent) (i32.const 4))

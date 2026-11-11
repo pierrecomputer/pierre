@@ -366,6 +366,18 @@ void test('every escape sequence is needed and none is left open', () => {
   }
 });
 
+void test('nested styles do not wrap their depth counters', () => {
+  for (const depth of [255, 256, 257, 65536]) {
+    const marks = '*'.repeat(depth * 2);
+    assert.equal(ansi(`${marks}bold${marks}`), ansi('**bold**'));
+    assert.equal(
+      ansi(`**outer ${marks}inner${marks} outer** plain`),
+      ansi('**outer inner outer** plain')
+    );
+    assert.equal(ansi('plain'), 'plain\n');
+  }
+});
+
 void test('a style starts on the word, not on the space before it', () => {
   // the space belongs to the text around the construct, so it stays unstyled
   assert.match(

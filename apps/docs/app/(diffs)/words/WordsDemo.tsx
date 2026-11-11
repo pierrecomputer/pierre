@@ -68,6 +68,9 @@ const overrides: Components = {
 };
 
 type ExampleKind = 'streaming' | 'fades' | 'code' | 'hooks' | 'playground';
+type Playback =
+  | { status: 'ready' | 'waiting' | 'complete' }
+  | { status: 'streaming'; cursor: number };
 const hooksSample =
   '## HTML render hooks\n\nMake [links](https://diffs.com) feel at home in your app. Style `inline code`, add an icon to headings, and keep **the same Markdown**.\n\n### Keep your own style\n\n- Return HTML strings from your hooks\n- Let Words handle the streaming updates\n- Use your own classes and design tokens';
 const streamingSample =
@@ -162,8 +165,7 @@ function WordsExample({
   );
   const [stressScale, setStressScale] = useState<1 | 100 | 1000 | undefined>();
   const [source, setSource] = useState<string>(initialSource);
-  const [cursor, setCursor] = useState(initialSource.length);
-  const [playing, setPlaying] = useState(false);
+  const [playback, setPlayback] = useState<Playback>({ status: 'ready' });
   const [speed, setSpeed] = useState(8);
   const [parseIncomplete, setRepair] = useState(true);
   const repair = playground || parseIncomplete;
@@ -174,35 +176,40 @@ function WordsExample({
   const lineNumbers = playground || numbered;
   const [fadeDuration, setFadeDuration] = useState(180);
   const charactersPerStep = (fixedSpeed ? 8 : speed) * (stressScale ?? 1);
-  const isStreaming = playing && cursor < source.length;
+  const isStreaming = playback.status === 'streaming';
+  const cursor =
+    playback.status === 'streaming'
+      ? playback.cursor
+      : playback.status === 'waiting'
+        ? 0
+        : source.length;
   const sourceId = playground ? 'markdown-source' : 'words-' + kind + '-source';
   const sourceLabel = playground ? 'Markdown source' : title + ' source';
   const progress =
     source.length === 0 ? 100 : Math.round((cursor / source.length) * 100);
   const progressState =
-    cursor >= source.length
-      ? 'complete'
-      : cursor === 0
-        ? 'empty'
-        : isStreaming
-          ? 'streaming'
-          : 'paused';
+    cursor >= source.length ? 'complete' : cursor === 0 ? 'empty' : 'streaming';
 
   // Only the playground preview scrolls to follow the stream.
   useLayoutEffect(() => {
     const preview = previewRef.current;
-    if (playground && playing && preview !== null)
+    if (
+      playground &&
+      (playback.status === 'streaming' || playback.status === 'complete') &&
+      preview !== null
+    )
       preview.scrollTop = preview.scrollHeight;
-  }, [cursor, playing, playground]);
+  }, [cursor, playback.status, playground]);
   useEffect(() => {
     if (!isStreaming) return;
-    const timer = setTimeout(
-      () =>
-        setCursor((value) =>
-          Math.min(source.length, value + charactersPerStep)
-        ),
-      40
-    );
+    const timer = setTimeout(() => {
+      const nextCursor = cursor + charactersPerStep;
+      setPlayback(
+        nextCursor >= source.length
+          ? { status: 'complete' }
+          : { status: 'streaming', cursor: nextCursor }
+      );
+    }, 40);
     return () => clearTimeout(timer);
   }, [isStreaming, cursor, source.length, charactersPerStep]);
 
@@ -217,14 +224,12 @@ function WordsExample({
     setSample(value);
     setStressScale(scale);
     setSpeed(scale === undefined ? 8 : 32);
-    setPlaying(false);
     setSource(nextSource);
     // Large documents wait for playback instead of building their entire preview on selection.
-    setCursor(scale === undefined ? nextSource.length : 0);
+    setPlayback({ status: scale === undefined ? 'ready' : 'waiting' });
   };
   const replay = (): void => {
-    setCursor(0);
-    setPlaying(true);
+    setPlayback({ status: 'streaming', cursor: 0 });
   };
   const usage = [
     "import { Markdown } from '@pierre/words/react';",
@@ -321,6 +326,7 @@ function WordsExample({
       aria-labelledby={'words-' + kind}
       className="space-y-5 pb-16 md:pb-24"
       data-words-example={kind}
+      data-playback={playback.status}
       data-stream-cursor={cursor}
       data-stream-length={source.length}
       data-stream-step={charactersPerStep}
@@ -418,12 +424,11 @@ function WordsExample({
                 value={source}
                 spellCheck={false}
                 onChange={(event) => {
-                  setPlaying(false);
                   setSample('custom');
                   setSource(event.target.value);
-                  setCursor(
-                    stressScale === undefined ? event.target.value.length : 0
-                  );
+                  setPlayback({
+                    status: stressScale === undefined ? 'ready' : 'waiting',
+                  });
                 }}
               />
             </div>
@@ -434,8 +439,8 @@ function WordsExample({
               <span role="status">
                 {isStreaming
                   ? 'Streaming…'
-                  : cursor < source.length
-                    ? 'Paused'
+                  : playback.status === 'waiting'
+                    ? 'Ready to replay'
                     : 'Ready'}
               </span>
             </div>
@@ -445,8 +450,7 @@ function WordsExample({
               aria-busy={isStreaming}
             >
               <Markdown
-                // A paused stream is still unfinished, so it keeps its repairs.
-                isAnimating={cursor < source.length}
+                isAnimating={isStreaming}
                 animated={{ animation: 'fadeIn', duration: fadeDuration }}
                 parseIncompleteMarkdown={repair}
                 components={custom ? overrides : undefined}

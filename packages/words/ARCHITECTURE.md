@@ -181,3 +181,6 @@ does not reconcile individual Markdown nodes.
   digits per ordered-list start, 512 table columns, 255 backticks per code span,
   256 open brackets per leaf, 64 open delimiter runs in the block that
   completion repairs, and 1,073,610,752 bytes (2^30 − 128 KiB) of input.
+- A table closes after a row takes it past 524,288 auto-filled cells, matching
+  cmark-gfm. Later lines parse as normal Markdown. Supplied cells do not count
+  toward this limit.

@@ -82,6 +82,12 @@ void test('a link may not contain another link', () => {
   );
 });
 
+void test('reference labels keep dotless i distinct during case folding', () => {
+  assert.equal(html('[ı]\n\n[i]: /wrong'), '<p>[ı]</p>\n');
+  assert.equal(html('[i]\n\n[ı]: /wrong'), '<p>[i]</p>\n');
+  assert.equal(html('[ı]\n\n[ı]: /right'), '<p><a href="/right">ı</a></p>\n');
+});
+
 void test('malformed frontmatter still yields valid JSON', () => {
   for (const yaml of [
     'a: [',

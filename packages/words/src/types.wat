@@ -42,7 +42,7 @@
     "code"      ;; data = info string begin, aux = info string end
     "html"
     "p"
-    "table"     ;; data = column count, extra = one alignment byte per column
+    "table"     ;; data = columns, aux = auto-filled cells, extra = column alignments
     "linkdef"   ;; data/aux = destination; extra = title range, label length, label
     "footnote"  ;; container, data = assigned number; extra as for linkdef
   )
@@ -60,6 +60,7 @@
   (const $F.openerType 256)
   (const $F.closerType 512)
   (const $Nest 250)        ;; CommonMark container-nesting limit
+  (const $MaxTableAutoCells 524288)
 
   ;; Container stack entry (see $mem.container): 24 bytes so 250 levels fill
   ;; 6 KB and the same region can hold the inline opener/bracket state after

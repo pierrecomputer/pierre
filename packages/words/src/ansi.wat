@@ -103,23 +103,31 @@
         (br $l)))
     (global.set $out (local.get $dst)))
 
-  ;; A style can nest inside itself and inside another that shares a bit, so
-  ;; each bit is a byte-wide depth counter: the style only ends when the last
-  ;; opener does. An opener wraps at 256 and a closer stops at 0, all eight
-  ;; lanes at once; the style in force is the set of nonzero counters.
+  ;; Warning: inline nesting can exceed 65535, so each style needs a 32-bit
+  ;; depth counter. A byte-wide counter loses the style every 256 openers.
   (func $sgrAdjust (param $bits i32) (param $off i32)
-    (local $v v128)
-    (local $b v128)
-    (local.set $v (v128.load64_zero (i32.const $mem.sgr)))
-    (local.set $b (i8x16.popcnt
-      (v128.and (i8x16.splat (local.get $bits)) (v128.load64_zero (i32.const $K.bits)))))
-    (local.set $v (select
-      (i8x16.sub_sat_u (local.get $v) (local.get $b))
-      (i8x16.add (local.get $v) (local.get $b))
-      (local.get $off)))
-    (v128.store64_lane 0 (i32.const $mem.sgr) (local.get $v))
-    ;; x | -x has its sign bit set when x is not zero
-    (call $sgrSet (i8x16.bitmask (v128.or (local.get $v) (i8x16.neg (local.get $v))))))
+    (local $at i32)
+    (local $bit i32)
+    (local $depth i32)
+    (local $mask i32)
+    (local.set $mask (global.get $sgr))
+    (loop $adjust
+      (local.set $at (i32.add (i32.const $mem.sgr)
+        (i32.shl (i32.ctz (local.get $bits)) (i32.const 2))))
+      (local.set $bit (i32.and (local.get $bits) (i32.sub (i32.const 0) (local.get $bits))))
+      (local.set $depth (i32.load (local.get $at)))
+      (local.set $depth (select
+        (i32.sub (local.get $depth) (i32.ne (local.get $depth) (i32.const 0)))
+        (i32.add (local.get $depth) (i32.const 1))
+        (local.get $off)))
+      (i32.store (local.get $at) (local.get $depth))
+      (local.set $mask (select
+        (i32.or (local.get $mask) (local.get $bit))
+        (i32.and (local.get $mask) (i32.xor (local.get $bit) (i32.const -1)))
+        (local.get $depth)))
+      (local.set $bits (i32.xor (local.get $bits) (local.get $bit)))
+      (br_if $adjust (local.get $bits)))
+    (call $sgrSet (local.get $mask)))
 
   (func $sgrOn (param $bits i32)
     (call $sgrAdjust (local.get $bits) (i32.const 0)))

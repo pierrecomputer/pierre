@@ -207,7 +207,7 @@ table('word-table', (_, inner) => {
   return bytes;
 });
 
-// Full Unicode case folding from U+0041, used to normalize link labels:
+// Unicode caseless keys from U+0041, used to normalize link labels:
 //   [base+0]  u16 run count, u16 multi count, u16 pairs pointer, u16 blob pointer
 //   runs      u32 each: start:17, span:8, pair index:7. A run folds each of
 //             its code points, or every second one, by the same delta.
@@ -218,9 +218,10 @@ table('unicode-fold-table', (base) => {
   const runs: { lo: number; hi: number; delta: number; stride: number }[] = [];
   const multi: [number, string][] = [];
   for (let cp = 0x41; cp <= 0x2ffff; cp++) {
-    if (cp >= 0xd800 && cp <= 0xdfff) continue;
+    // Warning: uppercasing dotless i would merge it with the distinct i/I label.
+    if (cp === 0x131 || (cp >= 0xd800 && cp <= 0xdfff)) continue;
     const char = String.fromCodePoint(cp);
-    // This round trip gives the full fold: U+1E9E becomes "ss", U+03C2 becomes U+03C3.
+    // This round trip gives a caseless key: U+1E9E becomes "ss", U+03C2 becomes U+03C3.
     const fold = char.toLowerCase().toUpperCase().toLowerCase();
     if (fold === char) continue;
     const points = Array.from(fold);

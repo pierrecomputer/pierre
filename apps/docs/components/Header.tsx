@@ -115,7 +115,9 @@ function MoreMenu({
             selected={active}
           >
             {isDiffs ? (
-              <Link href={href}>{label}</Link>
+              <Link href={href} aria-current={active ? 'page' : undefined}>
+                {label}
+              </Link>
             ) : (
               <a href={href} target="_blank" rel="noopener noreferrer">
                 {label}

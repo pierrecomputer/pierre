@@ -51,7 +51,7 @@
         (global.set $ansiCol (i32.const 0))
         (global.set $sgr (i32.const 0))
         (global.set $sgrLive (i32.const 0))
-        (i64.store (i32.const $mem.sgr) (i64.const 0))
+        (memory.fill (i32.const $mem.sgr) (i32.const 0) (i32.const 32))
         (global.set $pendingSpace (i32.const 0))
         (global.set $noWrap (i32.const 0))
         (global.set $prefixSkip (i32.const 0))
@@ -69,7 +69,7 @@
     (call $renderFootnotes)
     (if (global.get $mode)
       (then
-        (i64.store (i32.const $mem.sgr) (i64.const 0))
+        (memory.fill (i32.const $mem.sgr) (i32.const 0) (i32.const 32))
         (call $sgrSet (i32.const 0))
         (call $ansiEol))))
 

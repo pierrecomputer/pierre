@@ -38,7 +38,7 @@
   ;; spine entries. Rendering reuses the first 1 KB as its type/tightness
   ;; stack and the rest as the inline opener bottoms, backtick memo, and
   ;; bracket stack, which are dead until the record stream is finished.
-  (const $mem.container $mem.sgr+8)
+  (const $mem.container $mem.sgr+32)
   (const $mem.containerEnd $mem.container+6000)
   (const $mem.opener $mem.container+1024)
   (const $mem.tickMemo $mem.opener+128)
@@ -63,6 +63,6 @@
   ;; ANSI table rendering caches measured cell widths in the otherwise unused
   ;; fixed-memory gap below the input. Inline rendering owns no bytes here.
   (const $mem.cellWidth $mem.packedEnd)
-  (const $mem.cellWidthSlots 5816) ;; (65536 - $mem.cellWidth) / 4
+  (const $mem.cellWidthSlots 5810) ;; (65536 - $mem.cellWidth) / 4
   (const $mem.input 65536)
 )
