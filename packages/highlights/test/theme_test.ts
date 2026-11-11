@@ -589,6 +589,43 @@ void test('toCSS resolves every token scope through its parents and foreground',
   }
 });
 
+void test('toCSS: optional font style variables preserve inheritance and explicit normal styles', () => {
+  const theme: Theme = {
+    name: 'font styles',
+    appearance: 'dark',
+    style: {
+      syntax: {
+        comment: { color: '#888', font_style: 'italic' },
+        'comment.doc': { font_style: 'normal' },
+        string: { color: '#abc', font_style: 'italic' },
+        keyword: { font_style: 'italic;display:none' },
+      },
+    },
+  };
+  for (const cssVariablePrefix of [undefined, '--code-']) {
+    const prefix = cssVariablePrefix ?? '--hls-';
+    const colors = toCSS(theme, { cssVariablePrefix });
+    assert.doesNotMatch(colors, /-font-style:/);
+    assert.equal(toCSS(theme, { cssVariablePrefix, fontStyle: false }), colors);
+    const css = toCSS(theme, { cssVariablePrefix, fontStyle: true });
+    for (const [scope, style] of [
+      ['comment', 'italic'],
+      ['comment.doc', 'normal'],
+      ['string.escape', 'italic'],
+      ['variable', 'normal'],
+      ['keyword', 'normal'],
+      ['number', 'normal'],
+    ]) {
+      assert.ok(
+        css.includes(
+          `${prefix}${scope.replaceAll('.', '-')}-font-style: ${style};`
+        )
+      );
+    }
+    assert.ok(!css.includes('display:none'));
+  }
+});
+
 void test('toCSS: rejects colors that can escape the declaration', () => {
   const css = toCSS({
     name: 'hostile',
