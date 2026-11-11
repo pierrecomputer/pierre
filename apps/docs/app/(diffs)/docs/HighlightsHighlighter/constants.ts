@@ -10,6 +10,17 @@ const options = {
 } as const;
 
 export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
+  highlightsDiff: {
+    file: {
+      name: 'diff.tsx',
+      contents: `<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ preferredHighlighter: 'highlights' }}
+/>`,
+    },
+    options,
+  },
   highlightsInstall: {
     file: {
       name: 'pnpm.sh',
@@ -321,6 +332,7 @@ export const {
   highlightsApiRuntime: HIGHLIGHTS_API_RUNTIME,
   highlightsApiTypes: HIGHLIGHTS_API_TYPES,
   highlightsCssVariables: HIGHLIGHTS_CSS_VARIABLES,
+  highlightsDiff: HIGHLIGHTS_DIFF,
   highlightsDualThemes: HIGHLIGHTS_DUAL_THEMES,
   highlightsDualThemesCss: HIGHLIGHTS_DUAL_THEMES_CSS,
   highlightsHtml: HIGHLIGHTS_HTML,

@@ -3,13 +3,7 @@
 Use Highlights with any `@pierre/diffs` component by setting
 `preferredHighlighter: 'highlights'`:
 
-```tsx
-<FileDiff
-  oldFile={oldFile}
-  newFile={newFile}
-  options={{ preferredHighlighter: 'highlights' }}
-/>
-```
+<DocsCodeExample {...highlightsDiff} />
 
 Highlights usually performs best without a [worker pool](#worker-pool). See
 [Highlighters](#highlighters) for backend selection and

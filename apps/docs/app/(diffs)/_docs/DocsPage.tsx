@@ -65,6 +65,7 @@ import {
   HIGHLIGHTS_API_RUNTIME,
   HIGHLIGHTS_API_TYPES,
   HIGHLIGHTS_CSS_VARIABLES,
+  HIGHLIGHTS_DIFF,
   HIGHLIGHTS_DUAL_THEMES,
   HIGHLIGHTS_DUAL_THEMES_CSS,
   HIGHLIGHTS_HTML,
@@ -678,6 +679,7 @@ async function ThemingSection() {
 
 async function HighlightsHighlighterSection() {
   const [
+    highlightsDiff,
     highlightsInstall,
     highlightsSkill,
     highlightsHtml,
@@ -694,6 +696,7 @@ async function HighlightsHighlighterSection() {
     highlightsApiRuntime,
     highlightsApiTypes,
   ] = await Promise.all([
+    preloadCodeExample(HIGHLIGHTS_DIFF),
     preloadCodeExample(HIGHLIGHTS_INSTALL),
     preloadCodeExample(HIGHLIGHTS_SKILL),
     preloadCodeExample(HIGHLIGHTS_HTML),
@@ -713,6 +716,7 @@ async function HighlightsHighlighterSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
     scope: {
+      highlightsDiff,
       highlightsInstall,
       highlightsSkill,
       highlightsHtml,
