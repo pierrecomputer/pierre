@@ -1,4 +1,4 @@
-import type { Theme } from '../lib/index';
+import type { Theme, ThemedToken } from '../lib/index';
 import {
   ansiNames,
   defaultCssVariablePrefix,
@@ -104,7 +104,11 @@ export function toCSS(
   { style }: Theme,
   {
     cssVariablePrefix = defaultCssVariablePrefix,
-  }: { cssVariablePrefix?: string } = {}
+    fontStyle = false,
+  }: {
+    cssVariablePrefix?: string;
+    fontStyle?: boolean;
+  } = {}
 ): string {
   let css = '';
   if (style == null) return css;
@@ -122,14 +126,26 @@ export function toCSS(
     ...tokenTypes.slice(1, -2),
   ])) {
     if (!/^[a-z0-9_.-]+$/i.test(name)) continue;
-    const color = resolveThemeSyntax(syntax, name)?.color ?? foreground;
-    css += `${cssVariablePrefix}${name.replace(/[._]/g, '-')}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
+    const settings = resolveThemeSyntax(syntax, name);
+    const color = settings?.color ?? foreground;
+    const variable = cssVariablePrefix + name.replace(/[._]/g, '-');
+    css += `${variable}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
+    if (fontStyle)
+      css += `${variable}-font-style: ${settings?.font_style === 'italic' ? 'italic' : 'normal'};`;
   }
   const ansi = themeAnsiColors(style);
   for (let i = 0; i < ansi.length; i++) {
     css += `${cssVariablePrefix}terminal-ansi-${ansiNames[i].replace('_', '-')}: ${ansi[i]};`;
   }
   return css;
+}
+
+/** Return the font-style variable for a token from the `cssVariables` theme. */
+export function getFontStyle(token: ThemedToken): string | undefined {
+  if (token.color?.startsWith('var(') === true) {
+    return token.color.slice(0, -1) + '-font-style)';
+  }
+  return undefined;
 }
 
 export const andromeeda: Theme = andromeedaJson;

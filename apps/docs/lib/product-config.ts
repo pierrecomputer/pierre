@@ -1,5 +1,5 @@
 export type ProductId = 'diffs' | 'trees';
-export type AgentSkillProductId = ProductId | 'highlights';
+export type AgentSkillProductId = ProductId | 'highlights' | 'words';
 
 export interface ProductConfig {
   id: ProductId;
@@ -77,6 +77,13 @@ const AGENT_SKILL_PRODUCTS: Record<
     skillInstallCommand:
       'npx skills add pierrecomputer/pierre --skill highlights',
   },
+  words: {
+    name: 'Words',
+    packageName: '@pierre/words',
+    docsPath: '/docs#words',
+    skillUrl: 'https://www.skills.sh/pierrecomputer/pierre/words',
+    skillInstallCommand: 'npx skills add pierrecomputer/pierre --skill words',
+  },
 };
 
 /** External base URL for the other product's site. */
@@ -130,6 +137,27 @@ export function getAgentPrompt(productId: AgentSkillProductId): string {
       '- Preserve the existing languages, themes, and rendering behavior unless a change is required.',
       '- Verify the highlighted output in the target runtime and run the relevant project checks.',
       "- To use Highlights in @pierre/diffs, set preferredHighlighter: 'highlights' (beta) and use canUseWASM() to fall back to 'shiki-js'.",
+      `Full reference for LLMs: ${siteUrl}/llms-full.txt`,
+    ].join('\n');
+  }
+
+  if (productId === 'words') {
+    const siteUrl = EXTERNAL_URLS.diffs;
+
+    return [
+      `Set up ${product.packageName} in this project.`,
+      '',
+      'Install its agent skill first so you have the full API reference:',
+      product.skillInstallCommand,
+      '',
+      'Then:',
+      '- Inspect the repository package manager, framework, and runtime before you change dependencies.',
+      `- Install ${product.packageName} with the repository package manager.`,
+      `- Follow the installed Words skill and the official docs: ${siteUrl}${product.docsPath}`,
+      '- Choose the API that fits the app: React, HTML/DOM, or core HTML and ANSI output.',
+      '- For streamed text, pass the full Markdown source on each update and keep one renderer per document.',
+      '- Preserve the existing styles and content policy. Treat HTML hooks and plugins as trusted code.',
+      '- Verify the output in the target runtime and run the relevant project checks.',
       `Full reference for LLMs: ${siteUrl}/llms-full.txt`,
     ].join('\n');
   }

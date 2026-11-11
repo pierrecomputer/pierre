@@ -17,6 +17,7 @@ export type {
   TreeThemeStyles,
 } from './utils/themeToTreeStyles';
 export { themeToTreeStyles } from './utils/themeToTreeStyles';
+export { DEFAULT_FILE_TREE_LABELS } from './utils/fileTreeLabels';
 export type { FileTreePreparedInput } from './preparedInput';
 export {
   prepareFileTreeInput,
@@ -55,6 +56,8 @@ export type {
   FileTreeHydrationProps,
   FileTreeInitialExpansion,
   FileTreeItemHandle,
+  FileTreeLabels,
+  FileTreeLabelsOption,
   FileTreeListener,
   FileTreeMoveEvent,
   FileTreeMoveOptions,

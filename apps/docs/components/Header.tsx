@@ -76,17 +76,18 @@ function MoreMenu({
   pathname: string;
   product: ProductConfig;
 }) {
-  const diffsUrl = getExternalUrl('diffs');
-  const themeHref =
-    product.id === 'diffs'
-      ? `${product.basePath}${DIFFS_THEME_PATH}`
-      : `${diffsUrl}${DIFFS_THEME_PATH}`;
-  const iconsHref =
-    product.id === 'diffs' ? `${product.basePath}/icons` : `${diffsUrl}/icons`;
-  const isThemeActive =
-    product.id === 'diffs' && pathname.startsWith(DIFFS_THEME_PATH);
-  const isIconsActive = product.id === 'diffs' && pathname.startsWith('/icons');
-  const isMoreActive = isThemeActive || isIconsActive;
+  const isDiffs = product.id === 'diffs';
+  const links = [
+    { label: 'Highlights', path: '/highlights' },
+    { label: 'Words', path: '/words' },
+    { label: 'Themes', path: DIFFS_THEME_PATH },
+    { label: 'Icons', path: '/icons' },
+  ].map(({ label, path }) => ({
+    label,
+    href: `${isDiffs ? product.basePath : getExternalUrl('diffs')}${path}`,
+    active: isDiffs && pathname.startsWith(`${product.basePath}${path}`),
+  }));
+  const isMoreActive = links.some((link) => link.active);
   const otherProductId = product.id === 'diffs' ? 'trees' : 'diffs';
   const otherProductName = product.id === 'diffs' ? 'Trees' : 'Diffs';
 
@@ -106,34 +107,25 @@ function MoreMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
-        <DropdownMenuItem
-          asChild
-          className="cursor-pointer"
-          selected={isThemeActive}
-        >
-          {product.id === 'diffs' ? (
-            <Link href={themeHref}>Themes</Link>
-          ) : (
-            <a href={themeHref} target="_blank" rel="noopener noreferrer">
-              Themes
-              <IconArrowUpRight className="ml-auto opacity-60" />
-            </a>
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          asChild
-          className="cursor-pointer"
-          selected={isIconsActive}
-        >
-          {product.id === 'diffs' ? (
-            <Link href={iconsHref}>Icons</Link>
-          ) : (
-            <a href={iconsHref} target="_blank" rel="noopener noreferrer">
-              Icons
-              <IconArrowUpRight className="ml-auto opacity-60" />
-            </a>
-          )}
-        </DropdownMenuItem>
+        {links.map(({ label, href, active }) => (
+          <DropdownMenuItem
+            key={href}
+            asChild
+            className="cursor-pointer"
+            selected={active}
+          >
+            {isDiffs ? (
+              <Link href={href} aria-current={active ? 'page' : undefined}>
+                {label}
+              </Link>
+            ) : (
+              <a href={href} target="_blank" rel="noopener noreferrer">
+                {label}
+                <IconArrowUpRight className="ml-auto opacity-60" />
+              </a>
+            )}
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuSeparator className="mx-1.5" />
         <DropdownMenuItem asChild className="cursor-pointer">
           <a
@@ -278,11 +270,6 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           {product.id === 'diffs' && (
             <NavLink href="/edit" basePath={product.basePath}>
               Edit
-            </NavLink>
-          )}
-          {product.id === 'diffs' && (
-            <NavLink href="/highlights" basePath={product.basePath}>
-              Highlights
             </NavLink>
           )}
           <NavLink href="/docs" basePath={product.basePath}>

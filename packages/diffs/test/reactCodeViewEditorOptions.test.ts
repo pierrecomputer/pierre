@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import {
   act,
   type ComponentType,
@@ -40,9 +40,12 @@ import {
   dispatchScroll,
   installDom,
   makeFile,
+  preloadTestHighlighter,
   wait,
   waitFor,
 } from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 afterAll(async () => {
   await disposeHighlighter();

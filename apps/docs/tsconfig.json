@@ -20,6 +20,9 @@
     },
     {
       "path": "../../packages/trees/tsconfig.json"
+    },
+    {
+      "path": "../../packages/words/tsconfig.json"
     }
   ],
   "compilerOptions": {

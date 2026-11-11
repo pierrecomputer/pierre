@@ -124,6 +124,12 @@ Runtime reconfiguration helpers:
 - `setComposition(composition?)`
 - `setGitStatus(gitStatus?)`
 - `setIcons(icons?)`
+- `setLabels(labels?)`
+
+To localize the text the tree renders (the search placeholder, accessible names,
+and git status tooltips), pass a `labels` option at construction or call
+`setLabels(...)` later. Any label you leave out falls back to its English
+default from `DEFAULT_FILE_TREE_LABELS`.
 
 #### Subscriptions and external systems
 

@@ -18,6 +18,7 @@ import {
 } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
 import { samples, tokenizerSamples } from './_samples';
 import {
   assertLineFedParity,
@@ -44,6 +45,43 @@ t.before(() => {
 });
 
 const terminatorRe = /\r\n|\r|\n/g;
+
+void t.test(
+  'LiveTokenizer: HTML serializes raw records without materializing token objects',
+  () => {
+    const code = 'const value = "<&>";';
+    for (const live of [
+      new LiveTokenizer({ lang: 'typescript', theme: pierreDark, code }),
+      new LiveTokenizer({
+        lang: 'typescript',
+        themes: { light: pierreLight, dark: pierreDark },
+        defaultColor: 'light-dark()',
+        code,
+      }),
+    ]) {
+      live.getLineTokens = () => {
+        throw new Error('The HTML path must not construct themed tokens');
+      };
+      const html = live.getLineHtml(0);
+      assert.ok(html.includes('color:'));
+      assert.ok(html.includes('&lt;&amp;&gt;'));
+      assert.ok(!html.includes('--hls-null'));
+      assert.equal(live.getLineHtml(0), html);
+      live.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: code.length },
+            end: { line: 0, character: code.length },
+          },
+          newText: ' // more',
+        },
+      ]);
+      assert.ok(live.getLineHtml(0).includes('// more'));
+      live.dispose();
+      assert.throws(() => live.getLineHtml(0), /disposed/);
+    }
+  }
+);
 
 /** Content of each line; CRLF, lone CR, and lone LF all terminate. */
 function docLines(code: string): string[] {

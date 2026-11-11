@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": [
+    "lib/**/*.ts",
+    "scripts/**/*.ts",
+    "benchmark/**/*.ts",
+    "react/**/*.ts",
+    "react/**/*.tsx",
+    "html/**/*.ts",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "tsdown.config.ts",
+    "package.json"
+  ],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "types": ["bun"],
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "allowImportingTsExtensions": true,
+    "module": "ESNext"
+  }
+}
