@@ -15,12 +15,15 @@ describe('code example hydration data', () => {
     };
     const original = await preloadFile(input);
     const compact = await preloadCodeExample(input);
-    const { shared, content } = compact.prerenderedHTML;
+    const { sprite, shared, content } = compact.prerenderedHTML;
 
-    expect({ ...compact, prerenderedHTML: shared.html + content }).toEqual(
-      original
-    );
-    expect(shared.html).toContain('data-icon-sprite');
+    expect({
+      ...compact,
+      prerenderedHTML: sprite + shared.html + content,
+    }).toEqual(original);
+    expect(sprite).toStartWith('<svg data-icon-sprite');
+    expect(sprite).not.toContain('data-core-css');
+    expect(shared.html).toStartWith('<style data-core-css');
     expect(shared.html).toContain('data-core-css');
     expect(shared.html).not.toContain('data-theme-css');
     expect(content).not.toContain('data-core-css');
