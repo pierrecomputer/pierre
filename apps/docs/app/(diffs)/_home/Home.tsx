@@ -32,6 +32,7 @@ import { TokenHover } from '../_examples/TokenHover/TokenHover';
 import { AgentDemoSection } from './AgentDemoSection';
 import { HighlightsBanner } from './HighlightsBanner';
 import { preloadAuiPrerenderedDiffs } from './preloadAuiDiffs';
+import { WordsBanner } from './WordsBanner';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -50,6 +51,7 @@ export default function Home() {
           <HeadingAnchors />
           <section className="space-y-12 pb-8">
             <HighlightsBanner />
+            <WordsBanner />
             <EditSection />
             <SplitUnifiedSection />
             <DiffStylesSection />
