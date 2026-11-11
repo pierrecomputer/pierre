@@ -87,7 +87,7 @@ export function WordsBenchmarks() {
   const [scale, setScale] = useState(100);
   const [mode, setMode] = useState('highlight');
   const [memoryMode, setMemoryMode] = useState('highlight');
-  const [footprintId, setFootprintId] = useState('base');
+  const [footprintId, setFootprintId] = useState('shared');
   const [methodOpen, setMethodOpen] = useState(false);
   const [fixture, setFixture] = useState('gfm-spec.md');
   const suite = benchmark.packageRun;
@@ -111,7 +111,15 @@ export function WordsBenchmarks() {
   const memory = run.rows.find(
     (row) => row.scale === 100 && row.mode === memoryMode
   )!;
-  const footprint = run.download[footprintId === 'base' ? 'base' : 'highlight'];
+  const footprint =
+    run.download[
+      footprintId === 'base'
+        ? 'base'
+        : footprintId === 'shared'
+          ? 'shared'
+          : 'highlight'
+    ];
+  const coverage = run.downloadCoverage;
   const downloadRun = run.downloadRun;
   const date = new Intl.DateTimeFormat('en-US', {
     month: 'long',
@@ -365,8 +373,10 @@ export function WordsBenchmarks() {
               onChange={(event) => setFootprintId(event.target.value)}
             >
               <option value="base">Base renderer · initial load</option>
-              <option value="highlight">
-                Syntax highlighting · loaded total
+              <option value="highlight">TypeScript · loaded total</option>
+              <option value="shared">
+                {coverage.sharedLanguages.length} shared languages · loaded
+                total
               </option>
             </ChartSelect>
           </label>
@@ -386,8 +396,19 @@ export function WordsBenchmarks() {
             {footprintId === 'highlight' && (
               <>
                 {' '}
-                Words includes all built-in languages and two Pierre themes.
-                Streamdown loads TypeScript and two default themes.
+                Words includes all {coverage.wordsLanguages.length} built-in
+                languages and Pierre light/dark. Streamdown loads TypeScript and
+                GitHub light/dark.
+              </>
+            )}
+            {footprintId === 'shared' && (
+              <>
+                {' '}
+                Both use GitHub light/dark and support the same{' '}
+                {coverage.sharedLanguages.length} language requests. Words
+                includes all {coverage.wordsLanguages.length} built-in
+                languages. Streamdown loads languages on demand; this total
+                includes the shared set and required embedded grammars.
               </>
             )}
           </p>

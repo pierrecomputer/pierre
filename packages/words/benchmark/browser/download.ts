@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { environment } from '../shared.ts';
+import {
+  inputChunk,
+  loadDownloadCoverage,
+  staticChunkClosure,
+} from './coverage.ts';
+import type { DownloadCoverage } from './coverage.ts';
 
 export interface DownloadRun {
   date: string;
@@ -15,6 +21,7 @@ export interface DownloadRun {
 export interface DownloadReport {
   download: Record<string, Record<string, number>>;
   downloadRun: DownloadRun;
+  downloadCoverage: DownloadCoverage;
 }
 
 const directory = import.meta.dir;
@@ -26,6 +33,7 @@ export async function measureDownload(): Promise<DownloadReport> {
     'streamdown',
     '@streamdown/code',
     '@playwright/test',
+    'shiki',
   ]);
   const downloadRun: DownloadRun = {
     date: system.date,
@@ -35,6 +43,7 @@ export async function measureDownload(): Promise<DownloadReport> {
     bun: Bun.version,
     versions: system.versions,
   };
+  const downloadCoverage = await loadDownloadCoverage();
 
   // Minified ESM with React external; each JS file gzipped on its own.
   const variants = {
@@ -47,6 +56,14 @@ export async function measureDownload(): Promise<DownloadReport> {
       export { createHighlightsPlugin } from '@pierre/words/highlights';
       export { default as light } from '@pierre/highlights/themes/pierre-light';
       export { default as dark } from '@pierre/highlights/themes/pierre-dark';`,
+      streamdown: `export { Streamdown } from 'streamdown';
+      export { code } from '@streamdown/code';`,
+    },
+    shared: {
+      words: `export { Markdown } from '@pierre/words/react';
+      export { createHighlightsPlugin } from '@pierre/words/highlights';
+      export { default as light } from '@pierre/highlights/themes/github-light';
+      export { default as dark } from '@pierre/highlights/themes/github-dark';`,
       streamdown: `export { Streamdown } from 'streamdown';
       export { code } from '@streamdown/code';`,
     },
@@ -74,16 +91,9 @@ export async function measureDownload(): Promise<DownloadReport> {
           Bun.gzipSync(new Uint8Array(await file.arrayBuffer()), { level: 9 })
             .length
         );
-      const loaded = new Set<string>();
-      const visit = (path: string) => {
-        if (loaded.has(path)) return;
-        loaded.add(path);
-        for (const { path: next, kind } of chunks[path].imports)
-          if (kind !== 'dynamic-import') visit(next);
-      };
-      visit(outputs.find((file) => file.kind === 'entry-point')!.path);
+      const roots = [outputs.find((file) => file.kind === 'entry-point')!.path];
       // Streamdown loads the TypeScript grammar, its default themes, and the highlighted body on demand.
-      if (id === 'highlight' && library === 'streamdown')
+      if (id !== 'base' && library === 'streamdown')
         for (const input of [
           /langs\/dist\/typescript\.mjs$/,
           /themes\/dist\/github-light\.mjs$/,
@@ -94,8 +104,31 @@ export async function measureDownload(): Promise<DownloadReport> {
             Object.keys(chunks[path].inputs).some((name) => input.test(name))
           );
           assert.equal(lazy.length, 1, `${input}: lazy chunk`);
-          visit(lazy[0]);
+          roots.push(lazy[0]);
         }
+      if (id === 'shared' && library === 'streamdown')
+        for (const { streamdown } of downloadCoverage.sharedLanguages)
+          roots.push(
+            inputChunk(chunks, (path) =>
+              path.endsWith(`/@shikijs/langs/dist/${streamdown}.mjs`)
+            )
+          );
+      const loaded = staticChunkClosure(chunks, roots);
+      if (id === 'shared' && library === 'streamdown') {
+        const grammarNames = new Set<string>();
+        for (const path of loaded)
+          for (const input of Object.keys(chunks[path].inputs)) {
+            const match = /\/@shikijs\/langs\/dist\/([^/]+)\.mjs$/.exec(
+              input.replaceAll('\\', '/')
+            );
+            if (match !== null) grammarNames.add(match[1]);
+          }
+        assert.deepEqual(
+          [...grammarNames].sort(),
+          downloadCoverage.shared.loadedStreamdownLanguages,
+          'Shared download must include exactly the requested grammar arrays and their dependencies'
+        );
+      }
       download[id][library] = [...loaded].reduce(
         (sum, path) => sum + sizes.get(path)!,
         0
@@ -112,7 +145,7 @@ export async function measureDownload(): Promise<DownloadReport> {
       { level: 9 }
     ).length;
 
-  return { download, downloadRun };
+  return { download, downloadRun, downloadCoverage };
 }
 
 /** Keep the standalone and full benchmark's download comparison identical. */

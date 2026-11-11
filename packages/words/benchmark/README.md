@@ -160,23 +160,43 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 > Browser timing and heap measured on **2026-11-10** at commit `8b0ad8f3` with
 > Bun 1.4.0 and Chromium 134.0.6998.35 on Apple M4 Max with 128 GiB RAM.
 
-| Download, gzip KB                | @pierre/words | streamdown |
-| -------------------------------- | ------------: | ---------: |
-| Base React renderer              |          50.7 |      165.3 |
-| With highlighting and two themes |         247.3 |      244.9 |
-| CSS                              |           1.2 |        0.4 |
+| Download, gzip KB                      | @pierre/words | streamdown |
+| -------------------------------------- | ------------: | ---------: |
+| Base React renderer · initial load     |          50.7 |      165.3 |
+| TypeScript highlighting · loaded total |         247.3 |      244.9 |
+| 148 shared languages · loaded total    |         247.0 |     1057.8 |
+| CSS                                    |           1.2 |        0.4 |
 
 Download size uses minified `Bun.build` output with React external, with each JS
-file gzipped at level 9. The base row counts static imports only. The second row
-adds the chunks that Streamdown loads on demand for TypeScript, its two themes,
-and highlighted code. Words keeps all grammars in one file.
+file gzipped at level 9. Each loaded chunk is counted once, including its static
+dependencies. Unrequested dynamic imports are excluded. The base row counts
+static imports only.
+
+The TypeScript row adds the chunks Streamdown loads on demand for TypeScript,
+GitHub light/dark, and highlighted code. Words includes all 152 built-in
+languages and Pierre light/dark, matching the browser timing workload above.
+
+The shared-language row requests the 148 canonical languages supported by both
+libraries, resolving aliases without counting them as extra languages. Both use
+GitHub light/dark. Words still includes all 152 built-in languages; CUDA, GROQ,
+PromQL, and TSRX have no matching Shiki language. Streamdown also loads the
+required embedded grammar dependencies of those 148 requests. Its remaining
+languages, optional embedded languages, and unused themes are excluded.
+
+The highlighting rows measure cumulative transfer after the specified languages
+have loaded. Streamdown loads languages on demand, so a page using fewer
+languages downloads less than the shared-language total. This comparison matches
+language requests, not each highlighter's tokenization or grammar
+implementation.
 
 Download sizes are measured independently of browser timings. The `downloadRun`
 in [`benchmark.json`](../../../apps/docs/public/words/benchmark.json) records
 their date, source commit, Bun version, and dependency versions.
+`downloadCoverage` records the canonical language mapping, unmatched languages,
+shared themes, and loaded Streamdown grammar IDs so the scope can be audited.
 
-> Download sizes measured on **2026-11-11** at commit `8b0ad8f3` with Bun 1.4.0.
-> Standalone and full browser measurements agree byte for byte.
+> Download sizes measured on **2026-11-11** with Bun 1.4.0. The exact source
+> commit is recorded in `downloadRun`.
 
 ## Sampling
 

@@ -48,6 +48,7 @@ const system = environment([
   'streamdown',
   '@streamdown/code',
   '@playwright/test',
+  'shiki',
 ]);
 console.log({ ...system, bun: Bun.version, commit, dirty, settings });
 
@@ -224,7 +225,7 @@ const summarize = ({ scale, mode }: { scale: number; mode: string }) => {
   };
 };
 
-const { download, downloadRun } = await measureDownload();
+const { download, downloadRun, downloadCoverage } = await measureDownload();
 
 const report = {
   date: system.date,
@@ -241,6 +242,7 @@ const report = {
   stress: cases.filter((entry) => entry.stress).map(summarize),
   download,
   downloadRun,
+  downloadCoverage,
 };
 console.log(`\nChromium ${chrome}: median of per-run p95 (lower is better)`);
 console.table(
