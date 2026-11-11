@@ -85,7 +85,7 @@ void t.test('silk: declarations name the next word', () => {
 
 void t.test('silk: control flow, effects, and contextual words', () => {
   const html = distinctHl(
-    'fn f<T>(xs: List<T>) -> T ? Error where T: Copy {\n  for x in xs { if x { break } else { continue } }\n  while true { run tick() }\n  match x { Kind.A => fail Error.Bad {}, _ => return self }\n  let n = typeof(x)\n  drop(move x)\n}'
+    'fn f<T>(xs: List<T>) -> T ! Error where T: Copy {\n  for x in xs { if x { break } else { continue } }\n  while true { run tick() }\n  match x { Kind.A => fail Error.Bad {}, _ => return self }\n  let n = typeof(x)\n  drop(move x)\n}'
   );
   for (const word of [
     'for',
@@ -113,9 +113,45 @@ void t.test('silk: control flow, effects, and contextual words', () => {
   assert.equal(exact(html, '=>'), distinctColor('operator'));
 });
 
+void t.test('silk: contextual words need their parser lookahead', () => {
+  const html = distinctHl(
+    "test fn parses() {}\nfn pick(v: simd<f32, 4>, m: mask<4>) -> some<T: Show> T {\n  match place v { _ => 0 }\n}\nlet cb: for<use 'call> fn() -> () = run make()"
+  );
+  for (const word of ['test', 'some', 'place', 'use']) {
+    assert.equal(exact(html, word), distinctColor('keyword'), word);
+  }
+  for (const type of ['simd', 'mask']) {
+    assert.equal(exact(html, type), distinctColor('type.builtin'), type);
+  }
+  assert.equal(exact(html, 'parses'), distinctColor('function.definition'));
+
+  // the same words without that lookahead are ordinary names
+  const plain = distinctHl(
+    'let test = 1\ntest(some)\nlet use = mask & simd + 1\nplace = 2\nx.place\ntest.fnord'
+  );
+  for (const word of ['use', 'some', 'mask', 'simd']) {
+    assert.equal(exact(plain, word), distinctColor('variable'), word);
+  }
+  assert.equal(exact(plain, 'test'), distinctColor('variable'));
+  assert.equal(exact(plain, 'place'), distinctColor('variable'));
+  assert.equal(exact(plain, 'fnord'), distinctColor('property'));
+});
+
+void t.test('silk: directive arguments and dotted tuples', () => {
+  const html = distinctHl(
+    '@foreign(noCapture: .("buffer"))\n@features("aes", "ssse3")\nfn f() -> () where P provides &Clock from &mut Clock {}'
+  );
+  assert.equal(exact(html, '@foreign'), distinctColor('attribute'));
+  assert.equal(exact(html, '@features'), distinctColor('attribute'));
+  assert.equal(exact(html, 'noCapture'), distinctColor('variable.parameter'));
+  assert.equal(within(html, 'buffer'), distinctColor('string'));
+  assert.equal(exact(html, 'provides'), distinctColor('keyword'));
+  assert.equal(exact(html, 'Clock'), distinctColor('type'));
+});
+
 void t.test('silk: imports, members, directives, and lifetimes', () => {
   const html = distinctHl(
-    "import silk.core.option {Option}\nimport lexer.span as sp\n@inline\nfn get('a, v: &'a View) -> u8 {\n  v.items.len() + v.inner.count + pair.0\n}\nconst MAX_LEN = 4"
+    "import silk.core.option {Option}\nimport lexer.span as sp\n@inlineAlways\nfn get('a, v: &'a View) -> u8 {\n  v.items.len() + v.inner.count + pair.0\n}\nconst MAX_LEN = 4"
   );
   assert.equal(exact(html, 'import'), distinctColor('keyword.import'));
   assert.equal(exact(html, 'as'), distinctColor('keyword.import'));
@@ -123,7 +159,7 @@ void t.test('silk: imports, members, directives, and lifetimes', () => {
     assert.equal(exact(html, ns), distinctColor('namespace'), ns);
   }
   assert.equal(exact(html, 'Option'), distinctColor('type'));
-  assert.equal(exact(html, '@inline'), distinctColor('attribute'));
+  assert.equal(exact(html, '@inlineAlways'), distinctColor('attribute'));
   assert.equal(exact(html, "'a"), distinctColor('label'));
   assert.equal(exact(html, 'items'), distinctColor('property'));
   assert.equal(exact(html, 'len'), distinctColor('function.method'));

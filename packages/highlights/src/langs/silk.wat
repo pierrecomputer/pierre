@@ -41,6 +41,61 @@
           (then (local.set $hl (enum.get $Token.keyword))))))
     (local.get $hl))
 
+  ;; Contextual words stay identifiers unless the next token is the one the
+  ;; Silk parser itself looks ahead for: `test fn`, `some<` (an opaque result),
+  ;; `simd<` and `mask<` (vector types), `use 'a` (a callable's outer binder),
+  ;; and `match place value`. $p is the first byte after the word's trailing
+  ;; spaces. Returns the token, or -1 for an ordinary name.
+  (func $silkContextualHl (param $lhs i32) (param $rhs i32) (param $p i32) (result i32)
+    (local $n i32)
+    (local $w i32)
+    (local $pc i32)
+    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
+    ;; the wide load stays inside the input slack, as in $silkWordHl
+    (local.set $w (i32.load (local.get $lhs)))
+    (local.set $pc (call $templateByte (local.get $p)))
+    (if (i32.eq (local.get $n) (i32.const 4))
+      (then
+        (if
+          (i32.and
+            (i32.eq (local.get $w) (i32.const "test"))
+            (i32.and
+              (i32.eq (i32.load16_u (local.get $p)) (i32.const "fn"))
+              (i32.and
+                (i32.le_u (i32.add (local.get $p) (i32.const 2)) (global.get $end))
+                (i32.eqz
+                  (call $lexIsIdentContinue
+                    (call $templateByte (i32.add (local.get $p) (i32.const 2))))))))
+          (then (return (enum.get $Token.keyword))))
+        (if (i32.eq (local.get $pc) (i32.const "<"))
+          (then
+            (if (i32.eq (local.get $w) (i32.const "some"))
+              (then (return (enum.get $Token.keyword))))
+            (if
+              (i32.or
+                (i32.eq (local.get $w) (i32.const "simd"))
+                (i32.eq (local.get $w) (i32.const "mask")))
+              (then (return (enum.get $Token.type.builtin))))))))
+    (if
+      (i32.and
+        (i32.eq (local.get $n) (i32.const 3))
+        (i32.and
+          (i32.eq (i32.and (local.get $w) (i32.const 0xffffff)) (i32.const "use"))
+          (i32.eq (local.get $pc) (i32.const 39))))
+      (then (return (enum.get $Token.keyword))))
+    (if
+      (i32.and
+        (i32.eq (local.get $n) (i32.const 5))
+        (i32.and
+          (i32.and
+            (i32.eq (local.get $w) (i32.const "plac"))
+            (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "e")))
+          (i32.and
+            (i32.gt_u (local.get $p) (local.get $rhs))
+            (call $lexIsIdentStart (local.get $pc)))))
+      (then (return (enum.get $Token.keyword))))
+    (i32.const -1))
+
   (func $silkIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
@@ -220,7 +275,7 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        ;; a directive such as `@inline` or `@trace("label")`
+        ;; a directive such as `@inlineAlways` or `@features("aes")`
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "@")) (call $lexIsIdentStart (local.get $c2)))
           (then
@@ -245,6 +300,15 @@
                 (i32.const -1)
                 (call $silkWordHl (local.get $lhs) (local.get $rhs))
                 (local.get $member)))
+            ;; a contextual word, unless it names a binding or a member
+            (if
+              (i32.and
+                (i32.eq (local.get $kind) (i32.const -1))
+                (i32.eqz
+                  (i32.or (i32.or (local.get $member) (local.get $expect)) (local.get $importCtx))))
+              (then
+                (local.set $kind
+                  (call $silkContextualHl (local.get $lhs) (local.get $rhs) (local.get $p)))))
             ;; an import path keeps only `as` as a keyword
             (if
               (i32.and

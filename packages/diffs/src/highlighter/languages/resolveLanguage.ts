@@ -1,9 +1,10 @@
-import type { BundledLanguage } from 'shiki';
+import type { BundledLanguage, LanguageRegistration } from 'shiki';
 
 import type { SupportedLanguages } from '../../types';
 import { isWorkerContext } from '../../utils/isWorkerContext';
 import type { ResolvedLanguage } from '../../worker';
 import {
+  HighlightsOnlyLanguages,
   RegisteredCustomLanguages,
   ResolvedLanguages,
   ResolvingLanguages,
@@ -32,6 +33,8 @@ export async function resolveLanguage(
       if (Object.prototype.hasOwnProperty.call(bundledLanguages, lang))
         loader = bundledLanguages[lang as BundledLanguage];
     }
+    if (loader == null && HighlightsOnlyLanguages.has(lang))
+      loader = () => loadPlainTextGrammar(lang);
     if (loader == null)
       throw new Error(
         `resolveLanguage: "${lang}" not found in bundled or custom languages`
@@ -48,4 +51,16 @@ export async function resolveLanguage(
     if (ResolvingLanguages.get(lang) === resolver)
       ResolvingLanguages.delete(lang);
   }
+}
+
+// An empty TextMate grammar named `lang`: Shiki tokenizes every line as one
+// plain run, so a Highlights-only language renders like `text` under Shiki.
+function loadPlainTextGrammar(
+  lang: string
+): Promise<{ default: LanguageRegistration[] }> {
+  return Promise.resolve({
+    default: [
+      { name: lang, scopeName: `source.${lang}`, patterns: [], repository: {} },
+    ],
+  });
 }
