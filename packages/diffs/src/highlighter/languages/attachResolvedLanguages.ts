@@ -1,10 +1,14 @@
 import type { DiffsHighlighter } from '../../types';
 import type { ResolvedLanguage } from '../../worker';
-import { AttachedLanguages, ResolvedLanguages } from './constants';
+import {
+  AttachedLanguages,
+  ResolvedHighlightsLanguages,
+  ResolvedLanguages,
+} from './constants';
 
 /**
  * Record resolved grammars in the shared language cache and attach them to a
- * highlighter. Highlights bundles its lexers and ignores the grammars.
+ * highlighter. Highlights attaches only the lexers registered for it.
  */
 export function attachResolvedLanguages(
   resolvedLanguages: ResolvedLanguage | ResolvedLanguage[],
@@ -15,10 +19,14 @@ export function attachResolvedLanguages(
     : [resolvedLanguages]) {
     // The first resolution of a name wins so every instance and worker
     // attaches the same grammar data for it.
-    let lang = ResolvedLanguages.get(resolvedLang.name);
+    const cache =
+      resolvedLang.highlights == null
+        ? ResolvedLanguages
+        : ResolvedHighlightsLanguages;
+    let lang = cache.get(resolvedLang.name);
     if (lang == null) {
       lang = resolvedLang;
-      ResolvedLanguages.set(resolvedLang.name, lang);
+      cache.set(resolvedLang.name, lang);
     }
     highlighter.attachLanguages([lang]);
     AttachedLanguages.add(lang.name);

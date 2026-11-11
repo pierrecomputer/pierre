@@ -6,7 +6,7 @@ Zed-compatible object with the same ID and display name. The
 [third-party notices](../NOTICE.md) list source versions and attribution.
 
 ```js
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { vitesseDark } from '@pierre/highlights/themes';
 

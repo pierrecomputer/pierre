@@ -1,20 +1,20 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
   Theme,
   ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import {
   codeToHtml,
   codeToTokens,
   init,
   LiveTokenizer,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
+import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
 import tokenTypes from '../lib/token-types';
 import {
   lineRecordsToTokens,

@@ -19,16 +19,18 @@ editable document.
 pnpm add @pierre/highlights
 ```
 
-Import `createHighlighter` from `@pierre/highlights`, select language modules
-from `@pierre/highlights/langs/*`, and supply theme objects. Await the factory
-once. Its output methods then run synchronously. The core entry imports no
-language or theme bundle. Use the combined `langs` export from
-`@pierre/highlights/langs` when the application needs all languages.
+`@pierre/highlights` contains all lexers in one Wasm module, initialized at
+import, and all themes. Import shared output functions, `StreamTokenizer`, and
+`LiveTokenizer` from it. `registerLanguages(langs)` adds custom lexers to its
+shared output functions.
 
-Import shared output functions, `StreamTokenizer`, and `LiveTokenizer` from
-`@pierre/highlights/full`. This entry initializes the shared WebAssembly module
-at import. `createHighlighter` requires `{ langs, themes }` and returns a
-promise through either entry. Do not pass a Wasm module or omit the options.
+`@pierre/highlights/core` contains no lexers or themes. Import
+`createHighlighter` from it, select language modules from
+`@pierre/highlights/langs/*`, and supply theme objects. Await the factory once.
+Its output methods then run synchronously. Use the combined `langs` export from
+`@pierre/highlights/langs` when the application needs all languages.
+`createHighlighter` requires `{ langs, themes }` and returns a promise. Do not
+pass a Wasm module or omit the options.
 
 ## Select a reference
 

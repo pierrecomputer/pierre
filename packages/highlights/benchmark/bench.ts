@@ -4,8 +4,8 @@ import { arch, cpus, totalmem, type } from 'node:os';
 import { WriteStream } from 'node:tty';
 import type { Language } from 'tree-sitter-highlight';
 
+import { init, StreamTokenizer, type ThemedToken } from '../lib/core';
 import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
-import { init, StreamTokenizer, type ThemedToken } from '../lib/index';
 import { lineRecordsToTokens, resolveOptionThemes } from '../lib/tokens';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };

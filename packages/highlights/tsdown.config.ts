@@ -4,6 +4,7 @@ import { defineConfig, type UserConfig } from 'tsdown';
 const tokenTypesPath = fileURLToPath(
   new URL('./lib/token-types.ts', import.meta.url)
 );
+const themesPath = fileURLToPath(new URL('./themes/index.ts', import.meta.url));
 
 // The two configs share dist/, so neither may clean the other's output.
 // `scripts/build.ts` emits highlights.wasm and highlights.wasm.mjs
@@ -23,7 +24,6 @@ const config: UserConfig[] = defineConfig([
       'lib/theme.ts',
       'lib/token-types.ts',
       'lib/languages.ts',
-      'lib/default.ts',
       'lib/workerd.ts',
     ],
     tsconfig: './tsconfig.json',
@@ -35,8 +35,10 @@ const config: UserConfig[] = defineConfig([
     unbundle: true,
     platform: 'neutral',
     deps: {
-      neverBundle: [/^\.\/(?:highlights|emitter)\.wasm/, /^node:/],
+      neverBundle: [/^\.\/(?:highlights|emitter)\.wasm/, /^node:/, themesPath],
     },
+    // The main entry re-exports the separately bundled themes module.
+    outputOptions: { paths: { [themesPath]: './themes.js' } },
   },
   // Bundle named theme exports into one module. scripts/build.ts writes the
   // separate loader so lazy imports do not pull in every theme's data.

@@ -28,8 +28,21 @@ registerCustomLanguage(
 registerCustomTheme('my-theme', () => import('./my-textmate-theme.json'));
 ```
 
-Set `file.lang` and `options.theme` to the registered names. Custom languages
-apply to Shiki; Highlights bundles its lexers and ignores custom grammars.
+Set `file.lang` and `options.theme` to the registered names. TextMate grammars
+apply to Shiki. For Highlights, register a lexer from `@pierre/wat-tools` with
+the `'highlights'` type; its `aliases` must include the registered name:
+
+```ts
+registerCustomLanguage(
+  'my-language',
+  () => import('./my-language.highlights.js'),
+  ['myext'],
+  'highlights'
+);
+```
+
+Highlights uses registered lexers for rendered code. Its stream and editor
+tokenizers use built-in lexers only.
 
 For a CSS palette that works across backends:
 

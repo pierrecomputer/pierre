@@ -5,7 +5,7 @@ import {
   type Lang,
   type Language,
   type RegisteredHighlighter,
-} from '@pierre/highlights';
+} from '@pierre/highlights/core';
 import { langs } from '@pierre/highlights/langs';
 import css from '@pierre/highlights/langs/css';
 import html from '@pierre/highlights/langs/html';
@@ -265,7 +265,7 @@ test('the full theme bundle resolves canonical IDs, including accented display n
 
 test('selective browser bundles omit the combined Wasm and unused theme data', async () => {
   const source = `
-    import { createHighlighter } from '@pierre/highlights';
+    import { createHighlighter } from '@pierre/highlights/core';
     import typescript from '@pierre/highlights/langs/typescript';
     import { pierreDark } from '@pierre/highlights/themes';
     export const highlighter = createHighlighter({ langs: [typescript], themes: [pierreDark] });
@@ -557,23 +557,23 @@ test('plain text and ANSI work without loading language modules', async () => {
   }
 });
 
-test('the main entry exports only the registered-highlighter API', async () => {
-  expect(Object.keys(await import('@pierre/highlights')).sort()).toEqual([
-    'createHighlighter',
-    'isSupportedLanguage',
-  ]);
-  const full = await import('@pierre/highlights/full');
-  for (const name of [
+test('the main entry adds the combined lexers and all themes to the core API', async () => {
+  const core = await import('@pierre/highlights/core');
+  const main = await import('@pierre/highlights');
+  expect(Object.keys(core).sort()).toEqual([
+    'LiveTokenizer',
+    'StreamTokenizer',
     'codeToHtml',
     'codeToTokens',
     'createHighlighter',
     'init',
     'isSupportedLanguage',
-    'LiveTokenizer',
-    'StreamTokenizer',
+    'registerLanguages',
     'tokenNames',
-  ]) {
-    expect(full).toHaveProperty(name);
+  ]);
+  for (const name of Object.keys(core)) expect(main).toHaveProperty(name);
+  for (const name of Object.keys(await import('@pierre/highlights/themes'))) {
+    expect(main).toHaveProperty(name);
   }
 });
 

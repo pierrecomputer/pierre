@@ -4,7 +4,7 @@ import type {
   ThemedToken,
   ThemeFamily,
   TokensResult,
-} from './index';
+} from './core';
 import type { PreparedTheme } from './theme';
 import {
   escapeAttribute,

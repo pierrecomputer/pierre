@@ -1,14 +1,14 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { LANGS } from '../lib/highlighter';
-import type { Highlighter, Lang } from '../lib/index';
+import type { Highlighter, Lang } from '../lib/core';
 import {
   codeToTokens,
   init,
   isSupportedLanguage,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
+import { LANGS } from '../lib/highlighter';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { samples } from './_samples';

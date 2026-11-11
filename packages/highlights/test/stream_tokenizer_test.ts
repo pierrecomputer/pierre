@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { CodeToTokensOptions, ThemedToken } from '../lib/index';
-import { codeToTokens, StreamTokenizer } from '../lib/index';
+import type { CodeToTokensOptions, ThemedToken } from '../lib/core';
+import { codeToTokens, StreamTokenizer } from '../lib/core';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
 import { tokenizerSamples } from './_samples';

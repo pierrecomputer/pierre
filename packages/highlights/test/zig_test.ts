@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { isSupportedLanguage } from '../lib/index';
+import { isSupportedLanguage } from '../lib/core';
 import languages from '../lib/languages';
 import { zonSample } from './_samples';
 import {
