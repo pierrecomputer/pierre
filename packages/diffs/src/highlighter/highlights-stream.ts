@@ -1,7 +1,4 @@
-import {
-  type CodeToTokensOptions,
-  LiveTokenizer,
-} from '@pierre/highlights/full';
+import { type CodeToTokensOptions, LiveTokenizer } from '@pierre/highlights';
 
 import { appendItems } from '../utils/appendItems';
 import { BaseStreamTokenizer } from './stream-tokenizer';

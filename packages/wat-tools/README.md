@@ -31,7 +31,7 @@ writeFileSync(
 ```
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import { pierreDark } from '@pierre/highlights/themes';
 import example from './example.js';
 
@@ -52,6 +52,11 @@ Cloudflare Workers cannot compile WebAssembly from bytes. There, write the
 decoded bytes to a `.wasm` file, import it, and pass the module as `wasm`. Each
 descriptor has one lexer entry, so every alias maps to `0`. The canonical name
 is added automatically.
+
+With the main `@pierre/highlights` entry, `registerLanguages([example])` adds
+the lexer to the shared `codeToHtml()` and `codeToTokens()` functions. In
+`@pierre/diffs`, use
+`registerCustomLanguage(name, loader, files, 'highlights')`.
 
 ## Writing a lexer
 

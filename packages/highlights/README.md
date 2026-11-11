@@ -12,9 +12,15 @@ Read the [Documentation](https://diffs.com/docs#highlights).
 pnpm add @pierre/highlights
 ```
 
-The core package imports no language or theme bundle. `createHighlighter()`
-compiles the selected WebAssembly modules. Its `codeToHtml()` and
-`codeToTokens()` methods then run synchronously.
+The package has two entries:
+
+| Entry                     | Contents                                                                                 |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `@pierre/highlights`      | All lexers in one Wasm module, initialized at import, and all themes                     |
+| `@pierre/highlights/core` | No lexers or themes. `createHighlighter()` compiles the language modules that you select |
+
+Both entries export the same functions and types. In `/core`, call `init()`
+before the shared functions and tokenizers.
 
 The package runs in Node.js, browsers, and Cloudflare Workers. Workers cannot
 compile WebAssembly from bytes, so the `workerd` export condition selects
@@ -23,7 +29,20 @@ modules that import compiled `.wasm` files.
 ## Quick start
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { codeToHtml, pierreDark } from '@pierre/highlights';
+
+const html = new TextDecoder().decode(
+  codeToHtml('const a = 1', { lang: 'ts', theme: pierreDark })
+);
+```
+
+## Selected languages
+
+`createHighlighter()` compiles the selected WebAssembly modules. Its
+`codeToHtml()` and `codeToTokens()` methods then run synchronously.
+
+```ts
+import { createHighlighter } from '@pierre/highlights/core';
 import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
@@ -50,10 +69,10 @@ until you add CSS. Code fences also accept registered custom language names.
 `highlighter.getLoadedLanguages()` returns the names and aliases that `lang`
 accepts. A `ThemeFamily` in `themes` registers each of its members.
 
-## Full language and theme bundle
+All languages and themes are also available as registered names:
 
 ```ts
-import { createHighlighter } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
 import { langs } from '@pierre/highlights/langs';
 import { themes } from '@pierre/highlights/themes';
 
@@ -85,9 +104,15 @@ const language = buildHighlightsLexer({
 
 The result implements the `Language` type. Save this descriptor in a JavaScript
 module and pass it to `createHighlighter({ langs: [language], themes })`. A
-custom name that a built-in language also uses takes only that name. The
-[lexer guide](../wat-tools/README.md) describes the shared scanners, token
-types, and memory declarations.
+custom name that a built-in language also uses takes only that name.
+
+With the main entry, `registerLanguages([language])` adds the lexer to the
+shared `codeToHtml()` and `codeToTokens()` functions. Its names override
+built-in names there. Registration compiles base64 lexers synchronously and uses
+the emitter in the combined module, so no other Wasm loads. Built-in lexers do
+not embed registered languages, and `StreamTokenizer` and `LiveTokenizer` use
+only built-in lexers. The [lexer guide](../wat-tools/README.md) describes the
+shared scanners, token types, and memory declarations.
 
 ## Output and shared runtime
 
@@ -100,11 +125,9 @@ a copy for later use.
 promise. The previous no-argument and `WebAssembly.Module` forms are no longer
 supported.
 
-The `@pierre/highlights/full` entry initializes a shared highlighter at import.
-It provides the top-level `codeToHtml()` and `codeToTokens()` functions,
-`StreamTokenizer`, and `LiveTokenizer`. Its `createHighlighter` export uses the
-same options-only async API. The main entry exports only `createHighlighter`,
-`isSupportedLanguage`, and the types.
+The top-level `codeToHtml()` and `codeToTokens()` functions, `StreamTokenizer`,
+and `LiveTokenizer` use the shared highlighter that the main entry initializes
+at import.
 
 Read the [API reference](https://diffs.com/docs#highlights) for tokens, input
 streams, document edits, and themes.

@@ -1,10 +1,10 @@
 import { isAnsi } from './ansi';
+import type { CodeToTokensOptions, ThemedToken } from './core';
 import {
   assertWasmModule,
   HighlightsHighlighter,
   langIdOf,
 } from './highlighter';
-import type { CodeToTokensOptions, ThemedToken } from './index';
 import { defaultCssVariablePrefix, escapeAttribute } from './theme';
 import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';

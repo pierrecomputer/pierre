@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 
+import type { Lang, Theme, ThemedToken, ThemeFamily } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { HighlightsHighlighter } from '../lib/highlighter';
-import type { Lang, Theme, ThemedToken, ThemeFamily } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import { prepareTheme } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { listTokenTypes, transformWat, wat2wasm } from '../scripts/build';

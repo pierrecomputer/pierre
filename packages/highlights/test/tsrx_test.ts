@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { codeToTokens, init } from '../lib/index';
+import { codeToTokens, init } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { samples } from './_samples';
 import {

@@ -12,7 +12,7 @@ bytes internally, including characters split across chunks. Given an existing
 `ReadableStream<Uint8Array>` named `responseBody`:
 
 ```ts
-import { StreamTokenizer } from '@pierre/highlights/full';
+import { StreamTokenizer } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const lines = responseBody.pipeThrough(
@@ -32,7 +32,7 @@ feeding strings or UTF-8 bytes.
 ## Push chunks synchronously
 
 ```ts
-import { StreamTokenizer } from '@pierre/highlights/full';
+import { StreamTokenizer } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });

@@ -11,7 +11,7 @@ import type {
   ThemedToken,
   ThemeFamily,
   TokensResult,
-} from './index';
+} from './core';
 import languages from './languages';
 import {
   defaultCssVariablePrefix,
@@ -109,9 +109,13 @@ export class HighlightsHighlighter implements Highlighter<
     this.themePtr = Number(
       (instance.exports.themePtr as WebAssembly.Global | undefined)?.value ?? 0
     );
-    this.#highlight = (instance.exports.highlight ??
-      instance.exports.lex ??
-      instance.exports.emit) as () => void;
+    // WARNING: Only an emitter gets `languageIds`. The combined module also
+    // exports `emit`, so it can be the emitter for registered lexers.
+    this.#highlight = (
+      languageIds === undefined
+        ? (instance.exports.highlight ?? instance.exports.lex)
+        : instance.exports.emit
+    ) as () => void;
     this.#highlightStream = (instance.exports.highlightStream ??
       instance.exports.lexStream) as (reset: number | boolean) => void;
     this.pageN = this.memory.buffer.byteLength / pageSize;
@@ -460,6 +464,14 @@ export function initEmitter(wasm: WebAssembly.Module): void {
   emitterModule = Promise.resolve(wasm);
 }
 
+/** Decode a base64 lexer. */
+function lexerBytes(wasm: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(wasm);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 export async function createHighlighter(
   options: HighlighterOptions
 ): Promise<RegisteredHighlighter> {
@@ -474,15 +486,25 @@ export async function createHighlighter(
       if (typeof wasm !== 'string') return Promise.resolve(wasm);
       let compiledModule = lexerModules.get(language);
       if (compiledModule === undefined) {
-        const binary = atob(wasm);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        compiledModule = WebAssembly.compile(bytes);
+        compiledModule = WebAssembly.compile(lexerBytes(wasm));
         lexerModules.set(language, compiledModule);
       }
       return compiledModule;
     }),
   ]);
+  return buildHighlighter(emitter, languages, compiled, options.themes);
+}
+
+/**
+ * Register compiled lexers and themes with an emitter. Shared by
+ * `createHighlighter` and `registerLanguages`.
+ */
+function buildHighlighter(
+  emitter: WebAssembly.Module,
+  languages: readonly Language[],
+  compiled: readonly WebAssembly.Module[],
+  themeOptions: HighlighterOptions['themes']
+): RegisteredHighlighter {
   const registrations = new Map<
     number,
     { module: WebAssembly.Module; id: number }
@@ -663,7 +685,7 @@ export async function createHighlighter(
     return lexer;
   }
   const themes = new Map<string, Theme>();
-  for (const value of options.themes) {
+  for (const value of themeOptions) {
     const first = resolveTheme(value);
     // A family name selects the first member, as a `ThemeFamily` option does.
     let names = first === value || !value.name ? [] : [value.name];
@@ -792,6 +814,39 @@ export async function createHighlighter(
   };
 }
 
+let registered: RegisteredHighlighter | undefined;
+let registeredLangs: Language[] = [];
+let registeredNames = new Set<string>();
+const compiledLexers = new WeakMap<Language, WebAssembly.Module>();
+
+/**
+ * Add lexers to `codeToHtml` and `codeToTokens`. Their names and aliases
+ * override built-in names there. Call `init` first; the combined module emits
+ * their HTML, so no other Wasm loads.
+ */
+export function registerLanguages(langs: readonly Language[]): void {
+  const list = [...new Set([...registeredLangs, ...langs])];
+  // WARNING: Base64 lexers compile synchronously. Browsers allow this on the
+  // main thread only for modules up to 8 MB.
+  const compiled = list.map((language) => {
+    const { wasm } = language;
+    if (typeof wasm !== 'string') return wasm;
+    let compiledModule = compiledLexers.get(language);
+    if (compiledModule === undefined) {
+      compiledModule = new WebAssembly.Module(lexerBytes(wasm));
+      compiledLexers.set(language, compiledModule);
+    }
+    return compiledModule;
+  });
+  registered = buildHighlighter(assertWasmModule(), list, compiled, []);
+  registeredLangs = list;
+  registeredNames = new Set(
+    list.flatMap((language) =>
+      Object.keys(language.aliases).map((name) => name.toLowerCase())
+    )
+  );
+}
+
 /**
  * Return a `<pre class="highlights">` fragment with inline colors.
  * With `themes`, each span uses the default theme inline and CSS custom
@@ -799,8 +854,14 @@ export async function createHighlighter(
  */
 export function codeToHtml(
   input: string | Uint8Array | ArrayBuffer,
-  options: CodeToHtmlOptions
+  options: CodeToHtmlOptions<Theme | ThemeFamily, Lang | (string & {})>
 ): Uint8Array {
+  if (
+    registered !== undefined &&
+    registeredNames.has(String(options.lang).toLowerCase())
+  ) {
+    return registered.codeToHtml(input, options);
+  }
   return assertShared(input).codeToHtml(input, options);
 }
 
@@ -811,8 +872,14 @@ export function codeToHtml(
  */
 export function codeToTokens(
   input: string | Uint8Array | ArrayBuffer,
-  options: CodeToTokensOptions
+  options: CodeToTokensOptions<Theme | ThemeFamily, Lang | (string & {})>
 ): TokensResult {
+  if (
+    registered !== undefined &&
+    registeredNames.has(String(options.lang).toLowerCase())
+  ) {
+    return registered.codeToTokens(input, options);
+  }
   return assertShared(input).codeToTokens(input, options);
 }
 
