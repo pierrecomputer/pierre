@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { WordsBenchmarks } from './WordsBenchmarks';
 import { WordsDemo } from './WordsDemo';
+import { WordsInstall } from './WordsInstall';
 import { AgentSkillMenu } from '@/components/AgentSkillMenu';
 import { BetaBadge } from '@/components/BetaBadge';
 import Footer from '@/components/Footer';
@@ -45,7 +46,8 @@ export default function WordsPage() {
               benchmark.
             </p>
           </div>
-          <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center min-[460px]:gap-6">
+          <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:flex-wrap min-[460px]:items-center min-[460px]:gap-6">
+            <WordsInstall />
             <AgentSkillMenu productId="words" />
             <Button
               variant="link"
