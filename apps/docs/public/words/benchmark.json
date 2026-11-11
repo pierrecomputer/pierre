@@ -1,7 +1,7 @@
 {
   "browser": {
-    "date": "2026-11-10T22:42:03.239Z",
-    "commit": "286321781f6dea1f87c98f8b55eed9875239c984",
+    "date": "2026-11-10T23:56:20.369Z",
+    "commit": "8b0ad8f3d8b26a86059c577f64dc1d1e7c87d239",
     "dirty": false,
     "bun": "1.4.0",
     "platform": "darwin/arm64",
@@ -35,7 +35,7 @@
           "runs": 3,
           "updateP95Ms": 1,
           "frameP95Ms": 17.6,
-          "heapBytes": 604184,
+          "heapBytes": 604264,
           "elements": 409
         },
         "streamdown": {
@@ -43,7 +43,7 @@
           "runs": 3,
           "updateP95Ms": 3.4,
           "frameP95Ms": 17.6,
-          "heapBytes": 3114212,
+          "heapBytes": 3114096,
           "elements": 590
         }
       },
@@ -55,17 +55,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.3,
+          "updateP95Ms": 1.1,
           "frameP95Ms": 17.6,
-          "heapBytes": 724340,
+          "heapBytes": 724112,
           "elements": 929
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 3.4,
+          "updateP95Ms": 3.1,
           "frameP95Ms": 17.6,
-          "heapBytes": 3921036,
+          "heapBytes": 3920024,
           "elements": 950
         }
       },
@@ -77,17 +77,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.3,
-          "frameP95Ms": 17.7,
-          "heapBytes": 842620,
+          "updateP95Ms": 1.2,
+          "frameP95Ms": 17.6,
+          "heapBytes": 851100,
           "elements": 929
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 3.8,
-          "frameP95Ms": 17.7,
-          "heapBytes": 6014116,
+          "updateP95Ms": 3.5,
+          "frameP95Ms": 17.6,
+          "heapBytes": 6015860,
           "elements": 950
         }
       },
@@ -100,16 +100,16 @@
           "status": "completed",
           "runs": 3,
           "updateP95Ms": 1.1,
-          "frameP95Ms": 17.4,
-          "heapBytes": 4062580,
+          "frameP95Ms": 17.5,
+          "heapBytes": 4129832,
           "elements": 40801
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 25.9,
-          "frameP95Ms": 17.1,
-          "heapBytes": 126035824,
+          "updateP95Ms": 24.7,
+          "frameP95Ms": 17.4,
+          "heapBytes": 126034308,
           "elements": 58901
         }
       },
@@ -121,17 +121,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 1.9,
-          "frameP95Ms": 17.4,
-          "heapBytes": 5874796,
+          "updateP95Ms": 2,
+          "frameP95Ms": 17.6,
+          "heapBytes": 5738080,
           "elements": 90961
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 25.3,
-          "frameP95Ms": 17.3,
-          "heapBytes": 142336256,
+          "updateP95Ms": 26.9,
+          "frameP95Ms": 17.6,
+          "heapBytes": 142898232,
           "elements": 94901
         }
       },
@@ -143,17 +143,17 @@
         "words": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 6.9,
-          "frameP95Ms": 17.2,
-          "heapBytes": 7654760,
+          "updateP95Ms": 6.8,
+          "frameP95Ms": 17.6,
+          "heapBytes": 7615916,
           "elements": 90961
         },
         "streamdown": {
           "status": "completed",
           "runs": 3,
-          "updateP95Ms": 42.1,
+          "updateP95Ms": 41.9,
           "frameP95Ms": 83.4,
-          "heapBytes": 237342880,
+          "heapBytes": 236601596,
           "elements": 94901
         }
       }
@@ -167,17 +167,17 @@
         "words": {
           "status": "completed",
           "runs": 1,
-          "updateP95Ms": 3.6,
+          "updateP95Ms": 3.4,
           "frameP95Ms": 133.4,
-          "heapBytes": 35744804,
+          "heapBytes": 36014192,
           "elements": 890281
         },
         "streamdown": {
           "status": "completed",
           "runs": 1,
-          "updateP95Ms": 219,
-          "frameP95Ms": 283.4,
-          "heapBytes": 1397203328,
+          "updateP95Ms": 226.2,
+          "frameP95Ms": 283.5,
+          "heapBytes": 1397235188,
           "elements": 949001
         }
       },
@@ -189,9 +189,9 @@
         "words": {
           "status": "completed",
           "runs": 1,
-          "updateP95Ms": 190.1,
-          "frameP95Ms": 216.6,
-          "heapBytes": 52044900,
+          "updateP95Ms": 172.7,
+          "frameP95Ms": 200.1,
+          "heapBytes": 53893784,
           "elements": 890281
         },
         "streamdown": {
@@ -214,8 +214,8 @@
       }
     },
     "downloadRun": {
-      "date": "2026-11-10T23:46:28.572Z",
-      "commit": "babf827b888f419735c0e9f55040798ac1738041",
+      "date": "2026-11-11T00:12:37.327Z",
+      "commit": "8b0ad8f3d8b26a86059c577f64dc1d1e7c87d239",
       "dirty": false,
       "bun": "1.4.0",
       "versions": {
@@ -227,9 +227,9 @@
     }
   },
   "packageRun": {
-    "head": "286321781f6dea1f87c98f8b55eed9875239c984",
+    "head": "8b0ad8f3d8b26a86059c577f64dc1d1e7c87d239",
     "environment": {
-      "date": "2026-11-10T22:38:18.367Z",
+      "date": "2026-11-10T23:52:25.452Z",
       "node": "v24.11.0",
       "platform": "darwin",
       "arch": "arm64",
@@ -260,46 +260,46 @@
           {
             "fixture": "tiny.md",
             "values": [
-              326.4,
-              140.5,
-              102.7,
-              13.7
+              326.9,
+              139.7,
+              102.6,
+              13.6
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              397.5,
-              205,
-              163.5,
-              23
+              382.6,
+              198.9,
+              158.6,
+              21.8
             ]
           },
           {
             "fixture": "assistant-explain.md",
             "values": [
-              451.4,
-              220.4,
-              176.1,
-              32.8
+              437.5,
+              212.5,
+              170.3,
+              30.5
             ]
           },
           {
             "fixture": "simd.md",
             "values": [
-              377.2,
-              185,
-              128.8,
-              22
+              366.1,
+              178.4,
+              123.9,
+              20.9
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              371.9,
-              170.7,
-              122.7,
-              30.4
+              366.1,
+              168.5,
+              121.9,
+              29.7
             ]
           }
         ]
@@ -317,36 +317,36 @@
           {
             "fixture": "tiny.md",
             "values": [
-              3.09,
+              3.29,
               7.17
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              9.91,
-              31.43
+              10.25,
+              34.48
             ]
           },
           {
             "fixture": "assistant-explain.md",
             "values": [
-              6.08,
-              11.21
+              5.99,
+              11.16
             ]
           },
           {
             "fixture": "simd.md",
             "values": [
-              40.48,
-              177.21
+              41.48,
+              186.5
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              243.13,
-              4219.14
+              279.56,
+              4511.27
             ]
           }
         ]
@@ -367,7 +367,7 @@
             "fixture": "tiny.md",
             "values": [
               3.2,
-              0.9,
+              1.0,
               7.7,
               6.2
             ]
@@ -376,9 +376,9 @@
             "fixture": "assistant-review.md",
             "values": [
               3.2,
-              0.9,
-              7.7,
-              6
+              1.0,
+              7.8,
+              5.9
             ]
           },
           {
@@ -386,8 +386,8 @@
             "values": [
               3.2,
               0.9,
-              7.7,
-              5.7
+              7.8,
+              6.0
             ]
           },
           {
@@ -395,17 +395,17 @@
             "values": [
               3.5,
               1.4,
-              11.7,
-              8.5
+              11.8,
+              8.6
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
-              8.3,
-              2.5,
-              20.5,
-              17.7
+              8.6,
+              2.7,
+              20.7,
+              18.0
             ]
           }
         ]
@@ -423,36 +423,36 @@
           {
             "fixture": "tiny.md",
             "values": [
-              75.7,
-              86
+              76.2,
+              86.3
             ]
           },
           {
             "fixture": "assistant-review.md",
             "values": [
-              84,
-              121.5
+              85.0,
+              122.2
             ]
           },
           {
             "fixture": "assistant-explain.md",
             "values": [
-              77.2,
-              93.7
+              76.6,
+              93.4
             ]
           },
           {
             "fixture": "simd.md",
             "values": [
-              111.1,
-              146.4
+              110.6,
+              149.1
             ]
           },
           {
             "fixture": "gfm-spec.md",
             "values": [
               203.4,
-              331.6
+              333.0
             ]
           }
         ]
