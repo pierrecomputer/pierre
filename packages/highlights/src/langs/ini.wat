@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The OR with 0x20 maps only letters onto letters; the mask drops bytes past $rhs.
   (func $iniIsBoolean (param $lhs i32) (param $rhs i32) (result i32)

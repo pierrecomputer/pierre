@@ -3,11 +3,19 @@
 ## HTML
 
 ```ts
-import { codeToHtml } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [pierreDark],
+});
 const html = new TextDecoder().decode(
-  codeToHtml('const answer = 42;', { lang: 'ts', theme: pierreDark })
+  highlighter.codeToHtml('const answer = 42;', {
+    lang: 'ts',
+    theme: 'pierre-dark',
+  })
 );
 ```
 
@@ -15,18 +23,23 @@ const html = new TextDecoder().decode(
 `<pre class="highlights"><code>…</code></pre>` fragment. Source text is
 HTML-escaped and theme styles are applied inline. Decode the bytes immediately,
 or call `.slice()` before retaining them across another highlighting or
-tokenization call on the same highlighter. The top-level `codeToHtml()` and
-`codeToTokens()` share one instance.
+tokenization call on the same highlighter. The shared functions from
+`@pierre/highlights/full` share one instance.
 
 ## Tokens
 
 ```ts
-import { codeToTokens } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
-const result = codeToTokens('const answer = 42;\n', {
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [pierreDark],
+});
+const result = highlighter.codeToTokens('const answer = 42;\n', {
   lang: 'ts',
-  theme: pierreDark,
+  theme: 'pierre-dark',
 });
 
 console.log(result.tokens[0]); // ThemedToken[] for the first line
@@ -64,8 +77,8 @@ UTF-8. Supply `lang` and exactly one of `theme` or `themes`.
 | Option                  | Meaning                                                                                                                      |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `lang`                  | Built-in language name or alias, typed as `Lang`                                                                             |
-| `theme`                 | One Zed `Theme` or `ThemeFamily` object                                                                                      |
-| `themes`                | Non-empty map of named theme objects; see [Themes](themes.md)                                                                |
+| `theme`                 | One registered theme name, Zed `Theme`, or `ThemeFamily` object                                                              |
+| `themes`                | Non-empty map of theme objects or registered names; see [Themes](themes.md)                                                  |
 | `cssVariablePrefix`     | Prefix for CSS-variable colors and theme properties; default `--hls-`                                                        |
 | `defaultColor`          | With `themes`, inline theme key (default `light`), `false`, or `'light-dark()'`                                              |
 | `tokenizeMaxLineLength` | Tokenization only: lines at or above this UTF-16 length become one token without syntax styling; `0` or omission disables it |
@@ -74,7 +87,7 @@ The line-length limit reduces token objects, while the lexer still processes the
 line to preserve subsequent state. It also applies to streaming and live
 tokenization, but is not an HTML option.
 
-Language names and aliases are case-insensitive. Unknown names throw
+Language names and aliases are case-insensitive. Unknown or unloaded names throw
 `RangeError`. Highlights performs no automatic language detection or filename
 resolution. Validate external labels and choose an explicit fallback:
 
@@ -87,22 +100,42 @@ const lang = isSupportedLanguage(requestedLanguage)
   : 'plain';
 ```
 
-`isSupportedLanguage()` narrows a string to `Lang`. Plain text aliases include
-`plain`, `text`, `plaintext`, and `txt`. `ansi` reads terminal SGR colors, as in
-Shiki, and removes escape sequences from token content; `LiveTokenizer` treats
-it as `plain`. Lexers are built in; custom TextMate grammar registration belongs
-to the Shiki APIs in `@pierre/diffs`.
+`isSupportedLanguage()` narrows a string to `Lang`. It checks the full language
+catalog, not the languages selected for one highlighter. Plain text aliases
+include `plain`, `text`, `plaintext`, and `txt`. `ansi` reads terminal SGR
+colors, as in Shiki, and removes escape sequences from token content;
+`LiveTokenizer` treats it as `plain`. Lexers are built in; custom TextMate
+grammar registration belongs to the Shiki APIs in `@pierre/diffs`.
 
 ## Runtime and types
 
-`createHighlighter()` returns an isolated `Highlighter` using the initialized
-module. Embedders can pass their own compiled `WebAssembly.Module` to
-`createHighlighter(module)` or replace the shared highlighter with
-`init(module)`. Both functions are synchronous. `Highlighter` exposes
-`codeToHtml()` and `codeToTokens()` with the signatures above. Import the normal
-package entry for automatic initialization.
+`await createHighlighter({ langs, themes })` returns an isolated
+`RegisteredHighlighter`. Select only the language modules and themes that the
+application needs. The TypeScript module supports `ts`, `tsx`, `cts`, `mts`,
+`js`, `jsx`, `mjs`, and `cjs`.
 
-Core public types are `Highlighter`, `Lang`, `CodeToHtmlBaseOptions`,
+For the full language and theme bundle:
+
+```ts
+import { createHighlighter } from '@pierre/highlights';
+import { langs } from '@pierre/highlights/langs';
+import { themes } from '@pierre/highlights/themes';
+
+const highlighter = await createHighlighter({ langs, themes });
+```
+
+`langs` contains one combined lexer Wasm. Individual language modules contain
+standalone Wasm as base64 in JavaScript. Each lexer supplies source bytes and
+token records to the separate emitter Wasm.
+
+The `@pierre/highlights/full` entry initializes a shared highlighter at import.
+Its `init(module)` accepts an existing combined `WebAssembly.Module` and runs
+synchronously. Its `createHighlighter` export uses the same options-only async
+API as the main entry. The factory does not accept a Wasm module or omitted
+options.
+
+Core public types are `Highlighter`, `RegisteredHighlighter`,
+`HighlighterOptions`, `Language`, `Lang`, `CodeToHtmlBaseOptions`,
 `CodeToHtmlOptions`, `CodeToTokensBaseOptions`, `CodeToTokensOptions`,
 `ThemeOptions`, `ThemedToken`, and `TokensResult`. Theme types are covered in
 [Themes](themes.md); live types and `tokenNames` in

@@ -1,5 +1,8 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
   ;; first CR or LF at or after $p, or $end - one SIMD compare per 16 bytes
@@ -73,6 +76,11 @@
 
   (func $astroTsxRange (param $from i32) (param $to i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (call $embedRegion (i32.const 3) (local.get $from) (local.get $to) (i32.const -1))
+        (global.set $ptr (local.get $to))
+        (return)))
     ;; skip empty ranges, but still land $ptr at $to: the front-matter caller
     ;; relies on it when an unterminated `---` opener leaves body == close
     (if (i32.ge_u (local.get $from) (local.get $to))
@@ -107,7 +115,9 @@
             (global.set $ptr (local.get $body))
             (local.set $lineEnd (global.get $end))
             (global.set $end (local.get $close))
-            (call $hlTsxStream (i32.const 1))
+            (if (global.get $externalEmbedding)
+              (then (call $embedRegion (i32.const 3) (local.get $body) (local.get $close) (i32.const 1)))
+              (else (call $hlTsxStream (i32.const 1))))
             (global.set $end (local.get $lineEnd))
             (global.set $ptr (local.get $close))
             (global.set $streamRegionStarted (i32.const 1)))

@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.makefileWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
   ;; `\` line joins share $dockerLineJoin
   (import "./dockerfile.wat")
 
@@ -7,7 +11,7 @@
   ;; directives that may head a line; group 5 holds the built-in functions
   ;; looked up after `$(`. `endef` shares its hash features with `endif` and
   ;; `addprefix` with `addsuffix`, so both are matched directly.
-  (keyword-table $makefileWords $mem.makefileWords $mem.matlabWords
+  (keyword-table $makefileWords $mem.makefileWords $mem.makefileWords+192
     (group ;; 1: conditionals
       "ifeq" "ifneq" "ifdef" "ifndef" "else" "endif")
     (group "include" "sinclude" "-include") ;; 2: includes

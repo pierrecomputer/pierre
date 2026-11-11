@@ -29,10 +29,33 @@ package includes the lexers, so it does not download language grammars.
 
 <DocsCodeExample {...highlightsInstall} />
 
-The package runs in Node.js, browsers, and Cloudflare Workers. It selects and
-initializes the WebAssembly loader for your runtime at import. `codeToHtml()`
-and `codeToTokens()` run synchronously after import. You do not need to call
-`init()` or register languages.
+The core package imports no language or theme bundle. Select the languages and
+themes that your application needs, then await `createHighlighter()` once. Its
+`codeToHtml()` and `codeToTokens()` methods run synchronously.
+
+Each module under `@pierre/highlights/langs/*` contains a standalone Wasm lexer
+as base64. The TypeScript module supports TypeScript, JavaScript, TSX, and JSX.
+Embedded code uses the registered languages too. With `langs: [ts, html]`, HTML
+script bodies use JavaScript, while style bodies remain plain text until you
+register CSS.
+
+Use `buildHighlightsLexer` from `@pierre/wat-tools` at build time to add a
+custom WAT lexer. Save the returned `Language` descriptor in a JavaScript module
+and include it in `langs`. Markdown fences also accept its registered names and
+aliases.
+
+For all languages and themes, use the combined lexer bundle:
+
+```ts
+import { createHighlighter } from '@pierre/highlights';
+import { langs } from '@pierre/highlights/langs';
+import { themes } from '@pierre/highlights/themes';
+
+const highlighter = await createHighlighter({ langs, themes });
+```
+
+The `@pierre/highlights/full` entry initializes a shared highlighter at import.
+It provides top-level output functions, `StreamTokenizer`, and `LiveTokenizer`.
 
 ### Build with agents
 
@@ -58,9 +81,8 @@ section for details.
 
 <DocsCodeExample {...highlightsHtml} />
 
-The returned bytes can share WebAssembly memory. The top-level `codeToHtml()`
-and `codeToTokens()` functions share one highlighter instance. A later call on
-that instance can overwrite the bytes.
+The returned bytes can share WebAssembly memory. A later call on the same
+highlighter instance can overwrite the bytes.
 
 Decode the bytes before the next call. Use `.slice()` to keep a copy for later
 use.
@@ -98,7 +120,7 @@ these options:
 | Option                  | Behavior                                                                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `lang`                  | A built-in language name or alias                                                                                                                                                                       |
-| `theme`                 | One Zed `Theme` or `ThemeFamily`                                                                                                                                                                        |
+| `theme`                 | One Zed `Theme`, `ThemeFamily`, or registered name for a configured highlighter                                                                                                                         |
 | `themes`                | A non-empty map of named themes, such as `{ dark, light }`. The output includes styles for each theme.                                                                                                  |
 | `cssVariablePrefix`     | Prefix for CSS colors and properties for multiple themes. The default is `--hls-`.                                                                                                                      |
 | `defaultColor`          | With `themes`, the key for inline styles. The default is `light`. A missing key causes an error. `false` uses only custom properties. `'light-dark()'` combines the required `light` and `dark` themes. |
@@ -112,7 +134,7 @@ those lines to preserve state for later lines.
 
 ### Streaming
 
-`StreamTokenizer` extends
+Import `StreamTokenizer` from `@pierre/highlights/full`. It extends
 [`TransformStream`](https://developer.mozilla.org/en-US/docs/Web/API/TransformStream).
 It accepts UTF-8 `Uint8Array` chunks and emits one `ThemedToken[]` per complete
 line. It works directly with `readable.pipeThrough(tokenizer)`. When the
@@ -149,9 +171,10 @@ final line if the input ends with a line break. Repeated disposal is safe.
 
 ### Incremental editing
 
-`LiveTokenizer` keeps a document and its lexer state in a separate WebAssembly
-instance. It tokenizes edited lines and continues through later lines whose
-syntax changes. It stops when the lexer state matches the saved state.
+Import `LiveTokenizer` from `@pierre/highlights/full`. It keeps a document and
+its lexer state in a separate WebAssembly instance. It tokenizes edited lines
+and continues through later lines whose syntax changes. It stops when the lexer
+state matches the saved state.
 
 Edit positions use zero-based line numbers and UTF-16 character offsets. Every
 range in a batch refers to the document before the edits. Each range excludes
@@ -238,8 +261,10 @@ named theme from `@pierre/highlights/themes` or use a per-theme default export:
 
 <DocsCodeExample {...highlightsThemes} />
 
-Theme options need objects, not string IDs. A `ThemeFamily` uses its first
-member. Highlights caches themes by object identity.
+Pass theme objects to `createHighlighter({ themes })`. Output options accept
+those objects or their registered names, such as `'pierre-dark'`. The shared
+functions and tokenizer constructors require theme objects. A `ThemeFamily` uses
+its first member. Highlights caches themes by object identity.
 
 Pass `family.themes[index]` to choose another member. Create a new theme object
 when you change its values.
@@ -295,8 +320,10 @@ and do not need custom properties.
 
 ### Languages
 
-Language names and aliases ignore case. Unsupported names cause a `RangeError`.
-Highlights does not detect the language from the code or filename.
+Language names and aliases ignore case. A configured highlighter accepts only
+languages from its `langs` option, plus the built-in plain text and ANSI modes.
+Unsupported or unloaded names cause a `RangeError`. Highlights does not detect
+the language from the code or filename.
 
 Use `isSupportedLanguage(value)` to validate a string and narrow its type to
 `Lang`. Use `plain` for text without syntax colors. Its aliases are `text`,
@@ -481,24 +508,38 @@ Built-in languages and their aliases are included in the `Lang` type:
 
 #### `@pierre/highlights`
 
-The main entry exports runtime functions and public types:
+The main entry exports `createHighlighter()`, language checks, and public types.
+The `/full` entry supplies shared functions and tokenizer classes:
 
 <DocsCodeExample {...highlightsApiRuntime} />
 
-The environment-specific entry point initializes the shared instance.
-`createHighlighter()` creates an isolated `Highlighter` using the initialized
-module. Embedders can pass their own compiled `WebAssembly.Module` to
-`createHighlighter(module)` or replace the shared instance with `init(module)`.
+`await createHighlighter({ langs, themes })` creates an isolated highlighter.
+Its output methods accept registered theme names or theme objects. They reject
+languages absent from `langs`.
+
+The `/full` entry initializes a shared instance. Its `init(module)` accepts a
+compiled combined `WebAssembly.Module`. Its `createHighlighter` export uses the
+same options-only async API as the main entry. The previous no-argument and
+Wasm-module factory forms are no longer supported.
 
 The same entry exports the public types:
 
 <DocsCodeExample {...highlightsApiTypes} />
 
+#### `@pierre/highlights/langs`
+
+The `langs` export contains one combined lexer Wasm module for all languages.
+Pass it directly to `createHighlighter({ langs, themes })`.
+
+Each `@pierre/highlights/langs/*` entry exports one standalone language module.
+Pass selected modules as an array, such as `langs: [ts]`.
+
 #### `@pierre/highlights/themes`
 
-The themes entry exports `cssVariables`, `toCSS()`, and every bundled theme as a
-named `Theme`. Each theme also has a default export through its own import path,
-such as `@pierre/highlights/themes/vitesse-dark`.
+The themes entry exports `cssVariables`, `toCSS()`, all themes as the `themes`
+array, and every bundled theme as a named `Theme`. Each theme also has a default
+export through its own import path, such as
+`@pierre/highlights/themes/vitesse-dark`.
 
 #### `@pierre/highlights/themes/loader`
 

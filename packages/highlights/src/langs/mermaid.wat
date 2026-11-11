@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.mermaidWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./astro.wat")
   (import "./markdown.wat")
 
   ;; +256: the rest of a line that starts with the word is text (`title`,
   ;; `loop`). +512: the rest of the line is a `key:value` list (`style`,
   ;; `classDef`, gitGraph commands).
-  (keyword-table $mermaidWords $mem.mermaidWords $mem.typstWords
+  (keyword-table $mermaidWords $mem.mermaidWords $mem.mermaidWords+384
     (group $Token.keyword
       "subgraph" "end" "direction" "participant" "actor" "as" "note" "Note" "over" "of" "left"
       "right" "class" "click" "callback" "call" "href" "state" "namespace" "autonumber" "activate"

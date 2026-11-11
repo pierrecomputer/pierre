@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.powershellWords 352)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; PowerShell is case-insensitive, so the table holds lowercase words and
   ;; $psWordGroup probes it with a lowercased copy of the input word. Group
@@ -7,7 +11,7 @@
   ;; operators spelled `-eq`, `-and`, `-match`, and so on, looked up after
   ;; a `-`; any other `-Name` is a parameter. Groups 7-9 are looked up
   ;; after a `$`.
-  (keyword-table $powershellWords $mem.powershellWords $mem.protoWords
+  (keyword-table $powershellWords $mem.powershellWords $mem.powershellWords+352
     (group ;; 1: control
       "if" "else" "elseif" "switch" "for" "foreach" "while" "do" "until" "break" "continue"
       "return" "exit" "throw" "try" "catch" "finally" "trap" "begin" "process" "end" "dynamicparam"

@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.stylusWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The preprocessor dialect the shared lexer runs as: 0 css, 1 less, 2
   ;; scss, 3 the indented sass syntax, 4 stylus, which is also indented. Set
@@ -452,7 +456,7 @@
 
   ;; Stylus words. +256 marks property names without a `-`, which may drop
   ;; their colon (`margin 0 auto`); dashed names need no entry.
-  (keyword-table $stylusWords $mem.stylusWords $mem.luauWords
+  (keyword-table $stylusWords $mem.stylusWords $mem.stylusWords+288
     (group $Token.keyword.control "if" "else" "unless" "for" "return")
     (group $Token.keyword.operator "in" "and" "or" "not" "is" "isnt")
     (group $Token.boolean "true" "false")

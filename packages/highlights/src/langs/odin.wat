@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.odinWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $odinByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -51,7 +55,7 @@
   ;; Group values carry a declaration kind in the high byte so the `::`
   ;; lookahead can tell a proc definition from a type construction or a
   ;; constant: 1 = proc, 2 = type constructor, 3 = package/import namespace.
-  (keyword-table $odinWords $mem.odinWords $mem.leanWords
+  (keyword-table $odinWords $mem.odinWords $mem.odinWords+288
     (group $Token.keyword.control ;; 1: control flow
       "if" "else" "for" "in" "do" "when" "switch" "case" "break" "continue"
       "fallthrough" "defer" "return" "not_in" "or_else" "or_return" "or_break"

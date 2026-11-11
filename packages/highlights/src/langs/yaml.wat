@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The capture for a plain scalar spanning [$lhs,$rhs). YAML's untagged
   ;; constants are `~` and the case-insensitive words true, false, yes, no, on,

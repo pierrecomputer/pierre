@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.pythonWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Scan a Python string body. $seg includes the prefix and opening quote for
   ;; a new literal and starts at $ptr when resuming a stream chunk. $depth is
@@ -224,7 +228,7 @@
   ;; bytes, last byte, length) with range, so no table geometry holds both;
   ;; $pyWordHl matches it with a direct compare instead. match and case are
   ;; soft keywords and live in $pySoftKeyword, which needs the line position.
-  (keyword-table $pyWords $mem.pythonWords $mem.rWords
+  (keyword-table $pyWords $mem.pythonWords $mem.pythonWords+288
     (group $Token.boolean "True" "False")                       ;; 1: booleans
     (group $Token.constant.builtin "None" "Ellipsis" "NotImplemented")   ;; 2: built-in constants
     (group $Token.variable.special "self" "cls")                         ;; 3: special variables

@@ -1,4 +1,7 @@
 (module
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
   (import "./json.wat")
   (import "./xml.wat")
 
@@ -90,6 +93,24 @@
     (local.set $kind (i32.and (local.get $info) (i32.const 3)))
     (local.set $save (global.get $end))
     (local.set $stop (call $httpBodyEnd (global.get $ptr)))
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (select
+              (enum.get $Language.json)
+              (select (enum.get $Language.xml) (i32.const 0) (i32.eq (local.get $kind) (i32.const 3)))
+              (i32.eq (local.get $kind) (i32.const 2)))
+            (global.get $ptr) (local.get $stop)
+            (select (i32.eqz (local.get $resume)) (i32.const -1) (global.get $streaming))
+            (i32.const -3)))
+        (global.set $ptr (local.get $stop))
+        (global.set $streamRegionKind (i32.const 0))
+        (if (i32.and (global.get $streaming) (i32.eq (local.get $stop) (global.get $eof)))
+          (then
+            (global.set $streamRegionKind (i32.const 29))
+            (global.set $streamRegionStarted (local.get $kind))))
+        (return)))
     (local.set $depth (global.get $streamDepth))
     (local.set $reset (global.get $streamReset))
     (global.set $end (local.get $stop))

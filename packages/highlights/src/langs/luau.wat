@@ -1,10 +1,14 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.luauWords 64)
+
   (import "./lua.wat")
 
   ;; Luau words that Lua lacks. +512: a keyword only before a name on the
   ;; same line (`type Name`, `export type`), so `type(x)` stays a call; +1024:
   ;; a builtin only inside a type, so `string.format` stays a library.
-  (keyword-table $luauWords $mem.luauWords $mem.hackWords
+  (keyword-table $luauWords $mem.luauWords $mem.luauWords+64
     (group $Token.keyword.control "continue")
     (group $Token.keyword+512 "export")
     (group $Token.keyword.declaration+512 "type")

@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The next `{`, `}`, `"`, or backslash at or after $p, or $end - one SIMD
   ;; step per 16 bytes, so long abstracts cost no per-byte branches.

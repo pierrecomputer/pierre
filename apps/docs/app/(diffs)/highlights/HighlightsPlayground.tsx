@@ -102,7 +102,7 @@ export function HighlightsPlayground({
     dark: pierreDark,
   });
   const [highlighter, setHighlighter] =
-    useState<typeof import('@pierre/highlights')>();
+    useState<typeof import('@pierre/highlights/full')>();
   const [loadFailed, setLoadFailed] = useState(false);
   const lightTheme =
     previewTheme?.colorScheme === 'light'
@@ -117,7 +117,7 @@ export function HighlightsPlayground({
     let active = true;
 
     void Promise.all([
-      import('@pierre/highlights'),
+      import('@pierre/highlights/full'),
       themeLoaders[lightTheme](),
       themeLoaders[darkTheme](),
     ]).then(

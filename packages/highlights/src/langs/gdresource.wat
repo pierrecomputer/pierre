@@ -1,7 +1,11 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gdresourceWords 128)
+
   (import "./gdscript.wat")
 
-  (keyword-table $gdResourceWords $mem.gdresourceWords $mem.gleamWords
+  (keyword-table $gdResourceWords $mem.gdresourceWords $mem.gdresourceWords+128
     (group $Token.boolean "true" "false")
     (group $Token.constant.builtin "null" "nil" "inf" "nan")
     (group $Token.function "ExtResource" "SubResource" "Resource")

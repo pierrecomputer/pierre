@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.elmWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $elmByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  (keyword-table $elmWords $mem.elmWords $mem.erlangWords
+  (keyword-table $elmWords $mem.elmWords $mem.elmWords+128
     (group $Token.keyword.control "if" "then" "else" "case" "of" "let" "in")
     (group $Token.keyword.import+256 "module" "import")
     (group $Token.keyword.import "exposing" "as")

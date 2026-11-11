@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $cWordHl below; the C11 and C23
   ;; spellings sit alongside the classic keywords. `continue` is absent on
   ;; purpose: it shares every hash feature the table can use - first two
   ;; bytes, last byte, and length - with `alignof`, so $cWordHl matches it
   ;; with one exact eight-byte compare instead.
-  (keyword-table $cWords $mem.cWords $mem.c3Words
+  (keyword-table $cWords $mem.cWords $mem.cWords+192
     (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "case" "else" "goto" "break" "while" "return" "switch" "default")
     (group $Token.keyword.declaration ;; 2: declaration

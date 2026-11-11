@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Git metadata lines are blank-separated fields, so each helper advances $p
   ;; over one run - blanks or decimal digits - bounded by the end of the

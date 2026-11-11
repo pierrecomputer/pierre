@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.dartWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $dartWordHl below. `get` and `set`
   ;; are contextual: $hlDart keeps them in group 3 only when a name follows,
   ;; so `Set<int>` stays a type and `set(x)` a call.
-  (keyword-table $dartWords $mem.dartWords $mem.dockerfileWords
+  (keyword-table $dartWords $mem.dartWords $mem.dartWords+288
     (group ;; 1: control
       "if" "do" "for" "try" "case" "else" "await" "break" "catch" "throw" "while" "yield"
       "assert" "return" "switch" "default" "finally" "rethrow" "continue")

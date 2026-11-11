@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.qmlWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./tsx.wat")
 
   ;; Groups 1-7 double as $decl values. Value types (group 11) count only where
   ;; a type is expected, so `color: "red"` stays a binding.
-  (keyword-table $qmlWords $mem.qmlWords $mem.prologWords
+  (keyword-table $qmlWords $mem.qmlWords $mem.qmlWords+96
     (group "property")                      ;; 1: a type and a name follow
     (group "readonly" "required" "default") ;; 2: modifiers, a name may follow
     (group "signal")                        ;; 3: next name is a signal
@@ -75,6 +79,10 @@
   ;; region: closing a region clears every lexer's saved locals.
   (func $qmlJs (param $to i32) (param $reset i32) (result i32)
     (local $save i32)
+    (local $from i32)
+    (local $saved i64)
+    (local.set $from (global.get $ptr))
+    (local.set $saved (call $embedScanSave))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ecmaFeatures (i32.const 0))
@@ -84,6 +92,9 @@
     (if (local.get $reset)
       (then (global.set $tsxStreamExpressionDepth (i32.const 0))))
     (call $hlEcmaImpl (local.get $reset))
+    (call $embedScanRestore
+      (local.get $saved) (enum.get $Language.js) (local.get $from) (global.get $ptr)
+      (local.get $reset) (i32.const -7))
     (global.set $end (local.get $save))
     (select
       (i32.const 0)

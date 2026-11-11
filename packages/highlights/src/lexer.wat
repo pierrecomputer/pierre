@@ -1,0 +1,41 @@
+(module
+  (import "./languages.wat")
+  (import "./highlights.wat")
+
+  (func $lexBegin
+    (global.set $srcBase (i32.const $mem.input))
+    (global.set $streamDepth (i32.const 0))
+    (global.set $tokens (i32.const 1))
+    (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
+    (global.set $end (global.get $eof))
+    (global.set $ptr (i32.const $mem.input))
+    (global.set $out (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
+    (i32.store (i32.const 6) (global.get $out))
+    (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16))))
+
+  (func (export "lex")
+    (global.set $docStart (i32.const $mem.input))
+    (global.set $streaming (i32.const 0))
+    (call $sigReset)
+    (call $lexBegin)
+    (call $highlightLang (i32.load8_u (i32.const 0)))
+    (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
+
+  (func (export "lexStream") (param $reset i32)
+    (global.set $streaming (i32.const 1))
+    (global.set $streamReset (local.get $reset))
+    (global.set $docStart (select (i32.const $mem.input) (i32.const 0) (local.get $reset)))
+    (if (local.get $reset)
+      (then (call $streamResetGlobals)))
+    (call $lexBegin)
+    (call $streamChunk (i32.load8_u (i32.const 0)) (local.get $reset))
+    (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6))))
+    (global.set $streaming (i32.const 0))
+    (global.set $streamDepth (i32.const 0)))
+
+  (func (export "record") (param $type i32) (param $end i32)
+    (call $recTok (local.get $type) (local.get $end)))
+
+  (func (export "gap") (param $end i32)
+    (call $emitGap (global.get $srcBase) (local.get $end)))
+)

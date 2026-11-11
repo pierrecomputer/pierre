@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.vhdlWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. High byte: capture the next name as 1 a type or unit, 2 a
   ;; subprogram, 3 library names up to `;`. Plain `keyword` words keep a pending
   ;; capture; others drop it.
-  (keyword-table $vhdlWords $mem.vhdlWords $mem.tclWords
+  (keyword-table $vhdlWords $mem.vhdlWords $mem.vhdlWords+416
     (group $Token.keyword.control
       "if" "then" "elsif" "else" "case" "when" "others" "for" "while" "loop" "exit" "next"
       "return" "wait" "until" "after" "assert" "report" "severity" "generate" "select")

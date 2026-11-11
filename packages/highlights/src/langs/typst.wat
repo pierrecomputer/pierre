@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.typstWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; +256: after `#`, the word starts a statement that runs to the line end.
-  (keyword-table $typstWords $mem.typstWords $mem.bibtexWords
+  (keyword-table $typstWords $mem.typstWords $mem.typstWords+224
     (group $Token.keyword.declaration+256 "let")
     (group $Token.keyword+256 "set" "show" "context")
     (group $Token.keyword.import+256 "import" "include")

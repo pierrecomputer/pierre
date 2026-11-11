@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.powerqueryWords 448)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Library names such as `Table.AddColumn` are dotted names, not keywords.
-  (keyword-table $pqWords $mem.powerqueryWords $mem.dWords
+  (keyword-table $pqWords $mem.powerqueryWords $mem.powerqueryWords+448
     (group $Token.keyword "let" "in" "each" "type" "meta" "nullable" "optional")
     (group $Token.keyword.control "if" "then" "else" "try" "otherwise" "error" "catch")
     (group $Token.keyword.operator "and" "or" "not" "as" "is")

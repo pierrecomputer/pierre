@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.stataWords 576)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bits above the token: 256 a word that keeps its meaning after the
   ;; command name (`if`, `in`, `using`), 512 a prefix whose next word is a
   ;; command (`quietly`), 1024 a prefix whose `:` starts a command (`by`),
   ;; 2048 the next name defines a program. Words that share hash features
   ;; with another word are matched in $stataWordHl.
-  (keyword-table $stataWords $mem.stataWords $mem.daxWords
+  (keyword-table $stataWords $mem.stataWords $mem.stataWords+576
     (group $Token.keyword.control+256 "if")
     (group $Token.keyword.control+512 "else")
     (group $Token.keyword.control "foreach" "forvalues" "forval" "while" "exit")

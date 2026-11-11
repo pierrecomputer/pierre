@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.c3Words 384)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $c3Byte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -9,7 +13,7 @@
   ;; exist behind a `$` - `$sizeof`, `$vaarg` - and is accepted only there,
   ;; marked by bit 10 of its value; `$vaconst` and `$vasplat` share their
   ;; hash features with `$vacount` and get direct compares instead.
-  (keyword-table $c3Words $mem.c3Words $mem.clojureWords
+  (keyword-table $c3Words $mem.c3Words $mem.c3Words+384
     (group $Token.keyword.control ;; 1: control
       "if" "do" "asm" "for" "try" "case" "else" "break" "catch" "defer" "while" "assert" "return"
       "switch" "default" "foreach" "continue" "nextcase" "foreach_r")

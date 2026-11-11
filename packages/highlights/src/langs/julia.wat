@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.juliaWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $jlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -8,7 +12,7 @@
   ;; declaration value names the next name's capture: 1 a function, 2 a
   ;; type, 3 a module. `where` shares its hash features with `while` and is
   ;; matched directly.
-  (keyword-table $juliaWords $mem.juliaWords $mem.kotlinWords
+  (keyword-table $juliaWords $mem.juliaWords $mem.juliaWords+192
     (group $Token.keyword.control ;; 1: control flow and blocks
       "if" "elseif" "else" "for" "while" "break" "continue" "return" "try" "catch" "finally" "do"
       "begin" "end" "let" "quote")

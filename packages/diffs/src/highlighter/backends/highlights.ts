@@ -3,7 +3,7 @@ import {
   type CodeToTokensOptions as HighlightsOptions,
   isSupportedLanguage,
   type Theme,
-} from '@pierre/highlights';
+} from '@pierre/highlights/full';
 
 import { DiffsHighlighter } from '../DiffsHighlighter';
 import { HighlightsEditorTokenizer } from '../highlights-editor';

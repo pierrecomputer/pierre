@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.lispWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $lispByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -9,7 +13,7 @@
   ;; `set!`. `declare` shares its hash features with `deftype` and stays out,
   ;; as do `defconst` and `defrecord`, which share slot bits with `defsubst`
   ;; and `defmethod` in every geometry that fits the range.
-  (keyword-table $lispWords $mem.lispWords $mem.luaWords
+  (keyword-table $lispWords $mem.lispWords $mem.lispWords+320
     (group $Token.keyword.declaration+256 ;; definitions, next name is a function
       "defun" "defmacro" "defmethod" "defgeneric" "define" "define-syntax" "define-macro"
       "defsubst")

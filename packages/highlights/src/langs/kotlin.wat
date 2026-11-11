@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.kotlinWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $kotlinByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -10,7 +14,7 @@
   ;; can undo, so $kotlinWordHl matches "Short" directly. "where" is missing
   ;; for the same reason: the hash sees only the first two bytes, the last
   ;; byte, and the length, which "while" shares.
-  (keyword-table $kotlinWords $mem.kotlinWords $mem.latexWords
+  (keyword-table $kotlinWords $mem.kotlinWords $mem.kotlinWords+256
     (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "try" "else" "when" "break" "catch" "throw" "while" "return" "finally"
       "continue")

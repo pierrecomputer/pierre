@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.luaWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $luaLong (param $prefix i32) (param $hl i32) (result i32)
     (local $bracket i32)
@@ -82,7 +86,7 @@
   ;; Each value is the word's token; `function` adds 256 to mark that the
   ;; next name is a function definition. A miss is an ordinary name, which
   ;; $hlLua may still promote to a call or a property.
-  (keyword-table $luaWords $mem.luaWords $mem.makefileWords
+  (keyword-table $luaWords $mem.luaWords $mem.luaWords+96
     (group $Token.boolean "true" "false")
     (group $Token.constant.builtin "nil")
     (group $Token.keyword.operator "and" "not" "in" "or")

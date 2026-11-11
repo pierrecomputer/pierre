@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.bladeWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./php.wat")
   (import "./template.wat")
 
   ;; An `@end...` name takes the class of the name it closes, so those stay out.
-  (keyword-table $bladeWords $mem.bladeWords $mem.razorWords
+  (keyword-table $bladeWords $mem.bladeWords $mem.bladeWords+320
     (group $Token.keyword.control
       "if" "elseif" "else" "unless" "isset" "empty" "switch" "case" "break" "default" "for"
       "foreach" "forelse" "while" "continue" "auth" "guest" "can" "cannot" "env" "production"

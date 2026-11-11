@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cobolWords 672)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Bits 8-9 capture the next word: 1 a paragraph after
   ;; PERFORM, THRU, or GO TO, 3 a PIC string. Bit 10 (IS, TO) keeps a capture
   ;; armed. `than`, `indexed`, and `returning` collide and are matched directly.
-  (keyword-table $cobolWords $mem.cobolWords $mem.adaWords
+  (keyword-table $cobolWords $mem.cobolWords $mem.cobolWords+672
     (group $Token.keyword.control
       "if" "else" "evaluate" "when" "other" "until" "varying" "stop" "run" "exit" "goback"
       "continue" "next" "sentence" "call" "then" "invalid")

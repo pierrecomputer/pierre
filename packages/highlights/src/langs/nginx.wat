@@ -1,8 +1,12 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.nginxWords 96)
+
   (import "./dotenv.wat")
 
   ;; +256: `rewrite` takes a regex first.
-  (keyword-table $nginxWords $mem.nginxWords $mem.logWords
+  (keyword-table $nginxWords $mem.nginxWords $mem.nginxWords+96
     (group $Token.keyword.declaration
       "http" "server" "location" "upstream" "events" "stream" "mail" "types" "map" "geo"
       "split_clients" "limit_except")

@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.ocamlWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $mlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $mlWordHl below
-  (keyword-table $mlWords $mem.ocamlWords $mem.pascalWords
+  (keyword-table $mlWords $mem.ocamlWords $mem.ocamlWords+256
     (group $Token.keyword.control ;; 1: control
       "do" "if" "of" "to" "for" "try" "done" "else" "then" "when" "with" "begin" "match" "while"
       "downto" "assert" "function" "lazy")

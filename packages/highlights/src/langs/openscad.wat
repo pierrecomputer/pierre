@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.openscadWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The high byte of a declaration marks that the next name is defined; of
   ;; an import, that a `<path>` follows. Built-in modules and functions are
   ;; calls, so the `name(` rule colors them with no table entry.
-  (keyword-table $openscadWords $mem.openscadWords $mem.shaderlabWords
+  (keyword-table $openscadWords $mem.openscadWords $mem.openscadWords+96
     (group $Token.keyword.declaration+256 "module" "function")
     (group $Token.keyword.import+512 "use" "include")
     (group $Token.keyword.control

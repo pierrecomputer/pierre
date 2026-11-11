@@ -1,5 +1,10 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.shaderlabWords 608)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./hlsl.wat")
   (import "./glsl.wat")
 
@@ -9,7 +14,7 @@
   ;; `2D`, `3D`, and `2DArray` start with a digit and are matched as numbers.
   ;; $shaderlabWordHl strips the `OneMinus` of blend factors and matches
   ;; `FailBack`, which shares hash features with `Fallback`.
-  (keyword-table $shaderlabWords $mem.shaderlabWords $mem.coqWords
+  (keyword-table $shaderlabWords $mem.shaderlabWords $mem.shaderlabWords+608
     (group $Token.keyword.declaration
       "pass" "shader" "category" "fallback" "grabpass" "usepass" "subshader" "properties"
       "dependency" "customeditor")
@@ -123,13 +128,21 @@
     (global.set $streamDepth (i32.const 0))
     (global.set $streamReset (i32.eqz (local.get $resume)))
     (global.set $streamRegionKind (i32.const 0))
-    (block $run
-      ;; a resumed body first finishes the comment or string its lexer left open
-      (if (local.get $resume)
-        (then (br_if $run (call $streamResumeCommon))))
-      (if (i32.eq (local.get $kind) (i32.const 38))
-        (then (call $hlHlsl))
-        (else (call $hlGlslImpl (i32.const 0)))))
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (select (enum.get $Language.hlsl) (enum.get $Language.glsl) (i32.eq (local.get $kind) (i32.const 38)))
+            (global.get $ptr) (local.get $close)
+            (select (i32.eqz (local.get $resume)) (i32.const -1) (global.get $streaming))
+            (i32.const -3))))
+      (else
+        (block $run
+          (if (local.get $resume)
+            (then (br_if $run (call $streamResumeCommon))))
+          (if (i32.eq (local.get $kind) (i32.const 38))
+            (then (call $hlHlsl))
+            (else (call $hlGlslImpl (i32.const 0)))))))
     (global.set $streamDepth (local.get $depth))
     (global.set $streamReset (local.get $reset))
     (global.set $end (local.get $save))

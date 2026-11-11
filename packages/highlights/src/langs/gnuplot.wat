@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gnuplotWords 512)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./dockerfile.wat")
 
   ;; Group order is the dispatch order in $hlGnuplot. Axis-prefixed `set` options
   ;; (`xlabel`, `y2range`) hold the bare option.
-  (keyword-table $gnuplotWords $mem.gnuplotWords $mem.prismaWords
+  (keyword-table $gnuplotWords $mem.gnuplotWords $mem.gnuplotWords+512
     (group "set" "unset" "show") ;; 1: an option follows
     (group "plot" "splot" "replot" "fit") ;; 2: plot modifiers follow
     (group ;; 3: other commands

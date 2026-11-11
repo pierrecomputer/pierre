@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.awkWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bit 8: an operand follows, so `/` opens a regex. Bit 9: `function`.
-  (keyword-table $awkWords $mem.awkWords $mem.gherkinWords
+  (keyword-table $awkWords $mem.awkWords $mem.awkWords+192
     (group $Token.keyword.control+256
       "if" "else" "while" "for" "do" "return" "exit" "switch" "case" "default")
     (group $Token.keyword.control "break" "continue" "next" "nextfile")

@@ -1,11 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.pugWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./haml.wat")
 
   ;; Token in the low byte. Bit 8: `mixin`. Bit 9: `each`/`for`, names before
   ;; `in`. Bit 10: the rest of the line is a path or block name. Others take a JS
   ;; expression.
-  (keyword-table $pugWords $mem.pugWords $mem.coffeeWords
+  (keyword-table $pugWords $mem.pugWords $mem.pugWords+128
     (group $Token.keyword.import+1024 "include" "extends")
     (group $Token.keyword.declaration+1024 "block" "append" "prepend")
     (group $Token.keyword.declaration+256 "mixin")
@@ -20,6 +25,14 @@
 
   (func $pugJs (param $stop i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.js) (global.get $ptr) (local.get $stop)
+            (i32.const -1) (i32.const -3)))
+        (global.set $ptr (local.get $stop))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $stop))
     (call $hlJs)

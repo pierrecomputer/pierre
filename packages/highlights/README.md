@@ -12,27 +12,90 @@ Read the [Documentation](https://diffs.com/docs#highlights).
 pnpm add @pierre/highlights
 ```
 
-The package runs in Node.js, browsers, and Cloudflare Workers. It initializes
-WebAssembly at import. `codeToHtml()` and `codeToTokens()` run synchronously
-after import.
+The core package imports no language or theme bundle. `createHighlighter()`
+compiles the selected WebAssembly modules. Its `codeToHtml()` and
+`codeToTokens()` methods then run synchronously.
 
 ## Quick start
 
-```js
-import { codeToHtml } from '@pierre/highlights';
+```ts
+import { createHighlighter } from '@pierre/highlights';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
-const htmlBytes = codeToHtml("console.log('Hello world!')", {
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [pierreDark],
+});
+
+const htmlBytes = highlighter.codeToHtml('const a = 1', {
   lang: 'js',
-  theme: pierreDark,
+  theme: 'pierre-dark',
 });
 const html = new TextDecoder().decode(htmlBytes);
 ```
+
+The TypeScript module supports `ts`, `tsx`, `cts`, `mts`, `js`, `jsx`, `mjs`,
+and `cjs`. Each language module contains its standalone Wasm as base64. Import
+only the languages and themes that your application needs.
+
+Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
+script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text
+until you add CSS. Code fences also accept registered custom language names.
+
+## Full language and theme bundle
+
+```ts
+import { createHighlighter } from '@pierre/highlights';
+import { langs } from '@pierre/highlights/langs';
+import { themes } from '@pierre/highlights/themes';
+
+const highlighter = await createHighlighter({ langs, themes });
+```
+
+`langs` contains one combined lexer Wasm module. It does not load each language
+module separately. The emitter Wasm receives the source and token records from
+the lexer.
+
+## Custom lexers
+
+Use `@pierre/wat-tools` at build time to compile your own lexer:
+
+```ts
+import { buildHighlightsLexer } from '@pierre/wat-tools';
+
+const language = buildHighlightsLexer({
+  name: 'language-id',
+  alias: {},
+  wat: `(module
+    (func $highlight
+      (call $emitTok
+        (enum.get $Token.keyword)
+        (global.get $ptr)
+        (global.get $end))))`,
+});
+```
+
+The result implements the `Language` type. Save this descriptor in a JavaScript
+module and pass it to `createHighlighter({ langs: [language], themes })`. The
+[lexer guide](../wat-tools/README.md) describes the shared scanners, token
+types, and memory declarations.
+
+## Output and shared runtime
 
 `codeToHtml()` returns UTF-8 HTML bytes that can share WebAssembly memory.
 
 Decode the bytes before the next call to the highlighter. Use `.slice()` to keep
 a copy for later use.
+
+`createHighlighter({ langs, themes })` requires an options object and returns a
+promise. The previous no-argument and `WebAssembly.Module` forms are no longer
+supported.
+
+The `@pierre/highlights/full` entry initializes a shared highlighter at import.
+It provides the top-level `codeToHtml()` and `codeToTokens()` functions,
+`StreamTokenizer`, and `LiveTokenizer`. Its `createHighlighter` export uses the
+same options-only async API.
 
 Read the [API reference](https://diffs.com/docs#highlights) for tokens, input
 streams, document edits, and themes.

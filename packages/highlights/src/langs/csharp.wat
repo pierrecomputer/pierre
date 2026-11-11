@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.csharpWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $csByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -11,7 +15,7 @@
   ;; the rare `on` and `scoped` share their slot bits with `out` in every
   ;; geometry that fits the range. Groups 11-15 are contextual words that
   ;; are ordinary names outside their syntax; see $csContextual.
-  (keyword-table $csWords $mem.csharpWords $mem.cudaWords
+  (keyword-table $csWords $mem.csharpWords $mem.csharpWords+416
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "lock" "when" "break" "catch" "throw" "while"
       "yield" "return" "switch" "checked" "default" "finally" "foreach" "continue" "unchecked")

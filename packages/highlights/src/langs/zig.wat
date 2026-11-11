@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.zigWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $zigByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -140,7 +144,7 @@
   ;; `continue`, so the two words can never share a table and `comptime` is
   ;; matched directly. The one-byte names `c` and `_` are below the table's
   ;; minimum length and are matched directly too.
-  (keyword-table $zigWords $mem.zigWords $mem.odinWords
+  (keyword-table $zigWords $mem.zigWords $mem.zigWords+288
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword.declaration+512 "const" "var") ;; 2: declaration, next name is a variable
     (group $Token.keyword.declaration+768 "struct" "enum" "union" "opaque") ;; 3: declaration

@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.watWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; group order is the dispatch order in $watWordHl below
-  (keyword-table $watWords $mem.watWords $mem.wgslWords
+  (keyword-table $watWords $mem.watWords $mem.watWords+96
     (group ;; 1: value types
       "i32" "i64" "f32" "f64" "v128")
     (group ;; 2: structured control

@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.prologWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; A clause head is a definition even when it reuses one of these names.
-  (keyword-table $prologWords $mem.prologWords $mem.laterWordsEnd
+  (keyword-table $prologWords $mem.prologWords $mem.prologWords+224
     (group $Token.keyword.operator "is" "mod" "rem" "xor" "div")
     (group $Token.keyword.control "true" "fail" "false" "call" "catch" "throw" "halt")
     (group $Token.keyword.import "module" "use_module" "ensure_loaded" "include")

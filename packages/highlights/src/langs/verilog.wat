@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.verilogWords 512)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; High byte: capture the next name as 1 a type, 2 a function or task.
   ;; `inout`, `endgenerate`, `coverpoint`, and `priority` collide and are
   ;; matched in $verilogWord.
-  (keyword-table $verilogWords $mem.verilogWords $mem.vhdlWords
+  (keyword-table $verilogWords $mem.verilogWords $mem.verilogWords+512
     (group $Token.keyword.control
       "if" "else" "case" "casez" "casex" "endcase" "for" "while" "repeat" "forever" "do"
       "foreach" "return" "break" "continue" "default" "wait" "fork" "join" "join_any"

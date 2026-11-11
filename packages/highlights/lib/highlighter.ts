@@ -3,8 +3,13 @@ import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
   Highlighter,
+  HighlighterOptions,
   Lang,
+  Language,
+  RegisteredHighlighter,
+  Theme,
   ThemedToken,
+  ThemeFamily,
   TokensResult,
 } from './index';
 import languages from './languages';
@@ -12,6 +17,7 @@ import {
   defaultCssVariablePrefix,
   escapeAttribute,
   prepareTheme,
+  resolveTheme,
   themeTableBytes,
 } from './theme';
 import type { ResolvedTheme } from './tokens';
@@ -26,8 +32,6 @@ import {
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
-const themePtr = 64; // $mem.themeTable in src/memory.wat
-export const inputPtr = 81920; // $mem.input in src/memory.wat; wasm_test checks it
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -58,6 +62,15 @@ export class HighlightsHighlighter implements Highlighter {
   #themeWritten: Uint8Array | undefined;
   #htmlPrefix: string | undefined;
   #htmlPrefixBytes = new Uint8Array(0);
+  #beforeRun?: (
+    langId: number,
+    mode: number,
+    inputLength: number,
+    reset?: boolean
+  ) => void;
+  #languageIds?: ReadonlyMap<string, number>;
+  inputPtr: number;
+  themePtr: number;
   wasmModule: WebAssembly.Module;
   instance: WebAssembly.Instance;
   memory: WebAssembly.Memory;
@@ -65,19 +78,39 @@ export class HighlightsHighlighter implements Highlighter {
   dv: DataView;
   pageN: number;
 
-  constructor(wasmModule: WebAssembly.Module) {
+  constructor(
+    wasmModule: WebAssembly.Module,
+    beforeRun?: (
+      langId: number,
+      mode: number,
+      inputLength: number,
+      reset?: boolean
+    ) => void,
+    imports: Record<string, (...args: number[]) => number> = {},
+    languageIds?: ReadonlyMap<string, number>
+  ) {
+    this.#beforeRun = beforeRun;
+    this.#languageIds = languageIds;
     this.wasmModule = wasmModule;
     const env = {
+      ...imports,
       is_id_start: (ptr: number, len: number) => this.#idClass(ptr, len, 0),
       is_id_continue: (ptr: number, len: number) => this.#idClass(ptr, len, 2),
     };
     const instance = new WebAssembly.Instance(wasmModule, { env });
     this.instance = instance;
     this.memory = instance.exports.memory as WebAssembly.Memory;
-    this.#highlight = instance.exports.highlight as () => void;
-    this.#highlightStream = instance.exports.highlightStream as (
-      reset: number | boolean
-    ) => void;
+    this.inputPtr = Number(
+      (instance.exports.inputPtr as WebAssembly.Global).value
+    );
+    this.themePtr = Number(
+      (instance.exports.themePtr as WebAssembly.Global | undefined)?.value ?? 0
+    );
+    this.#highlight = (instance.exports.highlight ??
+      instance.exports.lex ??
+      instance.exports.emit) as () => void;
+    this.#highlightStream = (instance.exports.highlightStream ??
+      instance.exports.lexStream) as (reset: number | boolean) => void;
     this.pageN = this.memory.buffer.byteLength / pageSize;
     this.buffer = new Uint8Array(this.memory.buffer);
     this.dv = new DataView(this.memory.buffer);
@@ -90,7 +123,7 @@ export class HighlightsHighlighter implements Highlighter {
       this.#growMemoryIfNeeded(offset + input.length + 96);
       let { read, written } = enc.encodeInto(
         input,
-        this.buffer.subarray(inputPtr + offset, this.buffer.length - 96)
+        this.buffer.subarray(this.inputPtr + offset, this.buffer.length - 96)
       );
       if (read < input.length) {
         const rest = input.slice(read);
@@ -98,7 +131,7 @@ export class HighlightsHighlighter implements Highlighter {
         written += enc.encodeInto(
           rest,
           this.buffer.subarray(
-            inputPtr + offset + written,
+            this.inputPtr + offset + written,
             this.buffer.length - 96
           )
         ).written;
@@ -112,7 +145,7 @@ export class HighlightsHighlighter implements Highlighter {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
     this.#growMemoryIfNeeded(offset + input.length + 96);
-    this.buffer.set(input, inputPtr + offset);
+    this.buffer.set(input, this.inputPtr + offset);
     return input.length;
   }
 
@@ -127,10 +160,11 @@ export class HighlightsHighlighter implements Highlighter {
     inputLength: number,
     reset?: boolean
   ): void {
+    this.#beforeRun?.(langId, mode, inputLength, reset);
     this.dv.setUint8(0, langId);
     this.dv.setUint8(1, mode);
     this.dv.setUint32(2, inputLength, true);
-    this.buffer[inputPtr + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
+    this.buffer[this.inputPtr + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
     try {
       if (reset === undefined) this.#highlight();
       else this.#highlightStream(reset);
@@ -184,7 +218,9 @@ export class HighlightsHighlighter implements Highlighter {
       }
       return enc.encode(`${html}</code></pre>`);
     }
-    const langId = langIdOf(options.lang);
+    const langId =
+      this.#languageIds?.get(String(options.lang).toLowerCase()) ??
+      langIdOf(options.lang);
     let table: Uint8Array | undefined;
     let blob: Uint8Array | undefined;
     let mode = 0;
@@ -205,7 +241,7 @@ export class HighlightsHighlighter implements Highlighter {
     const inputLength = this.writeInput(input);
     if (blob !== undefined) {
       this.#growMemoryIfNeeded(inputLength + blob.length + 96);
-      const blobPtr = (inputPtr + inputLength + 47) & ~15;
+      const blobPtr = (this.inputPtr + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
       this.dv.setUint32(14, blobPtr, true);
       this.dv.setUint32(18, blob.length, true);
@@ -216,18 +252,18 @@ export class HighlightsHighlighter implements Highlighter {
       }
       const bytes = this.#htmlPrefixBytes;
       this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
-      const prefixPtr = (inputPtr + inputLength + 47) & ~15;
+      const prefixPtr = (this.inputPtr + inputLength + 47) & ~15;
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
       this.dv.setUint32(18, bytes.length, true);
       mode = 1;
     } else {
       if (this.#themeWritten !== table) {
-        this.buffer.set(table, themePtr);
+        this.buffer.set(table, this.themePtr);
         this.buffer.fill(
           0,
-          themePtr + table.length,
-          themePtr + themeTableBytes
+          this.themePtr + table.length,
+          this.themePtr + themeTableBytes
         );
         this.#themeWritten = table;
       }
@@ -281,7 +317,8 @@ export class HighlightsHighlighter implements Highlighter {
       : lineRecordsToTokens(
           code,
           this.tokenizeLineRecords(
-            langIdOf(options.lang),
+            this.#languageIds?.get(String(options.lang).toLowerCase()) ??
+              langIdOf(options.lang),
             this.writeInput(input)
           ),
           themes,
@@ -293,7 +330,7 @@ export class HighlightsHighlighter implements Highlighter {
 
   /** Grow the wasm linear memory if needed. */
   #growMemoryIfNeeded(len: number): void {
-    const neededPages = Math.ceil((inputPtr + len) / pageSize);
+    const neededPages = Math.ceil((this.inputPtr + len) / pageSize);
     if (neededPages > this.pageN) {
       this.memory.grow(neededPages - this.pageN);
       this.bindMemory();
@@ -396,14 +433,228 @@ export function init(wasm: WebAssembly.Module): Highlighter {
   return (shared = new HighlightsHighlighter(wasm));
 }
 
-/**
- * Create a highlighter with its own WebAssembly instance.
- * The shared highlighter is unchanged.
- */
-export function createHighlighter(
-  wasmModule: WebAssembly.Module = assertWasmModule()
-): Highlighter {
-  return new HighlightsHighlighter(wasmModule);
+const lexerModules = new WeakMap<Language, Promise<WebAssembly.Module>>();
+let emitterModule: Promise<WebAssembly.Module> | undefined;
+
+export async function createHighlighter(
+  options: HighlighterOptions
+): Promise<RegisteredHighlighter> {
+  emitterModule ??= import('./emitter.wasm.mjs').then(({ default: bytes }) =>
+    WebAssembly.compile(bytes)
+  );
+  const languages = [...new Set(options.langs)];
+  const [emitter, ...compiled] = await Promise.all([
+    emitterModule,
+    ...languages.map((language) => {
+      let compiledModule = lexerModules.get(language);
+      if (compiledModule === undefined) {
+        const binary = atob(language.wasm);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        compiledModule = WebAssembly.compile(bytes);
+        lexerModules.set(language, compiledModule);
+      }
+      return compiledModule;
+    }),
+  ]);
+  const registrations = new Map<
+    number,
+    { module: WebAssembly.Module; id: number }
+  >();
+  const languageIds = new Map<string, number>([
+    ['plain', 0],
+    ['plaintext', 0],
+    ['text', 0],
+    ['txt', 0],
+    ['ansi', -1],
+  ]);
+  let nextLanguageId = 256;
+  for (let i = 0; i < languages.length; i++) {
+    const localIds = new Map<number, number>();
+    for (const [alias, id] of Object.entries(languages[i].aliases)) {
+      const name = alias.toLowerCase();
+      if (!Number.isInteger(id) || id < 0 || id > 255) {
+        throw new RangeError(`invalid lexer entry: ${alias}`);
+      }
+      const builtIn = LANGS[name];
+      let externalId = typeof builtIn === 'number' ? builtIn : localIds.get(id);
+      externalId ??= nextLanguageId++;
+      if (externalId > 0x7fff)
+        throw new RangeError('too many registered languages');
+      localIds.set(id, externalId);
+      languageIds.set(name, externalId);
+      registrations.set(externalId, { module: compiled[i], id });
+    }
+  }
+  const roots = new Map<WebAssembly.Module, HighlightsHighlighter>();
+  function createLexer(
+    compiledModule: WebAssembly.Module,
+    depth: number
+  ): HighlightsHighlighter {
+    const children = new Map<
+      number,
+      { language: number; lexer: HighlightsHighlighter }
+    >();
+    let nextContext = 0;
+    const lexer = new HighlightsHighlighter(
+      compiledModule,
+      (_id, _mode, _length, reset) => {
+        if (reset !== false) {
+          children.clear();
+          nextContext = 0;
+        }
+      },
+      {
+        language: (ptr: number, length: number) => {
+          lexer.bindMemory();
+          const name = dec
+            .decode(lexer.buffer.subarray(ptr, ptr + length))
+            .toLowerCase();
+          return languageIds.get(name) ?? 0;
+        },
+        embed: (
+          id: number,
+          from: number,
+          to: number,
+          reset: number,
+          context: number
+        ) => {
+          const record = lexer.instance.exports.record as (
+            type: number,
+            end: number
+          ) => void;
+          const registration = registrations.get(id);
+          if (
+            registration === undefined ||
+            id === 0 ||
+            to <= from ||
+            depth >= 64
+          ) {
+            if (to > from) record(0, to);
+            return context;
+          }
+          if (context === 0) context = ++nextContext;
+          let child = children.get(context);
+          if (child === undefined || child.language !== id) {
+            child = {
+              language: id,
+              lexer: createLexer(registration.module, depth + 1),
+            };
+            children.set(context, child);
+          }
+          lexer.bindMemory();
+          const records = child.lexer.tokenizeLineRecords(
+            registration.id,
+            child.lexer.writeInput(lexer.buffer.subarray(from, to)),
+            reset < 0 ? undefined : reset !== 0
+          );
+          const gap = lexer.instance.exports.gap as (end: number) => void;
+          for (let i = 0; i < records.length; i += 2) {
+            if (records[i + 1] === 255) gap(from + records[i]);
+            else record(records[i + 1], from + records[i]);
+          }
+          if (records.length === 0) record(0, to);
+          return context;
+        },
+      }
+    );
+    return lexer;
+  }
+  const themes = new Map<string, Theme>();
+  for (const value of options.themes) {
+    const theme = resolveTheme(value);
+    if (theme.id !== undefined) themes.set(theme.id, theme);
+    themes.set(theme.name, theme);
+    themes.set(
+      theme.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, ''),
+      theme
+    );
+  }
+  const plainRecord = new Uint32Array(2);
+  const highlighter = new HighlightsHighlighter(
+    emitter,
+    (id, mode, length) => {
+      let records: Uint32Array;
+      if (id === 0) {
+        plainRecord[0] = length;
+        records = length === 0 ? plainRecord.subarray(0, 0) : plainRecord;
+      } else {
+        const registration = registrations.get(id)!;
+        let lexer = roots.get(registration.module);
+        if (lexer === undefined) {
+          lexer = createLexer(registration.module, 0);
+          roots.set(registration.module, lexer);
+        }
+        records = lexer.tokenizeLineRecords(
+          registration.id,
+          lexer.writeInput(
+            highlighter.buffer.subarray(
+              highlighter.inputPtr,
+              highlighter.inputPtr + length
+            )
+          )
+        );
+        for (let i = 1; i < records.length; i += 2) {
+          if (records[i] === 255) records[i] = 0;
+        }
+      }
+      const blobEnd =
+        mode === 0 || mode === 3
+          ? 0
+          : highlighter.dv.getUint32(14, true) +
+            highlighter.dv.getUint32(18, true);
+      const recordsPtr =
+        Math.ceil(Math.max(highlighter.inputPtr + length + 96, blobEnd) / 16) *
+        16;
+      const pages = Math.ceil((recordsPtr + records.byteLength + 96) / 65536);
+      if (pages > highlighter.pageN) {
+        highlighter.memory.grow(pages - highlighter.pageN);
+        highlighter.bindMemory();
+      }
+      highlighter.buffer.set(
+        new Uint8Array(records.buffer, records.byteOffset, records.byteLength),
+        recordsPtr
+      );
+      highlighter.dv.setUint32(22, recordsPtr, true);
+      highlighter.dv.setUint32(26, records.byteLength, true);
+    },
+    {},
+    languageIds
+  );
+  const resolveOptions = (
+    value: CodeToTokensOptions<Theme | ThemeFamily | string>
+  ): CodeToTokensOptions => {
+    const lang = String(value.lang).toLowerCase();
+    if (!languageIds.has(lang))
+      throw new RangeError(`language is not loaded: ${value.lang}`);
+    const resolved: Record<string, Theme | ThemeFamily> = {};
+    const entries =
+      value.themes === undefined
+        ? [['theme', value.theme] as const]
+        : Object.entries(value.themes);
+    for (const [key, reference] of entries) {
+      if (typeof reference !== 'string') {
+        resolved[key] = reference;
+        continue;
+      }
+      const theme = themes.get(reference);
+      if (theme === undefined)
+        throw new RangeError(`theme is not loaded: ${reference}`);
+      resolved[key] = theme;
+    }
+    return value.themes === undefined
+      ? { ...value, theme: resolved.theme, themes: undefined }
+      : { ...value, theme: undefined, themes: resolved };
+  };
+  return {
+    codeToHtml: (input, value) =>
+      highlighter.codeToHtml(input, resolveOptions(value)),
+    codeToTokens: (input, value) =>
+      highlighter.codeToTokens(input, resolveOptions(value)),
+  };
 }
 
 /**

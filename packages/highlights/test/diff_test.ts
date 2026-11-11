@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import { resolveThemeStyle } from '../lib/theme';
-import * as themes from '../themes/index';
+import { themes } from '../themes/index';
 import {
   assertLineFedParity,
   checkInvariants,
@@ -51,7 +51,7 @@ const theme = {
 };
 
 void t.test('diff: bundled themes keep added and removed text visible', () => {
-  for (const theme of Object.values(themes)) {
+  for (const theme of themes) {
     if (
       typeof theme !== 'object' ||
       theme.cssVariables === true ||

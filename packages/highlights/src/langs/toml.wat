@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.tomlStack 1024)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The container stack holds one kind byte per nesting level.
 

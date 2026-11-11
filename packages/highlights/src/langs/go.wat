@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.goWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $goByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $goWordHl below
-  (keyword-table $goWords $mem.goWords $mem.graphqlWords
+  (keyword-table $goWords $mem.goWords $mem.goWords+192
     (group $Token.keyword.control ;; 1: control
       "go" "if" "for" "case" "else" "goto" "break" "defer" "range" "return" "select" "switch"
       "default" "continue" "fallthrough")

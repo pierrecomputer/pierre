@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.protoWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each value is the token in the low byte and the next-name capture
   ;; above it: 1 type, 2 function, 3 namespace. `required` and `reserved`
   ;; are absent on purpose: the table hash sees only the first two bytes,
   ;; the last byte, and the length, which `repeated` shares, so
   ;; $protoWordHl matches both directly.
-  (keyword-table $protoWords $mem.protoWords $mem.pythonWords
+  (keyword-table $protoWords $mem.protoWords $mem.protoWords+160
     (group $Token.keyword.declaration+256 "enum" "extend" "message" "service")
     (group $Token.keyword.declaration+512 "rpc")
     (group $Token.keyword.declaration+768 "package")

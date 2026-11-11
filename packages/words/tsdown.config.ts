@@ -23,7 +23,7 @@ export default defineConfig([
     deps: {
       neverBundle: [
         '@pierre/words',
-        '@pierre/highlights',
+        /^@pierre\/highlights(?:\/|$)/,
         'react',
         'react/jsx-runtime',
       ],

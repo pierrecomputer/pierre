@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.abapWords 1216)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Bits 8-10 capture the next name: 1 a method or form
   ;; definition, 2 a type, 3 nothing (`CALL METHOD x` calls rather than
@@ -7,7 +11,7 @@
   ;; x`), and bit 12 makes the word a builtin type where a type is expected
   ;; (`TYPE REF TO data`). `like`, `where`, and `ascending` collide and are
   ;; matched directly.
-  (keyword-table $abapWords $mem.abapWords $mem.moonbitWords
+  (keyword-table $abapWords $mem.abapWords $mem.abapWords+1216
     (group $Token.keyword.declaration
       "constants" "field-symbols" "field-symbol" "class-data" "statics" "parameters"
       "select-options" "tables" "endclass" "endmethod" "endform" "endfunction" "endinterface"

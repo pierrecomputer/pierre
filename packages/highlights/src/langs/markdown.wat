@@ -1,5 +1,10 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.markdownFenceStack 96)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "../languages.wat")
 
   ;; A fence can name `markdown` (or `mdx`, which re-enters markdown), so the
@@ -58,7 +63,7 @@
           (i32.sub (i32.const $mem.markdownFenceStack+96) (local.get $from))))))
 
   ;; Transient: did the last $markdownCodeRange call run a body lexer? The
-  ;; caller folds it into the fence registers (bit 8 of the language slot) so
+  ;; caller folds it into the fence registers (bit 15 of the language slot) so
   ;; a later chunk knows whether the body's lexer already checkpointed state
   ;; for this fence.
   (global $markdownBodyRan (mut i32) (i32.const 0))
@@ -88,6 +93,15 @@
         (global.set $ptr (local.get $to))
         (return)))
     (global.set $markdownBodyRan (i32.const 1))
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (local.get $lang) (local.get $from) (local.get $to)
+            (select (i32.eqz (local.get $resume)) (i32.const -1) (global.get $streaming))
+            (i32.const -2)))
+        (global.set $ptr (local.get $to))
+        (return)))
     (global.set $markdownDepth (i32.add (global.get $markdownDepth) (i32.const 1)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
@@ -480,6 +494,8 @@
   (func $markdownClearEmbeddedStream
     (global.set $streamRegionKind (i32.const 0))
     (global.set $streamRegionStarted (i32.const 0))
+    (if (global.get $externalEmbedding)
+      (then (return)))
     (call $streamClearEmbedded)
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
@@ -490,7 +506,7 @@
   ;; Resume an open fence. Return 1 if its body consumes the whole chunk.
   ;; The length register stores block-quote depth in its upper half.
   ;; The language register stores list indentation in its upper half and
-  ;; uses bit 8 to mark a lexer that has run and needs resuming.
+  ;; uses bit 15 to mark a lexer that has run and needs resuming.
   ;; $streamChunk resumes the outer fence. $markdownCodeRange resumes nested
   ;; fences from the next depth's registers.
   (func $markdownStreamResume (result i32)
@@ -518,7 +534,7 @@
     ;; pseudo fence byte 1: an MDX ESM block, which a blank line ends
     (if (i32.eq (local.get $fence) (i32.const 1))
       (then (return (call $mdxEsmResume (local.get $reg)))))
-    (local.set $lang (i32.and (local.get $reg) (i32.const 0xff)))
+    (local.set $lang (i32.and (local.get $reg) (i32.const 0x7fff)))
     (local.set $quotes (i32.shr_u (local.get $len) (i32.const 16)))
     (local.set $close
       (call $markdownFenceClose
@@ -533,7 +549,7 @@
       (global.get $ptr)
       (local.get $close)
       (local.get $quotes)
-      (i32.ne (i32.and (local.get $reg) (i32.const 0x100)) (i32.const 0)))
+      (i32.ne (i32.and (local.get $reg) (i32.const 0x8000)) (i32.const 0)))
     (if (i32.eq (local.get $close) (global.get $end))
       (then
         ;; still open: the body's stream state stays live for the next chunk
@@ -542,7 +558,7 @@
             (call $markdownFenceSet
               (local.get $fence)
               (local.get $len)
-              (i32.or (local.get $reg) (i32.const 0x100)))))
+              (i32.or (local.get $reg) (i32.const 0x8000)))))
         (return (i32.const 1))))
     ;; closed in this chunk: whatever the body left open is finished text
     (call $markdownClearEmbeddedStream)
@@ -991,6 +1007,14 @@
 
   (func $markdownHtmlRange (param $from i32) (param $to i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.html) (local.get $from) (local.get $to)
+            (i32.const -1) (i32.const -3)))
+        (global.set $ptr (local.get $to))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
@@ -1000,6 +1024,13 @@
 
   (func $markdownYamlRange (param $from i32) (param $to i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (call $embedRegion
+          (i32.const 4) (local.get $from) (local.get $to)
+          (select (i32.const 1) (i32.const -1) (global.get $streaming)))
+        (global.set $ptr (local.get $to))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
@@ -1229,7 +1260,7 @@
                               (i32.eq (local.get $c) (i32.const "}")))))
                         (local.set $q (i32.add (local.get $q) (i32.const 1)))
                         (br $infoWord)))
-                    (local.set $lang (call $languageByName (local.get $info) (local.get $q)))
+                    (local.set $lang (call $embedLanguageByName (local.get $info) (local.get $q)))
                     (local.set $indent
                       (select (i32.sub (global.get $ptr) (local.get $listStart)) (i32.const 0) (local.get $listStart)))
                     (local.set $body (call $markdownAfterLine (local.get $lineEnd)))
@@ -1258,7 +1289,7 @@
                             ;; the body continues in the next chunk: whatever
                             ;; its lexer left open stays live, and the registers
                             ;; record the fence - run length in the low half,
-                            ;; block-quote depth above, and bit 8 of the
+                            ;; block-quote depth above, and bit 15 of the
                             ;; language once the body's lexer has run
                             (call $markdownFenceSet
                               (local.get $fence)
@@ -1276,7 +1307,7 @@
                               (i32.or
                                 (i32.or (local.get $lang) (i32.shl (local.get $indent) (i32.const 16)))
                                 (select
-                                  (i32.const 0x100)
+                                  (i32.const 0x8000)
                                   (i32.const 0)
                                   (i32.and
                                     (i32.ne (local.get $lang) (i32.const 0))

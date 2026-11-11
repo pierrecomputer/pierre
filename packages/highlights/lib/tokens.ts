@@ -273,7 +273,7 @@ export function themeHtmlStyle(
 
 /**
  * Pack a theme set for Wasm HTML mode 2. The emitter writes each theme's
- * colors and font settings into spans. Layout (see `$multiRec` in emit.wat):
+ * colors and font settings into spans. Layout (see `$multiRec` in emitter.wat):
  *
  *     0   u8  slot count       1  u8  kind: 0 custom properties, 1 light-dark()
  *     4   u32 tables offset    8  u32 span reserve    12  u32 prologue reserve

@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cmakeWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $cmakeByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -9,7 +13,7 @@
   ;; Groups 4 and 5 are uppercase argument words matched exactly: the
   ;; operators of a condition and the boolean constants. Group order is the
   ;; dispatch order in $hlCmake.
-  (keyword-table $cmakeWords $mem.cmakeWords $mem.cppWords
+  (keyword-table $cmakeWords $mem.cmakeWords $mem.cmakeWords+256
     (group ;; 1: flow control
       "if" "elseif" "else" "endif" "foreach" "endforeach" "while" "endwhile" "break" "continue"
       "return" "function" "endfunction" "macro" "endmacro" "block" "endblock")

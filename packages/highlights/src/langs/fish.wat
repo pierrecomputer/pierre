@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.fishWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Keywords count only where a command may start. The high byte of a value
   ;; says what follows: 1 a command, 2 a function name, 3 a variable name
   ;; after options, 4 a loop variable and then `in`.
-  (keyword-table $fishWords $mem.fishWords $mem.justWords
+  (keyword-table $fishWords $mem.fishWords $mem.fishWords+160
     (group $Token.keyword.control+256 "if" "while" "and" "or" "not" "else" "begin")
     (group $Token.keyword.control "switch" "case" "end" "return" "break" "continue" "exit")
     (group $Token.keyword.control+1024 "for")

@@ -1,12 +1,17 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.razorWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./csharp.wat")
   (import "./template.wat")
 
   ;; 1 a statement whose header runs to its `{`, 2 `using` (a statement before
   ;; `(`, else a directive), 3 a `@code` block, 4 `@section`, 5 a directive that
   ;; takes the rest of its line.
-  (keyword-table $razorWords $mem.razorWords $mem.twigWords
+  (keyword-table $razorWords $mem.razorWords $mem.razorWords+128
     (group "if" "for" "foreach" "while" "switch" "lock" "try" "do")
     (group "using")
     (group "code" "functions")
@@ -19,6 +24,14 @@
   ;; at a chunk end; $hlRazor continues those itself ($xline).
   (func $razorCs (param $to i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.csharp) (global.get $ptr) (local.get $to)
+            (i32.const -1) (i32.const -3)))
+        (global.set $ptr (local.get $to))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (call $hlCsharp)

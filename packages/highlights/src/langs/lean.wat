@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.leanWords 544)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $leanByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -49,7 +53,7 @@
                 (i32.eq (local.get $c) (i32.const 0x2c7c)))))))))
 
   ;; The high byte primes a declaration name: 1=value, 2=type, 3=namespace.
-  (keyword-table $leanWords $mem.leanWords $mem.bladeWords
+  (keyword-table $leanWords $mem.leanWords $mem.leanWords+544
     (group $Token.keyword.declaration+256 "def" "theorem" "lemma" "abbrev" "opaque" "axiom" "constant")
     (group $Token.keyword.declaration+512 "structure" "class" "inductive")
     (group $Token.keyword.import+768 "import" "namespace" "section" "open" "export" "end")

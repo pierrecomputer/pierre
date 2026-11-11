@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.moonbitWords 352)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Token in the low byte; the high byte holds what a word arms in
   ;; $hlMoonbit: 1 a function name, 2 a type name, 4 a `pub(...)` visibility
   ;; word.
-  (keyword-table $moonbitWords $mem.moonbitWords $mem.promqlWords
+  (keyword-table $moonbitWords $mem.moonbitWords $mem.moonbitWords+352
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword+256 "with")           ;; 2: impl method, next name is a function
     (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type

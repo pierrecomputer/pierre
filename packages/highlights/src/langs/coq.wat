@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.coqWords 480)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The high byte primes the next name: 1 a function definition, 2 a type
   ;; and then its constructors, 3 a namespace, 4 namespaces until the
   ;; sentence ends. Other vernacular commands are found by shape: a
   ;; capitalized word that starts a sentence.
-  (keyword-table $coqWords $mem.coqWords $mem.wolframWords
+  (keyword-table $coqWords $mem.coqWords $mem.coqWords+480
     (group $Token.keyword.declaration+256
       "Theorem" "Lemma" "Definition" "Fixpoint" "CoFixpoint" "Function" "Example" "Corollary"
       "Fact" "Remark" "Proposition" "Instance" "Let" "Ltac")

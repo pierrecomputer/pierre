@@ -1,4 +1,6 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
   (import "./php.wat")
 
   ;; Hack is PHP code without a `<?php` opener or `?>` closer, so the whole

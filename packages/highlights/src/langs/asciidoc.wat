@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./rst.wat")
 
   (func $adocIsAdmonition (param $p i32) (param $stop i32) (result i32)

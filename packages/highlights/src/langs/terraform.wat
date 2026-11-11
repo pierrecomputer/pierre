@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.terraformWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
   ;; heredoc bodies share $dockerHeredoc
   (import "./dockerfile.wat")
 
   ;; group order is the dispatch order in $hlTerraform's identifier branch
-  (keyword-table $tfWords $mem.terraformWords $mem.tsxWords
+  (keyword-table $tfWords $mem.terraformWords $mem.terraformWords+96
     (group "if" "in" "for" "else" "endif" "endfor") ;; 1: template and for-expression keywords
     (group "true" "false")                          ;; 2: booleans
     (group "null")                                  ;; 3: built-in constant

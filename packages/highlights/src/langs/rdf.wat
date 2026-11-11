@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.sparqlWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $hlSparql
     (call $hlRdfImpl (i32.const 1)))
@@ -9,7 +13,7 @@
 
   ;; The token sits in the low byte. Bit 8 marks the words Turtle (and TriG)
   ;; share with SPARQL; SPARQL matches every word without case.
-  (keyword-table $sparqlWords $mem.sparqlWords $mem.cypherWords
+  (keyword-table $sparqlWords $mem.sparqlWords $mem.sparqlWords+320
     (group $Token.keyword.import+256 "prefix" "base")
     (group $Token.boolean+256 "true" "false")
     (group $Token.keyword+256 "graph")

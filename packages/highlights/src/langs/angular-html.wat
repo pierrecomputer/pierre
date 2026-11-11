@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.angularWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
-  (keyword-table $angularWords $mem.angularWords $mem.bashWords
+  (keyword-table $angularWords $mem.angularWords $mem.angularWords+160
     (group $Token.keyword.control
       "if" "else" "for" "empty" "switch" "case" "default" "defer" "placeholder" "loading" "error")
     (group $Token.keyword.declaration "let")

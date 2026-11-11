@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.rustWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $rustByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -8,7 +12,7 @@
   ;; on purpose: the table hash sees only the first two bytes, the last byte,
   ;; and the length, which are identical for `while`, so the two words can
   ;; never share a table and `where` is matched directly in $rustWordHl.
-  (keyword-table $rustWords $mem.rustWords $mem.scalaWords
+  (keyword-table $rustWords $mem.rustWords $mem.rustWords+224
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword.declaration+512 ;; 2: declaration, next name is a type
       "mod" "type" "enum" "trait" "union" "struct")

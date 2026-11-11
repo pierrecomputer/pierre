@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.rubyWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $rubyByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -7,7 +11,7 @@
   ;; Group order is the dispatch order in $rubyWordHl below. The `attr_*`
   ;; family and the `__FILE__` family are prefix checks there: their members
   ;; share hash features the table cannot separate.
-  (keyword-table $rubyWords $mem.rubyWords $mem.rustWords
+  (keyword-table $rubyWords $mem.rubyWords $mem.rubyWords+224
     (group ;; 1: control
       "if" "do" "in" "END" "end" "for" "case" "else" "next" "redo" "then" "when" "BEGIN" "begin"
       "break" "elsif" "raise" "retry" "until" "while" "yield" "ensure" "rescue" "return" "unless")

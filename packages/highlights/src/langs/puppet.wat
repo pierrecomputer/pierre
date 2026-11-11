@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.puppetWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
   ;; heredoc end lines compare with $bashRangeEq
   (import "./bash.wat")
 
   ;; The high byte of a value is what the keyword awaits: 1 a class or
   ;; defined type name, 2 a function name, both then parameters; 3 a class
   ;; name; 4 a node name, where a regex may stand.
-  (keyword-table $puppetWords $mem.puppetWords $mem.applescriptWords
+  (keyword-table $puppetWords $mem.puppetWords $mem.puppetWords+160
     (group $Token.keyword.declaration+256 "class" "define")
     (group $Token.keyword.declaration+512 "function" "plan")
     (group $Token.keyword.declaration+1024 "node")

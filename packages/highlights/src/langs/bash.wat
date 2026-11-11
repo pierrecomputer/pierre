@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.bashWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; the byte at $p, or 0 at or past $end
   (func $bashByte (param $p i32) (result i32)
@@ -11,7 +15,7 @@
 
   ;; group order is the dispatch order in $bashWordHl below; the control
   ;; groups differ only in what may follow them (see $hlBash)
-  (keyword-table $bashWords $mem.bashWords $mem.batchWords
+  (keyword-table $bashWords $mem.bashWords $mem.bashWords+96
     (group ;; 1: control, a command follows
       "do" "if" "elif" "else" "then" "until" "while")
     (group ;; 2: control, arguments follow

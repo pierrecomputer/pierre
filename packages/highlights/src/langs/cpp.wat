@@ -1,5 +1,10 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cppWords 352)
+  (memory-region $mem.cudaWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; A bounded byte read for prefix and operator lookahead.
   (func $cppByte (param $p i32) (result i32)
@@ -215,7 +220,7 @@
     (i32.const 0))
 
   ;; group order is the dispatch order in $cppWordHl below
-  (keyword-table $cppWords $mem.cppWords $mem.csharpWords
+  (keyword-table $cppWords $mem.cppWords $mem.cppWords+352
     (group $Token.keyword.control ;; 1: control - `continue` lives in $cppWordHl instead
       "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch" "throw" "switch" "return"
       "default" "co_await" "co_yield" "co_return")
@@ -254,7 +259,7 @@
           (then (return (enum.get $Token.type.builtin))))))
     (keyword-table.value $cppWords (local.get $lhs) (local.get $rhs)))
 
-  (keyword-table $cudaWords $mem.cudaWords $mem.dartWords
+  (keyword-table $cudaWords $mem.cudaWords $mem.cudaWords+192
     (group $Token.keyword
       "__global__" "__host__" "__constant__" "__managed__"
       "__forceinline__" "__launch_bounds__" "__align__")

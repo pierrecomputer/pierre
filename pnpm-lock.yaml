@@ -886,6 +886,13 @@ importers:
       wabt:
         specifier: 'catalog:'
         version: 1.0.39
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   packages/words:
     devDependencies:

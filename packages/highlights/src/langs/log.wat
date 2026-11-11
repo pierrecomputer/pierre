@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.logWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Month names (+256) count only before a day number.
-  (keyword-table $logWords $mem.logWords $mem.verilogWords
+  (keyword-table $logWords $mem.logWords $mem.logWords+288
     (group $Token.diff.minus
       "error" "err" "fatal" "ftl" "critical" "crit" "severe" "alert" "emerg" "emergency" "panic"
       "fail" "failed" "failure" "traceback")

@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.vimlWords 544)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./vhdl.wat")
 
   ;; Positions where a word counts: 256 at a command start, 512 after an operand,
   ;; 1024 where an operand is expected. From bit 11, the next state: 0-5 a $st
   ;; value, 6 a function header, 7 a command with several expressions.
-  (keyword-table $vimlWords $mem.vimlWords $mem.awkWords
+  (keyword-table $vimlWords $mem.vimlWords $mem.vimlWords+544
     (group $Token.keyword.control+2304 "if" "elseif" "while" "for" "return" "throw")
     (group $Token.keyword.control+4352
       "else" "endif" "endfor" "endwhile" "try" "finally" "endtry" "break" "continue")
