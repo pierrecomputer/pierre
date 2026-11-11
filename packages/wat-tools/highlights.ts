@@ -98,7 +98,8 @@ export function transformWat(
   url: string | URL,
   content?: string
 ): TransformedWat {
-  if (!(url instanceof URL)) url = pathToFileURL(url);
+  // WARNING: `pathToFileURL` returns Node's URL type, which differs from the global URL under bun-types.
+  if (typeof url === 'string') url = new URL(pathToFileURL(url).href);
   content ??= readFileSync(url, 'utf-8');
   const enumMap: EnumMap = new Map();
   const languages: Record<string, number> = {};
