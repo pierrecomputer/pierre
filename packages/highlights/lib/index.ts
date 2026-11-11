@@ -1,10 +1,10 @@
 import type { Lang as LexerLang } from './languages';
 
 /**
- * A built-in or registered custom language name. `ansi` is terminal output
- * with escape sequences, as in Shiki.
+ * A built-in language name or alias. `ansi` is terminal output with escape
+ * sequences, as in Shiki.
  */
-export type Lang = LexerLang | 'ansi' | (string & {});
+export type Lang = LexerLang | 'ansi';
 
 /**
  * Styles for a Zed syntax scope. The `& {}` unions preserve literal
@@ -139,9 +139,12 @@ export interface ThemedToken {
 }
 
 /** Options shared by every highlighting and tokenization entry point. */
-export interface CodeToHtmlBaseOptions {
-  /** Built-in language name or alias, or `ansi` for terminal output. */
-  lang: Lang;
+export interface CodeToHtmlBaseOptions<L extends string = Lang> {
+  /**
+   * Built-in language name or alias, or `ansi` for terminal output. A
+   * highlighter from `createHighlighter` also accepts its custom names.
+   */
+  lang: L;
   /** Prefix for CSS-variable colors and per-theme properties. Defaults to `--hls-`. */
   cssVariablePrefix?: string;
   /**
@@ -157,7 +160,9 @@ export interface CodeToHtmlBaseOptions {
 }
 
 /** Options shared by every tokenization entry point. */
-export interface CodeToTokensBaseOptions extends CodeToHtmlBaseOptions {
+export interface CodeToTokensBaseOptions<
+  L extends string = Lang,
+> extends CodeToHtmlBaseOptions<L> {
   /**
    * Lines at or above this length become one token without syntax styles,
    * as in Shiki. This limits the number of DOM elements for long lines.
@@ -178,12 +183,16 @@ export type ThemeOptions<T = Theme | ThemeFamily> =
   | { theme?: undefined; themes: Record<string, T> };
 
 /** Options for highlighting source code as HTML. */
-export type CodeToHtmlOptions<T = Theme | ThemeFamily> = CodeToHtmlBaseOptions &
-  ThemeOptions<T>;
+export type CodeToHtmlOptions<
+  T = Theme | ThemeFamily,
+  L extends string = Lang,
+> = CodeToHtmlBaseOptions<L> & ThemeOptions<T>;
 
 /** Options for tokenizing source code. */
-export type CodeToTokensOptions<T = Theme | ThemeFamily> =
-  CodeToTokensBaseOptions & ThemeOptions<T>;
+export type CodeToTokensOptions<
+  T = Theme | ThemeFamily,
+  L extends string = Lang,
+> = CodeToTokensBaseOptions<L> & ThemeOptions<T>;
 
 /** Result of `codeToTokens`, matching Shiki's `TokensResult`. */
 export interface TokensResult {
@@ -200,7 +209,7 @@ export interface TokensResult {
 }
 
 /** An initialized highlighter with isolated WebAssembly memory. */
-export interface Highlighter<T = Theme | ThemeFamily> {
+export interface Highlighter<T = Theme | ThemeFamily, L extends string = Lang> {
   /**
    * Return highlighted HTML as UTF-8 bytes. Byte input must use UTF-8.
    * The result can share WebAssembly memory that the next call overwrites.
@@ -208,7 +217,7 @@ export interface Highlighter<T = Theme | ThemeFamily> {
    */
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
-    options: CodeToHtmlOptions<T>
+    options: CodeToHtmlOptions<T, L>
   ): Uint8Array;
   /**
    * Return themed tokens for each line and the root theme styles.
@@ -216,22 +225,37 @@ export interface Highlighter<T = Theme | ThemeFamily> {
    */
   codeToTokens(
     input: string | Uint8Array | ArrayBuffer,
-    options: CodeToTokensOptions<T>
+    options: CodeToTokensOptions<T, L>
   ): TokensResult;
 }
 
 export interface Language {
   name: string;
   aliases: Readonly<Record<string, number>>;
-  wasm: string;
+  /**
+   * Lexer Wasm as base64, or a compiled module where the runtime cannot
+   * compile WebAssembly from bytes, such as Cloudflare Workers.
+   */
+  wasm: string | WebAssembly.Module;
 }
 
 export interface HighlighterOptions {
   langs: readonly Language[];
+  /** Every member of a `ThemeFamily` is registered. */
   themes: readonly (Theme | ThemeFamily)[];
 }
 
-export type RegisteredHighlighter = Highlighter<Theme | ThemeFamily | string>;
+/**
+ * A highlighter from `createHighlighter`. It accepts the names of its
+ * registered languages and themes.
+ */
+export interface RegisteredHighlighter extends Highlighter<
+  Theme | ThemeFamily | string,
+  Lang | (string & {})
+> {
+  /** Lowercase names and aliases that `lang` accepts, as in Shiki. */
+  getLoadedLanguages(): string[];
+}
 
 export {
   codeToHtml,

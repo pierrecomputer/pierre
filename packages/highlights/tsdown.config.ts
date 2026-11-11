@@ -15,6 +15,8 @@ const config: UserConfig[] = defineConfig([
   {
     entry: [
       'lib/index.ts',
+      'lib/core.ts',
+      'lib/core-workerd.ts',
       'lib/highlighter.ts',
       'lib/live.ts',
       'lib/tokens.ts',

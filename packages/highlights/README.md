@@ -16,6 +16,10 @@ The core package imports no language or theme bundle. `createHighlighter()`
 compiles the selected WebAssembly modules. Its `codeToHtml()` and
 `codeToTokens()` methods then run synchronously.
 
+The package runs in Node.js, browsers, and Cloudflare Workers. Workers cannot
+compile WebAssembly from bytes, so the `workerd` export condition selects
+modules that import compiled `.wasm` files.
+
 ## Quick start
 
 ```ts
@@ -42,6 +46,9 @@ only the languages and themes that your application needs.
 Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
 script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text
 until you add CSS. Code fences also accept registered custom language names.
+
+`highlighter.getLoadedLanguages()` returns the names and aliases that `lang`
+accepts. A `ThemeFamily` in `themes` registers each of its members.
 
 ## Full language and theme bundle
 
@@ -77,7 +84,8 @@ const language = buildHighlightsLexer({
 ```
 
 The result implements the `Language` type. Save this descriptor in a JavaScript
-module and pass it to `createHighlighter({ langs: [language], themes })`. The
+module and pass it to `createHighlighter({ langs: [language], themes })`. A
+custom name that a built-in language also uses takes only that name. The
 [lexer guide](../wat-tools/README.md) describes the shared scanners, token
 types, and memory declarations.
 
@@ -95,7 +103,8 @@ supported.
 The `@pierre/highlights/full` entry initializes a shared highlighter at import.
 It provides the top-level `codeToHtml()` and `codeToTokens()` functions,
 `StreamTokenizer`, and `LiveTokenizer`. Its `createHighlighter` export uses the
-same options-only async API.
+same options-only async API. The main entry exports only `createHighlighter`,
+`isSupportedLanguage`, and the types.
 
 Read the [API reference](https://diffs.com/docs#highlights) for tokens, input
 streams, document edits, and themes.

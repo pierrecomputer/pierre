@@ -47,7 +47,7 @@ Document edits ── liveRun ───────────── per-line s
 
 | Source                                                                                                                     | Responsibility                                                    |
 | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [`lib/index.ts`](./lib/index.ts), [`lib/highlighter.ts`](./lib/highlighter.ts)                                             | Public API, language registration, Wasm instances, and streaming  |
+| [`lib/core.ts`](./lib/core.ts), [`lib/index.ts`](./lib/index.ts), [`lib/highlighter.ts`](./lib/highlighter.ts)             | Public API, language registration, Wasm instances, and streaming  |
 | [`lib/live.ts`](./lib/live.ts)                                                                                             | Edit validation, document reads, and deferred work                |
 | [`lib/theme.ts`](./lib/theme.ts), [`lib/tokens.ts`](./lib/tokens.ts)                                                       | Theme preparation and conversion of records to token objects      |
 | [`src/lexer.wat`](./src/lexer.wat), [`src/emitter.wat`](./src/emitter.wat)                                                 | Separate lexer and emitter entry points                           |
@@ -70,7 +70,18 @@ source and these records to the emitter instance.
 
 The emitter reads the record address at control byte 22 and the record byte
 length at byte 26. It places its output after these records so HTML expansion
-and UTF-16 conversion cannot overwrite records that it has not read.
+and UTF-16 conversion cannot overwrite records that it has not read. It clamps
+each record end to the input and emits uncovered bytes as plain text, so a
+custom lexer with wrong ends cannot drop text or read past the input.
+
+[`lib/core.ts`](./lib/core.ts) is the main entry. It exports
+`createHighlighter`, `isSupportedLanguage`, and the types. The shared functions
+and tokenizers need the combined module, so only `/full` exports them. A lexer
+or emitter instance above 8 MiB is replaced when small inputs resume.
+
+Cloudflare Workers cannot compile WebAssembly from bytes. The `workerd` export
+condition selects modules that import the compiled emitter and lexer `.wasm`
+files, and `Language.wasm` accepts a `WebAssembly.Module`.
 
 The following combined-module details apply to the `/full` entry. Its export
 conditions select an embedded-byte loader or a native Wasm import for workerd.
@@ -186,9 +197,16 @@ adjacent ranges with the same token ID. Gaps extend the previous record or use
 
 Standalone lexers call the host to resolve embedded languages from the
 registered `langs`. The host copies each bounded body into a child lexer
-instance and appends its raw records to the parent. Each embedded stream has its
-own child instance, so nested templates and multiline fences preserve
-independent state.
+instance. It then copies the child's raw records to the parent's `reserve`
+address, and the parent's `append` export merges them in one call. Each open
+embedded stream has its own child instance, so nested templates and multiline
+fences preserve independent state.
+
+Wasm instantiation is expensive, so each lexer keeps its finished child lexers
+for reuse. Whole-body lexers and stream lexers wait in separate pools, because a
+whole-body run does not clear the state of an unfinished stream. A template ends
+its stream context with `$embedEnd` when it closes. A stream that starts with an
+empty body still resets its child.
 
 With `langs: [ts, html]`, script bodies use the registered JavaScript lexer.
 Style bodies remain plain text because CSS is absent. Markdown fences resolve
@@ -388,6 +406,11 @@ and compound negations. Outputs include Wasm, the browser byte module, themes,
 and the tracked [`lib/languages.ts`](./lib/languages.ts) and
 [`lib/token-types.ts`](./lib/token-types.ts) tables. tsdown emits the host and
 declarations.
+
+For each standalone lexer, the build drops stream resume branches that the
+selected languages cannot reach. It keeps the embedded-region branch when the
+lexer can still call `$streamSetRegion`. Open every stream region through that
+function.
 
 To add a language, update its import and registration. Enable stream checkpoints
 if the lexer needs them. Add a language test and a sample in
