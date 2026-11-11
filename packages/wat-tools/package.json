@@ -1,6 +1,6 @@
 {
   "name": "@pierre/wat-tools",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "license": "apache-2.0",
   "type": "module",

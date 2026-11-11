@@ -1,6 +1,6 @@
 {
   "name": "@pierre/words",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A fast markdown renderer written in WebAssembly Text.",
   "license": "apache-2.0",
   "files": [
