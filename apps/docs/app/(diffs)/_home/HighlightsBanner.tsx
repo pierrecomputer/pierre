@@ -9,7 +9,7 @@ import {
   HIGHLIGHTS_LARGE_FILE_RESULTS,
   HIGHLIGHTS_THROUGHPUT_MAXIMUM,
 } from '../highlights/performanceBenchmarkData';
-import styles from './ProductBanner.module.css';
+import styles from './HighlightsBanner.module.css';
 import { Button } from '@/components/ui/button';
 
 export function HighlightsBanner() {
