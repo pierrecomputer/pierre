@@ -1,7 +1,16 @@
 import { expect, test } from 'bun:test';
 
+import { codeToTokens, createHighlighter } from '../lib/core';
+import { initEmitter } from '../lib/highlighter';
+import languages from '../lib/languages';
+import { transformLexer, transformWat, wat2wasm } from '../scripts/build';
 import { samples } from './_samples';
-import { assertLineFedParity, tokenKinds } from './_util';
+import {
+  assertLineFedParity,
+  distinctTheme,
+  initFullModule,
+  tokenKinds,
+} from './_util';
 
 test('marko: tags with shorthands, JavaScript attribute values, and placeholders', () => {
   expect(
@@ -229,3 +238,55 @@ test('marko: values, placeholders, statements, and blocks keep line-fed parity',
     '/>',
   ]);
 });
+
+test('marko: style.less and style.scss blocks use their dialect', () => {
+  const kinds = tokenKinds(
+    'marko',
+    'style.less {\n  @c: red; // }\n  .x { color: @c; }\n}\n<p>x</p>\nstyle.scss {\n  $c: red;\n}\n'
+  );
+  expect(kinds.filter(([text]) => text === '@c' || text === '$c')).toEqual([
+    ['@c', 'variable'],
+    ['@c', 'variable'],
+    ['$c', 'variable'],
+  ]);
+  expect(kinds).toContainEqual(['p', 'tag']);
+});
+
+test('marko: a standalone style block ends at its own brace', async () => {
+  const lexer = (name: string) => ({
+    name,
+    aliases: Object.fromEntries(
+      Object.entries(languages).filter(
+        ([, id]) => id === languages[name as keyof typeof languages]
+      )
+    ),
+    wasm: new WebAssembly.Module(
+      wat2wasm(`${name}.wat`, transformLexer([name]).code)
+    ),
+  });
+  const emitter = new URL('../src/emitter.wat', import.meta.url);
+  initEmitter(
+    new WebAssembly.Module(
+      wat2wasm(emitter.pathname, transformWat(emitter).code)
+    )
+  );
+  const highlighter = await createHighlighter({
+    langs: [lexer('marko'), lexer('css'), lexer('less')],
+    themes: [distinctTheme],
+  });
+  initFullModule();
+  for (const code of [
+    'style {\n  .a::after { content: "}"; }\n  /* }\n } */ .b { color: red }\n}\n<p>x</p>\n',
+    'style.less {\n  @c: red; // }\n}\n<p>x</p>\n',
+    'style{c\\}\n}\n<p>x</p>\n',
+  ]) {
+    expect(
+      highlighter.codeToTokens(code, {
+        lang: 'marko',
+        theme: distinctTheme.name,
+      }).tokens
+    ).toEqual(
+      codeToTokens(code, { lang: 'marko', theme: distinctTheme }).tokens
+    );
+  }
+}, 120000);

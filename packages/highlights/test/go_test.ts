@@ -425,3 +425,34 @@ void t.test('go: each line of a grouped type declaration names a type', () => {
   );
   assertLineFedParity('go', code);
 });
+
+void t.test('go: := is one operator and ...T is a type', () => {
+  assert.deepEqual(tokenKinds('go', 'x := 1'), [
+    ['x', 'variable'],
+    [':=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assert.deepEqual(tokenKinds('go', 'func f(xs ...Option) { g(xs...) }'), [
+    ['func', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['xs', 'variable'],
+    ['...', 'punctuation.delimiter'],
+    ['Option', 'type'],
+    [') {', 'punctuation.bracket'],
+    ['g', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['xs', 'variable'],
+    ['...', 'punctuation.delimiter'],
+    [') }', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('go: banner comments are not doc comments', () => {
+  assert.deepEqual(tokenKinds('go', '/**/\n////////\n/***/\n/// d'), [
+    ['/**/', 'comment'],
+    ['////////', 'comment'],
+    ['/***/', 'comment'],
+    ['/// d', 'comment.doc'],
+  ]);
+});

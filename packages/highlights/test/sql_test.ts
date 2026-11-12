@@ -399,3 +399,119 @@ void t.test('sql: a table name before a column list is not a call', () => {
   assert.equal(kindOf('SELECT COUNT(*) FROM t', 'COUNT'), 'function');
   assert.equal(kindOf('VALUES (NOW())', 'NOW'), 'function');
 });
+
+void t.test(
+  'sql: E strings take backslash escapes, plain strings do not',
+  () => {
+    assert.deepEqual(tokenKinds('sql', "SELECT E'it\\'s', 'C:\\' FROM t;"), [
+      ['SELECT', 'keyword'],
+      ["E'it", 'string'],
+      ["\\'", 'string.escape'],
+      ["s'", 'string'],
+      [',', 'punctuation.delimiter'],
+      ["'C:\\'", 'string'],
+      ['FROM', 'keyword'],
+      ['t', 'variable'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    assertLineFedParity('sql', "SELECT e'a\\'\nb' FROM t;\nSELECT 1;\n");
+  }
+);
+
+void t.test(
+  'sql: common DDL, transaction, and window keywords and types',
+  () => {
+    const html = hl(
+      'ALTER TABLE t DROP COLUMN c; CREATE UNIQUE INDEX i ON t (a); CREATE VIEW v AS SELECT 1 EXCEPT SELECT 2 INTERSECT SELECT 3 OFFSET 1; ' +
+        'SELECT rank() OVER (PARTITION BY a); BEGIN; COMMIT; ROLLBACK; GRANT; CREATE OR REPLACE FUNCTION f() RETURNS INT; ' +
+        'INSERT INTO t VALUES (1) RETURNING id; CROSS KEY CHECK IF ' +
+        'INT NUMERIC(5, 2) FLOAT SMALLINT INTERVAL TIME TIMESTAMP'
+    );
+    for (const word of [
+      'ALTER',
+      'DROP',
+      'COLUMN',
+      'UNIQUE',
+      'INDEX',
+      'VIEW',
+      'EXCEPT',
+      'INTERSECT',
+      'OFFSET',
+      'OVER',
+      'PARTITION',
+      'BEGIN',
+      'COMMIT',
+      'ROLLBACK',
+      'GRANT',
+      'REPLACE',
+      'FUNCTION',
+      'RETURNS',
+      'RETURNING',
+      'CROSS',
+      'KEY',
+      'CHECK',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('keyword'), word);
+    }
+    assert.equal(wordColor(html, 'IF'), distinctColor('keyword.control'));
+    for (const word of [
+      'INT',
+      'NUMERIC',
+      'FLOAT',
+      'SMALLINT',
+      'INTERVAL',
+      'TIME',
+      'TIMESTAMP',
+    ]) {
+      assert.equal(wordColor(html, word), distinctColor('type.builtin'), word);
+    }
+  }
+);
+
+void t.test(
+  'sql: casts, positional parameters, containment, and members',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'sql',
+        "SELECT '{}'::jsonb, $1, a @> b, a <@ b, t.order, t.date;"
+      ),
+      [
+        ['SELECT', 'keyword'],
+        ["'{}'", 'string'],
+        ['::', 'operator'],
+        ['jsonb', 'type.builtin'],
+        [',', 'punctuation.delimiter'],
+        ['$1', 'variable.special'],
+        [',', 'punctuation.delimiter'],
+        ['a', 'variable'],
+        ['@>', 'operator'],
+        ['b', 'variable'],
+        [',', 'punctuation.delimiter'],
+        ['a', 'variable'],
+        ['<@', 'operator'],
+        ['b', 'variable'],
+        [',', 'punctuation.delimiter'],
+        ['t', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['order', 'variable'],
+        [',', 'punctuation.delimiter'],
+        ['t', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['date', 'variable'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'sql: a dollar tag longer than 32 bytes resumes in a stream',
+  () => {
+    const tag = '$a_very_long_dollar_quote_tag_name_here$';
+    assertLineFedParity(
+      'sql',
+      `SELECT ${tag} line1\nline2 -- not\n${tag} FROM t;\n`
+    );
+  }
+);

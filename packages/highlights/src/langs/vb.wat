@@ -1,7 +1,7 @@
 (module
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
-  (memory-region $mem.vbWords 512)
+  (memory-region $mem.vbWords 520)
 
   (import "@pierre/wat-tools/common.wat")
 
@@ -9,23 +9,27 @@
   ;; Token in the low byte; bits 8-9 capture the next name: 1 a routine,
   ;; 2 a type, 3 a namespace. Bit 10 marks `End` and `Exit`, whose next
   ;; word captures nothing. Bit 11 marks `Rem`, which starts a comment.
+  ;; After a routine keyword, bit 12 keeps the capture (`Property Get Name`)
+  ;; and bit 13 takes it (`Sub New`).
   ;; `overloads` and `notinheritable` share their hashes with `overrides`
   ;; and `notoverridable` and are matched directly.
-  (keyword-table $vbWords $mem.vbWords $mem.vbWords+512
+  (keyword-table $vbWords $mem.vbWords $mem.vbWords+520
     (group $Token.keyword.declaration+256 "sub" "function" "property" "operator")
     (group $Token.keyword.declaration+512 "class" "module" "structure" "interface" "enum")
     (group $Token.keyword.declaration+768 "namespace")
     (group $Token.keyword.import+768 "imports")
-    (group $Token.keyword+512 "as" "of" "new" "inherits" "implements")
+    (group $Token.keyword+512 "as" "of" "inherits" "implements")
+    (group $Token.keyword+8704 "new")
     (group $Token.keyword+1024 "end")
     (group $Token.keyword.control+1024 "exit")
     (group $Token.keyword.declaration
-      "dim" "const" "redim" "preserve" "event" "delegate" "declare" "lib" "alias" "get" "set"
-      "let" "public" "private" "protected" "friend" "shared" "shadows" "overrides"
+      "dim" "const" "redim" "preserve" "event" "delegate" "declare" "lib" "alias" "public"
+      "private" "protected" "friend" "shared" "shadows" "overrides"
       "overridable" "notoverridable" "mustoverride" "mustinherit"
       "readonly" "writeonly" "partial" "static" "async" "iterator" "byval" "byref" "optional"
       "paramarray" "withevents" "default" "widening" "narrowing" "handles" "option" "explicit"
       "strict" "infer" "compare" "erase")
+    (group $Token.keyword.declaration+4096 "get" "set" "let")
     (group $Token.keyword.control
       "if" "then" "else" "elseif" "for" "each" "in" "to" "step" "next" "do" "loop" "while"
       "until" "wend" "select" "case" "try" "catch" "finally" "throw" "return" "continue" "goto"
@@ -186,22 +190,21 @@
               (then
                 (call $lexLineComment (i32.const 1) (enum.get $Token.preproc))
                 (br $next)))
-            (global.set $ptr
-              (call $scanFindSpecial
-                (i32.add (local.get $lhs) (i32.const 1))
-                (global.get $end)
-                (i32.const "#")
-                (i32.const 0)
-                (i32.const 1)))
-            (if
-              (i32.and
-                (call $lexIsDigit (local.get $c2))
-                (i32.eq (call $templateByte (global.get $ptr)) (i32.const "#")))
+            (if (call $lexIsDigit (local.get $c2))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
-                (br $next)))
-            (global.set $ptr (local.get $lhs))))
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (loop $date
+                  (local.set $v (call $templateByte (global.get $ptr)))
+                  (if (byteset.get "0123456789/-:. \09AMPamp" (local.get $v))
+                    (then
+                      (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                      (br $date))))
+                (if (i32.eq (local.get $v) (i32.const "#"))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
+                    (br $next)))
+                (global.set $ptr (local.get $lhs))))))
 
         ;; `&H1F`, `&O17`, `&B101`
         (if
@@ -228,13 +231,8 @@
             (i32.eq (local.get $c) (i32.const "["))
             (call $lexIsNameStart (local.get $c2)))
           (then
-            (global.set $ptr
-              (call $scanFindSpecial
-                (i32.add (local.get $lhs) (i32.const 1))
-                (global.get $end)
-                (i32.const "]")
-                (i32.const 0)
-                (i32.const 1)))
+            (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+            (call $scanIdentRun (i32.const "_"))
             (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "]"))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -283,12 +281,19 @@
                     (call $lexLineComment (i32.const 0) (enum.get $Token.comment))
                     (br $next)))
                 (local.set $hl (i32.and (local.get $v) (i32.const 255)))
-                (local.set $expect
-                  (select
-                    (i32.const 0)
-                    (i32.and (i32.shr_u (local.get $v) (i32.const 8)) (i32.const 3))
-                    (local.get $noCap)))
-                (local.set $noCap (i32.shr_u (i32.and (local.get $v) (i32.const 1024)) (i32.const 10))))
+                (if (i32.and (i32.eq (local.get $expect) (i32.const 1)) (i32.ge_u (local.get $v) (i32.const 4096)))
+                  (then
+                    (if (i32.ge_u (local.get $v) (i32.const 8192))
+                      (then
+                        (local.set $hl (enum.get $Token.function.definition))
+                        (local.set $expect (i32.const 4)))))
+                  (else
+                    (local.set $expect
+                      (select
+                        (i32.const 0)
+                        (i32.and (i32.shr_u (local.get $v) (i32.const 8)) (i32.const 3))
+                        (local.get $noCap)))
+                    (local.set $noCap (i32.shr_u (i32.and (local.get $v) (i32.const 1024)) (i32.const 10))))))
               (else
                 (local.set $noCap (i32.const 0))
                 (local.set $hl (enum.get $Token.variable))

@@ -204,3 +204,12 @@ void t.test('imba: style blocks', () => {
   // `css` as a plain name
   expectKinds('css = 1\nel.css', [['css', 'variable']]);
 });
+
+void t.test('imba: a bare `--` in a style value advances', () => {
+  expectKinds('css .x c:red --\n', [['--', 'variable']]);
+  expectKinds('<div[--]> "x"\n', [
+    ['--', 'variable'],
+    ['"x"', 'string'],
+  ]);
+  expectKinds('<div[c:--]>\n', [['--', 'variable']]);
+});

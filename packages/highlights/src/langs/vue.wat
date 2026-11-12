@@ -288,18 +288,16 @@
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then
-            (if
-              (i32.and
-                (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
-                (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
+            ;; `<!` and `<?` run to their own close, whatever cut lies inside
+            (local.set $q (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+            (if (i32.or (i32.eq (local.get $q) (i32.const "!")) (i32.eq (local.get $q) (i32.const "?")))
               (then
                 (call $vueHtmlRange (local.get $from) (local.get $p))
                 (global.set $ptr (local.get $p))
-                (call $htmlComment (local.get $p))
+                (call $htmlBang (local.get $q))
                 (br $resync)))
             ;; Tags are Vue's own: directive values are expressions, and a
-            ;; script/style body is scanned once here. Declarations remain
-            ;; the HTML lexer's job.
+            ;; script/style body is scanned once here.
             ;; $q: the name start, past the `/` of a close tag
             (local.set $q
               (i32.add

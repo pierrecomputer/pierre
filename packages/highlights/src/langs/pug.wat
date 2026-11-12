@@ -23,6 +23,9 @@
   ;; input cannot exhaust the call stack. Every caller restores it.
   (global $pugNest (mut i32) (i32.const 0))
 
+  ;; The brackets $pugValueEnd leaves open at $stop: a value that goes on.
+  (global $pugDepth (mut i32) (i32.const 0))
+
   (func $pugJs (param $stop i32)
     (local $save i32)
     (if (global.get $externalEmbedding)
@@ -41,9 +44,9 @@
     (global.set $ptr (local.get $stop)))
 
   ;; A `,` or `)` outside brackets and quotes, or a blank no operator joins.
-  (func $pugValueEnd (param $p i32) (param $stop i32) (result i32)
+  ;; $depth: the brackets still open from the line before.
+  (func $pugValueEnd (param $p i32) (param $stop i32) (param $depth i32) (result i32)
     (local $c i32)
-    (local $depth i32)
     (local $q i32)
     (block $done
       (loop $scan
@@ -83,6 +86,7 @@
                 (br $scan)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $scan)))
+    (global.set $pugDepth (local.get $depth))
     (select (local.get $stop) (local.get $p) (i32.gt_u (local.get $p) (local.get $stop))))
 
   ;; Returns 0 after the `)`, -1 when the list runs past $stop.
@@ -118,7 +122,8 @@
             (local.set $lhs (global.get $ptr))
             (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
             (call $emitGap (local.get $lhs) (global.get $ptr))
-            (call $pugJs (call $pugValueEnd (global.get $ptr) (local.get $stop)))
+            (call $pugJs (call $pugValueEnd (global.get $ptr) (local.get $stop) (i32.const 0)))
+            (br_if $done (i32.const -1) (global.get $pugDepth))
             (br $attr)))
         (block $nameDone
           (loop $name
@@ -472,7 +477,7 @@
                 (local.set $lhs (global.get $ptr))
                 (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
                 (call $emitGap (local.get $lhs) (global.get $ptr))
-                (call $pugJs (call $pugValueEnd (global.get $ptr) (local.get $stop)))
+                (call $pugJs (call $pugValueEnd (global.get $ptr) (local.get $stop) (i32.const 0)))
                 (br $param)))
             (global.set $ptr (call $utf8SpanEnd (i32.add (local.get $lhs) (i32.const 1)) (local.get $stop)))
             (if (call $lexIsSpace (local.get $c))
@@ -512,12 +517,49 @@
                 (br $namesDone)))
             (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
             (br $names)))))
+    (if
+      (i32.or
+        (i32.and
+          (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 4))
+          (i32.eq (i32.load (local.get $lhs)) (i32.const "when")))
+        (i32.and
+          (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 7))
+          (i64.eq (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffffff)) (i64.const "default"))))
+      (then
+        (local.set $p (global.get $ptr))
+        (block $found
+          (loop $scan
+            (br_if $found (i32.ge_u (local.get $p) (local.get $stop)))
+            (local.set $c (i32.load8_u (local.get $p)))
+            (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
+              (then
+                (loop $str
+                  (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                  (if (i32.lt_u (local.get $p) (local.get $stop))
+                    (then
+                      (local.set $c2 (i32.load8_u (local.get $p)))
+                      (if (i32.eq (local.get $c2) (i32.const 92))
+                        (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                      (br_if $str (i32.ne (local.get $c2) (local.get $c))))))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (br $scan)))
+            (br_if $found
+              (i32.and
+                (i32.eq (local.get $c) (i32.const ":"))
+                (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 32))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $scan)))
+        (if (i32.lt_u (local.get $p) (local.get $stop))
+          (then
+            (call $pugJs (local.get $p))
+            (return (call $pugTail (local.get $stop) (i32.const 0)))))))
     (call $pugJs (local.get $stop))
     (i32.const 0))
 
   ;; $block: an indented comment or text block, 128 | 1 comment or 2 text | the
   ;; head line's indentation << 8. $tag: 0x200 | the block language of a tag whose
-  ;; attributes run past its line. Both are 0 while an embedded body is open.
+  ;; attributes run past its line, | the brackets of a value still open << 16.
+  ;; Both are 0 while an embedded body is open.
   (func $hlPug
     (local $indent i32)
     (local $kind i32)
@@ -525,6 +567,7 @@
     (local $lineEnd i32)
     (local $block i32)
     (local $tag i32)
+    (local $head i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $line
@@ -551,13 +594,29 @@
               (local.set $block (i32.const 0))))
           (if (local.get $tag)
             (then
-              (br_if $rest (call $pugAttrs (local.get $lineEnd)))
+              (global.set $pugDepth (i32.shr_u (local.get $tag) (i32.const 16)))
+              (if (global.get $pugDepth)
+                (then
+                  (call $pugJs (call $pugValueEnd (global.get $ptr) (local.get $lineEnd) (global.get $pugDepth)))))
+              (local.set $kind (i32.const -1))
+              (if (i32.eqz (global.get $pugDepth))
+                (then (local.set $kind (call $pugAttrs (local.get $lineEnd)))))
+              (if (local.get $kind)
+                (then
+                  (local.set $tag
+                    (i32.or (i32.and (local.get $tag) (i32.const 0xffff)) (i32.shl (global.get $pugDepth) (i32.const 16))))
+                  (global.set $pugDepth (i32.const 0))
+                  (local.set $kind (i32.const 0))
+                  (br $rest)))
               (local.set $kind (call $pugTail (local.get $lineEnd) (i32.and (local.get $tag) (i32.const 255))))
+              (local.set $indent (local.get $head))
               (local.set $tag (i32.const 0)))
             (else (local.set $kind (call $pugLine (local.get $lineEnd)))))
           (if (i32.and (local.get $kind) (i32.const 0x200))
             (then
-              (local.set $tag (local.get $kind))
+              (local.set $tag (i32.or (local.get $kind) (i32.shl (global.get $pugDepth) (i32.const 16))))
+              (local.set $head (local.get $indent))
+              (global.set $pugDepth (i32.const 0))
               (local.set $kind (i32.const 0)))))
         (call $emitTok (enum.get $Token.none) (global.get $ptr) (local.get $lineEnd))
         (global.set $ptr (call $indentAfterBreak (local.get $lineEnd)))

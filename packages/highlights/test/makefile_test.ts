@@ -304,3 +304,58 @@ void t.test('makefile: line breaks in gaps, CR included, start lines', () => {
     ['1', null],
   ]);
 });
+
+void t.test('makefile: a recipe string continued with `\\` streams', () => {
+  const code = 'all:\n\techo "one \\\n\ttwo" && ls\n';
+  assertLineFedParity('makefile', code);
+  assert.deepEqual(tokenKinds('makefile', code), [
+    ['all', 'function'],
+    [':', 'punctuation.delimiter'],
+    ['echo', 'function'],
+    ['"one', 'string'],
+    ['\\', 'string.escape'],
+    ['two"', 'string'],
+    ['&&', 'operator'],
+    ['ls', 'function'],
+  ]);
+  assertLineFedParity('makefile', 'a:\n\techo "x \\\n\\\ny" z\n');
+});
+
+void t.test('makefile: a chain of `else` words stays linear', () => {
+  const code = `${'else  '.repeat(20000)}\n`;
+  const start = performance.now();
+  lexer.hl(code);
+  assert.ok(performance.now() - start < 1500);
+  assert.deepEqual(
+    tokenKinds('makefile', 'else ifeq (a,b)\nendif\n').slice(0, 1),
+    [['else ifeq', 'keyword.control']]
+  );
+});
+
+void t.test('makefile: `#` inside a recipe word and `.RECIPEPREFIX`', () => {
+  assert.deepEqual(
+    tokenKinds('makefile', 'all:\n\tcurl x/#frag -o out # c\n\tgrep x#y\n'),
+    [
+      ['all', 'function'],
+      [':', 'punctuation.delimiter'],
+      ['curl', 'function'],
+      ['x/#frag -o out', null],
+      ['# c', 'comment'],
+      ['grep', 'function'],
+      ['x#y', null],
+    ]
+  );
+  const code = '.RECIPEPREFIX = >\ntest:\n> echo hi\n\tnot recipe\n';
+  assertLineFedParity('makefile', code);
+  assert.deepEqual(tokenKinds('makefile', code), [
+    ['.RECIPEPREFIX', 'variable'],
+    ['=', 'operator'],
+    ['>', null],
+    ['test', 'function'],
+    [':', 'punctuation.delimiter'],
+    ['>', null],
+    ['echo', 'function'],
+    ['hi', null],
+    ['not recipe', null],
+  ]);
+});

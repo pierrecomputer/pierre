@@ -74,10 +74,11 @@
 
   ;; $str is the kind of a text body to resume: a document open at the
   ;; chunk end, a string continued by `\` at a line break, or the body whose
-  ;; `[ ]` expression just closed. $fld is the kind of the body whose `[`
-  ;; expression is open, plus 256 per nested `[`. $path is 1 in a type path,
-  ;; 6 in one that starts its line, 2 after its `proc` or `verb`, 3 after its
-  ;; `var`, 4 in the types after `as`, and 5 after a proc name whose
+  ;; `[ ]` expression just closed. $fld holds 10 bits per open `[` expression,
+  ;; innermost lowest: 1 in a `"` body or 2 in a `{"` one, plus 4 per nested
+  ;; `[`; a fourth level drops the outermost. $path is
+  ;; 1 in a type path, 6 in one that starts its line, 2 after its `proc` or
+  ;; `verb`, 3 after its `var`, 4 in the types after `as`, and 5 after a proc name whose
   ;; parameters follow. $params counts
   ;; the parentheses open in a parameter list. $head is 1 before the first
   ;; token of a line. $operand is 1 where a value may start, so `/` opens a
@@ -118,7 +119,7 @@
               (local.set $head (i32.const 1))
               (local.set $operand (i32.const 1))
               (local.set $path (i32.const 0))
-              (if (i32.eq (i32.and (local.get $fld) (i32.const 255)) (i32.const 34))
+              (if (i32.eq (i32.and (local.get $fld) (i32.const 3)) (i32.const 1))
                 (then (local.set $fld (i32.const 0))))))
           (call $emitGap (local.get $gap) (global.get $ptr))
           (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -329,19 +330,19 @@
             (if (i32.eq (local.get $c) (i32.const "["))
               (then
                 (if (local.get $fld)
-                  (then (local.set $fld (i32.add (local.get $fld) (i32.const 256)))))
+                  (then (local.set $fld (i32.add (local.get $fld) (i32.const 4)))))
                 (br $emit)))
             (if (i32.eq (local.get $c) (i32.const "]"))
               (then
                 ;; the `]` of an embedded expression returns to its text
-                (if (i32.and (i32.ne (local.get $fld) (i32.const 0)) (i32.lt_u (local.get $fld) (i32.const 256)))
+                (if (i32.lt_u (i32.sub (i32.and (local.get $fld) (i32.const 0x3ff)) (i32.const 1)) (i32.const 2))
                   (then
                     (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
-                    (local.set $str (local.get $fld))
-                    (local.set $fld (i32.const 0))
+                    (local.set $str (select (i32.const "{") (i32.const 34) (i32.and (local.get $fld) (i32.const 2))))
+                    (local.set $fld (i32.shr_u (local.get $fld) (i32.const 10)))
                     (br $next)))
                 (if (local.get $fld)
-                  (then (local.set $fld (i32.sub (local.get $fld) (i32.const 256)))))
+                  (then (local.set $fld (i32.sub (local.get $fld) (i32.const 4)))))
                 (br $value)))
             (br_if $emit (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}"))))
             (local.set $hl (enum.get $Token.punctuation.delimiter))
@@ -367,7 +368,8 @@
             (local.set $lhs (global.get $ptr))
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
-            (local.set $fld (local.get $kind))
+            (local.set $fld
+              (i32.or (i32.shl (local.get $fld) (i32.const 10)) (i32.add (i32.const 1) (i32.eq (local.get $kind) (i32.const "{")))))
             (local.set $operand (i32.const 1))))
         (if (i32.and (i32.eq (local.get $v) (i32.const 2)) (i32.ge_u (global.get $ptr) (global.get $end)))
           (then (local.set $str (local.get $kind))))

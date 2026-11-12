@@ -5,6 +5,7 @@
   (import "../embed.wat")
   (import "./html.wat")
   (import "./php.wat")
+  (import "./embed-line.wat")
 
   ;; Markup shared by Blade and Razor. Unlike $htmlLex, the whole markup state is
   ;; one value the caller keeps, so a template construct can cut a tag anywhere
@@ -110,14 +111,98 @@
           (i32.or (i64.eq (local.get $w) (i64.const "input")) (i64.eq (local.get $w) (i64.const "param"))))
         (i32.or (i64.eq (local.get $w) (i64.const "track")) (i64.eq (local.get $w) (i64.const "source"))))))
 
+  ;; A script or style body (mode 5). Returns as $tmplMarkup does; state 0 at the close tag.
+  (func $tmplBody (param $state i32) (param $dialect i32) (result i32)
+    (local $at i32)
+    (local $c i32)
+    (local $cut i32)
+    (local $kind i32)
+    (local $lhs i32)
+    (local $p i32)
+    (local $q i32)
+    (local $razor i32)
+    (local $saveEnd i32)
+    (local $skip i32)
+    (local.set $razor (i32.and (local.get $dialect) (i32.const 1)))
+    (local.set $at (i32.const "@"))
+    (local.set $cut (select (i32.const "@") (i32.const "{") (local.get $razor)))
+    (local.set $skip
+      (select (global.get $ptr) (i32.const -1) (i32.and (local.get $dialect) (i32.const 16))))
+    (block $out
+    (loop $body
+      (br_if $out (i32.ge_u (global.get $ptr) (global.get $end)))
+      (local.set $lhs (global.get $ptr))
+      (local.set $kind (i32.and (i32.shr_u (local.get $state) (i32.const 16)) (i32.const 3)))
+      (local.set $q (call $embedLineEnd (local.get $lhs)))
+      (local.set $saveEnd (global.get $end))
+      (global.set $end (local.get $q))
+      (local.set $p (local.get $lhs))
+      (block $stop
+        (loop $find
+          (local.set $p (call $tmplFind4 (local.get $p) (i32.const "<") (local.get $cut) (local.get $at) (i32.const "<")))
+          (br_if $stop (i32.ge_u (local.get $p) (local.get $q)))
+          (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+          (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
+            (then (br_if $stop (call $isRawTextClose (local.get $p) (local.get $kind))))
+            (else
+              (br_if $stop
+                (i32.and
+                  (i32.ne (local.get $p) (local.get $skip))
+                  (select
+                    (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "!")))
+                    (i32.and
+                      (i32.and
+                        (i32.or (local.get $razor) (i32.eq (local.get $kind) (i32.const 1)))
+                        (i32.or
+                          (call $lexIsIdentStart (local.get $c))
+                          (byteset.get "(@*{" (local.get $c))))
+                      (i32.or
+                        (i32.le_u (local.get $p) (global.get $srcBase))
+                        (i32.eqz (call $lexIsIdentContinue (i32.load8_u (i32.sub (local.get $p) (i32.const 1)))))))
+                    (i32.eq (i32.load8_u (local.get $p)) (i32.const "{")))))))
+          (local.set $p (i32.add (local.get $p) (i32.const 1)))
+          (br $find)))
+      (global.set $end (local.get $saveEnd))
+      (local.set $p (select (local.get $q) (local.get $p) (i32.gt_u (local.get $p) (local.get $q))))
+      (local.set $c (i32.and (i32.shr_u (local.get $state) (i32.const 3)) (i32.const 0x1fff)))
+      (if (i32.eq (local.get $kind) (i32.const 1))
+        (then
+          (if (global.get $externalEmbedding)
+            (then
+              (drop
+                (call $embedLanguage
+                  (enum.get $Language.js) (local.get $lhs) (local.get $p) (i32.eqz (local.get $c)) (i32.const -1)))
+              (global.set $ptr (local.get $p)))
+            (else (drop (call $embedJsLine (local.get $p) (i32.eqz (local.get $c)) (i32.const 0)))))
+          (local.set $c (i32.const 1)))
+        (else
+          ;; 260: CSS at a statement start outside any block
+          (local.set $c (call $embedCssLine (local.get $p) (select (local.get $c) (i32.const 260) (local.get $c))))))
+      (local.set $state
+        (i32.or (i32.and (local.get $state) (i32.const 0xffff0007)) (i32.shl (i32.and (local.get $c) (i32.const 0x1fff)) (i32.const 3))))
+      (br_if $body (i32.ge_u (local.get $p) (local.get $q)))
+      (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
+        (then
+          (local.set $state (i32.const 0))
+          (if (global.get $externalEmbedding)
+            (then (call $embedEnd (i32.const -1)))
+            (else
+              (if (i32.eq (local.get $kind) (i32.const 1))
+                (then (call $ecmaReset)))))
+          (return (i32.const 0))))
+      (return (i32.or (local.get $state) (i32.const 0x1000000)))))
+    (local.get $state))
+
   ;; Returns the new state with the stop reason in bits 24-31: 0 the range end, 1
   ;; a cut byte at $ptr, 2 a quoted expression value at $ptr, and with $dialect
   ;; bit 8 the end of a tag: 3 an opening start tag, 4 a void or self-closing
   ;; one, 5 a close tag.
   ;; State: bits 0-2 the mode (0 text, 1 before an attribute, 2 after a name, 3
-  ;; after `=`, 4 a quoted value with its quote in bits 8-15); bit 3 a close tag;
-  ;; bit 4 an expression value; bit 5 a Blade component; bit 6 a void element;
-  ;; bits 16-17 the raw-text kind of a script or style tag.
+  ;; after `=`, 4 a quoted value with its quote in bits 8-15, 5 a script or
+  ;; style body); bit 3 a close tag; bit 4 an expression value; bit 5 a Blade
+  ;; component; bit 6 a void element; bits 16-17 the raw-text kind of a script
+  ;; or style tag. In a body, bits 3-15 hold 0 before its first piece, then 1
+  ;; for JavaScript or the packed CSS state ($embedCssLine).
   ;; $dialect: bit 1 Razor, 2 a Razor section body, 4 no constructs (verbatim), 16
   ;; the cut at $ptr is plain markup. In $tmplMarkupBrace (templ), a tag or
   ;; value cuts at `{`, and text at `{` and the byte in $dialect bits 8-15.
@@ -304,9 +389,14 @@
             (local.set $c (i32.shr_u (local.get $state) (i32.const 16)))
             (local.set $state (i32.const 0))
             (if (i32.and (i32.ne (local.get $kind) (i32.const 5)) (i32.ne (local.get $c) (i32.const 0)))
-              (then (call $htmlRawText (local.get $c))))
+              (then
+                (if (i32.or (global.get $tmplBrace) (i32.and (local.get $dialect) (i32.const 4)))
+                  (then (call $htmlRawText (local.get $c)))
+                  (else
+                    (local.set $state (i32.or (i32.const 5) (i32.shl (local.get $c) (i32.const 16))))
+                    (br_if $out (i32.eqz (i32.and (local.get $dialect) (i32.const 8))))))))
             (br_if $next (i32.eqz (i32.and (local.get $dialect) (i32.const 8))))
-            (return (i32.shl (local.get $kind) (i32.const 24)))))
+            (return (i32.or (local.get $state) (i32.shl (local.get $kind) (i32.const 24))))))
         ;; a stray `<` ends the tag; the text mode reads it again
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then

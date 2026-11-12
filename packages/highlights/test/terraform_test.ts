@@ -441,3 +441,52 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'terraform: heredoc bodies are templates, and a quote on the opener line ends at its break',
+  () => {
+    const code =
+      'x = <<-EOT\n  a ${var.b} $${c}\n  %{ for p in l ~}\n  EOT\ny = 1\n';
+    assert.deepEqual(tokenKinds('terraform', code), [
+      ['x', 'property'],
+      ['=', 'operator'],
+      ['<<-EOT', 'string'],
+      ['a', 'string'],
+      ['${', 'punctuation.special'],
+      ['var', 'variable.special'],
+      ['.', 'punctuation.delimiter'],
+      ['b', 'property'],
+      ['}', 'punctuation.special'],
+      ['$${c}', 'string'],
+      ['%{', 'punctuation.special'],
+      ['for', 'keyword.control'],
+      ['p', 'variable'],
+      ['in', 'keyword.control'],
+      ['l', 'variable'],
+      ['~', 'operator'],
+      ['}', 'punctuation.special'],
+      ['EOT', 'string'],
+      ['y', 'property'],
+      ['=', 'operator'],
+      ['1', 'number'],
+    ]);
+    assertLineFedParity('terraform', code);
+    assertLineFedParity('terraform', 'x = <<EOT\n${\n  a\n} b\nEOT\ny = 1\n');
+    for (const src of ['<<EOT"\nEOT\n}', 'x = <<EOT "${a}\nb\nEOT\n']) {
+      checkInvariants(lexer.hl, src);
+      assertLineFedParity('terraform', src);
+    }
+    assert.deepEqual(tokenKinds('terraform', '<<EOT"\nEOT\n}'), [
+      ['<<EOT"', 'string'],
+      ['EOT', 'string'],
+      ['}', 'punctuation.bracket'],
+    ]);
+  }
+);
+
+void t.test('terraform: many quoted strings stay linear', () => {
+  const code = 'name = "value"\n'.repeat(40000);
+  const start = performance.now();
+  lexer.hl(code);
+  assert.ok(performance.now() - start < 1500);
+});

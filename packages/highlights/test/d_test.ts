@@ -176,3 +176,46 @@ test('d: multi-line strings, token strings, and comments stream by line', () => 
     assertLineFedParity('d', code.replaceAll('\n', '\r\n'));
   }
 });
+
+test('d: a brace inside a string does not close a token string', () => {
+  expect(tokenKinds('d', 'auto t = q{ writeln("}"); };\nint a;\n')).toEqual([
+    ['auto', 'keyword'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ['q{ writeln("}"); }', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['int', 'type.builtin'],
+    ['a', 'variable'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  const code = 'auto t = q{ f("}\\"{\n} x"); };\nint a;\n';
+  assertLineFedParity('d', code);
+  assertLineFedParity('d', code.replaceAll('\n', '\r\n'));
+});
+
+test('d: braces in chars, backtick strings, and comments do not count in a token string', () => {
+  expect(
+    tokenKinds(
+      'd',
+      "auto t = q{ c('}', `}`); /* } */ /+ } /+ } +/ } +/ // }\n};\nint a;\n"
+    )
+  ).toEqual([
+    ['auto', 'keyword'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ["q{ c('}', `}`); /* } */ /+ } /+ } +/ } +/ // }", 'string'],
+    ['}', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['int', 'type.builtin'],
+    ['a', 'variable'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  const code =
+    'auto t = q{ /* }\n} */ `}\n}` /+ }\n/+ } +/\n} +/ x };\nint a;\n';
+  assertLineFedParity('d', code);
+  assertLineFedParity('d', code.replaceAll('\n', '\r\n'));
+});
+
+test('d: a string cut by a line break ends a member access', () => {
+  assertLineFedParity('d', '."\n"😀');
+});

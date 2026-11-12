@@ -44,8 +44,10 @@
 
   ;; $expect is the pending next-name capture from $protoWordHl and $member
   ;; is 1 after `.`, where a lowercase name is a package segment and a
-  ;; capitalized one a message type. A name before `=` is a field or option
-  ;; name, one in SCREAMING_CASE an enum value.
+  ;; capitalized one a message type. Above its low byte, $member holds the
+  ;; quote of a string that an escaped line break continues in the next
+  ;; chunk. A name before `=` is a field or option name, one in
+  ;; SCREAMING_CASE an enum value.
   (func $hlProto
     (local $c i32)
     (local $c2 i32)
@@ -58,6 +60,10 @@
     (local $expect i32)
     (local $member i32)
     (call $lexEmitLeadingContinuation)
+    (if (i32.gt_u (local.get $member) (i32.const 255))
+      (then
+        (local.set $member
+          (i32.shl (call $lexCStringResume (i32.shr_u (local.get $member) (i32.const 8))) (i32.const 8)))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -80,8 +86,7 @@
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
-            (local.set $member (i32.const 0))
+            (local.set $member (i32.shl (call $lexCString (enum.get $Token.string)) (i32.const 8)))
             (br $next)))
 
         (if (call $lexIsIdentStart (local.get $c))
@@ -96,6 +101,16 @@
                 (i32.const -1)
                 (call $protoWordHl (local.get $lhs) (local.get $rhs))
                 (local.get $member)))
+            (if (i32.and (i32.eq (local.get $c2) (i32.const "=")) (i32.ge_s (local.get $kind) (i32.const 0)))
+              (then
+                (local.set $p (call $templateByte (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 1)))))
+                (if
+                  (i32.or
+                    (i32.le_u (i32.sub (local.get $p) (i32.const "0")) (i32.const 9))
+                    (i32.and
+                      (i32.ne (i32.load16_u (local.get $lhs)) (i32.const "sy"))
+                      (i32.ne (i32.load16_u (local.get $lhs)) (i32.const "ed"))))
+                  (then (local.set $kind (i32.const -1))))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -112,10 +127,12 @@
                           (i32.eq (local.get $expect) (i32.const 2)))
                         (i32.eq (local.get $expect) (i32.const 1))))
                     ;; a dotted package keeps its capture
-                    (if
-                      (i32.or
-                        (i32.ne (local.get $expect) (i32.const 3))
-                        (i32.ne (local.get $c2) (i32.const ".")))
+                    (if (i32.eq (local.get $c2) (i32.const "."))
+                      (then
+                        (if (i32.eq (local.get $expect) (i32.const 1))
+                          (then (local.set $hl (enum.get $Token.namespace)))))
+                      (else (local.set $expect (i32.const 0))))
+                    (if (i32.eq (local.get $expect) (i32.const 2))
                       (then (local.set $expect (i32.const 0)))))
                   (else
                     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))

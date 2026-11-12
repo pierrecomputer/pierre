@@ -85,8 +85,10 @@
               (i64.eq (local.get $w) (i64.const "number"))
               (i64.eq (local.get $w) (i64.const "string")))
             (i32.or
-              (i64.eq (local.get $w) (i64.const "symbol"))
-              (i64.eq (local.get $w) (i64.const "object")))))))
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "symbol"))
+                (i64.eq (local.get $w) (i64.const "object")))
+              (i64.eq (local.get $w) (i64.const "bigint")))))))
     (if (i32.eq (local.get $len) (i32.const 7))
       (then
         (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffffffff)))
@@ -212,10 +214,6 @@
             (i32.eq (local.get $prev) (enum.get $Lex.ctxword_as))
             (i32.eq (local.get $prev) (enum.get $Lex.ctxword_satisfies)))))
       (then (return (i32.const 1))))
-    ;; the rules below read the next token, which must share the line: a
-    ;; line-fed chunk ends before a next line's token arrives
-    (if (global.get $nlBefore)
-      (then (local.set $next (enum.get $Lex.eof))))
     ;; `<const T,>`: a const type parameter
     (if (i32.eq (local.get $prev) (enum.get $Lex.keyword_const))
       (then
@@ -255,22 +253,56 @@
         (return (call $tsReturnColonBefore (local.get $lhs)))))
     (i32.const 0))
 
+  ;; does `<...>` close on this line before `(` (`f<T>(`)? Stops at a line
+  ;; break, `;`, `&&`, `||`, or after 256 bytes
+  (func $tsGenericCallAhead (result i32)
+    (local $p i32)
+    (local $e i32)
+    (local $c i32)
+    (local $depth i32)
+    (if (i32.eqz (call $ecmaHasTypeScript))
+      (then (return (i32.const 0))))
+    (local.set $p (global.get $rhs))
+    (local.set $e (i32.add (local.get $p) (i32.const 256)))
+    (if (i32.gt_u (local.get $e) (global.get $end))
+      (then (local.set $e (global.get $end))))
+    (local.set $depth (i32.const 1))
+    (block $no
+      (loop $l
+        (br_if $no (i32.ge_u (local.get $p) (local.get $e)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $no
+          (i32.or
+            (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+            (i32.eq (local.get $c) (i32.const ";"))))
+        (if (i32.or (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c) (i32.const "|")))
+          (then (br_if $no (i32.eq (call $tsxByte (local.get $p)) (local.get $c)))))
+        (if (i32.eq (local.get $c) (i32.const "<"))
+          (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+        ;; the `>` of `=>` closes no level
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const ">"))
+            (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 2))) (i32.const "=")))
+          (then
+            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+            (if (i32.eqz (local.get $depth))
+              (then
+                (return
+                  (i32.eq (call $tsxByte (call $lexSkipSpaceAt (local.get $p))) (i32.const "(")))))))
+        (br $l)))
+    (i32.const 0))
+
   ;; after `( ident )`: whitespace-skipping byte lookahead for the `=>` that
   ;; makes the ident a sole parenthesized arrow parameter. The pipeline
   ;; already scanned the `)`, so the tokenizer global $rhs is its end.
   (func $sigArrowAhead (result i32)
     (local $p i32)
-    (local $c i32)
-    (local.set $p (global.get $rhs))
-    (block $stop
-      (loop $skip
-        (local.set $c (call $tsxByte (local.get $p)))
-        (br_if $stop (i32.eqz (local.get $c)))
-        (br_if $stop (i32.gt_u (local.get $c) (i32.const 32)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $skip)))
+    ;; same line only: a line-fed chunk has not seen the next line yet
+    (local.set $p (call $lexSkipSpaceAt (global.get $rhs)))
     (i32.and
-      (i32.eq (local.get $c) (i32.const "="))
+      (i32.eq (call $tsxByte (local.get $p)) (i32.const "="))
       (i32.eq (call $tsxByte (i32.add (local.get $p) (i32.const 1))) (i32.const ">"))))
 
   ;; advance the parameter-list machine for one classified token. $classify
@@ -469,13 +501,16 @@
           (then (return (enum.get $Token.keyword.declaration))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_await))
       (then (return (enum.get $Token.keyword.control))))
-    ;; `async (` and `keyof (`; before a name they take the shared rule below
     (if
       (i32.and
         (i32.or
           (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))
           (i32.eq (local.get $t) (enum.get $Lex.ctxword_keyof)))
-        (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
+        (i32.or
+          (i32.eq (local.get $next) (enum.get $Lex.l_paren))
+          (i32.and
+            (i32.eq (local.get $next) (enum.get $Lex.asterisk))
+            (i32.eq (local.get $t) (enum.get $Lex.ctxword_async)))))
       (then (return (enum.get $Token.keyword))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_of))
       (then
@@ -500,9 +535,8 @@
     ;; (`readonly [K in T]`)
     (if
       (i32.or
-        (call $isIdentish (local.get $next))
-        (i32.and
-          (i32.eqz (global.get $nlBefore))
+        (i32.or
+          (call $isIdentish (local.get $next))
           (i32.or
             (i32.and
               (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
@@ -513,7 +547,22 @@
               (i32.eq (local.get $next) (enum.get $Lex.l_bracket))
               (i32.and
                 (i32.eq (local.get $t) (enum.get $Lex.ctxword_readonly))
-                (i32.ne (local.get $prev) (enum.get $Lex.dot)))))))
+                (i32.ne (local.get $prev) (enum.get $Lex.dot))))))
+        (i32.or
+          (i32.and
+            (i32.and
+              (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))
+              (i32.or
+                (i32.eq (local.get $next) (enum.get $Lex.l_brace))
+                (i32.eq (local.get $next) (enum.get $Lex.asterisk))))
+            (i32.or
+              (i32.eq (local.get $prev) (enum.get $Lex.keyword_import))
+              (i32.eq (local.get $prev) (enum.get $Lex.keyword_export))))
+          (i32.and
+            (i32.or
+              (i32.eq (local.get $t) (enum.get $Lex.ctxword_as))
+              (i32.eq (local.get $t) (enum.get $Lex.ctxword_satisfies)))
+            (i32.ne (bitset.get $LexBits.exprEnd (local.get $prev)) (i32.const 0)))))
       (then
         (return
           (select
@@ -635,6 +684,10 @@
                 (if (call $tsNewMemberBefore (local.get $lhs))
                   (then (return (enum.get $Token.type.class))))))
             (return (enum.get $Token.function.method))))
+        (if (i32.eq (local.get $next) (enum.get $Lex.l_angle))
+          (then
+            (if (call $tsGenericCallAhead)
+              (then (return (enum.get $Token.function.method))))))
         (return (enum.get $Token.property))))
     (if (call $ecmaHasTsrx)
       (then
@@ -716,8 +769,58 @@
       (then
         (if (call $isPredefinedType (local.get $lhs) (local.get $rhs))
           (then
-            (if (i32.eq (local.get $prev) (enum.get $Lex.colon))
+            (if
+              (i32.or
+                (i32.or
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.colon))
+                    (i32.eq (local.get $prev) (enum.get $Lex.ctxword_as)))
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.ctxword_satisfies))
+                    (i32.eq (local.get $prev) (enum.get $Lex.ctxword_is))))
+                (i32.or
+                  (i32.eq (local.get $prev) (enum.get $Lex.ctxword_keyof))
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.pipe))
+                    (i32.eq (local.get $prev) (enum.get $Lex.ampersand)))))
               (then (return (enum.get $Token.type.builtin))))
+            (local.set $c
+              (i32.or
+                (i32.eq (local.get $next) (enum.get $Lex.r_angle))
+                (i32.eq (local.get $next) (enum.get $Lex.r_shift))))
+            (if (i32.eq (local.get $prev) (enum.get $Lex.l_angle))
+              (then
+                (if
+                  (i32.or
+                    (i32.or
+                      (local.get $c)
+                      (i32.or
+                        (i32.eq (local.get $next) (enum.get $Lex.comma))
+                        (i32.eq (local.get $next) (enum.get $Lex.l_bracket))))
+                    (i32.or
+                      (i32.eq (local.get $next) (enum.get $Lex.pipe))
+                      (i32.eq (local.get $next) (enum.get $Lex.ampersand))))
+                  (then (return (enum.get $Token.type.builtin))))))
+            (if (i32.eq (local.get $prev) (enum.get $Lex.comma))
+              (then
+                (if (i32.or (local.get $c) (i32.eq (local.get $next) (enum.get $Lex.r_bracket)))
+                  (then (return (enum.get $Token.type.builtin))))))
+            (if (i32.eq (local.get $prev) (enum.get $Lex.l_bracket))
+              (then
+                (if
+                  (i32.or
+                    (i32.eq (local.get $next) (enum.get $Lex.comma))
+                    (i32.eq (local.get $next) (enum.get $Lex.r_bracket)))
+                  (then (return (enum.get $Token.type.builtin))))))
+            (if (i32.eq (local.get $prev) (enum.get $Lex.equal))
+              (then
+                (if
+                  (i32.or
+                    (local.get $c)
+                    (i32.or
+                      (i32.eq (local.get $next) (enum.get $Lex.pipe))
+                      (i32.eq (local.get $next) (enum.get $Lex.ampersand))))
+                  (then (return (enum.get $Token.type.builtin))))))
             (if (i32.eq (local.get $prev) (enum.get $Lex.keyword_extends))
               (then
                 (if (i32.or
@@ -779,6 +882,10 @@
       (then (return (enum.get $Token.property))))
     (if (i32.eq (local.get $next) (enum.get $Lex.l_paren))
       (then (return (enum.get $Token.function))))
+    (if (i32.eq (local.get $next) (enum.get $Lex.l_angle))
+      (then
+        (if (call $tsGenericCallAhead)
+          (then (return (enum.get $Token.function))))))
     ;; SCREAMING_CASE names are constants - Zed's ^_*[A-Z_][A-Z\d_]*$ rule -
     ;; unless they sit in a TS type position, and other Uppercase-initial
     ;; names are types, deliberately
@@ -822,6 +929,9 @@
     (param $rhs i32)
     (result i32)
     (local $hl i32)
+    ;; the next token must share the line: a line-fed chunk ends before it
+    (if (global.get $nlBefore)
+      (then (local.set $next (enum.get $Lex.eof))))
     (call $sigStep
       (local.get $prev)
       (local.get $t)

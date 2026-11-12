@@ -352,6 +352,10 @@
               (loop $op
                 (local.set $c (call $templateByte (global.get $ptr)))
                 (br_if $opDone (i32.eqz (byteset.get "!%&*+-/<=>?^|~" (local.get $c))))
+                (if (i32.eq (local.get $c) (i32.const "/"))
+                  (then
+                    (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                    (br_if $opDone (i32.or (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c) (i32.const "*"))))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (local.set $hl (enum.get $Token.operator))

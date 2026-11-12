@@ -281,7 +281,7 @@
                       (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                       (local.set $c (call $templateByte (global.get $ptr)))
                       (br_if $date
-                        (byteset.get "$-.0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz" (local.get $c))))))
+                        (byteset.get "$+-.0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz" (local.get $c))))))
                 (local.set $hl (enum.get $Token.number))
                 (local.set $cmd (i32.const 0))
                 (br $emit)))

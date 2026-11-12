@@ -48,7 +48,7 @@
     (local $n i32)
     (local $w i64)
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 10))
+    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 11))
       (then (return (i32.const 0))))
     ;; the wide loads stay inside the input slack; the mask drops bytes past $rhs
     (local.set $w
@@ -80,9 +80,13 @@
     (if
       (i32.or
         (i64.eq (local.get $w) (i64.const "coffee"))
-        (i32.and
-          (i32.eq (local.get $n) (i32.const 12))
-          (i64.eq (local.get $w) (i64.const "coffeesc"))))
+        (i32.or
+          (i32.and
+            (i32.eq (local.get $n) (i32.const 12))
+            (i64.eq (local.get $w) (i64.const "coffeesc")))
+          (i32.and
+            (i32.eq (local.get $n) (i32.const 13))
+            (i64.eq (local.get $w) (i64.const "coffee-s")))))
       (then (return (i32.const 7))))
     (i32.const 0))
 

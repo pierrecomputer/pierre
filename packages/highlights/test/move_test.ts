@@ -238,3 +238,36 @@ test('move: numbers, comments, and specs', () => {
     ['}', 'punctuation.bracket'],
   ]);
 });
+
+test('move: std::signer is a module, vector::empty stays a builtin type', () => {
+  const code =
+    'use std::signer;\nlet a = signer::address_of(s);\nlet v = vector::empty<u64>();\n';
+  expect(tokenKinds('move', code)).toEqual([
+    ['use', 'keyword.import'],
+    ['std', 'namespace'],
+    ['::', 'punctuation.delimiter'],
+    ['signer', 'namespace'],
+    [';', 'punctuation.delimiter'],
+    ['let', 'keyword.declaration'],
+    ['a', 'variable'],
+    ['=', 'operator'],
+    ['signer', 'namespace'],
+    ['::', 'punctuation.delimiter'],
+    ['address_of', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['s', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['let', 'keyword.declaration'],
+    ['v', 'variable'],
+    ['=', 'operator'],
+    ['vector', 'type.builtin'],
+    ['::', 'punctuation.delimiter'],
+    ['empty', 'function'],
+    ['<', 'operator'],
+    ['u64', 'type.builtin'],
+    ['>', 'operator'],
+    ['()', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

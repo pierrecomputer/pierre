@@ -149,7 +149,7 @@ void t.test('wat: names may carry punctuation and dots', () => {
       ['local.get', 'function'],
       ['$foo.bar', 'variable'],
       [') (', 'punctuation.bracket'],
-      ['call', 'keyword'],
+      ['call', 'keyword.control'],
       ['$a-b', 'variable'],
       ['))', 'punctuation.bracket'],
     ]
@@ -174,18 +174,22 @@ void t.test(
     ]) {
       assert.equal(exactColor(html, instr), distinctColor('function'), instr);
     }
+    for (const word of ['drop', 'select', 'offset=16 align=4']) {
+      assert.equal(exactColor(html, word), distinctColor('keyword'), word);
+    }
     for (const word of [
       'br_if',
       'br_table',
       'return',
       'call',
       'call_indirect',
-      'drop',
-      'select',
       'unreachable',
-      'offset=16 align=4',
     ]) {
-      assert.equal(exactColor(html, word), distinctColor('keyword'), word);
+      assert.equal(
+        exactColor(html, word),
+        distinctColor('keyword.control'),
+        word
+      );
     }
     assert.equal(exactColor(html, '$t'), distinctColor('variable'));
   }
@@ -263,4 +267,26 @@ void t.test('wat: malformed and split ranges stay lossless', () => {
     checkInvariants(wat.hl, src);
   const split = loadLang('wat', '$hlWat', 6);
   checkInvariants(split.hl, '(func $x (result i32))');
+});
+
+void t.test('wat: control instructions share one color', () => {
+  assert.deepEqual(
+    tokenKinds('wat', 'br_if end return_call call_indirect br_tables calls'),
+    [
+      ['br_if end return_call call_indirect', 'keyword.control'],
+      ['br_tables calls', 'keyword'],
+    ]
+  );
+});
+
+void t.test('wat: hex and unicode escapes are one escape each', () => {
+  assert.deepEqual(tokenKinds('wat', '"\\0a\\c3\\a9x\\u{1F600}\\t\\0\\u{}"'), [
+    ['"', 'string'],
+    ['\\0a\\c3\\a9', 'string.escape'],
+    ['x', 'string'],
+    ['\\u{1F600}\\t\\0\\u', 'string.escape'],
+    ['{}"', 'string'],
+  ]);
+  // a backslash before a line break ends the line's string in every mode
+  assertLineFedParity('wat', '"a\\\nb" "c\\0"\n');
 });

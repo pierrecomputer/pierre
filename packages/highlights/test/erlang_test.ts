@@ -486,3 +486,73 @@ void t.test('erlang: `$ ` is the space character', () => {
     ['.', 'punctuation.delimiter'],
   ]);
 });
+
+void t.test('erlang: OTP 27 triple-quoted strings end at a `"""` line', () => {
+  const code = 'f() ->\n    """\n    a 5" screen\n    """.\ng() -> ok.\n';
+  assertLineFedParity('erlang', code);
+  assert.deepEqual(tokenKinds('erlang', code), [
+    ['f', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    ['->', 'operator'],
+    ['"""', 'string'],
+    ['a 5" screen', 'string'],
+    ['"""', 'string'],
+    ['.', 'punctuation.delimiter'],
+    ['g', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    ['->', 'operator'],
+    ['ok', 'string.special.symbol'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('erlang: four-quote strings and OTP 27 sigils', () => {
+  const code =
+    'f() ->\n    """"\n    a """ b\n    """".\ng() -> ~"a\\n" ++ ~b(x\\) y) ++ ~S[p\\]q] ++ ~s<l\nm>.\n';
+  assertLineFedParity('erlang', code);
+  assert.deepEqual(tokenKinds('erlang', code), [
+    ['f', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    ['->', 'operator'],
+    ['""""', 'string'],
+    ['a """ b', 'string'],
+    ['""""', 'string'],
+    ['.', 'punctuation.delimiter'],
+    ['g', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    ['->', 'operator'],
+    ['~"a\\n"', 'string'],
+    ['++', 'operator'],
+    ['~b(x', 'string'],
+    ['\\)', 'string.escape'],
+    ['y)', 'string'],
+    ['++', 'operator'],
+    ['~S[p\\]', 'string'],
+    ['q', 'string.special.symbol'],
+    [']', 'punctuation.bracket'],
+    ['++', 'operator'],
+    ['~s<l', 'string'],
+    ['m>', 'string'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('erlang: hex, octal, and control escapes are one token', () => {
+  const code = 'c() -> [$\\x{41}, $\\101, "\\x{41}\\x4A\\^A"].\n';
+  assertLineFedParity('erlang', code);
+  assert.deepEqual(tokenKinds('erlang', code), [
+    ['c', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    ['->', 'operator'],
+    ['[', 'punctuation.bracket'],
+    ['$\\x{41}', 'string.special'],
+    [',', 'punctuation.delimiter'],
+    ['$\\101', 'string.special'],
+    [',', 'punctuation.delimiter'],
+    ['"', 'string'],
+    ['\\x{41}\\x4A\\^A', 'string.escape'],
+    ['"', 'string'],
+    [']', 'punctuation.bracket'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+});

@@ -309,3 +309,15 @@ test('wikitext: HTML tags, comments, and literal blocks', () => {
   ]);
   assertLineFedParity('wikitext', code3);
 });
+
+test('wikitext: an unclosed `[` does not hide the next line', () => {
+  const code = 'a [b [c\n[https://x.org y]\n';
+  expect(tokenKinds('wikitext', code)).toEqual([
+    ['a [b [c', null],
+    ['[', 'punctuation.bracket'],
+    ['https://x.org', 'link_uri'],
+    ['y', 'link_text'],
+    [']', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('wikitext', code);
+});

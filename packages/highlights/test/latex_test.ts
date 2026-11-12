@@ -329,3 +329,23 @@ void t.test('latex: multi-line constructs stream line-fed', () => {
     assertLineFedParity('latex', code);
   }
 });
+
+void t.test(
+  'latex: a group inside a command `[...]` keeps the argument pending',
+  () => {
+    assert.deepEqual(
+      tokenKinds('latex', '\\section[A \\emph{B}]{Long title}\n'),
+      [
+        ['\\section', 'keyword'],
+        ['[', 'punctuation.bracket'],
+        ['A', null],
+        ['\\emph', 'function'],
+        ['{', 'punctuation.bracket'],
+        ['B', null],
+        ['}]{', 'punctuation.bracket'],
+        ['Long title', 'title'],
+        ['}', 'punctuation.bracket'],
+      ]
+    );
+  }
+);

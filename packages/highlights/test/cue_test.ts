@@ -138,3 +138,12 @@ test('cue: interpolation, bytes, raw and multi-line strings', () => {
   // an escaped line break continues a one-line string
   assertLineFedParity('cue', 'a: "x\\\ny"\nb: 1\n');
 });
+
+test('cue: a long `#` run is scanned once', () => {
+  const start = performance.now();
+  expect(tokenKinds('cue', 'x: ' + '#'.repeat(1 << 17))).toEqual([
+    ['x', 'property'],
+    [': ' + '#'.repeat(1 << 17), 'punctuation.delimiter'],
+  ]);
+  expect(performance.now() - start).toBeLessThan(2000);
+});

@@ -754,3 +754,204 @@ void t.test(
     ]);
   }
 );
+
+void t.test(
+  'bash: here-documents of any delimiter length, two per line',
+  () => {
+    const cases: [string, [string, string | null][]][] = [
+      [
+        "cat <<HERE\nit's $x\nHERE\necho ok\n",
+        [
+          ['cat', 'function'],
+          ['<<', 'operator'],
+          ['HERE', 'string'],
+          ["it's $x", 'string'],
+          ['HERE', 'string'],
+          ['echo', 'function'],
+          ['ok', 'variable'],
+        ],
+      ],
+      [
+        'cat <<A <<-BB\na\nA\n\tb\n\tBB\necho ok\n',
+        [
+          ['cat', 'function'],
+          ['<<', 'operator'],
+          ['A', 'string'],
+          ['<<-', 'operator'],
+          ['BB', 'string'],
+          ['a', 'string'],
+          ['A', 'string'],
+          ['b', 'string'],
+          ['BB', 'string'],
+          ['echo', 'function'],
+          ['ok', 'variable'],
+        ],
+      ],
+      // a third heredoc takes the second's place: both bodies stay strings
+      [
+        'cat <<A <<B <<C\na\nA\nb\nB\nc\nC\necho ok\n',
+        [
+          ['cat', 'function'],
+          ['<<', 'operator'],
+          ['A', 'string'],
+          ['<<', 'operator'],
+          ['B', 'string'],
+          ['<<', 'operator'],
+          ['C', 'string'],
+          ['a', 'string'],
+          ['A', 'string'],
+          ['b', 'string'],
+          ['B', 'string'],
+          ['c', 'string'],
+          ['C', 'string'],
+          ['echo', 'function'],
+          ['ok', 'variable'],
+        ],
+      ],
+    ];
+    for (const [code, expected] of cases) {
+      assertLineFedParity('bash', code);
+      assert.deepEqual(
+        tokenKinds('bash', code),
+        expected,
+        JSON.stringify(code)
+      );
+    }
+    // the second body is carried across chunks, and closes at the end too
+    assertLineFedParity('bash', 'cat <<A <<B\na\nA\nb\nB');
+    assertLineFedParity('bash', 'cat <<A <<B\na\nA\nb\n');
+  }
+);
+
+void t.test('bash: command words, redirections, tests, and nesting', () => {
+  const cases: [string, [string, string | null][]][] = [
+    // quotes inside a quoted `$( )` hide their parentheses
+    [
+      'echo "a $(echo ")" \')\' ) c"\necho ok\n',
+      [
+        ['echo', 'function'],
+        ['"a', 'string'],
+        ['$(', 'punctuation.special'],
+        ['echo ")" \')\'', 'string.special'],
+        [')', 'punctuation.special'],
+        ['c"', 'string'],
+        ['echo', 'function'],
+        ['ok', 'variable'],
+      ],
+    ],
+    // a quote there may span lines, in a stream too
+    [
+      'x="$(awk \'{\n  print $1 ")"\n}\' f)"\necho ok\n',
+      [
+        ['x', 'variable'],
+        ['=', 'operator'],
+        ['"', 'string'],
+        ['$(', 'punctuation.special'],
+        ["awk '{", 'string.special'],
+        ['print $1 ")"', 'string.special'],
+        ["}' f", 'string.special'],
+        [')', 'punctuation.special'],
+        ['"', 'string'],
+        ['echo', 'function'],
+        ['ok', 'variable'],
+      ],
+    ],
+    // a console prompt
+    [
+      '$ npm install foo\n',
+      [
+        ['$', 'punctuation.special'],
+        ['npm', 'function'],
+        ['install foo', 'variable'],
+      ],
+    ],
+    // `&>`, `&>>`, and `>|` take a file name
+    [
+      'cmd &> /dev/null\ncmd &>> log >| f\n',
+      [
+        ['cmd', 'function'],
+        ['&>', 'operator'],
+        ['/dev/null', 'variable'],
+        ['cmd', 'function'],
+        ['&>>', 'operator'],
+        ['log', 'variable'],
+        ['>|', 'operator'],
+        ['f', 'variable'],
+      ],
+    ],
+    // `&&` inside `[[ ]]` joins tests
+    [
+      '[[ -n $a && -f f ]] && ls\n',
+      [
+        ['[[', 'punctuation.bracket'],
+        ['-n $a', 'variable'],
+        ['&&', 'operator'],
+        ['-f f', 'variable'],
+        [']]', 'punctuation.bracket'],
+        ['&&', 'operator'],
+        ['ls', 'function'],
+      ],
+    ],
+    // `+=` assigns
+    [
+      'arr+=(x)\nPATH+=:/opt ls\n',
+      [
+        ['arr', 'variable'],
+        ['+', null],
+        ['=', 'operator'],
+        ['(', 'punctuation.bracket'],
+        ['x', 'variable'],
+        [')', 'punctuation.bracket'],
+        ['PATH', 'variable'],
+        ['+', null],
+        ['=', 'operator'],
+        [':', null],
+        ['/opt', 'variable'],
+        ['ls', 'function'],
+      ],
+    ],
+    // a nested `case` returns to the outer patterns
+    [
+      'case $x in\n  a) case $y in b) ls ;; esac ;;\n  c) echo c ;;\nesac\n',
+      [
+        ['case', 'keyword.control'],
+        ['$x', 'variable'],
+        ['in', 'keyword.control'],
+        ['a', 'variable'],
+        [')', 'punctuation.bracket'],
+        ['case', 'keyword.control'],
+        ['$y', 'variable'],
+        ['in', 'keyword.control'],
+        ['b', 'variable'],
+        [')', 'punctuation.bracket'],
+        ['ls', 'function'],
+        [';;', 'operator'],
+        ['esac', 'keyword.control'],
+        [';;', 'operator'],
+        ['c', 'variable'],
+        [')', 'punctuation.bracket'],
+        ['echo', 'function'],
+        ['c', 'variable'],
+        [';;', 'operator'],
+        ['esac', 'keyword.control'],
+      ],
+    ],
+  ];
+  for (const [code, expected] of cases) {
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), expected, JSON.stringify(code));
+  }
+});
+
+void t.test('bash: an embedded body starts at a command position', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'wikitext',
+      '<syntaxhighlight lang="bash">echo hi</syntaxhighlight>\n'
+    ).slice(6, 8),
+    [
+      ['echo', 'function'],
+      ['hi', 'variable'],
+    ]
+  );
+});

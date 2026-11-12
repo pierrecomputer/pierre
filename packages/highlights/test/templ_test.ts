@@ -66,8 +66,7 @@ test('templ: statements and component calls structure the body', () => {
     ['_', 'variable'],
     [',', 'punctuation.delimiter'],
     ['x', 'variable'],
-    [':', 'punctuation.delimiter'],
-    ['=', 'operator'],
+    [':=', 'operator'],
     ['range', 'keyword.control'],
     ['xs', 'variable'],
     ['{', 'punctuation.bracket'],
@@ -198,4 +197,49 @@ test('templ: multi-line Go, expressions, tags, and bodies keep line-fed parity',
   }
   // a component header starts its line; elsewhere `templ` is a Go name
   expect(tokenKinds('templ', 'x := templ A()')[0]).toEqual(['x', 'variable']);
+});
+
+test('templ: a component line inside a Go comment or raw string stays Go', () => {
+  expect(
+    tokenKinds('templ', '/*\ntempl Old() {\n\t<p>old</p>\n}\n*/\nfunc f() {}\n')
+  ).toEqual([
+    ['/*', 'comment'],
+    ['templ Old() {', 'comment'],
+    ['<p>old</p>', 'comment'],
+    ['}', 'comment'],
+    ['*/', 'comment'],
+    ['func', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['() {}', 'punctuation.bracket'],
+  ]);
+  expect(tokenKinds('templ', 'var s = `\ntempl X() {\n`\n')).toEqual([
+    ['var', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['`', 'string'],
+    ['templ X() {', 'string'],
+    ['`', 'string'],
+  ]);
+});
+
+test('templ: an expression skips raw strings and runes', () => {
+  expect(
+    tokenKinds(
+      'templ',
+      "templ A() {\n\t<p>{ f(`%d}`, '}', '\"') }</p>\n}\n"
+    ).slice(3, 15)
+  ).toEqual([
+    ['<', 'punctuation.bracket.html'],
+    ['p', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ['{', 'punctuation.special'],
+    ['f', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['`%d}`', 'string'],
+    [',', 'punctuation.delimiter'],
+    ["'}'", 'string'],
+    [',', 'punctuation.delimiter'],
+    ["'\"'", 'string'],
+    [')', 'punctuation.bracket'],
+  ]);
 });

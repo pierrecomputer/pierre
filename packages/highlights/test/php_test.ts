@@ -211,9 +211,10 @@ void t.test(
       assert.equal(word(w), D('keyword.declaration'), w);
     }
     // a declaration keyword primes the name that follows it
-    for (const w of ['App', 'B', 'C', 'D', 'Suit']) {
+    for (const w of ['B', 'C', 'D', 'Suit']) {
       assert.equal(wordColor(html, w), D('type.class'), w);
     }
+    assert.equal(wordColor(html, 'App'), D('namespace'));
     assert.equal(wordColor(html, 'void'), D('type.builtin'));
     assert.equal(wordColor(html, 'f'), D('function.definition'));
     // near misses stay identifiers
@@ -230,8 +231,12 @@ void t.test(
     for (const src of [heredoc, nowdoc]) {
       const html = checkInvariants(php.hl, src);
       // `?>` inside the body is literal text, and the label only closes on
-      // its own line followed by a non-identifier byte
-      assert.equal(colorOf(html, 'hello ?> $y'), STRING);
+      // its own line followed by a non-identifier byte; only a heredoc
+      // interpolates `$y`
+      assert.equal(
+        colorOf(html, src === heredoc ? 'hello ?> ' : 'hello ?> $y'),
+        STRING
+      );
       assert.equal(colorOf(html, 'echo'), KEYWORD);
       assertLineFedParity('php', src);
     }
@@ -277,6 +282,26 @@ void t.test('php: markup stays markup across line-fed chunks', () => {
   assert.equal(colorOf(snippet, '?>'), PREPROC);
   assert.equal(colorOf(snippet, 'b'), TAG);
 });
+
+void t.test(
+  'php: the first visible line alone decides snippet or markup',
+  () => {
+    for (const src of [
+      'Hello\n<?php\necho 1;\n',
+      '>\n<?= $x ?>\n',
+      'Hello world\n\n<?php f(); ?>\n<b>x</b>\n',
+      '$x = 1;\n<?php echo 2;\n',
+      'class Foo\n{\n}\n',
+    ]) {
+      assertLineFedParity('php', src);
+    }
+    const html = checkInvariants(php.hl, 'Hello\n<?php\necho 1;\n');
+    assert.notEqual(wordColor(html, 'Hello'), VARIABLE);
+    assert.equal(colorOf(html, '<?php'), PREPROC);
+    const snippet = checkInvariants(php.hl, 'class Foo\n{\n}\n');
+    assert.notEqual(wordColor(snippet, 'class'), wordColor(html, 'Hello'));
+  }
+);
 
 void t.test('php: a paren on the next line does not make a call', () => {
   const html = checkInvariants(php.hl, 'foo\n(1);');
@@ -381,7 +406,7 @@ void t.test('php: numeric literals, heredocs, and nowdocs', () => {
   for (const n of ['0x1F', '0b101', '0o17', '017', '1_000', '1e3', '2.5']) {
     assert.equal(exactColor(html, n), distinctColor('number'), n);
   }
-  assert.equal(colorOf(html, 'heredoc $x'), distinctColor('string'));
+  assert.equal(colorOf(html, 'heredoc '), distinctColor('string'));
   assert.equal(colorOf(html, 'nowdoc $x'), distinctColor('string'));
 });
 
@@ -597,4 +622,117 @@ void t.test('php: class names after new and before ::, and constants', () => {
     [';', 'punctuation.delimiter'],
   ]);
   assertLineFedParityOf('php', code);
+});
+
+void t.test('php: an island inside an open HTML tag or body streams', () => {
+  for (const src of [
+    '<script>\nx = <?= 1 ?>;\n</script>\n',
+    '<a\n href="<?= 1 ?>">\n<b>x</b>\n',
+    '<style>\na { /* x <?= 1 ?> */ }\n</style>\n',
+  ]) {
+    assertLineFedParity('php', src);
+  }
+});
+
+void t.test('php: alternative syntax closers and word operators', () => {
+  const code =
+    '<?php if ($a and $b or $c xor $d): ?>\n<p>x</p>\n<?php endif; foreach ($xs as $x): endforeach; ?>\n';
+  const kinds = tokenKinds('php', code);
+  for (const w of ['and', 'or', 'xor']) {
+    assert.ok(
+      kinds.some(([t, k]) => t === w && k === 'keyword.operator'),
+      w
+    );
+  }
+  for (const w of ['endif', 'endforeach']) {
+    assert.ok(
+      kinds.some(([t, k]) => t === w && k === 'keyword.control'),
+      w
+    );
+  }
+});
+
+void t.test('php: constants, imports, and namespace names', () => {
+  const code =
+    '<?php\nnamespace App\\Shop;\nuse function App\\fmt;\nclass A {\n    const RATE = 1;\n    public const int MAX = 2;\n}\nconst LIMIT = 3;\n';
+  assert.deepEqual(tokenKinds('php', code), [
+    ['<?php', 'preproc'],
+    ['namespace', 'keyword.declaration'],
+    ['App', 'namespace'],
+    ['\\', 'operator'],
+    ['Shop', 'namespace'],
+    [';', 'punctuation.delimiter'],
+    ['use', 'keyword'],
+    ['function', 'keyword.declaration'],
+    ['App', 'namespace'],
+    ['\\', 'operator'],
+    ['fmt', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['class', 'keyword.declaration'],
+    ['A', 'type.class'],
+    ['{', 'punctuation.bracket'],
+    ['const', 'keyword.declaration'],
+    ['RATE', 'constant'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['public', 'keyword'],
+    ['const', 'keyword.declaration'],
+    ['int', 'type.builtin'],
+    ['MAX', 'constant'],
+    ['=', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['}', 'punctuation.bracket'],
+    ['const', 'keyword.declaration'],
+    ['LIMIT', 'constant'],
+    ['=', 'operator'],
+    ['3', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParityOf('php', code);
+});
+
+void t.test('php: a shebang line is a comment in every path', () => {
+  const code = '#!/usr/bin/env php\n<?php\necho "hi";\n';
+  assert.deepEqual(tokenKinds('php', code).slice(0, 2), [
+    ['#!/usr/bin/env php', 'comment'],
+    ['<?php', 'preproc'],
+  ]);
+  assertLineFedParityOf('php', code);
+  assertLineFedParity('php', code);
+});
+
+void t.test('php: double-quoted strings and heredocs interpolate', () => {
+  assert.deepEqual(tokenKinds('php', '<?php\n$s = "a {$b->c} $d[0] ${e}";\n'), [
+    ['<?php', 'preproc'],
+    ['$s', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['{', 'punctuation.special'],
+    ['$b', 'variable'],
+    ['->', 'operator'],
+    ['c', 'property'],
+    ['}', 'punctuation.special'],
+    ['$d', 'variable'],
+    ['[', 'punctuation.bracket'],
+    ['0', 'number'],
+    [']', 'punctuation.bracket'],
+    ['${', 'punctuation.special'],
+    ['e', 'variable'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  // a chunk that starts inside a multi-line string or a heredoc resumes it
+  for (const src of [
+    '<?php\n$u = "one $x\ntwo {$y->z} three\nend";\necho 1;\n',
+    '<?php\n$h = <<<EOT\n  Hi $name, {$o->p}\n  {$open\n  EOT;\necho 1;\n',
+    "<?php\n$n = <<<'EOT'\n  $raw {$raw}\n  EOT;\n",
+    '<?php\n$t = `ls $dir\n$x`;\n',
+  ]) {
+    assertLineFedParity('php', src);
+  }
+  const kinds = tokenKinds('php', "<?php\n$n = <<<'EOT'\n  $raw\n  EOT;\n");
+  assert.ok(kinds.some(([t, k]) => t === '$raw' && k === 'string'));
 });

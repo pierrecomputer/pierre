@@ -207,3 +207,32 @@ void t.test('nix: multi-line constructs stream line-fed', () => {
     assertLineFedParity('nix', code);
   }
 });
+
+void t.test(
+  'nix: splices nest, `$$` is literal, a splice is no pattern',
+  () => {
+    const code = '{ a = "${f "x ${b} y"}"; c = "$$' + '{d}"; }\n';
+    assertLineFedParity('nix', code);
+    assert.deepEqual(tokenKinds('nix', code), [
+      ['{', 'punctuation.bracket'],
+      ['a', 'property'],
+      ['=', 'operator'],
+      ['"', 'string'],
+      ['${', 'punctuation.special'],
+      ['f', 'function'],
+      ['"x', 'string'],
+      ['${', 'punctuation.special'],
+      ['b', 'variable'],
+      ['}', 'punctuation.special'],
+      ['y"', 'string'],
+      ['}', 'punctuation.special'],
+      ['"', 'string'],
+      [';', 'punctuation.delimiter'],
+      ['c', 'property'],
+      ['=', 'operator'],
+      ['"$$' + '{d}"', 'string'],
+      [';', 'punctuation.delimiter'],
+      ['}', 'punctuation.bracket'],
+    ]);
+  }
+);

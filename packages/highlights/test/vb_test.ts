@@ -196,3 +196,56 @@ test('vb: an unclosed interpolation hole ends with its line', () => {
   ]);
   assertLineFedParity('vb', code);
 });
+
+test('vb: a file number is not a date literal', () => {
+  const code = 'Print #1, "Item #" & n\nd = #1/31/2024 12:30 PM#\n';
+  expect(tokenKinds('vb', code)).toEqual([
+    ['Print', 'variable'],
+    ['#', 'operator'],
+    ['1', 'number'],
+    [',', 'punctuation.delimiter'],
+    ['"Item #"', 'string'],
+    ['&', 'operator'],
+    ['n', 'variable'],
+    ['d', 'variable'],
+    ['=', 'operator'],
+    ['#1/31/2024 12:30 PM#', 'string.special'],
+  ]);
+  assertLineFedParity('vb', code);
+});
+
+test('vb: Property Get/Let/Set and Sub New name a definition', () => {
+  expect(
+    tokenKinds(
+      'vb',
+      'Public Property Get FullName() As String\nPublic Sub New(x As Integer)\n'
+    )
+  ).toEqual([
+    ['Public Property Get', 'keyword.declaration'],
+    ['FullName', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    ['As', 'keyword'],
+    ['String', 'type.builtin'],
+    ['Public Sub', 'keyword.declaration'],
+    ['New', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable.parameter'],
+    ['As', 'keyword'],
+    ['Integer', 'type.builtin'],
+    [')', 'punctuation.bracket'],
+  ]);
+});
+
+test('vb: an escaped name holds only name bytes', () => {
+  expect(tokenKinds('vb', 'x = [a + b] + [Class]')).toEqual([
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['[', 'punctuation.bracket'],
+    ['a', 'variable'],
+    ['+', 'operator'],
+    ['b', 'variable'],
+    [']', 'punctuation.bracket'],
+    ['+', 'operator'],
+    ['[Class]', 'variable'],
+  ]);
+});

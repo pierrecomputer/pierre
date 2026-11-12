@@ -296,11 +296,12 @@
                 (local.set $interp (i32.const 1))
                 (local.set $lit (i32.const 0)))
               (else
-                ;; flag bit 4 (a one-line body) sits at bit 20 of $lit
+                ;; status 0 before $end is the line break of a one-line body;
+                ;; at $end (an escaped line break) the body goes on
                 (if
                   (i32.or
                     (i32.eq (local.get $status) (i32.const 1))
-                    (i32.and (local.get $lit) (i32.const 0x100000)))
+                    (i32.lt_u (global.get $ptr) (global.get $end)))
                   (then (local.set $lit (i32.const 0))))))
             (br $next)))
 
@@ -336,7 +337,7 @@
                 (local.set $lit (i32.const 9))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 3))))
               (else
-                (local.set $lit (i32.const 17))
+                (local.set $lit (i32.const 1))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (local.set $lit
               (i32.or
@@ -380,6 +381,8 @@
                   (i32.le_u (i32.sub (local.get $c2) (i32.const "a")) (i32.const 25)))))
             (if (i32.eq (i32.or (local.get $c2) (i32.const 32)) (i32.const "r"))
               (then (local.set $hl (i32.or (local.get $hl) (i32.const 32)))))
+            (local.set $hl (i32.or (local.get $hl) (i32.shl (local.get $docAttr) (i32.const 2))))
+            (local.set $docAttr (i32.const 0))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
             (if
               (i32.and
@@ -399,7 +402,7 @@
             (call $emitTok
               (select
                 (enum.get $Token.string.regex)
-                (enum.get $Token.string)
+                (select (enum.get $Token.comment.doc) (enum.get $Token.string) (i32.and (local.get $hl) (i32.const 4)))
                 (i32.and (local.get $hl) (i32.const 32)))
               (local.get $lhs)
               (global.get $ptr))
@@ -466,6 +469,17 @@
                     (i32.load (i32.sub (global.get $ptr) (i32.const 3)))
                     (i32.const 0xffffff))
                   (i32.const "doc"))))
+            (if (local.get $docAttr)
+              (then
+                (local.set $c3 (call $templateByte (call $lexSkipSpaceAt (global.get $ptr))))
+                (if
+                  (i32.eqz
+                    (i32.or
+                      (i32.or (i32.eq (local.get $c3) (i32.const 34)) (i32.eq (local.get $c3) (i32.const 39)))
+                      (i32.or
+                        (i32.eq (local.get $c3) (i32.const "~"))
+                        (i32.le_u (local.get $c3) (i32.const 13)))))
+                  (then (local.set $docAttr (i32.const 0))))))
             (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
             (br $next)))
         ;; `?c` character codes: `?a`, `?é`, and escapes such as `?\n`. A

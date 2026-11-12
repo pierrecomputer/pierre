@@ -5,7 +5,8 @@
 
   ;; The capture for a plain scalar spanning [$lhs,$rhs). YAML's untagged
   ;; constants are `~` and the case-insensitive words true, false, yes, no, on,
-  ;; off, and null, so every match is 1..5 bytes: a length gate rejects longer
+  ;; off, and null, and the floats .inf, -.inf, +.inf, and .nan, so every
+  ;; match is 1..5 bytes: a length gate rejects longer
   ;; scalars before any byte compare, and each length then tests only its own
   ;; words. ORing 0x20 into a byte lowercases an ASCII letter, which is what
   ;; makes the compares case-insensitive.
@@ -24,26 +25,37 @@
             (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "~"))))))
     (if (i32.eq (local.get $n) (i32.const 5))
       (then
+        (if
+          (i64.eq
+            (i64.and
+              (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020))
+              (i64.const 0xffffffffff))
+            (i64.const "false"))
+          (then (return (enum.get $Token.boolean))))
         (return
           (select
-            (enum.get $Token.boolean)
+            (enum.get $Token.number)
             (enum.get $Token.string)
-            (i64.eq
-              (i64.and
-                (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020))
-                (i64.const 0xffffffffff))
-              (i64.const "false"))))))
+            (i32.and
+              (i32.eq
+                (i32.or (i32.load offset=1 (local.get $lhs)) (i32.const 0x20202020))
+                (i32.const ".inf"))
+              (i32.or
+                (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "-"))
+                (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "+"))))))))
     ;; wide loads stay inside the buffer slack, so a short word is safe to read
     (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
     (if (i32.eq (local.get $n) (i32.const 4))
       (then
         (if (i32.eq (local.get $w) (i32.const "true"))
           (then (return (enum.get $Token.boolean))))
+        (if (i32.eq (local.get $w) (i32.const "null"))
+          (then (return (enum.get $Token.constant.builtin))))
         (return
           (select
-            (enum.get $Token.constant.builtin)
+            (enum.get $Token.number)
             (enum.get $Token.string)
-            (i32.eq (local.get $w) (i32.const "null"))))))
+            (i32.or (i32.eq (local.get $w) (i32.const ".inf")) (i32.eq (local.get $w) (i32.const ".nan")))))))
     (if (i32.eq (local.get $n) (i32.const 3))
       (then
         (local.set $w (i32.and (local.get $w) (i32.const 0xffffff)))
@@ -85,19 +97,40 @@
           (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
     (local.get $p))
 
-  ;; Leading blanks of the line containing $p. The walk back can cross the start
-  ;; of a sub-range, which only reads host bytes and never emits them.
+  ;; Indent of the node that owns the block scalar header at $p: leading blanks
+  ;; plus each `- `, `? `, `: ` before it. The walk back only reads host bytes.
   (func $yamlLineIndent (param $p i32) (result i32)
+    (local $c i32)
+    (local $q i32)
+    (local $r i32)
+    (local $start i32)
+    (local.set $start (local.get $p))
     (block $done
       (loop $back
-        (br_if $done (i32.le_u (local.get $p) (global.get $srcBase)))
+        (br_if $done (i32.le_u (local.get $start) (global.get $srcBase)))
         (br_if $done
           (i32.or
-            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 10))
-            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13))))
-        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+            (i32.eq (i32.load8_u (i32.sub (local.get $start) (i32.const 1))) (i32.const 10))
+            (i32.eq (i32.load8_u (i32.sub (local.get $start) (i32.const 1))) (i32.const 13))))
+        (local.set $start (i32.sub (local.get $start) (i32.const 1)))
         (br $back)))
-    (i32.sub (call $yamlSkipHorizontal (local.get $p)) (local.get $p)))
+    (local.set $q (call $yamlSkipHorizontal (local.get $start)))
+    (block $nested
+      (loop $indicator
+        (local.set $c (i32.load8_u (local.get $q)))
+        (br_if $nested
+          (i32.eqz
+            (i32.or
+              (i32.eq (local.get $c) (i32.const "-"))
+              (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const ":"))))))
+        (local.set $r (call $yamlSkipHorizontal (i32.add (local.get $q) (i32.const 1))))
+        (br_if $nested
+          (i32.or
+            (i32.eq (local.get $r) (i32.add (local.get $q) (i32.const 1)))
+            (i32.ge_u (local.get $r) (local.get $p))))
+        (local.set $q (local.get $r))
+        (br $indicator)))
+    (i32.sub (local.get $q) (local.get $start)))
 
   ;; The end of a block scalar body starting at $p: every following line that
   ;; is blank, or indented deeper than $indent (the introducing line's
@@ -353,9 +386,8 @@
             (local.set $quote (local.get $c))
             ;; Probe the closing quote so quoted mapping keys get property. The
             ;; probe hops from quote to backslash instead of walking the body,
-            ;; and crosses line breaks because the scalar itself may. Any `:`
-            ;; right after the quote counts: a JSON-style `{"a":1}` is valid
-            ;; YAML, so the plain-scalar blank rule does not apply here.
+            ;; and stops at the line end, which a line-fed chunk cannot see past.
+            ;; Any `:` right after the quote counts (`{"a":1}` is valid YAML).
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (block $quoteDone
               (loop $q
@@ -365,9 +397,10 @@
                     (global.get $end)
                     (local.get $quote)
                     (i32.eq (local.get $quote) (i32.const 34))
-                    (i32.const 0)))
+                    (i32.const 1)))
                 (br_if $quoteDone (i32.ge_u (global.get $ptr) (global.get $end)))
                 (local.set $c (i32.load8_u (global.get $ptr)))
+                (br_if $quoteDone (i32.le_u (i32.sub (local.get $c) (i32.const 10)) (i32.const 3)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 ;; `''` escapes a quote inside a single-quoted scalar
                 (if
@@ -380,8 +413,11 @@
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (br $q)))
                 (br_if $quoteDone (i32.eq (local.get $c) (local.get $quote)))
-                ;; a backslash: step over the byte it escapes
-                (if (i32.lt_u (global.get $ptr) (global.get $end))
+                ;; a backslash: step over the byte it escapes, but not a line break
+                (if
+                  (i32.and
+                    (i32.lt_u (global.get $ptr) (global.get $end))
+                    (i32.gt_u (i32.load8_u (global.get $ptr)) (i32.const 13)))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (br $q)))
             (local.set $after (call $yamlSkipHorizontal (global.get $ptr)))
@@ -428,19 +464,44 @@
               (i32.eq (local.get $c) (i32.const "*"))
               (i32.eq (local.get $c) (i32.const "!"))))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanIdent)
+            (block $nameDone
+              (loop $name
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (br_if $nameDone (i32.ge_u (global.get $ptr) (global.get $end)))
+                (local.set $c (i32.load8_u (global.get $ptr)))
+                (br_if $nameDone
+                  (i32.or
+                    (i32.le_u (local.get $c) (i32.const 32))
+                    (i32.or
+                      (i32.eq (local.get $c) (i32.const ","))
+                      ;; ORing 0x20 folds `[` `]` onto `{` `}`
+                      (i32.or
+                        (i32.eq (i32.or (local.get $c) (i32.const 0x20)) (i32.const "{"))
+                        (i32.eq (i32.or (local.get $c) (i32.const 0x20)) (i32.const "}"))))))
+                (br $name)))
             (call $emitTok (enum.get $Token.type) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
         (if
-          (i32.and
-            (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
-            (i32.or
-              (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))
-              (i32.eq
-                (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff))
-                (i32.const "..."))))
+          (if (result i32)
+            (i32.and
+              (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
+              (i32.or
+                (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))
+                (i32.eq
+                  (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff))
+                  (i32.const "..."))))
+            (then
+              (i32.and
+                (i32.or
+                  (i32.le_u (global.get $ptr) (global.get $srcBase))
+                  (i32.or
+                    (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+                    (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+                (i32.or
+                  (i32.eq (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
+                  (call $lexIsSpace (i32.load8_u offset=3 (global.get $ptr))))))
+            (else (i32.const 0)))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
@@ -496,6 +557,12 @@
               (byteset.get ",-?>|" (local.get $c))
               (call $yamlColonEnds (global.get $ptr) (local.get $flow)))
             (then
+              (br_if $scalar
+                (i32.and
+                  (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "?")))
+                  (i32.and
+                    (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                    (i32.eqz (call $lexIsSpace (i32.load8_u offset=1 (global.get $ptr)))))))
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
               (call $emitTok
                 (enum.get $Token.punctuation.delimiter)

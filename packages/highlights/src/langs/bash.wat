@@ -76,22 +76,57 @@
   ;; Scan the body of a quoted `$(`/`$((` substitution from $ptr with $depth
   ;; parens open, emitting it as string.special and the closing paren as
   ;; punctuation. Only the parentheses move $depth, so hop straight to the
-  ;; next one. Returns the depth still open when $end arrived first, 0 when
-  ;; the substitution closed.
+  ;; next one or to a quote. Returns 0 when the substitution closed, else the
+  ;; depth still open at $end, plus the open quote byte << 8 when $end came
+  ;; inside a quote; that value as $depth resumes the scan.
   (func $bashSubstScan (param $depth i32) (result i32)
+    (local $c i32)
     (local $seg i32)
+    (local $stop i32)
     (local.set $seg (global.get $ptr))
+    (local.set $c (i32.shr_u (local.get $depth) (i32.const 8)))
+    (local.set $depth (i32.and (local.get $depth) (i32.const 255)))
     (block $done
       (loop $sub
-        (global.set $ptr (call $lexFindEither (global.get $ptr) (i32.const "(") (i32.const ")")))
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "("))
-          (then (local.set $depth (i32.add (local.get $depth) (i32.const 1))))
-          (else
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (if (i32.eqz (local.get $depth))
-              (then (br $done)))))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (if (i32.eqz (local.get $c))
+          (then
+            ;; reuse the `(`/`)`/`"` hit until $ptr passes it: `'` quotes must not rescan
+            (if (i32.lt_u (local.get $stop) (global.get $ptr))
+              (then
+                (local.set $stop
+                  (call $scanFind3 (global.get $ptr) (i32.const "(") (i32.const ")") (i32.const 34)))))
+            (global.set $ptr
+              (call $scanFindSpecial (global.get $ptr) (local.get $stop) (i32.const 39) (i32.const 0) (i32.const 0)))
+            (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $c (i32.load8_u (global.get $ptr)))
+            (if (i32.eq (local.get $c) (i32.const "("))
+              (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+            (if (i32.eq (local.get $c) (i32.const ")"))
+              (then
+                (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+                (br_if $done (i32.eqz (local.get $depth)))))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+        (if (i32.lt_u (local.get $c) (i32.const "("))
+          (then
+            (loop $q
+              (global.set $ptr
+                (call $scanFindSpecial
+                  (global.get $ptr)
+                  (global.get $end)
+                  (local.get $c)
+                  (i32.eq (local.get $c) (i32.const 34))
+                  (i32.const 0)))
+              (if (i32.ge_u (global.get $ptr) (global.get $end))
+                (then
+                  (local.set $depth (i32.or (local.get $depth) (i32.shl (local.get $c) (i32.const 8))))
+                  (br $done)))
+              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+              (if (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 92))
+                (then
+                  (global.set $ptr
+                    (i32.add (global.get $ptr) (i32.lt_u (global.get $ptr) (global.get $end))))
+                  (br $q))))))
+        (local.set $c (i32.const 0))
         (br $sub)))
     (call $emitTok (enum.get $Token.string.special) (local.get $seg) (global.get $ptr))
     (if (i32.lt_u (global.get $ptr) (global.get $end))
@@ -127,6 +162,9 @@
   ;; after the opener. Return 0 when complete, the open parenthesis depth
   ;; for unfinished quoted `$(`, or -1 for unfinished `${`.
   ;; The string lexer saves this result to resume in the next chunk.
+  ;; $quoted is 2 in a string, 1 unquoted at a command position, where `$ `
+  ;; before a word is a console prompt (bash would run a command named `$`):
+  ;; returns 1 there.
   (func $bashDollar (param $quoted i32) (result i32)
     (local $c i32)
     (local $close i32)
@@ -155,7 +193,7 @@
             (local.set $close (i32.const 2))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
-        (if (i32.eqz (local.get $quoted))
+        (if (i32.ne (local.get $quoted) (i32.const 2))
           (then
             (if (i32.eq (local.get $close) (i32.const 2))
               (then (global.set $bashArith (i32.add (global.get $bashArith) (i32.const 1)))))
@@ -164,6 +202,13 @@
     (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
       (then (call $scanIdentRun (i32.const 0)))
       (else
+        (if
+          (i32.and
+            (i32.and (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $quoted) (i32.const 1)))
+            (i32.gt_u (call $bashByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 32)))
+          (then
+            (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
+            (return (i32.const 1))))
         (if
           (i32.or (i32.eq (local.get $c) (i32.const "$")) (call $bashIsSpecialParam (local.get $c)))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
@@ -226,7 +271,7 @@
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $open (call $bashDollar (i32.const 1)))
+            (local.set $open (call $bashDollar (i32.const 2)))
             (local.set $seg (global.get $ptr))
             (br $l)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -252,18 +297,17 @@
         (global.set $streamMode (i32.const 12))
         (global.set $streamHl (enum.get $Token.string)))))
 
+  ;; compares from the end: under 50 bytes, it counts as small for V8's inlining budget
   (func $bashRangeEq (param $a i32) (param $b i32) (param $n i32) (result i32)
-    (local $i i32)
     (block $done
       (loop $l
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (if
-          (i32.ne
-            (i32.load8_u (i32.add (local.get $a) (local.get $i)))
-            (i32.load8_u (i32.add (local.get $b) (local.get $i))))
-          (then (return (i32.const 0))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l)))
+        (br_if $done (i32.eqz (local.get $n)))
+        (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+        (br_if $l
+          (i32.eq
+            (i32.load8_u (i32.add (local.get $a) (local.get $n)))
+            (i32.load8_u (i32.add (local.get $b) (local.get $n)))))
+        (return (i32.const 0))))
     (i32.const 1))
 
   ;; A bare heredoc delimiter is a word: bash ends it at whitespace or at a
@@ -275,11 +319,33 @@
   ;; after its opener, through the line holding the $n-byte delimiter at
   ;; $delim; `$strip` permits leading tabs on that line. An unterminated body
   ;; runs to $end and, in streaming, checkpoints the delimiter so the next
-  ;; chunk keeps looking for it.
-  (func $bashHeredocBody (param $delim i32) (param $n i32) (param $strip i32)
+  ;; chunk keeps looking for it. A second heredoc waits in $mem.lexLowerScratch
+  ;; (delimiter, count, strip). Returns 0, or when the first body runs into the
+  ;; next chunk, -(count | first count << 8 | strip << 16) of the second one,
+  ;; whose delimiter then follows the first in $mem.streamDelimiter; that value
+  ;; as $n resumes the second body. Two callers keep it out of $hlBash, whose
+  ;; V8 inlining budget is nearly used.
+  (func $bashHeredocBody (param $delim i32) (param $n i32) (param $strip i32) (result i32)
     (local $body i32)
     (local $lhs i32)
     (local $line i32)
+    (local $n2 i32)
+    (if (i32.lt_s (local.get $n) (i32.const 0))
+      (then
+        (local.set $n2 (i32.sub (i32.const 0) (local.get $n)))
+        (i32.store offset=4 (i32.const $mem.lexLowerScratch) (i32.const 0))
+        (local.set $delim
+          (i32.add
+            (i32.const $mem.streamDelimiter)
+            (i32.and (i32.shr_u (local.get $n2) (i32.const 8)) (i32.const 255))))
+        (local.set $n (i32.and (local.get $n2) (i32.const 255)))
+        (local.set $strip (i32.shr_u (local.get $n2) (i32.const 16)))))
+    ;; a stream carries a second delimiter only when both fit in $mem.streamDelimiter
+    (if
+      (i32.gt_u
+        (i32.add (local.get $n) (i32.load offset=4 (i32.const $mem.lexLowerScratch)))
+        (i32.const 32))
+      (then (i32.store offset=4 (i32.const $mem.lexLowerScratch) (i32.const 0))))
     (local.set $body (global.get $ptr))
     (block $done
       (loop $lines
@@ -312,7 +378,15 @@
             (if (i32.lt_u (global.get $ptr) (global.get $end))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (return)))
+            (local.set $n2 (i32.load offset=4 (i32.const $mem.lexLowerScratch)))
+            (if (i32.eqz (local.get $n2))
+              (then (return (i32.const 0))))
+            (i32.store offset=4 (i32.const $mem.lexLowerScratch) (i32.const 0))
+            (local.set $delim (i32.load (i32.const $mem.lexLowerScratch)))
+            (local.set $n (local.get $n2))
+            (local.set $strip (i32.load offset=8 (i32.const $mem.lexLowerScratch)))
+            (local.set $body (global.get $ptr))
+            (br $lines)))
         (call $scanToLineEnd)
         (if (i32.lt_u (global.get $ptr) (global.get $end))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -322,7 +396,22 @@
       (local.get $delim)
       (local.get $n)
       (local.get $strip)
-      (enum.get $Token.string)))
+      (enum.get $Token.string))
+    (local.set $n2 (i32.load offset=4 (i32.const $mem.lexLowerScratch)))
+    (i32.store offset=4 (i32.const $mem.lexLowerScratch) (i32.const 0))
+    (if (i32.and (i32.ne (local.get $n2) (i32.const 0)) (i32.eq (global.get $streamMode) (i32.const 22)))
+      (then
+        (memory.copy
+          (i32.add (i32.const $mem.streamDelimiter) (local.get $n))
+          (i32.load (i32.const $mem.lexLowerScratch))
+          (local.get $n2))
+        (return
+          (i32.sub
+            (i32.const 0)
+            (i32.or
+              (i32.or (local.get $n2) (i32.shl (local.get $n) (i32.const 8)))
+              (i32.shl (i32.load offset=8 (i32.const $mem.lexLowerScratch)) (i32.const 16)))))))
+    (i32.const 0))
 
   (func $bashIsOp (param $c i32) (result i32)
     (byteset.get "!&;<=>|~" (local.get $c)))
@@ -355,6 +444,8 @@
   ;;   3 in an arm body.
   ;; - Bit 2: waiting for `in` after `for NAME` or `case WORD`.
   ;; - Bit 3: assignment prefix waiting for the blank before its command.
+  ;; - Bit 4: inside a `[[ ]]` test on the current line.
+  ;; - Bits 5 up: outer `case` arms waiting for the inner `esac`.
   ;; $arrayOpen counts parentheses in a `NAME=(` array. Its lines hold elements.
   (func $hlBash
     (local $c i32)
@@ -368,7 +459,8 @@
     ;; a here-document opened on the current line: its delimiter bytes, their
     ;; count, and whether `<<-` allows leading tabs; the body is consumed at
     ;; the line break. Chunks end at line breaks, so the delimiter pointer is
-    ;; always used within the chunk that produced it.
+    ;; always used within the chunk that produced it. A negative $hdLen
+    ;; carries a second heredoc into the next chunk (see $bashHeredocBody).
     (local $hdDelim i32)
     (local $hdLen i32)
     (local $hdStrip i32)
@@ -391,12 +483,19 @@
     ;; the previous chunk ended in: not a command after a `\` line join or
     ;; inside an array, where the line break above kept $cmd at 0.
     (local.set $cmd (i32.const 1))
-    (if (i32.gt_u (global.get $ptr) (global.get $srcBase))
+    ;; an embedded body starts its own document at $docStart, after the host's `>`
+    (if
+      (i32.and
+        (i32.gt_u (global.get $ptr) (global.get $srcBase))
+        (i32.ne (global.get $ptr) (global.get $docStart)))
       (then
         (local.set $c (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))))
         (local.set $cmd
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))))
     (call $lexEmitLeadingContinuation)
+    (if (i32.lt_s (local.get $hdLen) (i32.const 0))
+      (then
+        (local.set $hdLen (call $bashHeredocBody (i32.const 0) (local.get $hdLen) (i32.const 0)))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -423,8 +522,8 @@
                       (i32.eq (local.get $c) (i32.const 13))
                       (i32.eq (call $bashByte (global.get $ptr)) (i32.const 10)))))
                 (call $emitGap (local.get $gap) (global.get $ptr))
-                (call $bashHeredocBody (local.get $hdDelim) (local.get $hdLen) (local.get $hdStrip))
-                (local.set $hdLen (i32.const 0))
+                (local.set $hdLen
+                  (call $bashHeredocBody (local.get $hdDelim) (local.get $hdLen) (local.get $hdStrip)))
                 (local.set $cmd (i32.const 1))
                 (br $next)))))
         (call $scanWhitespace)
@@ -434,14 +533,14 @@
             (local.set $cmd (i32.eqz (local.get $arrayOpen)))
             (local.set $joined (i32.const 0))
             ;; `case WORD` and `for NAME` may put `in` on the next line
-            (local.set $flow (i32.and (local.get $flow) (i32.const 7)))
+            (local.set $flow (i32.and (local.get $flow) (i32.const -25)))
             ;; a line break without a body - the opener was the final line
             ;; of a bounded range - drops the pending heredoc
             (local.set $hdLen (i32.const 0)))
           (else
             ;; the blank after `VAR=x` starts the command it prefixes (bit 3
-            ;; is the top bit of $flow)
-            (if (i32.ge_u (local.get $flow) (i32.const 8))
+            ;; of $flow)
+            (if (i32.and (local.get $flow) (i32.const 8))
               (then
                 (if (i32.lt_u (local.get $gap) (global.get $ptr))
                   (then
@@ -499,13 +598,14 @@
                 (call $lexString (i32.const 39) (i32.const 1) (enum.get $Token.string))
                 (br $arg)))
             (local.set $p (global.get $bashArith))
-            (drop (call $bashDollar (i32.const 0)))
             ;; an unquoted `$(` opens a command; `$((` (which counted itself
             ;; into $bashArith) opens arithmetic
             (local.set $cmd
-              (i32.and
-                (i32.eq (local.get $c2) (i32.const "("))
-                (i32.eq (global.get $bashArith) (local.get $p))))
+              (i32.or
+                (call $bashDollar (local.get $cmd))
+                (i32.and
+                  (i32.eq (local.get $c2) (i32.const "("))
+                  (i32.eq (global.get $bashArith) (local.get $p)))))
             (if (i32.eq (local.get $c2) (i32.const "("))
               (then
                 (local.set $flow (i32.and (local.get $flow) (i32.const -9)))
@@ -562,8 +662,7 @@
         ;; a `<<` inside `$(( ))` is a left shift, and both fall through to the
         ;; operator path instead. The opener emits `<<`, blanks, and the
         ;; delimiter word; the rest of the line lexes normally and the body
-        ;; is consumed at the line break (see $hdLen above). A second heredoc
-        ;; on the same line keeps its word but the first delimiter wins.
+        ;; is consumed at the line break (see $hdLen above).
         (if
           (i32.and
             (i32.and
@@ -614,11 +713,17 @@
                     (br $bare)))
                 (local.set $group (i32.sub (global.get $ptr) (local.get $rhs)))))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (if (i32.and (i32.eqz (local.get $hdLen)) (local.get $group))
+            ;; a third heredoc replaces the second; an empty delimiter opens none
+            (if (local.get $hdLen)
               (then
+                (i32.store (i32.const $mem.lexLowerScratch) (local.get $rhs))
+                (i32.store offset=4 (i32.const $mem.lexLowerScratch) (local.get $group))
+                (i32.store offset=8 (i32.const $mem.lexLowerScratch) (local.get $p)))
+              (else
                 (local.set $hdDelim (local.get $rhs))
                 (local.set $hdLen (local.get $group))
-                (local.set $hdStrip (local.get $p))))
+                (local.set $hdStrip (local.get $p))
+                (i32.store offset=4 (i32.const $mem.lexLowerScratch) (i32.const 0))))
             (br $next)))
         (if
           (i32.or
@@ -683,9 +788,12 @@
                         (if (local.get $cmd)
                           (then
                             ;; `\VAR=x` is quoted, so it runs as a command
+                            (local.set $p (call $bashByte (global.get $ptr)))
+                            (if (i32.eq (local.get $p) (i32.const "+"))
+                              (then (local.set $p (call $bashByte (i32.add (global.get $ptr) (i32.const 1))))))
                             (if
                               (i32.and
-                                (i32.eq (call $bashByte (global.get $ptr)) (i32.const "="))
+                                (i32.eq (local.get $p) (i32.const "="))
                                 (i32.ne (local.get $c) (i32.const 92)))
                               (then (local.set $flow (i32.or (local.get $flow) (i32.const 8))))
                               (else
@@ -700,7 +808,10 @@
               (then
                 ;; `esac` closes the case
                 (if (i32.eq (local.get $group) (i32.const 3))
-                  (then (local.set $flow (i32.and (local.get $flow) (i32.const -4)))))
+                  (then
+                    (local.set $flow (i32.and (local.get $flow) (i32.const -4)))
+                    (if (i32.ge_u (local.get $flow) (i32.const 32))
+                      (then (local.set $flow (i32.sub (local.get $flow) (i32.const 29)))))))
                 ;; `in` arrives; after `case WORD`, patterns follow
                 (if (i32.eq (local.get $group) (i32.const 4))
                   (then
@@ -716,6 +827,8 @@
                         (select (i32.const 4) (i32.const 0) (i32.le_u (local.get $group) (i32.const 6)))))
                     (if (i32.eq (local.get $group) (i32.const 6))
                       (then
+                        (if (i32.eq (i32.and (local.get $flow) (i32.const 3)) (i32.const 3))
+                          (then (local.set $flow (i32.add (local.get $flow) (i32.const 32)))))
                         (local.set $flow
                           (i32.or (i32.and (local.get $flow) (i32.const -4)) (i32.const 1)))))
                     ;; `function` names the next word; the token test keeps a
@@ -740,7 +853,14 @@
                   (i32.eq (local.get $c2) (local.get $c))
                   (then
                     (if (i32.le_u (local.get $c) (i32.const "]"))
-                      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
+                      (then
+                        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                        (local.set $flow
+                          (i32.or
+                            (i32.and (local.get $flow) (i32.const -17))
+                            (i32.shl
+                              (i32.and (i32.eq (local.get $c) (i32.const "[")) (local.get $p))
+                              (i32.const 4))))))))
                 ;; a `{` group holds commands; `{a,b}` is a brace expansion
                 (if (i32.eq (local.get $c) (i32.const "{"))
                   (then
@@ -803,6 +923,16 @@
         (if (call $bashIsOp (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            ;; `&>`, `&>>`, `>&`, `>|` redirect: $c becomes `>`, so no command follows
+            (if
+              (i32.or
+                (i32.and (i32.eq (local.get $c) (i32.const "&")) (i32.eq (local.get $c2) (i32.const ">")))
+                (i32.and
+                  (i32.eq (local.get $c) (i32.const ">"))
+                  (i32.or (i32.eq (local.get $c2) (i32.const "&")) (i32.eq (local.get $c2) (i32.const "|")))))
+              (then
+                (local.set $c (i32.const ">"))
+                (local.set $c2 (i32.const ">"))))
             ;; $c2 is 0 at $end, which matches neither
             (if
               (i32.or
@@ -817,7 +947,7 @@
             ;; separators start a command, except inside `(( ))`/`$(( ))`
             (if
               (i32.and
-                (i32.eqz (global.get $bashArith))
+                (i32.eqz (i32.or (global.get $bashArith) (i32.and (local.get $flow) (i32.const 16))))
                 (i32.or
                   (i32.eq (local.get $c) (i32.const ";"))
                   (i32.or
@@ -825,9 +955,9 @@
                     (i32.eq (local.get $c) (i32.const "|")))))
               (then
                 (local.set $cmd (i32.const 1))
-                (local.set $flow (i32.and (local.get $flow) (i32.const 3)))
+                (local.set $flow (i32.and (local.get $flow) (i32.const -29)))
                 ;; `;;`, `;&`, and `;;&` end a case arm: a pattern follows
-                (if (i32.eq (local.get $flow) (i32.const 3))
+                (if (i32.eq (i32.and (local.get $flow) (i32.const 3)) (i32.const 3))
                   (then
                     (if
                       (i32.and
@@ -835,7 +965,7 @@
                         (i32.or
                           (i32.eq (local.get $c2) (i32.const ";"))
                           (i32.eq (local.get $c2) (i32.const "&"))))
-                      (then (local.set $flow (i32.const 2))))))))
+                      (then (local.set $flow (i32.sub (local.get $flow) (i32.const 1)))))))))
             (br $next)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))

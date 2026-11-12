@@ -18,6 +18,8 @@
   ;; at $to with Go as the stream root, so Go's locals carry on and whole and
   ;; line-fed runs match. A host lexer gets the lines as one Go stream.
   (func $templGo (param $to i32) (param $mode i32) (result i32)
+    (local $c i32)
+    (local $p i32)
     (local $piece i32)
     (local $saveDepth i32)
     (local $saveEnd i32)
@@ -32,8 +34,56 @@
             (enum.get $Language.go) (global.get $ptr) (local.get $to)
             (select (i32.const -1) (i32.eqz (local.get $mode)) (local.get $piece))
             (i32.const -3)))
+        (if (local.get $piece)
+          (then
+            (global.set $ptr (local.get $to))
+            (return (i32.const 0))))
+        ;; $mode: a Go block comment (1) or raw string (2) open at $to
+        (local.set $saveEnd (global.get $end))
+        (global.set $end (local.get $to))
+        (local.set $mode (i32.and (local.get $mode) (i32.const 255)))
+        (local.set $p (global.get $ptr))
+        (block $line
+          (loop $scan
+            (if (i32.eq (local.get $mode) (i32.const 1))
+              (then
+                (local.set $p (call $tmplFindWord (local.get $p) (i64.const "*/") (i32.const 2)))
+                (br_if $line (i32.ge_u (local.get $p) (local.get $to)))
+                (local.set $p (i32.add (local.get $p) (i32.const 2)))
+                (local.set $mode (i32.const 0))))
+            (if (i32.eq (local.get $mode) (i32.const 2))
+              (then
+                (local.set $p (call $lexFindByte (local.get $p) (i32.const "`")))
+                (br_if $line (i32.ge_u (local.get $p) (local.get $to)))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (local.set $mode (i32.const 0))))
+            (local.set $p (call $tmplFind4 (local.get $p) (i32.const "/") (i32.const "`") (i32.const 34) (i32.const 39)))
+            (br_if $line (i32.ge_u (local.get $p) (local.get $to)))
+            (local.set $c (i32.load8_u (local.get $p)))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (if (i32.eq (local.get $c) (i32.const "/"))
+              (then
+                (br_if $line (i32.eq (call $templateByte (local.get $p)) (i32.const "/")))
+                (if (i32.eq (call $templateByte (local.get $p)) (i32.const "*"))
+                  (then
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (local.set $mode (i32.const 1))))
+                (br $scan)))
+            (if (i32.eq (local.get $c) (i32.const "`"))
+              (then
+                (local.set $mode (i32.const 2))
+                (br $scan)))
+            (loop $quote
+              (local.set $p (call $scanFindSpecial (local.get $p) (local.get $to) (local.get $c) (i32.const 1) (i32.const 1)))
+              (if (i32.eq (call $templateByte (local.get $p)) (i32.const 92))
+                (then
+                  (local.set $p (i32.add (local.get $p) (i32.const 2)))
+                  (br $quote))))
+            (local.set $p (i32.add (local.get $p) (i32.eq (call $templateByte (local.get $p)) (local.get $c))))
+            (br $scan)))
+        (global.set $end (local.get $saveEnd))
         (global.set $ptr (local.get $to))
-        (return (select (i32.const 0) (i32.const 0x1000000) (local.get $piece)))))
+        (return (i32.or (i32.const 0x1000000) (local.get $mode)))))
     (local.set $mode (select (i32.const 0) (local.get $mode) (local.get $piece)))
     (local.set $saveDepth (global.get $streamDepth))
     (local.set $saveEnd (global.get $end))
@@ -73,7 +123,7 @@
     (local.get $mode))
 
   ;; The `}` that closes a Go expression from $p before $to, or $to, skipping
-  ;; quoted strings. $depth counts the braces still open from earlier lines;
+  ;; strings and runes. $depth counts the braces still open from earlier lines;
   ;; $templBraces gets the count at $to.
   (func $templExprEnd (param $p i32) (param $to i32) (param $depth i32) (result i32)
     (local $c i32)
@@ -82,9 +132,16 @@
     (global.set $end (local.get $to))
     (block $done
       (loop $scan
-        (local.set $p (call $tmplFind4 (local.get $p) (i32.const "{") (i32.const "}") (i32.const 34) (i32.const 39)))
+        (local.set $p (call $tmplFind4 (local.get $p) (i32.const "{") (i32.const "}") (i32.const 34) (i32.const "`")))
         (br_if $done (i32.ge_u (local.get $p) (local.get $to)))
         (local.set $c (i32.load8_u (local.get $p)))
+        (if
+          (i32.and
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 39))
+            (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 39)))
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.const 2)))
+            (br $scan)))
         (if (i32.eq (local.get $c) (i32.const "}"))
           (then
             (br_if $done (i32.eqz (local.get $depth)))
@@ -96,7 +153,8 @@
                 (loop $quote
                   (local.set $p
                     (call $scanFindSpecial
-                      (i32.add (local.get $p) (i32.const 1)) (local.get $to) (local.get $c) (i32.const 1) (i32.const 1)))
+                      (i32.add (local.get $p) (i32.const 1)) (local.get $to) (local.get $c)
+                      (i32.ne (local.get $c) (i32.const "`")) (i32.const 1)))
                   (if (i32.eq (call $templateByte (local.get $p)) (i32.const 92))
                     (then
                       (local.set $p (i32.add (local.get $p) (i32.const 1)))
@@ -221,6 +279,7 @@
           (then
             ;; a `templ`, `css`, or `script` component starts its line
             (block $go
+              (br_if $go (i32.and (local.get $go) (i32.const 255)))
               (br_if $go
                 (i32.and
                   (i32.ne (local.get $lhs) (global.get $srcBase))

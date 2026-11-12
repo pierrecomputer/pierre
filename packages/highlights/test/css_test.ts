@@ -1028,3 +1028,75 @@ void t.test('css: unclosed interpolations do not scan ahead', () => {
     'selector.id',
   ]);
 });
+
+void t.test(
+  'css: a glued multi-line declaration and a selector list split by the property name',
+  () => {
+    // inside a block, `name:x` without `;` or `{` on its line is a
+    // declaration when the name is a property, else a selector
+    const src =
+      '.a {\n  font-family:Arial,\n    sans-serif;\n  a:not(.b),\n  p { color: red }\n}\n';
+    assert.deepEqual(tokenKinds('css', src).slice(2, 13), [
+      ['font-family', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['Arial', 'constant.builtin'],
+      [',', 'punctuation.delimiter'],
+      ['sans-serif', 'constant.builtin'],
+      [';', 'punctuation.delimiter'],
+      ['a', 'tag'],
+      [':not', 'selector.pseudo'],
+      ['(', 'punctuation.bracket'],
+      ['.b', 'selector.class'],
+      [')', 'punctuation.bracket'],
+    ]);
+    for (const lang of ['css', 'scss', 'less'] as const) {
+      assertLineFedParity(lang, src);
+    }
+  }
+);
+
+void t.test('css: the attribute case flag after a value is a keyword', () => {
+  assert.deepEqual(
+    tokenKinds('css', 'a[href$=".pdf" i], [x="y" S] {}').slice(0, 13),
+    [
+      ['a', 'tag'],
+      ['[', 'punctuation.bracket'],
+      ['href', 'attribute'],
+      ['$=', 'operator'],
+      ['".pdf"', 'string'],
+      ['i', 'keyword'],
+      [']', 'punctuation.bracket'],
+      [',', 'punctuation.delimiter'],
+      ['[', 'punctuation.bracket'],
+      ['x', 'attribute'],
+      ['=', 'operator'],
+      ['"y"', 'string'],
+      ['S', 'keyword'],
+    ]
+  );
+});
+
+void t.test(
+  'css: a glued last declaration without `;` stays a declaration',
+  () => {
+    // only a known pseudo-class after the colon makes `name:x` a selector;
+    // the property list is open-ended
+    const src =
+      '@font-face {\n  src:url(x.woff2)\n}\n.a {\n  inset:0\n}\n.b {\n  gap:8px\n}\n.c {\n  direction:rtl\n}\n';
+    for (const lang of ['css', 'scss'] as const) {
+      const kinds = tokenKinds(lang, src);
+      for (const name of ['src', 'inset', 'gap', 'direction']) {
+        assert.deepEqual(
+          kinds.find(([text]) => text === name),
+          [name, 'property'],
+          `${lang} ${name}`
+        );
+      }
+      assert.deepEqual(
+        kinds.find(([text]) => text === 'url'),
+        ['url', 'function']
+      );
+      assertLineFedParity(lang, src);
+    }
+  }
+);

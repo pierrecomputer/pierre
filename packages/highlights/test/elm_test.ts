@@ -143,3 +143,27 @@ test('elm: keyword matching respects case and complete identifiers', () => {
   }
   expect(tokenKinds('elm', 'value = FALSE')).toContainEqual(['FALSE', 'type']);
 });
+
+test('elm: only declared names are definitions', () => {
+  expect(
+    tokenKinds('elm', 'view model =\n    div [] [ text "hi" ]\n')
+  ).toContainEqual(['div', 'variable']);
+  const kinds = tokenKinds(
+    'elm',
+    'f =\n    let\n        helper x = x\n        total : Int\n    in\n    helper total\n'
+  );
+  expect(kinds).toContainEqual(['helper', 'function.definition']);
+  expect(kinds).toContainEqual(['total', 'function.definition']);
+  expect(kinds.at(-1)).toEqual(['helper total', 'variable']);
+});
+
+test('elm: a builtin type name before a dot is a module', () => {
+  expect(tokenKinds('elm', 'x = List.map f xs')).toContainEqual([
+    'List',
+    'namespace',
+  ]);
+  expect(tokenKinds('elm', 'x : List Int')).toContainEqual([
+    'List Int',
+    'type.builtin',
+  ]);
+});

@@ -564,3 +564,69 @@ void t.test(
     assertLineFedParity('c', code);
   }
 );
+
+void t.test(
+  'c: a block comment left open on a directive line continues as a comment',
+  () => {
+    const code =
+      '#define X 1 /* a */ 2 /* first\n  second */ int y;\n#define S "/*" // /*\nint z;\n';
+    assert.deepEqual(tokenKinds('c', code), [
+      ['#define X 1 /* a */ 2', 'preproc'],
+      ['/* first', 'comment'],
+      ['second */', 'comment'],
+      ['int', 'type.builtin'],
+      ['y', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['#define S "/*" // /*', 'preproc'],
+      ['int', 'type.builtin'],
+      ['z', 'variable'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    assertLineFedParity('c', code);
+    assertLineFedParity('c', '#include <a.h> /* x\r\ny */\r\nint z;\r\n');
+  }
+);
+
+void t.test(
+  'c: empty fractions and C23 digit separators stay one number',
+  () => {
+    assert.deepEqual(
+      tokenKinds('c', "double a = 1.f + 2. + 1.e+5, n = 1'000'000 + 0xFF'FFu;"),
+      [
+        ['double', 'type.builtin'],
+        ['a', 'variable'],
+        ['=', 'operator'],
+        ['1.f', 'number'],
+        ['+', 'operator'],
+        ['2.', 'number'],
+        ['+', 'operator'],
+        ['1.e+5', 'number'],
+        [',', 'punctuation.delimiter'],
+        ['n', 'variable'],
+        ['=', 'operator'],
+        ["1'000'000", 'number'],
+        ['+', 'operator'],
+        ["0xFF'FFu", 'number'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'c: a backslash at the end of a line comment splices the next line',
+  () => {
+    const code = '// a \\\nstill \\\r\nmore\n/// doc \\\ntoo\nint x;\n';
+    assert.deepEqual(tokenKinds('c', code), [
+      ['// a \\', 'comment'],
+      ['still \\', 'comment'],
+      ['more', 'comment'],
+      ['/// doc \\', 'comment.doc'],
+      ['too', 'comment.doc'],
+      ['int', 'type.builtin'],
+      ['x', 'variable'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    assertLineFedParity('c', code);
+  }
+);

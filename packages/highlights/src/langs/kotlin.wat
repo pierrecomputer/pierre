@@ -161,6 +161,11 @@
           (then
             (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
+            (if (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const "u"))
+              (then
+                (local.set $c (call $scanHexRun (global.get $ptr) (i32.const 4)))
+                (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $c))
+                (global.set $ptr (local.get $c))))
             (local.set $seg (global.get $ptr))
             (br $scan)))
         ;; `$`: a template opener when a brace or a name follows
@@ -287,6 +292,16 @@
             (br $tailM)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
+            (if (i32.and (i32.eq (local.get $c2) (i32.const 92)) (i32.eq (local.get $c3) (i32.const "u")))
+              (then
+                (local.set $p (call $scanHexRun (i32.add (local.get $lhs) (i32.const 3)) (i32.const 4)))
+                (if (i32.eq (call $kotlinByte (local.get $p)) (i32.const 39))
+                  (then
+                    (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.string) (local.get $lhs) (i32.add (local.get $lhs) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.string.escape) (i32.add (local.get $lhs) (i32.const 1)) (local.get $p))
+                    (call $emitTok (enum.get $Token.string) (local.get $p) (global.get $ptr))
+                    (br $next)))))
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
             (br $next)))
 
@@ -294,7 +309,15 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (select
+                (enum.get $Token.label)
+                (enum.get $Token.attribute)
+                (i32.and
+                  (i32.and (i32.eq (local.get $gap) (local.get $lhs)) (i32.gt_u (local.get $lhs) (global.get $srcBase)))
+                  (call $lexIsIdentContinue (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))))))
+              (local.get $lhs)
+              (global.get $ptr))
             (br $next)))
 
         (if (call $lexIsIdentStart (local.get $c))
@@ -309,7 +332,7 @@
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
-                (if (i32.and (local.get $kind) (i32.const 0x300))
+                (if (i32.and (i32.ne (i32.and (local.get $kind) (i32.const 0x300)) (i32.const 0)) (i32.eqz (local.get $member)))
                   (then
                     (local.set $expect
                       (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3)))
@@ -494,6 +517,37 @@
                     (br $angle)))))
             (br $tailM)))
 
+        ;; no blank skip before `(`: a second call site of that helper would stop its inlining
+        (if (i32.eq (local.get $c) (i32.const "`"))
+          (then
+            (local.set $p (global.get $ptr))
+            (loop $tick
+              (local.set $p (i32.add (local.get $p) (i32.const 1)))
+              (local.set $c2 (call $kotlinByte (local.get $p)))
+              (br_if $tick
+                (i32.and
+                  (i32.ne (local.get $c2) (i32.const "`"))
+                  (i32.and
+                    (i32.ne (local.get $c2) (i32.const 0))
+                    (i32.and (i32.ne (local.get $c2) (i32.const 10)) (i32.ne (local.get $c2) (i32.const 13)))))))
+            (if (i32.eq (local.get $c2) (i32.const "`"))
+              (then
+                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                (local.set $c2 (call $kotlinByte (global.get $ptr)))
+                (call $emitTok
+                  (select
+                    (select
+                      (enum.get $Token.function.definition)
+                      (enum.get $Token.type)
+                      (i32.eq (local.get $expect) (i32.const 1)))
+                    (select
+                      (select (enum.get $Token.function.method) (enum.get $Token.function) (local.get $member))
+                      (select (enum.get $Token.property) (enum.get $Token.variable) (local.get $member))
+                      (i32.eq (local.get $c2) (i32.const "(")))
+                    (local.get $expect))
+                  (local.get $lhs)
+                  (global.get $ptr))
+                (br $tailE)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))
         (local.set $expect (i32.const 0))

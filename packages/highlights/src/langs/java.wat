@@ -18,7 +18,7 @@
       "return" "switch" "default" "finally" "continue")
     (group $Token.keyword.declaration+256 "enum" "class" "interface") ;; 2: declaration, next name is a type
     (group $Token.keyword.declaration+512 "package")                           ;; 3: declaration, next name is a namespace
-    (group $Token.keyword.import "import")                            ;; 4: import
+    (group $Token.keyword.import+512 "import")                        ;; 4: import, next name is a namespace
     (group $Token.keyword.declaration ;; 5: declaration and modifiers
       "var" "const" "final" "native" "sealed" "static" "throws" "extends" "permits" "private"
       "abstract" "strictfp" "volatile" "protected" "public" "transient" "implements" "synchronized")
@@ -113,11 +113,13 @@
                 (return (i32.const 1))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $scan)))
-        (drop (call $stringEscapeAt (local.get $seg)))
+        (drop (call $javaEscapeAt (local.get $seg)))
         (local.set $seg (global.get $ptr))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (i32.const 0))
+
+  (func-variant $javaEscapeAt $stringEscapeAt (call $lexEscapeEnd $lexCEscapeEnd))
 
   (func $javaIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
@@ -147,7 +149,10 @@
     (local $textBlock i32)
     (local $soql i32)
     (local $pending i32)
+    ;; the quote of a string left open at an escaped line break, or 0
+    (local $strCont i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
     (block $done
       (loop $next
         ;; an open text block resumes at the top of the loop, so a body cut
@@ -216,7 +221,7 @@
             (br $plainTok)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (local.set $strCont (call $lexCString (enum.get $Token.string)))
             (local.set $member (i32.const 0))
             (local.set $afterType (i32.const 0))
             (br $next)))
@@ -322,13 +327,20 @@
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
                 ;; a bare keyword either arms the next-name capture or ends
                 ;; it; `Foo.class` names no type
-                (if (i32.eqz (local.get $member))
+                (if
+                  (i32.and
+                    (i32.eqz (local.get $member))
+                    (i32.or
+                      (i32.ne (local.get $expect) (i32.const 2))
+                      (i32.ne (local.get $kind) (enum.get $Token.keyword.declaration))))
                   (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))))
                 (local.set $afterType (i32.eq (local.get $hl) (enum.get $Token.type.builtin))))
               (else
                 (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
                 (if (local.get $expect)
                   (then
+                    (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
+                      (then (local.set $expect (i32.const 1))))
                     (local.set $hl
                       (select
                         (enum.get $Token.type)
@@ -546,7 +558,7 @@
               (then
                 (if
                   (i32.or
-                    (i32.ne (local.get $gap) (local.get $lhs))
+                    (i32.or (i32.ne (local.get $gap) (local.get $lhs)) (i32.eq (local.get $lhs) (global.get $srcBase)))
                     (i32.and
                       (i32.eq (local.get $c) (i32.const ">"))
                       (call $lexIsIdentStart (call $javaByte (global.get $ptr)))))

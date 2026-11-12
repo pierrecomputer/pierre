@@ -247,3 +247,32 @@ test('cadence: transactions, conditions, and comments', () => {
     ['x', 'property'],
   ]);
 });
+
+test('cadence: from is a keyword only before an import source', () => {
+  const code = 'import A from 0x1\nlet v <- from as! @Vault\n';
+  expect(tokenKinds('cadence', code)).toEqual([
+    ['import', 'keyword.import'],
+    ['A', 'type'],
+    ['from', 'keyword.import'],
+    ['0x1', 'number'],
+    ['let', 'keyword.declaration'],
+    ['v', 'variable'],
+    ['<-', 'operator'],
+    ['from', 'variable'],
+    ['as', 'keyword.operator'],
+    ['! @', 'operator'],
+    ['Vault', 'type'],
+  ]);
+});
+
+test('cadence: braced unicode escapes', () => {
+  const code = 'let s = "\\u{1F600}"';
+  expect(tokenKinds('cadence', code)).toEqual([
+    ['let', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"', 'string'],
+    ['\\u{1F600}', 'string.escape'],
+    ['"', 'string'],
+  ]);
+});

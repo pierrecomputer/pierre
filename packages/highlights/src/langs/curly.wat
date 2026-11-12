@@ -4,7 +4,7 @@
   (memory-region $mem.moveWords 232)
   (memory-region $mem.cadenceWords 224)
   (memory-region $mem.vWords 240)
-  (memory-region $mem.chapelWords 328)
+  (memory-region $mem.chapelWords 336)
   (memory-region $mem.ballerinaWords 312)
 
   (import "@pierre/wat-tools/common.wat")
@@ -84,7 +84,7 @@
     (group $Token.boolean "true" "false")
     (group $Token.constant.builtin "none" "nil"))
 
-  (keyword-table $chapelWords $mem.chapelWords $mem.chapelWords+328
+  (keyword-table $chapelWords $mem.chapelWords $mem.chapelWords+336
     (group $Token.keyword.declaration+256 "proc" "iter" "operator")
     (group $Token.keyword.declaration+512 "record" "class" "union" "enum" "type")
     (group $Token.keyword.declaration+768 "module")
@@ -92,11 +92,11 @@
     (group $Token.keyword.control
       "if" "then" "else" "for" "forall" "coforall" "foreach" "do" "while" "select" "when"
       "otherwise" "return" "yield" "break" "continue" "begin" "cobegin" "sync" "serial" "on"
-      "local" "try" "catch" "throw" "defer")
+      "local" "try" "catch" "throw" "defer" "label")
     (group $Token.keyword.declaration "var" "const" "param" "config" "ref" "let")
     (group $Token.keyword
       "public" "private" "export" "extern" "inline" "override" "throws" "with" "zip"
-      "by" "reduce" "scan" "dmapped" "new" "delete" "owned" "shared" "borrowed" "unmanaged"
+      "by" "reduce" "scan" "dmapped" "new" "delete" "owned" "shared" "borrowed" "unmanaged" "atomic"
       "noinit" "only" "out" "inout")
     (group $Token.keyword.operator "in" "as")
     (group $Token.type.builtin
@@ -269,6 +269,16 @@
             (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
             (local.set $seg (global.get $ptr))
+            (if
+              (i32.and
+                (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const "u"))
+                (i32.eq (call $templateByte (global.get $ptr)) (i32.const "{")))
+              (then
+                (global.set $ptr (call $scanHexRun (i32.add (global.get $ptr) (i32.const 1)) (i32.const 8)))
+                (global.set $ptr
+                  (i32.add (global.get $ptr) (i32.eq (call $templateByte (global.get $ptr)) (i32.const "}"))))
+                (call $emitTok (enum.get $Token.string.escape) (local.get $seg) (global.get $ptr))
+                (local.set $seg (global.get $ptr))))
             (br $scan)))
         ;; `$`: `${` opens a template, and V also reads `$name`
         (if
@@ -559,15 +569,19 @@
                 (i32.const -1)
                 (call $curlyWordHl (local.get $dialect) (local.get $lhs) (local.get $rhs))
                 (i32.eq (local.get $member) (i32.const 1))))
-            (if
-              (i32.and
-                (i32.gt_s (local.get $kind) (i32.const 2047))
-                (i32.or
-                  (i32.eq (local.get $c2) (i32.const ":"))
+            (if (i32.gt_s (local.get $kind) (i32.const 2047))
+              (then
+                (if
                   (i32.or
-                    (i32.eq (local.get $c2) (i32.const "."))
-                    (i32.or (i32.eq (local.get $c2) (i32.const ",")) (i32.eq (local.get $c2) (i32.const ")"))))))
-              (then (local.set $kind (i32.const -1))))
+                    (i32.or
+                      (i32.eq (local.get $c2) (i32.const ":"))
+                      (i32.or
+                        (i32.eq (local.get $c2) (i32.const "."))
+                        (i32.or (i32.eq (local.get $c2) (i32.const ",")) (i32.eq (local.get $c2) (i32.const ")")))))
+                    (i32.and
+                      (i32.eq (i32.and (local.get $kind) (i32.const 255)) (enum.get $Token.keyword.import))
+                      (i32.eqz (i32.or (call $lexIsDigit (local.get $c2)) (i32.eq (local.get $c2) (i32.const 34))))))
+                  (then (local.set $kind (i32.const -1))))))
             (block $named
               (if (i32.ge_s (local.get $kind) (i32.const 0))
                 (then
@@ -576,6 +590,20 @@
                       (enum.get $Token.type.builtin)
                       (i32.and (local.get $kind) (i32.const 255))
                       (i32.eq (local.get $expect) (i32.const 5))))
+                  (if
+                    (i32.and
+                      (i32.eqz (local.get $dialect))
+                      (i32.eq (local.get $hl) (enum.get $Token.type.builtin)))
+                    (then
+                      (if
+                        (i32.or
+                          (i32.eq (local.get $expect) (i32.const 7))
+                          (i32.and
+                            (i32.ne (local.get $c) (i32.const "v"))
+                            (i32.and
+                              (i32.eq (local.get $c3) (i32.const ":"))
+                              (i32.eq (call $templateByte (i32.add (local.get $rhs) (i32.const 1))) (i32.const ":")))))
+                        (then (local.set $hl (enum.get $Token.namespace))))))
                   ;; a keyword after a receiver's `)` is a result type
                   (if (i32.eq (local.get $expect) (i32.const 4))
                     (then (local.set $expect (i32.const 0))))
@@ -584,10 +612,11 @@
                       (local.set $expect
                         (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 7)))))
                   (br $named)))
-              (if (local.get $attr)
+              (if (i32.eq (local.get $attr) (i32.const 1))
                 (then
                   (local.set $hl (enum.get $Token.attribute))
-                  (local.set $attr (i32.const 0))
+                  ;; 2: inside a V `@[a; b]` list, where `;` starts the next name
+                  (local.set $attr (i32.shl (i32.eq (local.get $dialect) (i32.const 2)) (i32.const 1)))
                   (br $named)))
               (if (i32.eq (local.get $expect) (i32.const 1))
                 (then
@@ -647,7 +676,7 @@
                 (then
                   (local.set $expect (i32.const 0))
                   (local.set $hl (enum.get $Token.function.definition))
-                  (br_if $named (i32.eq (local.get $c2) (i32.const "(")))))
+                  (br_if $named (i32.or (i32.eq (local.get $c2) (i32.const "(")) (i32.eq (local.get $c2) (i32.const "["))))))
               (local.set $expect (i32.const 0))
               ;; calls, and Move macros `assert!(`
               (local.set $hl
@@ -738,6 +767,7 @@
                     (br $tailM)))))
             (if (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))
               (then (local.set $recv (i32.const 0))))
+            (local.set $attr (i32.const 0))
             (br $tailE)))
 
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
@@ -745,7 +775,10 @@
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
             (if (i32.eq (local.get $c) (i32.const ";"))
-              (then (local.set $recv (i32.const 0))))
+              (then
+                (local.set $recv (i32.const 0))
+                (if (i32.eq (local.get $attr) (i32.const 2))
+                  (then (local.set $attr (i32.const 1))))))
             ;; lists go on: `has key, store`, `use IO, Math`
             (br_if $tailM
               (i32.and

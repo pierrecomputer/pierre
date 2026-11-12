@@ -26,16 +26,64 @@
         (br $line)))
     (global.get $end))
 
-  (func $httpBodyEnd (param $p i32) (result i32)
+  ;; A body ends at a `###` line or at a `>`, `>>`, `<>` handler line. XML has a
+  ;; `>` in every tag, so its scan looks for `#` and the `%` of `> {%` only.
+  (func $httpBodyEnd (param $p i32) (param $xml i32) (result i32)
+    (local $c i32)
+    (local $q i32)
     (block $done
       (loop $find
-        (local.set $p (call $lexFindByte (local.get $p) (i32.const "#")))
-        (br_if $done (i32.gt_u (i32.add (local.get $p) (i32.const 3)) (global.get $end)))
-        (if
-          (i32.and
-            (i32.eq (i32.load16_u offset=1 (local.get $p)) (i32.const "##"))
-            (i32.eqz (call $lexLineByteBefore (local.get $p))))
-          (then (return (local.get $p))))
+        (local.set $p
+          (if (result i32) (local.get $xml)
+            (then (call $lexFindEither (local.get $p) (i32.const "#") (i32.const "%")))
+            (else (call $lexFindEither (local.get $p) (i32.const "#") (i32.const ">")))))
+        (br_if $done (i32.gt_u (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
+        (local.set $c (i32.load8_u offset=1 (local.get $p)))
+        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "#"))
+          (then
+            (if
+              (i32.and
+                (i32.and
+                  (i32.eq (local.get $c) (i32.const "#"))
+                  (i32.le_u (i32.add (local.get $p) (i32.const 3)) (global.get $end)))
+                (i32.eq (i32.load8_u offset=2 (local.get $p)) (i32.const "#")))
+              (then
+                (if (i32.eqz (call $lexLineByteBefore (local.get $p)))
+                  (then (return (local.get $p)))))))
+          (else
+            (if (local.get $xml)
+              (then
+                (local.set $q (i32.sub (local.get $p) (i32.const 1)))
+                (if
+                  (i32.and
+                    (i32.gt_u (local.get $p) (global.get $srcBase))
+                    (i32.eq (i32.load8_u (local.get $q)) (i32.const "{")))
+                  (then
+                    (block $gap
+                      (loop $back
+                        (br_if $gap (i32.le_u (local.get $q) (global.get $srcBase)))
+                        (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+                        (local.set $c (i32.load8_u (local.get $q)))
+                        (br_if $back (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const 9))))))
+                    (if
+                      (i32.and
+                        (i32.eq (i32.load8_u (local.get $q)) (i32.const ">"))
+                        (i32.eqz (call $lexLineByteBefore (local.get $q))))
+                      (then (return (local.get $q))))))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (br $find)))
+            (if (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const ">")))
+              (then
+                (local.set $c (call $lexLineByteBefore (local.get $p)))
+                (if (i32.eqz (local.get $c))
+                  (then (return (local.get $p))))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const "<"))
+                    (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "<")))
+                  (then
+                    (if (i32.eqz (call $lexLineByteBefore (i32.sub (local.get $p) (i32.const 1))))
+                      (then (return (i32.sub (local.get $p) (i32.const 1)))))))))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $find)))
     (global.get $end))
@@ -48,7 +96,6 @@
         (br_if $done (i32.ge_u (global.get $ptr) (local.get $stop)))
         (local.set $p
           (call $scanFindSpecial (global.get $ptr) (local.get $stop) (i32.const "{") (i32.const 0) (i32.const 0)))
-        (local.set $q (local.get $stop))
         (if
           (i32.and
             (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
@@ -60,18 +107,21 @@
                 (local.get $stop)
                 (i32.const "}")
                 (i32.const 0)
-                (i32.const 1)))))
-        (if
-          (i32.and
-            (i32.lt_u (i32.add (local.get $q) (i32.const 1)) (local.get $stop))
-            (i32.eq (i32.load16_u (local.get $q)) (i32.const "}}")))
-          (then
-            (call $emitTok (local.get $hl) (global.get $ptr) (local.get $p))
-            (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
-            (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
-            (call $emitTok (enum.get $Token.variable) (global.get $ptr) (local.get $q))
-            (global.set $ptr (i32.add (local.get $q) (i32.const 2)))
-            (call $emitTok (enum.get $Token.punctuation.special) (local.get $q) (global.get $ptr))
+                (i32.const 1)))
+            (if
+              (i32.and
+                (i32.lt_u (i32.add (local.get $q) (i32.const 1)) (local.get $stop))
+                (i32.eq (i32.load16_u (local.get $q)) (i32.const "}}")))
+              (then
+                (call $emitTok (local.get $hl) (global.get $ptr) (local.get $p))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+                (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
+                (call $emitTok (enum.get $Token.variable) (global.get $ptr) (local.get $q))
+                (global.set $ptr (i32.add (local.get $q) (i32.const 2)))
+                (call $emitTok (enum.get $Token.punctuation.special) (local.get $q) (global.get $ptr))
+                (br $l)))
+            (call $emitTok (local.get $hl) (global.get $ptr) (local.get $q))
+            (global.set $ptr (local.get $q))
             (br $l)))
         (local.set $p
           (select (i32.add (local.get $p) (i32.const 1)) (local.get $stop) (i32.lt_u (local.get $p) (local.get $stop))))
@@ -117,7 +167,7 @@
     (local.set $stop
       (if (result i32) (global.get $httpHurl)
         (then (call $hurlBodyEnd (global.get $ptr)))
-        (else (call $httpBodyEnd (global.get $ptr)))))
+        (else (call $httpBodyEnd (global.get $ptr) (i32.eq (local.get $kind) (i32.const 3))))))
     ;; WARNING: Only JSON and XML bodies have a host lexer. Other bodies need
     ;; the text scan below for `{{variable}}`.
     (if (i32.and (global.get $externalEmbedding) (i32.ge_u (local.get $kind) (i32.const 2)))
@@ -191,8 +241,8 @@
     (call $httpBody (global.get $streamRegionStarted) (i32.const 1))
     (i32.ge_u (global.get $ptr) (global.get $end)))
 
-  ;; $state: 0 before a start line, 1 in headers, 2 in the body. $type: the body
-  ;; kind from Content-Type.
+  ;; $state: 0 before a start line, 1 in headers, 2 in the body, 3 in a
+  ;; `{% ... %}` response handler. $type: the body kind from Content-Type.
   (func $hlHttp
     (local $c i32)
     (local $gap i32)
@@ -269,6 +319,59 @@
             (local.set $state (i32.const 0))
             (local.set $type (i32.const 0))
             (br $next)))
+        (if (i32.eq (local.get $state) (i32.const 3))
+          (then
+            (call $scanToLineEnd)
+            (local.set $rhs (global.get $ptr))
+            (local.set $p (local.get $lhs))
+            (block $closeDone
+              (loop $close
+                (local.set $p
+                  (call $scanFindSpecial (local.get $p) (local.get $rhs) (i32.const "%") (i32.const 0) (i32.const 0)))
+                (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $rhs))
+                  (then
+                    (local.set $p (local.get $rhs))
+                    (br $closeDone)))
+                (br_if $closeDone (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "}")))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (br $close)))
+            (call $emitTok (enum.get $Token.none) (local.get $lhs) (local.get $p))
+            (global.set $ptr (local.get $p))
+            (if (i32.lt_u (local.get $p) (local.get $rhs))
+              (then
+                (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+                (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
+                (local.set $state (i32.const 0))))
+            (br $next)))
+        ;; `c | 2` is `>` for `<` and `>`
+        (block $text
+          (if (i32.and (i32.lt_u (local.get $state) (i32.const 2)) (i32.eq (i32.or (local.get $c) (i32.const 2)) (i32.const ">")))
+            (then
+              (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
+              (local.set $q (call $templateByte (local.get $p)))
+              (br_if $text (i32.and (i32.eq (local.get $c) (i32.const "<")) (i32.ne (local.get $q) (i32.const ">"))))
+              (if (i32.eq (local.get $q) (i32.const ">"))
+                (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+              (if (i32.eq (call $templateByte (local.get $p)) (i32.const "!"))
+                (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+              (global.set $ptr (local.get $p))
+              (call $emitTok (enum.get $Token.operator) (local.get $lhs) (local.get $p))
+              (call $httpSkipBlanks)
+              (local.set $state (i32.const 0))
+              (if
+                (i32.and
+                  (i32.eq (call $templateByte (global.get $ptr)) (i32.const "{"))
+                  (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "%")))
+                (then
+                  (local.set $p (i32.add (global.get $ptr) (i32.const 2)))
+                  (call $emitTok (enum.get $Token.punctuation.special) (global.get $ptr) (local.get $p))
+                  (global.set $ptr (local.get $p))
+                  (local.set $state (i32.const 3))
+                  (br $next)))
+              (local.set $p (global.get $ptr))
+              (call $scanToLineEnd)
+              (call $emitTok (enum.get $Token.string) (local.get $p) (global.get $ptr))
+              (br $next))))
         (call $scanToLineEnd)
         (local.set $rhs (global.get $ptr))
         (global.set $ptr (local.get $lhs))

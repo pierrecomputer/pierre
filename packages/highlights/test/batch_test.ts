@@ -152,3 +152,19 @@ test('batch: keyword lookalikes stay identifiers', () => {
     expect(tokenKinds('batch', word)).toEqual([[word, 'variable']]);
   }
 });
+
+test('batch: echo text holds no keywords, labels, or comments', () => {
+  const code = 'echo Please call :555 or else rem it & rem done\necho Do it\n';
+  expect(tokenKinds('batch', code)).toEqual([
+    ['echo', 'function'],
+    ['Please call', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['555', 'number'],
+    ['or else rem it', 'variable'],
+    ['&', 'operator'],
+    ['rem done', 'comment'],
+    ['echo', 'function'],
+    ['Do it', 'variable'],
+  ]);
+  assertLineFedParity('batch', code);
+});

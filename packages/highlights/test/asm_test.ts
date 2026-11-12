@@ -290,3 +290,85 @@ void t.test('asm: x86 byte, word, and segment and RISC-V ABI registers', () => {
   // operands that only look similar stay symbols
   assert.deepEqual(registers('call a12b\nmov eax, as\njmp zeros'), ['eax']);
 });
+
+void t.test('asm: ARM `@` comments only between blanks', () => {
+  assert.deepEqual(
+    tokenKinds('asm', 'mov r0, #1 @ set flag\n@ line\nnop @').slice(4),
+    [
+      ['@ set flag', 'comment'],
+      ['@ line', 'comment'],
+      ['nop', 'keyword'],
+      ['@', 'comment'],
+    ]
+  );
+  // x86 `@plt` and `@function` suffixes and type tags stay operands
+  assert.deepEqual(tokenKinds('asm', 'call foo@plt\n.type foo, @function'), [
+    ['call', 'keyword'],
+    ['foo', 'variable'],
+    ['@', 'operator'],
+    ['plt', 'variable'],
+    ['.type', 'preproc'],
+    ['foo', 'variable'],
+    [',', 'punctuation.delimiter'],
+    ['@', 'operator'],
+    ['function', 'variable'],
+  ]);
+  assertLineFedParity('asm', 'mov r0, r1 /* c\n x */ @ tail\n');
+});
+
+void t.test('asm: C and NASM preprocessor lines', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'asm',
+      '#include <asm/unistd.h>\n#ifdef X\n# comment\n%define SYS 1\n%endmacro\nmov %eax, %ebx'
+    ),
+    [
+      ['#include <asm/unistd.h>', 'preproc'],
+      ['#ifdef X', 'preproc'],
+      ['# comment', 'comment'],
+      ['%define', 'preproc'],
+      ['SYS', 'variable'],
+      ['1', 'number'],
+      ['%endmacro', 'preproc'],
+      ['mov', 'keyword'],
+      ['%eax', 'variable.special'],
+      [',', 'punctuation.delimiter'],
+      ['%ebx', 'variable.special'],
+    ]
+  );
+  // an ARM relocation operator is an immediate, not a comment
+  assert.deepEqual(tokenKinds('asm', 'movw r3, #:lower16:sym').slice(3, 5), [
+    ['#', 'operator'],
+    [':', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('asm: labels and dotted mnemonics only start a statement', () => {
+  assert.deepEqual(tokenKinds('asm', 'mov ax, es:[bx]'), [
+    ['mov', 'keyword'],
+    ['ax', 'variable.special'],
+    [',', 'punctuation.delimiter'],
+    ['es', 'variable.special'],
+    [':', 'punctuation.delimiter'],
+    ['[', 'punctuation.bracket'],
+    ['bx', 'variable.special'],
+    [']', 'punctuation.bracket'],
+  ]);
+  assert.deepEqual(
+    tokenKinds('asm', 'jne .Lx\nb.ne lab\nfoo.bar: vadd.f32 s0\n.long .La-.Lb'),
+    [
+      ['jne', 'keyword'],
+      ['.Lx', 'variable'],
+      ['b.ne', 'keyword'],
+      ['lab', 'variable'],
+      ['foo.bar', 'label'],
+      [':', 'punctuation.delimiter'],
+      ['vadd.f32', 'keyword'],
+      ['s0', 'variable.special'],
+      ['.long', 'preproc'],
+      ['.La', 'variable'],
+      ['-', 'operator'],
+      ['.Lb', 'variable'],
+    ]
+  );
+});

@@ -169,6 +169,7 @@
                 (i32.and
                   (i32.eq (local.get $t) (enum.get $Lex.invalid))
                   (i32.eq (global.get $ptr) (global.get $end))))
+              (local.set $t (enum.get $Lex.string_literal))
               (br $finish)))
           ;; quoted JSX attribute value: hop to the closing quote 16 bytes per step,
           ;; as $jsxTagStep does for the opening chunk
@@ -287,8 +288,7 @@
               (local.get $curLhs)
               (global.get $ptr))
             (drop (call $jsxEmitName))
-            (drop (call $jsxCloseTagTail))
-            (call $jsxPop)
+            (call $jsxCloseTailStep)
             (local.set $done (global.get $ptr))
             (br $main)))
         (br_if $out (i32.eq (local.get $curT) (enum.get $Lex.eof)))
@@ -451,7 +451,7 @@
               (i32.and
                 (i32.eq (local.get $curT) (enum.get $Lex.identifier))
                 (i32.or
-                  (i32.eq (local.get $nxtT) (enum.get $Lex.colon))
+                  (i32.or (i32.eq (local.get $nxtT) (enum.get $Lex.colon)) (global.get $nlBefore))
                   (i32.or
                     (i32.eq (local.get $nxtT) (enum.get $Lex.eof))
                     (i32.ne (bitset.get $LexBits.comment (local.get $nxtT)) (i32.const 0))))))

@@ -51,12 +51,15 @@
     (local.set $stack (i64.shr_u (local.get $stack) (i64.const 2)))
     (select (local.get $stack) (i64.const 0) (i64.gt_u (local.get $stack) (i64.const 1))))
 
+  ;; The bracket depth $razorExprEnd leaves at its stop.
+  (global $razorDepth (mut i32) (i32.const 0))
+
   ;; Just past the bracket that balances the `(` or `[` at $p, or for a
-  ;; statement header ($header) at its first `{`; else the line end.
-  (func $razorExprEnd (param $p i32) (param $header i32) (result i32)
+  ;; statement header ($header) at its first `{`; else the line end. $depth:
+  ;; the brackets still open from the line before.
+  (func $razorExprEnd (param $p i32) (param $header i32) (param $depth i32) (result i32)
     (local $c i32)
     (local $c2 i32)
-    (local $depth i32)
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
@@ -88,6 +91,7 @@
             (local.set $depth (i32.sub (local.get $depth) (i32.ne (local.get $depth) (i32.const 0))))
             (br_if $done (i32.eqz (i32.or (local.get $header) (local.get $depth))))))
         (br $scan)))
+    (global.set $razorDepth (local.get $depth))
     (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; The closing quote of a verbatim string body from $p, or $end; a doubled
@@ -114,7 +118,7 @@
           (local.set $c (call $templateByte (local.get $p)))
           (if (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const "[")))
             (then
-              (local.set $p (call $razorExprEnd (local.get $p) (i32.const 0)))
+              (local.set $p (call $razorExprEnd (local.get $p) (i32.const 0) (i32.const 0)))
               (br $call))))
         (local.set $c
           (i32.add
@@ -134,7 +138,8 @@
   ;; 1 a code block, 2 an element in a code block, 3 a section body. $markup: the
   ;; $tmplMarkup state. $enter: the one tag a statement starts; $lineMarkup: an
   ;; `@:` line. $await: waiting for the `{` of a code block (1) or section (2),
-  ;; or for `else`, `catch`, `finally`, `while` (3). $xline: a C# block comment
+  ;; or for `else`, `catch`, `finally`, `while` (3), or 3 + the open brackets
+  ;; of an `@( )` that goes on. $xline: a C# block comment
   ;; (1), verbatim string (2), or raw string (3) open at a line end. $stmt: a C#
   ;; statement may start.
   (func $hlRazor
@@ -149,6 +154,7 @@
     (local $ev i32)
     (local $lhs i32)
     (local $lineEnd i32)
+    (local $markupEnd i32)
     (local $p i32)
     (local $parens i32)
     (local $q i32)
@@ -158,6 +164,7 @@
     (local $skip i32)
     (local $top i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $markupEnd (i32.const 0))
     (local.set $resumed (i32.const 0))
     (if (global.get $streamRegionKind)
       (then (local.set $resumed (call $streamResumeAnyRegion))))
@@ -176,6 +183,17 @@
         (block $header
           (if (local.get $await)
             (then
+              (if (i32.ge_u (local.get $await) (i32.const 4))
+                (then
+                  (local.set $p
+                    (call $razorExprEnd (local.get $lhs) (i32.const 0) (i32.sub (local.get $await) (i32.const 3))))
+                  (local.set $await (i32.const 0))
+                  (if (global.get $razorDepth)
+                    (then
+                      (local.set $p (call $markdownAfterLine (local.get $p)))
+                      (local.set $await (i32.add (global.get $razorDepth) (i32.const 3)))))
+                  (call $razorCs (local.get $p))
+                  (br $next)))
               (call $scanWhitespace)
               (call $emitGap (local.get $lhs) (global.get $ptr))
               (br_if $next (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -317,6 +335,40 @@
                             (then (local.set $xline (i32.const 2))))
                           (local.set $p (i32.add (local.get $p) (i32.const 1)))
                           (br $scan)))
+                      ;; $r: the open holes of an interpolated string
+                      (if (i32.and (i32.gt_u (local.get $p) (local.get $lhs)) (i32.eq (local.get $q) (i32.const "$")))
+                        (then
+                          (local.set $r (i32.const 0))
+                          (loop $interp
+                            (local.set $p
+                              (call $tmplFind4 (i32.add (local.get $p) (i32.const 1)) (i32.const 34) (i32.const 92) (i32.const "{") (i32.const "}")))
+                            (local.set $c (call $templateByte (local.get $p)))
+                            (if (i32.eq (local.get $c) (i32.const 92))
+                              (then
+                                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                                (br $interp)))
+                            (if (i32.eq (local.get $c) (i32.const "{"))
+                              (then
+                                (if (i32.or (local.get $r) (i32.ne (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "{")))
+                                  (then (local.set $r (i32.add (local.get $r) (i32.const 1))))
+                                  (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                                (br $interp)))
+                            (if (i32.eq (local.get $c) (i32.const "}"))
+                              (then
+                                (local.set $r (i32.sub (local.get $r) (i32.ne (local.get $r) (i32.const 0))))
+                                (br $interp)))
+                            (if (i32.and (i32.eq (local.get $c) (i32.const 34)) (i32.ne (local.get $r) (i32.const 0)))
+                              (then
+                                (loop $nested
+                                  (local.set $p
+                                    (call $scanFindSpecial (i32.add (local.get $p) (i32.const 1)) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 0)))
+                                  (if (i32.eq (call $templateByte (local.get $p)) (i32.const 92))
+                                    (then
+                                      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                                      (br $nested))))
+                                (br $interp))))
+                          (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                          (br $scan)))
                       (loop $string
                         (local.set $p
                           (call $scanFindSpecial
@@ -411,25 +463,30 @@
                 (then (call $tmplComment (i32.const 2) (i32.const "*@") (i32.const 2))))
               (br $next)))
           (local.set $saveEnd (global.get $end))
-          (local.set $lineEnd (call $markdownAfterLine (call $markdownLineEnd (local.get $lhs))))
+          (if (i32.ge_u (local.get $lhs) (local.get $markupEnd))
+            (then (local.set $markupEnd (call $markdownAfterLine (call $markdownLineEnd (local.get $lhs))))))
+          (local.set $lineEnd (local.get $markupEnd))
           (local.set $skip (i32.const 0))
           (loop $markupNext
             (if (local.get $lineMarkup)
               (then (global.set $end (local.get $lineEnd))))
             (local.set $r
-              (call $tmplMarkup
-                (local.get $markup)
-                (i32.or
-                  (i32.or
-                    (i32.const 1)
-                    (i32.shl
-                      (i32.and (i32.eq (local.get $top) (i32.const 3)) (i32.eqz (local.get $enter)))
-                      (i32.const 1)))
-                  (i32.or
-                    (i32.shl
-                      (i32.or (local.get $enter) (i32.eq (local.get $top) (i32.const 2)))
-                      (i32.const 3))
-                    (i32.shl (local.get $skip) (i32.const 4))))))
+              (if (result i32) (i32.eq (i32.and (local.get $markup) (i32.const 7)) (i32.const 5))
+                (then (call $tmplBody (local.get $markup) (i32.or (i32.const 1) (i32.shl (local.get $skip) (i32.const 4)))))
+                (else
+                  (call $tmplMarkup
+                    (local.get $markup)
+                    (i32.or
+                      (i32.or
+                        (i32.const 1)
+                        (i32.shl
+                          (i32.and (i32.eq (local.get $top) (i32.const 3)) (i32.eqz (local.get $enter)))
+                          (i32.const 1)))
+                      (i32.or
+                        (i32.shl
+                          (i32.or (local.get $enter) (i32.eq (local.get $top) (i32.const 2)))
+                          (i32.const 3))
+                        (i32.shl (local.get $skip) (i32.const 4))))))))
             (global.set $end (local.get $saveEnd))
             (local.set $markup (i32.and (local.get $r) (i32.const 0xffffff)))
             (local.set $ev (i32.shr_u (local.get $r) (i32.const 24)))
@@ -463,6 +520,13 @@
                   (call $markdownIsAlnum (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))))))
               (if (i32.eq (local.get $c) (i32.const "@"))
                 (then
+                  ;; in a script or style body the second `@` starts the embedded code (`@@media`)
+                  (if (i32.eq (i32.and (local.get $markup) (i32.const 7)) (i32.const 5))
+                    (then
+                      (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                      (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
+                      (local.set $skip (i32.const 1))
+                      (br $markupNext)))
                   (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
                   (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
                   (br $next)))
@@ -487,7 +551,12 @@
               (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
               (call $emitTok (enum.get $Token.keyword.control) (local.get $lhs) (global.get $ptr))
               (if (i32.eq (local.get $c) (i32.const "("))
-                (then (local.set $p (call $razorExprEnd (global.get $ptr) (i32.const 0))))
+                (then
+                  (local.set $p (call $razorExprEnd (global.get $ptr) (i32.const 0) (i32.const 0)))
+                  (if (global.get $razorDepth)
+                    (then
+                      (local.set $p (call $markdownAfterLine (local.get $p)))
+                      (local.set $await (i32.add (global.get $razorDepth) (i32.const 3))))))
                 (else
                   (call $scanIdentRun (i32.const "_"))
                   (local.set $p (global.get $ptr))
@@ -540,7 +609,7 @@
               (br $next))
             (local.set $skip (i32.const 1))
             (br $markupNext)))
-        (local.set $p (call $razorExprEnd (global.get $ptr) (i32.const 1)))
+        (local.set $p (call $razorExprEnd (global.get $ptr) (i32.const 1) (i32.const 0)))
         (call $razorCs (local.get $p))
         (local.set $q (i32.const 1))
         (br_if $openBrace (i32.eq (call $templateByte (local.get $p)) (i32.const "{")))

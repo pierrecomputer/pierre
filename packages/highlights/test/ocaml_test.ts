@@ -516,3 +516,49 @@ void t.test('ocaml: module type names and quoted extensions', () => {
     'the keyed closer ends the string'
   );
 });
+
+void t.test('ocaml: strings and chars inside comments do not end them', () => {
+  assert.deepEqual(tokenKinds('ocaml', '(* "*)" \'"\' *)\nlet x = 1\n'), [
+    ['(* "*)" \'"\' *)', 'comment'],
+    ['let', 'keyword.declaration'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+  for (const code of [
+    '(* a "open\n*) still" *)\nlet x = 1\n',
+    '(** doc "x\\"\n *) " (* n\n *) *)\nlet y = 2\n',
+  ]) {
+    assertLineFedParity('ocaml', code);
+  }
+});
+
+void t.test('ocaml: numeric escapes are one escape token', () => {
+  assert.deepEqual(
+    tokenKinds('ocaml', '"\\x41\\065\\o101\\u{1F600}" \'\\x41\''),
+    [
+      ['"', 'string'],
+      ['\\x41\\065\\o101\\u{1F600}', 'string.escape'],
+      ['" \'', 'string'],
+      ['\\x41', 'string.escape'],
+      ["'", 'string'],
+    ]
+  );
+  assertLineFedParity('ocaml', 'let s = "a\n\\x41 b" in s\n');
+});
+
+void t.test('ocaml: a tick before a line break is not a char literal', () => {
+  assertLineFedParity('ocaml', "let c = '\n'\n");
+  assertLineFedParity('ocaml', "let c = '\\\n'\\\n");
+});
+
+void t.test('ocaml: a quoted string id longer than 30 bytes closes', () => {
+  const id = 'a'.repeat(35);
+  assert.deepEqual(tokenKinds('ocaml', `{${id}|x|${id}}\nlet x = 1`), [
+    [`{${id}|x|${id}}`, 'string'],
+    ['let', 'keyword.declaration'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+});

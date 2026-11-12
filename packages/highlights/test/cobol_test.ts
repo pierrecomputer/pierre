@@ -156,3 +156,22 @@ test('cobol: a hyphen after a number that starts with a dot is an operator', () 
   ]);
   expect(tokenKinds('cobol', '7-Y')).toEqual([['7-Y', 'variable']]);
 });
+
+test('cobol: free format source is never cut at column 72', () => {
+  const display =
+    '        DISPLAY "Total is large; the sum exceeds the configured threshold value now"';
+  for (const head of ['>>SOURCE FORMAT FREE', 'PROCEDURE DIVISION.']) {
+    const code = `${head}\n${display}\n`;
+    expect(tokenKinds('cobol', code).slice(-2)).toEqual([
+      ['DISPLAY', 'keyword'],
+      [display.slice(16), 'string'],
+    ]);
+    assertLineFedParity('cobol', code);
+  }
+  // `>>SOURCE FORMAT FIXED` restores the identification area
+  const fixedAgain = `>>SOURCE FORMAT FREE\n>>SOURCE FORMAT FIXED\n${display}\n`;
+  expect(tokenKinds('cobol', fixedAgain).slice(-1)).toEqual([
+    ['d value now"', 'comment'],
+  ]);
+  assertLineFedParity('cobol', fixedAgain);
+});

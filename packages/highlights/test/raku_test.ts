@@ -302,3 +302,49 @@ test('raku: comments, Pod, and heredocs span lines', () => {
   assertLineFedParity('raku', code);
   assertLineFedParity('raku', code.replaceAll('\n', '\r\n'));
 });
+
+test('raku: term builtins compare with `<`, and slurpy hashes keep their sigil', () => {
+  const code = 'say 1 if now < $t;\nmy $n = pi < e;\nsub f(*%opts, |%h) { }\n';
+  expect(tokenKinds('raku', code)).toEqual([
+    ['say', 'function'],
+    ['1', 'number'],
+    ['if', 'keyword.control'],
+    ['now', 'function'],
+    ['<', 'operator'],
+    ['$t', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['$n', 'variable'],
+    ['=', 'operator'],
+    ['pi', 'constant.builtin'],
+    ['<', 'operator'],
+    ['e', 'constant.builtin'],
+    [';', 'punctuation.delimiter'],
+    ['sub', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['*', 'operator'],
+    ['%opts', 'variable'],
+    [',', 'punctuation.delimiter'],
+    ['|', 'operator'],
+    ['%h', 'variable'],
+    [') { }', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('raku', code);
+});
+
+test('raku: many plain strings lex in linear time', () => {
+  // each string start searched the rest of the input for `{`, `$`, or `@`
+  const code = '"a" '.repeat(100000);
+  const start = performance.now();
+  tokenKinds('raku', code);
+  expect(performance.now() - start).toBeLessThan(250);
+  expect(tokenKinds('raku', '"a $x {1}" "b"')).toEqual([
+    ['"a', 'string'],
+    ['$x', 'variable'],
+    ['{', 'punctuation.special'],
+    ['1', 'number'],
+    ['}', 'punctuation.special'],
+    ['" "b"', 'string'],
+  ]);
+});

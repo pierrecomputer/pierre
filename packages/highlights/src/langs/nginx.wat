@@ -55,7 +55,9 @@
     (local $p i32)
     (local $expect i32)
     (local $open i32)
+    (local $miss i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $miss (i32.const 0))
     (if (local.get $open)
       (then
         (if (call $envQuoted (local.get $open) (i32.const 1) (global.get $ptr))
@@ -96,7 +98,7 @@
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (global.set $ptr (local.get $lhs))
-            (call $envDollar (global.get $end) (enum.get $Token.none))
+            (local.set $miss (call $envDollar (global.get $end) (enum.get $Token.none) (local.get $miss)))
             (local.set $expect (i32.const 1))
             (br $next)))
         (if (i32.and (i32.eq (local.get $expect) (i32.const 2)) (i32.ne (local.get $c) (i32.const ")")))

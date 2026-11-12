@@ -141,12 +141,21 @@
                   (local.set $rhs (global.get $ptr))
                   (br $segment)))
               (br_if $classified (i32.ne (local.get $p) (local.get $rhs)))
-              ;; record ids: `person:tobie`, `person:⟨tobie jaime⟩`, `person:100`
+              ;; record ids such as `person:[1, 2]`: `[` ORed with 32 is `{`
+              (block $key
               (if
                 (i32.and
                   (i32.eq (local.get $c2) (i32.const ":"))
-                  (i32.or (call $lexIsIdentContinue (local.get $g)) (i32.eq (local.get $g) (i32.const "`"))))
+                  (i32.or
+                    (call $lexIsIdentContinue (local.get $g))
+                    (i32.or
+                      (i32.eq (local.get $g) (i32.const "`"))
+                      (i32.eq (i32.or (local.get $g) (i32.const 32)) (i32.const "{")))))
                 (then
+                  (br_if $key
+                    (i32.and
+                      (i32.gt_u (local.get $lhs) (global.get $srcBase))
+                      (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "{"))))
                   (call $emitTok (enum.get $Token.type) (local.get $lhs) (local.get $rhs))
                   (local.set $lhs (i32.add (local.get $rhs) (i32.const 1)))
                   (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $rhs) (local.get $lhs))
@@ -193,7 +202,7 @@
                       (enum.get $Token.function)
                       (enum.get $Token.constant)
                       (i32.eq (call $templateByte (local.get $rhs)) (i32.const "("))))
-                  (br $classified)))
+                  (br $classified))))
               (local.set $hl (enum.get $Token.type.builtin))
               (br_if $classified (local.get $cast))
               ;; `user.name`, `{ name: value }`
@@ -253,6 +262,8 @@
                   (br $classified)))
               (if (local.get $g)
                 (then
+                  (local.set $hl (enum.get $Token.variable))
+                  (br_if $classified (i32.eq (call $templateByte (local.get $p)) (i32.const "=")))
                   (local.set $g (i32.sub (local.get $g) (i32.const 1)))
                   (local.set $hl (i32.and (local.get $g) (i32.const 255)))
                   (local.set $expect (i32.shr_u (local.get $g) (i32.const 8)))

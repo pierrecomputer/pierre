@@ -11,9 +11,12 @@
   (func-variant $orgLanguageByName $embedLanguageByName)
 
   ;; Bit (marker & 31) is set for each emphasis marker with no closer later
-  ;; on the current line, so a line of unpaired markers stays linear. Reset
-  ;; at each line start.
+  ;; on the current line, so a line of unpaired markers stays linear. Bits
+  ;; 0-5 do the same for `]]`, `\)`, `\]`, `}}`, `]`, and `>`. Reset at each
+  ;; line start.
   (global $orgNoClose (mut i32) (i32.const 0))
+  ;; a `}}` not followed by `}` before the stop: every `{{{` that finds it first fails
+  (global $orgMacroFail (mut i32) (i32.const 0))
 
   ;; Whether the $n (1..8) bytes at $p equal $w after `| 0x20` on each byte:
   ;; ASCII letters compare without case, and `_` reads as `\7f`.
@@ -136,6 +139,7 @@
   ;; after the closing bracket, or 0.
   (func $orgTimestamp (param $p i32) (param $stop i32) (result i32)
     (local $q i32)
+    (local $bit i32)
     (if (i32.gt_u (i32.add (local.get $p) (i32.const 7)) (local.get $stop))
       (then (return (i32.const 0))))
     (if
@@ -146,6 +150,9 @@
             (i32.and (call $lexIsDigit (i32.load8_u offset=1 (local.get $p))) (call $lexIsDigit (i32.load8_u offset=2 (local.get $p))))
             (i32.and (call $lexIsDigit (i32.load8_u offset=3 (local.get $p))) (call $lexIsDigit (i32.load8_u offset=4 (local.get $p)))))))
       (then (return (i32.const 0))))
+    (local.set $bit (select (i32.const 16) (i32.const 32) (i32.eq (i32.load8_u (local.get $p)) (i32.const "["))))
+    (if (i32.and (global.get $orgNoClose) (local.get $bit))
+      (then (return (i32.const 0))))
     (local.set $q
       (call $scanFindSpecial
         (local.get $p)
@@ -153,7 +160,11 @@
         (i32.add (i32.load8_u (local.get $p)) (i32.const 2))
         (i32.const 0)
         (i32.const 0)))
-    (select (i32.add (local.get $q) (i32.const 1)) (i32.const 0) (i32.lt_u (local.get $q) (local.get $stop))))
+    (if (i32.ge_u (local.get $q) (local.get $stop))
+      (then
+        (global.set $orgNoClose (i32.or (global.get $orgNoClose) (local.get $bit)))
+        (return (i32.const 0))))
+    (i32.add (local.get $q) (i32.const 1)))
 
   ;; Inline markup from $ptr to $stop: emphasis, links, footnotes,
   ;; timestamps, LaTeX, entities, and macros. Other text gets $base. In a
@@ -179,6 +190,20 @@
                 (br_if $plainDone (i32.ge_u (local.get $p) (local.get $stop)))
                 (local.set $c (i32.load8_u (local.get $p)))
                 (br_if $plain (i32.eqz (byteset.get "$*+/<=[\5c_{|~" (local.get $c))))))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "/"))
+                (i32.and
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
+                  (i32.eq (i32.and (i32.load (i32.sub (local.get $p) (i32.const 1))) (i32.const 0xffffff)) (i32.const "://"))))
+              (then
+                (local.set $q (call $rstWordStart (local.get $lhs) (i32.sub (local.get $p) (i32.const 1))))
+                (if (i32.lt_u (local.get $q) (i32.sub (local.get $p) (i32.const 1)))
+                  (then
+                    (call $emitTok (local.get $base) (local.get $lhs) (local.get $q))
+                    (global.set $ptr (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const 32) (i32.const 0) (i32.const 0)))
+                    (call $emitTok (enum.get $Token.link_uri) (local.get $q) (global.get $ptr))
+                    (br $next)))))
             (global.set $ptr (local.get $p))
             (call $emitTok (local.get $base) (local.get $lhs) (local.get $p))
             (br $next)))
@@ -199,8 +224,12 @@
             (then
               (if (i32.eq (local.get $c2) (i32.const "["))
                 (then
+                  (br_if $plainByte (i32.and (global.get $orgNoClose) (i32.const 1)))
                   (local.set $q (call $orgFind2 (i32.add (local.get $lhs) (i32.const 2)) (local.get $stop) (i32.const "]]")))
-                  (br_if $plainByte (i32.ge_u (local.get $q) (local.get $stop)))
+                  (if (i32.ge_u (local.get $q) (local.get $stop))
+                    (then
+                      (global.set $orgNoClose (i32.or (global.get $orgNoClose) (i32.const 1)))
+                      (br $plainByte)))
                   (local.set $p (call $orgFind2 (i32.add (local.get $lhs) (i32.const 2)) (local.get $q) (i32.const "][")))
                   (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
                   (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -222,8 +251,12 @@
                 (i32.or
                   (i32.gt_u (i32.add (local.get $lhs) (i32.const 4)) (local.get $stop))
                   (i32.ne (i32.and (i32.load offset=1 (local.get $lhs)) (i32.const 0xffffff)) (i32.const "fn:"))))
+              (br_if $plainByte (i32.and (global.get $orgNoClose) (i32.const 16)))
               (local.set $q (call $scanFindSpecial (local.get $lhs) (local.get $stop) (i32.const "]") (i32.const 0) (i32.const 0)))
-              (br_if $plainByte (i32.ge_u (local.get $q) (local.get $stop)))
+              (if (i32.ge_u (local.get $q) (local.get $stop))
+                (then
+                  (global.set $orgNoClose (i32.or (global.get $orgNoClose) (i32.const 16)))
+                  (br $plainByte)))
               (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
               (call $emitTok (enum.get $Token.label) (local.get $lhs) (global.get $ptr))
               (br $next)))
@@ -259,6 +292,8 @@
             (then
               (if (i32.or (i32.eq (local.get $c2) (i32.const "(")) (i32.eq (local.get $c2) (i32.const "[")))
                 (then
+                  (local.set $bit (select (i32.const 4) (i32.const 2) (i32.eq (local.get $c2) (i32.const "["))))
+                  (br_if $plainByte (i32.and (global.get $orgNoClose) (local.get $bit)))
                   (local.set $q
                     (call $orgFind2
                       (i32.add (local.get $lhs) (i32.const 2))
@@ -268,7 +303,10 @@
                         (i32.shl
                           (i32.add (local.get $c2) (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c2) (i32.const "["))))
                           (i32.const 8)))))
-                  (br_if $plainByte (i32.ge_u (local.get $q) (local.get $stop)))
+                  (if (i32.ge_u (local.get $q) (local.get $stop))
+                    (then
+                      (global.set $orgNoClose (i32.or (global.get $orgNoClose) (local.get $bit)))
+                      (br $plainByte)))
                   (global.set $ptr (i32.add (local.get $q) (i32.const 2)))
                   (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
                   (br $next)))
@@ -286,9 +324,20 @@
                 (i32.or
                   (i32.gt_u (i32.add (local.get $lhs) (i32.const 3)) (local.get $stop))
                   (i32.ne (i32.load16_u offset=1 (local.get $lhs)) (i32.const "{{"))))
+              (br_if $plainByte (i32.and (global.get $orgNoClose) (i32.const 8)))
+              (br_if $plainByte (i32.le_u (i32.add (local.get $lhs) (i32.const 3)) (global.get $orgMacroFail)))
               (local.set $q (call $orgFind2 (i32.add (local.get $lhs) (i32.const 3)) (local.get $stop) (i32.const "}}")))
-              (br_if $plainByte (i32.ge_u (i32.add (local.get $q) (i32.const 2)) (local.get $stop)))
-              (br_if $plainByte (i32.ne (i32.load8_u offset=2 (local.get $q)) (i32.const "}")))
+              (if (i32.ge_u (local.get $q) (local.get $stop))
+                (then
+                  (global.set $orgNoClose (i32.or (global.get $orgNoClose) (i32.const 8)))
+                  (br $plainByte)))
+              (if
+                (i32.or
+                  (i32.ge_u (i32.add (local.get $q) (i32.const 2)) (local.get $stop))
+                  (i32.ne (i32.load8_u offset=2 (local.get $q)) (i32.const "}")))
+                (then
+                  (global.set $orgMacroFail (local.get $q))
+                  (br $plainByte)))
               (global.set $ptr (i32.add (local.get $q) (i32.const 3)))
               (call $emitTok (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr))
               (br $next)))
@@ -349,6 +398,7 @@
     (local $lineEnd i32)
     (local $block i32)
     (call $lexEmitLeadingContinuation)
+    (global.set $orgMacroFail (i32.const 0))
     (if (i32.eq (global.get $streamRegionKind) (i32.const 92))
       (then (global.set $streamRegionKind (i32.shr_u (local.get $block) (i32.const 24)))))
     (block $done
@@ -654,6 +704,8 @@
                           (call $lexIsSpace (i32.load8_u offset=2 (local.get $q))))))
                     (then
                       (call $orgInline (local.get $q) (enum.get $Token.property) (i32.const 0))
+                      ;; the term ends before the line end: its failed searches no longer hold
+                      (global.set $orgNoClose (i32.const 0))
                       (global.set $ptr (i32.add (local.get $q) (i32.const 2)))
                       (call $emitTok (enum.get $Token.punctuation.special) (local.get $q) (global.get $ptr))
                       (br $termDone)))

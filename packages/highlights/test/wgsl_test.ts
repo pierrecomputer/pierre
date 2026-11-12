@@ -444,3 +444,20 @@ void t.test(
     );
   }
 );
+
+void t.test('wgsl: a float with an empty fraction is one number', () => {
+  assert.deepEqual(tokenKinds('wgsl', 'x = 1.f + 2. + 1.e5 + 0.xxxx;'), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1.f', 'number'],
+    ['+', 'operator'],
+    ['2.', 'number'],
+    ['+', 'operator'],
+    ['1.e5', 'number'],
+    ['+', 'operator'],
+    ['0', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['xxxx', 'property'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

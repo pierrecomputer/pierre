@@ -771,7 +771,6 @@ export const samples: Record<string, LangSample> = {
       'attribute',
       'punctuation.bracket',
       'punctuation.delimiter',
-      'property',
       'keyword.declaration',
       'type',
       'keyword.import',

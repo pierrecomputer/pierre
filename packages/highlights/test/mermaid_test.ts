@@ -231,3 +231,30 @@ test('mermaid: title lines, values, and state markers', () => {
     ['"A"', 'string'],
   ]);
 });
+
+test('mermaid: a quoted pipe label may hold bars', () => {
+  const code = 'flowchart LR\n  C -->|"Yes | No"| D\n  E --> F\n';
+  expect(tokenKinds('mermaid', code)).toEqual([
+    ['flowchart', 'keyword.declaration'],
+    ['LR', 'constant'],
+    ['C', 'variable'],
+    ['-->', 'operator'],
+    ['|', 'punctuation.bracket'],
+    ['"Yes | No"', 'string'],
+    ['|', 'punctuation.bracket'],
+    ['D', 'variable'],
+    ['E', 'variable'],
+    ['-->', 'operator'],
+    ['F', 'variable'],
+  ]);
+  assertLineFedParity('mermaid', code);
+});
+
+test('mermaid: long runs of arrow heads and `..` openers stay linear', () => {
+  for (const unit of ['<', '>', '.. ']) {
+    const code = `flowchart LR\nA ${unit.repeat(300_000)}\n`;
+    const start = performance.now();
+    tokenKinds('mermaid', code);
+    expect(performance.now() - start).toBeLessThan(2000);
+  }
+});

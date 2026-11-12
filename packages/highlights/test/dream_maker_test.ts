@@ -206,3 +206,47 @@ test('dream-maker: documents and comments span lines', () => {
   ]);
   assertLineFedParity('dream-maker', code);
 });
+
+test('dream-maker: a string with its own [ ] inside an embedded expression', () => {
+  const code = 'var/t = "a [x ? "b [y]" : "c"] d"\nvar/z = 1\n';
+  expect(tokenKinds('dream-maker', code)).toEqual([
+    ['var', 'keyword.declaration'],
+    ['/', 'punctuation.delimiter'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['[', 'punctuation.special'],
+    ['x', 'variable'],
+    ['?', 'operator'],
+    ['"b', 'string'],
+    ['[', 'punctuation.special'],
+    ['y', 'variable'],
+    [']', 'punctuation.special'],
+    ['"', 'string'],
+    [':', 'operator'],
+    ['"c"', 'string'],
+    [']', 'punctuation.special'],
+    ['d"', 'string'],
+    ['var', 'keyword.declaration'],
+    ['/', 'punctuation.delimiter'],
+    ['z', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('dream-maker', code);
+  assertLineFedParity(
+    'dream-maker',
+    'var/t = {"a [f("b [1]")] c\nd [g("e [h("f [2]")]")] x"}\nvar/u = "a [b("c [d\nvar/v = 1\n'
+  );
+});
+
+test('dream-maker: three nested embedded expressions keep the outer string', () => {
+  const code = 'x = "a [f("b [g("c [1]")]")] d"\n';
+  expect(tokenKinds('dream-maker', code).slice(-4)).toEqual([
+    ['"', 'string'],
+    [')', 'punctuation.bracket'],
+    [']', 'punctuation.special'],
+    ['d"', 'string'],
+  ]);
+  assertLineFedParity('dream-maker', code);
+});

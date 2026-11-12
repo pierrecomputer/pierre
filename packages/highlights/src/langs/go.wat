@@ -83,18 +83,23 @@
         (block $tail0
 
         ;; `//` and `/*` comments; `///`, `//!`, `/**`, and `/*!` are doc
-        ;; comments - the third byte repeats the second or is `!`
+        ;; comments, but banners `////`, `/***`, and `/**/` are not
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const "/"))
             (i32.or (i32.eq (local.get $c2) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*"))))
           (then
+            (local.set $p (call $goByte (i32.add (global.get $ptr) (i32.const 3))))
             (local.set $hl
               (select
                 (enum.get $Token.comment.doc)
                 (enum.get $Token.comment)
                 (i32.or
-                  (i32.eq (local.get $c3) (local.get $c2))
+                  (i32.and
+                    (i32.eq (local.get $c3) (local.get $c2))
+                    (i32.and
+                      (i32.ne (local.get $p) (local.get $c2))
+                      (i32.ne (local.get $p) (i32.const "/"))))
                   (i32.eq (local.get $c3) (i32.const "!")))))
             (if (i32.eq (local.get $c2) (i32.const "/"))
               (then (call $lexLineComment (i32.const 2) (local.get $hl)))
@@ -223,6 +228,19 @@
         ;; `.` puts the next name in member position
         (if (byteset.get ",.:;" (local.get $c))
           (then
+            (if (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $c2) (i32.const "=")))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                (br $tail0)))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "."))
+                (i32.and (i32.eq (local.get $c2) (i32.const ".")) (i32.eq (local.get $c3) (i32.const "."))))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
+                (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+                (br $tail0)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
               (enum.get $Token.punctuation.delimiter)

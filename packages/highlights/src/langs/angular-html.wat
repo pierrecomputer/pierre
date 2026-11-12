@@ -49,17 +49,28 @@
         (local.set $c (i32.load8_u (local.get $p)))
         (if (local.get $quote)
           (then
+            ;; a string in an attribute value stops at its quote, which html reads first
+            (local.set $q (global.get $end))
             (if
+              (i32.and
+                (i32.le_u (i32.sub (local.get $expr) (i32.const 1)) (i32.const 1))
+                (i32.or (i32.eq (local.get $mode) (i32.const 34)) (i32.eq (local.get $mode) (i32.const 39))))
+              (then (global.set $end (call $lexFindByte (local.get $p) (local.get $mode)))))
+            (local.set $c
               (call $lexStringBody
                 (local.get $quote)
-                (i32.const 1)
+                (i32.eq (local.get $quote) (i32.const 96))
                 (enum.get $Token.string)
-                (local.get $p))
+                (local.get $p)))
+            (global.set $end (local.get $q))
+            ;; still open only after an escaped line break or at the input end
+            (if (i32.or (i32.eq (local.get $c) (i32.const 1)) (i32.lt_u (global.get $ptr) (local.get $q)))
               (then (local.set $quote (i32.const 0))))
             (br $next)))
-        (if (i32.eq (local.get $expr) (i32.const 2))
+        (if (i32.le_u (i32.sub (local.get $expr) (i32.const 1)) (i32.const 1))
           (then
-            (if (i32.eq (local.get $c) (local.get $mode))
+            ;; mode 1 (text) is an interpolation outside any attribute
+            (if (i32.and (i32.eq (local.get $c) (local.get $mode)) (i32.ne (local.get $mode) (i32.const 1)))
               (then
                 (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
                 (call $emitTok (enum.get $Token.string) (local.get $p) (global.get $ptr))
@@ -142,13 +153,7 @@
             (local.set $quote (local.get $c))
             (local.set $member (i32.const 0))
             (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-            (if
-              (call $lexStringBody
-                (local.get $quote)
-                (i32.const 1)
-                (enum.get $Token.string)
-                (local.get $p))
-              (then (local.set $quote (i32.const 0))))
+            (call $emitTok (enum.get $Token.string) (local.get $p) (global.get $ptr))
             (br $next)))
         (if (call $lexIsIdentStart (local.get $c))
           (then
@@ -244,6 +249,14 @@
     (local $mode i32)
     (local $hl i32)
     (local.set $from (global.get $ptr))
+    ;; a value that a template's `${}` just filled: the next blank ends it
+    (if
+      (i32.and
+        (i32.eq (local.get $state) (i32.const 4))
+        (i32.gt_u (global.get $ptr) (global.get $srcBase)))
+      (then
+        (if (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const "}"))
+          (then (local.set $state (i32.const 5))))))
     (block $done
       (loop $next
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))

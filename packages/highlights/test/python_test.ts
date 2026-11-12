@@ -636,3 +636,122 @@ void t.test('python: 3.14 t-strings have template fields', () => {
   ]);
   assertLineFedParity('python', code);
 });
+
+void t.test('python: braceless f-strings scan in linear time', () => {
+  // Each f-string once searched the rest of the input for a brace.
+  const src = 'x = f"abc"\n'.repeat(50_000);
+  const started = performance.now();
+  python.hl(src);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 500, `50000 f-strings took ${elapsed.toFixed(0)}ms`);
+});
+
+void t.test('python: PEP 701 quotes inside replacement fields', () => {
+  const code = 'x = f"{d["k"]} done"\ny = f\'{a[\'}\']}\'\nz = 1\n';
+  assert.deepEqual(tokenKinds('python', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['f"', 'string'],
+    ['{', 'punctuation.special'],
+    ['d["k"]', 'string'],
+    ['}', 'punctuation.special'],
+    ['done"', 'string'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ["f'", 'string'],
+    ['{', 'punctuation.special'],
+    ["a['}']", 'string'],
+    ['}', 'punctuation.special'],
+    ["'", 'string'],
+    ['z', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+});
+
+void t.test('python: escapes take their digits and names', () => {
+  const code = 'b = "\\x41BC \\u00e9 \\U0001F600 \\N{BULLET} \\101 \\n"\n';
+  assert.deepEqual(
+    tokenKinds('python', code).filter(([, kind]) => kind === 'string.escape'),
+    [
+      ['\\x41', 'string.escape'],
+      ['\\u00e9', 'string.escape'],
+      ['\\U0001F600', 'string.escape'],
+      ['\\N{BULLET}', 'string.escape'],
+      ['\\101', 'string.escape'],
+      ['\\n', 'string.escape'],
+    ]
+  );
+});
+
+void t.test('python: as is a keyword', () => {
+  const code = 'import numpy as np\nwith open(p) as fh: pass\n';
+  assert.deepEqual(
+    tokenKinds('python', code).filter(([text]) => text === 'as'),
+    [
+      ['as', 'keyword.control'],
+      ['as', 'keyword.control'],
+    ]
+  );
+});
+
+void t.test('python: trailing-dot floats are one number', () => {
+  const code = 'x = 1.\nfoo(1)\ny = 1.e5 + 1.j + 1_0.E-3 + 0x10.real\n';
+  assert.deepEqual(tokenKinds('python', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1.', 'number'],
+    ['foo', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['1', 'number'],
+    [')', 'punctuation.bracket'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['1.e5', 'number'],
+    ['+', 'operator'],
+    ['1.j', 'number'],
+    ['+', 'operator'],
+    ['1_0.E-3', 'number'],
+    ['+', 'operator'],
+    ['0x10', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['real', 'property'],
+  ]);
+});
+
+void t.test('python: relative imports name a module', () => {
+  const code = 'from .models import User\nfrom . import a\n';
+  assert.deepEqual(tokenKinds('python', code), [
+    ['from', 'keyword.import'],
+    ['.', 'punctuation.delimiter'],
+    ['models', 'variable'],
+    ['import', 'keyword.import'],
+    ['User', 'type'],
+    ['from', 'keyword.import'],
+    ['.', 'punctuation.delimiter'],
+    ['import', 'keyword.import'],
+    ['a', 'variable'],
+  ]);
+  assertLineFedParity('python', 'from \\\n.models import X\n');
+});
+
+void t.test(
+  'python: @ after a continuation or a closed string is an operator',
+  () => {
+    for (const code of [
+      'x = 1 \\\n@decorator\n',
+      "x = '''a\n'''@y\n",
+      'x = a \\\ncase[0]\n',
+      '\\\n\ncase n:\n',
+    ])
+      assertLineFedParity('python', code);
+    assert.deepEqual(tokenKinds('python', "x = '''a\n'''@y\n").slice(-2), [
+      ['@', 'operator'],
+      ['y', 'variable'],
+    ]);
+    // a blank line after a backslash ends the statement
+    assert.deepEqual(tokenKinds('python', '\\\n\ncase n:\n').slice(1, 2), [
+      ['case', 'keyword.control'],
+    ]);
+  }
+);

@@ -109,6 +109,24 @@
     (if (i32.eqz (call $lexIsIdentStart (call $odinByte (local.get $p))))
       (then
         (global.set $ptr (local.get $save))
+        (local.set $v (call $odinByte (local.get $p)))
+        (if (i32.eq (local.get $v) (i32.const "^"))
+          (then (return (i32.const 2))))
+        (if (i32.eq (local.get $v) (i32.const "["))
+          (then
+            (return
+              (select
+                (i32.const 3)
+                (i32.const 2)
+                (i32.eq
+                  (call $odinByte
+                    (call $scanFindSpecial
+                      (local.get $p)
+                      (global.get $end)
+                      (i32.const "{")
+                      (i32.const 0)
+                      (i32.const 1)))
+                  (i32.const "{"))))))
         (return (i32.const 3))))
     (global.set $ptr (local.get $p))
     (call $lexScanIdent)

@@ -288,3 +288,24 @@ test('chapel: strings, bytes, and comments', () => {
     '/* a /* nested */\n still */ // line\nvar x = nil;'
   );
 });
+
+test('chapel: atomic and label are keywords', () => {
+  const code = 'var x: atomic int;\nlabel outer for i in 1..3 {}\n';
+  expect(tokenKinds('chapel', code)).toEqual([
+    ['var', 'keyword.declaration'],
+    ['x', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['atomic', 'keyword'],
+    ['int', 'type.builtin'],
+    [';', 'punctuation.delimiter'],
+    ['label', 'keyword.control'],
+    ['outer', 'variable'],
+    ['for', 'keyword.control'],
+    ['i', 'variable'],
+    ['in', 'keyword.operator'],
+    ['1', 'number'],
+    ['..', 'operator'],
+    ['3', 'number'],
+    ['{}', 'punctuation.bracket'],
+  ]);
+});

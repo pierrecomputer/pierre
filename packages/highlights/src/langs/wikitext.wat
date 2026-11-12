@@ -165,6 +165,7 @@
     (local $head i32)
     (local $cell i32)
     (local $lineStart i32)
+    (local $noBr i32)
     (call $lexEmitLeadingContinuation)
     (if (i32.eq (global.get $streamRegionKind) (i32.const 93))
       (then (global.set $streamRegionKind (i32.shr_u (local.get $block) (i32.const 24)))))
@@ -174,6 +175,7 @@
     (local.set $link (i32.const 0))
     (local.set $head (i32.const 0))
     (local.set $cell (i32.const 0))
+    (local.set $noBr (i32.const 0))
     (local.set $lineEnd (call $lexFindEither (global.get $ptr) (i32.const 10) (i32.const 13)))
     (block $done
       (loop $next
@@ -448,10 +450,15 @@
                   (call $emitTok (enum.get $Token.link_uri) (local.get $p) (local.get $q))
                   (local.set $link (i32.add (local.get $link) (i32.const 1)))
                   (br $next)))
-              ;; `[https://example.org text]` and `[mailto:a@b.org text]`
+              ;; `[https://example.org text]` and `[mailto:a@b.org text]`; $noBr is
+              ;; the $stop of a range with no `]` after an earlier `[`
+              (br_if $plainByte (i32.eq (local.get $noBr) (local.get $stop)))
               (local.set $q
                 (call $scanFindSpecial (i32.add (local.get $lhs) (i32.const 1)) (local.get $stop) (i32.const "]") (i32.const 0) (i32.const 0)))
-              (br_if $plainByte (i32.ge_u (local.get $q) (local.get $stop)))
+              (if (i32.ge_u (local.get $q) (local.get $stop))
+                (then
+                  (local.set $noBr (local.get $stop))
+                  (br $plainByte)))
               (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
               (block $schemeDone
                 (loop $scheme

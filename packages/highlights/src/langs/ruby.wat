@@ -87,12 +87,14 @@
   ;; unemitted: up to the $close byte at nesting depth zero, where $open is
   ;; the byte that nests - zero when none - and $depth the nesting already
   ;; open. $flags bit 0 enables escapes and `#{}` interpolation, bit 1
-  ;; colors the body as a regex, bit 2 as a symbol, and bit 3 keeps the body
-  ;; on one line. $nested is nonzero inside an interpolation, where a nested
-  ;; literal keeps `#{` plain. Returns the status in the low two bits - 1
-  ;; past the closer, 2 past a `#{` that opens an interpolation, emitted as
-  ;; punctuation.special, 0 at $end or at the line break of a one-line
-  ;; body - and the nesting depth still open in the bits above.
+  ;; colors the body as a regex, bit 2 as a symbol, bit 3 keeps the body
+  ;; on one line, and bit 4 skips a backslash and the next character as
+  ;; text (`'...'`, `%q`). $nested is nonzero inside an interpolation,
+  ;; where a nested literal keeps `#{` plain. Returns the status in the low
+  ;; two bits - 1 past the closer, 2 past a `#{` that opens an
+  ;; interpolation, emitted as punctuation.special, 0 at $end or at the line
+  ;; break of a one-line body - and the nesting depth still open in the bits
+  ;; above.
   (func $rubyLiteralBody
     (param $close i32)
     (param $open i32)
@@ -141,8 +143,8 @@
                 (global.get $ptr)
                 (local.get $hash)
                 (local.get $close)
-                (i32.and (local.get $flags) (i32.const 1))
-                (i32.shr_u (local.get $flags) (i32.const 3))))))
+                (i32.and (local.get $flags) (i32.const 17))
+                (i32.and (local.get $flags) (i32.const 8))))))
         (global.set $ptr (local.get $stop))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
@@ -171,8 +173,12 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
+            (if (i32.and (local.get $flags) (i32.const 16))
+              (then
+                (global.set $ptr (local.get $e))
+                (br $scan)))
+            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
             (local.set $seg (global.get $ptr))
@@ -277,8 +283,9 @@
   ;; scanned and $seg the start of its bytes not yet emitted; the $i*
   ;; copies hold the literal suspended by a `#{` interpolation whose braces
   ;; $interp counts. $operand is 1 where a value may start - so `/`, `%`,
-  ;; and `<<` open literals - and 2 right after a plain name, which also
-  ;; takes a heredoc argument. $decl is 1 after `def` and 2 after `class`
+  ;; and `<<` open literals - 2 right after a plain name, which also
+  ;; takes a heredoc argument, and 3 after a `puts`-style word, which takes
+  ;; both (`/` and `%` test bit 0). $decl is 1 after `def` and 2 after `class`
   ;; or `module`; $member is 1 after `.`, `&.`, or `::`. $lineHead is 1
   ;; until the first token of a line, where `=begin` and `__END__` count.
   ;; A heredoc opener leaves $hdLen, $hdDelim, and $hdStrip pending until
@@ -336,28 +343,30 @@
             (br $done)))
         (if (local.get $hdLen)
           (then
-            ;; the pending heredoc body starts after this line's break, so
-            ;; skip blanks only and consume just the LF or CRLF
-            (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
-            (local.set $c (call $rubyByte (global.get $ptr)))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+            (if (i32.eqz (local.get $sActive))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if
-                  (i32.and
-                    (i32.eq (local.get $c) (i32.const 13))
-                    (i32.eq (call $rubyByte (global.get $ptr)) (i32.const 10)))
-                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-                (call $emitGap (local.get $gap) (global.get $ptr))
-                (call $rubyLineDelimited
-                  (local.get $hdDelim)
-                  (local.get $hdLen)
-                  (local.get $hdStrip)
-                  (enum.get $Token.string))
-                (local.set $hdLen (i32.const 0))
-                (local.set $lineHead (i32.const 1))
-                (local.set $operand (i32.const 1))
-                (br $next)))))
+              ;; the pending heredoc body starts after this line's break, so
+              ;; skip blanks only and consume just the LF or CRLF
+              (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
+              (local.set $c (call $rubyByte (global.get $ptr)))
+              (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+                (then
+                  (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                  (if
+                    (i32.and
+                      (i32.eq (local.get $c) (i32.const 13))
+                      (i32.eq (call $rubyByte (global.get $ptr)) (i32.const 10)))
+                    (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                  (call $emitGap (local.get $gap) (global.get $ptr))
+                  (call $rubyLineDelimited
+                    (local.get $hdDelim)
+                    (local.get $hdLen)
+                    (local.get $hdStrip)
+                    (enum.get $Token.string))
+                  (local.set $hdLen (i32.const 0))
+                  (local.set $lineHead (i32.const 1))
+                  (local.set $operand (i32.const 1))
+                  (br $next)))))))
 
         ;; an open literal body; $seg is zero across a chunk boundary, where
         ;; the body resumes at the chunk start
@@ -393,11 +402,20 @@
                 (local.set $operand (i32.const 1)))
               (else
                 ;; closed, or a one-line body cut by a line break; other
-                ;; bodies stay open for the next chunk
+                ;; bodies, and a one-line body whose escaped line break ends
+                ;; the chunk, stay open for the next chunk
                 (if
                   (i32.or
                     (i32.eq (local.get $status) (i32.const 1))
-                    (i32.and (local.get $sFlags) (i32.const 8)))
+                    (i32.and
+                      (i32.shr_u (local.get $sFlags) (i32.const 3))
+                      (i32.or
+                        (i32.lt_u (global.get $ptr) (global.get $end))
+                        (i32.gt_u
+                          (i32.sub
+                            (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1)))
+                            (i32.const 10))
+                          (i32.const 3)))))
                   (then
                     (local.set $sActive (i32.const 0))
                     (local.set $seg (i32.const 0))
@@ -510,15 +528,24 @@
                     (i32.eq (local.get $kind) (i32.const 39)))
                   (then
                     (local.set $hdDelim (i32.add (local.get $p) (i32.const 1)))
-                    (global.set $ptr (call $lexFindByte (local.get $hdDelim) (local.get $kind)))
+                    (global.set $ptr
+                      (call $scanFindSpecial
+                        (local.get $hdDelim)
+                        (global.get $end)
+                        (local.get $kind)
+                        (i32.const 0)
+                        (i32.const 1)))
                     (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))
-                    (if (i32.lt_u (global.get $ptr) (global.get $end))
+                    (if (i32.eq (call $rubyByte (global.get $ptr)) (local.get $kind))
                       (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
                   (else
                     (local.set $hdDelim (local.get $p))
                     (global.set $ptr (local.get $p))
                     (call $lexScanIdent)
                     (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))))
+                ;; a stream checkpoint holds at most 32 delimiter bytes
+                (if (i32.gt_u (local.get $hdLen) (i32.const 32))
+                  (then (local.set $hdLen (i32.const 0))))
                 (local.set $hl (enum.get $Token.string))
                 (br $valueTok)))))
 
@@ -531,7 +558,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (local.set $sClose (local.get $c))
             (local.set $sOpen (i32.const 0))
-            (local.set $sFlags (i32.ne (local.get $c) (i32.const 39)))
+            (local.set $sFlags (select (i32.const 1) (i32.const 16) (i32.ne (local.get $c) (i32.const 39))))
             (br $literal)))
         ;; `/regex/` and `%w[...]` literals in operand position
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (local.get $operand))
@@ -559,7 +586,7 @@
                 ;; only the bracket kinds nest
                 (if (i32.eq (local.get $sClose) (local.get $sOpen))
                   (then (local.set $sOpen (i32.const 0))))
-                (local.set $sFlags (i32.ne (local.get $kind) (i32.const 2)))
+                (local.set $sFlags (select (i32.const 1) (i32.const 16) (i32.ne (local.get $kind) (i32.const 2))))
                 (if (i32.eq (local.get $c2) (i32.const "r"))
                   (then (local.set $sFlags (i32.const 3))))
                 (if
@@ -583,7 +610,8 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
                 (local.set $sClose (local.get $c2))
                 (local.set $sOpen (i32.const 0))
-                (local.set $sFlags (i32.or (i32.const 12) (i32.ne (local.get $c2) (i32.const 39))))
+                (local.set $sFlags
+                  (select (i32.const 13) (i32.const 28) (i32.ne (local.get $c2) (i32.const 39))))
                 (br $literal)))
             (if (call $lexIsIdentStart (local.get $c2))
               (then
@@ -625,7 +653,7 @@
               (i32.gt_u (local.get $c2) (i32.const 32))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (if (i32.eq (local.get $c2) (i32.const "@"))
+            (if (i32.and (i32.eq (local.get $c2) (i32.const "@")) (i32.eq (local.get $c) (i32.const "@")))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (if (call $lexIsIdentContinue (call $rubyByte (global.get $ptr)))
               (then (call $lexScanIdent))
@@ -648,6 +676,14 @@
                 (i32.ne (local.get $kind) (i32.const "=")))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                ;; the keyword-table words cannot hold `?`
+                (if
+                  (i32.and
+                    (i32.eqz (local.get $member))
+                    (i64.eq (i64.load (local.get $lhs)) (i64.const "defined?")))
+                  (then
+                    (local.set $hl (enum.get $Token.keyword.operator))
+                    (br $opTok)))
                 (local.set $c3 (local.get $kind))))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
@@ -691,7 +727,7 @@
                       (i32.eq (local.get $hl) (enum.get $Token.keyword.operator)))))
                 ;; `puts`-style methods take a heredoc or literal argument
                 (if (i32.eq (local.get $hl) (enum.get $Token.function))
-                  (then (local.set $operand (i32.const 2)))))
+                  (then (local.set $operand (i32.const 3)))))
               (else
                 (if (local.get $decl)
                   (then
@@ -776,7 +812,15 @@
                                             (else
                                               (if (result i32) (call $lexIsIdentStart (local.get $c2))
                                                 (then (i32.eq (call $rubyArgWord (local.get $p)) (i32.const 1)))
-                                                (else (i32.const 0))))))
+                                                (else
+                                                  (i32.and
+                                                    (i32.eq (local.get $c2) (i32.const "/"))
+                                                    (i32.and
+                                                      (i32.gt_u
+                                                        (local.tee $c2
+                                                          (call $rubyByte (i32.add (local.get $p) (i32.const 1))))
+                                                        (i32.const 32))
+                                                      (i32.ne (local.get $c2) (i32.const "=")))))))))
                                         (else (i32.const 0)))))
                                   (then
                                     (local.set $hl (enum.get $Token.function))

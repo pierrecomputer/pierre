@@ -234,7 +234,7 @@
           (if (i32.eq (local.get $c) (i32.const 5))
             (then
               (local.set $css (call $embedCssLine (local.get $lineEnd) (local.get $css)))
-              (if (i32.eqz (i32.shr_u (local.get $css) (i32.const 9)))
+              (if (i32.eqz (i32.and (local.get $css) (i32.const 0x0ffffe00)))
                 (then (local.set $mode (i32.const 0))))
               (br $next)))
           (if (i32.eq (local.get $c) (i32.const 1))
@@ -430,10 +430,18 @@
                       (i32.le_u (i32.sub (local.get $q) (local.get $p)) (i32.const 6))))
                   (if (i64.eq (local.get $w) (i64.const "style"))
                     (then
+                      (local.set $c (i32.const 0))
                       (if (i32.eq (local.get $c2) (i32.const "."))
                         (then
                           (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
-                          (call $scanIdentRun (i32.const "-"))))
+                          (call $scanIdentRun (i32.const "-"))
+                          (if (i32.eq (i32.sub (global.get $ptr) (local.get $q)) (i32.const 5))
+                            (then
+                              (local.set $c (i32.load offset=1 (local.get $q)))
+                              (local.set $c
+                                (i32.or
+                                  (i32.eq (local.get $c) (i32.const "less"))
+                                  (i32.shl (i32.eq (local.get $c) (i32.const "scss")) (i32.const 1))))))))
                       (local.set $c2 (call $lexSkipSpaceAt (global.get $ptr)))
                       (if (i32.eq (call $templateByte (local.get $c2)) (i32.const "{"))
                         (then
@@ -442,8 +450,11 @@
                           (call $emitGap (global.get $ptr) (local.get $c2))
                           (global.set $ptr (local.get $c2))
                           ;; CSS sees the `{`, so its depth ends the block
-                          (local.set $css (call $embedCssLine (local.get $lineEnd) (i32.const 256)))
-                          (local.set $mode (select (i32.const 5) (i32.const 0) (i32.shr_u (local.get $css) (i32.const 9))))
+                          (local.set $css
+                            (call $embedCssLine
+                              (local.get $lineEnd)
+                              (i32.or (i32.const 256) (i32.shl (local.get $c) (i32.const 28)))))
+                          (local.set $mode (select (i32.const 5) (i32.const 0) (i32.and (local.get $css) (i32.const 0x0ffffe00))))
                           (br $next)))))
                   (global.set $ptr (local.get $p))
                   (if

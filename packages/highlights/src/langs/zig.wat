@@ -185,7 +185,19 @@
               (i32.or
                 (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "c"))
                 (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "_")))
-              (then (return (enum.get $Token.variable.special))))
+              (then
+                ;; a member `std.c` is a plain name; `0..c` is a range
+                (if
+                  (i32.and
+                    (i32.gt_u (local.get $lhs) (global.get $srcBase))
+                    (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const ".")))
+                  (then
+                    (if
+                      (i32.or
+                        (i32.eq (i32.sub (local.get $lhs) (i32.const 1)) (global.get $srcBase))
+                        (i32.ne (i32.load8_u (i32.sub (local.get $lhs) (i32.const 2))) (i32.const ".")))
+                      (then (return (i32.const -1))))))
+                (return (enum.get $Token.variable.special))))
             (return (i32.const -1))))
         ;; the one word the table cannot hold; the wide load stays inside the
         ;; input slack, as in the table's own compare

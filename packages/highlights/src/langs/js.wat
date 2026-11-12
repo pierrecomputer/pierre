@@ -193,6 +193,7 @@
       (i32.load8_u
         (i32.add (i32.const $mem.jsBracketStack) (i32.sub (global.get $brkSp) (i32.const 1))))
       (i32.const 1)))
+  (func-variant $brkTopKindKey $brkTopKind)
   (func $brkPop
     (global.set $rxCloser (i32.const 0))
     (if (i32.eqz (global.get $brkSp))
@@ -483,8 +484,15 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (return (enum.get $Lex.string_literal))))
         ;; a raw line break: unterminated, left unconsumed
-        (br_if $bail
-          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+          (then
+            ;; past a `\` line continuation it stays a string literal, as when a
+            ;; line-fed chunk ends after the continuation
+            (br_if $bail
+              (i32.ge_u
+                (call $lexFindEither (global.get $lhs) (i32.const 10) (i32.const 13))
+                (global.get $ptr)))
+            (return (enum.get $Lex.string_literal))))
         ;; backslash escape: two bytes, `\ CR LF` line continuation three
         (if
           (i32.and
@@ -559,9 +567,13 @@
             (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
           (if (i32.eq (local.get $c) (i32.const 92))
             (then
-              (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-              (if (i32.gt_u (global.get $ptr) (global.get $end))
-                (then (global.set $ptr (global.get $end))))
+              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+              ;; a backslash cannot escape a line break: unterminated
+              (local.set $c (call $tsxByte (global.get $ptr)))
+              (br_if $bail
+                (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+              (if (i32.lt_u (global.get $ptr) (global.get $end))
+                (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
               (br $l)))
           (if (i32.le_u (i32.sub (local.get $c) (i32.const "[")) (i32.const 2))
             (then (local.set $inClass (i32.eq (local.get $c) (i32.const "[")))))
@@ -758,6 +770,25 @@
             (i32.eqz (call $ecmaHasTypeScript))
             (i32.ge_u (local.get $kw) (enum.get $Lex.ctxword_abstract)))
           (then (return (enum.get $Lex.identifier))))
+        ;; a reserved word as a key is a name; a switch keeps its `default:`
+        (local.set $c (call $tsxByte (global.get $ptr)))
+        (if (i32.eq (local.get $c) (i32.const "?"))
+          (then (local.set $c (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))))))
+        (if (i32.eq (local.get $c) (i32.const ":"))
+          (then
+            (if
+              (i32.and
+                (i32.or
+                  (i32.or
+                    (i32.eq (global.get $lto) (enum.get $Lex.l_brace))
+                    (i32.eq (global.get $lto) (enum.get $Lex.comma)))
+                  (i32.and
+                    (i32.eq (global.get $lto) (enum.get $Lex.semicolon))
+                    (call $ecmaHasTypeScript)))
+                (i32.or
+                  (i32.ne (local.get $kw) (enum.get $Lex.keyword_default))
+                  (i32.eqz (call $brkTopKindKey))))
+              (then (return (enum.get $Lex.identifier))))))
         (return (local.get $kw))))
 
     ;; number
@@ -1042,32 +1073,27 @@
     (local $c i32)
     (local.set $t (call $scanToken))
     (global.set $rhs (global.get $ptr))
-    (if (i32.and (global.get $tsxStreaming) (i32.eq (global.get $ptr) (global.get $end)))
+    (if (i32.eq (global.get $ptr) (global.get $end))
       (then
         (if (i32.eq (local.get $t) (enum.get $Lex.invalid))
           (then
             ;; a cut template (from its backtick or a resuming `}`) or string
             (local.set $c (i32.load8_u (global.get $lhs)))
-            (global.set $tsxStreamMode
-              (select
-                (i32.const 1)
-                (select
-                  (i32.const 4)
-                  (select (i32.const 5) (global.get $tsxStreamMode) (i32.eq (local.get $c) (i32.const 39)))
-                  (i32.eq (local.get $c) (i32.const 34)))
-                (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "}")))))
-            ;; a quoted string cut by a `\` line continuation: $scanStringBody
-            ;; only consumes a line break behind a backslash, so a trailing LF
-            ;; means the string goes on in the next chunk. Report it as a
-            ;; string literal so the token before it - `from` - classifies as
-            ;; in the whole-buffer run; the emitter treats both kinds alike and
-            ;; the resume records the final kind
-            (if
-              (i32.and
-                (i32.le_u (i32.sub (global.get $tsxStreamMode) (i32.const 4)) (i32.const 1))
-                (i32.eq (i32.load8_u (i32.sub (global.get $rhs) (i32.const 1))) (i32.const 10)))
+            (if (global.get $tsxStreaming)
+              (then
+                (global.set $tsxStreamMode
+                  (select
+                    (i32.const 1)
+                    (select
+                      (i32.const 4)
+                      (select (i32.const 5) (global.get $tsxStreamMode) (i32.eq (local.get $c) (i32.const 39)))
+                      (i32.eq (local.get $c) (i32.const 34)))
+                    (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "}")))))))
+            ;; a quoted string cut by $end is a string literal, so `from` before
+            ;; it reads the same whether a chunk or the input ends there
+            (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
               (then (local.set $t (enum.get $Lex.string_literal))))))
-        (if (i32.eq (local.get $t) (enum.get $Lex.multiline_comment))
+        (if (i32.and (global.get $tsxStreaming) (i32.eq (local.get $t) (enum.get $Lex.multiline_comment)))
           (then
             (if (call $blockCommentOpen (global.get $lhs) (global.get $rhs))
               (then
@@ -1515,6 +1541,8 @@
             (block $noName
               (local.set $q (call $blanksEnd (local.get $p) (local.get $rhs)))
               (br_if $noName (i32.ge_u (local.get $q) (local.get $rhs)))
+              (if (i32.eq (i32.load8_u (local.get $q)) (i32.const "["))
+                (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
               (local.set $b (local.get $q))
               (block $nameEnd
                 (loop $name

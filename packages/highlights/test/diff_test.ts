@@ -338,3 +338,97 @@ void t.test('diff: malformed and bounded ranges stay lossless', () => {
   const split = loadLang('diff', '$hlDiff', 3);
   checkInvariants(split.hl, '+é\n-rest');
 });
+
+void t.test(
+  'diff: commit message bullets are prose until a diff header',
+  () => {
+    const src =
+      'Fix parser crash\n\n- handle empty input\n+ keep going\n---\ndiff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n';
+    for (const lang of ['diff', 'git-commit', 'patch', 'git-rebase'] as const) {
+      assert.deepEqual(tokenKinds(lang, src), [
+        ['Fix parser crash', null],
+        ['- handle empty input', null],
+        ['+ keep going', null],
+        ['---', null],
+        ['diff', 'function'],
+        ['--git', 'variable.parameter'],
+        ['a/x b/x', null],
+        ['---', 'punctuation.special'],
+        ['a/x', 'diff.minus'],
+        ['+++', 'punctuation.special'],
+        ['b/x', 'diff.plus'],
+        ['@@ -1 +1 @@', 'attribute'],
+        ['-', 'punctuation.special'],
+        ['old', 'diff.minus'],
+        ['+', 'punctuation.special'],
+        ['new', 'diff.plus'],
+      ]);
+    }
+    assertLineFedParity('diff', src);
+    assertLineFedParity('diff', src.replaceAll('\n', '\r\n'));
+    assertLineFedParity('diff', 'subject\n');
+    assertLineFedParity('diff', '\nsubject\n\n- x\n');
+  }
+);
+
+void t.test('diff: snippets without a blank second line stay diffs', () => {
+  for (const src of [
+    'context line\n-old\n+new\n',
+    '@@ -1,3 +1,3 @@\n a\n\n-b\n+c\n',
+    'subject\nbody\n\n-old\n',
+  ]) {
+    const kinds = tokenKinds('diff', src);
+    assert.ok(
+      kinds.some(([, kind]) => kind === 'diff.minus'),
+      src
+    );
+    assertLineFedParity('diff', src);
+  }
+});
+
+void t.test('diff: normal and context diff lines', () => {
+  const src =
+    '1,2c1,2\n< old\n---\n> new\n*** 1,3 ****\n! old line\n--- 1,3 ----\n! new line\n';
+  assert.deepEqual(tokenKinds('diff', src), [
+    ['1,2c1,2', 'attribute'],
+    ['<', 'punctuation.special'],
+    ['old', 'diff.minus'],
+    ['---', 'punctuation.special'],
+    ['>', 'punctuation.special'],
+    ['new', 'diff.plus'],
+    ['*** 1,3 ****', 'attribute'],
+    ['!', 'punctuation.special'],
+    ['old line', 'diff.minus'],
+    ['--- 1,3 ----', 'attribute'],
+    ['!', 'punctuation.special'],
+    ['new line', 'diff.plus'],
+  ]);
+  // without a command line, `>` and `<` are prose
+  assert.deepEqual(tokenKinds('diff', '> quote\n< x\n! y\n1,c2\n'), [
+    ['> quote', null],
+    ['< x', null],
+    ['! y', null],
+    ['1,c2', null],
+  ]);
+  assertLineFedParity('diff', src);
+});
+
+void t.test('diff: combined hunks mark any marker column', () => {
+  const src =
+    '@@@ -1,2 -1,2 +1,2 @@@\n -two\n +three\n- x\n  ctx\n--- a\n@@ -1 +1 @@\n -ctx\n';
+  assert.deepEqual(tokenKinds('diff', src), [
+    ['@@@ -1,2 -1,2 +1,2 @@@', 'attribute'],
+    ['-', 'punctuation.special'],
+    ['two', 'diff.minus'],
+    ['+', 'punctuation.special'],
+    ['three', 'diff.plus'],
+    ['-', 'punctuation.special'],
+    ['x', 'diff.minus'],
+    ['ctx', null],
+    ['--', 'punctuation.special'],
+    ['- a', 'diff.minus'],
+    ['@@ -1 +1 @@', 'attribute'],
+    ['-ctx', null],
+  ]);
+  assertLineFedParity('diff', src);
+});

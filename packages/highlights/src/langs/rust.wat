@@ -41,8 +41,8 @@
 
   ;; The opener of a raw string at $ptr - the `r`/`br`/`cr` prefix of
   ;; $prefix bytes, the hashes, and the quote - emitted as string. Returns 0
-  ;; with $ptr unmoved when no quote follows the hashes, else the hash count
-  ;; plus one: $hlRust keeps that in a checkpointed local while the body is
+  ;; with $ptr unmoved when no quote follows the hashes, -2 with $ptr past the
+  ;; `r#` of a raw identifier, else the hash count plus one: $hlRust keeps that in a checkpointed local while the body is
   ;; open, so a body crossing a chunk boundary resumes from the local rather
   ;; than from the 32-byte stream delimiter, which cannot hold long hash runs.
   (func $rustRawOpen (param $prefix i32) (result i32)
@@ -54,7 +54,17 @@
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $hash)))
     (if (i32.ne (call $rustByte (local.get $p)) (i32.const 34))
-      (then (return (i32.const 0))))
+      (then
+        (if
+          (i32.and
+            (i32.eq (local.get $p) (i32.add (global.get $ptr) (i32.const 2)))
+            (i32.eq (local.get $prefix) (i32.const 1)))
+          (then
+            (if (call $lexIsIdentStart (call $rustByte (local.get $p)))
+              (then
+                (global.set $ptr (local.get $p))
+                (return (i32.const -2))))))
+        (return (i32.const 0))))
     ;; the quote is below $end, so the cursor lands at most on $end
     (local.set $p (i32.add (local.get $p) (i32.const 1)))
     (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $p))
@@ -89,6 +99,58 @@
         (br $scan)))
     (i32.const 0))
 
+  ;; Bytes from $seg are not yet emitted. Returns 1 after the closing quote.
+  (func $rustStringBody (param $quote i32) (param $seg i32) (result i32)
+    (local $c i32)
+    (local $e i32)
+    (local $closed i32)
+    (block $done
+      (loop $l
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (local.get $quote)
+            (i32.const 1)
+            (i32.eq (local.get $quote) (i32.const 39))))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (local.get $quote))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $closed (i32.const 1))
+            (br $done)))
+        (br_if $done (i32.ne (local.get $c) (i32.const 92)))
+        (local.set $c (call $rustByte (i32.add (global.get $ptr) (i32.const 1))))
+        (if
+          (i32.and
+            (i32.eq (local.get $quote) (i32.const 39))
+            (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br $done)))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+        (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
+        (if (i32.eq (local.get $c) (i32.const "x"))
+          (then (local.set $e (call $scanHexRun (local.get $e) (i32.const 2))))
+          (else
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "u"))
+                (i32.eq (call $rustByte (local.get $e)) (i32.const "{")))
+              (then
+                (local.set $e
+                  (call $scanHexRun (i32.add (local.get $e) (i32.const 1)) (i32.const 6)))
+                (if (i32.eq (call $rustByte (local.get $e)) (i32.const "}"))
+                  (then (local.set $e (i32.add (local.get $e) (i32.const 1))))))
+              (else (local.set $e (call $lexEscapeEnd (global.get $ptr)))))))
+        (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
+        (br $l)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (local.get $closed))
+
   (func $rustIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>^|" (local.get $c)))
 
@@ -110,17 +172,22 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
-        ;; a raw string body left open by its opener or by the previous
-        ;; chunk: $rawOpen is its hash count plus one until the body closes
+        ;; a string body left open by the previous chunk: $rawOpen is -1 for
+        ;; a `"` string, else the raw string's hash count plus one
         (if
           (i32.and
             (i32.ne (local.get $rawOpen) (i32.const 0))
             (i32.lt_u (global.get $ptr) (global.get $end)))
           (then
             (local.set $lhs (global.get $ptr))
-            (if (call $rustRawBody (i32.sub (local.get $rawOpen) (i32.const 1)))
-              (then (local.set $rawOpen (i32.const 0))))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+            (if (i32.lt_s (local.get $rawOpen) (i32.const 0))
+              (then
+                (if (call $rustStringBody (i32.const 34) (local.get $lhs))
+                  (then (local.set $rawOpen (i32.const 0)))))
+              (else
+                (if (call $rustRawBody (i32.sub (local.get $rawOpen) (i32.const 1)))
+                  (then (local.set $rawOpen (i32.const 0))))
+                (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))))
             (br $next)))
 
         ;; token tails: $opTok leaves parameter position, and $tok emits
@@ -137,18 +204,23 @@
         (local.set $c3 (call $rustByte (i32.add (global.get $ptr) (i32.const 2))))
 
         ;; `//` and nesting `/*` comments; `///`, `//!`, `/**`, and `/*!` are
-        ;; doc comments - the third byte repeats the second or is `!`
+        ;; doc comments, but `////`, `/***`, and `/**/` are not
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const "/"))
             (i32.or (i32.eq (local.get $c2) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*"))))
           (then
+            (local.set $p (call $rustByte (i32.add (global.get $ptr) (i32.const 3))))
             (local.set $hl
               (select
                 (enum.get $Token.comment.doc)
                 (enum.get $Token.comment)
                 (i32.or
-                  (i32.eq (local.get $c3) (local.get $c2))
+                  (i32.and
+                    (i32.eq (local.get $c3) (local.get $c2))
+                    (i32.and
+                      (i32.ne (local.get $p) (local.get $c2))
+                      (i32.ne (local.get $p) (i32.const "/"))))
                   (i32.eq (local.get $c3) (i32.const "!")))))
             (if (i32.eq (local.get $c2) (i32.const "/"))
               (then (call $lexLineComment (i32.const 2) (local.get $hl)))
@@ -171,8 +243,15 @@
             (local.set $rawOpen (call $rustRawOpen (local.get $p)))
             (if (local.get $rawOpen)
               (then
-                (local.set $member (i32.const 0))
-                (br $next)))))
+                (if (i32.ne (local.get $rawOpen) (i32.const -2))
+                  (then
+                    (local.set $member (i32.const 0))
+                    (br $next)))
+                (local.set $rawOpen (i32.const 0))
+                (local.set $c (i32.load8_u (global.get $ptr)))))))
+
+        (block $noStr
+        (block $str
         (if
           (i32.and
             (i32.or (i32.eq (local.get $c) (i32.const "b")) (i32.eq (local.get $c) (i32.const "c")))
@@ -182,21 +261,20 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (call $lexString (local.get $c2) (i32.const 0) (enum.get $Token.string))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $lhs (global.get $ptr))
+            (local.set $p (local.get $c2))
+            (br $str)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
-            (br $next)))
+            (local.set $p (i32.const 34))
+            (br $str)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             ;; Cairo has no lifetimes: `'bad value'` is a short string
             (if (global.get $rustCairo)
               (then
-                (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
-                (local.set $member (i32.const 0))
-                (br $next)))
+                (local.set $p (i32.const 39))
+                (br $str)))
             (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
             (block $lifeDone
               (loop $life
@@ -210,10 +288,21 @@
                 (i32.ne (call $rustByte (local.get $p)) (i32.const 39)))
               (then
                 (global.set $ptr (local.get $p))
-                (call $emitTok (enum.get $Token.label) (local.get $lhs) (global.get $ptr)))
-              (else (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))))
-            (local.set $member (i32.const 0))
-            (br $next)))
+                (call $emitTok (enum.get $Token.label) (local.get $lhs) (global.get $ptr))
+                (local.set $member (i32.const 0))
+                (br $next)))
+            (local.set $p (i32.const 39))
+            (br $str)))
+        (br $noStr))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (local.set $rawOpen
+          (i32.sub
+            (i32.const 0)
+            (i32.and
+              (i32.eq (local.get $p) (i32.const 34))
+              (i32.eqz (call $rustStringBody (local.get $p) (local.get $lhs))))))
+        (local.set $member (i32.const 0))
+        (br $next))
 
         (if
           (i32.and
@@ -243,7 +332,10 @@
             (if (local.get $attr)
               (then
                 (local.set $hl (enum.get $Token.attribute))
-                (local.set $attr (i32.const 0)))
+                (local.set $attr
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $rhs) (i32.const 1)) (global.get $end))
+                    (i32.eq (i32.load16_u (local.get $rhs)) (i32.const "::")))))
               (else
                 ;; Token in the low byte; bit 8 expects a function name and
                 ;; bit 9 a type. WARNING: keep this lookup inline; a shared
@@ -311,7 +403,12 @@
                                   (select
                                     (enum.get $Token.function.method)
                                     (enum.get $Token.function)
-                                    (i32.eq (local.get $member) (i32.const 1)))))
+                                    (i32.eq (local.get $member) (i32.const 1))))
+                                (local.set $hl
+                                  (select
+                                    (enum.get $Token.punctuation.special)
+                                    (local.get $hl)
+                                    (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "$(")))))
                               (else
                                 (if (local.get $member)
                                   (then
@@ -372,14 +469,23 @@
                         (i32.eq (i32.load16_u (local.get $rhs)) (i32.const "::")))
                       (then
                         (if
-                          (i32.and
-                            (i32.ne
-                              (call $rustByte (i32.add (local.get $rhs) (i32.const 2)))
-                              (i32.const "<"))
-                            (i32.gt_u
-                              (i32.sub (local.get $c) (i32.const "A"))
-                              (i32.const 25)))
-                          (then (local.set $hl (enum.get $Token.namespace))))))))))
+                          (i32.ne
+                            (call $rustByte (i32.add (local.get $rhs) (i32.const 2)))
+                            (i32.const "<"))
+                          (then
+                            (if
+                              (i32.gt_u
+                                (i32.sub (local.get $c) (i32.const "A"))
+                                (i32.const 25))
+                              (then (local.set $hl (enum.get $Token.namespace)))))
+                          (else
+                            (if (i32.eq (local.get $hl) (enum.get $Token.property))
+                              (then
+                                (local.set $hl
+                                  (select
+                                    (enum.get $Token.function.method)
+                                    (enum.get $Token.function)
+                                    (i32.eq (local.get $member) (i32.const 1))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             ;; only a `mut` binding modifier keeps the next name in position
             (global.set $sigPattern

@@ -529,3 +529,112 @@ void t.test('ruby: character literals in value position', () => {
     ['"done"', 'string'],
   ]);
 });
+
+void t.test("ruby: `\\'` does not close a raw literal", () => {
+  const code =
+    "a = 'it\\'s' + 'x\\\\' + 'a\\n'\nb = %q(a \\) b)\nc = :'d\\'e'\n";
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['a', 'variable'],
+    ['=', 'operator'],
+    ["'it\\'s'", 'string'],
+    ['+', 'operator'],
+    ["'x\\\\'", 'string'],
+    ['+', 'operator'],
+    ["'a\\n'", 'string'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['%q(a \\) b)', 'string'],
+    ['c', 'variable'],
+    ['=', 'operator'],
+    [":'d\\'e'", 'string.special.symbol'],
+  ]);
+  assertLineFedParity('ruby', code);
+});
+
+void t.test('ruby: `$@` is two bytes', () => {
+  checkInvariants(lexer.hl, 'raise $@');
+  assert.deepEqual(tokenKinds('ruby', '$@ b\nputs $@'), [
+    ['$@', 'variable.special'],
+    ['b', 'variable'],
+    ['puts', 'function'],
+    ['$@', 'variable.special'],
+  ]);
+});
+
+void t.test('ruby: an escaped line break continues a one-line literal', () => {
+  const code = 'x = /ab\\\ncd/ + 1\ny = :"a\\\nb"\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['/ab', 'string.regex'],
+    ['\\', 'string.escape'],
+    ['cd/', 'string.regex'],
+    ['+', 'operator'],
+    ['1', 'number'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    [':"a', 'string.special.symbol'],
+    ['\\', 'string.escape'],
+    ['b"', 'string.special.symbol'],
+  ]);
+  assertLineFedParity('ruby', code);
+});
+
+void t.test('ruby: command words take a regex or word-array argument', () => {
+  const code = 'puts %w[a b]\nassert_match /foo/, out\ny = x / 2\nz = x /= 3\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['puts', 'function'],
+    ['%w[a b]', 'string'],
+    ['assert_match', 'function'],
+    ['/foo/', 'string.regex'],
+    [',', 'punctuation.delimiter'],
+    ['out', 'variable'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['x', 'variable'],
+    ['/', 'operator'],
+    ['2', 'number'],
+    ['z', 'variable'],
+    ['=', 'operator'],
+    ['x', 'variable'],
+    ['/=', 'operator'],
+    ['3', 'number'],
+  ]);
+});
+
+void t.test('ruby: `defined?` is a keyword operator', () => {
+  assert.deepEqual(tokenKinds('ruby', 'x = defined?(foo)\ny = a.defined?\n'), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['defined?', 'keyword.operator'],
+    ['(', 'punctuation.bracket'],
+    ['foo', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['a', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['defined?', 'function.method'],
+  ]);
+});
+
+void t.test('ruby: a quoted heredoc delimiter ends at its line', () => {
+  const code = 'x = <<"\n;\ny = 1\n"\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['<<"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['"', 'string'],
+  ]);
+  assertLineFedParity('ruby', code);
+});
+
+void t.test('ruby: a heredoc waits for a body open at its line break', () => {
+  const code = 'x = <<EOS + "\nEOS\nr';
+  checkInvariants(lexer.hl, code);
+  assertLineFedParity('ruby', code);
+});

@@ -1526,8 +1526,12 @@ void t.test('tsx: `from` before a string cut by a line continuation', () => {
     'ts',
     'import x from "y\\\nz\\\nw"\nexport { q } from "a\\\nb"\n'
   );
-  // an unterminated specifier at the end of the input stays invalid in both
   assertLineFedParity('tsx', "import x from 'abc");
+  assertLineFedParity('js', 'from"\\\n');
+  assertLineFedParity('js', "from'\\\n\u{1F600}");
+  assertLineFedParity('js', 'from"\\\nab\nx = 1 / 2\n');
+  assertLineFedParity('ts', 'x = "a\\\nb\\\nc\n/re/g.test(a)\n');
+  assert.equal(colorOf(checkInvariants(tsx.hl, "from'\\\nx"), 'from'), KEYWORD);
 });
 
 void t.test('tsx: jsx attribute strings resume across line breaks', () => {
@@ -2246,4 +2250,170 @@ void t.test('vue-vine: a vine tagged template is HTML like html', () => {
   assert.deepEqual(vine.slice(6), html.slice(6));
   assert.ok(vine.some(([text, kind]) => text === 'div' && kind === 'tag'));
   assertLineFedParity('vue-vine', 'vine`<p\n title="x">\n</p>`;\n');
+});
+
+void t.test('ecma: a backslash before a line break ends a regexp', () => {
+  for (const lang of ['js', 'ts', 'tsx'] as const) {
+    for (const newline of ['\n', '\r\n']) {
+      const code = `const re = /a\\${newline}const s = 1;${newline}`;
+      assert.deepEqual(tokenKinds(lang, code).slice(3, 5), [
+        ['/a\\', 'string.regex'],
+        ['const', 'keyword.declaration'],
+      ]);
+      assertLineFedParity(lang, code);
+    }
+  }
+});
+
+void t.test('ecma: no lookahead reads a token on the next line', () => {
+  for (const lang of ['js', 'ts', 'tsx'] as const) {
+    for (const code of [
+      'const f = (\n  item\n) => item;\n',
+      'items.forEach((item)\n => item);\n',
+      'const x = foo\n  (bar);\n',
+      'const o = {\n a\n : 1 };\n',
+      'class A {\n get\n foo() {}\n}\n',
+    ]) {
+      assertLineFedParity(lang, code);
+    }
+    assert.deepEqual(tokenKinds(lang, 'const x = foo\n  (bar);\n')[3], [
+      'foo',
+      'variable',
+    ]);
+  }
+  for (const code of [
+    'let v = y as\n Foo;\n',
+    'import type\n { A } from "a";\n',
+    'function f(x\n is: 1) {}\n',
+  ]) {
+    assertLineFedParity('ts', code);
+  }
+});
+
+void t.test('jsx: a close tag may end on the next line', () => {
+  for (const lang of ['jsx', 'tsx'] as const) {
+    for (const code of [
+      'const a = (\n  <div>\n    <p>x</p\n    >\n    <b>{y / 2}</b>\n  </div>\n);\nconst z = 1 / 2;\n',
+      'const a = <p>x</\np>;\nconst z = 1 / 2;\n',
+      'x = <F\n#;\n',
+      'x = <F\n(1);\n',
+    ]) {
+      assertLineFedParity(lang, code);
+    }
+    assert.deepEqual(tokenKinds(lang, 'const a = <p>x</p\n>;\n').slice(7), [
+      ['</', 'punctuation.bracket.jsx'],
+      ['p', 'tag.jsx'],
+      ['>', 'punctuation.bracket.jsx'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    const code = 'const a = <p>x</p\nconst b = 1\n';
+    assertLineFedParity(lang, code);
+    assert.deepEqual(tokenKinds(lang, code).slice(9, 11), [
+      ['const', 'keyword.declaration'],
+      ['b', 'variable'],
+    ]);
+  }
+});
+
+void t.test('ts: type-only import and export clauses', () => {
+  for (const lang of ['ts', 'tsx'] as const) {
+    const kinds = tokenKinds(
+      lang,
+      'import type { A } from "a";\nexport type * from "b";\n'
+    );
+    assert.deepEqual(kinds[1], ['type', 'keyword.declaration']);
+    assert.deepEqual(kinds[9], ['type', 'keyword.declaration']);
+  }
+});
+
+void t.test('ecma: async generator methods', () => {
+  for (const lang of ['js', 'ts'] as const) {
+    assert.deepEqual(
+      tokenKinds(lang, 'class A { async *gen() {} }\n').slice(3, 6),
+      [
+        ['async', 'keyword'],
+        ['*', 'operator'],
+        ['gen', 'function'],
+      ]
+    );
+  }
+});
+
+void t.test('ts: predefined types in type positions', () => {
+  const builtins = tokenKinds(
+    'ts',
+    'let p: Map<string, number> = f<boolean>();\ntype U = symbol | object;\nconst v = x as unknown;\ntype N = [bigint, never];\n'
+  )
+    .filter(([, kind]) => kind === 'type.builtin')
+    .map(([text]) => text);
+  assert.deepEqual(builtins, [
+    'string',
+    'number',
+    'boolean',
+    'symbol',
+    'object',
+    'unknown',
+    'bigint',
+    'never',
+  ]);
+  assert.deepEqual(tokenKinds('ts', 'let a: bigint = 1n;\n').slice(2, 4), [
+    [':', 'punctuation.special'],
+    ['bigint', 'type.builtin'],
+  ]);
+  // a value comparison keeps its operand a variable
+  assert.deepEqual(tokenKinds('ts', 'if (i < number) {}\n')[4], [
+    'number',
+    'variable',
+  ]);
+});
+
+void t.test('ecma: reserved words as object and type keys', () => {
+  for (const lang of ['js', 'ts'] as const) {
+    assert.deepEqual(
+      tokenKinds(
+        lang,
+        'const o = { default: 1, new: 2 };\nswitch (x) { default: break; }\n'
+      )
+        .filter(([text]) => text === 'default' || text === 'new')
+        .map(([, kind]) => kind),
+      ['property', 'property', 'keyword.control']
+    );
+  }
+  assert.deepEqual(
+    tokenKinds('ts', 'interface I { a: string; delete?: number }\n')[7],
+    ['delete', 'property']
+  );
+});
+
+void t.test('js: a JSDoc optional parameter names its parameter', () => {
+  assert.deepEqual(
+    tokenKinds('js', '/** @param {string} [opts.name] name */\n').slice(5),
+    [
+      ['[', 'comment.doc'],
+      ['opts.name', 'variable.jsdoc'],
+      ['] name */', 'comment.doc'],
+    ]
+  );
+});
+
+void t.test('ts: as and satisfies before any type shape', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'ts',
+      'const w = obj as [A, B];\nlet n = x satisfies { a: 1 };\nlet m = x as unknown as 3;\n'
+    )
+      .filter(([text]) => text === 'as' || text === 'satisfies')
+      .map(([, kind]) => kind),
+    ['keyword', 'keyword', 'keyword', 'keyword']
+  );
+});
+
+void t.test('ts: a call with type arguments names a function', () => {
+  const kinds = tokenKinds(
+    'ts',
+    'const r = useState<boolean>(false);\nthis.m<A, B<C>>();\nif (a < b && c > (d)) {}\n'
+  );
+  assert.deepEqual(kinds[3], ['useState', 'function']);
+  assert.deepEqual(kinds[13], ['m', 'function.method']);
+  assert.deepEqual(kinds[25], ['a', 'variable']);
 });

@@ -221,17 +221,17 @@ void t.test('java: packages and imports, including static imports', () => {
       ['example', 'namespace'],
       [';', 'punctuation.delimiter'],
       ['import', 'keyword.import'],
-      ['java', 'variable'],
+      ['java', 'namespace'],
       ['.', 'punctuation.delimiter'],
-      ['util', 'property'],
+      ['util', 'namespace'],
       ['.', 'punctuation.delimiter'],
       ['List', 'type'],
       [';', 'punctuation.delimiter'],
       ['import', 'keyword.import'],
       ['static', 'keyword.declaration'],
-      ['java', 'variable'],
+      ['java', 'namespace'],
       ['.', 'punctuation.delimiter'],
-      ['lang', 'property'],
+      ['lang', 'namespace'],
       ['.', 'punctuation.delimiter'],
       ['Math', 'type'],
       ['.', 'punctuation.delimiter'],
@@ -531,3 +531,25 @@ void t.test(
     ]);
   }
 );
+
+void t.test('java: unicode and octal escapes are whole', () => {
+  const code =
+    'char u = \'\\u0041\'; String s = "\\u00e9 \\377 \\n";\nString t = """\n  \\u0041\n  """;\nString c = "a\\\n\\u0041";\n';
+  assertLineFedParity('java', code);
+  assert.deepEqual(
+    tokenKinds('java', code).filter(([, kind]) => kind === 'string.escape'),
+    [
+      ['\\u0041', 'string.escape'],
+      ['\\u00e9', 'string.escape'],
+      ['\\377', 'string.escape'],
+      ['\\n', 'string.escape'],
+      ['\\u0041', 'string.escape'],
+      ['\\', 'string.escape'],
+      ['\\u0041', 'string.escape'],
+    ]
+  );
+});
+
+void t.test('java: a `>` that starts a line ends a pending type', () => {
+  assertLineFedParity('java', 'A\n> d(');
+});

@@ -157,3 +157,29 @@ test('smalltalk: comments and strings span lines', () => {
   assertLineFedParity('smalltalk', code);
   assertLineFedParity('smalltalk', '#(a\n(b\n c) d) e.\n| t\n u |\n');
 });
+
+test('smalltalk: a binary bar at a line start and negative array literals', () => {
+  const code =
+    'ok\n\t^ (a isNil\n\t\t| b isNil)\n\nfoo\n\t| t |\n\t^ #(1 -2) size\n';
+  expect(tokenKinds('smalltalk', code)).toEqual([
+    ['ok', 'variable'],
+    ['^', 'keyword.control'],
+    ['(', 'punctuation.bracket'],
+    ['a', 'variable'],
+    ['isNil', 'function'],
+    ['|', 'operator'],
+    ['b', 'variable'],
+    ['isNil', 'function'],
+    [')', 'punctuation.bracket'],
+    ['foo', 'function'],
+    ['|', 'punctuation.delimiter'],
+    ['t', 'variable'],
+    ['|', 'punctuation.delimiter'],
+    ['^', 'keyword.control'],
+    ['#(', 'punctuation.bracket'],
+    ['1 -2', 'number'],
+    [')', 'punctuation.bracket'],
+    ['size', 'function'],
+  ]);
+  assertLineFedParity('smalltalk', code);
+});

@@ -27,7 +27,7 @@
       (i32.const $mem.lexLowerScratch)
       (i32.add (i32.const $mem.lexLowerScratch) (local.get $n))))
 
-  ;; A heredoc body after its opener's line, shared with terraform.wat: skip
+  ;; A heredoc body after its opener's line, shared with other lexers: skip
   ;; the blanks left on that line and, at its LF or CRLF, emit the break as a
   ;; gap from $gap and consume the body through the line holding the $n-byte
   ;; delimiter at $delim; `$strip` permits leading blanks on that line
@@ -158,7 +158,8 @@
   ;; there is a comment line that BuildKit drops, and the instruction
   ;; continues after it. A heredoc opener leaves $hdLen (the delimiter length
   ;; times 2, plus 1 for `<<-`) and $hdDelim pending until the line break,
-  ;; after which its body runs to the delimiter line. All are checkpointed.
+  ;; after which its body runs to the delimiter line. $esc is the escape
+  ;; byte xor `\`, set by a `# escape=`` ` directive. All are checkpointed.
   (func $hlDockerfile
     (local $c i32)
     (local $c2 i32)
@@ -175,6 +176,7 @@
     (local $hdLen i32)
     (local $hdDelim i32)
     (local $hdStrip i32)
+    (local $esc i32)
     (local.set $lineHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -231,6 +233,25 @@
             (i32.eq (local.get $c) (i32.const "#")))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
+            (local.set $p (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1))))
+            (if
+              (i32.and
+                (i32.lt_u (i32.add (local.get $p) (i32.const 6)) (global.get $ptr))
+                (i32.and
+                  (i32.eq
+                    (i32.or (i32.load (local.get $p)) (i32.const 0x20202020))
+                    (i32.const "esca"))
+                  (i32.eq
+                    (i32.or (i32.load16_u offset=4 (local.get $p)) (i32.const 0x2020))
+                    (i32.const "pe"))))
+              (then
+                (local.set $p (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 6))))
+                (if (i32.eq (call $templateByte (local.get $p)) (i32.const "="))
+                  (then
+                    (local.set $g
+                      (call $templateByte (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 1)))))
+                    (if (i32.or (i32.eq (local.get $g) (i32.const 96)) (i32.eq (local.get $g) (i32.const 92)))
+                      (then (local.set $esc (i32.xor (local.get $g) (i32.const 92)))))))))
             (br $next)))
 
         ;; the instruction word, or the one `HEALTHCHECK`/`ONBUILD` wraps
@@ -272,11 +293,23 @@
 
         ;; `\` before the line break continues the logical line; elsewhere
         ;; it escapes the next byte
-        (if (i32.eq (local.get $c) (i32.const 92))
+        (if (i32.eq (local.get $c) (i32.xor (local.get $esc) (i32.const 92)))
           (then
             (if (call $dockerLineJoin)
               (then
                 (local.set $lineHead (i32.const 2))
+                ;; a join that ends the chunk keeps a pending heredoc, and its
+                ;; delimiter (up to 32 bytes) where the next chunk can read it
+                (if (i32.ge_u (global.get $ptr) (global.get $end))
+                  (then
+                    (if (i32.le_u (local.get $hdLen) (i32.const 65))
+                      (then
+                        (memory.copy
+                          (i32.const $mem.streamDelimiter)
+                          (local.get $hdDelim)
+                          (i32.shr_u (local.get $hdLen) (i32.const 1)))
+                        (local.set $hdDelim (i32.const $mem.streamDelimiter))))
+                    (br $done)))
                 (br $next)))
             (global.set $ptr (call $lexEscapeEnd (global.get $ptr)))
             (local.set $hl (enum.get $Token.string.escape))
@@ -394,7 +427,14 @@
 
         ;; a number stands alone after blanks; digits inside `ubuntu:22.04`
         ;; stay plain
-        (if (i32.and (call $lexIsDigit (local.get $c)) (i32.gt_u (local.get $lhs) (local.get $gap)))
+        (if
+          (if (result i32)
+            (i32.and (call $lexIsDigit (local.get $c)) (i32.gt_u (local.get $lhs) (local.get $gap)))
+            (then
+              (i32.or
+                (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const 32))
+                (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const 9))))
+            (else (i32.const 0)))
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))

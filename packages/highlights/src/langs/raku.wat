@@ -1,15 +1,15 @@
 (module
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
-  (memory-region $mem.rakuWords 376)
+  (memory-region $mem.rakuWords 400)
 
   (import "@pierre/wat-tools/common.wat")
   (import "./perl.wat")
 
   ;; Each value is the word's token; the high byte is what the next name is
   ;; (see $decl in $hlRaku): 1 a routine, 2 a type, 3 a module, 5 a trait,
-  ;; 7 a regex routine, whose `{` opens a regex body.
-  (keyword-table $rakuWords $mem.rakuWords $mem.rakuWords+376
+  ;; 7 a regex routine, whose `{` opens a regex body, 8 a term.
+  (keyword-table $rakuWords $mem.rakuWords $mem.rakuWords+400
     (group $Token.keyword.declaration "my" "our" "has" "state" "constant" "unit" "anon")
     (group $Token.keyword.declaration+256 "sub" "method" "submethod" "multi" "proto")
     (group $Token.keyword.declaration+512 "class" "role" "grammar" "module" "package" "enum" "subset")
@@ -27,7 +27,8 @@
       "and" "or" "not" "xor" "andthen" "orelse" "eq" "ne" "lt" "le" "gt" "ge" "leg" "cmp" "xx"
       "div" "mod" "gcd" "lcm" "before" "after")
     (group $Token.boolean "True" "False")
-    (group $Token.constant.builtin "Nil")
+    (group $Token.constant.builtin "Nil" "pi" "tau")
+    (group $Token.function+2048 "now" "time" "rand")
     (group $Token.variable.special "self"))
 
   ;; 1 when the UTF-8 code point at $p is an operator: a Latin-1 symbol but
@@ -127,22 +128,7 @@
     (local.set $mark (global.get $ptr))
     (block $done
       (loop $scan
-        ;; the next closer or backslash, and the next opener, `$`, `@`, or
-        ;; `{` before it, each found with one SIMD hop (see $perlQuoteBody)
-        (if
-          (i32.or
-            (i32.ge_u (global.get $ptr) (local.get $stop))
-            (i32.gt_u (global.get $ptr) (local.get $mark)))
-          (then
-            (local.set $mark
-              (call $scanFind3
-                (global.get $ptr)
-                (select
-                  (local.get $open)
-                  (select (i32.const "{") (local.get $close) (i32.and (local.get $flags) (i32.const 8)))
-                  (local.get $open))
-                (select (i32.const "$") (local.get $close) (i32.and (local.get $flags) (i32.const 1)))
-                (select (i32.const "@") (local.get $close) (i32.and (local.get $flags) (i32.const 1)))))))
+        ;; the opener search stops at the closer found first, so each byte is read once
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
           (then
             (local.set $stop
@@ -151,7 +137,22 @@
                 (global.get $end)
                 (local.get $close)
                 (i32.eqz (i32.and (local.get $flags) (i32.const 4)))
-                (i32.const 0)))))
+                (i32.const 0)))
+            (local.set $mark (i32.const 0))))
+        (if (i32.gt_u (global.get $ptr) (local.get $mark))
+          (then
+            (local.set $e (global.get $end))
+            (global.set $end (local.get $stop))
+            (local.set $mark
+              (call $scanFind3
+                (global.get $ptr)
+                (select
+                  (local.get $open)
+                  (select (i32.const "{") (local.get $close) (i32.and (local.get $flags) (i32.const 8)))
+                  (local.get $open))
+                (select (i32.const "$") (local.get $close) (i32.and (local.get $flags) (i32.const 1)))
+                (select (i32.const "@") (local.get $close) (i32.and (local.get $flags) (i32.const 1)))))
+            (global.set $end (local.get $e))))
         (global.set $ptr
           (select (local.get $mark) (local.get $stop) (i32.lt_u (local.get $mark) (local.get $stop))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -689,6 +690,10 @@
                         (local.set $decl (i32.const 0))
                         (local.set $hl (enum.get $Token.function))
                         (br $opTok)))))
+                (if (i32.eq (local.get $decl) (i32.const 8))
+                  (then
+                    (local.set $decl (i32.const 0))
+                    (br $valueTok)))
                 (br_if $valueTok
                   (i32.or
                     (i32.or
@@ -699,11 +704,13 @@
             (local.set $decl (i32.const 0))
             ;; the repetition operator `x`, too short for the table, and
             ;; `where`, whose hash `while` has
-            (local.set $hl (enum.get $Token.keyword.operator))
-            (br_if $opTok
-              (i32.and
-                (i32.eq (local.get $rhs) (i32.add (local.get $lhs) (i32.const 1)))
-                (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "x"))))
+            (if (i32.eq (local.get $rhs) (i32.add (local.get $lhs) (i32.const 1)))
+              (then
+                (local.set $c (i32.load8_u (local.get $lhs)))
+                (local.set $hl (enum.get $Token.keyword.operator))
+                (br_if $opTok (i32.eq (local.get $c) (i32.const "x")))
+                (local.set $hl (enum.get $Token.constant.builtin))
+                (br_if $valueTok (i32.or (i32.eq (local.get $c) (i32.const "e")) (i32.eq (local.get $c) (i32.const "i"))))))
             (local.set $hl (enum.get $Token.keyword))
             (br_if $opTok
               (i32.and
@@ -836,6 +843,12 @@
                       (i32.and
                         (i32.eq (global.get $ptr) (i32.add (local.get $lhs) (i32.const 1)))
                         (i32.eq (local.get $c) (i32.const "/"))))))
+                (if (i32.eq (local.get $c3) (i32.const "%"))
+                  (then
+                    (br_if $opDone
+                      (i32.and
+                        (local.get $operand)
+                        (call $lexIsNameStart (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))))))
                 ;; so does a method call: `>>.say`
                 (br_if $opDone
                   (i32.and

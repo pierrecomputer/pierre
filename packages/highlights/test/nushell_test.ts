@@ -209,3 +209,9 @@ test('nushell: comments start words; lists keep items as arguments', () => {
   ]);
   assertLineFedParity('nushell', code);
 });
+
+test('nushell: a datetime with a UTC offset is one number', () => {
+  expect(tokenKinds('nushell', '2024-03-15T10:30:00+02:00\n')).toEqual([
+    ['2024-03-15T10:30:00+02:00', 'number'],
+  ]);
+});

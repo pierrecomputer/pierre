@@ -382,3 +382,23 @@ void t.test('gleam: multi-line strings and case blocks stream line-fed', () => {
     'fn f() {\n  let s = "a\n  b"\n  case s {\n    "x" -> 1\n    _ -> 2\n  }\n}\n'
   );
 });
+
+void t.test('gleam: `as` renames an import; `\\u{...}` is one escape', () => {
+  const code = 'import gleam/string as str\nlet s = "\\u{1F600} a\nb"\n';
+  assertLineFedParity('gleam', code);
+  assert.deepEqual(tokenKinds('gleam', code), [
+    ['import', 'keyword.import'],
+    ['gleam', 'namespace'],
+    ['/', 'punctuation.delimiter'],
+    ['string', 'namespace'],
+    ['as', 'keyword.import'],
+    ['str', 'namespace'],
+    ['let', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"', 'string'],
+    ['\\u{1F600}', 'string.escape'],
+    ['a', 'string'],
+    ['b"', 'string'],
+  ]);
+});

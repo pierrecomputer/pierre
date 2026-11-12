@@ -3,8 +3,9 @@
   (import "@pierre/wat-tools/lexer-state.wat")
   (import "./ini.wat")
 
-  ;; Shared with nginx.
-  (func $envDollar (param $stop i32) (param $hl i32)
+  ;; Shared with nginx. $miss is the last failed `}` search (the previous return
+  ;; value): a `${` before it skips the search, so a line is scanned once.
+  (func $envDollar (param $stop i32) (param $hl i32) (param $miss i32) (result i32)
     (local $lhs i32)
     (local $p i32)
     (local.set $lhs (global.get $ptr))
@@ -17,7 +18,10 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
         (local.set $p
-          (call $scanFindSpecial (global.get $ptr) (local.get $stop) (i32.const "}") (i32.const 0) (i32.const 1)))
+          (if (result i32) (i32.lt_u (global.get $ptr) (local.get $miss))
+            (then (local.get $miss))
+            (else
+              (call $scanFindSpecial (global.get $ptr) (local.get $stop) (i32.const "}") (i32.const 0) (i32.const 1)))))
         (if
           (i32.and
             (i32.lt_u (local.get $p) (local.get $stop))
@@ -26,7 +30,7 @@
             (call $emitTok (enum.get $Token.variable) (global.get $ptr) (local.get $p))
             (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))))
-        (return)))
+        (return (local.get $p))))
     (if (i32.lt_u (global.get $ptr) (local.get $stop))
       (then (call $scanIdentRun (i32.const 0))))
     (if (i32.gt_u (global.get $ptr) (local.get $stop))
@@ -37,13 +41,15 @@
         (local.get $hl)
         (i32.gt_u (global.get $ptr) (i32.add (local.get $lhs) (i32.const 1))))
       (local.get $lhs)
-      (global.get $ptr)))
+      (global.get $ptr))
+    (local.get $miss))
 
   ;; Returns 1 after the closing quote, 0 at $end. Shared with nginx.
   (func $envQuoted (param $quote i32) (param $vars i32) (param $seg i32) (result i32)
     (local $c i32)
     (local $e i32)
     (local $stop i32)
+    (local $miss i32)
     (block $done
       (loop $l
         ;; Reuse the found stop until $ptr passes it, so many `$` do not rescan.
@@ -74,7 +80,8 @@
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e)))
-          (else (call $envDollar (local.get $stop) (enum.get $Token.string))))
+          (else
+            (local.set $miss (call $envDollar (local.get $stop) (enum.get $Token.string) (local.get $miss)))))
         (local.set $seg (global.get $ptr))
         (br $l)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
@@ -90,7 +97,9 @@
     (local $rhs i32)
     (local $line i32)
     (local $open i32)
+    (local $miss i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $miss (i32.const 0))
     (if (local.get $open)
       (then
         (if (call $envQuoted (local.get $open) (i32.eq (local.get $open) (i32.const 34)) (global.get $ptr))
@@ -193,7 +202,7 @@
             (call $emitTok (enum.get $Token.none) (global.get $ptr) (local.get $p))
             (global.set $ptr (local.get $p))
             (br_if $plainDone (i32.ge_u (local.get $p) (local.get $rhs)))
-            (call $envDollar (local.get $rhs) (enum.get $Token.none))
+            (local.set $miss (call $envDollar (local.get $rhs) (enum.get $Token.none) (local.get $miss)))
             (br $plain)))
         (br $next))))
 )

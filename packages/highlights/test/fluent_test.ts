@@ -69,8 +69,8 @@ test('fluent: placeables with variables, references, calls, and literals', () =>
     [',', 'string'],
     ['{', 'punctuation.special'],
     ['"', 'string'],
-    ['\\u', 'string.escape'],
-    ['00A0"', 'string'],
+    ['\\u00A0', 'string.escape'],
+    ['"', 'string'],
     ['}', 'punctuation.special'],
     [',', 'string'],
     ['{', 'punctuation.special'],
@@ -137,4 +137,28 @@ test('fluent: selectors span lines and hold text variants', () => {
     ['y', 'string'],
   ]);
   assertLineFedParity('fluent', inline);
+});
+
+test('fluent: string escapes take their hex digits and strings end at the line', () => {
+  const code = 'a = { "x\\U01F602y\\\\" }\nb = { "open\\\nc = 1\n';
+  expect(tokenKinds('fluent', code)).toEqual([
+    ['a', 'property'],
+    ['=', 'operator'],
+    ['{', 'punctuation.special'],
+    ['"x', 'string'],
+    ['\\U01F602', 'string.escape'],
+    ['y', 'string'],
+    ['\\\\', 'string.escape'],
+    ['"', 'string'],
+    ['}', 'punctuation.special'],
+    ['b', 'property'],
+    ['=', 'operator'],
+    ['{', 'punctuation.special'],
+    ['"open', 'string'],
+    ['\\', 'string.escape'],
+    ['c', 'property'],
+    ['=', 'operator'],
+    ['1', 'string'],
+  ]);
+  assertLineFedParity('fluent', code);
 });

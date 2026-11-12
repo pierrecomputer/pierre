@@ -169,3 +169,20 @@ test('puppet: heredocs end at their tag, expanding only quoted tags', () => {
     assertLineFedParity('puppet', text);
   }
 });
+
+test('puppet: a line of unclosed heredoc openers stays linear', () => {
+  // each `@(` used to scan to the line end: 64K of them took seconds
+  const code = '@('.repeat(65536) + '\n';
+  tokenKinds('puppet', 'x');
+  const start = performance.now();
+  const tokens = tokenKinds('puppet', code);
+  expect(performance.now() - start).toBeLessThan(2000);
+  expect(tokens.map(([text]) => text).join('')).toBe(code.trimEnd());
+  expect(tokenKinds('puppet', '$a = @(EOT:json/L)\nx\nEOT\n')).toEqual([
+    ['$a', 'variable'],
+    ['=', 'operator'],
+    ['@(EOT:json/L)', 'string'],
+    ['x', 'string'],
+    ['EOT', 'string'],
+  ]);
+});

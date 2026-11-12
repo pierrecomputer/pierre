@@ -495,6 +495,8 @@
   ;; language. Returns 1 when the construct consumed the whole range. Shared
   ;; by the top-level stream and markdown fence bodies.
   (func $streamResumeLang (param $lang i32) (result i32)
+    (local $open i32)
+    (local $saveEnd i32)
     ;; an HTTP or Hurl body bounds the regions and modes of its own lexer
     (if
       (i32.and
@@ -551,6 +553,24 @@
       (then
         (call $highlightLang (local.get $lang))
         (return (i32.const 1))))
+    ;; PHP: an open HTML tag or body ends at the next `<?php`/`<?=`, as in a whole buffer
+    (if
+      (i32.and
+        (i32.eq (local.get $lang) (enum.get $Language.php))
+        (i32.ne (global.get $streamRegionKind) (i32.const 0)))
+      (then
+        (local.set $open (call $phpFindOpen (global.get $ptr)))
+        (if (i32.lt_u (local.get $open) (global.get $end))
+          (then
+            (local.set $saveEnd (global.get $end))
+            (global.set $end (local.get $open))
+            (local.set $open (call $streamResumeAnyRegion))
+            (global.set $end (local.get $saveEnd))
+            (if (local.get $open)
+              (then
+                (global.set $streamRegionKind (i32.const 0))
+                (call $streamClearEmbedded)))
+            (return (i32.const 0))))))
     ;; an open start-tag (kinds 9-13) or embedded region
     (if (global.get $streamRegionKind)
       (then (return (call $streamResumeAnyRegion))))

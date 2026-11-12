@@ -464,3 +464,107 @@ void t.test('rust: tuple fields keep the dot out of the number', () => {
   ]);
   assertLineFedParity('rust', 'let v = pair\n    .0\n    .1;\n');
 });
+
+void t.test(
+  'rust: cooked strings span lines; chars and lifetimes do not',
+  () => {
+    assert.deepEqual(
+      tokenKinds('rust', 'let sql = "SELECT *\nFROM users";\nlet n = 1;'),
+      [
+        ['let', 'keyword.declaration'],
+        ['sql', 'variable'],
+        ['=', 'operator'],
+        ['"SELECT *', 'string'],
+        ['FROM users"', 'string'],
+        [';', 'punctuation.delimiter'],
+        ['let', 'keyword.declaration'],
+        ['n', 'variable'],
+        ['=', 'operator'],
+        ['1', 'number'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+    assert.deepEqual(tokenKinds('rust', "fn f<'a>() { b'x'; }\n'b'"), [
+      ['fn', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['<', 'operator'],
+      ["'a", 'label'],
+      ['>', 'operator'],
+      ['() {', 'punctuation.bracket'],
+      ["b'x'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['}', 'punctuation.bracket'],
+      ["'b'", 'string'],
+    ]);
+    assertLineFedParity(
+      'rust',
+      'let a = "one\ntwo \\"q\\"\n\nthree";\nlet b = b"x\ny";\nlet c = c"p\n";\nlet d = \'\\\nq\';\nlet e = "open\n'
+    );
+  }
+);
+
+void t.test('rust: unicode and hex escapes are whole', () => {
+  assert.deepEqual(tokenKinds('rust', '"\\u{1F600}\\x7f\\n"; \'\\u{41}\''), [
+    ['"', 'string'],
+    ['\\u{1F600}\\x7f\\n', 'string.escape'],
+    ['"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ["'", 'string'],
+    ['\\u{41}', 'string.escape'],
+    ["'", 'string'],
+  ]);
+});
+
+void t.test('rust: raw identifiers are names, not keywords', () => {
+  assert.deepEqual(tokenKinds('rust', 'let r#type = r#"s"#; r#match(x);'), [
+    ['let', 'keyword.declaration'],
+    ['r#type', 'variable'],
+    ['=', 'operator'],
+    ['r#"s"#', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['r#match', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assert.deepEqual(tokenKinds('rust', 'let r#Foo = 1;')[1], ['r#Foo', 'type']);
+});
+
+void t.test('rust: turbofish method calls, attribute paths, and $(', () => {
+  assert.deepEqual(
+    tokenKinds('rust', 's.parse::<i32>(); #[tokio::main] $(f)*'),
+    [
+      ['s', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['parse', 'function.method'],
+      ['::', 'punctuation.delimiter'],
+      ['<', 'operator'],
+      ['i32', 'type.builtin'],
+      ['>', 'operator'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['#', 'attribute'],
+      ['[', 'punctuation.bracket'],
+      ['tokio', 'attribute'],
+      ['::', 'punctuation.delimiter'],
+      ['main', 'attribute'],
+      [']', 'punctuation.bracket'],
+      ['$', 'punctuation.special'],
+      ['(', 'punctuation.bracket'],
+      ['f', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['*', 'operator'],
+    ]
+  );
+});
+
+void t.test('rust: banner comments are not doc comments', () => {
+  assert.deepEqual(tokenKinds('rust', '/**/\n/***/\n////\n/** d */\n/// d'), [
+    ['/**/', 'comment'],
+    ['/***/', 'comment'],
+    ['////', 'comment'],
+    ['/** d */', 'comment.doc'],
+    ['/// d', 'comment.doc'],
+  ]);
+});
