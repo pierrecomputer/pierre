@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { InteractionManager } from '../src/managers/InteractionManager';
 import type { SelectedLineRange } from '../src/types';
-import { installDom } from './domHarness';
+import { installDom, wait } from './domHarness';
 
 interface FilePreFixture {
   contentRows: HTMLDivElement[];
@@ -192,18 +192,54 @@ describe('InteractionManager editor active-line state', () => {
       onSelectedLinesRender: () => reports.push(isSelected(contentRows[0])),
     });
     try {
-      // Setup applies the initial, empty selection.
+      // Setup draws the selection after a render. It is not a selection
+      // change, so it reports nothing.
       manager.setup(pre);
-      expect(reports).toEqual([false]);
+      expect(reports).toEqual([]);
 
       manager.setSelection({ start: 1, end: 2 }, { notify: false });
-      expect(reports).toEqual([false, true]);
+      expect(reports).toEqual([true]);
 
       manager.setEditorActiveLine(3, { side: 'additions' });
-      expect(reports).toEqual([false, true]);
+      expect(reports).toEqual([true]);
 
       manager.setSelection(null, { notify: false });
-      expect(reports).toEqual([false, true, false]);
+      expect(reports).toEqual([true, false]);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('a selection change that is waiting for its frame still reports after the options change', async () => {
+    const { cleanup } = installDom();
+    const { contentRows, gutterRows, pre } = createFilePre(3);
+    // Whether the first row was marked when each report arrived.
+    const reports: boolean[] = [];
+    const options = {
+      enableLineSelection: true,
+      onSelectedLinesRender: () => reports.push(isSelected(contentRows[0])),
+    };
+    const manager = new InteractionManager('file', options);
+    try {
+      manager.setup(pre);
+      // A press on a line number selects its line. The rows are marked on
+      // the next frame.
+      dispatchPointer(gutterRows[0], 'pointerdown', {
+        clientX: 8,
+        clientY: 20,
+        pointerId: 1,
+        pointerType: 'mouse',
+      });
+      expect(manager.getSelection()).toEqual({ start: 1, end: 1 });
+      expect(reports).toEqual([]);
+
+      // The host changes an option before that frame.
+      manager.setOptions({ ...options, onLineClick: () => {} });
+      await wait(30);
+
+      expect(isSelected(contentRows[0])).toBe(true);
+      expect(reports).toEqual([true]);
     } finally {
       manager.cleanUp();
       cleanup();

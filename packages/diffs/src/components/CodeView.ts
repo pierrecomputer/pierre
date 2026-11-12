@@ -4645,7 +4645,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     this.flushSlotCoordinator();
     this.flushManagers(updatedItems);
-    // Read phase: measure a freshly mounted or re-populated host now so its
+    // Read phase: every diff measures its semantic connectors before any of
+    // them is drawn, so the reads share one reflow with the reads below.
+    this.measureSemanticConnectors(updatedItems);
+    // Measure a freshly mounted or re-populated host now so its
     // getBoundingClientRect batches into the same reflow as the item height reads.
     const { measurementsPending } = this.renderState;
     if (hostsChanged || measurementsPending) {
@@ -4656,6 +4659,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const measured = this.reconcileRenderedItems(
       !measurementsPending ? updatedItems : undefined
     );
+    this.drawSemanticConnectors(updatedItems);
     this.renderState.measurementsPending = !measured;
     this.syncContainerHeight();
     this.updateStickyPositioning();
@@ -4765,6 +4769,26 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   ): void {
     for (const item of updatedItems) {
       item.instance.flushManagers();
+    }
+  }
+
+  private measureSemanticConnectors(
+    updatedItems: Set<CodeViewContextItem<LAnnotation, Caret>>
+  ): void {
+    for (const item of updatedItems) {
+      if (item.type === 'diff') {
+        item.instance.measureSemanticConnectors();
+      }
+    }
+  }
+
+  private drawSemanticConnectors(
+    updatedItems: Set<CodeViewContextItem<LAnnotation, Caret>>
+  ): void {
+    for (const item of updatedItems) {
+      if (item.type === 'diff') {
+        item.instance.drawSemanticConnectors();
+      }
     }
   }
 

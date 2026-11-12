@@ -157,7 +157,10 @@ import {
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
-import { SemanticConnector } from './SemanticConnector';
+import {
+  SemanticConnector,
+  type SemanticConnectorRenderProps,
+} from './SemanticConnector';
 import { DiffsContainerLoaded } from './web-components';
 
 type LoadedPartialDiffContents = Awaited<
@@ -338,6 +341,7 @@ interface SemanticConnectorCache {
   instance: SemanticConnector | undefined;
   fileDiff: FileDiffMetadata | undefined;
   regions: SemanticDiffConnectorRegion[];
+  measured: SemanticConnectorRenderProps | undefined;
 }
 
 interface SemanticConnectorLayout {
@@ -407,6 +411,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     instance: undefined,
     fileDiff: undefined,
     regions: [],
+    measured: undefined,
   };
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
@@ -864,8 +869,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       !this.managersDirty &&
       areObjectsEqual(setup, this.appliedManagerSetup)
     ) {
-      // A render can move rows without the managers needing a new setup.
-      this.renderSemanticConnectors();
       return;
     }
     this.interactionManager.setup(this.pre);
@@ -887,7 +890,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     this.appliedManagerSetup = setup;
     this.managersDirty = false;
-    this.renderSemanticConnectors();
   }
 
   // Attach the center column once and refresh its source regions when
@@ -962,15 +964,22 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // rendered, so it is not needed.
   protected computeLineBounds: ComputeLineBounds | undefined;
 
-  // Measure the source rows and let SemanticConnector handle when to draw.
   private renderSemanticConnectors = (): void => {
+    this.measureSemanticConnectors();
+    this.drawSemanticConnectors();
+  };
+
+  // Measures the source rows for the semantic connectors. This only reads
+  // the page. Nothing is drawn until drawSemanticConnectors, so a caller
+  // with several diffs can measure them all before any of them writes.
+  public measureSemanticConnectors(): void {
     const layout = this.getSemanticConnectorLayout();
     if (layout == null) {
+      this.semanticConnector.measured = undefined;
       return;
     }
     const { column, bounds, deletions, additions } = layout;
-    this.semanticConnector.instance ??= new SemanticConnector();
-    this.semanticConnector.instance.render({
+    this.semanticConnector.measured = {
       container: column,
       bounds: { left: 0, top: 0, width: bounds.width, height: bounds.height },
       // FOLLOWUP: Think about how this work could maybe be better memoized?
@@ -987,8 +996,21 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.interactionManager.getSelectedRowEdges(),
         bounds.top
       ),
-    });
-  };
+    };
+  }
+
+  // Draws what measureSemanticConnectors measured. This only writes to the
+  // page. SemanticConnector handles when the connectors appear.
+  public drawSemanticConnectors(): void {
+    const { semanticConnector } = this;
+    const { measured } = semanticConnector;
+    if (measured == null) {
+      return;
+    }
+    semanticConnector.measured = undefined;
+    semanticConnector.instance ??= new SemanticConnector();
+    semanticConnector.instance.render(measured);
+  }
 
   // A selection change moves no rows, so only the selection band needs a new
   // measurement. Before the connector layer exists, its first render measures
@@ -1316,6 +1338,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.injectUnsafeCSS();
     this.managersDirty = true;
     this.flushManagers();
+    this.renderSemanticConnectors();
   }
 
   public rerender(): void {
@@ -1948,6 +1971,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
       if (!deferManagers) {
         this.flushManagers();
+        this.renderSemanticConnectors();
       }
 
       this.finalizeRender();

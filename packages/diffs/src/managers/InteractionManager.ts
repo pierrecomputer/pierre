@@ -262,6 +262,7 @@ export interface InteractionManagerOptions<
     expansionLineCountOverride?: number
   ): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
+  /** Called after a selection change redraws the selected lines. */
   onSelectedLinesRender?(): void;
   onSemanticFoldToggle?(start: number): void;
 }
@@ -319,7 +320,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     }
     this.options = options;
     if (this.pre != null) {
-      this.setup(this.pre);
+      this.applyOptions(this.pre);
+      this.placeUtility();
     }
   }
 
@@ -352,14 +354,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   // Rows keep the selection marks written on them; the component calls
   // `setSelectionDirty` when a render wrote rows that have none.
   setup(pre: HTMLPreElement): void {
-    const { usesCustomGutterUtility = false, enableGutterUtility = false } =
-      this.options;
-
-    const newContainer = this.pre !== pre;
-    if (newContainer) {
+    if (this.pre !== pre) {
       this.cleanUp();
       this.pre = pre;
     }
+
+    this.applyOptions(pre);
+    this.drawSelection();
+    this.placeUtility();
+  }
+
+  // Applies what the options decide: the gutter utility, the pointer
+  // listeners and the interactive line attributes.
+  private applyOptions(pre: HTMLPreElement): void {
+    const { usesCustomGutterUtility = false, enableGutterUtility = false } =
+      this.options;
 
     if (enableGutterUtility) {
       this.ensureGutterUtilityNode(usesCustomGutterUtility);
@@ -377,8 +386,6 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
     this.syncPointerListeners(pre);
     this.updateInteractiveLineAttributes();
-    this.renderSelection();
-    this.placeUtility();
   }
 
   setSelectionDirty(): void {
@@ -1810,11 +1817,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     return columns;
   }
 
+  // Draws a selection change and reports it.
   private renderSelection = (): void => {
+    if (this.drawSelection()) {
+      const { onSelectedLinesRender } = this.options;
+      onSelectedLinesRender?.();
+    }
+  };
+
+  // Marks the selected rows and the editor's active line. Returns whether the
+  // selected lines were drawn again.
+  private drawSelection(): boolean {
     dequeueRender(this.renderSelection);
     const renderState = this.getSelectionRenderState();
     if (this.pre == null) {
-      return;
+      return false;
     }
     const { editorActiveLine, selectedLines } = renderState;
     const selectedLinesChanged = !areLineRenderStatesEqual(
@@ -1826,7 +1843,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       editorActiveLine
     );
     if (!selectedLinesChanged && !editorActiveLineChanged) {
-      return;
+      return false;
     }
 
     // A changed channel remains explicitly dirty until its DOM update finishes,
@@ -2006,15 +2023,15 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       }
     }
 
-    if (selectedLinesChanged && selectedLinesComplete) {
+    const selectedLinesDrawn = selectedLinesChanged && selectedLinesComplete;
+    if (selectedLinesDrawn) {
       this.renderedSelectedLinesState = selectedLines;
-      const { onSelectedLinesRender } = this.options;
-      onSelectedLinesRender?.();
     }
     if (editorActiveLineChanged && editorActiveLineComplete) {
       this.renderedEditorActiveLineState = editorActiveLine;
     }
-  };
+    return selectedLinesDrawn;
+  }
 
   // Removes a mark from the elements carrying it: the ones marked here, or,
   // before anything was marked, whatever the markup came with.
