@@ -42,7 +42,7 @@
     "code"      ;; data = info string begin, aux = info string end
     "html"
     "p"
-    "table"     ;; data = columns, aux = auto-filled cells, extra = column alignments
+    "table"     ;; data = column count, aux = previous table, extra = alignment bytes
     "linkdef"   ;; data/aux = destination; extra = title range, label length, label
     "footnote"  ;; container, data = assigned number; extra as for linkdef
   )

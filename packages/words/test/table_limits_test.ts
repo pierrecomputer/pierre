@@ -56,3 +56,18 @@ void test('streamed sparse tables preserve the same limit through appends and re
     );
   }
 });
+
+void test('table width traversal and sparse-cell budgets remain independent', () => {
+  const prefix = `${'plain '.repeat(100_000)}\n\n`;
+  const small = '| a | b |\n| - | - |\n| x |\n';
+  const wide = `${atLimit}|\noutside\n`;
+  const source = `${prefix}${small}\n${wide}\n${small}`;
+  for (const render of [renderToHtml, renderToAnsi]) {
+    const smallOutput = decoder.decode(render(small));
+    const expected = [prefix, small, wide, small]
+      .map((part) => decoder.decode(render(part)))
+      .join(render === renderToAnsi ? '\n' : '');
+    assert.equal(decoder.decode(render(source)), expected);
+    assert.equal(decoder.decode(render(small)), smallOutput);
+  }
+});

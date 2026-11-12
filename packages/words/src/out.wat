@@ -13,10 +13,11 @@
   ;; immediate for each occurrence while retaining immediate dispatch otherwise.
   (data (i32.const $mem.quoteEscape) "&quot;\00\00")
 
-  ;; Four regions live above the input, in the order they stop growing:
+  ;; Regions live above the input, in the order they stop growing:
   ;;
   ;;   [$metaBase   .. $recBase)   frontmatter JSON, written before block analysis
   ;;   [$recBase    .. $rec)       block records, appended during block analysis
+  ;;   [$rec        .. $outBase)   reference indices and temporary ANSI table widths
   ;;   [$outBase    .. $out)       rendered output, appended during rendering
   ;;   [$scratchBase.. memory end) rebuilt content and marks grow up, tags grow down
   ;;

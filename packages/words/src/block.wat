@@ -14,6 +14,9 @@
   ;; whenever $sp is not zero and needs no reset between renders.
   (global $top (mut i32) (i32.const 0))
   (global $leaf (mut i32) (i32.const 0))     ;; $Blk of the open leaf, or none
+  (global $tableHead (mut i32) (i32.const 0))
+  ;; Only the open table can acquire more automatically filled cells.
+  (global $tableAutoCells (mut i32) (i32.const 0))
   (global $leafRec (mut i32) (i32.const 0))
   (global $leafBlank (mut i32) (i32.const 0))
   (global $plainRunLiteral (mut i32) (i32.const 0)) ;; result of the current run scan
@@ -58,8 +61,8 @@
         (local.set $missing (i32.sub (i32.load offset=8 (local.get $r))
           (call $countRowCells (local.get $beg) (global.get $lineEnd))))
         (if (i32.gt_s (local.get $missing) (i32.const 0))
-          (then (i32.store offset=12 (local.get $r)
-            (i32.add (i32.load offset=12 (local.get $r)) (local.get $missing)))))))
+          (then (global.set $tableAutoCells
+            (i32.add (global.get $tableAutoCells) (local.get $missing)))))))
     ;; HTML can retain an unindented LF-separated fenced block as one input
     ;; span. ANSI keeps individual lines so it can reapply their prefixes.
     (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
@@ -619,7 +622,7 @@
               ;; Warning: sparse rows can amplify tiny input into gigabytes of
               ;; output. Match cmark-gfm's budget and close the table afterward.
               (br_if $unmatched (i32.and (i32.eq (local.get $t) (enum.get $Blk.table))
-                (i32.gt_u (i32.load offset=12 (global.get $leafRec)) (i32.const $MaxTableAutoCells))))
+                (i32.gt_u (global.get $tableAutoCells) (i32.const $MaxTableAutoCells))))
               ;; A pipe starts no block, so the line is the next table row.
               (if (i32.and (i32.eq (local.get $t) (enum.get $Blk.table))
                     (i32.and (i32.lt_u (global.get $indent) (i32.const 4))
@@ -942,7 +945,10 @@
           (i32.sub (local.get $tableN) (i32.const 1)))
         (call $closeLeaf)
         (call $openLeaf (enum.get $Blk.table))
+        (global.set $tableAutoCells (i32.const 0))
         (i32.store offset=8 (global.get $leafRec) (local.get $tableCols))
+        (i32.store offset=12 (global.get $leafRec) (global.get $tableHead))
+        (global.set $tableHead (global.get $leafRec))
         ;; Alignment bytes sit between the header and line array.
         (local.set $tableExtra
           (i32.and (i32.add (local.get $tableCols) (i32.const 7)) (i32.const -8)))

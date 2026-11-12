@@ -21,7 +21,7 @@
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch
       [64:80)         hex digits
-      [80:65536)      static tables and fixed work areas, in this order (see
+      [80:$mem.input) static tables and fixed work areas, in this order (see
                       memory.wat for the addresses): pooled output string
                       literals, scanner byte tables, HTML5 named character
                       references and their lookup cache, Unicode P|S ranges,
@@ -32,12 +32,12 @@
                       stack, then opener bottoms, tick memo, and the bracket
                       stack; completion uses it for its two stacks), table
                       column widths, the ansi line prefix and pending marker,
-                      ansi list state, the packed Unicode range tables, cached
-                      ansi table-cell widths
+                      ansi list state, and the packed Unicode range tables
     [] pages 2..N (text buffer)
-      [65536:EOF)     input, a NUL sentinel, then at least 32 bytes of slack
+      [$mem.input:EOF) input, a NUL sentinel, then at least 32 bytes of slack
       [meta:rec)      frontmatter JSON
-      [rec:out)       block records, the reference hash table, the footnote order
+      [rec:out)       block records, the reference hash table, the footnote order,
+                      and temporary ANSI table measurements when needed
       [out:…)         rendered output
       [scratch:end)   rebuilt block content when needed, and inline marks
   ;;)
@@ -99,6 +99,7 @@
     (global.set $boundaryRec (i32.const 0))
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
+    (global.set $tableHead (i32.const 0))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $src (i32.const $mem.input))
     ;; a UTF-8 byte order mark is not content
@@ -264,7 +265,7 @@
     (i32.store8 (i32.const 30) (i32.ne (global.get $linkHash) (i32.const 0)))
     (local.get $safeEnd))
 
-  ;; Unpack the Unicode range tables once, at instantiation.
+  ;; Expand the immutable lookup tables once, at instantiation.
   (func $init
     (drop (call $unpackRanges
       (call $unpackRanges
@@ -285,8 +286,9 @@
         (if (call $complete (i32.shr_u (local.get $safeEnd) (i32.const 31)))
           (then (local.set $safeEnd (call $analyze))))))
     (global.set $out (i32.and (i32.add (global.get $rec) (i32.const 15)) (i32.const -16)))
-    (global.set $outBase (global.get $out))
     (call $setOutCap)
+    (if (global.get $mode) (then (call $ansiTableSpace)))
+    (global.set $outBase (global.get $out))
     (global.set $boundaryOut (global.get $outBase))
     (call $renderBlocks)
     (i32.store (i32.const 6) (global.get $outBase))

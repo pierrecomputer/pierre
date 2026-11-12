@@ -66,8 +66,7 @@ const docs = {
     { length: 800 },
     (_, i) => `| a${i} | b |\n| --- | --: |\n| ${i} | *v* |`
   ).join('\n\n'),
-  // More cells than the ANSI width cache holds; exercise remeasurement while
-  // alternating input aliases and escaped-pipe copies in the same table.
+  // Alternate input aliases and escaped-pipe copies while table output grows.
   tableWidthOverflow:
     '| a | b |\n| --- | --- |\n' +
     Array.from({ length: 3200 }, (_, i) => `| \\*${i} | \`<&"\\|é\` |\n`).join(

@@ -49,7 +49,7 @@
   (const $mem.completeDelims $mem.bracket)
   (const $mem.completeLinks $mem.completeDelims+1024)
   (const $mem.column $mem.containerEnd)
-  (const $mem.columnEnd $mem.column+1024)
+  (const $mem.columnEnd $mem.column+2048)
   (const $mem.prefix $mem.columnEnd)
   (const $mem.prefixEnd $mem.prefix+1024)
   (const $mem.pending $mem.prefixEnd-256)
@@ -60,9 +60,5 @@
   ;; them into $mem.punct, $mem.width and $mem.wide at instantiation.
   (const $mem.packed $mem.itemIndent+256)
   (const $mem.packedEnd $mem.packed+2048)
-  ;; ANSI table rendering caches measured cell widths in the otherwise unused
-  ;; fixed-memory gap below the input. Inline rendering owns no bytes here.
-  (const $mem.cellWidth $mem.packedEnd)
-  (const $mem.cellWidthSlots 5810) ;; (65536 - $mem.cellWidth) / 4
   (const $mem.input 65536)
 )
