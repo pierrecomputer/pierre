@@ -70,7 +70,10 @@ import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
-import { createSVGSpriteElement } from '../utils/createSVGSpriteElement';
+import {
+  createSVGSpriteElement,
+  hydrateSVGSpriteElement,
+} from '../utils/createSVGSpriteElement';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import {
   patchScrollbarGutterSize,
@@ -1008,7 +1011,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       fileContainer.shadowRoot?.children ?? []
     )) {
       if (element instanceof SVGElement) {
-        this.spriteSVG = element;
+        this.spriteSVG = hydrateSVGSpriteElement(element);
         continue;
       }
       if (!(element instanceof HTMLElement)) {
