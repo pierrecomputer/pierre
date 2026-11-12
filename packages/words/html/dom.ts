@@ -1,4 +1,6 @@
-import { controlFlags, createHtmlRenderer } from './render';
+import { delta, type InternalHtmlUpdate } from '../lib/internal';
+import type { InternalCodeUpdate } from './render';
+import { controlFlags, createHtmlRenderer, decodeHtml } from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
 
 const isFade = (node: Node): node is HTMLElement =>
@@ -6,11 +8,13 @@ const isFade = (node: Node): node is HTMLElement =>
   (node as Element).getAttribute('data-markdown') === 'token';
 const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
-  '[data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"]';
+  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"]';
 
 /** Wrap new text in fade spans, and unwrap each span when its animation ends. */
 function createFades(root: HTMLElement) {
-  const pending = new Map<HTMLElement, number>();
+  // A negative deadline marks an existing block, which needs no wrapper removal.
+  const nodes: HTMLElement[] = [];
+  const deadlines: number[] = [];
   const document = root.ownerDocument;
   const query = document.defaultView?.matchMedia?.(
     '(prefers-reduced-motion: reduce)'
@@ -36,26 +40,38 @@ function createFades(root: HTMLElement) {
     const now = performance.now();
     const parents = new Set<Node>();
     let next = Infinity;
-    for (const [span, deadline] of pending) {
+    let kept = 0;
+    for (let at = 0; at < nodes.length; at++) {
+      const span = nodes[at];
+      const value = deadlines[at];
+      const deadline = Math.abs(value);
       if (!all && deadline > now) {
+        nodes[kept] = span;
+        deadlines[kept++] = value;
         next = Math.min(next, deadline);
         continue;
       }
       const parent = span.parentNode;
-      pending.delete(span);
       if (parent !== null && root.contains(span)) {
+        if (value < 0) {
+          span.removeAttribute('data-animated');
+          span.style.removeProperty('animation-duration');
+          if (span.getAttribute('style') === '') span.removeAttribute('style');
+          continue;
+        }
         while (span.firstChild !== null)
           parent.insertBefore(span.firstChild, span);
         parent.removeChild(span);
         parents.add(parent);
       }
     }
+    nodes.length = deadlines.length = kept;
     for (const parent of parents) parent.normalize();
     arm(next);
   };
   const stop = (): void => {
     arm(Infinity);
-    if (pending.size > 0) flush(true);
+    if (nodes.length > 0) flush(true);
   };
   const motionChanged = (): void => {
     if (query?.matches === true) stop();
@@ -75,10 +91,11 @@ function createFades(root: HTMLElement) {
     const span = document.createElement('span');
     span.dataset.markdown = 'token';
     span.dataset.animated = 'true';
-    span.style.animationDuration = `${duration}ms`;
+    if (duration !== 180) span.style.animationDuration = `${duration}ms`;
     text.replaceWith(span);
     span.append(text);
-    pending.set(span, performance.now() + duration);
+    nodes.push(span);
+    deadlines.push(performance.now() + duration);
   };
   return {
     connect(): void {
@@ -91,10 +108,16 @@ function createFades(root: HTMLElement) {
     // Runs once per DOM patch, not once per text run.
     finish(): void {
       let next = Infinity;
-      for (const [span, deadline] of pending) {
-        if (!root.contains(span)) pending.delete(span);
-        else next = Math.min(next, deadline);
+      let kept = 0;
+      for (let at = 0; at < nodes.length; at++) {
+        const node = nodes[at];
+        if (!root.contains(node)) continue;
+        nodes[kept] = node;
+        const deadline = deadlines[at];
+        deadlines[kept++] = deadline;
+        next = Math.min(next, Math.abs(deadline));
       }
+      nodes.length = deadlines.length = kept;
       arm(next);
     },
     update(active: boolean, options: boolean | AnimateOptions): void {
@@ -104,8 +127,49 @@ function createFades(root: HTMLElement) {
       duration = Number.isFinite(value) ? Math.max(0, value) : 180;
       if (!enabled()) stop();
     },
-    tree(node: Node): void {
+    tree(node: Node, completed = false): void {
       if (!enabled()) return;
+      if (completed && node.nodeType === 1) {
+        const visit = (node: Node): void => {
+          if (node.nodeType === 3) {
+            animate(node as Text);
+            return;
+          }
+          if (node.nodeType !== 1) return;
+          const element = node as HTMLElement;
+          const kind = element.getAttribute('data-markdown');
+          if (
+            kind === 'code-header' ||
+            kind === 'line-numbers' ||
+            kind === 'caret' ||
+            kind === 'token'
+          )
+            return;
+          if (
+            !element.hasAttribute('style') &&
+            (kind === 'p' ||
+              (kind?.length === 2 &&
+                kind[0] === 'h' &&
+                kind[1] >= '1' &&
+                kind[1] <= '6') ||
+              kind === 'code-lines')
+          ) {
+            element.setAttribute('data-animated', 'true');
+            if (duration !== 180)
+              element.style.animationDuration = `${duration}ms`;
+            nodes.push(element);
+            deadlines.push(-(performance.now() + duration));
+            return;
+          }
+          for (let child = node.firstChild; child !== null; ) {
+            const next = child.nextSibling;
+            visit(child);
+            child = next;
+          }
+        };
+        visit(node);
+        return;
+      }
       if (node.nodeType === 3) animate(node as Text);
       else {
         const walker = document.createTreeWalker(node, 4);
@@ -138,6 +202,189 @@ function createFades(root: HTMLElement) {
 
 type Fades = ReturnType<typeof createFades>;
 
+/** Update existing nodes directly and let the native parser build batches of new blocks. */
+function patchHtml(
+  root: Node,
+  html: string,
+  first: Node | null,
+  committed: number,
+  template: HTMLTemplateElement,
+  marker?: Comment
+): Node | null {
+  const document = root.ownerDocument!;
+  let at = 0;
+  let firstPending: Node | null = null;
+  const children = (parent: Node, current: Node | null): void => {
+    while (at < html.length && !html.startsWith('</', at)) {
+      if (
+        parent === root &&
+        current === null &&
+        marker === undefined &&
+        html.length - at >= 1024 &&
+        html.charCodeAt(at) === 60
+      ) {
+        const split = committed > at && committed < html.length;
+        template.innerHTML = split
+          ? html.slice(at, committed) +
+            '<!--markdown-->' +
+            html.slice(committed)
+          : html.slice(at);
+        const fragment = template.content;
+        if (split) {
+          for (
+            let node = fragment.firstChild;
+            node !== null;
+            node = node.nextSibling
+          )
+            if (node.nodeType === 8) {
+              firstPending = node.nextSibling;
+              fragment.removeChild(node);
+              break;
+            }
+        } else if (at >= committed && firstPending === null)
+          firstPending = fragment.firstChild;
+        parent.appendChild(fragment);
+        at = html.length;
+        return;
+      }
+      const pending = parent === root && at >= committed;
+      if (pending && marker !== undefined && firstPending === null) {
+        parent.insertBefore(marker, current);
+        firstPending = marker;
+      }
+      let actual: Node;
+      if (html.charCodeAt(at) !== 60) {
+        let end = html.indexOf('<', at);
+        if (end < 0) end = html.length;
+        if (parent === root && at < committed && committed < end)
+          end = committed;
+        const value = decodeHtml(html.slice(at, end));
+        if (current?.nodeType === 3) {
+          // Code-line boundaries and carets can split an otherwise unchanged text run.
+          let last = current as Text;
+          let next = last.nextSibling;
+          if (next?.nodeType === 3) {
+            let previous = last.data;
+            do {
+              last = next as Text;
+              previous += last.data;
+              next = last.nextSibling;
+            } while (next?.nodeType === 3);
+            const append = value.startsWith(previous);
+            const lineAppend =
+              !append &&
+              previous.endsWith('\n') &&
+              value.endsWith('\n') &&
+              value.slice(0, -1).startsWith(previous.slice(0, -1));
+            if (append || lineAppend) {
+              if (value !== previous) {
+                if (append) last.appendData(value.slice(previous.length));
+                else {
+                  while (last.length === 0) last = last.previousSibling as Text;
+                  last.insertData(
+                    last.length - 1,
+                    value.slice(previous.length - 1, -1)
+                  );
+                }
+              }
+              if (pending && firstPending === null) firstPending = current;
+              at = end;
+              current = next;
+              continue;
+            }
+          }
+          actual = current;
+          const text = current as Text;
+          const previous = text.data;
+          if (previous !== value) {
+            if (value.startsWith(previous))
+              text.appendData(value.slice(previous.length));
+            else if (
+              previous.endsWith('\n') &&
+              value.endsWith('\n') &&
+              value.slice(0, -1).startsWith(previous.slice(0, -1))
+            )
+              text.insertData(
+                previous.length - 1,
+                value.slice(previous.length - 1, -1)
+              );
+            else text.data = value;
+          }
+        } else actual = document.createTextNode(value);
+        at = end;
+      } else {
+        const end = html.indexOf('>', at);
+        let nameEnd = html.indexOf(' ', at);
+        if (nameEnd < 0 || nameEnd > end) nameEnd = end;
+        const name = html.slice(at + 1, nameEnd);
+        const element =
+          current?.nodeType === 1 && (current as Element).localName === name
+            ? (current as Element)
+            : document.createElement(name);
+        const names: string[] = [];
+        for (let pos = nameEnd; pos < end; ) {
+          if (html.charCodeAt(pos) === 32) {
+            pos++;
+            continue;
+          }
+          const start = pos;
+          while (
+            pos < end &&
+            html.charCodeAt(pos) !== 32 &&
+            html.charCodeAt(pos) !== 61
+          )
+            pos++;
+          const attribute = html.slice(start, pos);
+          let value = '';
+          if (html.charCodeAt(pos) === 61) {
+            const close = html.indexOf('"', pos + 2);
+            value = decodeHtml(html.slice(pos + 2, close));
+            pos = close + 1;
+          }
+          names.push(attribute);
+          if (element.getAttribute(attribute) !== value)
+            element.setAttribute(attribute, value);
+        }
+        for (let index = element.attributes.length - 1; index >= 0; index--) {
+          const name = element.attributes[index].name;
+          if (!names.includes(name)) element.removeAttribute(name);
+        }
+        at = end + 1;
+        if (
+          name !== 'br' &&
+          name !== 'hr' &&
+          name !== 'img' &&
+          name !== 'input'
+        ) {
+          children(element, element.firstChild);
+          at = html.indexOf('>', at) + 1;
+        }
+        actual = element;
+      }
+      if (actual !== current) {
+        parent.insertBefore(actual, current);
+        if (current !== null) {
+          const next = current.nextSibling;
+          parent.removeChild(current);
+          current = next;
+        }
+      } else current = current.nextSibling;
+      if (pending && firstPending === null) firstPending = actual;
+    }
+    while (current !== null) {
+      const next = current.nextSibling;
+      parent.removeChild(current);
+      current = next;
+    }
+  };
+  children(root, first);
+  if (marker !== undefined && firstPending === null) {
+    root.appendChild(marker);
+    firstPending = marker;
+  }
+  return firstPending;
+}
+
 /** Patch `parent` to match `incoming`, and reuse nodes. A fade span counts as text. Returns the node at `committed`. */
 function patchChildren(
   parent: Node,
@@ -156,6 +403,30 @@ function patchChildren(
   let index = 0;
   let firstPending: Node | null = null;
   while (target !== null) {
+    if (
+      current === null &&
+      incoming.nodeType === 11 &&
+      target.nextSibling !== null
+    ) {
+      // Matching targets stay in the detached fragment; only append its new tail.
+      while (incoming.firstChild !== target)
+        incoming.removeChild(incoming.firstChild!);
+      for (let node: Node | null = target; node !== null; ) {
+        const next: Node | null = node.nextSibling;
+        if (
+          node !== marker &&
+          (previousText === undefined ||
+            !previousText.includes(node.textContent ?? ''))
+        )
+          fades.tree(node, index < committed);
+        if (index === committed)
+          firstPending = node.parentNode === incoming ? node : node.parentNode;
+        index++;
+        node = next;
+      }
+      parent.appendChild(incoming);
+      return firstPending;
+    }
     const nextTarget = target.nextSibling;
     let actual: Node;
     if (target === marker) {
@@ -259,7 +530,7 @@ function patchChildren(
         previousText === undefined ||
         !previousText.includes(target.textContent ?? '')
       )
-        fades.tree(target);
+        fades.tree(target, index < committed);
       current = next;
     }
     if (index === committed) firstPending = actual;
@@ -274,8 +545,8 @@ function patchChildren(
   return firstPending;
 }
 
-/** Insert a comment before the last code line, so later updates patch only that line. */
-function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
+/** Separate the last code line, so later updates patch only that line. */
+function lastCodeLine(code: Element, trailingNewline: boolean): Node | null {
   let before = code.firstChild;
   for (let node = code.lastChild; node !== null; node = node.previousSibling) {
     if (node.nodeType !== 3) continue;
@@ -292,9 +563,49 @@ function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
       at + 1 === text.data.length ? text.nextSibling : text.splitText(at + 1);
     break;
   }
+  return before;
+}
+
+/** Keep a physical boundary while fade cleanup can merge neighboring text nodes. */
+function markLastCodeLine(code: Element, trailingNewline: boolean): Comment {
   const marker = code.ownerDocument.createComment('markdown-code');
-  code.insertBefore(marker, before);
+  code.insertBefore(marker, lastCodeLine(code, trailingNewline));
   return marker;
+}
+
+/** Append literal code into 64-line groups, retaining the last text node and its selections. */
+function appendCodeText(
+  code: Element,
+  lines: number,
+  text: string,
+  replaceNewline: boolean
+): Element {
+  let group = code.lastElementChild ?? code;
+  const value = text.endsWith('\n') ? text : text + '\n';
+  for (let from = 0; from < value.length; ) {
+    if (!replaceNewline && lines > 0 && lines % 64 === 0) {
+      group = code.ownerDocument.createElement('span');
+      group.setAttribute('data-markdown', 'code-lines');
+      code.append(group);
+    }
+    let end = from;
+    for (let left = 64 - (lines % 64); left > 0; left--) {
+      const at = value.indexOf('\n', end);
+      if (at < 0) break;
+      end = at + 1;
+      lines++;
+    }
+    const last = group.lastChild;
+    if (replaceNewline && last?.nodeType === 3) {
+      const node = last as Text;
+      node.insertData(node.length - 1, value.slice(from, end - 1));
+      replaceNewline = false;
+    } else if (last?.nodeType === 3)
+      (last as Text).appendData(value.slice(from, end));
+    else group.append(value.slice(from, end));
+    from = end;
+  }
+  return group;
 }
 
 /** Render Markdown into `root`, and patch its DOM nodes on each update. */
@@ -305,6 +616,7 @@ export function createDomRenderer(
 ) {
   const document = root.ownerDocument;
   const checkpoint = document.createComment('markdown');
+  let pending: Node | null = root.firstChild;
   const template = document.createElement('template');
   const tail = document.createElement('template');
   const caret = document.createElement('span');
@@ -315,15 +627,17 @@ export function createDomRenderer(
   let codeState:
     | {
         code: Element;
-        marker: Comment;
+        marker: Comment | undefined;
+        group: Element;
+        first: Node | null;
         line: number;
+        lineCount: number;
         key: number;
         numbers: Element | null;
         numberCount: number;
       }
     | undefined;
   root.dataset.markdown = 'root';
-  root.insertBefore(checkpoint, root.firstChild);
   caret.dataset.markdown = 'caret';
   caret.setAttribute('aria-hidden', 'true');
 
@@ -449,29 +763,79 @@ export function createDomRenderer(
       if (!changed && nextCaret === previousCaret) return;
       // Remove the caret first, so patches never see it.
       caret.remove();
-      const codeUpdate = update.code;
+      const codeUpdate: InternalCodeUpdate | undefined = update.code;
+      const append = (update as InternalHtmlUpdate)[delta];
+      const textAppend = typeof append === 'string' ? append : undefined;
+      const codeAppend = codeUpdate?.[delta];
+      const direct =
+        animated === false &&
+        options.plugins === undefined &&
+        Object.keys(options.components ?? {}).length === 0 &&
+        options.allowedElements === undefined &&
+        options.disallowedElements === undefined;
       if (
+        changed &&
+        !reset &&
+        textAppend !== undefined &&
+        update.addition === '' &&
+        pending?.parentNode === root &&
+        pending.nodeName === 'P' &&
+        pending.lastChild !== null &&
+        isText(pending.lastChild)
+      ) {
+        if (textAppend !== '') {
+          if (animated !== false) fades.append(pending, textAppend, null);
+          else {
+            const text = pending.lastChild as Text;
+            if (text.length < 4096) text.appendData(textAppend);
+            else {
+              // Partial edits can synchronously reshape a long paragraph. Native
+              // coalescing preserves the text node and selections while deferring layout.
+              pending.appendChild(document.createTextNode(textAppend));
+              pending.normalize();
+            }
+          }
+        }
+      } else if (
         changed &&
         !reset &&
         codeUpdate !== undefined &&
         codeState !== undefined &&
         update.addition === '' &&
         codeState.key === codeUpdate.key &&
-        root.contains(codeState.marker) &&
+        direct === (codeState.marker === undefined) &&
+        (codeState.marker !== undefined
+          ? root.contains(codeState.marker)
+          : root.contains(codeState.group) &&
+            (codeState.first === null ||
+              codeState.first.parentNode === codeState.group)) &&
         (codeUpdate.firstLine === codeUpdate.lineCount ||
           (codeUpdate.firstLine === codeState.line &&
             codeUpdate.firstLine <= codeUpdate.lastLine)) &&
         (codeUpdate.numbers === undefined) === (codeState.numbers === null) &&
         (codeUpdate.numbers ?? 0) >= codeState.numberCount
       ) {
-        if (codeUpdate.firstLine < codeUpdate.lineCount) {
+        if (direct && codeAppend !== undefined) {
+          const group = appendCodeText(
+            codeState.code,
+            codeState.lineCount -
+              1 -
+              (codeAppend.replaceNewline === true ? 1 : 0),
+            codeAppend.text,
+            codeAppend.replaceNewline === true
+          );
+          codeState.group = group;
+          codeState.first = lastCodeLine(group, true);
+          codeState.line = codeUpdate.lastLine;
+        } else if (codeUpdate.firstLine < codeUpdate.lineCount) {
           // Balanced per-line HTML lets the browser parse just the changed
           // lines. Lines fill the last 64-line group, then open new groups.
           const { html, lastLineOffset } = codeUpdate;
-          const marker = document.createComment('markdown-code');
-          let group = codeState.marker.parentNode as Element | null;
-          let first = codeState.marker.nextSibling;
-          codeState.marker.remove();
+          const marker = codeState.marker;
+          let group = (marker?.parentNode ?? codeState.group) as Element | null;
+          let first =
+            marker === undefined ? codeState.first : marker.nextSibling;
+          marker?.remove();
           for (let start = 0, line = codeUpdate.firstLine; ; ) {
             let end = start;
             let left = 64 - (line % 64);
@@ -493,21 +857,35 @@ export function createDomRenderer(
               (lastLineOffset < end || end === html.length)
                 ? lastLineOffset
                 : -1;
-            template.innerHTML = html.slice(start, at < 0 ? end : at);
-            const fragment = template.content;
-            if (at >= 0) {
-              fragment.append(marker);
-              tail.innerHTML = html.slice(at, end);
-              fragment.append(tail.content);
+            if (direct) {
+              const next = patchHtml(
+                group,
+                html.slice(start, end),
+                first,
+                at < 0 ? end - start : at - start,
+                template
+              );
+              if (at >= 0) {
+                codeState.first = next;
+                codeState.group = group;
+              }
+            } else {
+              template.innerHTML = html.slice(start, at < 0 ? end : at);
+              const fragment = template.content;
+              if (at >= 0) {
+                fragment.append(marker!);
+                tail.innerHTML = html.slice(at, end);
+                fragment.append(tail.content);
+              }
+              patchChildren(
+                group,
+                fragment,
+                first,
+                fades,
+                -1,
+                at < 0 ? undefined : marker
+              );
             }
-            patchChildren(
-              group,
-              fragment,
-              first,
-              fades,
-              -1,
-              at < 0 ? undefined : marker
-            );
             if (end === html.length) break;
             line += 64 - (line % 64);
             start = end;
@@ -516,6 +894,7 @@ export function createDomRenderer(
           codeState.marker = marker;
           codeState.line = codeUpdate.lastLine;
         }
+        codeState.lineCount = codeUpdate.lineCount;
         const count = codeUpdate.numbers ?? 0;
         if (codeState.numbers !== null && count > codeState.numberCount) {
           let group = codeState.numbers.lastElementChild!;
@@ -539,15 +918,70 @@ export function createDomRenderer(
           append(text);
           codeState.numberCount = count;
         }
+      } else if (changed && direct) {
+        codeState?.marker?.remove();
+        codeState = undefined;
+        if (checkpoint.parentNode !== null) {
+          pending = checkpoint.nextSibling;
+          checkpoint.remove();
+        }
+        if (reset) pending = root.firstChild;
+        const addition = reset ? update.stable : update.addition;
+        const firstPending = patchHtml(
+          root,
+          addition + update.pending,
+          pending,
+          addition.length,
+          template
+        );
+        pending = firstPending;
+        if (codeUpdate !== undefined) {
+          let code: Element | null = null;
+          for (
+            let node = firstPending;
+            node !== null;
+            node = node.nextSibling
+          ) {
+            if (node.nodeType === 1)
+              code = (node as Element).querySelector(
+                '[data-incomplete] > pre > code'
+              );
+            if (code !== null) break;
+          }
+          if (code !== null) {
+            const group = code.lastElementChild ?? code;
+            const first = lastCodeLine(
+              group,
+              codeUpdate.lastLine < codeUpdate.lineCount - 1
+            );
+            const numbers = code.previousElementSibling;
+            codeState = {
+              code,
+              marker: undefined,
+              group,
+              first,
+              line: codeUpdate.lastLine,
+              lineCount: codeUpdate.lineCount,
+              key: codeUpdate.key,
+              numbers:
+                numbers?.getAttribute('data-markdown') === 'line-numbers'
+                  ? numbers
+                  : null,
+              numberCount: codeUpdate.numbers ?? 0,
+            };
+          }
+        }
+        initialized = true;
       } else if (changed) {
         // The first render and skipped revisions need the full prefix. Other
         // updates use only the addition.
-        codeState?.marker.remove();
+        codeState?.marker?.remove();
         codeState = undefined;
-        if (reset) {
-          if (checkpoint.parentNode !== null) root.removeChild(checkpoint);
-          root.insertBefore(checkpoint, root.firstChild);
+        if (checkpoint.parentNode !== null) {
+          pending = checkpoint.nextSibling;
+          checkpoint.remove();
         }
+        if (reset) pending = root.firstChild;
         template.innerHTML = reset ? update.stable : update.addition;
         const fragment = template.content;
         const count = fragment.childNodes.length;
@@ -569,13 +1003,16 @@ export function createDomRenderer(
         const firstPending = patchChildren(
           root,
           fragment,
-          checkpoint.nextSibling,
+          pending,
           fades,
           count,
           codeMarker,
           initialized && reset
         );
-        if (checkpoint.nextSibling !== firstPending)
+        pending = firstPending;
+        // Root-level text can merge when fade wrappers finish. Keep a physical
+        // boundary only there; ordinary block nodes are stable references.
+        if (firstPending !== null && isText(firstPending))
           root.insertBefore(checkpoint, firstPending);
         if (codeUpdate !== undefined && codeMarker?.parentNode != null) {
           const code = codeMarker.parentNode.parentNode as Element;
@@ -583,7 +1020,10 @@ export function createDomRenderer(
           codeState = {
             code,
             marker: codeMarker,
+            group: codeMarker.parentNode as Element,
+            first: codeMarker.nextSibling,
             line: codeUpdate.lastLine,
+            lineCount: codeUpdate.lineCount,
             key: codeUpdate.key,
             numbers:
               numbers?.getAttribute('data-markdown') === 'line-numbers'

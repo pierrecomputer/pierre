@@ -3,6 +3,7 @@ import pierreLight from '@pierre/highlights/themes/pierre-light';
 import { createHtmlSession, renderToHtml } from '@pierre/words';
 import { afterEach, describe, expect, expectTypeOf, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
 import { act, StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -103,6 +104,10 @@ function expectFreshDom(
     /<!--markdown(?:-code)?-->/g,
     ''
   );
+  for (const caret of actual.content.querySelectorAll(
+    '[data-markdown="caret"]'
+  ))
+    caret.remove();
   const expected = document.createElement('template');
   const fresh = createHtmlRenderer(options);
   try {
@@ -335,7 +340,7 @@ describe('HTML rendering and the React wrapper', () => {
       createHtmlRenderer({}).render(source, false).html
     );
   });
-  test('formats initial content once and reuses its caches for appends', async () => {
+  test('formats initial content once and preserves completed output for appends', async () => {
     const container = mountDOM();
     root = createRoot(container);
     let calls = 0;
@@ -1002,6 +1007,33 @@ describe('native DOM token fades', () => {
       nodePrototype.normalize = normalize;
     }
   });
+  test('completed blocks fade without wrapping their text or replacing settled nodes', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    try {
+      renderer.update('First **bold**\n\nSecond', true, true, {
+        duration: 10_000,
+      });
+      const [first, second] = container.querySelectorAll('p');
+      const bold = first.querySelector('strong');
+      expect(first.getAttribute('data-animated')).toBe('true');
+      expect(first.querySelector('[data-markdown="token"]')).toBeNull();
+      const tail = second.querySelector('[data-markdown="token"]');
+      expect(tail?.textContent).toBe('Second');
+      renderer.update('First **bold**\n\nSecond grows', true, true, {
+        duration: 10_000,
+      });
+      expect(first.querySelector('strong')).toBe(bold);
+      expect(second.querySelector('[data-markdown="token"]')).toBe(tail);
+      renderer.update('First **bold**\n\nSecond grows', true, false);
+      expect(container.querySelector('[data-animated]')).toBeNull();
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+      expect(first.querySelector('strong')).toBe(bold);
+      expect(first.hasAttribute('style')).toBe(false);
+    } finally {
+      renderer.disconnect();
+    }
+  });
   test('keeps previous spans and captured durations while chunks arrive', async () => {
     const container = await render('Hel', true, 10_000);
     const first = container.querySelector('[data-markdown="token"]');
@@ -1014,6 +1046,80 @@ describe('native DOM token fades', () => {
         (node) => node.textContent
       )
     ).toEqual(['Hel', 'lo world']);
+  });
+  test('formatted paragraph appends preserve fade spans, durations, and selections', () => {
+    for (const plugins of [
+      undefined,
+      { code: createHighlightsPlugin({ theme: pierreLight }) },
+    ]) {
+      const container = mountDOM();
+      const options = { controls: false, plugins };
+      const renderer = createDomRenderer(container, options);
+      const selection = window.getSelection()!;
+      const source =
+        '**Bold** and [link](/docs). ' +
+        'Earlier prose. '.repeat(400) +
+        'Hello';
+      try {
+        renderer.update(source, true, true);
+        const paragraph = container.querySelector('p')!;
+        const bold = paragraph.querySelector('strong');
+        const link = paragraph.querySelector('a');
+        const text = paragraph.lastChild!;
+        const range = document.createRange();
+        range.setStart(text, text.textContent!.length - 4);
+        range.setEnd(text, text.textContent!.length - 1);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        renderer.update(
+          source + ' world',
+          true,
+          true,
+          { duration: 10_000 },
+          'block'
+        );
+        const first = paragraph.querySelector('[data-markdown="token"]')!;
+        expect(first.textContent).toBe(' world');
+        renderer.update(
+          source + ' world again',
+          true,
+          true,
+          { duration: 40_000 },
+          'block'
+        );
+        expect(paragraph.querySelector('[data-markdown="token"]')).toBe(first);
+        expect(first.getAttribute('style')).toContain('10000ms');
+        const spans = Array.from(
+          paragraph.querySelectorAll<HTMLElement>('[data-markdown="token"]')
+        );
+        expect(spans.map((span) => span.textContent)).toEqual([
+          ' world',
+          ' again',
+        ]);
+        expect(spans[1].style.animationDuration).toBe('40000ms');
+        expect(paragraph.querySelector('strong')).toBe(bold);
+        expect(paragraph.querySelector('a')).toBe(link);
+        expect(selection.toString()).toBe('ell');
+        expect(selection.anchorNode).toBe(text);
+        renderer.update(source + ' world again', true, false);
+        expect(paragraph.querySelector('[data-markdown="token"]')).toBeNull();
+        expect(selection.toString()).toBe('ell');
+        expect(selection.anchorNode).toBe(text);
+        expectFreshDom(container, source + ' world again', options);
+        renderer.update(source + ' world again **formatted**', true, true, {
+          duration: 10_000,
+        });
+        renderer.update(source + ' world again **formatted**', true, false);
+        expectFreshDom(
+          container,
+          source + ' world again **formatted**',
+          options
+        );
+      } finally {
+        selection.removeAllRanges();
+        renderer.disconnect();
+      }
+    }
   });
   test('keeps bold text and its existing fades mounted at streamed word boundaries', async () => {
     const source =
@@ -1175,6 +1281,289 @@ describe('native DOM token fades', () => {
 });
 
 describe('direct HTML sessions', () => {
+  test('generated DOM matches the browser parser across conformance examples and streamed prefixes', () => {
+    const container = mountDOM();
+    const options = { controls: false };
+    const renderer = createDomRenderer(container, options);
+    try {
+      for (const suite of ['commonmark', 'gfm']) {
+        const examples = JSON.parse(
+          readFileSync(
+            new URL(`./spec/${suite}-spec.json`, import.meta.url),
+            'utf8'
+          )
+        ) as { markdown: string }[];
+        for (const { markdown } of examples)
+          for (const end of [
+            Math.floor(markdown.length / 2),
+            markdown.length,
+          ]) {
+            const source = markdown.slice(0, end);
+            renderer.update(source, true, true);
+            expectFreshDom(container, source, options);
+          }
+      }
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('large appends preserve existing blocks and reconcile the changing tail', () => {
+    const container = mountDOM();
+    const options = { controls: false };
+    const renderer = createDomRenderer(container, options);
+    const source = Array.from(
+      { length: 30 },
+      (_, index) =>
+        `# Heading ${index}\n\nA **paragraph** with [links](/${index}) and é 中.\n\n` +
+        `- first\n- second\n\n| A | B |\n|---|---|\n| ${index} | data |\n\n` +
+        '```ts\nconst value = "<literal>";\n```\n\n'
+    ).join('');
+    let heading: HTMLHeadingElement | null = null;
+    try {
+      for (let end = 2048; end < source.length + 2048; end += 2048) {
+        const value = source.slice(0, end);
+        renderer.update(value, true, true);
+        expectFreshDom(container, value, options);
+        heading ??= container.querySelector('h1');
+        expect(container.querySelector('h1')).toBe(heading);
+      }
+      renderer.update(source + '**A new tail', true, true);
+      expectFreshDom(container, source + '**A new tail', options);
+      expect(container.querySelector('h1')).toBe(heading);
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('native fragment appends preserve custom blocks and the pending boundary', () => {
+    const container = mountDOM();
+    const options = {
+      controls: false,
+      components: {
+        p: (html: string) => html.replace('<p ', '<p title="custom" '),
+      },
+    };
+    const renderer = createDomRenderer(container, options);
+    const source =
+      '# Existing heading\n\n' + 'Ordinary **prose**.\n\n'.repeat(80);
+    try {
+      renderer.update(source.slice(0, 100), true, true);
+      const heading = container.querySelector('h1');
+      for (let end = 200; end < source.length + 200; end += 200) {
+        const value = source.slice(0, end);
+        renderer.update(value, true, true);
+        expectFreshDom(container, value, options);
+        expect(container.querySelector('h1')).toBe(heading);
+      }
+      renderer.update(source + 'New tail', true, true);
+      expectFreshDom(container, source + 'New tail', options);
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('text appends preserve selections in paragraphs and open code fences', () => {
+    const container = mountDOM();
+    const options = { controls: false };
+    const renderer = createDomRenderer(container, options);
+    const selection = window.getSelection()!;
+    try {
+      for (const prefix of ['', '```text\n']) {
+        renderer.update(prefix + 'Hello', true, true);
+        const parent =
+          prefix === ''
+            ? container.querySelector('p')!
+            : container.querySelector('pre code [data-markdown="code-lines"]')!;
+        const text = [...parent.childNodes].find(
+          (node) => node.nodeType === 3
+        )!;
+        const range = document.createRange();
+        range.setStart(text, 1);
+        range.setEnd(text, 4);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        renderer.update(prefix + 'Hello world', true, true);
+        expect(selection.toString()).toBe('ell');
+        expect(selection.anchorNode).toBe(text);
+        expectFreshDom(container, prefix + 'Hello world', options);
+      }
+    } finally {
+      selection.removeAllRanges();
+      renderer.disconnect();
+    }
+  });
+  test('long paragraph appends and completion preserve text ranges', () => {
+    for (const plugins of [
+      undefined,
+      { code: createHighlightsPlugin({ theme: pierreLight }) },
+    ]) {
+      const container = mountDOM();
+      const selection = window.getSelection()!;
+      const options = { controls: false, plugins };
+      const renderer = createDomRenderer(container, options);
+      try {
+        for (const prefix of ['', '**Earlier bold** and [a link](/docs). '])
+          for (const caret of [undefined, 'block'] as const) {
+            const source =
+              prefix + 'Earlier prose é 中. '.repeat(400) + 'Hello';
+            renderer.update(source, true, true, false, caret);
+            const paragraph = container.querySelector('p')!;
+            const strong = paragraph.querySelector('strong');
+            const link = paragraph.querySelector('a');
+            const text = Array.from(paragraph.childNodes).findLast(
+              (node) => node.nodeType === 3
+            )!;
+            const range = document.createRange();
+            range.setStart(text, text.textContent!.length - 4);
+            range.setEnd(text, text.textContent!.length - 1);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            for (const suffix of [' world', ' world.', ' world.\n\nNext']) {
+              renderer.update(source + suffix, true, true, false, caret);
+              expect(selection.toString()).toBe('ell');
+              expect(selection.anchorNode).toBe(text);
+              expect(container.querySelector('p')).toBe(paragraph);
+              expect(paragraph.querySelector('strong')).toBe(strong);
+              expect(paragraph.querySelector('a')).toBe(link);
+              expectFreshDom(container, source + suffix, options);
+            }
+          }
+      } finally {
+        selection.removeAllRanges();
+        renderer.disconnect();
+      }
+    }
+  });
+  test('closing or pausing a plain fence preserves selections across split text nodes', () => {
+    const host = mountDOM();
+    const selection = window.getSelection()!;
+    for (const caret of [undefined, 'block'] as const) {
+      for (const finish of ['close', 'pause', 'append-close']) {
+        const container = document.createElement('div');
+        host.append(container);
+        const renderer = createDomRenderer(container, { controls: false });
+        let source = '```text\nfirst line\n';
+        try {
+          renderer.update(source, true, true, false, caret);
+          source += 'selected words';
+          renderer.update(source, true, true, false, caret);
+          const walker = document.createTreeWalker(
+            container.querySelector('code')!,
+            4
+          );
+          let selected: Text | undefined;
+          for (
+            let node = walker.nextNode();
+            node !== null;
+            node = walker.nextNode()
+          )
+            if (node.textContent?.includes('selected') === true)
+              selected = node as Text;
+          const start = selected!.data.indexOf('selected');
+          const range = document.createRange();
+          range.setStart(selected!, start);
+          range.setEnd(selected!, start + 8);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          if (finish !== 'pause')
+            source += (finish === 'append-close' ? ' grow' : '') + '\n```';
+          renderer.update(source, true, finish !== 'pause', false, caret);
+          expect(selection.toString()).toBe('selected');
+          expect(selection.anchorNode).toBe(selected!);
+          expect(selected!.isConnected).toBe(true);
+        } finally {
+          selection.removeAllRanges();
+          renderer.disconnect();
+        }
+      }
+    }
+  });
+  test('plain fence deltas preserve deferred HTML, skipped revisions, and stream pauses', () => {
+    const container = mountDOM();
+    const options = { controls: false };
+    const formatter = createHtmlRenderer(options);
+    const renderer = createDomRenderer(container, options, formatter);
+    const retained: [ReturnType<typeof formatter.render>, string][] = [];
+    let source = 'Intro\n\n```text\n';
+    try {
+      renderer.update(source, true, true);
+      for (let step = 0; step < 12; step++) {
+        source += '<&>" é 中 😀\n\n' + 'x\n'.repeat(32);
+        const update = formatter.render(source, true, true);
+        retained.push([update, source]);
+        if (step % 3 !== 0) renderer.update(source, true, true);
+      }
+      renderer.update(source, true, true);
+      expectFreshDom(container, source, options);
+      renderer.update(source, true, false);
+      expect(container.querySelector('[data-incomplete]')).toBeNull();
+      renderer.update(source, true, true);
+      expectFreshDom(container, source, options);
+      source += '\n```\n\nAfter';
+      renderer.update(source, true, true);
+      expectFreshDom(container, source, options);
+      for (const [update, value] of retained.reverse()) {
+        const fresh = createHtmlRenderer(options);
+        try {
+          expect(update.html).toBe(fresh.render(value, true, true).html);
+        } finally {
+          fresh.dispose();
+        }
+      }
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('plain paragraph deltas preserve deferred output and recover after hooks or edits', () => {
+    const container = mountDOM();
+    const options = { controls: false };
+    const formatter = createHtmlRenderer(options);
+    const renderer = createDomRenderer(container, options, formatter);
+    const retained: [ReturnType<typeof formatter.render>, string][] = [];
+    let source = 'Plain';
+    try {
+      renderer.update(source, true, true);
+      const paragraph = container.querySelector('p');
+      const text = paragraph!.firstChild;
+      for (const chunk of [
+        ' words',
+        ', punctuation.',
+        ' é 中 😀',
+        ' and more',
+      ]) {
+        source += chunk;
+        const update = formatter.render(source, true, true);
+        retained.push([update, source]);
+        renderer.update(source, true, true);
+        expect(container.querySelector('p')).toBe(paragraph);
+        expect(paragraph!.firstChild).toBe(text);
+        expectFreshDom(container, source, options);
+      }
+      renderer.update(source, true, false);
+      renderer.update(source, true, true);
+      source += ' **bold**\n\nNew';
+      renderer.update(source, true, true);
+      expectFreshDom(container, source, options);
+      renderer.update('Replacement text', true, true);
+      expectFreshDom(container, 'Replacement text', options);
+      renderer.configure({
+        ...options,
+        components: { p: (html) => html.replace('<p ', '<p class="custom" ') },
+      });
+      renderer.update('Replacement text grows', true, true);
+      expect(container.querySelector('p.custom')?.textContent).toBe(
+        'Replacement text grows'
+      );
+      for (const [update, value] of retained.reverse()) {
+        const fresh = createHtmlRenderer(options);
+        try {
+          expect(update.html).toBe(fresh.render(value, true, true).html);
+        } finally {
+          fresh.dispose();
+        }
+      }
+    } finally {
+      renderer.disconnect();
+    }
+  });
   for (const stage of ['completed addition', 'pending suffix']) {
     test(`retry recovers the full DOM after a hook fails in the ${stage}`, () => {
       let reject = '';
@@ -1478,6 +1867,28 @@ describe('direct HTML sessions', () => {
     );
     expectFreshDom(container, source, options);
     renderer.disconnect();
+  });
+  test('completed fences are formatted independently across positions and document resets', () => {
+    let calls = 0;
+    const formatter = createHtmlRenderer({
+      plugins: {
+        code: {
+          highlight({ code }) {
+            calls++;
+            return code;
+          },
+        },
+      },
+    });
+    const fences = '```text\nsame code\n```\n\n'.repeat(3);
+    try {
+      formatter.render('First\n\n' + fences, true);
+      expect(calls).toBe(3);
+      formatter.render('Replacement\n\n' + fences, true);
+      expect(calls).toBe(6);
+    } finally {
+      formatter.dispose();
+    }
   });
 });
 
@@ -2092,6 +2503,43 @@ describe('incremental streaming', () => {
       expect(code.querySelector('[data-markdown="token"]')).toBe(firstFade);
     } finally {
       renderer.disconnect();
+    }
+  });
+  test('plain fence deltas preserve ordinary objects and older lazy output', () => {
+    const options = { controls: false };
+    const formatter = createHtmlRenderer(options);
+    const fresh = createHtmlRenderer(options);
+    try {
+      const first = '```ts\nfirst\n';
+      formatter.render(first, true, true);
+      const source = first + 'second & tail';
+      const update = formatter.render(source, true, true);
+      const code = update.code!;
+      expect(code).toBeDefined();
+      expect(Object.getPrototypeOf(code)).toBe(Object.prototype);
+      expect(Object.keys(code)).toEqual([
+        'key',
+        'firstLine',
+        'lineCount',
+        'lastLine',
+        'lastLineOffset',
+        'html',
+        'numbers',
+        'pending',
+      ]);
+      const descriptor = Object.getOwnPropertyDescriptor(code, 'pending')!;
+      expect(descriptor.enumerable).toBe(true);
+      expect(descriptor.configurable).toBe(true);
+      expect(typeof descriptor.get).toBe('function');
+      expect(descriptor.set).toBeUndefined();
+      const expected = fresh.render(source, true, true).pending;
+      formatter.render(source + '\nthird', true, true);
+      formatter.render('Replacement', true, true);
+      expect(code.pending).toBe(expected);
+      expect(JSON.parse(JSON.stringify(code)).pending).toBe(expected);
+    } finally {
+      formatter.dispose();
+      fresh.dispose();
     }
   });
   test('fence fallbacks survive nested containers, custom hooks, filters, and skipped revisions', () => {
