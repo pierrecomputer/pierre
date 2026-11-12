@@ -104,7 +104,9 @@ const language = buildHighlightsLexer({
 
 The result implements the `Language` type. Save this descriptor in a JavaScript
 module and pass it to `createHighlighter({ langs: [language], themes })`. A
-custom name that a built-in language also uses takes only that name.
+custom name that a built-in language also uses takes only that name: the other
+names of the built-in language and its embedded code keep the built-in lexer.
+When two lexers in `langs` declare the same name, the later one wins.
 
 With the main entry, `registerLanguages([language])` adds the lexer to the
 shared `codeToHtml()` and `codeToTokens()` functions. Its names override

@@ -475,9 +475,12 @@ function lexerBytes(wasm: string): Uint8Array<ArrayBuffer> {
 export async function createHighlighter(
   options: HighlighterOptions
 ): Promise<RegisteredHighlighter> {
-  emitterModule ??= import('./emitter.wasm.mjs').then(({ default: bytes }) =>
-    WebAssembly.compile(bytes)
-  );
+  emitterModule ??= import('./emitter.wasm.mjs')
+    .then(({ default: bytes }) => WebAssembly.compile(bytes))
+    .catch((error: unknown) => {
+      emitterModule = undefined;
+      throw error;
+    });
   const languages = [...new Set(options.langs)];
   const [emitter, ...compiled] = await Promise.all([
     emitterModule,
@@ -526,21 +529,14 @@ function buildHighlighter(
       }
       if (name === 'ansi') throw new RangeError('reserved language name: ansi');
       // WARNING: A built-in ID also routes embedded languages, and several
-      // names can share it. A built-in module (its entry is that ID) replaces
-      // the ID's lexer. Another lexer takes the ID only when it is free, so
-      // its alias cannot reroute the other names. ID 0 is plain text.
-      const builtIn = LANGS[name];
+      // names can share it. Only a built-in module (its entry is that ID)
+      // takes the ID. Another lexer gets its own ID, so its alias cannot
+      // reroute the other names or embedded code. ID 0 is plain text.
       let externalId: number | undefined;
-      if (builtIn > 0) {
-        const owner = registrations.get(builtIn);
-        if (id === builtIn || owner === undefined) {
-          registrations.set(builtIn, { module: compiled[i], id });
-          externalId = builtIn;
-        } else if (owner.module === compiled[i] && owner.id === id) {
-          externalId = builtIn;
-        }
-      }
-      if (externalId === undefined) {
+      if (id > 0 && id === LANGS[name]) {
+        registrations.set(id, { module: compiled[i], id });
+        externalId = id;
+      } else {
         externalId = localIds.get(id);
         if (externalId === undefined) {
           externalId = nextLanguageId++;
@@ -826,6 +822,9 @@ const compiledLexers = new WeakMap<Language, WebAssembly.Module>();
  */
 export function registerLanguages(langs: readonly Language[]): void {
   const list = [...new Set([...registeredLangs, ...langs])];
+  if (registered !== undefined && list.length === registeredLangs.length) {
+    return;
+  }
   // WARNING: Base64 lexers compile synchronously. Browsers allow this on the
   // main thread only for modules up to 8 MB.
   const compiled = list.map((language) => {
