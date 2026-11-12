@@ -398,6 +398,15 @@ void t.test('dockerfile: continuations and heredocs stream line-fed', () => {
     'dockerfile',
     '# syntax=docker/dockerfile:1\nFROM node:20 AS build\nRUN npm ci --omit=dev \\\n    && npm cache clean --force \\\n    && echo done\nRUN <<EOF\necho "multi line"\napk add curl\nEOF\nCOPY <<-\'EOT\' /app/x\n\tliteral $var\n\tEOT\nCMD ["node", "server.js"]\n'
   );
+  // a heredoc opener before a `\` join: its body follows the joined line
+  const joined = 'RUN <<E \\\n\nC\nE\nRUN x\n';
+  assertLineFedParity('dockerfile', joined);
+  assert.deepEqual(tokenKinds('dockerfile', joined).slice(4), [
+    ['C', 'string'],
+    ['E', 'string'],
+    ['RUN', 'keyword'],
+    ['x', 'function'],
+  ]);
 });
 
 void t.test(
@@ -467,5 +476,31 @@ void t.test(
         ['i', null],
       ]
     );
+  }
+);
+
+void t.test(
+  'dockerfile: line-start digits and the `# escape` directive',
+  () => {
+    const code = '\n1\nEXPOSE 80 \\\n  443\n';
+    assertLineFedParity('dockerfile', code);
+    assert.deepEqual(tokenKinds('dockerfile', code), [
+      ['1', null],
+      ['EXPOSE', 'keyword'],
+      ['80', 'number'],
+      ['\\', 'punctuation.special'],
+      ['443', 'number'],
+    ]);
+    const escaped = '# escape=`\nRUN dir `\n    && echo hi\n';
+    assertLineFedParity('dockerfile', escaped);
+    assert.deepEqual(tokenKinds('dockerfile', escaped), [
+      ['# escape=`', 'comment'],
+      ['RUN', 'keyword'],
+      ['dir', 'function'],
+      ['`', 'punctuation.special'],
+      ['&&', 'operator'],
+      ['echo', 'function'],
+      ['hi', null],
+    ]);
   }
 );

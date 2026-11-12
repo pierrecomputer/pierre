@@ -586,3 +586,25 @@ void t.test('scala: an LF or CRLF gap ends an import line', () => {
     ['Z', 'type'],
   ]);
 });
+
+void t.test('scala: a unicode escape is one char literal', () => {
+  assert.deepEqual(
+    tokenKinds('scala', "val c = '\\u0041'; val d = '\\uu00e9'"),
+    [
+      ['val', 'keyword.declaration'],
+      ['c', 'variable'],
+      ['=', 'operator'],
+      ["'\\u0041'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['val', 'keyword.declaration'],
+      ['d', 'variable'],
+      ['=', 'operator'],
+      ["'\\uu00e9'", 'string'],
+    ]
+  );
+});
+
+void t.test('scala: a raw line break is no char literal', () => {
+  assertLineFedParity('scala', "'\n'");
+  assertLineFedParity('scala', "'\r\n'");
+});

@@ -281,7 +281,8 @@ void t.test(
       assert.equal(exactColor(html, s), distinctColor('string'), s);
     }
     assert.equal(exactColor(html, '@'), distinctColor('punctuation.special'));
-    assert.equal(exactColor(html, '@YES'), distinctColor('keyword'));
+    // `@YES` boxes a constant: `@` and `YES` are separate spans
+    assert.equal(exactColor(html, '@YES'), undefined);
     for (const type of ['id', 'Class', 'BOOL', 'SEL', 'char', 'void']) {
       assert.equal(wordColor(html, type), distinctColor('type.builtin'), type);
     }
@@ -446,4 +447,60 @@ void t.test('objc: C hex and octal escapes are one escape each', () => {
     [';', 'punctuation.delimiter'],
   ]);
   assertLineFedParity('objc', 'NSString *s = @"ab\\\n\\x41cd";\nint y;\n');
+});
+
+void t.test('objc: boxed BOOL literals are `@` and a constant', () => {
+  assert.deepEqual(tokenKinds('objc', 'id b = @YES, f = @false;'), [
+    ['id', 'type.builtin'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['@', 'punctuation.special'],
+    ['YES', 'constant.builtin'],
+    [',', 'punctuation.delimiter'],
+    ['f', 'variable'],
+    ['=', 'operator'],
+    ['@', 'punctuation.special'],
+    ['false', 'boolean'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test(
+  'objc: a method head split at aligned colons stays a definition',
+  () => {
+    const code = '- (void)setX:(int)x\n          y:(int)y;\n';
+    assert.deepEqual(
+      tokenKinds('objc', code).filter(
+        ([, kind]) => kind === 'function.definition'
+      ),
+      [
+        ['setX', 'function.definition'],
+        ['y', 'function.definition'],
+      ]
+    );
+    assertLineFedParity('objc', code);
+  }
+);
+
+void t.test('objc: C comment, directive, and number fixes apply', () => {
+  const code =
+    "#import <a.h> /* x\ny */\n// a \\\nb\nfloat q = 1.f + 2. + 1'0;\n";
+  assert.deepEqual(tokenKinds('objc', code), [
+    ['#import', 'preproc'],
+    ['<a.h>', 'string'],
+    ['/* x', 'comment'],
+    ['y */', 'comment'],
+    ['// a \\', 'comment'],
+    ['b', 'comment'],
+    ['float', 'type.builtin'],
+    ['q', 'variable'],
+    ['=', 'operator'],
+    ['1.f', 'number'],
+    ['+', 'operator'],
+    ['2.', 'number'],
+    ['+', 'operator'],
+    ["1'0", 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('objc', code);
 });

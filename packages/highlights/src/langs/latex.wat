@@ -208,8 +208,8 @@
                   (local.set $outerDepth (i32.const 0))))
               (if (local.get $depth)
                 (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
-              (local.set $pend (i32.const 0))
-              (local.set $pendOpt (i32.const 0))
+              ;; a group inside a pending command's `[...]` keeps it pending
+              (local.set $pend (i32.mul (local.get $pend) (local.get $pendOpt)))
               (br $bracket))
             (case "["
               (local.set $pendOpt (i32.ne (local.get $pend) (i32.const 0)))

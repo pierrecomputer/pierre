@@ -91,10 +91,43 @@
             (i32.and (i32.ne (local.get $depth) (i32.const "!")) (i32.ne (local.get $depth) (i32.const ".")))))))
     (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $depth) (i32.const ";"))))
 
+  (func $wlEscapeEnd (param $p i32) (result i32)
+    (local $q i32)
+    (local $c i32)
+    (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "["))
+      (then
+        (local.set $q (i32.add (local.get $p) (i32.const 2)))
+        (block $done
+          (loop $name
+            (local.set $c (call $templateByte (local.get $q)))
+            (br_if $done (i32.eqz (call $lexIsIdentContinue (local.get $c))))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br $name)))
+        (if (i32.and (i32.gt_u (local.get $q) (i32.add (local.get $p) (i32.const 2))) (i32.eq (local.get $c) (i32.const "]")))
+          (then (return (i32.add (local.get $q) (i32.const 1)))))))
+    (call $lexEscapeEnd (local.get $p)))
+
+  ;; Returns 1 after the closing quote.
+  (func-variant $wlStringBody $lexStringBody (call $lexEscapeEnd $wlEscapeEnd))
+
+  ;; An open string saves stream mode 51: the shared mode 2 does not know `\[Alpha]`.
+  (func $wlString (param $seg i32)
+    (if
+      (i32.and
+        (i32.ne
+          (call $wlStringBody (i32.const 34) (i32.const 1) (enum.get $Token.string) (local.get $seg))
+          (i32.const 1))
+        (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof))))
+      (then (global.set $streamMode (i32.const 51)))))
+
   (func $hlWolfram
     (local $c i32) (local $c2 i32) (local $lhs i32) (local $rhs i32) (local $gap i32) (local $p i32)
     (local $q i32) (local $kind i32) (local $hl i32) (local $call i32)
     (call $lexEmitLeadingContinuation)
+    (if (i32.eq (global.get $streamMode) (i32.const 51))
+      (then
+        (global.set $streamMode (i32.const 0))
+        (call $wlString (global.get $ptr))))
     (block $done
       (loop $next
         ;; a branch to $emit emits [$lhs,$ptr) as $hl
@@ -121,7 +154,8 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (call $lexString (i32.const 34) (i32.const 1) (enum.get $Token.string))
+            (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+            (call $wlString (local.get $lhs))
             (br $next)))
         ;; `2^^101`, `1.5*^10`, and precision marks `` 1.5`20 ``, ``` 3``10 ```
         (if

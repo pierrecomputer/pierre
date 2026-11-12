@@ -114,7 +114,8 @@
             (br $next)))
         ;; numbers: `16r1F`, `1.5e-3`, `1.5s2`, and a negative literal
         (if (i32.or (call $lexIsDigit (local.get $c))
-              (i32.and (i32.and (i32.eq (local.get $c) (i32.const "-")) (i32.eqz (local.get $operand)))
+              (i32.and (i32.and (i32.eq (local.get $c) (i32.const "-"))
+                  (i32.or (i32.eqz (local.get $operand)) (local.get $array)))
                 (call $lexIsDigit (local.get $c2))))
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.eq (local.get $c) (i32.const "-"))))
@@ -201,12 +202,27 @@
           ;; operator otherwise
           (if (i32.eq (local.get $c) (i32.const "|"))
             (then
-              (if (i32.and (local.get $operand)
-                    (i32.eqz (i32.or (i32.or (local.get $hl) (local.get $bar)) (local.get $first))))
+              (if (i32.and (local.get $operand) (i32.eqz (i32.or (local.get $hl) (local.get $bar))))
                 (then
-                  (local.set $operand (i32.const 0))
-                  (local.set $hl (enum.get $Token.operator))
-                  (br $kind)))
+                  ;; only a bar at a line start declares temporaries; elsewhere it is the binary or
+                  (if (local.get $first)
+                    (then
+                      (local.set $gap (global.get $ptr))
+                      (block $tempsDone
+                        (loop $temps
+                          (local.set $c (call $templateByte (local.get $gap)))
+                          (br_if $tempsDone
+                            (i32.eqz
+                              (i32.or (call $lexIsIdentContinue (local.get $c))
+                                (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const 9))))))
+                          (local.set $gap (i32.add (local.get $gap) (i32.const 1)))
+                          (br $temps)))
+                      (local.set $first (i32.eq (local.get $c) (i32.const "|")))))
+                  (if (i32.eqz (local.get $first))
+                    (then
+                      (local.set $operand (i32.const 0))
+                      (local.set $hl (enum.get $Token.operator))
+                      (br $kind)))))
               (local.set $bar (i32.and (i32.eqz (local.get $bar)) (i32.eqz (local.get $hl))))
               (local.set $operand (i32.const 0))
               (local.set $hl (enum.get $Token.punctuation.delimiter))

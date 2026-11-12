@@ -337,3 +337,31 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'scss: `@at-root` takes a selector, or a query in parentheses',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'scss',
+        '@at-root .child { a: b; }\n@at-root (without: media) {}\n'
+      ),
+      [
+        ['@at-root', 'keyword'],
+        ['.child', 'selector.class'],
+        ['{', 'punctuation.bracket'],
+        ['a', 'property'],
+        [':', 'punctuation.delimiter'],
+        ['b', 'constant.builtin'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+        ['@at-root', 'keyword'],
+        ['(', 'punctuation.bracket'],
+        ['without', 'property'],
+        [':', 'punctuation.delimiter'],
+        ['media', 'constant.builtin'],
+        [') {}', 'punctuation.bracket'],
+      ]
+    );
+  }
+);

@@ -430,3 +430,26 @@ void t.test(
     );
   }
 );
+
+void t.test('c3: hex and unicode escapes keep their digits', () => {
+  assert.deepEqual(
+    tokenKinds('c3', 'String s = "\\x41\\u00e9"; char c = \'\\x7f\';'),
+    [
+      ['String', 'type'],
+      ['s', 'variable'],
+      ['=', 'operator'],
+      ['"', 'string'],
+      ['\\x41\\u00e9', 'string.escape'],
+      ['"', 'string'],
+      [';', 'punctuation.delimiter'],
+      ['char', 'type.builtin'],
+      ['c', 'variable'],
+      ['=', 'operator'],
+      ["'", 'string'],
+      ['\\x7f', 'string.escape'],
+      ["'", 'string'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+  assertLineFedParity('c3', 'String s = "a\\x41\\\nb\\x42";\nint x;\n');
+});

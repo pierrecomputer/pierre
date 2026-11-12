@@ -172,3 +172,39 @@ test('ahk: continuation sections span lines', () => {
     [')', 'punctuation.bracket'],
   ]);
 });
+
+test('ahk: v2 static methods, properties, and catch as', () => {
+  expect(
+    tokenKinds(
+      'ahk',
+      'class A {\n  static Create(n) {\n  }\n  Name {\n  }\n  static x := 1\n}\ntry {\n} catch Error as e {\n}'
+    )
+  ).toEqual([
+    ['class', 'keyword.declaration'],
+    ['A', 'type'],
+    ['{', 'punctuation.bracket'],
+    ['static', 'keyword.declaration'],
+    ['Create', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['n', null],
+    [') {', 'punctuation.bracket'],
+    ['}', 'punctuation.bracket'],
+    ['Name', 'property'],
+    ['{', 'punctuation.bracket'],
+    ['}', 'punctuation.bracket'],
+    ['static', 'keyword.declaration'],
+    ['x', null],
+    [':=', 'operator'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+    ['try', 'keyword.control'],
+    ['{', 'punctuation.bracket'],
+    ['}', 'punctuation.bracket'],
+    ['catch', 'keyword.control'],
+    ['Error', null],
+    ['as', 'keyword.control'],
+    ['e', null],
+    ['{', 'punctuation.bracket'],
+    ['}', 'punctuation.bracket'],
+  ]);
+});

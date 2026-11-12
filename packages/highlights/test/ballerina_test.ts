@@ -266,3 +266,16 @@ test('ballerina: documentation, comments, and queries', () => {
     ['} }', 'punctuation.bracket'],
   ]);
 });
+
+test('ballerina: braced unicode escapes', () => {
+  const code = 'string s = "a \\u{1F600} b";';
+  expect(tokenKinds('ballerina', code)).toEqual([
+    ['string', 'type.builtin'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['\\u{1F600}', 'string.escape'],
+    ['b"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

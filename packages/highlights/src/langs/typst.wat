@@ -84,6 +84,38 @@
     (call $emitTok (enum.get $Token.text.literal) (local.get $seg) (global.get $ptr))
     (local.get $n))
 
+  ;; Bytes from $seg are not yet emitted. Returns 1 while the string is open at $end.
+  (func $typstString (param $seg i32) (result i32)
+    (local $p i32)
+    (local $e i32)
+    (block $done
+      (loop $scan
+        (global.set $ptr
+          (call $scanFindSpecial (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 0)))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $p (global.get $ptr))
+        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 34))
+          (then
+            (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+            (return (i32.const 0))))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
+        (local.set $e (call $lexEscapeEnd (local.get $p)))
+        (if
+          (i32.and
+            (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "u"))
+            (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const "{")))
+          (then
+            (local.set $seg (call $lexFindEither (local.get $p) (i32.const "}") (i32.const 10)))
+            (if (i32.eq (call $templateByte (local.get $seg)) (i32.const "}"))
+              (then (local.set $e (i32.add (local.get $seg) (i32.const 1)))))))
+        (call $emitTok (enum.get $Token.string.escape) (local.get $p) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
+        (br $scan)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (i32.const 1))
+
   ;; Typst switches between markup, code, and math. $stack holds the open
   ;; modes, three bits each, top in the low bits: 0 the document's markup,
   ;; 1 a `[...]` content block, 2 a `{...}` code block, 3 `(...)` in code,
@@ -92,7 +124,8 @@
   ;; line. A blank ends a `#` expression unless a call, content block, or
   ;; field follows its atom. $flags: 1 strong, 2 emphasis, 4 heading, all
   ;; ended by the line. $mid: a token precedes on this line. $raw: the
-  ;; backtick count of open raw text.
+  ;; backtick count of open raw text. $str: a string is open. $over: brackets
+  ;; opened on a full stack (21 frames), counted but not pushed.
   (func $hlTypst
     (local $c i32)
     (local $c2 i32)
@@ -109,9 +142,13 @@
     (local $flags i32)
     (local $mid i32)
     (local $raw i32)
+    (local $str i32)
+    (local $over i32)
     (call $lexEmitLeadingContinuation)
     (if (local.get $raw)
       (then (local.set $raw (call $typstRaw (global.get $ptr) (local.get $raw)))))
+    (if (local.get $str)
+      (then (local.set $str (call $typstString (global.get $ptr)))))
     (block $done
       (loop $next
         (block $emit
@@ -207,13 +244,16 @@
               (i32.or (i32.le_u (local.get $top) (i32.const 1)) (i32.eq (local.get $top) (i32.const 4))))
             (then
               (if
-                (i32.or
+                (i32.and
                   (i32.or
-                    (i32.ge_u (local.get $c2) (i32.const 0x80))
                     (i32.or
-                      (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
-                      (i32.eq (local.get $c2) (i32.const "_"))))
-                  (byteset.get "\22([{" (local.get $c2)))
+                      (i32.ge_u (local.get $c2) (i32.const 0x80))
+                      (i32.or
+                        (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                        (i32.eq (local.get $c2) (i32.const "_"))))
+                    (byteset.get "\22([{" (local.get $c2)))
+                  ;; on a full stack the `#` is text
+                  (i64.lt_u (local.get $stack) (i64.const 0x1000000000000000)))
                 (then
                   (local.set $stack (i64.or (i64.shl (local.get $stack) (i64.const 3)) (i64.const 6)))
                   (local.set $mid (i32.eqz (local.get $first)))
@@ -294,16 +334,22 @@
                     (local.set $tok (enum.get $Token.string.escape))
                     (br $emit))
                   (case "$"
-                    (local.set $stack (i64.or (i64.shl (local.get $stack) (i64.const 3)) (i64.const 4)))
+                    (if (i64.ge_u (local.get $stack) (i64.const 0x1000000000000000))
+                      (then (local.set $over (i32.add (local.get $over) (i32.const 1))))
+                      (else (local.set $stack (i64.or (i64.shl (local.get $stack) (i64.const 3)) (i64.const 4)))))
                     (local.set $tok (enum.get $Token.punctuation.bracket))
                     (br $emit))
                   (case "["
-                    (local.set $stack (i64.or (i64.shl (local.get $stack) (i64.const 3)) (i64.const 1)))
+                    (if (i64.ge_u (local.get $stack) (i64.const 0x1000000000000000))
+                      (then (local.set $over (i32.add (local.get $over) (i32.const 1))))
+                      (else (local.set $stack (i64.or (i64.shl (local.get $stack) (i64.const 3)) (i64.const 1)))))
                     (local.set $tok (enum.get $Token.none))
                     (br $emit))
                   (case "]"
                     (br_if $text (i32.eqz (local.get $top)))
-                    (local.set $stack (i64.shr_u (local.get $stack) (i64.const 3)))
+                    (if (local.get $over)
+                      (then (local.set $over (i32.sub (local.get $over) (i32.const 1))))
+                      (else (local.set $stack (i64.shr_u (local.get $stack) (i64.const 3)))))
                     (local.set $v (i32.wrap_i64 (i64.and (local.get $stack) (i64.const 7))))
                     (local.set $tok
                       (select (enum.get $Token.none) (enum.get $Token.punctuation.bracket) (i32.le_u (local.get $v) (i32.const 1))))
@@ -392,7 +438,9 @@
             (then
               (if (i32.eq (local.get $c) (i32.const "$"))
                 (then
-                  (local.set $stack (i64.shr_u (local.get $stack) (i64.const 3)))
+                  (if (local.get $over)
+                    (then (local.set $over (i32.sub (local.get $over) (i32.const 1))))
+                    (else (local.set $stack (i64.shr_u (local.get $stack) (i64.const 3)))))
                   (local.set $tok (enum.get $Token.punctuation.bracket))
                   (br $emit)))
               (if (i32.eq (local.get $c) (i32.const 92))
@@ -404,8 +452,7 @@
                   (br $emit)))
               (if (i32.eq (local.get $c) (i32.const 34))
                 (then
-                  (global.set $ptr (local.get $lhs))
-                  (call $lexString (i32.const 34) (i32.const 1) (enum.get $Token.string))
+                  (local.set $str (call $typstString (local.get $lhs)))
                   (br $next)))
               ;; letters make names (`x`, `alpha`, `arrow.r`, `sqrt(x)`); `_`
               ;; and digits stay apart, as in `x_1` and `2x`
@@ -467,10 +514,15 @@
                 (then
                   (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
                   (call $emitTok (enum.get $Token.punctuation.special) (i32.sub (local.get $lhs) (i32.const 1)) (local.get $lhs))))
-              (global.set $ptr (local.get $lhs))
-              (call $lexString (i32.const 34) (i32.const 1) (enum.get $Token.string))
+              (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+              (local.set $str (call $typstString (local.get $lhs)))
               (br $next))
             (case "{" "(" "[" "$"
+              (local.set $tok (enum.get $Token.punctuation.bracket))
+              (if (i64.ge_u (local.get $stack) (i64.const 0x1000000000000000))
+                (then
+                  (local.set $over (i32.add (local.get $over) (i32.const 1)))
+                  (br $emit)))
               (local.set $stack
                 (i64.or
                   (i64.shl (local.get $stack) (i64.const 3))
@@ -482,9 +534,13 @@
                         (select (i32.const 1) (i32.const 4) (i32.eq (local.get $c) (i32.const "[")))
                         (i32.eq (local.get $c) (i32.const "(")))
                       (i32.eq (local.get $c) (i32.const "{"))))))
-              (local.set $tok (enum.get $Token.punctuation.bracket))
               (br $emit))
             (case "}" ")" "]"
+              (local.set $tok (enum.get $Token.punctuation.bracket))
+              (if (local.get $over)
+                (then
+                  (local.set $over (i32.sub (local.get $over) (i32.const 1)))
+                  (br $emit)))
               ;; a closer ends the statements and `#` expressions inside it
               (loop $close
                 (local.set $top (i32.wrap_i64 (i64.and (local.get $stack) (i64.const 7))))
@@ -500,7 +556,6 @@
                     (select (i32.const 3) (i32.const 1) (i32.eq (local.get $c) (i32.const ")")))
                     (i32.eq (local.get $c) (i32.const "}"))))
                 (then (local.set $stack (i64.shr_u (local.get $stack) (i64.const 3)))))
-              (local.set $tok (enum.get $Token.punctuation.bracket))
               (br $emit))
             (case ";"
               (if (i32.eq (local.get $top) (i32.const 7))

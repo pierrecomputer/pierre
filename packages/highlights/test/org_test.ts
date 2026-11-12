@@ -212,3 +212,44 @@ test('org: source, example, and comment blocks', () => {
   ]);
   assertLineFedParity('org', code4);
 });
+
+test('org: plain links, unclosed openers, and description terms', () => {
+  const code =
+    'See https://example.com/ and /it/.\n\\( [[a {{{b [fn:c\n\\(x\\) [[d]] {{{e}}} [fn:f]\n- *t :: *d*\n';
+  expect(tokenKinds('org', code)).toEqual([
+    ['See', null],
+    ['https://example.com/', 'link_uri'],
+    ['and', null],
+    ['/it/', 'emphasis'],
+    ['.', null],
+    ['\\( [[a {{{b [fn:c', null],
+    ['\\(x\\)', 'string.special'],
+    ['[[', 'punctuation.bracket'],
+    ['d', 'link_uri'],
+    [']]', 'punctuation.bracket'],
+    ['{{{e}}}', 'variable.special'],
+    ['[fn:f]', 'label'],
+    ['-', 'punctuation.list_marker'],
+    ['*t', 'property'],
+    ['::', 'punctuation.special'],
+    // a failed search inside the term does not hold after it
+    ['*d*', 'emphasis.strong'],
+  ]);
+  assertLineFedParity('org', code);
+});
+
+test('org: many `{{{` before one `}}` stay linear', () => {
+  tokenKinds('org', '');
+  for (const src of [
+    `${'{'.repeat(400_000)}}}\n`,
+    `${'{{{a'.repeat(200_000)}}} x\n`,
+  ]) {
+    const started = performance.now();
+    tokenKinds('org', src);
+    expect(performance.now() - started).toBeLessThan(1500);
+  }
+  expect(tokenKinds('org', '{{{{a}} {{{m(x)}}}\n')).toEqual([
+    ['{{{{a}}', null],
+    ['{{{m(x)}}}', 'variable.special'],
+  ]);
+});

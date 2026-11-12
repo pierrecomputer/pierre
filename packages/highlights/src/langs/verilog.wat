@@ -1,21 +1,21 @@
 (module
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
-  (memory-region $mem.verilogWords 512)
+  (memory-region $mem.verilogWords 552)
 
   (import "@pierre/wat-tools/common.wat")
 
   ;; High byte: capture the next name as 1 a type, 2 a function or task.
-  ;; `inout`, `endgenerate`, `coverpoint`, and `priority` collide and are
-  ;; matched in $verilogWord.
-  (keyword-table $verilogWords $mem.verilogWords $mem.verilogWords+512
+  ;; `inout`, `endgenerate`, `coverpoint`, `priority`, and `endprimitive`
+  ;; collide and are matched in $verilogWord.
+  (keyword-table $verilogWords $mem.verilogWords $mem.verilogWords+552
     (group $Token.keyword.control
       "if" "else" "case" "casez" "casex" "endcase" "for" "while" "repeat" "forever" "do"
       "foreach" "return" "break" "continue" "default" "wait" "fork" "join" "join_any"
       "join_none" "disable" "unique")
     (group $Token.keyword.declaration+256
       "module" "macromodule" "interface" "package" "program" "class" "extends"
-      "implements")
+      "implements" "primitive")
     (group $Token.keyword.declaration+512 "function" "task")
     (group $Token.keyword.declaration
       "endmodule" "endinterface" "endpackage" "endprogram" "endclass" "endfunction" "endtask"
@@ -23,13 +23,14 @@
       "endclocking" "property" "endproperty" "sequence" "endsequence" "covergroup" "endgroup"
       "bins" "constraint" "generate" "genvar" "parameter" "localparam" "defparam" "virtual"
       "automatic" "static" "const" "extern" "local" "protected" "pure" "rand" "randc" "input"
-      "output" "ref")
+      "output" "ref" "table" "endtable" "specify" "endspecify" "timeunit" "timeprecision")
     (group $Token.keyword.import "import" "export")
     (group $Token.keyword
       "begin" "end" "assign" "deassign" "force" "release" "always" "always_ff" "always_comb"
       "always_latch" "initial" "final" "posedge" "negedge" "edge" "iff" "inside" "dist" "with"
       "new" "assert" "assume" "cover" "type" "var" "let" "soft" "solve" "before" "tagged"
-      "throughout" "within" "or" "and" "not")
+      "throughout" "within" "or" "and" "not" "nand" "nor" "xor" "xnor" "buf" "bufif0" "bufif1"
+      "notif0" "notif1")
     (group $Token.type.builtin
       "wire" "reg" "logic" "bit" "byte" "shortint" "int" "longint" "integer" "real" "realtime"
       "shortreal" "time" "string" "chandle" "event" "void" "tri" "wand" "wor" "supply0"
@@ -39,6 +40,11 @@
 
   (func $verilogWord (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
+    (local $v i32)
+    ;; check the hash twins only after a table miss
+    (local.set $v (keyword-table.value $verilogWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.ge_s (local.get $v) (i32.const 0))
+      (then (return (local.get $v))))
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
     (if (i32.and
           (i32.eq (local.get $n) (i32.const 5))
@@ -51,6 +57,12 @@
             (i64.eq (i64.load (i32.sub (local.get $rhs) (i32.const 8))) (i64.const "generate"))))
       (then (return (enum.get $Token.keyword.declaration))))
     (if (i32.and
+          (i32.eq (local.get $n) (i32.const 12))
+          (i32.and
+            (i64.eq (i64.load (local.get $lhs)) (i64.const "endprimi"))
+            (i64.eq (i64.load (i32.sub (local.get $rhs) (i32.const 8))) (i64.const "rimitive"))))
+      (then (return (enum.get $Token.keyword.declaration))))
+    (if (i32.and
           (i32.eq (local.get $n) (i32.const 10))
           (i32.and
             (i64.eq (i64.load (local.get $lhs)) (i64.const "coverpoi"))
@@ -60,7 +72,7 @@
           (i32.eq (local.get $n) (i32.const 8))
           (i64.eq (i64.load (local.get $lhs)) (i64.const "priority")))
       (then (return (enum.get $Token.keyword.control))))
-    (keyword-table.value $verilogWords (local.get $lhs) (local.get $rhs)))
+    (i32.const -1))
 
   ;; Whether a user type name follows at $p, as in `state_t next`.
   (func $verilogNameFollows (param $p i32) (result i32)
@@ -263,7 +275,16 @@
           (then
             (local.set $hl (enum.get $Token.punctuation.bracket))
             (if (i32.eq (local.get $c) (i32.const "("))
-              (then (local.set $expect (i32.const 0))))))
+              (then
+                (local.set $expect (i32.const 0))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $c2) (i32.const "*"))
+                    (i32.ne (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const ")")))
+                  (then
+                    (global.set $ptr (local.get $lhs))
+                    (call $lexNestedBlockComment (i32.const "(*") (i32.const "*)") (enum.get $Token.attribute))
+                    (br $next)))))))
         (if (i32.eq (local.get $c) (i32.const ";"))
           (then (local.set $expect (i32.const 0))))
         (if (i32.or

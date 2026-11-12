@@ -29,7 +29,7 @@
     (group $Token.keyword.control
       "if" "elseif" "else" "endif" "case" "when" "endcase" "do" "enddo" "while" "endwhile" "loop"
       "endloop" "try" "cleanup" "endtry" "check" "exit" "continue" "return" "raise" "endat"
-      "endselect" "leave" "stop" "retry" "then" "switch" "cond")
+      "endselect" "leave" "stop" "retry" "then" "switch" "cond" "others")
     (group $Token.keyword
       "read" "append" "insert" "modify" "delete" "clear" "free" "refresh" "sort" "collect" "move"
       "move-corresponding" "assign" "unassign" "write" "message" "concatenate" "split" "replace"
@@ -247,7 +247,7 @@
                             (i64.eq (local.get $w) (i64.const "ascendin"))
                             (i32.eq (i32.load8_u (i32.const $mem.lexLowerScratch+8)) (i32.const "g")))))
                       (then (local.set $v (enum.get $Token.keyword))))))))
-            (if (i32.ge_s (local.get $v) (i32.const 0))
+            (if (i32.and (i32.ge_s (local.get $v) (i32.const 0)) (i32.ne (local.get $want) (i32.const 1)))
               (then
                 (local.set $hl (i32.and (local.get $v) (i32.const 255)))
                 (if

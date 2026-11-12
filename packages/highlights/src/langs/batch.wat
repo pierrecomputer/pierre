@@ -13,7 +13,7 @@
     (group $Token.keyword.operator "equ" "neq" "lss" "leq" "gtr" "geq")
     (group $Token.keyword.declaration "set" "setlocal" "endlocal")
     (group $Token.function
-      "echo" "echo." "cd" "chdir" "cls" "copy" "del" "dir" "erase" "md" "mkdir" "move"
+      "echo" "cd" "chdir" "cls" "copy" "del" "dir" "erase" "md" "mkdir" "move"
       "path" "pause" "popd" "pushd" "rd" "ren" "rename" "rmdir" "shift" "start" "title"
       "type" "ver" "verify" "vol" "assoc" "ftype" "color" "prompt" "mklink" "choice")
     (group $Token.comment "rem"))
@@ -121,7 +121,7 @@
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (local.set $quote (i32.eqz (local.get $quote)))
-            (local.set $argument (i32.const 1))
+            (local.set $argument (i32.or (local.get $argument) (i32.const 1)))
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "%")) (i32.eq (local.get $c) (i32.const "!")))
           (then
@@ -175,9 +175,17 @@
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (call $lexScanIdent)
-            (local.set $n (call $lexLowerCopy (local.get $lhs) (global.get $ptr) (i32.const $mem.lexLowerScratch)))
-            (local.set $hl (keyword-table.value $batchWords (i32.const $mem.lexLowerScratch)
-              (i32.add (i32.const $mem.lexLowerScratch) (local.get $n))))
+            ;; `echo` text ($argument 3) holds no keywords
+            (local.set $n (i32.const 0))
+            (local.set $hl (i32.const -1))
+            (if (i32.lt_u (local.get $argument) (i32.const 2))
+              (then
+                (local.set $n
+                  (call $lexLowerCopy (local.get $lhs) (global.get $ptr) (i32.const $mem.lexLowerScratch)))
+                (local.set $hl
+                  (keyword-table.value $batchWords
+                    (i32.const $mem.lexLowerScratch)
+                    (i32.add (i32.const $mem.lexLowerScratch) (local.get $n))))))
             (if (i32.and (i32.eq (local.get $hl) (enum.get $Token.comment)) (i32.eqz (local.get $argument)))
               (then
                 (call $scanToLineEnd)
@@ -194,7 +202,11 @@
                 (i32.const 0)
                 (i32.eq (local.get $n) (i32.const 4))))
             (local.set $label (i32.eq (local.get $p) (i32.const "goto")))
-            (local.set $argument (i32.const 1))
+            (local.set $argument
+              (select
+                (i32.const 3)
+                (i32.or (local.get $argument) (i32.const 1))
+                (i32.eq (local.get $p) (i32.const "echo"))))
             (if (i32.eq (local.get $hl) (enum.get $Token.keyword.control))
               (then
                 (if (i32.or

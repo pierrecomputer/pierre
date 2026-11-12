@@ -68,8 +68,30 @@
         (if (local.get $block)
           (then
             (local.set $lhs (global.get $ptr))
-            (local.set $block (call $jsonnetBlock))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))))
+            (local.set $hl (enum.get $Token.string))
+            (if (i32.eq (local.get $block) (i32.const 1))
+              (then (local.set $block (call $jsonnetBlock)))
+              (else
+                ;; a verbatim string body: $block holds the quote, its style above
+                (local.set $hl (i32.shr_u (local.get $block) (i32.const 8)))
+                (local.set $c (i32.and (local.get $block) (i32.const 255)))
+                (loop $verbatim
+                  (global.set $ptr
+                    (call $scanFindSpecial (global.get $ptr) (global.get $end) (local.get $c) (i32.const 0) (i32.const 0)))
+                  (if (i32.lt_u (global.get $ptr) (global.get $end))
+                    (then
+                      (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                      (local.set $block (i32.const 0))
+                      (if (i32.eq (call $templateByte (global.get $ptr)) (local.get $c))
+                        (then
+                          (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                          (local.set $block (i32.const 1))
+                          (br $verbatim))))))
+                (if (local.get $block)
+                  (then
+                    (local.set $block
+                      (i32.or (local.get $c) (i32.shl (local.get $hl) (i32.const 8))))))))
+            (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))))
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
@@ -102,9 +124,9 @@
             (i32.eq (local.get $c) (i32.const "@"))
             (i32.or (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c2) (i32.const 39))))
           (then
-            (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+            (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-            (call $lexRawString (local.get $c2) (i32.const 1) (local.get $hl))
+            (local.set $block (i32.or (local.get $c2) (i32.shl (local.get $hl) (i32.const 8))))
             (local.set $key (i32.const 0))
             (local.set $expect (i32.const 0))
             (br $next)))

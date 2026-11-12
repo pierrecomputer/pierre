@@ -335,6 +335,22 @@
                 (call $lexIsDigit (i32.load8_u offset=1 (global.get $ptr))))))
           (then
             (call $lexScanHexNumber (i32.const 0))
+            (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
+              (then
+                (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                (if
+                  (i32.or
+                    (i32.eqz (call $lexIsIdentContinue (local.get $c)))
+                    (i32.or
+                      (i32.le_u
+                        (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "e"))
+                        (i32.const 1))
+                      (i32.or
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "h"))
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "l")))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $lexScanNumberBody (i32.const 0))))))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $include (i32.const 0))
             (local.set $afterDot (i32.const 0))

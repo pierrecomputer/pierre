@@ -9,15 +9,26 @@
       (i32.ge_u (local.get $c) (i32.const 0x80))
       (byteset.get "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" (local.get $c))))
 
+  ;; Bit ($c & 15) * 2 + $n - 1: $rstCloseEnd found no closer for that marker on
+  ;; this line. Callers reset it at each line start.
+  (global $rstNoClose (mut i32) (i32.const 0))
+
   ;; End of the run of $n `$c` bytes that closes markup in [$p,$stop), after a
   ;; non-blank byte and, with $tight, before no letter or digit; 0 when none.
   (func $rstCloseEnd (param $p i32) (param $stop i32) (param $c i32) (param $n i32) (param $tight i32) (result i32)
     (local $q i32)
+    (local $bit i32)
+    (local.set $bit
+      (i32.shl (i32.const 1) (i32.add (i32.shl (i32.and (local.get $c) (i32.const 15)) (i32.const 1)) (i32.sub (local.get $n) (i32.const 1)))))
+    (if (i32.and (global.get $rstNoClose) (local.get $bit))
+      (then (return (i32.const 0))))
     (loop $find
       (local.set $p
         (call $scanFindSpecial (local.get $p) (local.get $stop) (local.get $c) (i32.const 0) (i32.const 0)))
       (if (i32.ge_u (local.get $p) (local.get $stop))
-        (then (return (i32.const 0))))
+        (then
+          (global.set $rstNoClose (i32.or (global.get $rstNoClose) (local.get $bit)))
+          (return (i32.const 0))))
       (local.set $q (i32.add (local.get $p) (local.get $n)))
       (if
         (i32.and
@@ -159,10 +170,14 @@
     (local $mid i32)
     (local $lineEnd i32)
     (local $lineIndent i32)
+    (local $br i32)
+    (local $roleEnd i32)
     (call $lexEmitLeadingContinuation)
     (local.set $mid (i32.const 0))
     (local.set $lineEnd (i32.const 0))
     (local.set $lineIndent (i32.const 0))
+    (local.set $br (i32.const 0))
+    (local.set $roleEnd (i32.const 0))
     (block $done
       (loop $next
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -192,6 +207,7 @@
             ;; a blank line keeps $mid 0 for its line break
             (br_if $next (i32.ge_u (local.get $lhs) (local.get $lineEnd)))
             (local.set $mid (i32.const 1))
+            (global.set $rstNoClose (i32.const 0))
             (local.set $c (i32.load8_u (local.get $lhs)))
             (local.set $c2 (call $templateByte (i32.add (local.get $lhs) (i32.const 1))))
             (local.set $rhs (call $rstTrimEnd (local.get $lhs) (local.get $lineEnd)))
@@ -551,21 +567,29 @@
                     (br $next)))))
             (if (i32.eq (local.get $c) (i32.const "["))
               (then
-                (local.set $p
-                  (call $scanFindSpecial (local.get $lhs) (local.get $lineEnd) (i32.const "]") (i32.const 0) (i32.const 0)))
+                ;; $br: first `]` or blank after an earlier `[` on this line
+                (if (i32.ge_u (local.get $lhs) (local.get $br))
+                  (then
+                    (local.set $br
+                      (call $scanFind3 (i32.add (local.get $lhs) (i32.const 1)) (i32.const "]") (i32.const 32) (i32.const 10)))
+                    (if (i32.gt_u (local.get $br) (local.get $lineEnd))
+                      (then (local.set $br (local.get $lineEnd))))))
+                (local.set $p (local.get $br))
                 (if
                   (i32.and
+                    (i32.lt_u (local.get $p) (local.get $lineEnd))
                     (i32.and
-                      (i32.lt_u (local.get $p) (local.get $lineEnd))
-                      (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "_")))
-                    (i32.eq
-                      (call $scanFindSpecial (local.get $lhs) (local.get $p) (i32.const 32) (i32.const 0) (i32.const 0))
-                      (local.get $p)))
+                      (i32.eq (i32.load8_u (local.get $p)) (i32.const "]"))
+                      (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "_"))))
                   (then
                     (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
                     (call $emitTok (enum.get $Token.link_text) (local.get $lhs) (global.get $ptr))
                     (br $next)))))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const ":")) (call $rstIsAlnum (local.get $c2)))
+        ;; a colon before $roleEnd lies in a `a:b:c` chain that has no role
+        (if
+          (i32.and
+            (i32.and (i32.eq (local.get $c) (i32.const ":")) (call $rstIsAlnum (local.get $c2)))
+            (i32.ge_u (local.get $lhs) (local.get $roleEnd)))
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (block $role
@@ -578,7 +602,8 @@
                   (then
                     (call $emitTok (enum.get $Token.function) (local.get $lhs) (global.get $ptr))
                     (br $next)))
-                (br_if $part (call $rstIsAlnum (local.get $c2)))))))
+                (br_if $part (call $rstIsAlnum (local.get $c2)))))
+            (local.set $roleEnd (global.get $ptr))))
         (local.set $q (call $rstPlainEnd (i32.add (local.get $lhs) (i32.const 1)) (local.get $lineEnd) (i32.const "[") (i32.const "[") (i32.const "[")))
         (local.set $c (call $templateByte (local.get $q)))
         (if

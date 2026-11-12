@@ -135,3 +135,70 @@ test('http: Content-Type picks the body lexer, and `###` closes open constructs'
     expect(kinds.slice(-3)).toEqual(['### n', 'GET', '/y']);
   }
 });
+
+test('http: response handlers and redirects end the body', () => {
+  const code =
+    'POST https://x/api\nContent-Type: application/json\n\n{"a": 1}\n\n> {%\n  client.global.set("token", response.body.token);\n%}\n>> out.json\n<> prev.json\n';
+  expect(tokenKinds('http', code)).toEqual([
+    ['POST', 'keyword'],
+    ['https://x/api', 'string'],
+    ['Content-Type', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['application/json', 'string'],
+    ['{', 'punctuation.bracket'],
+    ['"a"', 'property.json_key'],
+    [':', 'punctuation.delimiter'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+    ['>', 'operator'],
+    ['{%', 'punctuation.special'],
+    ['client.global.set("token", response.body.token);', null],
+    ['%}', 'punctuation.special'],
+    ['>>', 'operator'],
+    ['out.json', 'string'],
+    ['<>', 'operator'],
+    ['prev.json', 'string'],
+  ]);
+  assertLineFedParity('http', code);
+  assertLineFedParity(
+    'http',
+    'GET /x\n\n> {% client.test("a", () => {}); %}\n###\nGET /y\n'
+  );
+});
+
+test('http: a `> {%` handler ends an XML body', () => {
+  const code =
+    'POST /x\nContent-Type: application/xml\n\n<a b="%">{%</a>\n  > {%\n  client.log(1);\n%}\n';
+  expect(tokenKinds('http', code).slice(9)).toEqual([
+    ['"%"', 'string'],
+    ['>', 'punctuation.bracket.html'],
+    ['{%', null],
+    ['</', 'punctuation.bracket.html'],
+    ['a', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ['>', 'operator'],
+    ['{%', 'punctuation.special'],
+    ['client.log(1);', null],
+    ['%}', 'punctuation.special'],
+  ]);
+  assertLineFedParity('http', code);
+});
+
+test('http: many `{{` without `}}` on a line stay linear', () => {
+  for (const lang of ['http', 'hurl'] as const) {
+    const code = `GET /x\nX: ${'{{'.repeat(300_000)}\n`;
+    const start = performance.now();
+    tokenKinds(lang, code);
+    expect(performance.now() - start).toBeLessThan(2000);
+  }
+  expect(tokenKinds('http', 'GET /a\nX: a{{b} {{c}}\n')).toEqual([
+    ['GET', 'keyword'],
+    ['/a', 'string'],
+    ['X', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['a{{b}', 'string'],
+    ['{{', 'punctuation.special'],
+    ['c', 'variable'],
+    ['}}', 'punctuation.special'],
+  ]);
+});

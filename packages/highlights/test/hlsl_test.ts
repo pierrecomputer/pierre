@@ -456,3 +456,32 @@ void t.test('hlsl: a capitalized declarator after a type is a variable', () => {
   }
   assertLineFedParity('hlsl', code);
 });
+
+void t.test('hlsl: a float with an empty fraction is one number', () => {
+  assert.deepEqual(tokenKinds('hlsl', 'x = 1.f + 2. + 1.e5 + 0.xxxx;'), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1.f', 'number'],
+    ['+', 'operator'],
+    ['2.', 'number'],
+    ['+', 'operator'],
+    ['1.e5', 'number'],
+    ['+', 'operator'],
+    ['0', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['xxxx', 'property'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('hlsl: a PascalCase call is a function, not a type', () => {
+  assert.deepEqual(
+    tokenKinds('hlsl', 'void CSMain() { InterlockedAdd(c[0], 1); }').filter(
+      ([text]) => text === 'CSMain' || text === 'InterlockedAdd'
+    ),
+    [
+      ['CSMain', 'function.definition'],
+      ['InterlockedAdd', 'function'],
+    ]
+  );
+});

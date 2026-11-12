@@ -238,3 +238,21 @@ test('abap: malformed and random input remains total, balanced and lossless', ()
     checkInvariants(lexer.hl, code);
   }
 });
+
+test('abap: WHEN OTHERS and keyword-named method definitions', () => {
+  expect(tokenKinds('abap', 'WHEN OTHERS.')).toEqual([
+    ['WHEN OTHERS', 'keyword.control'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+  expect(
+    tokenKinds('abap', 'CLASS-METHODS create RETURNING').slice(0, 2)
+  ).toEqual([
+    ['CLASS-METHODS', 'keyword.declaration'],
+    ['create', 'function.definition'],
+  ]);
+  expect(tokenKinds('abap', 'METHOD get.')).toEqual([
+    ['METHOD', 'keyword.declaration'],
+    ['get', 'function.definition'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+});

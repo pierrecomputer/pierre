@@ -1,7 +1,8 @@
 (module
   ;; Resume script/style bodies, front matter, and framework expressions
-  ;; at chunk boundaries. These use $streamRegionKind 1-8, 14-16, and 42
-  ;; (CSS preprocessor bodies, see html.wat).
+  ;; at chunk boundaries. These use $streamRegionKind 1-8, 14-18, and 42
+  ;; (CSS preprocessor bodies, TypeScript and plain-text scripts, see
+  ;; html.wat).
   ;; highlights.wat resumes them in HTML-like documents. markdown.wat
   ;; resumes them inside streamed fences. Their import cycle is safe
   ;; because the build inlines each module once.
@@ -50,6 +51,10 @@
       (then (return (enum.get $Language.sass))))
     (if (i32.eq (local.get $kind) (i32.const 42))
       (then (return (enum.get $Language.stylus))))
+    (if (i32.eq (local.get $kind) (i32.const 17))
+      (then (return (enum.get $Language.ts))))
+    (if (i32.eq (local.get $kind) (i32.const 18))
+      (then (return (enum.get $Language.plain))))
     (enum.get $Language.tsx))
 
   (func $embedRegion (param $kind i32) (param $from i32) (param $to i32) (param $reset i32)
@@ -104,17 +109,27 @@
     (block $bodyDone
       ;; CSS and YAML use the common comment/string modes. Resume them only
       ;; after the region end is installed; ECMAScript owns its own machine.
-      ;; Style bodies are kind 2 or, in a preprocessor dialect, 14-16.
+      ;; Style bodies are kind 2 or, in a preprocessor dialect, 14-16 and 42.
       (if
         (i32.and
           (i32.eqz (local.get $reset))
-          (i32.or
-            (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
-            (i32.eq (local.get $kind) (i32.const 4))))
+          (i32.and
+            (i32.or
+              (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
+              (i32.eq (local.get $kind) (i32.const 4)))
+            (i32.gt_u (i32.sub (local.get $kind) (i32.const 17)) (i32.const 1))))
         (then (br_if $bodyDone (call $streamResumeCommon))))
       (if (i32.eq (local.get $kind) (i32.const 1))
         (then (call $hlJsStream (local.get $reset)))
         (else
+          (if (i32.eq (local.get $kind) (i32.const 17))
+            (then
+              (call $hlTsStream (local.get $reset))
+              (br $bodyDone)))
+          (if (i32.eq (local.get $kind) (i32.const 18))
+            (then
+              (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
+              (br $bodyDone)))
           (if
             (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
             (then (call $htmlStyleBody (local.get $kind)))
@@ -220,7 +235,10 @@
           (loop $raw
             (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
             (br_if $rawDone (i32.ge_u (local.get $p) (global.get $end)))
-            (if (call $isRawTextClose (local.get $p) (local.get $kind))
+            (if
+              (call $isRawTextClose
+                (local.get $p)
+                (select (i32.const 1) (local.get $kind) (i32.le_u (i32.sub (local.get $kind) (i32.const 17)) (i32.const 1))))
               (then
                 (local.set $close (local.get $p))
                 (local.set $found (i32.const 1))

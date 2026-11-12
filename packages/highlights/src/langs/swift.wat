@@ -1,7 +1,7 @@
 (module
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
-  (memory-region $mem.swiftWords 256)
+  (memory-region $mem.swiftWords 272)
 
   (import "@pierre/wat-tools/common.wat")
 
@@ -9,13 +9,13 @@
   ;; absent on purpose: the table hash sees only the first two bytes, the last
   ;; byte, and the length, which are identical for `while`, so the two words
   ;; can never share a table and `where` is matched directly in $swiftWordHl.
-  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+256
+  (keyword-table $swiftWords $mem.swiftWords $mem.swiftWords+272
     (group $Token.keyword.control ;; 1: control
       "do" "try" "case" "else" "defer" "break" "throw" "async" "await" "repeat" "return" "default"
-      "continue")
+      "continue" "fallthrough")
     (group $Token.keyword.declaration+256 "func") ;; 2: declaration, next name is a function
     (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type
-      "enum" "class" "actor" "struct" "protocol" "typealias" "extension")
+      "enum" "class" "actor" "struct" "protocol" "typealias" "extension" "associatedtype")
     (group $Token.keyword.declaration "let" "var" "deinit" "subscript") ;; 4: declaration
     (group $Token.keyword.import "import")    ;; 5: import
     (group $Token.keyword.operator "in" "is" "as") ;; 6: operator keywords
@@ -30,7 +30,7 @@
     (group $Token.keyword.control+1024 ;; 12: control that opens a condition
       "if" "for" "guard" "while" "catch" "switch")
     (group $Token.keyword+2048 ;; 13: soft modifiers, keywords only before a word
-      "any" "some" "lazy" "weak" "open"))
+      "any" "some" "lazy" "weak" "open" "indirect" "required" "convenience" "nonisolated"))
 
   ;; Token in the low byte; bits 8-9 select the next-name capture:
   ;; 1=function, 2=type. Bit 10 marks a word whose condition runs to the
@@ -51,16 +51,6 @@
               (i64.const "where")))
           (then (return (enum.get $Token.keyword))))))
     (local.get $hl))
-
-  (func $swiftRawStart (result i32)
-    (local $p i32)
-    (local.set $p (global.get $ptr))
-    (block $done
-      (loop $hash
-        (br_if $done (i32.ne (call $templateByte (local.get $p)) (i32.const "#")))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $hash)))
-    (i32.eq (call $templateByte (local.get $p)) (i32.const 34)))
 
   ;; The opener of a hash-delimited or triple-quoted string at $ptr - the
   ;; hashes and the quote or quotes - emitted as string. Returns the hash
@@ -95,7 +85,8 @@
   ;; Advance $ptr through a hash-delimited or triple-quoted body to just past
   ;; its closing quote or quotes and $hashes hashes, or to $end. An escape
   ;; uses the same hash count as the delimiter, so its quote cannot close
-  ;; the body. Returns 1 when the body closed.
+  ;; the body. Returns 1 when the body closed, and 2 with $ptr at the
+  ;; backslash of an interpolation (`\(` or `\#(`).
   (func $swiftHashBody (param $hashes i32) (param $triple i32) (result i32)
     (local $q i32)
     (local $seen i32)
@@ -117,6 +108,10 @@
                 (br $hash)))
             (if (i32.eq (local.get $seen) (local.get $hashes))
               (then
+                (if (i32.eq (call $templateByte (local.get $q)) (i32.const "("))
+                  (then
+                    (global.set $ptr (i32.sub (global.get $ptr) (i32.const 1)))
+                    (return (i32.const 2))))
                 (global.set $ptr
                   (call $utf8SpanEnd (i32.add (local.get $q) (i32.const 1)) (global.get $end)))))
             (br $scan)))
@@ -218,9 +213,10 @@
 
   ;; $stringMode marks an open `"` body with $seg the start of its bytes not
   ;; yet emitted - zero across a chunk boundary, where the body resumes at
-  ;; the chunk start; $interp counts parens inside a `\(` interpolation; and
-  ;; $rawOpen holds an open hash-delimited or triple-quoted body as packed by
-  ;; $swiftHashOpen; $cond marks open conditions by paren/bracket depth
+  ;; the chunk start; $interp counts parens inside a `\(` interpolation;
+  ;; $nest stacks one byte per open interpolation (enclosing paren count,
+  ;; string to resume: 1 for `"`, else its $rawOpen); $rawOpen holds an open hash-delimited or triple-quoted body as packed by
+  ;; $swiftHashOpen, or minus the hash count of an open multi-line `#/` regex; $cond marks open conditions by paren/bracket depth
   ;; ($condParen). A closure argument can have its own condition without
   ;; clearing the enclosing one. All are
   ;; checkpointed between stream chunks.
@@ -244,7 +240,11 @@
     (local $rawOpen i32)
     (local $cond i32)
     (local $condParen i32)
+    (local $nest i32)
+    (local $regexStop i32)
     (call $lexEmitLeadingContinuation)
+    ;; positions before $regexStop failed a regex scan on this line
+    (local.set $regexStop (i32.const 0))
     (block $done
       (loop $next
         ;; a hash-delimited or triple-quoted body left open by its opener or
@@ -255,12 +255,64 @@
             (i32.lt_u (global.get $ptr) (global.get $end)))
           (then
             (local.set $lhs (global.get $ptr))
-            (if
+            (if (i32.lt_s (local.get $rawOpen) (i32.const 0))
+              (then
+                (block $closed
+                  (loop $find
+                    (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "/")))
+                    (br_if $closed (i32.ge_u (global.get $ptr) (global.get $end)))
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (local.set $p (global.get $ptr))
+                    (loop $hash
+                      (if
+                        (i32.and
+                          (i32.lt_u
+                            (i32.sub (local.get $p) (global.get $ptr))
+                            (i32.sub (i32.const 0) (local.get $rawOpen)))
+                          (i32.eq (call $templateByte (local.get $p)) (i32.const "#")))
+                        (then
+                          (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                          (br $hash))))
+                    (br_if $find
+                      (i32.ne
+                        (i32.sub (local.get $p) (global.get $ptr))
+                        (i32.sub (i32.const 0) (local.get $rawOpen))))
+                    (global.set $ptr (local.get $p))
+                    (local.set $rawOpen (i32.const 0))))
+                (call $emitTok (enum.get $Token.string.regex) (local.get $lhs) (global.get $ptr))
+                (br $next)))
+            (local.set $e
               (call $swiftHashBody
                 (i32.sub (i32.shr_u (local.get $rawOpen) (i32.const 1)) (i32.const 1))
-                (i32.and (local.get $rawOpen) (i32.const 1)))
+                (i32.and (local.get $rawOpen) (i32.const 1))))
+            (if (i32.eq (local.get $e) (i32.const 1))
               (then (local.set $rawOpen (i32.const 0))))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+            (if (i32.eq (local.get $e) (i32.const 2))
+              (then
+                (local.set $lhs (global.get $ptr))
+                (global.set $ptr
+                  (i32.add
+                    (local.get $lhs)
+                    (i32.add (i32.shr_u (local.get $rawOpen) (i32.const 1)) (i32.const 1))))
+                ;; a full $nest keeps the interpolation as string text
+                (if
+                  (i32.and
+                    (i32.lt_u (local.get $nest) (i32.const 0x1000000))
+                    (i32.and
+                      (i32.lt_u (local.get $interp) (i32.const 16))
+                      (i32.lt_u (local.get $rawOpen) (i32.const 16))))
+                  (then
+                    (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
+                    (local.set $nest
+                      (i32.or
+                        (i32.shl (local.get $nest) (i32.const 8))
+                        (i32.or (i32.shl (local.get $rawOpen) (i32.const 4)) (local.get $interp))))
+                    (local.set $interp (i32.const 1))
+                    (local.set $rawOpen (i32.const 0))
+                    (local.set $member (i32.const 0)))
+                  (else
+                    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))))))
             (br $next)))
 
         (if (local.get $stringMode)
@@ -297,7 +349,9 @@
                   (then
                     (if
                       (i32.and
-                        (i32.eqz (local.get $interp))
+                        (i32.and
+                          (i32.lt_u (local.get $nest) (i32.const 0x1000000))
+                          (i32.lt_u (local.get $interp) (i32.const 16)))
                         (i32.eq
                           (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                           (i32.const "(")))
@@ -310,6 +364,10 @@
                           (global.get $ptr)
                           (local.get $e))
                         (global.set $ptr (local.get $e))
+                        (local.set $nest
+                          (i32.or
+                            (i32.shl (local.get $nest) (i32.const 8))
+                            (i32.or (i32.const 16) (local.get $interp))))
                         (local.set $interp (i32.const 1))
                         (local.set $openedInterp (i32.const 1))
                         (br $stringDone)))
@@ -341,35 +399,163 @@
         (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
         (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
 
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
-          (then
-            (call $lexLineComment
-              (i32.const 2)
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.eq (local.get $c3) (i32.const "/"))))
-            (br $next)))
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (call $lexNestedBlockComment
-              (i32.const "/*")
-              (i32.const "*/")
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.eq (local.get $c3) (i32.const "*"))))
-            (br $next)))
-
-        (if (i32.eq (local.get $c) (i32.const "#"))
-          (then
-            (if (call $swiftRawStart)
+        ;; both regex forms reach $regexScan with the body start in $p and the hash count in $hl
+        (block $notRegex
+          (block $regexScan
+            (if (i32.eq (local.get $c) (i32.const "/"))
               (then
-                (local.set $rawOpen (call $swiftHashOpen))
-                (local.set $member (i32.const 0))
-                (br $next)))))
+                (if (i32.eq (local.get $c2) (i32.const "/"))
+                  (then
+                    (call $lexLineComment
+                      (i32.const 2)
+                      (select
+                        (enum.get $Token.comment.doc)
+                        (enum.get $Token.comment)
+                        (i32.eq (local.get $c3) (i32.const "/"))))
+                    (br $next)))
+                (if (i32.eq (local.get $c2) (i32.const "*"))
+                  (then
+                    (call $lexNestedBlockComment
+                      (i32.const "/*")
+                      (i32.const "*/")
+                      (select
+                        (enum.get $Token.comment.doc)
+                        (enum.get $Token.comment)
+                        (i32.eq (local.get $c3) (i32.const "*"))))
+                    (br $next)))
+                (if
+                  (i32.and
+                    (i32.ge_u (local.get $lhs) (local.get $regexStop))
+                    (i32.and
+                      (i32.ne (local.get $c2) (i32.const 32))
+                      (i32.ne (local.get $c2) (i32.const 9))))
+                  (then
+                    (local.set $p (local.get $lhs))
+                    (local.set $e (i32.const 0))
+                    (block $back
+                      (loop $blank
+                        (br_if $back (i32.le_u (local.get $p) (global.get $srcBase)))
+                        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+                        (local.set $e (i32.load8_u (local.get $p)))
+                        (br_if $blank
+                          (i32.or (i32.eq (local.get $e) (i32.const 32)) (i32.eq (local.get $e) (i32.const 9))))))
+                    (if (call $lexIsIdentStart (local.get $e))
+                      (then
+                        (local.set $rhs (i32.add (local.get $p) (i32.const 1)))
+                        (block $start
+                          (loop $word
+                            (br_if $start (i32.le_u (local.get $p) (global.get $srcBase)))
+                            (local.set $kind (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
+                            (br_if $start
+                              (i32.eqz
+                                (i32.or
+                                  (call $lexIsIdentStart (local.get $kind))
+                                  (call $lexIsDigit (local.get $kind)))))
+                            (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+                            (br $word)))
+                        (local.set $kind
+                          (i32.and
+                            (keyword-table.value $swiftWords (local.get $p) (local.get $rhs))
+                            (i32.const 255)))
+                        (if
+                          (i32.or
+                            (i32.eq (local.get $kind) (enum.get $Token.keyword.control))
+                            (i32.eq (local.get $kind) (enum.get $Token.keyword.operator)))
+                          (then (local.set $e (i32.const 0))))))
+                    (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
+                    (local.set $hl (i32.const 0))
+                    (br_if $regexScan
+                      (i32.eqz
+                        (i32.or
+                          (i32.or
+                            (call $lexIsIdentStart (local.get $e))
+                            (call $lexIsDigit (local.get $e)))
+                          (i32.or
+                            (i32.or (i32.eq (local.get $e) (i32.const ")")) (i32.eq (local.get $e) (i32.const "]")))
+                            (i32.or
+                              (i32.or (i32.eq (local.get $e) (i32.const "}")) (i32.eq (local.get $e) (i32.const 34)))
+                              (i32.eq (local.get $e) (i32.const 96)))))))))))
+            ;; a longer `#` run is emitted whole, so it is scanned once
+            (if (i32.eq (local.get $c) (i32.const "#"))
+              (then
+                (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
+                (loop $hash
+                  (if (i32.eq (call $templateByte (local.get $p)) (i32.const "#"))
+                    (then
+                      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                      (br $hash))))
+                (local.set $e (call $templateByte (local.get $p)))
+                (if (i32.eq (local.get $e) (i32.const 34))
+                  (then
+                    (local.set $rawOpen (call $swiftHashOpen))
+                    (local.set $member (i32.const 0))
+                    (br $next)))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $e) (i32.const "/"))
+                    (i32.ge_u (local.get $lhs) (local.get $regexStop)))
+                  (then
+                    (local.set $hl (i32.sub (local.get $p) (local.get $lhs)))
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (local.set $e (call $templateByte (local.get $p)))
+                    (if
+                      (i32.or
+                        (i32.eqz (local.get $e))
+                        (i32.or (i32.eq (local.get $e) (i32.const 10)) (i32.eq (local.get $e) (i32.const 13))))
+                      (then
+                        (global.set $ptr (local.get $p))
+                        (call $emitTok (enum.get $Token.string.regex) (local.get $lhs) (local.get $p))
+                        (local.set $rawOpen (i32.sub (i32.const 0) (local.get $hl)))
+                        (local.set $member (i32.const 0))
+                        (br $next)))
+                    (br $regexScan)))
+                (if (i32.gt_u (local.get $p) (i32.add (local.get $lhs) (i32.const 1)))
+                  (then
+                    (global.set $ptr (local.get $p))
+                    (call $emitTok (enum.get $Token.none) (local.get $lhs) (local.get $p))
+                    (local.set $member (i32.const 0))
+                    (br $next)))))
+            (br $notRegex))
+          ;; a failure marks the bytes up to its stop in $regexStop, so each is scanned once
+          (block $fail
+            (loop $scan
+              (local.set $e (call $templateByte (local.get $p)))
+              (br_if $fail
+                (i32.or
+                  (i32.eqz (local.get $e))
+                  (i32.or (i32.eq (local.get $e) (i32.const 10)) (i32.eq (local.get $e) (i32.const 13)))))
+              (local.set $p (i32.add (local.get $p) (i32.const 1)))
+              (if (i32.eq (local.get $e) (i32.const 92))
+                (then
+                  (local.set $e (call $templateByte (local.get $p)))
+                  (br_if $scan
+                    (i32.or
+                      (i32.eqz (local.get $e))
+                      (i32.or (i32.eq (local.get $e) (i32.const 10)) (i32.eq (local.get $e) (i32.const 13)))))
+                  (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                  (br $scan)))
+              (br_if $scan (i32.ne (local.get $e) (i32.const "/")))
+              (if (i32.eqz (local.get $hl))
+                (then
+                  (local.set $e (i32.load8_u (i32.sub (local.get $p) (i32.const 2))))
+                  (br_if $fail
+                    (i32.or (i32.eq (local.get $e) (i32.const 32)) (i32.eq (local.get $e) (i32.const 9))))))
+              (local.set $rhs (local.get $p))
+              (loop $hash
+                (if
+                  (i32.and
+                    (i32.lt_u (i32.sub (local.get $rhs) (local.get $p)) (local.get $hl))
+                    (i32.eq (call $templateByte (local.get $rhs)) (i32.const "#")))
+                  (then
+                    (local.set $rhs (i32.add (local.get $rhs) (i32.const 1)))
+                    (br $hash))))
+              (br_if $scan (i32.ne (i32.sub (local.get $rhs) (local.get $p)) (local.get $hl)))
+              (global.set $ptr (local.get $rhs))
+              (call $emitTok (enum.get $Token.string.regex) (local.get $lhs) (local.get $rhs))
+              (local.set $member (i32.const 0))
+              (br $next)))
+          (local.set $regexStop (local.get $p))
+          (br $next))
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const 34))
@@ -532,12 +718,15 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if
-          (i32.or
-            (call $lexIsDigit (local.get $c))
-            (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
+        ;; Swift has no `.5` literal, so after a member `.` a number is a tuple index
+        (if (call $lexIsDigit (local.get $c))
           (then
-            (call $lexScanHexNumber (i32.const 1))
+            (if (local.get $member)
+              (then
+                (loop $index
+                  (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                  (br_if $index (call $lexIsDigit (call $templateByte (global.get $ptr))))))
+              (else (call $lexScanHexNumber (i32.const 1))))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))
@@ -554,9 +743,15 @@
                   (enum.get $Token.punctuation.special)
                   (local.get $lhs)
                   (global.get $ptr))
-                (local.set $interp (i32.const 0))
-                (local.set $seg (global.get $ptr))
-                (local.set $stringMode (i32.const 1))
+                (local.set $e (i32.and (local.get $nest) (i32.const 255)))
+                (local.set $nest (i32.shr_u (local.get $nest) (i32.const 8)))
+                (local.set $interp (i32.and (local.get $e) (i32.const 15)))
+                (local.set $e (i32.shr_u (local.get $e) (i32.const 4)))
+                (if (i32.eq (local.get $e) (i32.const 1))
+                  (then
+                    (local.set $seg (global.get $ptr))
+                    (local.set $stringMode (i32.const 1)))
+                  (else (local.set $rawOpen (local.get $e))))
                 (local.set $member (i32.const 0))
                 (br $next)))
             (if (local.get $interp)
@@ -708,6 +903,35 @@
                       (then (call $sigAngleOps (local.get $lhs) (global.get $ptr))))))))
             (global.set $sigPattern (i32.const 0))
             (br $next)))
+
+        (if (i32.eq (local.get $c) (i32.const 96))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $lexScanIdent)
+            (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const 96))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $hl
+                  (select
+                    (enum.get $Token.property)
+                    (enum.get $Token.variable)
+                    (local.get $member)))
+                (if (local.get $expect)
+                  (then
+                    (local.set $hl
+                      (select
+                        (enum.get $Token.function.definition)
+                        (enum.get $Token.type)
+                        (i32.eq (local.get $expect) (i32.const 1))))
+                    (if (i32.eq (local.get $expect) (i32.const 1))
+                      (then
+                        (global.set $sigFnPend (i32.const 1))
+                        (global.set $sigFnAngle (i32.const 0))))
+                    (local.set $expect (i32.const 0))))
+                (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+                (local.set $member (i32.const 0))
+                (br $next)))
+            (global.set $ptr (local.get $lhs))))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

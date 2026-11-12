@@ -63,6 +63,12 @@ test('log: dates, times, numbers, and ids', () => {
   ]);
   // words made of hex letters without a digit stay words
   expect(styled('deadbeef accede')).toEqual([]);
+  // `,` joins digits only, so a key after it stays a word
+  expect(styled('status=500,bytes=512,cached=1')).toEqual([
+    ['500', 'number'],
+    ['512', 'number'],
+    ['1', 'number'],
+  ]);
 });
 
 test('log: strings, URLs, exceptions, and stack frames', () => {

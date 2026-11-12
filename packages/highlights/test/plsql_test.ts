@@ -152,3 +152,17 @@ test('plsql: SQL keeps its own dialect after a PL/SQL run', () => {
     ['# note', 'comment'],
   ]);
 });
+
+test('plsql: no E strings, and long SQL words still match', () => {
+  expect(tokenKinds('plsql', "v := e'x';")).toEqual([
+    ['v', 'variable'],
+    [':=', 'operator'],
+    ['e', 'variable'],
+    ["'x'", 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  expect(tokenKinds('plsql', 'timestamp partition returning')).toEqual([
+    ['timestamp', 'type.builtin'],
+    ['partition returning', 'keyword'],
+  ]);
+});

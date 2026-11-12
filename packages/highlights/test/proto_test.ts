@@ -379,3 +379,71 @@ void t.test(
     );
   }
 );
+
+void t.test('proto: keyword field names, C escapes, and extend paths', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'proto',
+      'syntax = "proto3";\nextend google.protobuf.FieldOptions { int32 max = 1; bytes b = 2 [default = "\\x00\\001\\n"]; }\n'
+    ),
+    [
+      ['syntax', 'keyword'],
+      ['=', 'operator'],
+      ['"proto3"', 'string'],
+      [';', 'punctuation.delimiter'],
+      ['extend', 'keyword.declaration'],
+      ['google', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['protobuf', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['FieldOptions', 'type'],
+      ['{', 'punctuation.bracket'],
+      ['int32', 'type.builtin'],
+      ['max', 'property'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+      ['bytes', 'type.builtin'],
+      ['b', 'property'],
+      ['=', 'operator'],
+      ['2', 'number'],
+      ['[', 'punctuation.bracket'],
+      ['default', 'property'],
+      ['=', 'operator'],
+      ['"', 'string'],
+      ['\\x00\\001\\n', 'string.escape'],
+      ['"', 'string'],
+      [']', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['}', 'punctuation.bracket'],
+    ]
+  );
+  assertLineFedParity('proto', 'option x = "a\\\n\\x41b";\nfoo.\nBar y = 1;\n');
+});
+
+void t.test('proto: a field named `syntax` or `edition` is a property', () => {
+  const src =
+    'syntax = "proto3";\nmessage M {\n  string syntax = 1;\n  int32 edition = 2;\n}\n';
+  assert.deepEqual(
+    tokenKinds('proto', src).filter(
+      ([, kind]) =>
+        kind !== 'punctuation.delimiter' && kind !== 'punctuation.bracket'
+    ),
+    [
+      ['syntax', 'keyword'],
+      ['=', 'operator'],
+      ['"proto3"', 'string'],
+      ['message', 'keyword.declaration'],
+      ['M', 'type'],
+      ['string', 'type.builtin'],
+      ['syntax', 'property'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      ['int32', 'type.builtin'],
+      ['edition', 'property'],
+      ['=', 'operator'],
+      ['2', 'number'],
+    ]
+  );
+  assertLineFedParity('proto', src);
+});

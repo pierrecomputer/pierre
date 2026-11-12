@@ -49,6 +49,14 @@
                 (br $done)))
             (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (local.set $seg (call $lexEscapeEnd (global.get $ptr)))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "u"))
+                (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "{")))
+              (then
+                (local.set $seg (call $scanHexRun (i32.add (global.get $ptr) (i32.const 3)) (i32.const 6)))
+                (if (i32.eq (call $templateByte (local.get $seg)) (i32.const "}"))
+                  (then (local.set $seg (i32.add (local.get $seg) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $seg))
             (global.set $ptr (local.get $seg))
             (br $scan)))

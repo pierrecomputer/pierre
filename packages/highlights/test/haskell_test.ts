@@ -526,3 +526,96 @@ void t.test(
     );
   }
 );
+
+void t.test('haskell: numeric and named escapes are one escape token', () => {
+  assert.deepEqual(
+    tokenKinds('haskell', 'x = "\\1234 \\x7F \\o17\\SOH\\^A" ++ \'\\x41\''),
+    [
+      ['x', 'function.definition'],
+      ['=', 'operator'],
+      ['"', 'string'],
+      ['\\1234', 'string.escape'],
+      ['\\x7F', 'string.escape'],
+      ['\\o17\\SOH\\^A', 'string.escape'],
+      ['"', 'string'],
+      ['++', 'operator'],
+      ["'", 'string.special'],
+      ['\\x41', 'string.escape'],
+      ["'", 'string.special'],
+    ]
+  );
+  assertLineFedParity('haskell', 's = "a\\\n  \\x41\\SOH"\nf = g\n');
+});
+
+void t.test('haskell: the closing backslash of a string gap is alone', () => {
+  const src = 's = "a\\\n   \\more"\nt = "b\\  \n\n \\c"\nu = "p\\  \\q"\n';
+  assert.deepEqual(
+    tokenKinds('haskell', src).filter(([, kind]) => kind === 'string.escape'),
+    [
+      ['\\', 'string.escape'],
+      ['\\', 'string.escape'],
+      ['\\', 'string.escape'],
+      ['\\', 'string.escape'],
+      ['\\', 'string.escape'],
+      ['\\', 'string.escape'],
+    ]
+  );
+  assertLineFedParity('haskell', src);
+  assertLineFedParity('haskell', '"\\\n"t');
+  assertLineFedParity('haskell', '"\\\n\r}');
+});
+
+void t.test('haskell: quasi-quote bodies are opaque up to |]', () => {
+  assert.deepEqual(tokenKinds('haskell', 'g = [r|{- "x |]\nh = 2'), [
+    ['g', 'function.definition'],
+    ['=', 'operator'],
+    ['[', 'punctuation.special'],
+    ['r', 'function'],
+    ['|', 'punctuation.special'],
+    ['{- "x', 'string'],
+    ['|]', 'punctuation.special'],
+    ['h', 'function.definition'],
+    ['=', 'operator'],
+    ['2', 'number'],
+  ]);
+  assert.deepEqual(tokenKinds('haskell', 'e = [e|1|]').slice(2, 5), [
+    ['[', 'punctuation.bracket'],
+    ['e', 'variable'],
+    ['|', 'operator'],
+  ]);
+  assertLineFedParity('haskell', 'q = [sql|SELECT\n  -- x\n  |] ++ y\nh = 2\n');
+});
+
+void t.test(
+  'haskell: a comprehension without blanks is not a quasi-quote',
+  () => {
+    for (const code of [
+      'xs = [x|x<-ys]\nmain = print 1\n',
+      'xs = [x|x<-ys, y<-zs]\nmain = print 1\n',
+      'xs = [f x|x<-ys]\nmain = print 1\n',
+      'xs = [x|y]\nmain = print 1\n',
+    ]) {
+      const kinds = tokenKinds('haskell', code);
+      assert.ok(
+        kinds.some(([, kind]) => kind === 'punctuation.bracket'),
+        code
+      );
+      assert.ok(!kinds.some(([, kind]) => kind === 'string'), code);
+      assert.deepEqual(kinds.at(-1), ['1', 'number'], code);
+      assertLineFedParity('haskell', code);
+    }
+    for (const code of [
+      'q = [sql|SELECT 1|]\nmain = print 1\n',
+      'q = [sql|a[0]|]\nmain = print 1\n',
+      'h = [hamlet|\n  <p>hi\n  |]\nmain = print 1\n',
+    ]) {
+      const kinds = tokenKinds('haskell', code);
+      assert.ok(
+        kinds.some(([kind]) => kind === '|]'),
+        code
+      );
+      assert.deepEqual(kinds.at(-1), ['1', 'number'], code);
+      assertLineFedParity('haskell', code);
+    }
+  }
+);

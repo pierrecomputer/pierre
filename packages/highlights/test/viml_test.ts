@@ -143,3 +143,84 @@ test('viml: continuation lines keep the expression and stream by line', () => {
   ]);
   assertLineFedParity('viml', code);
 });
+
+test('viml: a heredoc body is text up to its marker line', () => {
+  const code =
+    'let s:text =<< trim END\n  if "quoted" text\n  " not a comment\n  END\necho 1\n';
+  expect(tokenKinds('viml', code)).toEqual([
+    ['let', 'keyword.declaration'],
+    ['s:text', 'variable'],
+    ['=<<', 'operator'],
+    ['trim', 'keyword'],
+    ['END', 'string'],
+    ['if "quoted" text', 'string'],
+    ['" not a comment', 'string'],
+    ['END', 'string'],
+    ['echo', 'keyword'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('viml', code);
+  assertLineFedParity('viml', 'let x =<< END\n  END\nif 1\nEND\nlet y = 1\n');
+});
+
+test('viml: list and dict are types only before <', () => {
+  expect(
+    tokenKinds(
+      'viml',
+      'def list(a: number)\nenddef\ndef H(dict: list<any>)\n  for x in list\nenddef\n'
+    )
+  ).toEqual([
+    ['def', 'keyword.declaration'],
+    ['list', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['a', 'variable.parameter'],
+    [':', 'operator'],
+    ['number', 'type'],
+    [')', 'punctuation.bracket'],
+    ['enddef', 'keyword.declaration'],
+    ['def', 'keyword.declaration'],
+    ['H', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['dict', 'variable.parameter'],
+    [':', 'operator'],
+    ['list<any>', 'type'],
+    [')', 'punctuation.bracket'],
+    ['for', 'keyword.control'],
+    ['x', 'variable'],
+    ['in', 'keyword.operator'],
+    ['list', 'variable'],
+    ['enddef', 'keyword.declaration'],
+  ]);
+});
+
+test('viml: Vim9 generic types and catch patterns', () => {
+  expect(
+    tokenKinds(
+      'viml',
+      'def F(): list<string>\n  var r: dict<number> = {}\nenddef\ntry\ncatch /^Vim\\%((\\a\\+)\\)\\=:E/\nendtry\n'
+    )
+  ).toEqual([
+    ['def', 'keyword.declaration'],
+    ['F', 'function.definition'],
+    ['()', 'punctuation.bracket'],
+    [':', 'operator'],
+    ['list<string>', 'type'],
+    ['var', 'keyword.declaration'],
+    ['r', 'variable'],
+    [':', 'operator'],
+    ['dict<number>', 'type'],
+    ['=', 'operator'],
+    ['{}', 'punctuation.bracket'],
+    ['enddef', 'keyword.declaration'],
+    ['try', 'keyword.control'],
+    ['catch', 'keyword.control'],
+    ['/^Vim', 'string.regex'],
+    ['\\%', 'string.escape'],
+    ['((', 'string.regex'],
+    ['\\a\\+', 'string.escape'],
+    [')', 'string.regex'],
+    ['\\)\\=', 'string.escape'],
+    [':E/', 'string.regex'],
+    ['endtry', 'keyword.control'],
+  ]);
+});

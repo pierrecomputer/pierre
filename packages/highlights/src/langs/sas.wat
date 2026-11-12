@@ -22,7 +22,7 @@
     (group $Token.keyword
       "by" "where" "call" "title" "footnote" "create" "from" "as" "group" "order" "having"
       "distinct" "into" "join" "on" "inner" "outer" "full" "union" "insert" "values" "calculated"
-      "desc" "descending")
+      "desc" "descending" "delete")
     (group $Token.keyword+2048
       "keep" "drop" "retain" "rename" "format" "informat" "label" "attrib" "class" "var" "model"
       "tables" "table" "id" "freq" "weight" "array")
@@ -214,6 +214,12 @@
                 (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (call $emitTok (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr))
+                (br $next)))
+            ;; one token for a run of `&`, so no `&` rescans it
+            (if (i32.gt_u (local.get $p) (i32.add (local.get $lhs) (i32.const 1)))
+              (then
+                (global.set $ptr (local.get $p))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (local.get $p))
                 (br $next)))))
         ;; `$`, `$20`, and `$char10.` character formats
         (if (i32.eq (local.get $c) (i32.const "$"))

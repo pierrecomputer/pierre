@@ -111,3 +111,13 @@ test('ada: numbers, strings, comments, and labels', () => {
   // a comment between a name and its tick keeps the attribute context
   assertLineFedParity('ada', "X -- c\n'First;\nY := 'z';\n");
 });
+
+test('ada: with inside a statement is not an import', () => {
+  expect(tokenKinds('ada', 'raise Program_Error with "bad";\n')).toEqual([
+    ['raise', 'keyword.control'],
+    ['Program_Error', 'variable'],
+    ['with', 'keyword'],
+    ['"bad"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

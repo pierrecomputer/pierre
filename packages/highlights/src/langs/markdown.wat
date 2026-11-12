@@ -540,9 +540,10 @@
         (local.set $reg (global.get $markdownStreamLang))))
     (if (i32.eqz (local.get $fence))
       (then (return (i32.const 0))))
-    ;; pseudo fence byte 1: an MDX ESM block, which a blank line ends
-    (if (i32.eq (local.get $fence) (i32.const 1))
-      (then (return (call $mdxEsmResume (local.get $reg)))))
+    ;; pseudo fence bytes 1 and 2: an MDX ESM block or JSX tag, which a
+    ;; blank line ends
+    (if (i32.lt_u (local.get $fence) (i32.const 3))
+      (then (return (call $mdxEsmResume (local.get $fence) (local.get $reg)))))
     (local.set $lang (i32.and (local.get $reg) (i32.const 0x7fff)))
     (local.set $quotes (i32.shr_u (local.get $len) (i32.const 16)))
     (local.set $close
@@ -663,8 +664,18 @@
         (i32.le_u (i32.add (local.get $lhs) (i32.const 4)) (global.get $end))
         (i32.eq (i32.load (local.get $lhs)) (i32.const "<!--")))
       (then
-        ;; hop dash to dash with SIMD; a terminator must start with `-`
         (local.set $p (i32.add (local.get $lhs) (i32.const 4)))
+        (if
+          (i32.and
+            (i32.lt_u (local.get $p) (global.get $end))
+            (i32.eq (i32.load8_u (local.get $p)) (i32.const ">")))
+          (then (return (i32.add (local.get $p) (i32.const 1)))))
+        (if
+          (i32.and
+            (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+            (i32.eq (i32.load16_u (local.get $p)) (i32.const "->")))
+          (then (return (i32.add (local.get $p) (i32.const 2)))))
+        ;; hop dash to dash with SIMD; a terminator must start with `-`
         (block $commentDone
           (loop $comment
             (local.set $p (call $lexFindByte (local.get $p) (i32.const "-")))
@@ -945,34 +956,31 @@
   ;; (`*`, `_` or `~`) and closed by a run of at least $count markers (exactly
   ;; $count for `~`) on the line [.., $lineEnd), or 0. $open is the end of the
   ;; opener run, which may be longer than $count. A marker inside a code span
-  ;; never closes, and a `_` run neither opens glued to a preceding
-  ;; alphanumeric byte nor closes before one.
+  ;; never closes, a run never opens before a blank nor closes after one, and
+  ;; a `_` run neither opens glued to a preceding alphanumeric byte nor closes
+  ;; before one.
   (func $markdownEmphasisEnd (param $lhs i32) (param $c i32) (param $count i32) (param $open i32) (param $lineEnd i32) (result i32)
     (local $p i32)
     (local $q i32)
     (local $run i32)
     (local $slashes i32)
-    (local $flanking i32)
     (local $mask i32)
     (local $tick i32)
     (local.set $p (local.get $open))
-    (local.set $flanking (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $count) (i32.const 3))))
-    (if (i32.and (local.get $flanking) (call $lexIsSpace (i32.load8_u (local.get $p))))
+    (if
+      (i32.or
+        (i32.ge_u (local.get $p) (local.get $lineEnd))
+        (call $lexIsSpace (i32.load8_u (local.get $p))))
       (then (return (i32.const 0))))
     (if (i32.eq (local.get $c) (i32.const "_"))
       (then
-        ;; `_` opens only when left-flanking: not glued to a preceding
-        ;; alphanumeric byte and not followed by a blank, so
+        ;; `_` opens only when not glued to a preceding alphanumeric byte, so
         ;; `snake_case_name` stays plain. The byte before the chunk start is
         ;; a line break, which never flanks.
         (if
-          (i32.or
-            (i32.and
-              (i32.gt_u (local.get $lhs) (global.get $srcBase))
-              (call $markdownIsAlnum (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1)))))
-            (i32.or
-              (i32.ge_u (local.get $p) (local.get $lineEnd))
-              (call $lexIsSpace (i32.load8_u (local.get $p)))))
+          (i32.and
+            (i32.gt_u (local.get $lhs) (global.get $srcBase))
+            (call $markdownIsAlnum (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1)))))
           (then (return (i32.const 0))))))
     (local.set $mask (i32.shl (i32.const 1) (i32.add (local.get $count)
       (select (i32.const 3)
@@ -1026,8 +1034,7 @@
             (i32.gt_u (local.get $q) (local.get $run))
             (i32.or
               (i32.and (i32.eq (local.get $c) (i32.const "~")) (i32.ne (local.get $q) (local.get $run)))
-              (i32.and (local.get $flanking)
-                (call $lexIsSpace (i32.load8_u (i32.sub (local.get $p) (i32.const 1)))))))
+              (call $lexIsSpace (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))))
         (then
           (local.set $p (local.get $run))
           (br $em)))
@@ -1048,8 +1055,11 @@
       (br $em))
     (i32.const 0))
 
+  (global $markdownHtmlAt (mut i32) (i32.const 0))
+
   (func $markdownHtmlRange (param $from i32) (param $to i32)
     (local $save i32)
+    (global.set $markdownHtmlAt (local.get $to))
     (if (global.get $externalEmbedding)
       (then
         (drop
@@ -1260,9 +1270,20 @@
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
                     (br $openRun)))
                 (local.set $fenceLen (i32.sub (local.get $p) (global.get $ptr)))
-                (if (i32.ge_u (local.get $fenceLen) (i32.const 3))
+                (if $fenceOpen (i32.ge_u (local.get $fenceLen) (i32.const 3))
                   (then
                     (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
+                    (if (i32.eq (local.get $fence) (i32.const "`"))
+                      (then
+                        (br_if $fenceOpen
+                          (i32.lt_u
+                            (call $scanFindSpecial
+                              (local.get $p)
+                              (local.get $lineEnd)
+                              (i32.const "`")
+                              (i32.const 0)
+                              (i32.const 0))
+                            (local.get $lineEnd)))))
                     (local.set $q (local.get $p))
                     (block $infoStart
                       (loop $infoSpace
@@ -1326,7 +1347,7 @@
                       (i32.const 0))
                     (if (global.get $streaming)
                       (then
-                        (if (i32.eq (local.get $close) (global.get $end))
+                        (if (i32.eq (local.get $close) (global.get $eof))
                           (then
                             ;; the body continues in the next chunk: whatever
                             ;; its lexer left open stays live, and the registers
@@ -1444,14 +1465,17 @@
                           (then (call $markdownClearEmbeddedStream)))
                         (br $next)))))))
 
-            ;; Inline code run. A missing closer consumes to the current line
-            ;; end.
+            ;; Inline code run. A run without a closer on the line is literal text.
             (if (i32.eq (local.get $c) (i32.const "`"))
               (then
-                (global.set $ptr (call $markdownCodeSpanEnd (global.get $ptr) (local.get $lineCache)))
-                (if (i32.eqz (global.get $ptr))
-                  (then (global.set $ptr (local.get $lineCache))))
-                (call $emitTok (enum.get $Token.text.literal) (local.get $lhs) (global.get $ptr))
+                (local.set $q (call $markdownCodeSpanEnd (global.get $ptr) (local.get $lineCache)))
+                (if (local.get $q)
+                  (then
+                    (global.set $ptr (local.get $q))
+                    (call $emitTok (enum.get $Token.text.literal) (local.get $lhs) (global.get $ptr)))
+                  (else
+                    (global.set $ptr (call $markdownRunEnd (global.get $ptr) (local.get $lineCache)))
+                    (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))))
                 (br $next)))
 
             ;; `[label](uri)` links. A `[` whose `]` scan would start at or
@@ -1497,21 +1521,47 @@
                           (i32.eq (i32.load8_u (local.get $p)) (i32.const "]"))
                           (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "("))))
                       (then
+                        ;; a `(` before the `)` nests: destinations take balanced parentheses
                         (local.set $q
-                          (call $scanFindSpecial
+                          (call $scanFind3
                             (i32.add (local.get $p) (i32.const 2))
-                            (local.get $lineCache)
+                            (i32.const "(")
                             (i32.const ")")
-                            (i32.const 0)
-                            (i32.const 0)))
-                        (if (i32.lt_u (local.get $q) (local.get $lineCache))
+                            (i32.const 10)))
+                        (if (i32.ge_u (local.get $q) (local.get $lineCache))
+                          (then (local.set $q (local.get $lineCache))))
+                        (if
+                          (i32.and
+                            (i32.lt_u (local.get $q) (local.get $lineCache))
+                            (i32.eq (i32.load8_u (local.get $q)) (i32.const "(")))
+                          (then
+                            (local.set $count (i32.const 0))
+                            (block $parenDone
+                              (loop $paren
+                                (br_if $parenDone (i32.ge_u (local.get $q) (local.get $lineCache)))
+                                (br_if $parenDone
+                                  (i32.and
+                                    (i32.ne (local.get $count) (i32.const 0))
+                                    (i32.le_u (i32.load8_u (local.get $q)) (i32.const 32))))
+                                (if (i32.eq (i32.load8_u (local.get $q)) (i32.const "("))
+                                  (then (local.set $count (i32.add (local.get $count) (i32.const 1)))))
+                                (if (i32.eq (i32.load8_u (local.get $q)) (i32.const ")"))
+                                  (then
+                                    (br_if $parenDone (i32.eqz (local.get $count)))
+                                    (local.set $count (i32.sub (local.get $count) (i32.const 1)))))
+                                (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                                (br $paren)))))
+                        (if
+                          (i32.and
+                            (i32.lt_u (local.get $q) (local.get $lineCache))
+                            (i32.eq (i32.load8_u (local.get $q)) (i32.const ")")))
                           (then
                             (call $markdownLink (global.get $ptr) (local.get $p) (local.get $q))
                             (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
                             (br $next)))
-                        ;; no `)` from here to the line end: every later `[` on
-                        ;; the line needs one further right and fails too
-                        (local.set $linkNoClose (local.get $lineCache)))
+                        ;; a blank inside an unbalanced `(` ends the destination at $q; a
+                        ;; later `[` before $q is not retried, which keeps the line linear
+                        (local.set $linkNoClose (local.get $q)))
                       (else
                         ;; `]` missing, or not followed by `(`: later `[` up to
                         ;; that `]` would find the same one

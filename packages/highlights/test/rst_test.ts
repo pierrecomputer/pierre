@@ -117,3 +117,18 @@ test('rst: comments, literal blocks, and code bodies follow indentation', () => 
   ]);
   assertLineFedParity('rst', code);
 });
+
+test('rst: unclosed openers and colon chains do not hide later markup', () => {
+  const code = '`` a *b [c d]_ a:b:c :py:func:`x`\n``e`` *f* [1]_ :r:`y`\n';
+  expect(tokenKinds('rst', code)).toEqual([
+    ['`` a *b [c d]_ a:b:c', null],
+    [':py:func:', 'function'],
+    ['`x`', 'string'],
+    ['``e``', 'text.literal'],
+    ['*f*', 'emphasis'],
+    ['[1]_', 'link_text'],
+    [':r:', 'function'],
+    ['`y`', 'string'],
+  ]);
+  assertLineFedParity('rst', code);
+});

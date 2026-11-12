@@ -144,7 +144,9 @@
                     (local.set $expect (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 7)))))
                 ;; `with` and `use` open a clause only at its start, not in `new T with record`
                 (if (i32.and (i32.eq (local.get $expect) (i32.const 4)) (i32.ne (local.get $last) (i32.const 0)))
-                  (then (local.set $expect (i32.const 0))))
+                  (then
+                    (local.set $expect (i32.const 0))
+                    (local.set $hl (enum.get $Token.keyword))))
                 (local.set $prev
                   (select (i32.const 1) (i32.const 2) (i32.and (local.get $kind) (i32.const 4096)))))
               (else

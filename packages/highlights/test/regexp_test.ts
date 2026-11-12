@@ -128,3 +128,27 @@ test('regexp: delimited lines, line breaks, and Unicode', () => {
     ['\\😀', 'string.escape'],
   ]);
 });
+
+test('regexp: escaped backslashes before the closer, `[^-`, and POSIX names', () => {
+  expect(tokenKinds('regexp', '/a\\\\/\n[^-a][[:^digit:]]')).toEqual([
+    ['/', 'punctuation.delimiter'],
+    ['a', 'string'],
+    ['\\\\', 'string.escape'],
+    ['/', 'punctuation.delimiter'],
+    ['[', 'punctuation.bracket'],
+    ['^', 'keyword.operator'],
+    ['-a', 'constant'],
+    ['][', 'punctuation.bracket'],
+    ['[:^digit:]', 'constant.builtin'],
+    [']', 'punctuation.bracket'],
+  ]);
+  // an odd backslash run escapes the `/`
+  expect(tokenKinds('regexp', '/a\\/\n')).toEqual([
+    ['/a', 'string'],
+    ['\\/', 'string.escape'],
+  ]);
+  const code = `[${'[: '.repeat(100_000)}\n`;
+  const start = performance.now();
+  tokenKinds('regexp', code);
+  expect(performance.now() - start).toBeLessThan(2000);
+});

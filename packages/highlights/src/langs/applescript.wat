@@ -21,6 +21,7 @@
     (group $Token.keyword.declaration+512 "set" "property" "prop")
     (group $Token.keyword.declaration+1024 "local" "global")
     (group $Token.keyword.declaration "script" "copy")
+    (group $Token.keyword.import "use")
     (group $Token.keyword.operator
       "and" "or" "not" "is" "equal" "equals" "contains" "contain" "as" "div" "mod" "greater"
       "less" "does" "starts" "ends" "begins" "comes" "before" "after" "in")

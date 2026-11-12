@@ -1,6 +1,7 @@
 (module
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.asmDirectives 64)
   (import "@pierre/wat-tools/common.wat")
 
   ;; whether [$lhs,$rhs) names a machine register: `r`/`x`/`w` followed by a
@@ -125,6 +126,10 @@
         (i32.or (i32.eq (local.get $w) (i32.const "si")) (i32.eq (local.get $w) (i32.const "di")))
         (i32.or (i32.eq (local.get $w) (i32.const "bp")) (i32.eq (local.get $w) (i32.const "sp"))))))
 
+  (keyword-table $asmDirectives $mem.asmDirectives $mem.asmDirectives+64
+    (group "if" "line" "elif" "else" "error" "ifdef" "endif" "undef" "define" "ifndef" "pragma"
+      "include" "warning"))
+
   (func $hlAsm
     (local $c i32)
     (local $expectMnemonic i32)
@@ -193,11 +198,19 @@
                 (i32.eq (local.get $next) (i32.const "/")))
               (i32.and
                 (i32.eq (local.get $c) (i32.const "#"))
-                (i32.eqz (local.get $prefixedNumber)))))
+                (i32.and (i32.eqz (local.get $prefixedNumber)) (i32.ne (local.get $next) (i32.const ":"))))))
           (then
+            (local.set $hl (enum.get $Token.comment))
+            (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (local.get $expectMnemonic))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $lexScanIdent)
+                (if (keyword-table.get $asmDirectives (i32.add (local.get $lhs) (i32.const 1)) (global.get $ptr))
+                  (then (local.set $hl (enum.get $Token.preproc))))
+                (global.set $ptr (local.get $lhs))))
             (call $lexLineComment
               (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c) (i32.const "/")))
-              (enum.get $Token.comment))
+              (local.get $hl))
             (br $token)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
@@ -234,7 +247,13 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (select
+                (enum.get $Token.preproc)
+                (enum.get $Token.variable.special)
+                (i32.and (i32.eq (local.get $c) (i32.const "%")) (local.get $expectMnemonic)))
+              (local.get $lhs)
+              (global.get $ptr))
             (local.set $expectMnemonic (i32.const 0))
             (br $token)))
         (if (i32.eq (local.get $c) (i32.const "."))
@@ -249,6 +268,11 @@
                 (i32.and
                   (i32.lt_u (local.get $p) (global.get $end))
                   (i32.eq (i32.load8_u (local.get $p)) (i32.const ":")))))
+            (if
+              (i32.and
+                (i32.eq (local.get $next) (i32.const "L"))
+                (i32.and (i32.eqz (local.get $expectMnemonic)) (i32.eq (local.get $hl) (enum.get $Token.preproc))))
+              (then (local.set $hl (enum.get $Token.variable))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (if (i32.eq (local.get $hl) (enum.get $Token.label))
               (then (local.set $expectMnemonic (i32.const 1)))
@@ -257,23 +281,47 @@
         (if (call $lexIsIdentStart (local.get $c))
           (then
             (call $lexScanIdent)
-            (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
             (local.set $hl (enum.get $Token.variable))
-            (if
-              (i32.and
-                (i32.lt_u (local.get $p) (global.get $end))
-                (i32.eq (i32.load8_u (local.get $p)) (i32.const ":")))
-              (then (local.set $hl (enum.get $Token.label)))
+            ;; only a statement start holds a label, so `es:[bx]` stays a register
+            (if (local.get $expectMnemonic)
+              (then
+                (block $dots
+                  (loop $dot
+                    (br_if $dots (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+                    (br_if $dots (i32.ne (i32.load8_u (global.get $ptr)) (i32.const ".")))
+                    (br_if $dots (i32.eqz (call $lexIsIdentContinue (i32.load8_u offset=1 (global.get $ptr)))))
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $lexScanIdent)
+                    (br $dot)))
+                (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
+                (local.set $hl
+                  (select
+                    (enum.get $Token.label)
+                    (enum.get $Token.keyword)
+                    (i32.and
+                      (i32.lt_u (local.get $p) (global.get $end))
+                      (i32.eq (i32.load8_u (local.get $p)) (i32.const ":"))))))
               (else
-                (if (local.get $expectMnemonic)
-                  (then (local.set $hl (enum.get $Token.keyword)))
-                  (else
-                    (if (call $asmIsRegister (local.get $lhs) (global.get $ptr))
-                      (then (local.set $hl (enum.get $Token.variable.special))))))))
+                (if (call $asmIsRegister (local.get $lhs) (global.get $ptr))
+                  (then (local.set $hl (enum.get $Token.variable.special))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (local.set $expectMnemonic
               (select (i32.const 1) (i32.const 0) (i32.eq (local.get $hl) (enum.get $Token.label))))
             (br $token)))
+        ;; ARM `@ comment` needs a blank on both sides: x86 `foo@plt` is an operand
+        (if (i32.eq (local.get $c) (i32.const "@"))
+          (then
+            (if
+              (i32.and
+                (i32.or (i32.eqz (local.get $next)) (call $lexIsSpace (local.get $next)))
+                (i32.or
+                  (local.get $expectMnemonic)
+                  (i32.and
+                    (i32.gt_u (local.get $lhs) (global.get $srcBase))
+                    (call $lexIsSpace (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1)))))))
+              (then
+                (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
+                (br $token)))))
         ;; any other byte: a bracket, a delimiter, or an operator
         (local.set $hl (enum.get $Token.operator))
         (if

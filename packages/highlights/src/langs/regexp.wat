@@ -140,17 +140,27 @@
                       (i32.le_u
                         (i32.sub (i32.or (i32.load8_u (local.get $p)) (i32.const 32)) (i32.const "a"))
                         (i32.const 25)))))
+                (local.set $close (local.get $p))
+                (loop $back
+                  (if
+                    (i32.and
+                      (i32.gt_u (local.get $close) (i32.add (local.get $lhs) (i32.const 1)))
+                      (i32.eq (i32.load8_u (i32.sub (local.get $close) (i32.const 1))) (i32.const 92)))
+                    (then
+                      (local.set $close (i32.sub (local.get $close) (i32.const 1)))
+                      (br $back))))
                 (if
                   (i32.and
                     (i32.gt_u (local.get $p) (local.get $lhs))
                     (i32.and
                       (i32.eq (i32.load8_u (local.get $p)) (i32.const "/"))
-                      (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 92))))
+                      (i32.eqz (i32.and (i32.sub (local.get $p) (local.get $close)) (i32.const 1)))))
                   (then
                     (local.set $close (local.get $p))
                     (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
                     (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
-                    (br $next)))))))
+                    (br $next)))
+                (local.set $close (i32.const 0))))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
             (call $regexpEscape (local.get $class))
@@ -164,17 +174,27 @@
                 (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
                 (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
                 (br $next)))
-            (local.set $class (i32.const 1))
             ;; POSIX `[:alpha:]`
             (if
               (i32.and
                 (i32.eq (local.get $c) (i32.const "["))
                 (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 1))) (i32.const ":")))
               (then
-                (local.set $p (call $regexpFindOnLine (i32.add (local.get $lhs) (i32.const 2)) (i32.const "]")))
-                (if (i32.eq (i32.load8_u (i32.sub (select (local.get $p) (i32.add (local.get $lhs) (i32.const 1)) (local.get $p)) (i32.const 1))) (i32.const ":"))
+                (local.set $p (i32.add (local.get $lhs) (i32.const 2)))
+                (if (i32.eq (call $templateByte (local.get $p)) (i32.const "^"))
+                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                (loop $name
+                  (if (i32.le_u (i32.sub (i32.or (call $templateByte (local.get $p)) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                    (then
+                      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                      (br $name))))
+                (if
+                  (i32.and
+                    (i32.eq (call $templateByte (local.get $p)) (i32.const ":"))
+                    (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "]")))
                   (then
-                    (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                    (local.set $class (i32.const 1))
+                    (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
                     (call $emitTok (enum.get $Token.constant.builtin) (local.get $lhs) (global.get $ptr))
                     (br $next)))))
             ;; a range `-`, not one at either end of the class
@@ -182,12 +202,13 @@
               (i32.and
                 (i32.eq (local.get $c) (i32.const "-"))
                 (i32.and
-                  (i32.ne (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "["))
+                  (i32.eq (local.get $class) (i32.const 1))
                   (i32.ne (call $templateByte (i32.add (local.get $lhs) (i32.const 1))) (i32.const "]"))))
               (then
                 (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
                 (call $emitTok (enum.get $Token.keyword.operator) (local.get $lhs) (global.get $ptr))
                 (br $next)))
+            (local.set $class (i32.const 1))
             (local.set $p (local.get $lhs))
             (block $memberDone
               (loop $member
