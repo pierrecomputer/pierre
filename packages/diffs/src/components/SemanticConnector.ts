@@ -48,7 +48,7 @@ interface SemanticConnectorBounds {
   height: number;
 }
 
-interface SemanticConnectorRenderProps {
+export interface SemanticConnectorRenderProps {
   /** Supplies the SVG's positioning context and layout space. */
   container: HTMLElement;
   /** Pixel bounds within the container; connector regions are local to this origin. */
