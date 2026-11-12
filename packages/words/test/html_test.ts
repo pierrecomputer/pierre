@@ -1463,7 +1463,7 @@ void test('email autolinks take underscore runs into the local part', () => {
   );
 });
 
-void test('named references decode from the table and its lookup cache', async () => {
+void test('named references decode exactly and reject near misses', async () => {
   const { readFileSync } = await import('node:fs');
   const table = new Map<string, string>();
   for (const line of readFileSync(
@@ -1497,9 +1497,13 @@ void test('named references decode from the table and its lookup cache', async (
   const names = [...table.keys()];
   const source = names.map((n) => `&${n};`).join(' ');
   const expected = `<p>${names.map((n) => escape(table.get(n)!)).join(' ')}</p>\n`;
-  // the second render answers short names from the cache
   assert.equal(html(source), expected);
   assert.equal(html(source), expected);
+  for (const malformed of ['Ecy\0Edot\0Efr', 'zdot\0zeetrf\0zeta'])
+    assert.equal(
+      html(`&${malformed};`),
+      `<p>&amp;${malformed.replaceAll('\0', '\ufffd')};</p>\n`
+    );
   // near misses: a suffix, a dropped last byte, and flipped case
   for (const n of names) {
     for (const miss of [

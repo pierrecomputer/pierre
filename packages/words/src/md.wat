@@ -24,7 +24,7 @@
       [80:$mem.input) static tables and fixed work areas, in this order (see
                       memory.wat for the addresses): pooled output string
                       literals, scanner byte tables, HTML5 named character
-                      references and their lookup cache, Unicode P|S ranges,
+                      references and their immutable index, Unicode P|S ranges,
                       Unicode case folding, HTML block tag names and the GFM
                       tag filter list, Unicode display width ranges, ansi marker
                       fragments and SGR depth counters, the block analysis
@@ -267,6 +267,7 @@
 
   ;; Expand the immutable lookup tables once, at instantiation.
   (func $init
+    (call $unpackEntities)
     (drop (call $unpackRanges
       (call $unpackRanges
         (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))

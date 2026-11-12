@@ -14,10 +14,12 @@
   (const $mem.syntaxLo $mem.markHi+16)
   (const $mem.escapeNibbles $mem.syntaxLo+16)
   (const $mem.entities $mem.escapeNibbles+16)
-  (const $mem.entitiesEnd $mem.entities+16424)
-  ;; 2-way cache of recent named-reference lookups (128 sets x 32 bytes), see $entityMatch
-  (const $mem.entityCache $mem.entitiesEnd)
-  (const $mem.punct $mem.entityCache+4096)
+  (const $mem.entitiesEnd $mem.entities+34000)
+  ;; 512 u16 displacement seeds, then 4096 packed u32 name/value records.
+  (const $mem.entitySlots $mem.entities+1024)
+  ;; Each name has a one-byte length before its bytes; slot pointers skip it.
+  (const $mem.entityNames $mem.entitySlots+16384)
+  (const $mem.punct $mem.entitiesEnd)
   (const $mem.punctEnd $mem.punct+1536)
   (const $mem.fold $mem.punctEnd)
   (const $mem.foldEnd $mem.fold+3328)
