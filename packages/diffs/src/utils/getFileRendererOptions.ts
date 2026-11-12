@@ -17,7 +17,7 @@ export function getFileRendererOptions<LAnnotation, Caret>(
     disableVirtualizationBuffers: options?.disableVirtualizationBuffers,
     stickyHeader: options?.stickyHeader,
     preferredHighlighter: options?.preferredHighlighter,
-    lazyHighlighter: options?.lazyHighlighter,
+    deferHydrationHighlight: options?.deferHydrationHighlight,
     useCSSClasses: options?.useCSSClasses,
     useTokenTransformer: shouldUseTokenTransformer(options),
     tokenizeMaxLineLength: options?.tokenizeMaxLineLength,

@@ -450,9 +450,9 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately, unless
-    // lazyHighlighter defers it to the first render that needs it
+    // deferHydrationHighlight defers it to the first render that needs it
     else if (
-      this.options.lazyHighlighter !== true &&
+      this.options.deferHydrationHighlight !== true &&
       getHighlighterIfLoaded({ theme: this.getLocalHighlightTheme() }) == null
     ) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);

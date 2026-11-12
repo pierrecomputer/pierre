@@ -25,7 +25,7 @@ async function prerender<T>(load: () => Promise<T>): Promise<T> {
   return result;
 }
 
-describe('lazyHighlighter', () => {
+describe('deferHydrationHighlight', () => {
   test('File hydration preloads the highlighter by default', async () => {
     const { prerenderedHTML } = await prerender(() =>
       preloadFile({ file: oldFile, options })
@@ -50,7 +50,7 @@ describe('lazyHighlighter', () => {
     const instance = new File({
       ...options,
       disableErrorHandling: true,
-      lazyHighlighter: true,
+      deferHydrationHighlight: true,
     });
     try {
       const fileContainer = document.createElement('div');
@@ -78,7 +78,7 @@ describe('lazyHighlighter', () => {
     const instance = new FileDiff({
       ...options,
       disableErrorHandling: true,
-      lazyHighlighter: true,
+      deferHydrationHighlight: true,
     });
     try {
       const fileContainer = document.createElement('div');

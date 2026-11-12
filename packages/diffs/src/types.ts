@@ -465,7 +465,7 @@ export interface BaseCodeOptions {
    * hydrates. Prerendered code that never changes then never downloads the
    * highlighter. false is default
    */
-  lazyHighlighter?: boolean;
+  deferHydrationHighlight?: boolean;
   useCSSClasses?: boolean;
   useTokenTransformer?: boolean;
   tokenizeMaxLineLength?: number;
@@ -531,7 +531,7 @@ export type BaseDiffOptionsWithDefaults = Required<
     BaseDiffOptions,
     | 'unsafeCSS'
     | 'preferredHighlighter'
-    | 'lazyHighlighter'
+    | 'deferHydrationHighlight'
     | 'parseDiffOptions'
     | 'loadDiffFiles'
   >

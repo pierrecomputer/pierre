@@ -40,7 +40,7 @@ corresponding React component for automatic hydration.
 
 Hydrating prerendered HTML normally starts loading the highlighter right away,
 so it is ready for the next render. When the prerendered content rarely changes,
-set `lazyHighlighter: true` in the options you preload and hydrate with:
+set `deferHydrationHighlight: true` in the options you preload and hydrate with:
 hydration then keeps the prerendered markup as is, and the highlighter (with its
 engine, themes and languages) loads only once a render needs it, such as new
 contents or options. The option applies to `File` and `FileDiff` hydration; it
@@ -50,7 +50,7 @@ loads the highlighter.
 ```tsx
 const preloaded = await preloadFile({
   file,
-  options: { theme: 'pierre-dark', lazyHighlighter: true },
+  options: { theme: 'pierre-dark', deferHydrationHighlight: true },
 });
 
 <File {...preloaded} />;
