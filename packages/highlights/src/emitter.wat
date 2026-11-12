@@ -1019,6 +1019,7 @@
     (local $recordsEnd i32)
     (local $lhs i32)
     (local $rhs i32)
+    (local $type i32)
     (local.set $record (i32.load (i32.const 22)))
     (local.set $recordsEnd (i32.add (local.get $record) (i32.load (i32.const 26))))
     (global.set $recordInputEnd (local.get $recordsEnd))
@@ -1035,7 +1036,14 @@
           (then (local.set $rhs (global.get $eof))))
         (if (i32.gt_u (local.get $rhs) (local.get $lhs))
           (then
-            (call $emitTok (i32.load offset=4 (local.get $record)) (local.get $lhs) (local.get $rhs))
+            (local.set $type (i32.load offset=4 (local.get $record)))
+            (call $emitTok
+              (select
+                (local.get $type)
+                (enum.get $Token.none)
+                (i32.le_u (local.get $type) (enum.get $Token.foreground)))
+              (local.get $lhs)
+              (local.get $rhs))
             (local.set $lhs (local.get $rhs))))
         (local.set $record (i32.add (local.get $record) (i32.const 8)))
         (br $records)))

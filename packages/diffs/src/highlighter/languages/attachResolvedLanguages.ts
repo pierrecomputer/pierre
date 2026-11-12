@@ -14,9 +14,9 @@ export function attachResolvedLanguages(
   resolvedLanguages: ResolvedLanguage | ResolvedLanguage[],
   highlighter: DiffsHighlighter
 ): void {
-  for (const resolvedLang of Array.isArray(resolvedLanguages)
-    ? resolvedLanguages
-    : [resolvedLanguages]) {
+  const langs = (
+    Array.isArray(resolvedLanguages) ? resolvedLanguages : [resolvedLanguages]
+  ).map((resolvedLang) => {
     // The first resolution of a name wins so every instance and worker
     // attaches the same grammar data for it.
     const cache =
@@ -28,7 +28,8 @@ export function attachResolvedLanguages(
       lang = resolvedLang;
       cache.set(resolvedLang.name, lang);
     }
-    highlighter.attachLanguages([lang]);
-    AttachedLanguages.add(lang.name);
-  }
+    return lang;
+  });
+  highlighter.attachLanguages(langs);
+  for (const lang of langs) AttachedLanguages.add(lang.name);
 }
