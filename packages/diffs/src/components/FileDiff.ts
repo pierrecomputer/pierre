@@ -2612,7 +2612,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // deterministic expansion from the nearest gap edge, sized to reach the
   // target plus the normal expansion step (clamped to the gap at render).
   // Routed through expandHunk so subclass expansion flows (CodeView's
-  // deferred pendingExpansions) apply.
+  // deferred expansions) apply.
   public revealLine(lineNumber: number): boolean {
     const fileDiff = this.getRenderedDiff();
     const {
