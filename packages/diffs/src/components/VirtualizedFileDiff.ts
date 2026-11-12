@@ -132,6 +132,14 @@ interface PendingLoadedDiff {
   files: LoadedPartialDiffContents;
 }
 
+// Layout changes that wait for CodeView's next layout pass.
+interface PendingLayout {
+  hydratedDiff?: PendingLoadedDiff;
+  // The expansion state as it will be once the pass applies it.
+  expandedHunks?: ExpandedHunksMap;
+  foldToggles?: number[];
+}
+
 interface PendingRender {
   // Diff requested for the next render, including editor changes.
   workingDiff: FileDiffMetadata;
@@ -177,11 +185,7 @@ export class VirtualizedFileDiff<
   private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
   private layoutDirty = true;
   private currentCollapsed: boolean | undefined;
-  private pendingHydratedDiff: PendingLoadedDiff | undefined;
-  // CodeView applies expansions at its next layout pass. Until then this is
-  // the expansion state as it will be once they are applied.
-  private pendingExpandedHunks: ExpandedHunksMap | undefined;
-  private pendingFoldToggles: number[] | undefined;
+  private pendingLayout: PendingLayout = {};
   // The lines semantic connectors end on, sorted, for the regions they were
   // read from.
   private connectorLines: ConnectorLines | undefined;
@@ -683,20 +687,18 @@ export class VirtualizedFileDiff<
     let dropMeasurements = false;
     let resetEstimatedHeights = false;
     const {
-      pendingExpandedHunks,
-      pendingFoldToggles,
-      pendingHydratedDiff,
+      pendingLayout: { expandedHunks, foldToggles, hydratedDiff },
       options: { collapsed = false },
     } = this;
 
     // Hydrate the `isPartial: true` diff if we have a pending hydration
-    if (pendingHydratedDiff != null) {
-      this.pendingHydratedDiff = undefined;
-      if (areDiffTargetsEqual(pendingHydratedDiff.expectedDiff, fileDiff)) {
+    if (hydratedDiff != null) {
+      this.pendingLayout.hydratedDiff = undefined;
+      if (areDiffTargetsEqual(hydratedDiff.expectedDiff, fileDiff)) {
         // The loaded contents are written into the diff object the host
         // passes now, which may be a new object for the same diff.
-        Object.assign(fileDiff, pendingHydratedDiff.nextDiff);
-        this.setHydratedState(pendingHydratedDiff.files);
+        Object.assign(fileDiff, hydratedDiff.nextDiff);
+        this.setHydratedState(hydratedDiff.files);
         this.installHydratedDiff(fileDiff);
         this.forceRenderOverride = true;
         dropMeasurements = true;
@@ -705,17 +707,17 @@ export class VirtualizedFileDiff<
     }
 
     // Go ahead and apply any pending expansion changes
-    if (pendingExpandedHunks != null) {
-      this.pendingExpandedHunks = undefined;
-      this.hunksRenderer.setExpandedHunksMap(pendingExpandedHunks);
+    if (expandedHunks != null) {
+      this.pendingLayout.expandedHunks = undefined;
+      this.hunksRenderer.setExpandedHunksMap(expandedHunks);
       this.forceRenderOverride = true;
       resetEstimatedHeights = true;
     }
 
     // And any queued fold toggles
-    if (pendingFoldToggles != null) {
-      this.pendingFoldToggles = undefined;
-      for (const start of pendingFoldToggles) {
+    if (foldToggles != null) {
+      this.pendingLayout.foldToggles = undefined;
+      for (const start of foldToggles) {
         this.applySemanticFoldToggle(start);
       }
       this.forceRenderOverride = true;
@@ -817,7 +819,7 @@ export class VirtualizedFileDiff<
       startingLine: checkpoint?.renderedLineIndex ?? 0,
       expandedHunks: expandUnchanged
         ? true
-        : (this.pendingExpandedHunks ??
+        : (this.pendingLayout.expandedHunks ??
           this.hunksRenderer.getExpandedHunksMap()),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
@@ -1155,9 +1157,7 @@ export class VirtualizedFileDiff<
     if (!recycle) {
       this.resetMeasurements();
       this.invalidateLayout({ includeEstimatedHeights: true });
-      this.pendingExpandedHunks = undefined;
-      this.pendingFoldToggles = undefined;
-      this.pendingHydratedDiff = undefined;
+      this.pendingLayout = {};
     }
     this.pendingRender = undefined;
     this.isSetup = false;
@@ -1178,7 +1178,8 @@ export class VirtualizedFileDiff<
     this.loadFilesIfNecessary();
     if (this.isAdvancedMode()) {
       const { expansionLineCount = 100 } = this.options;
-      const pending = (this.pendingExpandedHunks ??= new Map(
+      const { pendingLayout } = this;
+      const pending = (pendingLayout.expandedHunks ??= new Map(
         this.hunksRenderer.getExpandedHunksMap()
       ));
       pending.set(
@@ -1210,8 +1211,9 @@ export class VirtualizedFileDiff<
       return;
     }
     if (this.isAdvancedMode()) {
-      this.pendingFoldToggles ??= [];
-      this.pendingFoldToggles.push(start);
+      const { pendingLayout } = this;
+      pendingLayout.foldToggles ??= [];
+      pendingLayout.foldToggles.push(start);
     } else {
       this.applySemanticFoldToggle(start);
       this.invalidateLayout({ includeEstimatedHeights: true });
@@ -1275,7 +1277,7 @@ export class VirtualizedFileDiff<
       if (this.getInputDiff() !== expectedDiff) {
         return;
       }
-      this.pendingHydratedDiff = {
+      this.pendingLayout.hydratedDiff = {
         expectedDiff,
         nextDiff,
         files,
@@ -1303,23 +1305,24 @@ export class VirtualizedFileDiff<
   }
 
   protected override loadFilesIfNecessary(): void {
-    if (this.pendingHydratedDiff != null) {
-      if (this.pendingHydratedDiff.expectedDiff === this.getInputDiff()) {
+    const { pendingLayout } = this;
+    if (pendingLayout.hydratedDiff != null) {
+      if (pendingLayout.hydratedDiff.expectedDiff === this.getInputDiff()) {
         return;
       }
-      this.pendingHydratedDiff = undefined;
+      pendingLayout.hydratedDiff = undefined;
     }
 
     super.loadFilesIfNecessary();
   }
 
   // In advanced (CodeView) mode, expansions stay pending until the next
-  // layout/render pass, so we need to use pendingExpandedHunks instead of the
-  // expandedHunks.
+  // layout/render pass, so we need to use the pending expansion state instead
+  // of the expandedHunks.
   override isLineInCollapsedContext(
     lineNumber: number,
     side: SelectionSide = 'additions',
-    expandedHunks: ExpandedHunksMap = this.pendingExpandedHunks ??
+    expandedHunks: ExpandedHunksMap = this.pendingLayout.expandedHunks ??
       this.hunksRenderer.getExpandedHunksMap()
   ): boolean {
     return super.isLineInCollapsedContext(lineNumber, side, expandedHunks);
