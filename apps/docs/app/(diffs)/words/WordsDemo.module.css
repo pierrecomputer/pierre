@@ -196,6 +196,13 @@
   }
 }
 
+/* Keep touch editors at 16px so mobile Safari does not zoom on focus. */
+@media (width <= 767px), (any-pointer: coarse) {
+  .editorPane textarea {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progress[data-state],
   .progressFill {
