@@ -2233,3 +2233,17 @@ void t.test('ecma: a ternary colon is never a type slot', () => {
   // is not a parameter in either run shape
   assertLineFedParity('ts', 'const v = ok ? (a) : Result\n=> c;\n');
 });
+
+void t.test('vue-vine: a vine tagged template is HTML like html', () => {
+  const vine = tokenKinds(
+    'vue-vine',
+    'const C = () => vine`<div class="a">{{ x }}</div>`;\n'
+  );
+  const html = tokenKinds(
+    'vue-vine',
+    'const C = () => html`<div class="a">{{ x }}</div>`;\n'
+  );
+  assert.deepEqual(vine.slice(6), html.slice(6));
+  assert.ok(vine.some(([text, kind]) => text === 'div' && kind === 'tag'));
+  assertLineFedParity('vue-vine', 'vine`<p\n title="x">\n</p>`;\n');
+});

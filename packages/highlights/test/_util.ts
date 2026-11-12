@@ -163,30 +163,48 @@ export type TestSplitHl = (
   splitBytes: number
 ) => string;
 
+// WARNING: A language that shares another language's file needs an entry
+// here, or loadSplitLang looks for a file that does not exist.
+const splitLexerFiles: Record<string, string> = {
+  js: 'tsx',
+  jsx: 'tsx',
+  ts: 'tsx',
+  less: 'css',
+  sass: 'css',
+  scss: 'css',
+  stylus: 'css',
+  'fortran-fixed-form': 'fortran',
+  json5: 'json',
+  jsonl: 'json',
+  tsv: 'csv',
+  sparql: 'rdf',
+  turtle: 'rdf',
+  cue: 'schema',
+  pkl: 'schema',
+  smithy: 'schema',
+  wit: 'schema',
+  zenscript: 'schema',
+  sdbl: 'bsl',
+  ballerina: 'curly',
+  cadence: 'curly',
+  chapel: 'curly',
+  move: 'curly',
+  v: 'curly',
+  cairo: 'rust',
+  'glimmer-js': 'glimmer',
+  'glimmer-ts': 'glimmer',
+};
+
 /**
  * Scan [0, splitBytes) and then the remainder to detect lost bytes or
  * unbalanced spans at chunk and embedded-language boundaries.
  */
 export function loadSplitLang(name: Lang): TestSplitHl {
   const entry =
-    name === 'angular-html'
-      ? '$hlAngularHtml'
-      : name === 'fortran-fixed-form'
-        ? '$hlFortranFixed'
-        : `$hl${name[0].toUpperCase()}${name.slice(1)}`;
-  const file = ['js', 'jsx', 'ts'].includes(name)
-    ? 'tsx'
-    : ['less', 'sass', 'scss', 'stylus'].includes(name)
-      ? 'css'
-      : name === 'fortran-fixed-form'
-        ? 'fortran'
-        : name === 'json5' || name === 'jsonl'
-          ? 'json'
-          : name === 'tsv'
-            ? 'csv'
-            : name === 'sparql' || name === 'turtle'
-              ? 'rdf'
-              : name;
+    name === 'fortran-fixed-form'
+      ? '$hlFortranFixed'
+      : `$hl${name.replace(/(?:^|-)(\w)/g, (_, c: string) => c.toUpperCase())}`;
+  const file = splitLexerFiles[name] ?? name;
   const { highlighter, setSplit } = compileSplitLexer(name, file, entry);
   return (input, splitBytes) => {
     setSplit(splitBytes);

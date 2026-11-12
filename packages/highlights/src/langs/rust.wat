@@ -2,16 +2,28 @@
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
   (memory-region $mem.rustWords 224)
+  (memory-region $mem.cairoWords 40)
 
   (import "@pierre/wat-tools/common.wat")
+
+  ;; 1 only in $hlCairo, the build's copy of $hlRust for Cairo.
+  ;; WARNING: guard Cairo-only code in $hlRust with this global. Binaryen
+  ;; then drops it from the Rust copy, so Rust keeps its speed.
+  (global $rustCairo i32 (i32.const 0))
+
+  ;; Cairo words that Rust lacks
+  (keyword-table $cairoWords $mem.cairoWords $mem.cairoWords+40
+    (group $Token.type.builtin
+      "felt252" "u128" "u256" "i128" "bytes31" "ContractAddress" "ClassHash" "ByteArray")
+    (group $Token.keyword "nopanic" "of"))
 
   (func $rustByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $rustWordHl below. `where` is absent
-  ;; on purpose: the table hash sees only the first two bytes, the last byte,
-  ;; and the length, which are identical for `while`, so the two words can
-  ;; never share a table and `where` is matched directly in $rustWordHl.
+  ;; `where` is absent on purpose: the table hash sees only the first two
+  ;; bytes, the last byte, and the length, which are identical for `while`,
+  ;; so the two words can never share a table and `where` is matched
+  ;; directly in $hlRust.
   (keyword-table $rustWords $mem.rustWords $mem.rustWords+224
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword.declaration+512 ;; 2: declaration, next name is a type
@@ -26,23 +38,6 @@
       "i8" "u8" "i16" "u16" "i32" "u32" "i64" "u64" "f32" "f64" "str" "bool" "char" "isize" "usize")
     (group $Token.boolean "true" "false") ;; 9: booleans
     (group $Token.variable.special "self" "Self")) ;; 10: the receiver value and its type spelling
-
-  ;; Token in the low byte; bit 8 expects a function name and bit 9 a type.
-  (func $rustWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (local $hl i32)
-    (local.set $hl (keyword-table.value $rustWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eq (local.get $hl) (i32.const -1))
-      (then
-        ;; the one word the table cannot hold; the wide load stays inside the
-        ;; input slack, as in the table's own compare
-        (if
-          (i32.and
-            (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
-            (i64.eq
-              (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
-              (i64.const "where")))
-          (then (return (enum.get $Token.keyword))))))
-    (local.get $hl))
 
   ;; The opener of a raw string at $ptr - the `r`/`br`/`cr` prefix of
   ;; $prefix bytes, the hashes, and the quote - emitted as string. Returns 0
@@ -196,6 +191,12 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
+            ;; Cairo has no lifetimes: `'bad value'` is a short string
+            (if (global.get $rustCairo)
+              (then
+                (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
+                (local.set $member (i32.const 0))
+                (br $next)))
             (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
             (block $lifeDone
               (loop $life
@@ -244,7 +245,32 @@
                 (local.set $hl (enum.get $Token.attribute))
                 (local.set $attr (i32.const 0)))
               (else
-                (local.set $kind (call $rustWordHl (local.get $lhs) (local.get $rhs)))
+                ;; Token in the low byte; bit 8 expects a function name and
+                ;; bit 9 a type. WARNING: keep this lookup inline; a shared
+                ;; helper has two callers with $hlCairo, and Binaryen then
+                ;; stops inlining it into $hlRust.
+                (local.set $kind
+                  (block $word (result i32)
+                    (local.set $kind
+                      (keyword-table.value $rustWords (local.get $lhs) (local.get $rhs)))
+                    (if (i32.eq (local.get $kind) (i32.const -1))
+                      (then
+                        (if (global.get $rustCairo)
+                          (then
+                            (local.set $kind
+                              (keyword-table.value $cairoWords (local.get $lhs) (local.get $rhs)))))
+                        ;; the one word the table cannot hold; the wide load
+                        ;; stays inside the input slack, as in the table's
+                        ;; own compare
+                        (drop
+                          (br_if $word
+                            (enum.get $Token.keyword)
+                            (i32.and
+                              (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+                              (i64.eq
+                                (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
+                                (i64.const "where")))))))
+                    (local.get $kind)))
                 (if (i32.ge_s (local.get $kind) (i32.const 0))
                   (then
                     (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -515,11 +541,18 @@
             (br $opTok)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (local.set $hl (enum.get $Token.none))
+        ;; Cairo `@T` snapshots
+        (local.set $hl
+          (select
+            (enum.get $Token.operator)
+            (enum.get $Token.none)
+            (i32.and (global.get $rustCairo) (i32.eq (local.get $c) (i32.const "@")))))
         (br $tok))
         (global.set $sigPattern (i32.const 0)))
         (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (local.set $member (i32.const 0))
         (local.set $expect (i32.const 0))
         (br $next))))
+
+  (func-variant $hlCairo $hlRust (global $rustCairo 1))
 )

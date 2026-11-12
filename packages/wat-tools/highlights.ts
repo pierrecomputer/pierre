@@ -137,7 +137,7 @@ export function transformWat(
       names.push(name);
       functions.push(fn);
       for (const quoted of [name, ...aliases].sort()) {
-        if (!/^"[a-z][a-z0-9_.+#-]*"$/.test(quoted))
+        if (!/^"[a-z0-9][a-z0-9_.+#-]*"$/.test(quoted))
           throw new Error(
             `Invalid language alias ${quoted} in ${url.pathname}`
           );
@@ -231,7 +231,9 @@ export function transformWat(
   const lexers = new Set([
     '$hlAbap',
     '$hlAda',
+    '$hlAhk',
     '$hlApache',
+    '$hlApl',
     '$hlApplescript',
     '$hlAsciidoc',
     '$hlAsm',
@@ -239,9 +241,12 @@ export function transformWat(
     '$hlAwk',
     '$hlBash',
     '$hlBatch',
+    '$hlBeancount',
+    '$hlBerry',
     '$hlBibtex',
     '$hlBicep',
     '$hlBlade',
+    '$hlBslImpl',
     '$hlC',
     '$hlC3',
     '$hlClojure',
@@ -255,6 +260,7 @@ export function transformWat(
     '$hlCsharp',
     '$hlCssImpl',
     '$hlCsvImpl',
+    '$hlCurlyImpl',
     '$hlCypher',
     '$hlD',
     '$hlDart',
@@ -262,17 +268,20 @@ export function transformWat(
     '$hlDiff',
     '$hlDockerfile',
     '$hlDotenv',
+    '$hlDreamMaker',
     '$hlElixir',
     '$hlElm',
     '$hlErb',
     '$hlErlang',
     '$hlFish',
+    '$hlFluent',
     '$hlFortranImpl',
     '$hlFsharp',
     '$hlGdresource',
     '$hlGdscript',
     '$hlGherkin',
     '$hlGleam',
+    '$hlGlimmerImpl',
     '$hlGlslImpl',
     '$hlGnuplot',
     '$hlGo',
@@ -283,9 +292,12 @@ export function transformWat(
     '$hlHaml',
     '$hlHaskell',
     '$hlHaxe',
+    '$hlHjson',
     '$hlHlsl',
     '$hlHtml',
     '$hlHttp',
+    '$hlHurl',
+    '$hlImba',
     '$hlIni',
     '$hlJavaImpl',
     '$hlJinjaImpl',
@@ -295,6 +307,7 @@ export function transformWat(
     '$hlJust',
     '$hlKdl',
     '$hlKotlin',
+    '$hlKustoImpl',
     '$hlLatex',
     '$hlLean',
     '$hlLisp',
@@ -304,6 +317,7 @@ export function transformWat(
     '$hlLuau',
     '$hlMakefile',
     '$hlMarkdown',
+    '$hlMarko',
     '$hlMatlab',
     '$hlMdx',
     '$hlMermaid',
@@ -311,10 +325,13 @@ export function transformWat(
     '$hlNginx',
     '$hlNim',
     '$hlNix',
+    '$hlNsis',
+    '$hlNushell',
     '$hlObjc',
     '$hlOcaml',
     '$hlOdin',
     '$hlOpenscad',
+    '$hlOrg',
     '$hlPascal',
     '$hlPerl',
     '$hlPhp',
@@ -330,53 +347,75 @@ export function transformWat(
     '$hlPython',
     '$hlQml',
     '$hlR',
+    '$hlRaku',
     '$hlRazor',
     '$hlRdfImpl',
     '$hlReg',
+    '$hlRegexp',
     '$hlRosmsg',
     '$hlRst',
     '$hlRuby',
     '$hlRust',
     '$hlSas',
     '$hlScala',
+    '$hlSchemaImpl',
     '$hlShaderlab',
+    '$hlSmalltalk',
     '$hlSolidity',
     '$hlSqlImpl',
     '$hlStata',
+    '$hlSurrealql',
     '$hlSvelte',
     '$hlSwift',
+    '$hlTalonscript',
     '$hlTcl',
+    '$hlTempl',
     '$hlTerraform',
     '$hlToml',
     '$hlTypst',
+    '$hlVb',
     '$hlVerilog',
     '$hlVhdl',
     '$hlViml',
     '$hlVue',
     '$hlWat',
     '$hlWgsl',
+    '$hlWikitext',
     '$hlWolfram',
     '$hlXml',
     '$hlYaml',
     '$hlZig',
   ]);
-  // `(func-variant $copy $base (global $g <int>) ...)` adds a copy of $base
-  // that reads each listed global as a constant. Binaryen then drops the
-  // branches the copy never takes, so a dialect can get its own loop
-  // without slowing the lexer it shares code with.
-  const variants: { name: string; base: string; globals: string[][] }[] = [];
+  // `(func-variant $copy $base (global $g <int>) (call $from $to) ...)` adds a
+  // copy of $base that reads each listed global as a constant and calls $to
+  // where $base calls $from. Binaryen then drops the branches the copy never
+  // takes, so a dialect can get its own loop without slowing the lexer it
+  // shares code with.
+  // WARNING: Binaryen inlines a larger helper only while it has one caller,
+  // and the copy calls the helpers of $base too. Give the copy its own copy
+  // of such a helper with `call`, or $base loses the inlined code.
+  const variants: {
+    name: string;
+    base: string;
+    globals: string[][];
+    calls: string[][];
+  }[] = [];
   code = replaceForm(code, 'func-variant', (inner) => {
     const m = inner.match(
-      /^\s*(\$\w+)\s+(\$\w+)((?:\s*\(global\s+\$\w+\s+-?\d+\s*\))+)\s*$/
+      /^\s*(\$\w+)\s+(\$\w+)((?:\s*\((?:global\s+\$\w+\s+-?\d+|call\s+\$\w+\s+\$\w+)\s*\))*)\s*$/
     );
     if (m === null)
       throw new Error(`Malformed func-variant in ${url.pathname}`);
     variants.push({
       name: m[1],
       base: m[2],
-      globals: [...m[3].matchAll(/(\$\w+)\s+(-?\d+)/g)].map((g) => [
+      globals: [...m[3].matchAll(/global\s+(\$\w+)\s+(-?\d+)/g)].map((g) => [
         g[1],
         g[2],
+      ]),
+      calls: [...m[3].matchAll(/call\s+(\$\w+)\s+(\$\w+)/g)].map((c) => [
+        c[1],
+        c[2],
       ]),
     });
     return '';
@@ -398,6 +437,15 @@ export function transformWat(
             `(i32.const ${value})`
           );
         }
+        for (const [from, to] of variant.calls)
+          body = body.replace(
+            new RegExp(`\\(\\s*call\\s+\\${from}(?![\\w.])`, 'g'),
+            `(call ${to}`
+          );
+        // WARNING: Binaryen merges identical functions before it inlines, so
+        // an exact copy would be the base again. A trailing nop keeps the
+        // copy apart until then.
+        if (variant.globals.length === 0) body += '\n    (nop)';
         out += `\n  (func${body})`;
         if (lexers.has(name)) lexers.add(variant.name);
       }
