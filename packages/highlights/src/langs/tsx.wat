@@ -544,10 +544,6 @@
   ;; Highlight an embedded expression body until its outer `}` or `}}`.
   ;; Returns one with $ptr left at the closing delimiter, zero at chunk end.
   (func $hlTsxExpressionStream (param $reset i32) (param $closeLen i32) (result i32)
-    (local $from i32)
-    (local $saved i64)
-    (local.set $from (global.get $ptr))
-    (local.set $saved (call $embedScanSave))
     (global.set $ecmaFeatures (i32.const 3))
     (global.set $tsxStreaming (i32.const 1))
     (global.set $tsxStreamExpressionClose (local.get $closeLen))
@@ -555,9 +551,6 @@
     (if (local.get $reset)
       (then (global.set $tsxStreamExpressionDepth (i32.const 0))))
     (call $hlEcmaImpl (local.get $reset))
-    (call $embedScanRestore
-      (local.get $saved) (enum.get $Language.tsx) (local.get $from) (global.get $ptr)
-      (local.get $reset) (i32.const -4))
     (global.get $tsxStreamExpressionClosed))
 
   ;; Highlight an expression from $ptr, stopping before its outer `}` or `}}`.
@@ -574,19 +567,12 @@
     (param $tag i32)
     (result i32)
     (local $closed i32)
-    (local $from i32)
-    (local $saved i64)
-    (local.set $from (global.get $ptr))
-    (local.set $saved (call $embedScanSave))
     (global.set $ecmaFeatures (i32.const 3))
     (global.set $tsxStreaming (global.get $streaming))
     (global.set $tsxStreamExpressionClose (local.get $closeLen))
     (global.set $tsxStreamExpressionClosed (i32.const 0))
     (global.set $tsxStreamExpressionDepth (i32.sub (i32.const 0) (local.get $open)))
     (call $hlEcmaImpl (i32.const 1))
-    (call $embedScanRestore
-      (local.get $saved) (enum.get $Language.tsx) (local.get $from) (global.get $ptr)
-      (select (i32.const 1) (i32.const -1) (global.get $streaming)) (i32.const -4))
     (local.set $closed (global.get $tsxStreamExpressionClosed))
     (global.set $tsxStreamExpressionClose (i32.const 0))
     (global.set $tsxStreamExpressionClosed (i32.const 0))

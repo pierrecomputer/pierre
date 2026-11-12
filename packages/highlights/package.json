@@ -35,6 +35,7 @@
       "import": "./dist/langs/*.js",
       "default": "./dist/langs/*.js"
     },
+    "./highlights.wasm": "./dist/highlights.wasm",
     "./themes": {
       "types": "./dist/themes.d.ts",
       "import": "./dist/themes.js",
@@ -58,7 +59,7 @@
     "typescript": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 303354,
-    "highlights.wasm.gz": 142928
+    "highlights.wasm": 303398,
+    "highlights.wasm.gz": 142954
   }
 }

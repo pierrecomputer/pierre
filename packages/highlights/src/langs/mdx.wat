@@ -22,7 +22,6 @@
     (local $save i32)
     (local $p i32)
     (local $dotted i32)
-    (local $saved i64)
     ;; A close tag is a complete MDX token even when this bounded range starts
     ;; at `</`; open tags and expressions delegate to the TSX lexer below.
     (if
@@ -92,14 +91,10 @@
             (br $tag)))
         (global.set $ptr (local.get $to))
         (return)))
-    (local.set $saved (call $embedScanSave))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
     (call $hlTsx)
-    (call $embedScanRestore
-      (local.get $saved) (enum.get $Language.tsx) (local.get $from) (local.get $to)
-      (i32.const -1) (i32.const -5))
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
@@ -316,7 +311,6 @@
     (local $saveEof i32)
     (local $saveStreaming i32)
     (local $saveEnd i32)
-    (local $saved i64)
     (local.set $saveEof (global.get $eof))
     (local.set $saveStreaming (global.get $streaming))
     (local.set $saveEnd (global.get $end))
@@ -337,15 +331,17 @@
                     (i32.or (global.get $tsxStreamMode) (global.get $jsTemplateLexSp))))))))
         (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
         (global.set $eof (local.get $p))
-        (if (global.get $externalEmbedding)
+        ;; WARNING: A modular build has no `tsx` entry for $markdownCodeRange
+        ;; to call, so it runs the TSX lexer here. Past the depth limit (see
+        ;; $markdownCodeRange) the lines stay literal text.
+        (if
+          (i32.and
+            (global.get $externalEmbedding)
+            (i32.lt_u (i32.load8_u (i32.const 14)) (i32.const 8)))
           (then
-            (local.set $saved (call $embedScanSave))
             (global.set $ptr (local.get $from))
             (global.set $end (local.get $p))
             (call $hlTsxStream (i32.eqz (local.get $resume)))
-            (call $embedScanRestore
-              (local.get $saved) (enum.get $Language.tsx) (local.get $from) (local.get $p)
-              (i32.eqz (local.get $resume)) (i32.const -5))
             (global.set $end (local.get $saveEnd))
             (global.set $markdownBodyRan (i32.const 1)))
           (else
@@ -454,7 +450,6 @@
     (local $noClose i32)
     (local $p i32)
     (local $to i32)
-    (local $saved i64)
     (call $lexEmitLeadingContinuation)
     ;; the memo describes the previous chunk's bytes once restored; the scan
     ;; below restarts from $ptr, so start every call without it
@@ -584,11 +579,7 @@
                 (call $streamSetRegion (i32.const 5))
                 (local.set $to (global.get $end))
                 (global.set $ptr (local.get $p))
-                (local.set $saved (call $embedScanSave))
                 (call $hlTsxStream (i32.const 1))
-                (call $embedScanRestore
-                  (local.get $saved) (enum.get $Language.tsx) (local.get $p) (local.get $to)
-                  (i32.const 1) (i32.const -6))
                 (global.set $ptr (local.get $to))
                 (global.set $streamRegionStarted (i32.const 1))
                 (local.set $from (local.get $to))

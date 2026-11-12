@@ -497,7 +497,13 @@
             (i32.store
               (i32.sub (global.get $out) (i32.const 8))
               (i32.sub (local.get $rhs) (global.get $srcBase))))
-          (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
+          (else
+            (call $recTok
+              (select
+                (i32.const 255)
+                (enum.get $Token.none)
+                (i32.eq (global.get $tokens) (i32.const 2)))
+              (local.get $rhs))))
         (return)))
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
     (call $ensureCap (i32.add (local.get $len) (i32.const 16)))
@@ -899,12 +905,18 @@
   ;; Initialize output for highlights.wat and per-language test harnesses.
   ;; Read the control block and write the wrapper. Output mode in [1]:
   ;; 0 inline colors, 1 CSS variables, 2 multiple themes, 3 UTF-16 line
-  ;; records, 4 prepared HTML openers.
+  ;; records, 4 prepared HTML openers, 5 byte records.
+  ;; WARNING: Mode 5 ($tokens 2) is the output of a lexer module: byte ends
+  ;; and a leading gap of type 255. The host uses it when this module lexes
+  ;; an embedded body for a registered lexer.
   (func $hlBegin
     (local $offset i32)
     (local $changed v128)
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
-    (global.set $tokens (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
+    (global.set $tokens
+      (i32.or
+        (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3))
+        (i32.shl (i32.eq (i32.load8_u (i32.const 1)) (i32.const 5)) (i32.const 1))))
     (global.set $htmlOpeners
       (select (i32.load (i32.const 14)) (i32.const 0)
         (i32.eq (i32.load8_u (i32.const 1)) (i32.const 4))))
@@ -1010,7 +1022,7 @@
   (func $hlEnd
     (if (i32.eqz (global.get $tokens))
       (then (call $epilogue)))
-    (if (global.get $tokens)
+    (if (i32.eq (global.get $tokens) (i32.const 1))
       (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 
