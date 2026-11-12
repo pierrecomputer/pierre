@@ -5,6 +5,27 @@
   (import "./json.wat")
   (import "./xml.wat")
 
+  ;; 1 in $hurlBody, the copy of $httpBody that Hurl uses (see hurl.wat)
+  (global $httpHurl i32 (i32.const 0))
+
+  ;; A Hurl body ends at the next line that starts with a capital letter or
+  ;; `#`, such as `HTTP 200`.
+  (func $hurlBodyEnd (param $p i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $line
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (if
+          (i32.or
+            (i32.eq (local.get $c) (i32.const "#"))
+            (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25)))
+          (then (return (local.get $p))))
+        (local.set $p
+          (i32.add (call $lexFindEither (local.get $p) (i32.const 10) (i32.const 13)) (i32.const 1)))
+        (br $line)))
+    (global.get $end))
+
   (func $httpBodyEnd (param $p i32) (result i32)
     (block $done
       (loop $find
@@ -83,7 +104,8 @@
     (i32.const 1))
 
   ;; JSON and XML bodies run their lexers as stream roots. An open body is region
-  ;; 29; $streamRegionStarted keeps its kind and, in bit 2, an open XML start tag.
+  ;; 29; $streamRegionStarted keeps its kind, in bit 2 an open XML start tag,
+  ;; and in bit 3 a Hurl body.
   (func $httpBody (param $info i32) (param $resume i32)
     (local $depth i32)
     (local $kind i32)
@@ -92,7 +114,10 @@
     (local $stop i32)
     (local.set $kind (i32.and (local.get $info) (i32.const 3)))
     (local.set $save (global.get $end))
-    (local.set $stop (call $httpBodyEnd (global.get $ptr)))
+    (local.set $stop
+      (if (result i32) (global.get $httpHurl)
+        (then (call $hurlBodyEnd (global.get $ptr)))
+        (else (call $httpBodyEnd (global.get $ptr)))))
     ;; WARNING: Only JSON and XML bodies have a host lexer. Other bodies need
     ;; the text scan below for `{{variable}}`.
     (if (i32.and (global.get $externalEmbedding) (i32.ge_u (local.get $kind) (i32.const 2)))
@@ -111,7 +136,8 @@
         (if (i32.and (global.get $streaming) (i32.eq (local.get $stop) (global.get $eof)))
           (then
             (global.set $streamRegionKind (i32.const 29))
-            (global.set $streamRegionStarted (local.get $kind))))
+            (global.set $streamRegionStarted
+              (i32.or (local.get $kind) (i32.shl (global.get $httpHurl) (i32.const 3))))))
         (return)))
     (local.set $depth (global.get $streamDepth))
     (local.set $reset (global.get $streamReset))
@@ -149,7 +175,9 @@
     (local.set $info
       (i32.or
         (local.get $kind)
-        (i32.shl (i32.eq (global.get $streamRegionKind) (i32.const 10)) (i32.const 2))))
+        (i32.or
+          (i32.shl (i32.eq (global.get $streamRegionKind) (i32.const 10)) (i32.const 2))
+          (i32.shl (global.get $httpHurl) (i32.const 3)))))
     (global.set $streamRegionKind (i32.const 0))
     (if (global.get $streaming)
       (then

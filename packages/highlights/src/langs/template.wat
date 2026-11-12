@@ -80,6 +80,10 @@
     (global.set $streamRegionKind (i32.const 0))
     (call $streamClearEmbedded))
 
+  ;; 1 only in $tmplMarkupBrace, the build's copy of $tmplMarkup for the brace
+  ;; dialects, so Blade and Razor keep their code as it was.
+  (global $tmplBrace i32 (i32.const 0))
+
   (func $tmplIsVoid (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
     (local $w i64)
@@ -115,7 +119,8 @@
   ;; bit 4 an expression value; bit 5 a Blade component; bit 6 a void element;
   ;; bits 16-17 the raw-text kind of a script or style tag.
   ;; $dialect: bit 1 Razor, 2 a Razor section body, 4 no constructs (verbatim), 16
-  ;; the cut at $ptr is plain markup.
+  ;; the cut at $ptr is plain markup. In $tmplMarkupBrace (templ), a tag or
+  ;; value cuts at `{`, and text at `{` and the byte in $dialect bits 8-15.
   (func $tmplMarkup (param $state i32) (param $dialect i32) (result i32)
     (local $at i32)
     (local $c i32)
@@ -139,6 +144,11 @@
         (local.set $at (i32.const "<"))
         (local.set $cut (i32.const "<"))
         (local.set $cut2 (i32.const "<"))))
+    (if (global.get $tmplBrace)
+      (then
+        (local.set $at (i32.const "{"))
+        (local.set $cut (i32.const "{"))
+        (local.set $cut2 (i32.shr_u (local.get $dialect) (i32.const 8)))))
     (local.set $skip
       (select (global.get $ptr) (i32.const -1) (i32.and (local.get $dialect) (i32.const 16))))
     (block $out
@@ -355,4 +365,11 @@
               (i32.const 4))))
         (br $next)))
     (local.get $state))
+
+  ;; WARNING: The copy gets its own $tmplIsVoid. With two callers Binaryen
+  ;; stops inlining it into $tmplMarkup.
+  (func-variant $tmplIsVoidBrace $tmplIsVoid)
+  (func-variant $tmplMarkupBrace $tmplMarkup
+    (global $tmplBrace 1)
+    (call $tmplIsVoid $tmplIsVoidBrace))
 )
