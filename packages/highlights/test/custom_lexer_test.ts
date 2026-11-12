@@ -6,6 +6,7 @@ import {
   registerLanguages,
 } from '@pierre/highlights';
 import c from '@pierre/highlights/langs/c';
+import html from '@pierre/highlights/langs/html';
 import markdown from '@pierre/highlights/langs/markdown';
 import { cssVariables } from '@pierre/highlights/themes';
 import { buildHighlightsLexer } from '@pierre/wat-tools';
@@ -155,6 +156,32 @@ test('a custom lexer that reports ends out of order still covers the input once'
   expect(tokens[0].map((token) => token.content).join('')).toBe(code);
 });
 
+test.each([80, 200, 100000])(
+  'a custom lexer that reports token type %d emits plain text',
+  async (type) => {
+    const language = buildHighlightsLexer({
+      name: 'bad-type-language',
+      wat: `(module
+        (func $highlight
+          (call $recTok (i32.const ${type}) (global.get $end))))`,
+    });
+    const highlighter = await createHighlighter({
+      langs: [language],
+      themes: [cssVariables],
+    });
+    const options = { lang: language.name, theme: 'css-variables' };
+    const code = '<img src=x onerror=alert(1)>'.repeat(40);
+    const html = new TextDecoder().decode(
+      highlighter.codeToHtml(code, options)
+    );
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(highlighter.codeToTokens(code, options).tokens).toEqual(
+      highlighter.codeToTokens(code, { ...options, lang: 'text' }).tokens
+    );
+  }
+);
+
 test('a custom alias takes only its own name from a built-in language', async () => {
   const header = buildHighlightsLexer({
     name: 'header-language',
@@ -197,6 +224,20 @@ test('a custom alias takes only its own name from a built-in language', async ()
   expect(tokens(before, 'c')).toEqual(builtIn);
   expect(tokens(before, 'h')).toEqual(builtIn);
   expect(tokens(before, 'header-language').tokens[0]).toEqual(custom);
+  // A free built-in ID stays free: `<script>` does not reach a custom `mjs`.
+  const script = await createHighlighter({
+    langs: [{ ...header, aliases: { mjs: 0 } }, html],
+    themes: [cssVariables],
+  });
+  expect(tokens(script, 'mjs').tokens[0]).toEqual(custom);
+  expect(
+    script
+      .codeToTokens('<script>let a = 1</script>', {
+        lang: 'html',
+        theme: 'css-variables',
+      })
+      .tokens[0].find((token) => token.content.includes('let'))?.color
+  ).not.toBe('var(--hls-keyword)');
   const reserved = await createHighlighter({
     langs: [{ ...header, aliases: { ansi: 0 } }],
     themes: [cssVariables],
