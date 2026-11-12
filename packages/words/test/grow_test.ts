@@ -93,6 +93,22 @@ const docs = {
   ).join('\n\n'),
 };
 
+void test('a render that traps after growing memory leaves usable views', () => {
+  const renderer = init(wasm);
+  const render = renderer.wasmRender;
+  renderer.wasmRender = () => {
+    renderer.memory.grow(1);
+    throw new WebAssembly.RuntimeError('render failed');
+  };
+  assert.throws(() => renderer.render('text', 0), WebAssembly.RuntimeError);
+  assert.equal(renderer.buffer.buffer, renderer.memory.buffer);
+  renderer.wasmRender = render;
+  assert.equal(
+    dec.decode(renderer.render('# next', 0).output),
+    '<h1>next</h1>\n'
+  );
+});
+
 void test('string encoding survives growth between multibyte characters', () => {
   for (const length of [16000, 26023, 65536, 262144]) {
     for (const tail of ['é中', '😀', '\ud800x\udc00', '\0']) {

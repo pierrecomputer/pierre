@@ -152,7 +152,8 @@ class Renderer {
     try {
       this.wasmRender();
     } finally {
-      this.bindMemory();
+      // Growing Wasm's non-shared memory detaches the previous views.
+      if (this.buffer.byteLength === 0) this.bindMemory();
     }
     const outStart = this.dv.getUint32(6, true);
     const outLength = this.dv.getUint32(10, true);

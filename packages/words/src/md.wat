@@ -164,9 +164,25 @@
                   (call $closeLeaf)
                   (local.set $blockStart (i32.add (local.get $blockStart) (i32.const 1)))
                   (br $boundary)))
-              (if (i32.eqz (i32.or (global.get $mode) (global.get $leaf)))
+              (if (i32.eqz (global.get $leaf))
                 (then
-                  (if (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart))))
+                  (if (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const "#"))
+                    (then
+                      (local.set $blockEnd (call $rootHeading (local.get $blockStart)))
+                      (if (local.get $blockEnd)
+                        (then
+                          (local.set $blockStart (local.get $blockEnd))
+                          (br $blockLine)))))
+                  (if (i32.or (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const "\60"))
+                        (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const "~")))
+                    (then
+                      (local.set $blockEnd (call $rootFence (local.get $blockStart)))
+                      (if (local.get $blockEnd)
+                        (then
+                          (local.set $blockStart (local.get $blockEnd))
+                          (br $blockLine)))))
+                  (if (i32.and (i32.eqz (global.get $mode))
+                        (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart)))))
                     (then
                       (local.set $blockStart (call $startPlainParagraphRun (local.get $blockStart)))
                       (br $blockLine)))))))
