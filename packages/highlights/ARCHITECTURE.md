@@ -93,9 +93,11 @@ Each loader calls `init` and exports the shared API.
 lexer/emitter modules and returns a promise. `registerLanguages(langs)` builds
 the same registered pipeline synchronously, but its emitter is the combined
 module, which also exports `emit`. The shared functions send registered names to
-it. Each active stream or live document owns its instance and lexer state. A
-completed stream can return its instance to a pool with one slot. A new stream
-can reuse that instance. Live documents do not share a pool.
+it. When a registered lexer embeds a built-in language that has no registered
+lexer, the host runs the combined module in mode 5 as the child lexer. Each
+active stream or live document owns its instance and lexer state. A completed
+stream can return its instance to a pool with one slot. A new stream can reuse
+that instance. Live documents do not share a pool.
 
 Each module reserves its own static memory with
 `(memory-region $mem.name bytes)`. The compiler aligns these regions after the
@@ -116,13 +118,14 @@ input are data. The lexer uses the boundary to find the end.
 The host writes a language ID, input length, and output mode into the control
 block. Wasm writes back the output address and length:
 
-| Mode | Output                        |
-| ---- | ----------------------------- |
-| 0    | HTML with inline colors       |
-| 1    | HTML with CSS-variable colors |
-| 2    | HTML for a packed theme set   |
-| 3    | UTF-16 line records           |
-| 4    | HTML with prepared span tags  |
+| Mode | Output                                      |
+| ---- | ------------------------------------------- |
+| 0    | HTML with inline colors                     |
+| 1    | HTML with CSS-variable colors               |
+| 2    | HTML for a packed theme set                 |
+| 3    | UTF-16 line records                         |
+| 4    | HTML with prepared span tags                |
+| 5    | Byte records, as a lexer module writes them |
 
 Output starts after the input at a 16-byte-aligned address. Modes 1 and 2 place
 the variable prefix or theme set before the output. `$ensureCap` increases
@@ -215,9 +218,13 @@ With `langs: [ts, html]`, script bodies use the registered JavaScript lexer.
 Style bodies remain plain text because CSS is absent. Markdown fences resolve
 registered custom names and aliases through the same host lookup.
 
-Some framework grammars need an intrinsic scanner to find a closing brace or
-tag. That scanner determines the boundary and preserves the parent state. The
-registered child lexer supplies the token styles within that boundary.
+Some framework grammars need the TSX lexer to find a closing brace or tag, so
+their modules contain it. Vue, Svelte, Astro, MDX, and QML keep its tokens for
+those expressions and do not call the host. The TypeScript module also contains
+the markup lexer for `html` tagged templates, which reads JavaScript escapes.
+PHP lexes each HTML segment between islands as a new body, as the combined lexer
+does. Markdown reads its nesting depth from control byte 14, which the host
+writes, and stops at eight levels.
 
 The combined runtime of the main entry calls child functions in the same Wasm
 instance. A parent sets `$end` to the end of a body, then restores the outer
@@ -414,7 +421,9 @@ declarations.
 For each standalone lexer, the build drops stream resume branches that the
 selected languages cannot reach. It keeps the embedded-region branch when the
 lexer can still call `$streamSetRegion`. Open every stream region through that
-function.
+function. The build fails when a branch or pattern that it must drop is not in
+the source. Worker threads compile the lexer modules while the main thread
+compiles the combined module.
 
 To add a language, update its import and registration. Enable stream checkpoints
 if the lexer needs them. Add a language test and a sample in

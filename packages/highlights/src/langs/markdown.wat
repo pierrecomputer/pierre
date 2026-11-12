@@ -87,7 +87,16 @@
         (return)))
     ;; Past the limit the body stays literal text rather than growing the stack:
     ;; the contract says a lexer is total, and a trap would break that.
-    (if (i32.ge_u (global.get $markdownDepth) (i32.const 8))
+    ;; WARNING: In a modular build each nested body has its own module
+    ;; instance, so $markdownDepth stays 0. The host writes the depth of the
+    ;; instance to control byte 14.
+    (if
+      (i32.ge_u
+        (select
+          (i32.load8_u (i32.const 14))
+          (global.get $markdownDepth)
+          (global.get $externalEmbedding))
+        (i32.const 8))
       (then
         (call $emitTok (enum.get $Token.text.literal) (local.get $from) (local.get $to))
         (global.set $ptr (local.get $to))
