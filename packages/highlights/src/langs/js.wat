@@ -138,7 +138,7 @@
     "ternary_colon")
 
   ;; Shared JavaScript state. Feature bit 0 enables TypeScript, bit 1 JSX,
-  ;; and bit 2 TSRX (see langs/tsrx.wat).
+  ;; bit 2 TSRX (see langs/tsrx.wat), and bit 3 Glimmer (see langs/glimmer.wat).
   (global $ecmaFeatures (mut i32) (i32.const 3))
   (global $sourceStart (mut i32) (i32.const $mem.input))
   (global $lhs (mut i32) (i32.const 0))
@@ -173,6 +173,9 @@
 
   (func $ecmaHasTsrx (result i32)
     (i32.ne (i32.and (global.get $ecmaFeatures) (i32.const 4)) (i32.const 0)))
+
+  (func $ecmaHasGlimmer (result i32)
+    (i32.ne (i32.and (global.get $ecmaFeatures) (i32.const 8)) (i32.const 0)))
 
   ;; bracket-kind stack (regexp-vs-division bookkeeping)
   (func $brkPush (param $k i32)

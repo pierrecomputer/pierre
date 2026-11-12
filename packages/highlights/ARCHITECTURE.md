@@ -170,6 +170,17 @@ pay for Luau checks. Jinja, Twig, Liquid, and Handlebars share `jinja.wat`
 through a dialect parameter of `$hlJinjaImpl`. Blade and Razor share the markup
 lexer in `template.wat`, and AsciiDoc reuses the inline scans of `rst.wat`.
 
+Move, Cadence, V, Chapel, and Ballerina share `curly.wat`, and WIT, Smithy, Pkl,
+CUE, and ZenScript share `schema.wat`. Each file has one loop with a dialect
+parameter and one keyword table per language. Kusto and Splunk share
+`kusto.wat`. 1C (BSL) and its query language share `bsl.wat`, which folds each
+Cyrillic letter to one ASCII byte before the keyword lookup. Cairo is a
+`func-variant` of the Rust lexer, so Rust does not pay for Cairo checks. Hurl
+reuses the HTTP body code the same way. templ uses a `func-variant` of the
+`template.wat` markup lexer. Glimmer runs the ECMAScript lexer and hands each
+`<template>` body to the Handlebars lexer. `embed-line.wat` holds the JavaScript
+and CSS body helpers of Marko and templ.
+
 The ECMAScript family uses `js.wat` to scan code and `ts.wat` to classify
 tokens. `jsx.wat` handles markup, and `tsx.wat` is the driver. Feature flags
 select JS, TS, JSX, and TSRX behavior. `sig.wat` tracks parameter lists for
@@ -425,10 +436,14 @@ function. The build fails when a branch or pattern that it must drop is not in
 the source. Worker threads compile the lexer modules while the main thread
 compiles the combined module.
 
-To add a language, update its import and registration. Enable stream checkpoints
-if the lexer needs them. Add a language test and a sample in
-[`test/_samples.ts`](./test/_samples.ts). Markdown fences use the new names
-automatically.
+To add a language, update its import and registration. Add the import at the end
+of the list in `languages.wat`: import order sets the memory addresses and
+byte-set numbers of every lexer, so an import in the middle changes the code of
+the lexers after it. If the new lexer calls a helper of another lexer, give it a
+copy with `(func-variant $copy $helper)`. Binaryen inlines a larger helper only
+while it has one caller. Enable stream checkpoints if the lexer needs them. Add
+a language test and a sample in [`test/_samples.ts`](./test/_samples.ts).
+Markdown fences use the new names automatically.
 
 For changes to saved state, update the live capture, reset, and restore code.
 Before you add entries to `$Token`, check the fixed capacities for themes and

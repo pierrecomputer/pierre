@@ -243,7 +243,7 @@
         (return)))
     (local.set $done (global.get $ptr))
     ;; feature and embedding flags are fixed for the whole run
-    (local.set $jsx (call $ecmaHasJsx))
+    (local.set $jsx (i32.or (call $ecmaHasJsx) (call $ecmaHasGlimmer)))
     (local.set $exprClose (global.get $tsxStreamExpressionClose))
     (block $out
       (loop $main
@@ -349,25 +349,45 @@
                 (call $jsxPop)
                 (br $main)))))
         ;; a `<` in operand position with a tag-like shape opens JSX; without
-        ;; the shape it falls through and stays a comparison operator
+        ;; the shape it falls through and stays a comparison operator. A
+        ;; Glimmer `<template>` may also start a line after a class field
+        ;; without a semicolon
         (if
           (if (result i32)
             (i32.and
               (local.get $jsx)
               (i32.eq (local.get $curT) (enum.get $Lex.l_angle)))
-            (then (call $jsxCanStart (global.get $prevTok)))
+            (then
+              (i32.or
+                (call $jsxCanStart (global.get $prevTok))
+                (i32.and (call $ecmaHasGlimmer) (global.get $nlBefore))))
             (else (i32.const 0)))
           (then
-            (if (call $jsxValidate (local.get $curRhs))
+            ;; Glimmer has no JSX: `<template>` ends the run before its `<`
+            ;; for $hlGlimmerImpl, and any other `<` stays an operator
+            (if (call $ecmaHasGlimmer)
               (then
-                (call $emitTok
-                  (enum.get $Token.punctuation.bracket.jsx)
-                  (local.get $curLhs)
-                  (local.get $curRhs))
-                (global.set $jsTemplateMarker (i32.const 0))
-                (call $jsxPush (i32.const 1) (call $jsxEmitName))
-                (local.set $done (global.get $ptr))
-                (br $main)))))
+                (if
+                  (i32.and
+                    (i32.le_u (i32.add (local.get $curRhs) (i32.const 9)) (global.get $end))
+                    (i32.and
+                      (i64.eq (i64.load (local.get $curRhs)) (i64.const "template"))
+                      (i32.eq (i32.load8_u offset=8 (local.get $curRhs)) (i32.const ">"))))
+                  (then
+                    (global.set $ptr (local.get $curLhs))
+                    (global.set $tsxStreamExpressionClosed (i32.const 1))
+                    (br $out))))
+              (else
+                (if (call $jsxValidate (local.get $curRhs))
+                  (then
+                    (call $emitTok
+                      (enum.get $Token.punctuation.bracket.jsx)
+                      (local.get $curLhs)
+                      (local.get $curRhs))
+                    (global.set $jsTemplateMarker (i32.const 0))
+                    (call $jsxPush (i32.const 1) (call $jsxEmitName))
+                    (local.set $done (global.get $ptr))
+                    (br $main)))))))
         ;; lookahead, then emit the current token. A nonzero stream mode
         ;; before the lookahead means the current token itself was cut at the
         ;; chunk end; read it now, because the lookahead sets the mode for the
@@ -488,10 +508,13 @@
                   (i32.const 0x20202020)
                   (i32.const 0)
                   (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))))
+            ;; Vue Vine's `vine` tag holds an HTML template too
             (if (i32.eq (local.get $markerLen) (i32.const 4))
               (then
                 (global.set $jsTemplateMarker
-                  (i32.eq (local.get $markerWord) (i32.const "html"))))
+                  (i32.or
+                    (i32.eq (local.get $markerWord) (i32.const "html"))
+                    (i32.eq (local.get $markerWord) (i32.const "vine")))))
               (else
                 (if (i32.eq (i32.and (local.get $markerWord) (i32.const 0xffffff)) (i32.const "css"))
                   (then (global.set $jsTemplateMarker (i32.const 260))))))))

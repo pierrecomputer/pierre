@@ -4,6 +4,7 @@ import {
   flattenWat,
   resolveConsts,
   splitTopLevelForms,
+  transformWat,
   wat2wasm,
 } from '@pierre/wat-tools';
 import { beforeAll, describe, expect, test } from 'bun:test';
@@ -193,5 +194,27 @@ test('parses adjacent and multiline imports without consuming module boundaries'
   ).toBe(true);
   expect(() => splitTopLevelForms('(module))')).toThrow(
     'unexpected closing parenthesis'
+  );
+});
+
+test('func-variant copies a function, fixes globals, and renames calls', () => {
+  const { code } = transformWat(
+    new URL('variant.wat', import.meta.url),
+    `(module
+      (global $flag i32 (i32.const 0))
+      (func $helper (result i32) (i32.const 1))
+      (func $base (result i32) (i32.add (global.get $flag) (call $helper)))
+      (func-variant $helperCopy $helper)
+      (func-variant $copy $base (global $flag 1) (call $helper $helperCopy)))`
+  );
+  expect(code).toContain(
+    '(func $copy (result i32) (i32.add (i32.const 1) (call $helperCopy)))'
+  );
+  // An exact copy ends with a nop, or Binaryen merges it with its base.
+  expect(code).toMatch(
+    /\(func \$helperCopy \(result i32\) \(i32\.const 1\)\s+\(nop\)\)/
+  );
+  expect(code).toContain(
+    '(func $base (result i32) (i32.add (global.get $flag) (call $helper)))'
   );
 });

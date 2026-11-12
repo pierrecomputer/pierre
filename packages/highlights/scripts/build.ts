@@ -151,6 +151,9 @@ export function transformLexer(
       if (selected !== undefined) {
         const has = (...languages: string[]): boolean =>
           languages.some((language) => selected.has(language));
+        // Modules without Glimmer drop its checks from the ECMAScript machine.
+        if (!has('glimmer-js', 'glimmer-ts'))
+          text = text.replaceAll('(call $ecmaHasGlimmer)', '(i32.const 0)');
         if (
           name === '$streamChunk' ||
           name === '$ecmaStreamLang' ||
@@ -184,6 +187,7 @@ export function transformLexer(
         const drop: string[] = [];
         if (name === '$streamResumeLang') {
           if (!has('http')) drop.push('(call $httpStreamResume');
+          if (!has('hurl')) drop.push('(call $hurlStreamResume');
           if (!has('shaderlab')) drop.push('(call $shaderlabStreamResume');
           if (!regions) drop.push('(call $streamResumeAnyRegion');
         }
@@ -295,7 +299,8 @@ export function generateLanguages(languages: Record<string, number>): string {
     'const languages = {\n' +
     Object.entries(languages)
       .map(
-        ([name, id]) => `  ${/^\w+$/.test(name) ? name : `'${name}'`}: ${id},`
+        ([name, id]) =>
+          `  ${/^[a-z_]\w*$/.test(name) ? name : `'${name}'`}: ${id},`
       )
       .join('\n') +
     '\n} as const;\n\n' +
