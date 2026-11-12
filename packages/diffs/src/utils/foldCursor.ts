@@ -62,6 +62,8 @@ export function takeHiddenRows(cursor: FoldCursor, hunk: Hunk): number {
 
 /** A closed fold's place among a hunk's rows. */
 export interface ClosedFoldRows {
+  /** The fold's first old line. */
+  line: number;
   /** The fold's row, counted from the hunk's first row in the view's rows. */
   row: number;
   /** The rows after it that the fold hides. */
@@ -102,6 +104,7 @@ export function takeClosedFoldRows(
     ) {
       if (!openSemanticFolds.has(fold.old.start)) {
         (closedFolds ??= []).push({
+          line: fold.old.start,
           row: row + fold.old.start - oldLine,
           hiddenRows: fold.old.end - fold.old.start,
         });

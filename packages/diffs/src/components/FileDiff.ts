@@ -134,6 +134,7 @@ import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import {
+  type ComputeLineBounds,
   measureSemanticDiffConnectors,
   measureSemanticDiffSelection,
   measureSemanticDiffSeparators,
@@ -144,8 +145,8 @@ import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import {
-  prepareSemanticDiffConnectors,
-  type SemanticDiffConnector,
+  prepareSemanticDiffConnectorRegions,
+  type SemanticDiffConnectorRegion,
 } from '../utils/semanticDiffConnectors';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import {
@@ -337,7 +338,7 @@ type HydrationSetup<LAnnotation> = {
 interface SemanticConnectorCache {
   instance: SemanticConnector | undefined;
   fileDiff: FileDiffMetadata | undefined;
-  regions: SemanticDiffConnector[];
+  regions: SemanticDiffConnectorRegion[];
 }
 
 interface SemanticConnectorLayout {
@@ -854,10 +855,20 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.semanticConnectorColumn = column;
       pre.append(column);
     }
-    if (!areDiffTargetsEqual(fileDiff, this.semanticConnector.fileDiff)) {
-      this.semanticConnector.regions = prepareSemanticDiffConnectors(fileDiff);
-      this.semanticConnector.fileDiff = fileDiff;
+    this.getSemanticConnectorRegions(fileDiff);
+  }
+
+  // The connector regions of a diff. They are built once and kept until a
+  // different diff is asked for.
+  protected getSemanticConnectorRegions(
+    fileDiff: FileDiffMetadata
+  ): readonly SemanticDiffConnectorRegion[] {
+    const { semanticConnector } = this;
+    if (!areDiffTargetsEqual(fileDiff, semanticConnector.fileDiff)) {
+      semanticConnector.regions = prepareSemanticDiffConnectorRegions(fileDiff);
+      semanticConnector.fileDiff = fileDiff;
     }
+    return semanticConnector.regions;
   }
 
   // The mounted connector column and the split content columns it sits
@@ -890,6 +901,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     };
   }
 
+  // Computes where a line is, without measuring the page. A virtualized diff
+  // sets this, for the lines it has not rendered. Here every row is
+  // rendered, so it is not needed.
+  protected computeLineBounds: ComputeLineBounds | undefined;
+
   // Measure the source rows and let SemanticConnector handle when to draw.
   private renderSemanticConnectors = (): void => {
     const layout = this.getSemanticConnectorLayout();
@@ -906,7 +922,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.semanticConnector.regions,
         deletions,
         additions,
-        bounds.top
+        bounds.top,
+        this.computeLineBounds,
+        this.hunksRenderer.getOpenSemanticFolds()
       ),
       separators: measureSemanticDiffSeparators(deletions, bounds.top),
       selection: measureSemanticDiffSelection(
