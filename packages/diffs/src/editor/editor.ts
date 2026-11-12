@@ -33,6 +33,7 @@ import type {
   SelectionSide,
 } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
+import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { normalizeLineBreaks } from '../utils/lineEndings';
@@ -173,32 +174,6 @@ export type {
   EditPredictRequest,
   EditPredictResponse,
 } from './editPrediction';
-
-// ShadowRoot.getSelection is a non-standard Blink/WebKit method (predates the
-// spec'd Selection.getComposedRanges) and is missing from the DOM lib types.
-type ShadowRootWithSelection = ShadowRoot & {
-  getSelection?: () => Selection | null;
-};
-
-// Fallback for browsers without Selection.getComposedRanges: read the first
-// range from the shadow root's own selection so the editor can still map a
-// caret placed by a click inside its shadow tree. Normalized to a StaticRange
-// so it matches the getComposedRanges return shape the callers expect. Returns
-// undefined when the API or a live range is unavailable.
-function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
-  const selection = (shadowRoot as ShadowRootWithSelection).getSelection?.();
-  if (selection == null || selection.rangeCount === 0) {
-    return undefined;
-  }
-  const range = selection.getRangeAt(0);
-  return {
-    collapsed: range.collapsed,
-    startContainer: range.startContainer,
-    startOffset: range.startOffset,
-    endContainer: range.endContainer,
-    endOffset: range.endOffset,
-  };
-}
 
 // Describes replacing the whole document, in the document's own text, with
 // one `\n` per line break.
@@ -2296,7 +2271,7 @@ export class Editor<
             return;
           }
 
-          const composedRange = this.#composedSelectionRange(shadowRoot);
+          const composedRange = getComposedSelectionRange(shadowRoot);
           if (
             composedRange === undefined ||
             !this.#rangeBelongsToEditor(composedRange)
@@ -4537,34 +4512,6 @@ export class Editor<
     };
   }
 
-  // The native selection's first range as seen through the editor's shadow
-  // root. Selection.getComposedRanges is the standard way to read it; where
-  // it is missing (older browsers, embedded WebViews, the pinned CI Chromium)
-  // the older ShadowRoot.getSelection still reports the range inside the
-  // shadow tree. Undefined when neither has a range.
-  #composedSelectionRange(shadowRoot: ShadowRoot): StaticRange | undefined {
-    const selection = document.getSelection();
-    if (selection == null) {
-      return undefined;
-    }
-    if (typeof selection.getComposedRanges !== 'function') {
-      return getShadowRootRange(shadowRoot);
-    }
-    try {
-      return selection.getComposedRanges({ shadowRoots: [shadowRoot] })?.[0];
-    } catch (error) {
-      // Older Safari takes shadow roots as separate arguments.
-      const legacy = selection.getComposedRanges as unknown as (
-        ...shadowRoots: ShadowRoot[]
-      ) => StaticRange[];
-      try {
-        return legacy.call(selection, shadowRoot)?.[0];
-      } catch {
-        throw error;
-      }
-    }
-  }
-
   // A plain click on text the editor cannot edit (the deletions column in
   // split view, a deleted row in unified view) puts the caret where editing
   // continues on the editable side: the same line and column for a context
@@ -4585,7 +4532,7 @@ export class Editor<
     ) {
       return;
     }
-    const range = this.#composedSelectionRange(shadowRoot);
+    const range = getComposedSelectionRange(shadowRoot);
     if (range != null && !range.collapsed) {
       return;
     }
