@@ -806,8 +806,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         workerManager.highlightDiffAST(this, this.diff);
       }
     }
-    // Lets attempt to get the highlighter/languages ready immediately
+    // Lets attempt to get the highlighter/languages ready immediately, unless
+    // deferHydrationHighlight defers it to the first render that needs it
     else if (
+      this.options.deferHydrationHighlight !== true &&
       getHighlighterIfLoaded({ theme: this.getLocalHighlightTheme() }) == null
     ) {
       this.computedLangs = getDiffLanguages(diff);
