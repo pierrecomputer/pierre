@@ -105,6 +105,11 @@ export function transformLexer(
   ]);
   const flattened = flattenWat(url, readFileSync(url, 'utf-8'), { overrides });
   const selected = names === undefined ? undefined : new Set(names);
+  // Only the module of all lexers keeps the pad functions of highlights.wat.
+  const exported =
+    selected === undefined
+      ? /\(export "(?:inputPtr|lex|lexStream|reserve|append|pad\d+)"\)/
+      : /\(export "(?:inputPtr|lex|lexStream|reserve|append)"\)/;
   const forms = splitTopLevelForms(
     flattened.code
       .replace(/^\s*\(module/, '')
@@ -133,7 +138,7 @@ export function transformLexer(
       (form) =>
         !form.text.includes('(export ') ||
         form.head === 'memory' ||
-        /\(export "(?:inputPtr|lex|lexStream|reserve|append)"\)/.test(form.text)
+        exported.test(form.text)
     )
     .map((form) => {
       let text = form.text;
@@ -270,7 +275,7 @@ export function transformLexer(
     if (
       text.startsWith('(language-table') ||
       text.startsWith('(memory ') ||
-      /\(export "(?:inputPtr|lex|lexStream|reserve|append)"\)/.test(text)
+      exported.test(text)
     )
       visit(text);
   }
