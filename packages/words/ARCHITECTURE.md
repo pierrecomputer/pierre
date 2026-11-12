@@ -57,14 +57,18 @@ data segments overlap. `tsdown` then writes the JavaScript and declarations to
 
 ## Memory
 
-The first 64 KiB holds control fields, generated tables, and fixed work buffers.
-See [`md.wat`](./src/md.wat) for the control fields and
-[`memory.wat`](./src/memory.wat) for exact addresses. Document data comes after:
+The fixed prefix holds control fields, generated tables, and work buffers. See
+[`md.wat`](./src/md.wat) for the control fields and
+[`memory.wat`](./src/memory.wat) for exact addresses. Input starts at byte
+65,536; JavaScript grows memory before writing it after this fixed prefix. Named
+entities expand from front-coded names into an immutable index at instantiation.
+Document data comes after:
 
 ```text
 input + NUL sentinel + at least 32 bytes of slack
 frontmatter JSON
 block records + reference table + footnote order
+bounded ANSI table measurements, when needed
 output                         grows upward
 scratch content + inline marks grows upward
 packed emphasis tags           grow downward from the memory end
@@ -87,6 +91,11 @@ Each line goes through three steps:
 1. Match open containers, such as lists and block quotes.
 2. Find new block starts.
 3. Add the remaining content to the deepest open block.
+
+Unindented root headings and fences can write their records directly. Ordinary
+paragraph lines are collected together, including lines after inline syntax; the
+inline parser still handles the full span. A first-byte bitset stops this scan
+before possible block starts, where the general block rules take over.
 
 A record holds a type, flags, its total size, type-specific data, and source
 line ranges. The renderer uses the size to find the next record. Containers have
@@ -132,6 +141,16 @@ safe boundary. Lists, quotes, tables, and code can change until the parser
 closes them. Wasm reports the boundary as UTF-16 lengths, so the session can
 slice its strings without a second render.
 
+After full parsing validates a single-line paragraph or an unindented top-level
+code fence, the session can extend its literal content directly. A paragraph may
+contain completed inline formatting before its final literal word. Syntax
+characters, possible closing fences, control characters, and structural changes
+return to the parser. Changed-text and changed-line metadata let the DOM
+renderer append content without scanning or materializing the whole pending
+HTML. This metadata uses a private symbol shared by the core and renderer
+bundles; public result types and enumerable string keys stay unchanged. Each
+result still provides independent full HTML through lazy getters.
+
 An edit, a changed `incomplete` option, a BOM at the boundary, or a link or
 footnote definition resets the session. Definitions can change earlier output,
 so those documents always render in full.
@@ -146,28 +165,34 @@ the stream is active.
 [`html/render.ts`](./html/render.ts) adds URL checks, element filters, code
 plugins, and hooks. [`html/dom.ts`](./html/dom.ts) patches DOM nodes:
 
-- A comment separates completed content from the part that can still change.
-  Updates parse only the new HTML and keep matching nodes. A reset or a skipped
-  revision reconciles the whole completed prefix.
-- A second comment marks the last line of an open code fence, so updates touch
-  only the changed lines. This also works inside lists and quotes.
+- Node references separate completed content from the part that can still
+  change. Comments retain boundaries only where fade cleanup can merge text. A
+  reset or a skipped revision reconciles the whole completed prefix.
+- Plain text appends update existing text nodes. Other canonical HTML updates
+  reconcile nodes directly, with native bulk parsing for new subtrees. Hooks and
+  filters use the general DOM reconciliation path. Literal paragraph appends
+  also work with a configured code highlighter or fades; animated appends use
+  the same fade spans and cleanup as general reconciliation.
+- Open fences update only changed lines. This also works inside lists and
+  quotes, where the parser still validates the containing structure.
 - Code lines sit in groups, 64 lines each in plain and open fences, so the
   browser lays out only the last group.
 - A native deep compare (`isEqualNode`) skips each unchanged element of the part
   that can still change.
-- Fades wrap new text in spans and remove the spans when the animation ends.
+- Newly completed paragraphs, headings, and code-line groups can fade as whole
+  elements. Changing text uses temporary spans, removed when the fade ends.
 
 The Highlights plugin uses `codeToHtml` for completed fences. An open fence
-keeps one live tokenizer, which the plugin releases when the fence closes or
-disappears.
+keeps one live tokenizer until its fence leaves the pending output. Completed
+output moves forward without a lookup cache for previously rendered code.
 
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.
 
 ## Constraints
 
-- Keep the parser and output backends in WAT. TypeScript only connects them to
-  the host.
+- Keep Markdown syntax and output backends in WAT. Host sessions may extend
+  parser-validated literal content; syntax changes return to the parser.
 - Every scanner must advance and stay in its range. Malformed input must not
   trap or loop forever.
 - Line scans can read up to 31 bytes past the input, and other SIMD scans up to

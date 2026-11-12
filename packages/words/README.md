@@ -135,8 +135,10 @@ syntax. A link with no destination yet renders as
 `<pre data-markdown-incomplete>`.
 
 Appended text reuses completed blocks. An edit, a changed `incomplete` option,
-or a link or footnote definition can force a full render. A long open paragraph
-is parsed again on each update.
+or a link or footnote definition can force a full render. Single-line paragraphs
+and top-level code fences can append literal content incrementally, including
+paragraphs with completed inline formatting. Syntax changes and more complex
+open blocks return to the parser.
 
 `@pierre/words/html` exports `createHtmlRenderer()` for formatted HTML and
 `createDomRenderer()` for DOM updates without React. See

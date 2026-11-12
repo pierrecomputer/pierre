@@ -59,8 +59,72 @@ tasks:
       cache: false
       runInCI: 'skip'
 
+  bench-runtime:
+    command: 'node benchmark/runtime.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
   bench-memory:
     command: 'node benchmark/bench-memory.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-core:
+    command: 'node benchmark/bench-core.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-core-bun:
+    command: 'bun benchmark/bench-core.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-retained:
+    command: 'node --expose-gc benchmark/bench-retained.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-startup:
+    command: 'node benchmark/bench-startup.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-startup-bun:
+    command: 'bun benchmark/bench-startup.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-incremental:
+    command: 'node benchmark/bench-incremental.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-incremental-browser:
+    command: 'bun benchmark/browser/incremental.ts'
     deps:
       - 'build'
     options:

@@ -1,0 +1,779 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "ff3f0ed1ef2f3def3500f8fb17b5e3c523eabfe7",
+  "candidateRuntimeCommit": "1ba7741d583ac5ccf8f85bb1ca2077083cb9a728",
+  "wasmSha256": {
+    "main": "145830d8c864209b44c553fbba6dc80c02ff94bb2cee1e66e5341977f5835c74",
+    "branch": "31f70dbfccec3bb201ad1488cf09cdab56a19259ea1c779fdeba2c70200595ee"
+  },
+  "environment": {
+    "date": "2026-11-12",
+    "cpu": "Apple M5 Max",
+    "memoryGiB": 36,
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "26.13.1",
+    "bun": "1.4.4",
+    "chrome": "157.0.8103.79"
+  },
+  "aggregation": {
+    "timing": "Median of three process medians. Speedup is after/before for throughput and before/after for time and size.",
+    "startup": "Median of three runs, each with 30 alternating fresh imports and 400 measured precompiled instantiations per revision.",
+    "memory": "Median of five fresh processes. RSS includes native memory and allocator capacity. Live heap growth is measured after collection.",
+    "size": "Minified browser bundles with React external; gzip level 9. Package sizes use pnpm pack.",
+    "scope": "Original suites are HTML strings, React streaming, and browser download. Added html-string cases also decode output; other core cases return UTF-8 bytes. Single-block replays use 256 UTF-16-unit chunks and JSDOM. The browser case uses 40 ms delivery intervals and fades. All measurements compare the two source revisions on the same host and runtime."
+  },
+  "metrics": [
+    {
+      "suite": "original",
+      "name": "html/tiny.md",
+      "runtime": "Node 26.13.1",
+      "unit": "MiB/s",
+      "before": 478.03719685364143,
+      "after": 507.26123091926087,
+      "speedup": 1.0611333893219335
+    },
+    {
+      "suite": "original",
+      "name": "html/assistant-review.md",
+      "runtime": "Node 26.13.1",
+      "unit": "MiB/s",
+      "before": 986.5882921818643,
+      "after": 1022.335237553702,
+      "speedup": 1.036232890310083
+    },
+    {
+      "suite": "original",
+      "name": "html/assistant-explain.md",
+      "runtime": "Node 26.13.1",
+      "unit": "MiB/s",
+      "before": 1193.97451928576,
+      "after": 1280.2461334554034,
+      "speedup": 1.0722558252091103
+    },
+    {
+      "suite": "original",
+      "name": "html/simd.md",
+      "runtime": "Node 26.13.1",
+      "unit": "MiB/s",
+      "before": 856.5766662491612,
+      "after": 882.2935616127588,
+      "speedup": 1.0300228763832764
+    },
+    {
+      "suite": "original",
+      "name": "html/gfm-spec.md",
+      "runtime": "Node 26.13.1",
+      "unit": "MiB/s",
+      "before": 933.7907958847549,
+      "after": 931.6902935638211,
+      "speedup": 0.9977505643339057
+    },
+    {
+      "suite": "original",
+      "name": "stream/tiny.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 2.3775835000000143,
+      "after": 1.1529375000000073,
+      "speedup": 2.062196346289369
+    },
+    {
+      "suite": "original",
+      "name": "stream/assistant-review.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 8.114832999999635,
+      "after": 2.3283330000003843,
+      "speedup": 3.4852544717608245
+    },
+    {
+      "suite": "original",
+      "name": "stream/assistant-explain.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 4.608041999999841,
+      "after": 1.7775830000000497,
+      "speedup": 2.5923076447061613
+    },
+    {
+      "suite": "original",
+      "name": "stream/simd.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 34.114667000000736,
+      "after": 13.770292000000154,
+      "speedup": 2.477410573428679
+    },
+    {
+      "suite": "original",
+      "name": "stream/gfm-spec.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 204.01164599999993,
+      "after": 79.3306875000003,
+      "speedup": 2.5716611368078612
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-tiny.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.0038419975728155036,
+      "after": 0.0036996407843137196,
+      "speedup": 1.0384785434049082,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-assistant-review.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.008833853832441617,
+      "after": 0.008651311418685087,
+      "speedup": 1.021099970272978,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-assistant-explain.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.009364092278719703,
+      "after": 0.008876264285713984,
+      "speedup": 1.054958705295747,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-simd.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.06925477142857354,
+      "after": 0.06711205405405496,
+      "speedup": 1.0319274593025085,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-gfm-spec.md",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.35200600000000903,
+      "after": 0.3412138666667185,
+      "speedup": 1.031628648151723,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-short-paragraph",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.00029958108795115763,
+      "after": 0.00028627196047716427,
+      "speedup": 1.0464912017642574,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-long-paragraph",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.021245469565217164,
+      "after": 0.02084920779220758,
+      "speedup": 1.019006082962907,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-short-lines",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.038281976744183904,
+      "after": 0.03807824427479783,
+      "speedup": 1.0053503640534425,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-table",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.11972865853656514,
+      "after": 0.10382002127660095,
+      "speedup": 1.153232845306204,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-sorted",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.6393541250001817,
+      "after": 0.2321627142856804,
+      "speedup": 2.753905281334043,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-shuffled",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.7841388333332967,
+      "after": 0.22995263636370178,
+      "speedup": 3.410001493059958,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-common",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.2098402916666752,
+      "after": 0.21433878260865205,
+      "speedup": 0.979012239935176,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-unknown",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.7854236666668536,
+      "after": 0.14303214285713953,
+      "speedup": 5.491238899016808,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-long",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.4254895833332739,
+      "after": 0.1430919117647136,
+      "speedup": 2.9735404194816235,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-4000",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.6944225714284714,
+      "after": 0.6647500000001401,
+      "speedup": 1.0446371890610382,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-5000",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 0.862597166666698,
+      "after": 0.8229235000004943,
+      "speedup": 1.0482106376427212,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-6000",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 1.0685081999996329,
+      "after": 0.9902917999999772,
+      "speedup": 1.0789831845519244,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-10000",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 2.045353999999861,
+      "after": 1.6471530000004957,
+      "speedup": 1.241751069875868,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-257-columns",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 1.2731979999998657,
+      "after": 0.8497986666667808,
+      "speedup": 1.4982348760251778,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-512-columns",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/render",
+      "before": 2.552645499999926,
+      "after": 1.6884166666665503,
+      "speedup": 1.5118575588569776,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "public-import",
+      "runtime": "Node 26.13.1",
+      "unit": "ms",
+      "before": 2.097166999999999,
+      "after": 2.224584,
+      "speedup": 0.9427232237577897
+    },
+    {
+      "suite": "added",
+      "name": "precompiled-wasm-instance",
+      "runtime": "Node 26.13.1",
+      "unit": "us",
+      "before": 17.58299999994506,
+      "after": 27.62499999994361,
+      "speedup": 0.6364886877821159
+    },
+    {
+      "suite": "original",
+      "name": "html/tiny.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "MiB/s",
+      "before": 579.617291759371,
+      "after": 607.3798444256538,
+      "speedup": 1.0478980752662024
+    },
+    {
+      "suite": "original",
+      "name": "html/assistant-review.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "MiB/s",
+      "before": 1141.6950767246583,
+      "after": 1176.1147096367165,
+      "speedup": 1.0301478333521439
+    },
+    {
+      "suite": "original",
+      "name": "html/assistant-explain.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "MiB/s",
+      "before": 1412.255452007906,
+      "after": 1475.656798258591,
+      "speedup": 1.0448936813524372
+    },
+    {
+      "suite": "original",
+      "name": "html/simd.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "MiB/s",
+      "before": 993.1889393135937,
+      "after": 1038.609305024525,
+      "speedup": 1.0457318481036668
+    },
+    {
+      "suite": "original",
+      "name": "html/gfm-spec.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "MiB/s",
+      "before": 1107.3795109294945,
+      "after": 1083.5081061899807,
+      "speedup": 0.9784433389782723
+    },
+    {
+      "suite": "original",
+      "name": "stream/tiny.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/replay",
+      "before": 1.8936659999999392,
+      "after": 0.9315409999999247,
+      "speedup": 2.0328316198643885
+    },
+    {
+      "suite": "original",
+      "name": "stream/assistant-review.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/replay",
+      "before": 6.144708499999979,
+      "after": 1.8479999999999563,
+      "speedup": 3.325058712121279
+    },
+    {
+      "suite": "original",
+      "name": "stream/assistant-explain.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/replay",
+      "before": 3.70568749999984,
+      "after": 1.4501249999993888,
+      "speedup": 2.555426256358177
+    },
+    {
+      "suite": "original",
+      "name": "stream/simd.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/replay",
+      "before": 26.775249999999687,
+      "after": 9.697916500000247,
+      "speedup": 2.7609280818203588
+    },
+    {
+      "suite": "original",
+      "name": "stream/gfm-spec.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/replay",
+      "before": 183.8096874999992,
+      "after": 60.46458299999995,
+      "speedup": 3.039956258360359
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-tiny.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.003289731493943494,
+      "after": 0.00321777344782035,
+      "speedup": 1.0223626825474263,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-assistant-review.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.007513763197586911,
+      "after": 0.00740697481481456,
+      "speedup": 1.0144172736430486,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-assistant-explain.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.007758659374999866,
+      "after": 0.00747552710843357,
+      "speedup": 1.03787455552758,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-simd.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.05710152873562874,
+      "after": 0.05574391011235635,
+      "speedup": 1.0243545639431464,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-gfm-spec.md",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.2922941176470618,
+      "after": 0.2869167058823437,
+      "speedup": 1.0187420657440673,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-short-paragraph",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.00022127054088542353,
+      "after": 0.00021570088410992875,
+      "speedup": 1.0258212051307878,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-long-paragraph",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.01591885245901513,
+      "after": 0.015876602564104267,
+      "speedup": 1.0026611420636293,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-short-lines",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.03007777575757328,
+      "after": 0.02909697660818398,
+      "speedup": 1.0337079402646059,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/html-table",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.09761029411763993,
+      "after": 0.09351886792449837,
+      "speedup": 1.043749740388696,
+      "output": "html-string"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-sorted",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.7201785714286026,
+      "after": 0.20044499999996332,
+      "speedup": 3.5928986576304442,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-shuffled",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.8432848333335036,
+      "after": 0.19901336000002628,
+      "speedup": 4.237327751932796,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-common",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.19743836000001466,
+      "after": 0.20549304166661386,
+      "speedup": 0.9608031415503261,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-unknown",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.8254028333334039,
+      "after": 0.12724889473683057,
+      "speedup": 6.48652261412925,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/entities-long",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.4951875000000655,
+      "after": 0.13024342105262277,
+      "speedup": 3.802015456888167,
+      "output": "html-bytes"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-4000",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.6475521250001748,
+      "after": 0.6177447499999289,
+      "speedup": 1.048251927677652,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-5000",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 0.8243263333333744,
+      "after": 0.7728680000000168,
+      "speedup": 1.0665810116777463,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-6000",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 1.0070250000004308,
+      "after": 0.9246915999996418,
+      "speedup": 1.0890387670882065,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-10000",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 1.9475000000002183,
+      "after": 1.5443056666663324,
+      "speedup": 1.2610845391795102,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-257-columns",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 1.204114500000287,
+      "after": 0.8012361666666644,
+      "speedup": 1.502820953539446,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "core/ansi-table-512-columns",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms/render",
+      "before": 2.3786459999992076,
+      "after": 1.5932499999992917,
+      "speedup": 1.4929521418485894,
+      "output": "ansi"
+    },
+    {
+      "suite": "added",
+      "name": "public-import",
+      "runtime": "Bun 1.4.4",
+      "unit": "ms",
+      "before": 2.2959165,
+      "after": 2.5149375,
+      "speedup": 0.9129119510922241
+    },
+    {
+      "suite": "added",
+      "name": "precompiled-wasm-instance",
+      "runtime": "Bun 1.4.4",
+      "unit": "us",
+      "before": 37.81250000002956,
+      "after": 47.833499999967444,
+      "speedup": 0.7905024721179779
+    },
+    {
+      "suite": "added",
+      "name": "rich-paragraph/65536",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 398.9139170000003,
+      "after": 3.2175419999998667,
+      "speedup": 123.98095098681442
+    },
+    {
+      "suite": "added",
+      "name": "rich-paragraph/262144",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 7395.662958000001,
+      "after": 16.67024999999967,
+      "speedup": 443.6443939353128
+    },
+    {
+      "suite": "added",
+      "name": "fence/65536",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 37.96579200000008,
+      "after": 5.33745799999997,
+      "speedup": 7.1130849179516344
+    },
+    {
+      "suite": "added",
+      "name": "fence/262144",
+      "runtime": "Node 26.13.1",
+      "unit": "ms/replay",
+      "before": 277.4311670000002,
+      "after": 25.98679200000015,
+      "speedup": 10.675852833239231
+    },
+    {
+      "suite": "added",
+      "name": "animated-rich-paragraph-65536/updateP95Ms",
+      "runtime": "Chrome 157.0.8103.79",
+      "unit": "ms",
+      "before": 2,
+      "after": 0.6,
+      "speedup": 3.3333333333333335
+    },
+    {
+      "suite": "added",
+      "name": "animated-rich-paragraph-65536/frameP95Ms",
+      "runtime": "Chrome 157.0.8103.79",
+      "unit": "ms",
+      "before": 16.8,
+      "after": 16.7,
+      "speedup": 1.005988023952096
+    },
+    {
+      "suite": "added",
+      "name": "animated-rich-paragraph-65536/heapBytes",
+      "runtime": "Chrome 157.0.8103.79",
+      "unit": "bytes",
+      "before": 731812,
+      "after": 671044,
+      "speedup": 1.090557400110872
+    },
+    {
+      "suite": "added",
+      "name": "retained-sessions/post-gc-rss",
+      "runtime": "Node 26.13.1",
+      "unit": "bytes",
+      "before": 218693632,
+      "after": 219480064,
+      "speedup": 0.9964168408480143
+    },
+    {
+      "suite": "added",
+      "name": "retained-sessions/peak-rss",
+      "runtime": "Node 26.13.1",
+      "unit": "bytes",
+      "before": 295632896,
+      "after": 303316992,
+      "speedup": 0.9746664506022795
+    },
+    {
+      "suite": "added",
+      "name": "retained-sessions/live-heap-growth",
+      "runtime": "Node 26.13.1",
+      "unit": "bytes",
+      "before": 2371920,
+      "after": 2432256,
+      "speedup": 0.9751934006946638
+    },
+    {
+      "suite": "original",
+      "name": "browser-download/base",
+      "runtime": "Bun 1.4.4",
+      "unit": "gzip bytes",
+      "before": 50812,
+      "after": 55795,
+      "speedup": 0.9106909221256385
+    },
+    {
+      "suite": "original",
+      "name": "browser-download/shared",
+      "runtime": "Bun 1.4.4",
+      "unit": "gzip bytes",
+      "before": 247114,
+      "after": 252024,
+      "speedup": 0.9805177284703044
+    },
+    {
+      "suite": "original",
+      "name": "browser-download/css",
+      "runtime": "Bun 1.4.4",
+      "unit": "gzip bytes",
+      "before": 1197,
+      "after": 1186,
+      "speedup": 1.0092748735244519
+    },
+    {
+      "suite": "added",
+      "name": "package/archiveBytes",
+      "runtime": "pnpm 11.9.0",
+      "unit": "bytes",
+      "before": 134235,
+      "after": 150809,
+      "speedup": 0.8900993972508272
+    },
+    {
+      "suite": "added",
+      "name": "package/unpackedBytes",
+      "runtime": "pnpm 11.9.0",
+      "unit": "bytes",
+      "before": 338625,
+      "after": 413449,
+      "speedup": 0.8190248374043715
+    }
+  ]
+}
