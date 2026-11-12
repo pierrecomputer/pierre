@@ -65,35 +65,6 @@ export default function WordsPage() {
         </section>
         <WordsBenchmarks />
         <WordsDemo />
-        <section className="mt-16 grid grid-cols-1 gap-6 border-t pt-8 md:grid-cols-3 md:gap-12">
-          <div>
-            <h2 className="mb-5 border-b pb-4 text-lg font-light">
-              Ready as it arrives.
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              Unfinished emphasis and links render correctly while a response
-              streams. Finished blocks are not rendered again.
-            </p>
-          </div>
-          <div>
-            <h2 className="mb-5 border-b pb-4 text-lg font-light">
-              Your HTML.
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              Customize headings, links, and code blocks with hooks that take
-              and return HTML strings.
-            </p>
-          </div>
-          <div>
-            <h2 className="mb-5 border-b pb-4 text-lg font-light">
-              A small, capable core.
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              Tables, task lists, and footnotes from a WAT parser. Add Pierre
-              Highlights when your words include code.
-            </p>
-          </div>
-        </section>
       </main>
       <Footer />
     </div>

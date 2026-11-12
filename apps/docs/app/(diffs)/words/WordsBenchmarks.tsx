@@ -16,6 +16,39 @@ const modes = [
   { id: 'animated', label: 'Highlighting + fades' },
 ] as const;
 
+const documents: Record<string, { label: string; description: string }> = {
+  'tiny.md': {
+    label: 'Markdown showcase · 1.3 KiB',
+    description: 'A short document with lists, links, a table, and code.',
+  },
+  'assistant-review.md': {
+    label: 'AI code review · 5.4 KiB',
+    description:
+      'A code review response with suggested diffs and TypeScript examples.',
+  },
+  'assistant-explain.md': {
+    label: 'AI explanation · 6.0 KiB',
+    description: 'A technical explanation with a TypeScript implementation.',
+  },
+  'simd.md': {
+    label: 'Technical specification · 39.0 KiB',
+    description:
+      'The WebAssembly SIMD specification, with detailed instructions and code.',
+  },
+  'gfm-spec.md': {
+    label: 'GitHub Markdown specification · 211.3 KiB',
+    description:
+      'The full GitHub Flavored Markdown specification and its examples.',
+  },
+};
+
+const measurements = [
+  'How much Markdown becomes HTML per second. Higher is better.',
+  'Time to replay the full document through React in JSDOM. Lower is better.',
+  'Peak process memory added by loading the parser and rendering HTML. Lower is better.',
+  'Peak process memory added by loading React and JSDOM and replaying the stream. Lower is better.',
+];
+
 const decimal = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
 function ChartSelect({ children, ...props }: ComponentProps<'select'>) {
@@ -76,12 +109,6 @@ function Comparison({
   );
 }
 
-function capacityFrame(sample: { status: string; frameP95Ms?: number }) {
-  return sample.status === 'completed' && sample.frameP95Ms !== undefined
-    ? `${decimal.format(sample.frameP95Ms)} ms`
-    : 'Timed out';
-}
-
 export function WordsBenchmarks() {
   const [metricIndex, setMetricIndex] = useState(0);
   const [scale, setScale] = useState(100);
@@ -89,16 +116,14 @@ export function WordsBenchmarks() {
   const [memoryMode, setMemoryMode] = useState('highlight');
   const [footprintId, setFootprintId] = useState('shared');
   const [methodOpen, setMethodOpen] = useState(false);
-  const [fixture, setFixture] = useState('gfm-spec.md');
+  const [fixture, setFixture] = useState('assistant-review.md');
   const suite = benchmark.packageRun;
   const metric = suite.metrics[metricIndex];
-  const versions: Record<string, string> = suite.environment.versions;
   // Best result first, like the highlights chart.
   const results = metric.engines
     .map((engine, index) => ({
       engine,
       value: metric.rows.find((row) => row.fixture === fixture)!.values[index],
-      version: versions[engine.split(' ')[0].toLowerCase()],
     }))
     .sort((a, b) =>
       metric.higherIsBetter === true ? b.value - a.value : a.value - b.value
@@ -138,8 +163,8 @@ export function WordsBenchmarks() {
             Markdown rendering benchmarks
           </h2>
           <p className="text-muted-foreground text-pretty">
-            Compare HTML throughput, React streaming time, and peak memory
-            across five Markdown files.
+            From everyday AI replies to full specifications, compare rendering
+            speed, streaming work, memory use, and download size.
           </p>
         </div>
         <a
@@ -158,12 +183,10 @@ export function WordsBenchmarks() {
               id="words-package-chart"
               className="text-xl font-semibold tracking-tight"
             >
-              Package benchmarks
+              Markdown to HTML and React
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
-              {date.format(new Date(suite.environment.date))} · Node{' '}
-              {suite.environment.node} · {suite.environment.cpu} ·{' '}
-              {suite.environment.memoryBytes / 1024 ** 3} GiB RAM
+              {measurements[metricIndex]}
             </p>
           </figcaption>
           <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
@@ -181,14 +204,14 @@ export function WordsBenchmarks() {
               </ChartSelect>
             </label>
             <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Fixture</span>
+              <span className="text-muted-foreground">Document</span>
               <ChartSelect
                 value={fixture}
                 onChange={(event) => setFixture(event.target.value)}
               >
                 {metric.rows.map((row) => (
                   <option key={row.fixture} value={row.fixture}>
-                    {row.fixture}
+                    {documents[row.fixture].label}
                   </option>
                 ))}
               </ChartSelect>
@@ -199,14 +222,18 @@ export function WordsBenchmarks() {
           id="words-package-caption"
           className="text-muted-foreground mb-5 text-sm"
         >
-          <strong>{fixture}</strong> · {metric.description}
+          <strong className="text-foreground">
+            {documents[fixture].label}
+          </strong>
+          {' · '}
+          {documents[fixture].description}
         </p>
         <dl
           aria-labelledby="words-package-caption"
           aria-live="polite"
           className="space-y-5 tabular-nums sm:space-y-6"
         >
-          {results.map(({ engine, value, version }) => {
+          {results.map(({ engine, value }) => {
             const words = engine.startsWith('Words');
             return (
               <div
@@ -217,7 +244,6 @@ export function WordsBenchmarks() {
                   <span className="text-foreground text-sm font-medium">
                     {engine}
                   </span>
-                  {version}
                 </dt>
                 <dd className="contents">
                   <div className="col-start-1 row-start-1">
@@ -243,9 +269,15 @@ export function WordsBenchmarks() {
         </dl>
       </figure>
 
-      <h3 className="text-xl font-semibold tracking-tight">
-        Browser measurements
-      </h3>
+      <div className="space-y-2">
+        <h3 className="text-xl font-semibold tracking-tight">
+          Streaming in the browser
+        </h3>
+        <p className="text-muted-foreground max-w-2xl text-sm">
+          A long response with paragraphs and TypeScript code, tested on its own
+          and repeated 100 times to show how each renderer scales.
+        </p>
+      </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-3">
         <figure className={cardClass} aria-labelledby="words-update-chart">
           <figcaption className="mb-5 space-y-1.5">
@@ -256,8 +288,8 @@ export function WordsBenchmarks() {
               Streaming updates
             </h3>
             <p className="text-muted-foreground text-sm">
-              Source update latency, p95. Recorded {measuredDate}. Shorter is
-              better.
+              Time for incoming text to reach the DOM, before paint. 95% of
+              updates finish within this time. Lower is better.
             </p>
           </figcaption>
           <div className="mb-6 grid grid-cols-2 gap-2">
@@ -268,8 +300,8 @@ export function WordsBenchmarks() {
                 value={scale}
                 onChange={(event) => setScale(Number(event.target.value))}
               >
-                <option value={1}>8.5 KB · 1×</option>
-                <option value={100}>853 KB · 100×</option>
+                <option value={1}>Long response · 8.5 KB</option>
+                <option value={100}>Repeated response · 853 KB</option>
               </ChartSelect>
             </label>
             <label className="grid min-w-0 gap-1.5 text-xs">
@@ -294,12 +326,6 @@ export function WordsBenchmarks() {
               unit="ms"
             />
           </div>
-          <p className="text-muted-foreground mt-6 border-t pt-4 text-xs leading-relaxed">
-            Frame p95: {decimal.format(browser.words.frameP95Ms)} ms for Words,{' '}
-            {decimal.format(browser.streamdown.frameP95Ms)} ms for Streamdown.
-            Median of {browser.words.runs} runs, {browser.updates} updates each.
-            Update latency excludes following paint.
-          </p>
         </figure>
 
         <figure className={cardClass} aria-labelledby="words-memory-chart">
@@ -311,13 +337,13 @@ export function WordsBenchmarks() {
               Memory after streaming
             </h3>
             <p className="text-muted-foreground text-sm">
-              Additional settled JS heap. Recorded {measuredDate}. Shorter is
-              better.
+              JavaScript memory kept after the full document has rendered. Lower
+              is better.
             </p>
           </figcaption>
           <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
             <span className="text-muted-foreground">
-              853 KB document · 100×
+              Repeated response · 853 KB
             </span>
             <ChartSelect
               aria-label="Benchmark memory configuration"
@@ -339,11 +365,6 @@ export function WordsBenchmarks() {
               unit="MB"
             />
           </div>
-          <p className="text-muted-foreground mt-6 border-t pt-4 text-xs leading-relaxed">
-            Median of {memory.words.runs} runs. V8 heap after forced garbage
-            collection, relative to a warmed empty renderer. Excludes native
-            DOM, Wasm, and graphics memory.
-          </p>
         </figure>
 
         <figure className={cardClass} aria-labelledby="words-footprint-chart">
@@ -355,7 +376,8 @@ export function WordsBenchmarks() {
               Browser download
             </h3>
             <p className="text-muted-foreground text-sm">
-              Compressed JavaScript. Shorter is better.
+              JavaScript transferred to load the renderer and selected
+              languages, compressed with gzip. Lower is better.
             </p>
           </figcaption>
           <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
@@ -367,8 +389,7 @@ export function WordsBenchmarks() {
             >
               <option value="base">Base renderer · initial load</option>
               <option value="shared">
-                {coverage.sharedLanguages.length} shared languages · loaded
-                total
+                With {coverage.sharedLanguages.length} languages · total
               </option>
             </ChartSelect>
           </label>
@@ -380,62 +401,7 @@ export function WordsBenchmarks() {
               unit="KB"
             />
           </div>
-          <p className="text-muted-foreground mt-6 border-t pt-4 text-xs leading-relaxed">
-            React is external. CSS is separate:{' '}
-            {decimal.format(run.download.css.words / 1000)} KB for Words,{' '}
-            {decimal.format(run.download.css.streamdown / 1000)} KB for
-            Streamdown.
-            {footprintId === 'shared' && (
-              <>
-                {' '}
-                Both use GitHub light/dark and support the same{' '}
-                {coverage.sharedLanguages.length} language requests. Words
-                includes all {coverage.wordsLanguages.length} built-in
-                languages. Streamdown loads languages on demand; this total
-                includes the shared set and required embedded grammars.
-              </>
-            )}
-          </p>
-          <p className="text-muted-foreground mt-2 text-xs leading-relaxed">
-            Download measured {date.format(new Date(downloadRun.date))} at
-            commit {downloadRun.commit.slice(0, 8)}
-            {downloadRun.dirty ? ' with uncommitted changes' : ''} · Bun{' '}
-            {downloadRun.bun}.
-          </p>
         </figure>
-      </div>
-
-      <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
-        <p>
-          Browser timings recorded {measuredDate} at commit{' '}
-          {run.commit.slice(0, 8)}
-          {run.dirty ? ' with uncommitted changes' : ''} · {run.cpu} ·{' '}
-          {Math.round(run.memoryBytes / 1024 ** 3)} GiB RAM · Chromium{' '}
-          {run.chrome} · React {run.versions.react} · Streamdown{' '}
-          {run.versions.streamdown}.
-        </p>
-        <p>
-          Both libraries use their native streaming paths. The repeated fixture
-          includes identical TypeScript fences; unique code and other languages
-          may behave differently. Small documents stay near the display frame
-          interval for both renderers.{' '}
-          <a
-            href="/words/benchmark-raw.json"
-            className="styled-link"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Raw browser results
-          </a>
-          {' · '}
-          <a href="/words/benchmark.json" className="styled-link">
-            Chart data
-          </a>
-          {' · '}
-          <a href={methodologyUrl} className="styled-link">
-            Benchmark source
-          </a>
-        </p>
       </div>
 
       <details
@@ -447,82 +413,115 @@ export function WordsBenchmarks() {
         <summary className="cursor-pointer text-sm font-medium">
           How we measure
         </summary>
-        <div className="mt-5 grid min-w-0 gap-8 text-sm md:grid-cols-2">
-          <div className="min-w-0 space-y-3">
-            <h3 className="font-medium">From a fresh checkout</h3>
-            <p className="text-muted-foreground leading-relaxed">
-              Install the repository’s pinned toolchain and dependencies, then
-              run these commands from its root. They measure HTML throughput,
-              React stream replays in JSDOM, process memory, and the browser
-              charts above.
+        <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 text-sm leading-relaxed md:grid-cols-2">
+          <div className="space-y-3">
+            <h3 className="text-foreground font-medium">
+              HTML and React benchmarks
+            </h3>
+            <p>
+              Five documents cover short Markdown, AI responses, and technical
+              specifications. HTML throughput measures input MiB per second.
+              React replays deliver chunks of up to 256 UTF-16 code units in
+              JSDOM, without highlighting or animations. This measures parsing
+              and DOM work; it does not include browser layout or paint. Memory
+              is median peak process growth through import and rendering,
+              measured in five fresh processes per engine and document.
             </p>
-            <pre className="bg-muted/50 overflow-x-auto rounded-md p-4 text-xs leading-6">
-              <code>{`moonx words:bench --ignore-ci-checks\nmoonx words:bench-stream --ignore-ci-checks\nmoonx words:bench-memory --ignore-ci-checks\nmoonx words:bench-browser --ignore-ci-checks`}</code>
-            </pre>
-            <a href={methodologyUrl} className="styled-link inline-block">
-              Setup, methodology, and output files ↗
-            </a>
+            <p>
+              {date.format(new Date(suite.environment.date))} · Node{' '}
+              {suite.environment.node} · {suite.environment.cpu} ·{' '}
+              {suite.environment.memoryBytes / 1024 ** 3} GiB RAM · commit{' '}
+              {suite.head.slice(0, 8)}. md4x {suite.environment.versions.md4x},
+              markdown-it {suite.environment.versions['markdown-it']}, React{' '}
+              {suite.environment.versions.react}, Streamdown{' '}
+              {suite.environment.versions.streamdown}, JSDOM{' '}
+              {suite.environment.versions.jsdom}.
+            </p>
           </div>
           <div className="space-y-3">
-            <h3 className="font-medium">What these charts cover</h3>
-            <p className="text-muted-foreground leading-relaxed">
-              Timing uses {browser.updates} commit-paced deliveries, waiting{' '}
-              {run.settings.intervalMs} ms after each commit, in a{' '}
+            <h3 className="text-foreground font-medium">
+              Browser streaming and memory
+            </h3>
+            <p>
+              The 8.5 KB document has 100 paragraphs and a 40-line TypeScript
+              block; the 853 KB document repeats it 100 times. Both libraries
+              use their native streaming paths, with {browser.updates} updates
+              spaced {run.settings.intervalMs} ms after each commit. Results are
+              the median of {run.settings.runs} fresh-browser runs, after
+              warming startup and grammar loading, in a{' '}
               {run.settings.viewport.width} × {run.settings.viewport.height}{' '}
-              viewport without auto-scrolling. Code controls and line numbers
-              are disabled. Each value is the median of {run.settings.runs}{' '}
-              fresh-browser runs’ p95 update times. Startup and first grammar
-              loading are warmed before measurement. Heap is sampled in the same
-              runs, before and after playback.
+              viewport. Auto-scrolling, code controls, and line numbers are off.
             </p>
-            <p className="text-muted-foreground leading-relaxed">
-              The 8.53 MB capacity diagnostic still stutters in both libraries.
-              These single runs are excluded from the charts above. Playback
-              stops after {run.settings.stressTimeoutMs / 1000} seconds.
+            <p>
+              Memory is settled V8 heap growth after forced garbage collection;
+              it excludes native DOM, Wasm, and graphics memory. Repeated code
+              blocks are identical; unique code and other languages may differ.
+              Small documents stay near the display frame interval for both
+              renderers. Words fades delivered chunks, including code;
+              Streamdown fades prose words. Single 8.53 MB diagnostic runs
+              stutter in both libraries and are excluded from the charts.
             </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs tabular-nums">
-                <caption className="text-muted-foreground mb-2 text-left">
-                  Frame p95 · 8.53 MB · single diagnostic runs
-                </caption>
-                <thead>
-                  <tr className="border-b">
-                    <th scope="col" className="py-2 pr-3 font-medium">
-                      Rendering
-                    </th>
-                    <th scope="col" className="py-2 pr-3 font-medium">
-                      Words
-                    </th>
-                    <th scope="col" className="py-2 font-medium">
-                      Streamdown
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {run.stress.map((row) => (
-                    <tr key={row.mode} className="border-b">
-                      <th scope="row" className="py-2 pr-3 font-normal">
-                        {row.mode === 'animated'
-                          ? 'Highlighting + fades'
-                          : 'Highlighting'}
-                      </th>
-                      <td className="py-2 pr-3 whitespace-nowrap">
-                        {capacityFrame(row.words)}
-                      </td>
-                      <td className="py-2 whitespace-nowrap">
-                        {capacityFrame(row.streamdown)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-muted-foreground leading-relaxed">
-              Fade behavior differs: Words animates delivered text chunks,
-              including code; Streamdown animates prose words. Parser-only
-              speed, browser update latency, and complete replay duration are
-              separate measurements.
+            <p>
+              {measuredDate} · {run.cpu} ·{' '}
+              {Math.round(run.memoryBytes / 1024 ** 3)} GiB RAM · Chromium{' '}
+              {run.chrome} · Bun {run.bun} · React {run.versions.react} ·
+              Streamdown {run.versions.streamdown} · commit{' '}
+              {run.commit.slice(0, 8)}
+              {run.dirty ? ' with uncommitted changes' : ''}.
             </p>
+          </div>
+          <div className="space-y-3">
+            <h3 className="text-foreground font-medium">Browser download</h3>
+            <p>
+              Minified JavaScript, gzipped per file, with React external. The
+              base renderer counts initial static imports; the language total
+              counts every chunk loaded for the same{' '}
+              {coverage.sharedLanguages.length} languages and GitHub light/dark
+              themes. Words includes all {coverage.wordsLanguages.length}{' '}
+              built-in languages. Streamdown loads languages on demand,
+              including required embedded grammars. Streamdown downloads less
+              than this total on pages that use fewer languages. CSS is
+              separate: {decimal.format(run.download.css.words / 1000)} KB for
+              Words and {decimal.format(run.download.css.streamdown / 1000)} KB
+              for Streamdown.
+            </p>
+            <p>
+              {date.format(new Date(downloadRun.date))} · Bun {downloadRun.bun}{' '}
+              · commit {downloadRun.commit.slice(0, 8)}
+              {downloadRun.dirty ? ' with uncommitted changes' : ''}.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <h3 className="text-foreground font-medium">
+              Explore or reproduce the results
+            </h3>
+            <p>
+              The benchmark source includes setup instructions, commands, and
+              the Markdown documents used here. Raw results include frame
+              timings and the larger capacity diagnostics.
+            </p>
+            <ul className="space-y-2">
+              <li>
+                <a href={methodologyUrl} className="styled-link">
+                  Benchmark source and methodology ↗
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/words/benchmark-raw.json"
+                  className="styled-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Raw browser results ↗
+                </a>
+              </li>
+              <li>
+                <a href="/words/benchmark.json" className="styled-link">
+                  Chart data ↗
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
       </details>
