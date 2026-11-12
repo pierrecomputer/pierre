@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import {
+  type ComputeLineBounds,
   measureSemanticDiffConnectors,
   measureSemanticDiffSelection,
   measureSemanticDiffSeparators,
 } from '../src/utils/measureSemanticDiffConnectors';
-import type { SemanticDiffConnector } from '../src/utils/semanticDiffConnectors';
+import type { SemanticDiffConnectorRegion } from '../src/utils/semanticDiffConnectors';
 import { type DomHandle, installDom } from './domHarness';
 
 const ROW_HEIGHT = 20;
@@ -95,7 +96,7 @@ describe('measureSemanticDiffConnectors', () => {
   test('ends a one-sided connector at the attached row edge', () => {
     const deletions = column(lines(4), ORIGIN_TOP);
     const additions = column(lines(6), ORIGIN_TOP);
-    const regions: SemanticDiffConnector[] = [
+    const regions: SemanticDiffConnectorRegion[] = [
       {
         id: 'added',
         kind: 'added',
@@ -133,7 +134,7 @@ describe('measureSemanticDiffConnectors', () => {
   });
 
   test("ends at the empty column's top on either side", () => {
-    const regions: SemanticDiffConnector[] = [
+    const regions: SemanticDiffConnectorRegion[] = [
       {
         id: 'added',
         kind: 'added',
@@ -185,7 +186,7 @@ describe('measureSemanticDiffConnectors', () => {
   });
 
   test('omits a connector until its attached row is mounted', () => {
-    const regions: SemanticDiffConnector[] = [
+    const regions: SemanticDiffConnectorRegion[] = [
       {
         id: 'added',
         kind: 'added',
@@ -222,7 +223,7 @@ describe('measureSemanticDiffConnectors', () => {
     ]);
   });
   test('extends a band through the no-newline row under its last line', () => {
-    const regions: SemanticDiffConnector[] = [
+    const regions: SemanticDiffConnectorRegion[] = [
       {
         id: 'moved',
         kind: 'moved',
@@ -251,7 +252,7 @@ describe('measureSemanticDiffConnectors', () => {
   });
 
   test('extends a band through the annotation row under its last line', () => {
-    const region: SemanticDiffConnector = {
+    const region: SemanticDiffConnectorRegion = {
       id: 'moved',
       kind: 'moved',
       rank: 0,
@@ -356,7 +357,7 @@ describe('measureSemanticDiffConnectors', () => {
     expect(measure({ start: 2, end: 6 })).toEqual([{ top: 20, bottom: 80 }]);
   });
 
-  test("merges same-colored bands that end on one closed fold's row", () => {
+  test("draws a fold's joined region while it is closed, and its own regions while it is open", () => {
     // Old lines 3-5 are folded into the row between lines 2 and 6.
     const deletions = column([1, 2, 'gap', 6], ORIGIN_TOP);
     const placeholder = deletions.children[2];
@@ -365,50 +366,76 @@ describe('measureSemanticDiffConnectors', () => {
     placeholder.setAttribute('data-semantic-fold-start', '3');
     placeholder.setAttribute('data-semantic-fold-end', '5');
     const additions = column(lines(12), ORIGIN_TOP);
-    const band = (
-      id: string,
-      kind: SemanticDiffConnector['kind'],
-      base: number,
-      target: { start: number; end: number }
-    ): SemanticDiffConnector => ({
-      id,
-      kind,
-      rank: 0,
-      base: { start: base, end: base },
-      target,
-    });
-    const measure = (regions: SemanticDiffConnector[]) =>
-      measureSemanticDiffConnectors(regions, deletions, additions, ORIGIN_TOP);
-
-    // Each old line paired with an adjacent new run: one band spanning them.
-    expect(
-      measure([
-        band('a', 'modified', 3, { start: 7, end: 7 }),
-        band('b', 'modified', 4, { start: 8, end: 8 }),
-        band('c', 'modified', 5, { start: 9, end: 9 }),
-      ])
-    ).toEqual([
+    // Three one-line moves out of the fold, the region that stands for them
+    // while the fold is closed, and a region the fold has nothing to do with.
+    const regions: SemanticDiffConnectorRegion[] = [
+      ...[3, 4, 5].map(
+        (line): SemanticDiffConnectorRegion => ({
+          id: `moved-${line}`,
+          kind: 'moved',
+          rank: 0,
+          base: { start: line, end: line },
+          target: { start: line + 4, end: line + 4 },
+          fold: { start: 3, closed: false },
+        })
+      ),
       {
-        id: 'a',
+        id: 'moved-3',
+        kind: 'moved',
+        rank: 0,
+        base: { start: 3, end: 3 },
+        target: { start: 7, end: 9 },
+        fold: { start: 3, closed: true },
+      },
+      {
+        id: 'other',
         kind: 'modified',
+        rank: 0,
+        base: { start: 1, end: 1 },
+        target: { start: 1, end: 1 },
+      },
+    ];
+    const measure = (openSemanticFolds?: ReadonlySet<number>) =>
+      measureSemanticDiffConnectors(
+        regions,
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        undefined,
+        openSemanticFolds
+      );
+
+    expect(measure()).toEqual([
+      {
+        id: 'moved-3',
+        kind: 'moved',
         rank: 0,
         base: { top: 49.5, bottom: 50.5 },
         target: { top: 120, bottom: 180 },
       },
+      {
+        id: 'other',
+        kind: 'modified',
+        rank: 0,
+        base: { top: 0, bottom: 20 },
+        target: { top: 0, bottom: 20 },
+      },
     ]);
-
-    // A different color, or new runs that don't touch, stay separate.
-    expect(
-      measure([
-        band('a', 'moved', 3, { start: 7, end: 7 }),
-        band('b', 'modified', 4, { start: 8, end: 8 }),
-        band('c', 'moved', 5, { start: 11, end: 11 }),
-      ]).map((connector) => connector.id)
-    ).toEqual(['a', 'b', 'c']);
+    // A different fold being open changes nothing.
+    expect(measure(new Set([40])).map((connector) => connector.id)).toEqual([
+      'moved-3',
+      'other',
+    ]);
+    expect(measure(new Set([3])).map((connector) => connector.id)).toEqual([
+      'moved-3',
+      'moved-4',
+      'moved-5',
+      'other',
+    ]);
   });
 
-  test('spans gap rows but not a separator', () => {
-    const region: SemanticDiffConnector = {
+  test('spans gap rows, and throws for a side split by a separator', () => {
+    const region: SemanticDiffConnectorRegion = {
       id: 'moved',
       kind: 'moved',
       rank: 0,
@@ -433,14 +460,16 @@ describe('measureSemanticDiffConnectors', () => {
         target: { top: 0, bottom: 60 },
       },
     ]);
-    expect(
+    // One side's lines are always in one hunk, so a separator between them
+    // means the regions and the rows do not belong together.
+    expect(() =>
       measureSemanticDiffConnectors(
         [{ ...region, base: { start: 1, end: 9 } }],
         column([1, 'separator', 9], ORIGIN_TOP),
         additions,
         ORIGIN_TOP
       )
-    ).toEqual([]);
+    ).toThrow('old lines 1-9 of a connector are not next to each other');
   });
 
   test('measures each separator row for the connector column', () => {
@@ -482,5 +511,281 @@ describe('measureSemanticDiffConnectors', () => {
       )
     ).toEqual({ top: 20, bottom: 100 });
     expect(measureSemanticDiffSelection([], ORIGIN_TOP)).toBeUndefined();
+  });
+});
+
+describe('measureSemanticDiffConnectors with a rendered window', () => {
+  let dom: DomHandle;
+
+  beforeEach(() => {
+    dom = installDom();
+  });
+
+  afterEach(() => {
+    dom.cleanup();
+  });
+
+  // The window mounts lines 11-20 of each side, stacked from the connector
+  // column's top.
+  const WINDOW_LINES = Array.from({ length: 10 }, (_, index) => 11 + index);
+  const mountWindow = () => ({
+    deletions: column(WINDOW_LINES, ORIGIN_TOP),
+    additions: column(WINDOW_LINES, ORIGIN_TOP),
+  });
+
+  // The diff's row math: every line is one row high, counted from the file's
+  // first line. Its coordinates start somewhere else than the column's, so
+  // the results only come out right when they are tied to a mounted line.
+  // `fold` is a closed fold over old lines: they share one row, and the old
+  // lines after it move up.
+  const MATH_ORIGIN = 1000;
+  function rowMath(fold?: { start: number; end: number }): {
+    computeLineBounds: ComputeLineBounds;
+    asked: number[];
+  } {
+    const asked: number[] = [];
+    return {
+      asked,
+      computeLineBounds(side, line) {
+        asked.push(line);
+        const isFolded =
+          side === 'old' &&
+          fold != null &&
+          line >= fold.start &&
+          line <= fold.end;
+        const row =
+          side === 'new' || fold == null || line < fold.start
+            ? line - 1
+            : isFolded
+              ? fold.start - 1
+              : line - 1 - (fold.end - fold.start);
+        const top = MATH_ORIGIN + row * ROW_HEIGHT;
+        return {
+          top,
+          bottom: top + ROW_HEIGHT,
+          fold: isFolded ? fold.start : undefined,
+        };
+      },
+    };
+  }
+
+  // The top of a line's row relative to the connector column, on or off the
+  // window.
+  const topOf = (line: number) => (line - 11) * ROW_HEIGHT;
+  const bottomOf = (line: number) => topOf(line) + ROW_HEIGHT;
+
+  test('a band that starts above the window takes its top from the row math', () => {
+    const { deletions, additions } = mountWindow();
+    const regions: SemanticDiffConnectorRegion[] = [
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 1,
+        base: { start: 8, end: 13 },
+        target: { start: 11, end: 14 },
+      },
+    ];
+    expect(
+      measureSemanticDiffConnectors(
+        regions,
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        rowMath().computeLineBounds
+      )
+    ).toEqual([
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 1,
+        base: { top: topOf(8), bottom: bottomOf(13) },
+        target: { top: topOf(11), bottom: bottomOf(14) },
+      },
+    ]);
+    // Without the row math the band is left out.
+    expect(
+      measureSemanticDiffConnectors(regions, deletions, additions, ORIGIN_TOP)
+    ).toEqual([]);
+  });
+
+  test('a band that ends below the window takes its bottom from the row math', () => {
+    const { deletions, additions } = mountWindow();
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'moved',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 12, end: 14 },
+            target: { start: 18, end: 25 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        rowMath().computeLineBounds
+      )
+    ).toEqual([
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 1,
+        base: { top: topOf(12), bottom: bottomOf(14) },
+        target: { top: topOf(18), bottom: bottomOf(25) },
+      },
+    ]);
+  });
+
+  test('a band with one end above the window and one below crosses it', () => {
+    const { deletions, additions } = mountWindow();
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'moved',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 3, end: 5 },
+            target: { start: 30, end: 32 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        rowMath().computeLineBounds
+      )
+    ).toEqual([
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 1,
+        base: { top: topOf(3), bottom: bottomOf(5) },
+        target: { top: topOf(30), bottom: bottomOf(32) },
+      },
+    ]);
+  });
+
+  test('a one-sided connector attaches to a row outside the window', () => {
+    const { deletions, additions } = mountWindow();
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'added',
+            kind: 'added',
+            rank: 2,
+            target: { start: 12, end: 13 },
+            attachment: { line: 5, edge: 'after' },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        rowMath().computeLineBounds
+      )
+    ).toEqual([
+      {
+        id: 'added',
+        kind: 'added',
+        rank: 2,
+        base: { top: bottomOf(5), bottom: bottomOf(5) },
+        target: { top: topOf(12), bottom: bottomOf(13) },
+      },
+    ]);
+  });
+
+  test('bands wholly above or below the window are left out without any row math', () => {
+    const { deletions, additions } = mountWindow();
+    const math = rowMath();
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'above',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 1, end: 2 },
+            target: { start: 3, end: 4 },
+          },
+          {
+            id: 'below',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 30, end: 31 },
+            target: { start: 40, end: 41 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        math.computeLineBounds
+      )
+    ).toEqual([]);
+    expect(math.asked).toEqual([]);
+  });
+
+  test('a band crosses a window whose new column shows no line', () => {
+    // The new column only has filler rows here, so its lines cannot be
+    // judged above or below by line number.
+    const deletions = column(WINDOW_LINES, ORIGIN_TOP);
+    const additions = column(
+      WINDOW_LINES.map(() => 'gap' as const),
+      ORIGIN_TOP
+    );
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'moved',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 1, end: 2 },
+            target: { start: 30, end: 31 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        rowMath().computeLineBounds
+      )
+    ).toEqual([
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 1,
+        base: { top: topOf(1), bottom: bottomOf(2) },
+        target: { top: topOf(30), bottom: bottomOf(31) },
+      },
+    ]);
+  });
+
+  test("an end on a closed fold that is not rendered is at the fold row's 1px line", () => {
+    const { deletions, additions } = mountWindow();
+    // Old lines 3-5 are folded into one row, above the window. With the
+    // fold closed, old line 11 is two rows higher than line 11 would be.
+    const fold = { start: 3, end: 5 };
+    const foldRowTop = (fold.start - 1 - (11 - 1 - 2)) * ROW_HEIGHT;
+    const foldLine = {
+      top: foldRowTop + ROW_HEIGHT / 2 - 0.5,
+      bottom: foldRowTop + ROW_HEIGHT / 2 + 0.5,
+    };
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'moved',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 3, end: 5 },
+            target: { start: 12, end: 14 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        rowMath(fold).computeLineBounds
+      ).map((connector) => connector.base)
+    ).toEqual([foldLine]);
   });
 });

@@ -44,6 +44,7 @@ import {
   takeHiddenRows,
 } from '../utils/foldCursor';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
+import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
   FILE_ANNOTATION_DOM_KEY,
@@ -56,7 +57,12 @@ import {
   type FoldRow,
   iterateOverDiff,
 } from '../utils/iterateOverDiff';
+import type {
+  ComputedLineBounds,
+  ComputeLineBounds,
+} from '../utils/measureSemanticDiffConnectors';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
+import type { SemanticDiffConnectorRegion } from '../utils/semanticDiffConnectors';
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
@@ -98,6 +104,13 @@ interface DiffLayoutCache {
   // diff line, rendered row, or scroll offset instead of replaying layout from
   // the first hunk.
   checkpoints: DiffLayoutCheckpoint[];
+  // Where each line a semantic connector ends on sits, by line number, as of
+  // the last layout pass. Connectors read these for lines with no rendered
+  // row.
+  connectorLineBounds: {
+    old: Map<number, ComputedLineBounds>;
+    new: Map<number, ComputedLineBounds>;
+  };
   // Total renderable diff rows for the current diff style and expansion state.
   totalLines: number;
   // Measured height for the file annotation row. Starts at 0 so
@@ -156,6 +169,7 @@ export class VirtualizedFileDiff<
     estimatedSplitHeight: undefined,
     estimatedUnifiedHeight: undefined,
     checkpoints: [],
+    connectorLineBounds: { old: new Map(), new: new Map() },
     totalLines: 0,
     fileAnnotationHeight: 0,
     ghostTextRows: NO_GHOST_TEXT_ROWS,
@@ -175,6 +189,9 @@ export class VirtualizedFileDiff<
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
   private pendingExpansions: PendingExpansion[] | undefined;
   private pendingFoldToggles: number[] | undefined;
+  // The lines semantic connectors end on, sorted, for the regions they were
+  // read from.
+  private connectorLines: ConnectorLines | undefined;
   // Remember which diff the layout was calculated from, even when only a
   // placeholder is rendered. Async highlighting clears this through rerender()
   // so layout can use the newly available content. CodeView updates it during
@@ -911,6 +928,46 @@ export class VirtualizedFileDiff<
     });
 
     return position;
+  }
+
+  // Compute a lines top and bottom based on the internal cache
+  protected override computeLineBounds: ComputeLineBounds = (side, line) => {
+    const fileDiff = this.getLayoutDiff();
+    if (fileDiff == null) {
+      return undefined;
+    }
+    // The layout pass records where the lines connectors end on are.
+    this.approximateLayoutCheckpoints(fileDiff);
+    const recorded = this.cache.connectorLineBounds[side].get(line);
+    if (recorded != null) {
+      return recorded;
+    }
+    // Any other line is found by walking to it.
+    const position = this.getLinePosition(
+      line,
+      side === 'old' ? 'deletions' : 'additions'
+    );
+    return position != null
+      ? { top: position.top, bottom: position.top + position.height }
+      : undefined;
+  };
+
+  // The lines the diff's semantic connectors end on, sorted. Only the split
+  // view draws connectors.
+  private getConnectorLines(
+    fileDiff: FileDiffMetadata
+  ): ConnectorLines | undefined {
+    if (
+      fileDiff.semanticOperations == null ||
+      this.getDiffStyle() !== 'split'
+    ) {
+      return undefined;
+    }
+    const regions = this.getSemanticConnectorRegions(fileDiff);
+    if (this.connectorLines?.regions !== regions) {
+      this.connectorLines = createConnectorLines(regions);
+    }
+    return this.connectorLines;
   }
 
   public getEditorViewport(): HTMLElement | Document | undefined {
@@ -1900,10 +1957,99 @@ export class VirtualizedFileDiff<
       fileDiff,
       this.hunksRenderer.getOpenSemanticFolds()
     );
+    // The lines connectors end on. Their positions are recorded as their
+    // hunks go by.
+    const connectorLines = this.getConnectorLines(fileDiff);
+    const lineCursor =
+      connectorLines != null
+        ? { lines: connectorLines, oldIndex: 0, newIndex: 0 }
+        : undefined;
+    const { connectorLineBounds } = this.cache;
+    connectorLineBounds.old.clear();
+    connectorLineBounds.new.clear();
     let top =
       getVirtualFileHeaderRegion(this.metrics, disableFileHeader) +
       this.cache.fileAnnotationHeight;
     let renderedLineIndex = 0;
+
+    // Records where the wanted lines of one run of a hunk's rows are, from
+    // `wantedIndex` on, and returns the index of the first wanted line after
+    // the run. Called before the run is added to `top`. A line a closed fold
+    // hides is at the fold's row, the run's last.
+    const recordConnectorLineBounds = (
+      hunk: Hunk,
+      wantedRows: HunkLineRow[],
+      wantedIndex: number,
+      run: HunkBodyRun,
+      rowStart: number,
+      preSeparatorHeight: number,
+      metadataOffsets: number[],
+      fold: ClosedFoldRows | undefined
+    ): number => {
+      const { lineHeight } = this.metrics;
+      const lastRow = rowStart + run.rowCount - 1;
+      const lastWantedRow = lastRow + (fold?.hiddenRows ?? 0);
+      const rowTop = (offset: number) =>
+        top +
+        preSeparatorHeight +
+        offset * lineHeight +
+        countMetadataOffsetsBefore(metadataOffsets, offset) * lineHeight +
+        sumHeightDeltas(
+          heightDeltaPrefix,
+          run.startLineIndex,
+          run.startLineIndex + offset
+        );
+      let index = wantedIndex;
+      for (; index < wantedRows.length; index++) {
+        const wanted = wantedRows[index];
+        if (wanted == null || wanted.row > lastWantedRow) {
+          break;
+        }
+        const { side, line, row } = wanted;
+        const offset = Math.min(row, lastRow) - rowStart;
+        const lineIndex = run.startLineIndex + offset;
+        const lineTop = rowTop(offset);
+        connectorLineBounds[side].set(line, {
+          top: lineTop,
+          bottom:
+            lineTop +
+            lineHeight +
+            sumHeightDeltas(heightDeltaPrefix, lineIndex, lineIndex + 1),
+          fold:
+            side === 'old' && fold != null && row >= fold.row
+              ? fold.line
+              : undefined,
+        });
+      }
+      // A "No newline at end of file" row is under this run. It belongs to
+      // the last line of each side that shows one, however many filler rows
+      // sit between them, so that line reaches down to the row's bottom. A
+      // closed fold on the last row hides the old side's.
+      if (metadataOffsets.length > 0) {
+        const markerBottom = rowTop(run.rowCount);
+        if (hunk.noEOFCRDeletions && fold == null) {
+          const lastLine = connectorLineBounds.old.get(
+            getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) +
+              hunk.deletionCount
+          );
+          if (lastLine != null) {
+            lastLine.bottom = markerBottom;
+            lastLine.reachesNoNewline = true;
+          }
+        }
+        if (hunk.noEOFCRAdditions) {
+          const lastLine = connectorLineBounds.new.get(
+            getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) +
+              hunk.additionCount
+          );
+          if (lastLine != null) {
+            lastLine.bottom = markerBottom;
+            lastLine.reachesNoNewline = true;
+          }
+        }
+      }
+      return index;
+    };
 
     const processRows = ({
       rowCount,
@@ -2041,6 +2187,8 @@ export class VirtualizedFileDiff<
         foldCursor != null
           ? takeClosedFoldRows(foldCursor, hunk, diffStyle)
           : undefined;
+      const wantedRows =
+        lineCursor != null ? takeHunkLineRows(lineCursor, hunk) : undefined;
       if (closedFolds != null && foldCursor != null) {
         // Closed folds break the hunk's rows into runs. The separators sit
         // before the first run and after the last, and each marker row goes
@@ -2063,40 +2211,71 @@ export class VirtualizedFileDiff<
             })
           : [];
         let runStart = 0;
+        let wantedIndex = 0;
         for (const [runIndex, run] of bodyRuns.entries()) {
           const runEnd = runStart + run.rowCount;
+          const preSeparatorHeight =
+            runIndex === 0 ? pendingLeadingSeparatorHeight : 0;
+          const runMetadataOffsets = getMetadataOffsetsInRun(
+            metadataOffsets,
+            runStart,
+            runEnd
+          );
+          if (wantedRows != null) {
+            wantedIndex = recordConnectorLineBounds(
+              hunk,
+              wantedRows,
+              wantedIndex,
+              run,
+              run.startLineIndex - hunkBodyStartLineIndex,
+              preSeparatorHeight,
+              runMetadataOffsets,
+              closedFolds[runIndex]
+            );
+          }
           processRows({
             rowCount: run.rowCount,
             startLineIndex: run.startLineIndex,
-            preSeparatorHeight:
-              runIndex === 0 ? pendingLeadingSeparatorHeight : 0,
+            preSeparatorHeight,
             postSeparatorHeight:
               runIndex === bodyRuns.length - 1 && trailingExpandedCount === 0
                 ? trailingSeparatorHeight
                 : 0,
-            metadataOffsets: getMetadataOffsetsInRun(
-              metadataOffsets,
-              runStart,
-              runEnd
-            ),
+            metadataOffsets: runMetadataOffsets,
           });
           runStart = runEnd;
         }
       } else {
+        const metadataOffsets = showsNoNewlineMarkers
+          ? getHunkMetadataOffsets({
+              diffStyle,
+              hunk,
+              rowCount: hunkBodyRowCount,
+              hidesLastOldLine: false,
+            })
+          : [];
+        if (wantedRows != null) {
+          recordConnectorLineBounds(
+            hunk,
+            wantedRows,
+            0,
+            {
+              rowCount: hunkBodyRowCount,
+              startLineIndex: hunkBodyStartLineIndex,
+            },
+            0,
+            pendingLeadingSeparatorHeight,
+            metadataOffsets,
+            undefined
+          );
+        }
         processRows({
           rowCount: hunkBodyRowCount,
           startLineIndex: hunkBodyStartLineIndex,
           preSeparatorHeight: pendingLeadingSeparatorHeight,
           postSeparatorHeight:
             trailingExpandedCount === 0 ? trailingSeparatorHeight : 0,
-          metadataOffsets: showsNoNewlineMarkers
-            ? getHunkMetadataOffsets({
-                diffStyle,
-                hunk,
-                rowCount: hunkBodyRowCount,
-                hidesLastOldLine: false,
-              })
-            : [],
+          metadataOffsets,
         });
       }
 
@@ -2629,6 +2808,129 @@ function countMetadataOffsetsBefore(
     }
   }
   return count;
+}
+
+// The line numbers semantic connectors start or end on.
+interface ConnectorLines {
+  /** The regions these line numbers were read from. */
+  regions: readonly SemanticDiffConnectorRegion[];
+  /** Line numbers in the old file, sorted, each one once. */
+  old: number[];
+  /** Line numbers in the new file, sorted, each one once. */
+  new: number[];
+}
+
+function createConnectorLines(
+  regions: readonly SemanticDiffConnectorRegion[]
+): ConnectorLines {
+  const oldLines = new Set<number>();
+  const newLines = new Set<number>();
+  for (const region of regions) {
+    if (region.base != null) {
+      oldLines.add(region.base.start).add(region.base.end);
+    } else if (!('empty' in region.attachment)) {
+      oldLines.add(region.attachment.line);
+    }
+    if (region.target != null) {
+      newLines.add(region.target.start).add(region.target.end);
+    } else if (!('empty' in region.attachment)) {
+      newLines.add(region.attachment.line);
+    }
+  }
+  return {
+    regions,
+    old: [...oldLines].sort((a, b) => a - b),
+    new: [...newLines].sort((a, b) => a - b),
+  };
+}
+
+// A place in the connector lines, for the layout pass, which goes through
+// the hunks in order.
+interface ConnectorLineCursor {
+  lines: ConnectorLines;
+  oldIndex: number;
+  newIndex: number;
+}
+
+// A connector line and its row, counted from its hunk's first row in the
+// split view.
+interface HunkLineRow {
+  side: 'old' | 'new';
+  line: number;
+  row: number;
+}
+
+// Finds the rows of the connector lines that are in this hunk, in row order,
+// and moves the cursor past them. Undefined when the hunk has none. A hunk
+// knows its first old and new line, and each of its blocks knows how many
+// lines of each side it holds, so a line's row is found block by block.
+function takeHunkLineRows(
+  cursor: ConnectorLineCursor,
+  hunk: Hunk
+): HunkLineRow[] | undefined {
+  const { old: oldLines, new: newLines } = cursor.lines;
+  let oldLine =
+    getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) + 1;
+  let newLine =
+    getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) + 1;
+  // A line before the hunk has no row in it.
+  while (
+    cursor.oldIndex < oldLines.length &&
+    oldLines[cursor.oldIndex] < oldLine
+  ) {
+    cursor.oldIndex++;
+  }
+  while (
+    cursor.newIndex < newLines.length &&
+    newLines[cursor.newIndex] < newLine
+  ) {
+    cursor.newIndex++;
+  }
+  const hasOldLine =
+    cursor.oldIndex < oldLines.length &&
+    oldLines[cursor.oldIndex] < oldLine + hunk.deletionCount;
+  const hasNewLine =
+    cursor.newIndex < newLines.length &&
+    newLines[cursor.newIndex] < newLine + hunk.additionCount;
+  if (!hasOldLine && !hasNewLine) {
+    return undefined;
+  }
+  const rows: HunkLineRow[] = [];
+  // The row the next block starts on.
+  let row = 0;
+  for (const content of hunk.hunkContent) {
+    const oldCount =
+      content.type === 'context' ? content.lines : content.deletions;
+    const newCount =
+      content.type === 'context' ? content.lines : content.additions;
+    // The block's old lines and new lines are each in row order. Take
+    // whichever side's next line is on the earlier row.
+    while (true) {
+      const nextOld = oldLines[cursor.oldIndex];
+      const nextNew = newLines[cursor.newIndex];
+      const oldRow =
+        nextOld != null && nextOld < oldLine + oldCount
+          ? row + nextOld - oldLine
+          : undefined;
+      const newRow =
+        nextNew != null && nextNew < newLine + newCount
+          ? row + nextNew - newLine
+          : undefined;
+      if (oldRow != null && (newRow == null || oldRow <= newRow)) {
+        rows.push({ side: 'old', line: nextOld, row: oldRow });
+        cursor.oldIndex++;
+      } else if (newRow != null) {
+        rows.push({ side: 'new', line: nextNew, row: newRow });
+        cursor.newIndex++;
+      } else {
+        break;
+      }
+    }
+    row += Math.max(oldCount, newCount);
+    oldLine += oldCount;
+    newLine += newCount;
+  }
+  return rows;
 }
 
 // A run of a hunk's rows that show one after another: `rowCount` rows from

@@ -13,6 +13,7 @@ import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import type {
   FileDiffMetadata,
   SemanticDiffFold,
+  SemanticDiffOperation,
   VirtualFileMetrics,
 } from '../src/types';
 import { computeEstimatedDiffHeights } from '../src/utils/computeEstimatedDiffHeights';
@@ -27,8 +28,13 @@ import {
   takeHiddenRows,
 } from '../src/utils/foldCursor';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
+import {
+  type ComputeLineBounds,
+  measureSemanticDiffConnectors,
+} from '../src/utils/measureSemanticDiffConnectors';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
+import { prepareSemanticDiffConnectorRegions } from '../src/utils/semanticDiffConnectors';
 import {
   createRoot,
   dispatchScroll,
@@ -67,6 +73,39 @@ function fold(start: number, end: number): SemanticDiffFold {
 // hunks: old lines 10-14 removed, old line 40 edited, old lines 60-63
 // removed. One fold covers the first removed block and another the middle of
 // the last.
+// Code that moved from the old lines to the new lines, drawn as one band.
+function movedOperation(
+  old: { start: number; end: number },
+  target: { start: number; end: number }
+): SemanticDiffOperation {
+  return {
+    type: 'moved',
+    spans: [
+      {
+        role: 'root',
+        relation: 'moved',
+        old: [
+          {
+            start: { line: old.start, character: 0 },
+            end: { line: old.end + 1, character: 0 },
+          },
+        ],
+        new: [
+          {
+            start: { line: target.start, character: 0 },
+            end: { line: target.end + 1, character: 0 },
+          },
+        ],
+        linePairs: [{ old, new: target }],
+      },
+    ],
+    lines: {
+      old: [{ ...old, spanIndex: 0 }],
+      new: [{ ...target, spanIndex: 0 }],
+    },
+  };
+}
+
 function removedBlocksDiff(): FileDiffMetadata {
   const oldLines = Array.from(
     { length: 80 },
@@ -191,9 +230,8 @@ describe('fold cursor', () => {
     "finds each closed fold's row among its hunk's rows in the %s view",
     (diffStyle) => {
       // The rows the walk shows for closed folds, by hunk.
-      const walked: { row: number; hiddenRows: number }[][] = diff.hunks.map(
-        () => []
-      );
+      const walked: { line: number; row: number; hiddenRows: number }[][] =
+        diff.hunks.map(() => []);
       iterateOverDiff({
         diff,
         diffStyle,
@@ -201,6 +239,7 @@ describe('fold cursor', () => {
         callback: ({ hunkIndex, hunk, foldRow, deletionLine }) => {
           if (foldRow == null || hunk == null || deletionLine == null) return;
           walked[hunkIndex].push({
+            line: foldRow.fold.old.start,
             row:
               diffStyle === 'split'
                 ? deletionLine.splitLineIndex - hunk.splitLineStart
@@ -981,6 +1020,491 @@ describe('toggling a fold in a virtualized view', () => {
     } finally {
       viewer.cleanUp();
       await wait(0);
+      dom.cleanup();
+    }
+  });
+});
+
+describe('connector line positions from the layout pass', () => {
+  const layoutMetrics: VirtualFileMetrics = {
+    ...DEFAULT_VIRTUAL_FILE_METRICS,
+    hunkLineCount: 1,
+    lineHeight: 10,
+    diffHeaderHeight: 30,
+    spacing: 4,
+  };
+
+  // Old lines 3-5 move to new lines 7-9, with a fold over the old lines. The
+  // connector for the move ends on old lines 3 and 5 and new lines 7 and 9.
+  function movedDiff(): FileDiffMetadata {
+    const fileDiff = parseDiffFromFile(
+      {
+        name: 'moves.txt',
+        contents: 'a\nb\nmoved one\nmoved two\nmoved three\nc\nd\ne\nf\n',
+      },
+      {
+        name: 'moves.txt',
+        contents: 'a\nb\nc\nd\ne\nf\nmoved one\nmoved two\nmoved three\n',
+      }
+    );
+    fileDiff.semanticOperations = [
+      {
+        type: 'moved',
+        spans: [
+          {
+            role: 'root',
+            relation: 'moved',
+            old: [
+              {
+                start: { line: 3, character: 0 },
+                end: { line: 6, character: 0 },
+              },
+            ],
+            new: [
+              {
+                start: { line: 7, character: 0 },
+                end: { line: 10, character: 0 },
+              },
+            ],
+            linePairs: [
+              { old: { start: 3, end: 5 }, new: { start: 7, end: 9 } },
+            ],
+          },
+        ],
+        lines: {
+          old: [{ start: 3, end: 5, spanIndex: 0 }],
+          new: [{ start: 7, end: 9, spanIndex: 0 }],
+        },
+      },
+    ];
+    fileDiff.semanticFolds = [fold(3, 5)];
+    return fileDiff;
+  }
+
+  // The parts of the diff the test reads that are not public.
+  interface Inspectable {
+    computeLineBounds: ComputeLineBounds;
+    cache: {
+      connectorLineBounds: {
+        old: Map<number, unknown>;
+        new: Map<number, unknown>;
+      };
+    };
+  }
+
+  test('they match the positions found by walking, and name the fold', () => {
+    const dom = installDom();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const virtualizer = new Virtualizer();
+    virtualizer.setup(root);
+    const instance = new VirtualizedFileDiff<undefined>(
+      { diffStyle: 'split', expandUnchanged: true },
+      virtualizer,
+      layoutMetrics
+    );
+    try {
+      instance.updateCodeViewLayout(movedDiff(), 0);
+      const inspect = instance as unknown as Inspectable;
+
+      for (const [side, line, selectionSide] of [
+        ['old', 3, 'deletions'],
+        ['old', 5, 'deletions'],
+        ['new', 7, 'additions'],
+        ['new', 9, 'additions'],
+      ] as const) {
+        const walked = instance.getLinePosition(line, selectionSide);
+        assertDefined(walked, 'the line should have a position');
+        expect(inspect.computeLineBounds(side, line)).toEqual({
+          top: walked.top,
+          bottom: walked.top + walked.height,
+          // Both old lines are hidden in the closed fold.
+          fold: side === 'old' ? 3 : undefined,
+        });
+      }
+      // The layout pass recorded exactly the lines the connector ends on.
+      const { connectorLineBounds } = inspect.cache;
+      expect([...connectorLineBounds.old.keys()]).toEqual([3, 5]);
+      expect([...connectorLineBounds.new.keys()]).toEqual([7, 9]);
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('they match the positions found by walking when one hunk has many closed folds', () => {
+    // Forty two-line moves with five unchanged lines between them, all in
+    // one hunk, each with a closed fold. The moved code lands at the end.
+    const moveCount = 40;
+    const oldLines: string[] = [];
+    const newLines: string[] = [];
+    const landed: string[] = [];
+    const operations: SemanticDiffOperation[] = [];
+    const folds: SemanticDiffFold[] = [];
+    for (let index = 0; index < moveCount; index++) {
+      const moved = [`move ${index} a`, `move ${index} b`];
+      const stable = Array.from(
+        { length: 5 },
+        (_, line) => `stable ${index} ${line}`
+      );
+      oldLines.push(...moved, ...stable);
+      newLines.push(...stable);
+      landed.push(...moved);
+      const oldStart = index * 7 + 1;
+      const newStart = moveCount * 5 + index * 2 + 1;
+      operations.push(
+        movedOperation(
+          { start: oldStart, end: oldStart + 1 },
+          { start: newStart, end: newStart + 1 }
+        )
+      );
+      folds.push(fold(oldStart, oldStart + 1));
+    }
+    const fileDiff = parseDiffFromFile(
+      { name: 'moves.txt', contents: `${oldLines.join('\n')}\n` },
+      {
+        name: 'moves.txt',
+        contents: `${[...newLines, ...landed].join('\n')}\n`,
+      }
+    );
+    expect(fileDiff.hunks).toHaveLength(1);
+    fileDiff.semanticOperations = operations;
+    fileDiff.semanticFolds = folds;
+
+    const dom = installDom();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const virtualizer = new Virtualizer();
+    virtualizer.setup(root);
+    const instance = new VirtualizedFileDiff<undefined>(
+      { diffStyle: 'split', expandUnchanged: true },
+      virtualizer,
+      layoutMetrics
+    );
+    try {
+      instance.updateCodeViewLayout(fileDiff, 0);
+      const inspect = instance as unknown as Inspectable;
+      for (let index = 0; index < moveCount; index++) {
+        const oldStart = index * 7 + 1;
+        const newStart = moveCount * 5 + index * 2 + 1;
+        for (const [side, line, selectionSide] of [
+          ['old', oldStart, 'deletions'],
+          ['old', oldStart + 1, 'deletions'],
+          ['new', newStart, 'additions'],
+          ['new', newStart + 1, 'additions'],
+        ] as const) {
+          const walked = instance.getLinePosition(line, selectionSide);
+          assertDefined(walked, 'the line should have a position');
+          expect(inspect.computeLineBounds(side, line)).toEqual({
+            top: walked.top,
+            bottom: walked.top + walked.height,
+            fold: side === 'old' ? oldStart : undefined,
+          });
+        }
+      }
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+// A file that ends without a newline shows a "No newline at end of file" row
+// under its last hunk. A connector there has to look the same whether its
+// rows are rendered or its position is computed.
+describe('connectors at the end of a file with no trailing newline', () => {
+  // CodeView's default line height.
+  const rowHeight = 20;
+  const stable = Array.from({ length: 300 }, (_, index) => `stable ${index}`);
+
+  // The parts of the diff the test reads that are not public.
+  interface Inspectable {
+    computeLineBounds: ComputeLineBounds;
+  }
+
+  /** How tall each end is, and how far the new end is below the old. */
+  interface Shape {
+    base: number;
+    target: number;
+    between: number;
+  }
+
+  interface Measured {
+    /** The first connector's shape. */
+    shape: Shape;
+    /** Every connector, by id. */
+    bands: ({ id: string } & Shape)[];
+    /** What each rendered row of a column is. */
+    oldRows: string[];
+    newRows: string[];
+  }
+
+  function describeRow(row: Element): string {
+    const line = row.getAttribute('data-line');
+    return line != null
+      ? `line ${line}`
+      : row.hasAttribute('data-semantic-fold')
+        ? 'fold'
+        : row.hasAttribute('data-no-newline')
+          ? 'no newline'
+          : 'other';
+  }
+
+  // Renders the diff in a CodeView of the given height and measures its
+  // connectors. jsdom does no layout, so each rendered row is given a
+  // rectangle: one line height for each row it stands for, stacked from the
+  // top of its column.
+  async function measure(
+    fileDiff: FileDiffMetadata,
+    height: number,
+    scrollTop = 0
+  ): Promise<Measured> {
+    const viewer = new CodeView<undefined>({
+      disableFileHeader: true,
+      expandUnchanged: true,
+      diffStyle: 'split',
+    });
+    const root = createRoot({ height });
+    const shadowRoot = () => viewer.getRenderedItems()[0]?.element.shadowRoot;
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [{ id: 'diff', type: 'diff', fileDiff }]);
+      root.scrollTop = scrollTop;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => shadowRoot()?.querySelector('[data-line]') != null);
+      viewer.render(true);
+      await wait(30);
+
+      const item = viewer.getRenderedItems()[0];
+      assertDefined(item, 'the diff should be rendered');
+      const columns = ['deletions', 'additions'].map((side) => {
+        const column = shadowRoot()?.querySelector(
+          `[data-${side}] [data-content]`
+        );
+        if (!(column instanceof HTMLElement)) {
+          throw new Error(`the ${side} column should be rendered`);
+        }
+        let top = 0;
+        const rect = (rowTop: number, rowBottom: number): DOMRect => ({
+          x: 0,
+          y: rowTop,
+          top: rowTop,
+          bottom: rowBottom,
+          left: 0,
+          right: 400,
+          width: 400,
+          height: rowBottom - rowTop,
+          toJSON: () => ({}),
+        });
+        for (const row of column.children) {
+          const rowTop = top;
+          top += rowHeight * Number(row.getAttribute('data-buffer-size') ?? 1);
+          const rowBottom = top;
+          row.getBoundingClientRect = () => rect(rowTop, rowBottom);
+        }
+        const columnBottom = top;
+        column.getBoundingClientRect = () => rect(0, columnBottom);
+        return column;
+      });
+      const [deletions, additions] = columns;
+      const bands = measureSemanticDiffConnectors(
+        prepareSemanticDiffConnectorRegions(fileDiff),
+        deletions,
+        additions,
+        0,
+        (item.instance as unknown as Inspectable).computeLineBounds
+      ).map(({ id, base, target }) => ({
+        id,
+        base: base.bottom - base.top,
+        target: target.bottom - target.top,
+        between: target.top - base.top,
+      }));
+      const [first] = bands;
+      assertDefined(first, 'a connector should be drawn');
+      return {
+        shape: {
+          base: first.base,
+          target: first.target,
+          between: first.between,
+        },
+        bands,
+        oldRows: [...deletions.children].map(describeRow),
+        newRows: [...additions.children].map(describeRow),
+      };
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+    }
+  }
+
+  test('a closed fold on the last row is at its own 1px line when it is not rendered', async () => {
+    // The last two old lines move to the top, with a closed fold over them.
+    // The new file's "No newline" row sits under the fold's row.
+    const diff = () => {
+      const moved = ['move a', 'move b'];
+      const fileDiff = parseDiffFromFile(
+        { name: 'a.txt', contents: [...stable, ...moved].join('\n') },
+        { name: 'a.txt', contents: [...moved, ...stable].join('\n') }
+      );
+      fileDiff.semanticOperations = [
+        movedOperation({ start: 301, end: 302 }, { start: 1, end: 2 }),
+      ];
+      fileDiff.semanticFolds = [fold(301, 302)];
+      return fileDiff;
+    };
+    const dom = installDom();
+    try {
+      const rendered = await measure(diff(), 10_000);
+      expect(rendered.oldRows).toContain('fold');
+      expect(rendered.newRows.at(-1)).toBe('no newline');
+      expect(rendered.shape.base).toBe(1);
+
+      const computed = await measure(diff(), 400);
+      expect(computed.oldRows).not.toContain('fold');
+      expect(computed.shape).toEqual(rendered.shape);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('a band reaches its side\'s "No newline" row across filler, rendered or not', async () => {
+    // The first old line moves to the end of the new file, beside the first
+    // of 400 removed lines. The new side's "No newline" row is 400 rows
+    // below its last line, under the filler.
+    const diff = () => {
+      const removed = Array.from(
+        { length: 400 },
+        (_, index) => `removed ${index}`
+      );
+      const fileDiff = parseDiffFromFile(
+        {
+          name: 'a.txt',
+          contents: ['move a', ...stable, ...removed].join('\n'),
+        },
+        { name: 'a.txt', contents: [...stable, 'move a'].join('\n') },
+        { disableLineMatching: true }
+      );
+      fileDiff.semanticOperations = [
+        movedOperation({ start: 1, end: 1 }, { start: 301, end: 301 }),
+      ];
+      return fileDiff;
+    };
+    const dom = installDom();
+    try {
+      const rendered = await measure(diff(), 20_000);
+      expect(rendered.newRows).toContain('line 301');
+      expect(rendered.newRows.at(-1)).toBe('no newline');
+      // The line, the filler beside the other 399 removed lines, and the
+      // "No newline" row.
+      expect(rendered.shape.target).toBe(401 * rowHeight);
+
+      // Neither the line nor its "No newline" row is rendered.
+      const computed = await measure(diff(), 400);
+      expect(computed.newRows).not.toContain('line 301');
+      expect(computed.shape).toEqual(rendered.shape);
+
+      // The line is rendered and its "No newline" row is not.
+      const cut = await measure(diff(), 400, 300 * rowHeight);
+      expect(cut.newRows).toContain('line 301');
+      expect(cut.newRows).not.toContain('no newline');
+      expect(cut.shape).toEqual(rendered.shape);
+
+      // The same, one row of scrolling at a time, through the position where
+      // the line is the last rendered row and no filler is rendered under
+      // it.
+      let wasLastRenderedRow = false;
+      for (let scrollTop = 5400; scrollTop <= 5480; scrollTop += rowHeight) {
+        const step = await measure(diff(), 400, scrollTop);
+        wasLastRenderedRow ||= step.newRows.at(-1) === 'line 301';
+        expect(step.shape).toEqual(rendered.shape);
+      }
+      expect(wasLastRenderedRow).toBe(true);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('a line does not reach a "No newline" row that belongs to the other side', async () => {
+    // The last old line moves to the top. Only the new file ends without a
+    // newline, so the row under the old line is filler.
+    const diff = () => {
+      const fileDiff = parseDiffFromFile(
+        { name: 'a.txt', contents: `${[...stable, 'move a'].join('\n')}\n` },
+        { name: 'a.txt', contents: ['move a', ...stable].join('\n') }
+      );
+      fileDiff.semanticOperations = [
+        movedOperation({ start: 301, end: 301 }, { start: 1, end: 1 }),
+      ];
+      return fileDiff;
+    };
+    const dom = installDom();
+    try {
+      const rendered = await measure(diff(), 10_000);
+      expect(rendered.oldRows).toContain('line 301');
+      expect(rendered.oldRows).not.toContain('no newline');
+      expect(rendered.newRows.at(-1)).toBe('no newline');
+      expect(rendered.shape.base).toBe(rowHeight);
+
+      const computed = await measure(diff(), 400);
+      expect(computed.oldRows).not.toContain('line 301');
+      expect(computed.shape).toEqual(rendered.shape);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('the band of a closed fold is the same band wherever the window is', async () => {
+    // The first 100 old lines move to the end, one region for each line,
+    // with a closed fold over the old lines. They land beside 100 removed
+    // lines, so both columns show source lines there.
+    const diff = () => {
+      const moved = Array.from({ length: 100 }, (_, index) => `move ${index}`);
+      const removed = Array.from(
+        { length: 100 },
+        (_, index) => `removed ${index}`
+      );
+      const fileDiff = parseDiffFromFile(
+        {
+          name: 'a.txt',
+          contents: `${[...moved, ...stable, ...removed].join('\n')}\n`,
+        },
+        { name: 'a.txt', contents: `${[...stable, ...moved].join('\n')}\n` },
+        { disableLineMatching: true }
+      );
+      fileDiff.semanticOperations = moved.map((_, index) =>
+        movedOperation(
+          { start: index + 1, end: index + 1 },
+          { start: 301 + index, end: 301 + index }
+        )
+      );
+      fileDiff.semanticFolds = [fold(1, 100)];
+      return fileDiff;
+    };
+    const dom = installDom();
+    try {
+      const rendered = await measure(diff(), 10_000);
+      expect(rendered.oldRows).toContain('fold');
+      // One band, from the fold's line to all 100 new lines.
+      expect(rendered.bands).toHaveLength(1);
+      expect(rendered.shape).toEqual({
+        base: 1,
+        target: 100 * rowHeight,
+        between: 300 * rowHeight + rowHeight / 2 + 0.5,
+      });
+
+      // Scrolled into the new lines: the fold and the first of them are
+      // above the rendered rows.
+      for (const scrollTop of [6600, 7000, 7400]) {
+        const scrolled = await measure(diff(), 400, scrollTop);
+        expect(scrolled.oldRows).not.toContain('fold');
+        expect(scrolled.oldRows.some((row) => row.startsWith('line'))).toBe(
+          true
+        );
+        expect(scrolled.newRows).not.toContain('line 301');
+        expect(scrolled.bands).toEqual(rendered.bands);
+      }
+    } finally {
       dom.cleanup();
     }
   });
