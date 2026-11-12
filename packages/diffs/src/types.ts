@@ -458,6 +458,14 @@ export interface BaseCodeOptions {
 
   // Highlighter options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
+  /**
+   * When hydrating prerendered HTML, wait to load the highlighter (Shiki, its
+   * engine, themes and languages) until a render needs it, such as new
+   * contents or options, instead of preloading it as soon as the component
+   * hydrates. Prerendered code that never changes then never downloads the
+   * highlighter. false is default
+   */
+  deferHydrationHighlight?: boolean;
   useCSSClasses?: boolean;
   useTokenTransformer?: boolean;
   tokenizeMaxLineLength?: number;
@@ -521,7 +529,11 @@ export interface DiffsI18nConfig {
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
+    | 'unsafeCSS'
+    | 'preferredHighlighter'
+    | 'deferHydrationHighlight'
+    | 'parseDiffOptions'
+    | 'loadDiffFiles'
   >
 >;
 
