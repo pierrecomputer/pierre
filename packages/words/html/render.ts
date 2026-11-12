@@ -1,6 +1,11 @@
 import { createHtmlSession } from '@pierre/words';
 import type { HtmlUpdate } from '@pierre/words';
 
+import {
+  delta,
+  type FenceDelta,
+  type InternalHtmlUpdate,
+} from '../lib/internal';
 import type {
   CodeHighlighterSession,
   CodeHighlightUpdate,
@@ -19,8 +24,11 @@ export interface CodeHtmlUpdate extends Omit<CodeHighlightUpdate, 'fullHtml'> {
 }
 
 type RenderedHtmlUpdate = HtmlUpdate & { code?: CodeHtmlUpdate };
+export type InternalCodeUpdate = CodeHtmlUpdate & { [delta]?: FenceDelta };
+type InternalRenderedUpdate = RenderedHtmlUpdate & { [delta]?: string };
 
 const lineGroup = '<span data-markdown="code-lines">';
+const paragraphStart = '<p data-markdown="p">';
 
 /**
  * Wrap code in groups of 64 lines, so the browser lays out only the last group
@@ -123,7 +131,7 @@ export function escapeHtml(value: string): string {
 }
 
 /** Decode only the entities that Wasm writes. The result is text, not HTML. */
-function decodeHtml(value: string): string {
+export function decodeHtml(value: string): string {
   let result = '';
   let from = 0;
   for (
@@ -229,6 +237,24 @@ const isNameCode = (code: number): boolean =>
   (code >= 65 && code <= 90) ||
   code === 95 ||
   (code >= 97 && code <= 122);
+
+/** Find the first changed byte range with native string comparisons before checking its short tail. */
+function unchangedEnd(
+  a: string,
+  b: string,
+  start: number,
+  end: number
+): number {
+  let step = end - start;
+  while (step > 32) {
+    if (a.slice(start, start + step) === b.slice(start, start + step)) {
+      start += step;
+      step = end - start;
+    } else step = Math.floor(step / 2);
+  }
+  while (start < end && a.charCodeAt(start) === b.charCodeAt(start)) start++;
+  return start;
+}
 
 /** The language of a fence from the attributes of its `<code>`. */
 function codeLanguage(attributes: string): string {
@@ -426,17 +452,18 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     | undefined;
   let liveUses = 0;
   let previousUpdate: HtmlUpdate | undefined;
-  let result: RenderedHtmlUpdate | undefined;
+  let result: InternalRenderedUpdate | undefined;
   let revision = 0;
   let pendingRaw = '';
+  let pendingSource: HtmlUpdate | undefined;
   let pendingInput: string | undefined;
   let pendingActive = false;
   let pendingCode = -1;
   let pendingHtml = '';
-  let pendingFence: CodeHtmlUpdate | undefined;
-  // Completed fence HTML by language and code. Resets keep only the fences they reuse.
-  let codeCache = new Map<string, string>();
-  let oldCodeCache = new Map<string, string>();
+  let pendingParagraph: { body: string } | undefined;
+  let pendingFence: InternalCodeUpdate | undefined;
+  // Raw end, formatted end, and next code index at fences in the current pending output.
+  let pendingFences: number[] = [];
   // The open fence, the formatted HTML around it, and its previous escaped and decoded code.
   let fenceKey = 0;
   let fence:
@@ -473,24 +500,33 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     previousUpdate = undefined;
     result = undefined;
     pendingInput = undefined;
+    pendingSource = undefined;
     pendingHtml = '';
+    pendingParagraph = undefined;
     pendingActive = false;
     pendingCode = -1;
     pendingFence = undefined;
-    codeCache = new Map();
-    oldCodeCache = new Map();
+    pendingFences = [];
     fence = undefined;
   };
 
   const format = (
     input: string,
     firstCode: number,
-    active: boolean
+    active: boolean,
+    fences?: number[]
   ): [string, number] => {
+    if (
+      options.allowedElements !== undefined ||
+      options.disallowedElements !== undefined ||
+      Object.values(options.components ?? {}).some((hook) => hook !== undefined)
+    )
+      fences = undefined;
     const decorated = decorate(input, options);
     let html = '';
     let index = firstCode;
     let cursor = 0;
+    let rawEnd = 0;
     // A fence is `<pre ...><code ...>`, escaped code, then `</code></pre>`.
     for (
       let at = decorated.indexOf('<pre '), scan = 0;
@@ -510,6 +546,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const isIncomplete =
         active && decorated.slice(at, pre).includes('data-markdown-incomplete');
       const number = index++;
+      if (fences !== undefined)
+        rawEnd = input.indexOf('</code></pre>', rawEnd) + 13;
       html += decorated.slice(cursor, at);
       cursor = scan = end + 13;
       const custom = options.plugins?.renderers?.find((renderer) =>
@@ -519,6 +557,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       );
       if (custom !== undefined) {
         html += hookHtml(custom.render({ code, language, isIncomplete }));
+        fences?.push(rawEnd, html.length, index);
         continue;
       }
       const plugin = options.plugins?.code;
@@ -540,19 +579,10 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         liveUses++;
         highlighted = live.session.highlight({ code, language, isIncomplete });
       } else if (plugin !== undefined) {
-        const key = language + '\0' + code;
-        highlighted = isIncomplete
-          ? undefined
-          : (codeCache.get(key) ?? oldCodeCache.get(key));
-        if (highlighted === undefined) {
-          highlighted = plugin.highlight({ code, language, isIncomplete });
-          if (!isIncomplete && typeof highlighted === 'string')
-            codeCache.set(key, highlighted);
-        } else codeCache.set(key, highlighted);
+        highlighted = plugin.highlight({ code, language, isIncomplete });
       }
       if (highlighted != null && typeof highlighted !== 'string')
         throw new TypeError('Code highlighters must return HTML strings');
-      if (!isIncomplete && live?.index === number) dispose();
       let count = 1;
       for (
         let line = code.indexOf('\n');
@@ -568,6 +598,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         options
       );
       html += before + groupLines(highlighted ?? content) + after;
+      fences?.push(rawEnd, html.length, index);
     }
     html += decorated.slice(cursor);
     for (const [tag, render] of Object.entries(options.components ?? {})) {
@@ -621,6 +652,31 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     return [html, index];
   };
 
+  /** Move already formatted pending fences into completed output without highlighting them again. */
+  const formatAddition = (
+    input: string,
+    firstCode: number,
+    active: boolean
+  ): [string, number] => {
+    if (
+      pendingInput !== undefined &&
+      pendingCode === firstCode &&
+      pendingActive === active &&
+      pendingInput.slice(0, input.length) === input
+    ) {
+      for (let at = pendingFences.length - 3; at >= 0; at -= 3) {
+        if (pendingFences[at] > input.length) continue;
+        const [tail, next] = format(
+          input.slice(pendingFences[at]),
+          pendingFences[at + 2],
+          active
+        );
+        return [pendingHtml.slice(0, pendingFences[at + 1]) + tail, next];
+      }
+    }
+    return format(input, firstCode, active);
+  };
+
   /**
    * Format the last open fence as changed lines when no hook or filter needs
    * its full element. The HTML around the fence is reused while it is unchanged,
@@ -630,7 +686,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     input: string,
     firstCode: number,
     active: boolean
-  ): CodeHtmlUpdate | undefined => {
+  ): InternalCodeUpdate | undefined => {
     if (
       !active ||
       options.allowedElements !== undefined ||
@@ -783,8 +839,70 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     };
   };
 
+  /** Use the parser's changed lines without scanning the preceding code again. */
+  const formatFenceDelta = (
+    update: FenceDelta,
+    firstCode: number,
+    active: boolean
+  ): InternalCodeUpdate | undefined => {
+    if (
+      !active ||
+      fence === undefined ||
+      fence.firstCode !== firstCode ||
+      options.plugins !== undefined ||
+      options.allowedElements !== undefined ||
+      options.disallowedElements !== undefined ||
+      Object.values(options.components ?? {}).some((hook) => hook !== undefined)
+    )
+      return;
+    const escaped = update.fullHtml;
+    const lastLine = Math.max(0, update.lineCount - 2);
+    const numbers =
+      options.lineNumbers === false
+        ? undefined
+        : Math.max(1, update.lineCount - 1);
+    fence.escaped = escaped;
+    fence.start = escaped.length - update.html.length + update.lastLineOffset;
+    fence.line = lastLine;
+    fence.code = escaped;
+    fence.codeStart = fence.start;
+    const context = fence;
+    const renderOptions = options;
+    let fullPending: string | undefined;
+    // A literal allocation template can retain the getter and its fence strings.
+    const result = Object.create(Object.prototype) as InternalCodeUpdate;
+    result.key = context.key;
+    result[delta] = update;
+    result.firstLine = update.firstLine;
+    result.lineCount = update.lineCount;
+    result.lastLine = lastLine;
+    result.lastLineOffset = update.lastLineOffset;
+    result.html = update.html;
+    result.numbers = numbers;
+    return Object.defineProperty(result, 'pending', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        if (fullPending !== undefined) return fullPending;
+        const [before, after] = codeWrapper(
+          decorate(`<code${context.attributes}>`, renderOptions).slice(5, -1),
+          codeLanguage(context.attributes),
+          true,
+          numbers,
+          renderOptions
+        );
+        return (fullPending =
+          context.before +
+          before +
+          groupLines(update.fullHtml) +
+          after +
+          context.after);
+      },
+    });
+  };
+
   return {
-    /** Change options. A reset drops caches, so completed output is formatted again. */
+    /** Change options. A reset discards completed output and reformats it. */
     configure(next: HtmlOptions, reset = true): void {
       if (reset) resetState();
       options = next;
@@ -796,6 +914,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     ): RenderedHtmlUpdate {
       try {
         const update = parser.render(source, { incomplete });
+        const change = (update as InternalHtmlUpdate)[delta];
+        const fenceDelta = typeof change === 'object' ? change : undefined;
+        const paragraphDelta = typeof change === 'string' ? change : undefined;
         if (
           update === previousUpdate &&
           active === pendingActive &&
@@ -807,11 +928,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         let addition = '';
         if (changed && previousUpdate?.stable === stableRaw && !update.reset) {
           if (update.addition !== '') {
-            [addition, nextCode] = format(update.addition, nextCode, active);
+            [addition, nextCode] = formatAddition(
+              update.addition,
+              nextCode,
+              active
+            );
             stable += addition;
           }
           stableRaw = update.stable;
-          pendingRaw = update.pending;
+          pendingSource =
+            fenceDelta === undefined && paragraphDelta === undefined
+              ? undefined
+              : update;
+          if (pendingSource === undefined) pendingRaw = update.pending;
         } else if (changed) {
           const raw = update.stable + update.pending;
           if (
@@ -825,8 +954,6 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             stable = '';
             stableRaw = '';
             nextCode = 0;
-            oldCodeCache = codeCache;
-            codeCache = new Map();
           }
           // Link definitions reset every update. Keep whole top-level blocks
           // that did not change since the previous update as completed HTML,
@@ -837,18 +964,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               previousUpdate === undefined
                 ? ''
                 : previousUpdate.stable + previousUpdate.pending;
-            let same = cut;
             // An open fence formats differently once the stream is inactive.
             const open = raw.indexOf('<pre data-markdown-incomplete', cut);
             const limit = Math.min(
               open < 0 ? raw.length : open,
               previousRaw.length
             );
-            while (
-              same < limit &&
-              raw.charCodeAt(same) === previousRaw.charCodeAt(same)
-            )
-              same++;
+            const same = unchangedEnd(raw, previousRaw, cut, limit);
             let depth = 0;
             // Identical HTML does not show that the last block has closed.
             for (
@@ -864,7 +986,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             }
           }
           if (cut > stableRaw.length) {
-            [addition, nextCode] = format(
+            [addition, nextCode] = formatAddition(
               raw.slice(stableRaw.length, cut),
               nextCode,
               active
@@ -874,38 +996,101 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           stableRaw =
             cut === update.stable.length ? update.stable : raw.slice(0, cut);
           pendingRaw = raw.slice(cut);
+          pendingSource = undefined;
         }
         previousUpdate = update;
-        if (
-          pendingInput !== pendingRaw ||
-          pendingActive !== active ||
-          pendingCode !== nextCode
-        ) {
-          const uses = liveUses;
-          pendingFence = formatFence(pendingRaw, nextCode, active);
-          if (pendingFence === undefined)
-            [pendingHtml] = format(pendingRaw, nextCode, active);
-          // Release the live highlighter once its fence is no longer pending.
-          if (liveUses === uses) dispose();
-          pendingInput = pendingRaw;
+        const textAppend =
+          changed &&
+          paragraphDelta !== undefined &&
+          options.allowedElements === undefined &&
+          options.disallowedElements === undefined &&
+          !Object.values(options.components ?? {}).some(
+            (hook) => hook !== undefined
+          ) &&
+          (pendingParagraph !== undefined ||
+            (pendingFence === undefined &&
+              pendingHtml.startsWith(paragraphStart) &&
+              pendingHtml.endsWith('</p>\n')))
+            ? paragraphDelta
+            : undefined;
+        if (textAppend !== undefined) {
+          pendingParagraph = {
+            body:
+              (pendingParagraph?.body ??
+                pendingHtml.slice(paragraphStart.length, -5)) + textAppend,
+          };
+          pendingFence = undefined;
+          pendingFences = [];
+          pendingInput = undefined;
           pendingActive = active;
           pendingCode = nextCode;
+        } else {
+          pendingParagraph = undefined;
+          const fenceUpdate =
+            changed && fenceDelta !== undefined
+              ? formatFenceDelta(fenceDelta, nextCode, active)
+              : undefined;
+          if (fenceUpdate !== undefined) {
+            pendingFence = fenceUpdate;
+            pendingFences = [];
+            pendingInput = undefined;
+            pendingActive = active;
+            pendingCode = nextCode;
+          } else {
+            if (pendingSource !== undefined) {
+              pendingRaw = pendingSource.pending;
+              pendingSource = undefined;
+            }
+            if (
+              pendingInput !== pendingRaw ||
+              pendingActive !== active ||
+              pendingCode !== nextCode
+            ) {
+              const uses = liveUses;
+              pendingFences = [];
+              pendingFence = formatFence(pendingRaw, nextCode, active);
+              if (pendingFence === undefined) {
+                [pendingHtml] = format(
+                  pendingRaw,
+                  nextCode,
+                  active,
+                  pendingFences
+                );
+                fence = undefined;
+              }
+              // Release the live highlighter once its fence is no longer pending.
+              if (liveUses === uses) dispose();
+              pendingInput = pendingRaw;
+              pendingActive = active;
+              pendingCode = nextCode;
+            }
+          }
         }
         const completedHtml = stable;
         const code = pendingFence;
         const pending = pendingHtml;
+        const paragraph = pendingParagraph;
         let fullPending: string | undefined;
         let fullHtml: string | undefined;
+        const getPending = (): string => {
+          if (fullPending !== undefined) return fullPending;
+          if (paragraph !== undefined) {
+            fullPending = paragraphStart + paragraph.body + '</p>\n';
+            paragraph.body = fullPending.slice(paragraphStart.length, -5);
+          } else fullPending = code?.pending ?? pending;
+          return fullPending;
+        };
         result = {
           get html() {
-            return (fullHtml ??= completedHtml + (code?.pending ?? pending));
+            return (fullHtml ??= completedHtml + getPending());
           },
           stable: completedHtml,
           addition,
           get pending() {
-            return (fullPending ??= code?.pending ?? pending);
+            return getPending();
           },
           code,
+          [delta]: textAppend,
           reset,
           revision: ++revision,
         };

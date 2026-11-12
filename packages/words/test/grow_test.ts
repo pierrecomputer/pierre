@@ -93,6 +93,19 @@ const docs = {
   ).join('\n\n'),
 };
 
+void test('string encoding survives growth between multibyte characters', () => {
+  for (const length of [16000, 26023, 65536, 262144]) {
+    for (const tail of ['é中', '😀', '\ud800x\udc00', '\0']) {
+      const source = 'é'.repeat(length) + tail.repeat(10000) + ' finished';
+      const cold = init(wasm);
+      assert.equal(
+        dec.decode(cold.render(source, 0, {}).output),
+        dec.decode(warm.render(new TextEncoder().encode(source), 0, {}).output)
+      );
+    }
+  }
+});
+
 void test(
   'growth past 2.5 GiB clamps to the wasm32 limit instead of trapping',
   {

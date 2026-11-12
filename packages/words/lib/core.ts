@@ -1,4 +1,9 @@
 import type {
+  FenceDelta,
+  InternalHtmlUpdate,
+  delta as protocolDelta,
+} from './internal';
+import type {
   AnsiOptions,
   Frontmatter,
   HtmlSessionOptions,
@@ -22,9 +27,47 @@ const enc = new TextEncoder();
 // Keep a leading U+FEFF so string lengths match the UTF-16 counts from Wasm.
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
-// Line records keep 30-bit end addresses and the input starts after the first
-// 64 KiB page. Another 64 KiB stays free for the closers completion appends.
+// Records use 30-bit addresses; completion also needs a page of slack.
 const maxInput = 2 ** 30 - 2 * pageSize;
+// Keep the core entrypoint self-contained while sharing the renderer's private key.
+const delta = Symbol.for(
+  '@pierre/words/stream-delta/v1'
+) as typeof protocolDelta;
+// oxlint-disable-next-line no-control-regex -- Control bytes require parser normalization.
+const paragraphSyntax = /[\u0000-\u001f"&<>@\\[\]`*_~:\uD800-\uDFFF]/u;
+
+/** Escape appended fence text exactly as the Wasm text writer does. */
+function escapeCode(value: string): string {
+  return value.replace(/[&"<>]/g, (character) => {
+    switch (character) {
+      case '&':
+        return '&amp;';
+      case '"':
+        return '&quot;';
+      case '<':
+        return '&lt;';
+      default:
+        return '&gt;';
+    }
+  });
+}
+
+/** A possible closing fence must go through the full block parser. */
+function fenceMayClose(
+  input: string,
+  previousLength: number,
+  line: number,
+  marker: number
+): boolean {
+  for (;;) {
+    let at = line;
+    while (at < line + 3 && input.charCodeAt(at) === 32) at++;
+    if (input.charCodeAt(at) === marker) return true;
+    const end = input.indexOf('\n', Math.max(line, previousLength));
+    if (end < 0) return false;
+    line = end + 1;
+  }
+}
 
 class Renderer {
   memory: WebAssembly.Memory;
@@ -59,12 +102,24 @@ class Renderer {
     }
     let inputLength;
     if (typeof input === 'string') {
-      this.grow(Math.min(input.length * 3, maxInput + 1) + 8192);
-      const { read, written } = enc.encodeInto(
+      this.grow(Math.min(input.length, maxInput + 1) + 8192);
+      let { read, written } = enc.encodeInto(
         input,
         this.buffer.subarray(pageSize, pageSize + maxInput + 1)
       );
+      if (read < input.length && written <= maxInput) {
+        this.grow(
+          Math.min(written + (input.length - read) * 3, maxInput + 1) + 8192
+        );
+        const next = enc.encodeInto(
+          input.slice(read),
+          this.buffer.subarray(pageSize + written, pageSize + maxInput + 1)
+        );
+        read += next.read;
+        written += next.written;
+      }
       if (read < input.length || written > maxInput) throw tooLarge();
+      this.grow(written + 8192);
       inputLength = written;
     } else {
       if (input instanceof ArrayBuffer) input = new Uint8Array(input);
@@ -174,8 +229,19 @@ export function createHtmlSession(): {
   let offset = 0;
   let definitions = false;
   let incomplete: boolean | undefined;
-  let result: HtmlUpdate | undefined;
+  let result: InternalHtmlUpdate | undefined;
   let revision = 0;
+  let paragraph: { body: string; spaces: number; links: boolean } | undefined;
+  let openFence:
+    | {
+        prefix: string;
+        body: string;
+        marker: number;
+        line: number;
+        tail: string;
+        firstLine: number;
+      }
+    | undefined;
   return {
     render(input, options) {
       if (typeof input !== 'string')
@@ -191,6 +257,140 @@ export function createHtmlSession(): {
         incomplete !== wanted ||
         definitions;
       if (offset !== 0 && input.charCodeAt(offset) === 0xfeff) reset = true;
+      if (!reset && paragraph !== undefined) {
+        const appended = input.slice(previous.length);
+        if (
+          !paragraphSyntax.test(appended) &&
+          (!paragraph.links || !/[()]/.test(appended)) &&
+          !/www\./i.test(previous.slice(-3) + appended)
+        ) {
+          let end = appended.length;
+          while (appended.charCodeAt(end - 1) === 32) end--;
+          const text =
+            end === 0
+              ? ''
+              : ' '.repeat(paragraph.spaces) +
+                dec.decode(enc.encode(appended.slice(0, end)));
+          const context = {
+            body: paragraph.body + text,
+            links: paragraph.links,
+            spaces:
+              end === 0
+                ? paragraph.spaces + appended.length
+                : appended.length - end,
+          };
+          let pending: string | undefined;
+          const getPending = (): string => {
+            if (pending === undefined) {
+              pending = '<p>' + context.body + '</p>\n';
+              context.body = pending.slice(3, -5);
+            }
+            return pending;
+          };
+          paragraph = context;
+          previous = input;
+          const completedHtml = stable;
+          let fullHtml: string | undefined;
+          result = {
+            get html() {
+              return (fullHtml ??= completedHtml + getPending());
+            },
+            stable: completedHtml,
+            addition: '',
+            get pending() {
+              return getPending();
+            },
+            reset: false,
+            revision: ++revision,
+            [delta]: text,
+          };
+          return result;
+        }
+      }
+      if (!reset && openFence !== undefined) {
+        const appended = input.slice(previous.length);
+        if (
+          !/[\0\r\uD800-\uDFFF]/u.test(appended) &&
+          !fenceMayClose(
+            input,
+            previous.length,
+            openFence.line,
+            openFence.marker
+          )
+        ) {
+          // Own the new text: source slices could otherwise retain every earlier document.
+          const literal = dec.decode(enc.encode(appended));
+          const escaped = escapeCode(literal);
+          let body = openFence.body + escaped;
+          const changed = openFence.tail + escaped;
+          const ending = body === '' || input.endsWith('\n') ? '' : '\n';
+          const html = changed + ending;
+          const length = html.endsWith('\n') ? html.length - 1 : html.length;
+          const lastStart =
+            length === 0 ? 0 : html.lastIndexOf('\n', length - 1) + 1;
+          const firstLine = openFence.firstLine;
+          let lineCount = firstLine + 1;
+          for (
+            let at = html.indexOf('\n');
+            at >= 0;
+            at = html.indexOf('\n', at + 1)
+          )
+            lineCount++;
+          const lastLine = appended.lastIndexOf('\n');
+          const context = {
+            ...openFence,
+            body,
+            line:
+              lastLine < 0 ? openFence.line : previous.length + lastLine + 1,
+            tail: changed.slice(lastStart),
+            firstLine: Math.max(0, lineCount - 2),
+          };
+          const suffix = ending + '</code></pre>\n';
+          const fence: FenceDelta = {
+            text: literal,
+            replaceNewline: openFence.body !== '' && !previous.endsWith('\n'),
+            firstLine,
+            lineCount,
+            html,
+            lastLineOffset: lastStart,
+            get fullHtml() {
+              return body + ending;
+            },
+          };
+          let pending: string | undefined;
+          const getPending = (): string => {
+            if (pending === undefined) {
+              pending = context.prefix + body + suffix;
+              // Share the materialized output instead of retaining its old rope pieces too.
+              body = pending.slice(
+                context.prefix.length,
+                context.prefix.length + body.length
+              );
+              context.body = body;
+              context.tail = body.slice(body.length - context.tail.length);
+            }
+            return pending;
+          };
+          openFence = context;
+          previous = input;
+          const completedHtml = stable;
+          let fullHtml: string | undefined;
+          result = {
+            get html() {
+              return (fullHtml ??= completedHtml + getPending());
+            },
+            stable: completedHtml,
+            addition: '',
+            get pending() {
+              return getPending();
+            },
+            reset: false,
+            revision: ++revision,
+            [delta]: fence,
+          };
+          return result;
+        }
+      }
       // A render can throw, so session state changes only after it succeeds.
       let nextStable = reset ? '' : stable;
       let nextOffset = reset ? 0 : offset;
@@ -225,6 +425,82 @@ export function createHtmlSession(): {
       previous = input;
       incomplete = wanted;
       const completedHtml = stable;
+      paragraph = undefined;
+      if (
+        !definitions &&
+        pending.startsWith('<p>') &&
+        pending.endsWith('</p>\n')
+      ) {
+        const body = pending.slice(3, -5);
+        let end = input.length;
+        while (input.charCodeAt(end - 1) === 32) end--;
+        const tail = input.slice(offset, end).trimStart();
+        if (
+          !body.includes('</p>') &&
+          !/^[#=+0-9-]/.test(tail) &&
+          !(tail.startsWith('[') && tail.includes(']:')) &&
+          !/[<\r\n\t\0]/.test(tail) &&
+          !paragraphSyntax.test(tail.slice(-2))
+        ) {
+          // A literal final word excludes synthetic inline closers. New block
+          // markers, unfinished HTML, entities, and autolinks need the parser.
+          const word = tail.slice(tail.lastIndexOf(' ') + 1);
+          if (
+            word !== '' &&
+            body.endsWith(word) &&
+            !/[&<>@:]/.test(word) &&
+            !/www\./i.test(word)
+          )
+            paragraph = {
+              body,
+              spaces: input.length - end,
+              links: tail.includes('['),
+            };
+        }
+      }
+      openFence = undefined;
+      if (
+        !definitions &&
+        pending.startsWith('<pre data-markdown-incomplete><code') &&
+        pending.endsWith('</code></pre>\n')
+      ) {
+        const firstLine = input.indexOf('\n', offset);
+        const opener = input.slice(offset, firstLine);
+        const last = input.charCodeAt(input.length - 1);
+        if (
+          firstLine >= offset &&
+          /^(`{3,}|~{3,})[^\r\n]*$/.test(opener) &&
+          last !== 13 &&
+          !(last >= 0xd800 && last <= 0xdbff)
+        ) {
+          const start = pending.indexOf('>', pending.indexOf('<code')) + 1;
+          let body = pending.slice(start, -14);
+          if (input.length > firstLine + 1 && !input.endsWith('\n'))
+            body = body.slice(0, -1);
+          const length = body.endsWith('\n') ? body.length - 1 : body.length;
+          const lastStart =
+            length === 0 ? 0 : body.lastIndexOf('\n', length - 1) + 1;
+          let line = 0;
+          for (
+            let at = body.indexOf('\n');
+            at >= 0 && at < lastStart;
+            at = body.indexOf('\n', at + 1)
+          )
+            line++;
+          const source = input.slice(offset);
+          openFence = {
+            prefix: pending.slice(0, start),
+            body,
+            marker: opener.charCodeAt(0),
+            line:
+              offset +
+              Math.max(source.lastIndexOf('\n'), source.lastIndexOf('\r')) +
+              1,
+            tail: body.slice(lastStart),
+            firstLine: line,
+          };
+        }
+      }
       let fullHtml: string | undefined;
       result = {
         // The DOM renderer reads only `addition` and `pending`, so build this on demand.

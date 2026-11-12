@@ -22,6 +22,25 @@ void test('retained open-fence updates keep the options used to render them', ()
   renderer.dispose();
 });
 
+void test('retained fence appends keep their render options after reconfiguration', () => {
+  for (const controls of [false, true]) {
+    const renderer = createHtmlRenderer({ controls });
+    renderer.render('```text\nhello', true, true);
+    const source = '```text\nhello world\nnext';
+    const before = renderer.render(source, true, true);
+    const reference = createHtmlRenderer({ controls });
+    const expected = reference.render(source, true, true).html;
+    reference.dispose();
+
+    renderer.configure({ controls: !controls });
+    renderer.render(source, true, true);
+    assert.equal(before.html, expected);
+    assert.equal(before.stable + before.pending, expected);
+    assert.equal(before.code?.pending, before.pending);
+    renderer.dispose();
+  }
+});
+
 void test('a failed highlighter disposal clears the live session before retry', () => {
   let disposed = 0;
   const renderer = createHtmlRenderer({
