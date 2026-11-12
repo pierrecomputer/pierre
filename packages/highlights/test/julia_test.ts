@@ -297,3 +297,60 @@ void t.test('julia: `begin` in an index is a value before a range', () => {
     ['keyword.control', 'string.special.symbol', 'keyword.control']
   );
 });
+
+void t.test(
+  'julia: Unicode operators split names; Unicode letters do not',
+  () => {
+    const code = 'if a ≠ b && c ≤ d; end\nz = x÷2 ∘ f\nx ∈ S ? ∇f : ∑α′ → √y\n';
+    assert.deepEqual(tokenKinds('julia', code), [
+      ['if', 'keyword.control'],
+      ['a', 'variable'],
+      ['≠', 'operator'],
+      ['b', 'variable'],
+      ['&&', 'operator'],
+      ['c', 'variable'],
+      ['≤', 'operator'],
+      ['d', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['end', 'keyword.control'],
+      ['z', 'variable'],
+      ['=', 'operator'],
+      ['x', 'variable'],
+      ['÷', 'operator'],
+      ['2', 'number'],
+      ['∘', 'operator'],
+      ['f', 'variable'],
+      ['x', 'variable'],
+      ['∈', 'operator'],
+      ['S', 'type'],
+      ['?', 'operator'],
+      ['∇f', 'variable'],
+      [':', 'operator'],
+      ['∑α′', 'variable'],
+      ['→ √', 'operator'],
+      ['y', 'variable'],
+    ]);
+    assertLineFedParity('julia', code);
+  }
+);
+
+void t.test('julia: broadcast Unicode operators and long Unicode names', () => {
+  const code = 'a.≤b .∈ S a.β\nvery_long_variable_name∈S ∑αβγδεζηθικλμ≤x\n';
+  assert.deepEqual(tokenKinds('julia', code), [
+    ['a', 'variable'],
+    ['.≤', 'operator'],
+    ['b', 'variable'],
+    ['.∈', 'operator'],
+    ['S', 'type'],
+    ['a', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['β', 'property'],
+    ['very_long_variable_name', 'variable'],
+    ['∈', 'operator'],
+    ['S', 'type'],
+    ['∑αβγδεζηθικλμ', 'variable'],
+    ['≤', 'operator'],
+    ['x', 'variable'],
+  ]);
+  assertLineFedParity('julia', code);
+});

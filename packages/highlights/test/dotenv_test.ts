@@ -88,3 +88,25 @@ test('dotenv: quoted values span lines', () => {
   assertLineFedParity('dotenv', code);
   assertLineFedParity('dotenv', "A='one\ntwo'\nB=`x\ny`\nC=2\n");
 });
+
+test('dotenv: many unclosed `${` on one line stay linear', () => {
+  for (const [lang, src] of [
+    ['dotenv', `A=${'${'.repeat(400_000)}\nB="${'${'.repeat(400_000)}"\n`],
+    ['nginx', `set $a ${'${'.repeat(400_000)};\n`],
+  ] as const) {
+    tokenKinds(lang, '');
+    const started = performance.now();
+    tokenKinds(lang, src);
+    const elapsed = performance.now() - started;
+    expect(elapsed).toBeLessThan(1500);
+  }
+  expect(tokenKinds('dotenv', 'A=${a ${b} ${c\n')).toEqual([
+    ['A', 'variable'],
+    ['=', 'operator'],
+    ['${', 'punctuation.special'],
+    ['a ${b', 'variable'],
+    ['}', 'punctuation.special'],
+    ['${', 'punctuation.special'],
+    ['c', null],
+  ]);
+});

@@ -98,6 +98,9 @@
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
+  ;; a copy keeps the markdown lexer's code-span scan inlined there
+  (func-variant $mdxCodeSpanEnd $markdownCodeSpanEnd)
+
   ;; Start of the line after the one at $p, or $end. A shared call keeps
   ;; the CR/LF step out of each line walk below.
   (func $mdxNextLine (param $p i32) (result i32)
@@ -261,6 +264,19 @@
       (select (i32.sub (local.get $p) (local.get $listStart)) (i32.const 0) (local.get $listStart)))
     (if (i32.lt_u (local.get $len) (i32.const 3))
       (then (return (i32.const 0))))
+    (if (i32.eq (local.get $fence) (i32.const "`"))
+      (then
+        (local.set $close (call $markdownLineEnd (local.get $q)))
+        (if
+          (i32.lt_u
+            (call $scanFindSpecial
+              (local.get $q)
+              (local.get $close)
+              (i32.const "`")
+              (i32.const 0)
+              (i32.const 0))
+            (local.get $close))
+          (then (return (i32.const 0))))))
     (local.set $close
       (call $markdownFenceClose
         (call $mdxNextLine (local.get $q))
@@ -365,8 +381,33 @@
     (global.set $ptr (local.get $from))
     (local.get $from))
 
-  ;; Resume the ESM block stored under pseudo fence byte 1.
-  (func $mdxEsmResume (param $reg i32) (result i32)
+  ;; Resume the ESM block (pseudo fence byte 1) or JSX tag (byte 2) saved by
+  ;; $hlMdx; a blank line ends both unless the TSX lexer closes the tag first.
+  (func $mdxEsmResume (param $fence i32) (param $reg i32) (result i32)
+    (local $p i32)
+    (local $q i32)
+    (if (i32.eq (local.get $fence) (i32.const 2))
+      (then
+        (local.set $p (global.get $ptr))
+        (block $blank
+          (loop $lines
+            (br_if $blank (i32.ge_u (local.get $p) (global.get $end)))
+            (local.set $q (call $lexSkipSpaceAt (local.get $p)))
+            (br_if $blank (i32.eq (call $markdownLineEnd (local.get $q)) (local.get $q)))
+            (local.set $p (call $mdxNextLine (local.get $p)))
+            (br $lines)))
+        (local.set $q (i32.const 1))
+        (if (i32.lt_u (global.get $ptr) (local.get $p))
+          (then (local.set $q (call $mdxJsxLines (local.get $p) (i32.const 0)))))
+        (if (i32.eq (local.get $q) (i32.const 1))
+          (then
+            (if (i32.eq (local.get $p) (global.get $end))
+              (then (return (i32.const 1))))
+            (local.set $q (local.get $p))))
+        (call $markdownClearEmbeddedStream)
+        (global.set $ptr (local.get $q))
+        (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
+        (return (i32.const 0))))
     (if
       (i32.eq
         (call $mdxEsmRange
@@ -377,7 +418,51 @@
     (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
     (i32.const 0))
 
-  ;; Check whether `<` at $p starts JSX that continues in the next chunk.
+  ;; Lex the JSX tag at $ptr up to $to line by line as stream region 5, as a
+  ;; line-fed stream does. Return where TSX closed the tag, or 1 if still open.
+  (func $mdxJsxLines (param $to i32) (param $first i32) (result i32)
+    (local $line i32)
+    (local $root i32)
+    (local $save i32)
+    (local $saveEof i32)
+    (local $saveStreaming i32)
+    (local.set $save (global.get $end))
+    (local.set $saveEof (global.get $eof))
+    (local.set $saveStreaming (global.get $streaming))
+    (global.set $streaming (i32.const 1))
+    (local.set $root (i32.const 1))
+    (local.set $line (global.get $ptr))
+    (block $done
+      (loop $lines
+        (br_if $done (i32.ge_u (local.get $line) (local.get $to)))
+        (global.set $ptr (local.get $line))
+        (global.set $end (local.get $save))
+        (local.set $line (call $mdxNextLine (local.get $line)))
+        (global.set $end (local.get $line))
+        (global.set $eof (local.get $line))
+        (if (local.get $first)
+          (then
+            (local.set $root (global.get $ptr))
+            (global.set $ptr (local.get $line))
+            (call $streamSetRegion (i32.const 5))
+            (global.set $ptr (local.get $root))
+            (global.set $jsxRootEnd (i32.const 1))
+            (call $hlTsxStream (i32.const 1))
+            (local.set $root (global.get $jsxRootEnd))
+            (global.set $jsxRootEnd (i32.const 0))
+            (global.set $streamRegionStarted (i32.const 1))
+            (local.set $first (i32.const 0)))
+          (else
+            (if (i32.eqz (call $streamResumeLang (enum.get $Language.mdx)))
+              (then (local.set $root (global.get $ptr))))))
+        (br_if $lines (i32.eq (local.get $root) (i32.const 1)))))
+    (global.set $streaming (local.get $saveStreaming))
+    (global.set $eof (local.get $saveEof))
+    (global.set $end (local.get $save))
+    (local.get $root))
+
+  ;; Check whether `<` at $p starts JSX that continues on the next line; $end
+  ;; is the end of this line.
   ;; Bytes after the name must be attributes: names, `=`, quoted values,
   ;; expressions, comments, `/`, or blanks. Also require a component name,
   ;; line-start position, or attribute assignment. This prevents incomplete
@@ -445,15 +530,22 @@
     (local $from i32)
     (local $inFence i32)
     (local $lineEnd i32)
-    ;; set once a `>` search from some `<` reached $end: no later `<` in
-    ;; this chunk can close a tag, so their scans are skipped
+    (local $lineCache i32)
+    (local $lineStart i32)
+    (local $tick i32)
+    ;; no `>` before this position on its line: a `<` before it skips its scan
     (local $noClose i32)
+    (local $open i32)
     (local $p i32)
+    (local $save i32)
     (local $to i32)
     (call $lexEmitLeadingContinuation)
     ;; the memo describes the previous chunk's bytes once restored; the scan
     ;; below restarts from $ptr, so start every call without it
     (local.set $noClose (i32.const 0))
+    (local.set $lineCache (i32.const 0))
+    (local.set $lineStart (i32.const 0))
+    (local.set $tick (i32.const 0))
     ;; Keep inherited Markdown YAML front matter opaque to MDX braces/angles.
     ;; Streaming also demands the first chunk, as the markdown lexer does.
     (local.set $p (call $frontMatterOpen))
@@ -466,6 +558,15 @@
     (local.set $from (global.get $ptr))
     (local.set $p (global.get $ptr))
     (local.set $fenceAt (global.get $ptr))
+    ;; a stream region that closed mid-line leaves $ptr inside a line, where no
+    ;; fence or ESM block starts
+    (if
+      (i32.and
+        (i32.gt_u (global.get $ptr) (global.get $srcBase))
+        (i32.and
+          (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+          (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+      (then (local.set $fenceAt (call $mdxNextLine (global.get $ptr)))))
     (block $done
       (loop $scan
         (local.set $p (call $lexFindEither (local.get $p) (i32.const "{") (i32.const "<")))
@@ -506,6 +607,7 @@
                       (then (local.set $p (local.get $to))))
                     (local.set $fenceAt (local.get $to))
                     (br $scan)))
+                (local.set $lineStart (local.get $fenceAt))
                 (local.set $fenceAt (call $mdxNextLine (local.get $fenceAt)))))
             (br $fenceLines)))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
@@ -513,6 +615,40 @@
           (then
             (local.set $p (local.get $fenceAt))
             (br $scan)))
+        ;; `{` and `<` in a code span are text. Pair the backticks before the hit
+        ;; on its line from $from on, as the markdown range does; $tick is where
+        ;; the pairing reached, so no byte is paired twice.
+        (local.set $to
+          (select (local.get $tick) (local.get $lineStart) (i32.gt_u (local.get $tick) (local.get $lineStart))))
+        (if (i32.lt_u (local.get $to) (local.get $from))
+          (then (local.set $to (local.get $from))))
+        (block $paired
+          (loop $ticks
+            (local.set $to (call $scanFindSpecial (local.get $to) (local.get $p) (i32.const "`") (i32.const 0) (i32.const 0)))
+            (br_if $paired (i32.ge_u (local.get $to) (local.get $p)))
+            (local.set $save (local.get $to))
+            (block $escDone
+              (loop $esc
+                (br_if $escDone (i32.le_u (local.get $save) (local.get $from)))
+                (br_if $escDone (i32.ne (i32.load8_u (i32.sub (local.get $save) (i32.const 1))) (i32.const 92)))
+                (local.set $save (i32.sub (local.get $save) (i32.const 1)))
+                (br $esc)))
+            (if (i32.and (i32.sub (local.get $to) (local.get $save)) (i32.const 1))
+              (then
+                (local.set $to (i32.add (local.get $to) (i32.const 1)))
+                (br $ticks)))
+            (if (i32.ge_u (local.get $p) (local.get $lineCache))
+              (then (local.set $lineCache (call $markdownLineEnd (local.get $p)))))
+            (local.set $save (call $mdxCodeSpanEnd (local.get $to) (local.get $lineCache)))
+            (local.set $to
+              (if (result i32) (local.get $save)
+                (then (local.get $save))
+                (else (call $markdownTickRunEnd (local.get $to) (local.get $lineCache)))))
+            (br_if $ticks (i32.le_u (local.get $to) (local.get $p)))
+            (local.set $tick (local.get $to))
+            (local.set $p (local.get $to))
+            (br $scan)))
+        (local.set $tick (local.get $p))
         (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "{"))
           (then
             ;; one pass, braces included: the TSX lexer stops at the outer
@@ -537,25 +673,57 @@
                 (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
                 (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
               (then
-                (local.set $to
-                  (call $markdownHtmlEnd (local.get $p) (call $markdownLineEnd (local.get $p))))
+                (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
+                (local.set $to (call $markdownHtmlEnd (local.get $p) (local.get $lineEnd)))
+                (local.set $lineEnd (call $markdownAfterLine (local.get $lineEnd)))
+                ;; markdown may not open this comment (a heading, emphasis): lex its
+                ;; line alone, as a line-fed stream does; an HTML range to the line
+                ;; end is an open comment, here or at a later `<!--`
+                (if (i32.gt_u (local.get $to) (local.get $lineEnd))
+                  (then
+                    (global.set $markdownHtmlAt (i32.const 0))
+                    (call $mdxMarkdownRange (local.get $from) (local.get $lineEnd))
+                    (local.set $from (local.get $lineEnd))
+                    (if (i32.eq (global.get $markdownHtmlAt) (local.get $lineEnd))
+                      (then
+                        (call $emitTok (enum.get $Token.comment) (local.get $lineEnd) (local.get $to))
+                        (global.set $ptr (local.get $to))
+                        (call $streamSetFixed32 (i32.const "-->") (i32.const 3) (enum.get $Token.comment))
+                        (local.set $from (local.get $to))))
+                    (local.set $p (local.get $from))
+                    (br $scan)))
                 (call $mdxMarkdownRange (local.get $from) (local.get $to))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))
+            ;; A tag closes on its own line, or runs from a line that shows it is a tag
+            ;; to its TSX close or a blank line, the same as a line-fed stream.
+            (local.set $save (global.get $end))
+            (if (i32.ge_u (local.get $p) (local.get $lineCache))
+              (then (local.set $lineCache (call $markdownLineEnd (local.get $p)))))
+            (local.set $lineEnd (call $markdownAfterLine (local.get $lineCache)))
+            (global.set $end (local.get $lineEnd))
             (local.set $to (i32.add (local.get $p) (i32.const 1)))
-            (if (i32.eqz (local.get $noClose))
+            (if (i32.ge_u (local.get $p) (local.get $noClose))
               (then
                 (local.set $to (call $mdxJsxEnd (local.get $p)))
-                (if (i32.le_u (local.get $to) (i32.add (local.get $p) (i32.const 1)))
-                  (then
-                    ;; no tag closed here; when no `>` follows at all, every
-                    ;; later `<` in the chunk would rescan to $end for nothing
-                    (if
-                      (i32.ge_u
-                        (call $lexFindByte (i32.add (local.get $p) (i32.const 1)) (i32.const ">"))
-                        (global.get $end))
-                      (then (local.set $noClose (i32.const 1))))))))
+                (if
+                  (i32.and
+                    (i32.le_u (local.get $to) (i32.add (local.get $p) (i32.const 1)))
+                    (i32.ge_u
+                      (call $lexFindByte (i32.add (local.get $p) (i32.const 1)) (i32.const ">"))
+                      (local.get $lineEnd)))
+                  (then (local.set $noClose (local.get $lineEnd))))))
+            (local.set $open
+              (if (result i32)
+                (i32.and
+                  (i32.le_u (local.get $to) (i32.add (local.get $p) (i32.const 1)))
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineEnd))
+                    (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))))
+                (then (call $mdxTagStartContinues (local.get $p)))
+                (else (i32.const 0))))
+            (global.set $end (local.get $save))
             (if (i32.gt_u (local.get $to) (i32.add (local.get $p) (i32.const 1)))
               (then
                 (call $mdxMarkdownRange (local.get $from) (local.get $p))
@@ -563,25 +731,28 @@
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))
-            ;; the back and forward scans run only for a streamed `<name`
-            (if
-              (if (result i32)
-                (i32.and
-                  (global.get $streaming)
-                  (i32.and
-                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                    (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))))
-                (then (call $mdxTagStartContinues (local.get $p)))
-                (else (i32.const 0)))
+            (if (local.get $open)
               (then
+                (local.set $to (local.get $lineEnd))
+                (block $blank
+                  (loop $lines
+                    (br_if $blank (i32.ge_u (local.get $to) (global.get $end)))
+                    (local.set $lineEnd (call $lexSkipSpaceAt (local.get $to)))
+                    (br_if $blank (i32.eq (call $markdownLineEnd (local.get $lineEnd)) (local.get $lineEnd)))
+                    (local.set $to (call $mdxNextLine (local.get $to)))
+                    (br $lines)))
                 (call $mdxMarkdownRange (local.get $from) (local.get $p))
-                (global.set $ptr (global.get $end))
-                (call $streamSetRegion (i32.const 5))
-                (local.set $to (global.get $end))
                 (global.set $ptr (local.get $p))
-                (call $hlTsxStream (i32.const 1))
+                (local.set $lineEnd (call $mdxJsxLines (local.get $to) (i32.const 1)))
+                (if (i32.ne (local.get $lineEnd) (i32.const 1))
+                  (then (local.set $to (local.get $lineEnd))))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $lineEnd) (i32.const 1))
+                    (i32.and (global.get $streaming) (i32.eq (local.get $to) (global.get $eof))))
+                  (then (call $markdownFenceSet (i32.const 2) (i32.const 0) (i32.const 0)))
+                  (else (call $markdownClearEmbeddedStream)))
                 (global.set $ptr (local.get $to))
-                (global.set $streamRegionStarted (i32.const 1))
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))))

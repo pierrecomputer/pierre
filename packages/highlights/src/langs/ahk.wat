@@ -6,13 +6,15 @@
   (import "@pierre/wat-tools/common.wat")
 
   ;; Words are looked up lowercase. Bit 8: the statement goes on after the
-  ;; word (`else MsgBox`). Bit 9: the next word names a class.
+  ;; word (`else MsgBox`). Bit 9: the next word names a class. Bit 10: the
+  ;; next word may start a definition (`static Name() {`).
   (keyword-table $ahkWords $mem.ahkWords $mem.ahkWords+192
     (group $Token.keyword.control+256 "else" "try" "finally")
     (group $Token.keyword.control
       "if" "while" "loop" "for" "in" "return" "break" "continue" "catch" "throw" "switch" "case"
-      "default" "until" "goto" "gosub" "exit" "exitapp")
-    (group $Token.keyword.declaration "global" "local" "static")
+      "default" "until" "goto" "gosub" "exit" "exitapp" "as")
+    (group $Token.keyword.declaration "global" "local")
+    (group $Token.keyword.declaration+1024 "static")
     (group $Token.keyword.declaration+512 "class" "extends")
     (group $Token.keyword.operator "and" "or" "not" "is" "new")
     (group $Token.boolean "true" "false")
@@ -306,6 +308,10 @@
                   (if (i32.and (local.get $v) (i32.const 256))
                     (then (local.set $pos (i32.const 0))))
                   (local.set $expect (i32.shr_u (local.get $v) (i32.const 9)))
+                  (if (i32.gt_u (local.get $expect) (i32.const 1))
+                    (then
+                      (local.set $expect (i32.const 0))
+                      (local.set $mid (i32.const 0))))
                   (local.set $hl (i32.and (local.get $v) (i32.const 255)))
                   (br $kind)))
               (if (i32.eq (local.get $c) (i32.const "("))
@@ -364,7 +370,15 @@
                 (then (local.set $hl (enum.get $Token.none))))
               (if (i32.or (i32.eq (local.get $c2) (i32.const ","))
                     (i32.and (i32.eq (local.get $c2) (i32.const "{")) (i32.gt_u (local.get $p) (global.get $ptr))))
-                (then (local.set $args (i32.const 1)))))
+                (then
+                  (local.set $args (i32.const 1))
+                  (if (i32.eq (local.get $c2) (i32.const "{"))
+                    (then
+                      (local.set $c (call $templateByte (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 1)))))
+                      (if (i32.or (i32.eqz (local.get $c)) (byteset.get "\0a\0d" (local.get $c)))
+                        (then
+                          (local.set $args (i32.const 0))
+                          (local.set $hl (enum.get $Token.property)))))))))
             (local.set $member (i32.const 0))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (br $next)))

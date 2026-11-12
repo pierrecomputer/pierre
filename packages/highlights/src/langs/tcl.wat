@@ -147,7 +147,7 @@
         (local.set $c (i32.load8_u (local.get $lhs)))
         (local.set $e (local.get $expect))
         (local.set $expect (i32.const 0))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (i32.ne (local.get $pos) (i32.const 1)))
+        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (i32.eqz (local.get $pos)))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
             (br $next)))
@@ -248,7 +248,11 @@
                       (select
                         (i32.const 0)
                         (i32.const 2)
-                        (i32.or (i32.eqz (local.get $v)) (call $lexIsSpace (local.get $v)))))))))
+                        (i32.or
+                          (i32.or (i32.eqz (local.get $v)) (call $lexIsSpace (local.get $v)))
+                          (i32.and
+                            (i32.eq (local.get $v) (i32.const "#"))
+                            (i32.le_u (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 32))))))))))
             (if (i32.and (i32.eq (local.get $c) (i32.const "}")) (i32.ne (local.get $param) (i32.const 0)))
               (then (local.set $param (i32.sub (local.get $param) (i32.const 1)))))
             (br $next)))

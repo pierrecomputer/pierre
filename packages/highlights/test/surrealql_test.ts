@@ -251,3 +251,46 @@ test('surrealql: a table may share a keyword name after FROM and arrows', () => 
     [';', 'punctuation.delimiter'],
   ]);
 });
+
+test('surrealql: a keyword before `=` is a field, and array or object record ids', () => {
+  expect(
+    tokenKinds('surrealql', 'UPDATE person:[1, 2] SET user = 1, type = 2;')
+  ).toEqual([
+    ['UPDATE', 'keyword'],
+    ['person', 'type'],
+    [':', 'punctuation.delimiter'],
+    ['[', 'punctuation.bracket'],
+    ['1', 'number'],
+    [',', 'punctuation.delimiter'],
+    ['2', 'number'],
+    [']', 'punctuation.bracket'],
+    ['SET', 'keyword'],
+    ['user', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    [',', 'punctuation.delimiter'],
+    ['type', 'variable'],
+    ['=', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  expect(tokenKinds('surrealql', 'SELECT * FROM person:{ a: 1 };')[3]).toEqual([
+    'person',
+    'type',
+  ]);
+});
+
+test('surrealql: a key glued to `{` is not a record id', () => {
+  expect(tokenKinds('surrealql', 'RETURN {v:{a:1}};')).toEqual([
+    ['RETURN', 'keyword.control'],
+    ['{', 'punctuation.bracket'],
+    ['v', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['{', 'punctuation.bracket'],
+    ['a', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['1', 'number'],
+    ['}}', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

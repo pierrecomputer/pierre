@@ -83,6 +83,15 @@
         (if (call $lexIsDigit (local.get $c))
           (then
             (call $lexScanNumber)
+            (if
+              (i32.and
+                (i32.eq (call $templateByte (global.get $ptr)) (i32.const 39))
+                (i32.and
+                  (i32.le_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
+                  (call $lexIsIdentContinue (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $scanIdentRun (i32.const "_"))))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))

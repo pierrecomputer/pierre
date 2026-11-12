@@ -214,3 +214,33 @@ test('v: compile-time words and comments', () => {
     ['{} } }', 'punctuation.bracket'],
   ]);
 });
+
+test('v: attribute lists and generic methods', () => {
+  const code =
+    '@[heap; inline]\nstruct S {}\nfn (mut s Stack[T]) push[T](v T) {}\n';
+  expect(tokenKinds('v', code)).toEqual([
+    ['@[heap', 'attribute'],
+    [';', 'punctuation.delimiter'],
+    ['inline', 'attribute'],
+    [']', 'punctuation.bracket'],
+    ['struct', 'keyword.declaration'],
+    ['S', 'type'],
+    ['{}', 'punctuation.bracket'],
+    ['fn', 'keyword.declaration'],
+    ['(', 'punctuation.bracket'],
+    ['mut', 'keyword'],
+    ['s', 'variable'],
+    ['Stack', 'type'],
+    ['[', 'punctuation.bracket'],
+    ['T', 'type'],
+    ['])', 'punctuation.bracket'],
+    ['push', 'function.definition'],
+    ['[', 'punctuation.bracket'],
+    ['T', 'type'],
+    ['](', 'punctuation.bracket'],
+    ['v', 'variable'],
+    ['T', 'type'],
+    [') {}', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('v', code);
+});

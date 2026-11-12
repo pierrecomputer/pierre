@@ -24,8 +24,10 @@ test('hack: code needs no opener, and `?>` closes nothing', () => {
     ['$x', 'variable'],
     [';', 'punctuation.delimiter'],
   ]);
-  // without an opener the text is code, not markup
-  expect(tokenKinds('hack', '<p>')).toEqual([
+  // without an opener the text is code, not markup; after a value `<`
+  // compares (an operand `<p>` is XHP)
+  expect(tokenKinds('hack', '$a <p>')).toEqual([
+    ['$a', 'variable'],
     ['<', 'operator'],
     ['p', 'variable'],
     ['>', 'operator'],
@@ -220,4 +222,34 @@ test('hack: malformed and random input remains total, balanced and lossless', ()
     ).join('');
     checkInvariants(lexer.hl, code);
   }
+});
+
+test('hack: XHP elements hold text, attributes, and code', () => {
+  const code =
+    "function f(): XHPRoot {\n  return <p>Don't do it</p>;\n}\nfunction g(): int { return 1; }\n";
+  expect(tokenKinds('hack', code).slice(6, 16)).toEqual([
+    ['return', 'keyword.control'],
+    ['<', 'punctuation.bracket.html'],
+    ['p', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ["Don't do it", null],
+    ['</', 'punctuation.bracket.html'],
+    ['p', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    [';', 'punctuation.delimiter'],
+    ['}', 'punctuation.bracket'],
+  ]);
+  expect(tokenKinds('hack', code).at(-3)).toEqual(['1', 'number']);
+  // an element that spans lines, with `{expr}` code and nested elements
+  const multi =
+    '$x = <div class="a" id={$id}\n  hidden>\n  {$xs->map($i ==> <li>{$i} it\'s</li>)}\n  <ui:button label="ok" />\n</div>;\n$y = 1;\n';
+  const kinds = tokenKinds('hack', multi);
+  expect(kinds).toContainEqual(['hidden', 'attribute']);
+  expect(kinds).toContainEqual(['ui:button', 'tag']);
+  expect(kinds.at(-4)).toEqual(['$y', 'variable']);
+  assertLineFedParity('hack', multi);
+  // `use function` imports a name and defines nothing
+  expect(tokenKinds('hack', 'use function App\\fmt;').slice(2, 3)).toEqual([
+    ['App', 'namespace'],
+  ]);
 });

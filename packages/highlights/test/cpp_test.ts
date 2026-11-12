@@ -476,3 +476,86 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'cpp: a block comment left open on a directive line continues',
+  () => {
+    const code =
+      '#if 0 /* a\nb */\n#define A \\\n  1 /* open \\\n  x */ int y;\n#include "b.h" /* c\n */\n';
+    assert.deepEqual(tokenKinds('cpp', code), [
+      ['#if 0', 'preproc'],
+      ['/* a', 'comment'],
+      ['b */', 'comment'],
+      ['#define A \\', 'preproc'],
+      ['1', 'preproc'],
+      ['/* open \\', 'comment'],
+      ['x */', 'comment'],
+      ['int', 'type.builtin'],
+      ['y', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['#include', 'preproc'],
+      ['"b.h"', 'string'],
+      ['/* c', 'comment'],
+      ['*/', 'comment'],
+    ]);
+    assertLineFedParity('cpp', code);
+    assertLineFedParity('cuda', code);
+  }
+);
+
+void t.test(
+  'cpp: a header name continued by a backslash ends with its line',
+  () => {
+    const code = '#include <a\\\nb.h>\nint x;\n';
+    assert.deepEqual(tokenKinds('cpp', code).slice(0, 3), [
+      ['#include', 'preproc'],
+      ['<a\\', 'string'],
+      ['b.h>', 'preproc'],
+    ]);
+    assertLineFedParity('cpp', code);
+    assertLineFedParity('cuda', code);
+  }
+);
+
+void t.test(
+  'cpp: a backslash at the end of a line comment splices the next line',
+  () => {
+    const code = '// a \\\nstill\n/// doc \\\r\ntoo\r\nint x;\n';
+    assert.deepEqual(tokenKinds('cpp', code).slice(0, 4), [
+      ['// a \\', 'comment'],
+      ['still', 'comment'],
+      ['/// doc \\', 'comment.doc'],
+      ['too', 'comment.doc'],
+    ]);
+    assertLineFedParity('cpp', code);
+  }
+);
+
+void t.test('cpp: only a name that starts its statement is a label', () => {
+  const code =
+    'int y = ok ? a : b;\nfor (auto& x : xs) {}\nswitch (v) { case kRed: break; }\nstruct B { unsigned flags : 4; };\nvoid f() {\nretry:\n  goto retry; }\n';
+  assert.deepEqual(
+    tokenKinds('cpp', code).filter(([, kind]) => kind === 'label'),
+    [['retry', 'label']]
+  );
+  for (const name of ['a', 'x', 'kRed', 'flags']) {
+    assert.ok(
+      tokenKinds('cpp', code).some(
+        ([text, kind]) => text === name && kind === 'variable'
+      ),
+      name
+    );
+  }
+});
+
+void t.test('cpp: a spliced `//` in a directive hides a later `/*`', () => {
+  const code = '#define A 1 // note \\\n  more /* not open\nint x;\n';
+  assertLineFedParity('cpp', code);
+  assert.deepEqual(tokenKinds('cpp', code), [
+    ['#define A 1 // note \\', 'preproc'],
+    ['more /* not open', 'preproc'],
+    ['int', 'type.builtin'],
+    ['x', 'variable'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

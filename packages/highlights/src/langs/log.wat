@@ -205,6 +205,8 @@
                     (i32.eqz (i32.or (byteset.get "+-./:" (local.get $p)) (i32.eq (local.get $p) (i32.const ",")))))
                   (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
                   (br_if $numberDone
+                    (i32.and (i32.eq (local.get $p) (i32.const ",")) (i32.eqz (call $lexIsDigit (local.get $c)))))
+                  (br_if $numberDone
                     (i32.eqz
                       (i32.or
                         (call $lexIsHex (local.get $c))

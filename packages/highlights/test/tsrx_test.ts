@@ -376,3 +376,9 @@ void t.test('tsrx: malformed input stays lossless and balanced', () => {
     checkInvariants(tsrx.hl, input + '\n');
   }
 });
+
+void t.test('tsrx: a declaration word never reads the next line', () => {
+  for (const code of ['fragment\nt\n', 'module\nm\n']) {
+    assertLineFedParity('tsrx', code);
+  }
+});

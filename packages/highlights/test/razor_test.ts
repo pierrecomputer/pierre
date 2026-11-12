@@ -169,3 +169,63 @@ test('razor: directives, code blocks, sections, and Blazor attributes', () => {
     expect(kinds).toContainEqual([text, kind]);
   }
 });
+
+test('razor: interpolated strings in code blocks hide their braces', () => {
+  const code = '@{\n  var x = $"a {{ {(b ? "}" : "c")} }}";\n}\n<p>x</p>\n';
+  assertLineFedParity('razor', code);
+  expect(tokenKinds('razor', code).slice(10, 21)).toEqual([
+    ['"}"', 'string'],
+    [':', 'punctuation.delimiter'],
+    ['"c"', 'string'],
+    [')', 'punctuation.bracket'],
+    ['}', 'punctuation.special'],
+    ['}}"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['}', 'punctuation.bracket'],
+    ['<', 'punctuation.bracket.html'],
+    ['p', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+  ]);
+});
+
+test('razor: an explicit expression runs on to its balancing paren', () => {
+  const code = '@(Model\n  .Items.Where(x =>\r\n x.Ok)\n  .Name)\n<p>x</p>\n';
+  assertLineFedParity('razor', code);
+  expect(tokenKinds('razor', code).slice(12, 21)).toEqual([
+    ['Ok', 'type'],
+    [')', 'punctuation.bracket'],
+    ['.', 'punctuation.delimiter'],
+    ['Name', 'type'],
+    [')', 'punctuation.bracket'],
+    ['<', 'punctuation.bracket.html'],
+    ['p', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ['x', null],
+  ]);
+});
+
+test('razor: expressions inside script bodies are C#', () => {
+  const code =
+    '<script>\n    const count = @Model.Count;\n    let s = `@(a +\n      b)`;\n</script>\n';
+  assertLineFedParity('razor', code);
+  expect(tokenKinds('razor', code).slice(3, 11)).toEqual([
+    ['const', 'keyword.declaration'],
+    ['count', 'variable'],
+    ['=', 'operator'],
+    ['@', 'keyword.control'],
+    ['Model', 'type'],
+    ['.', 'punctuation.delimiter'],
+    ['Count', 'type'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+test('razor: `@@` in a style body leaves `@` to the CSS', () => {
+  const code = '<style>\n  @@media (min-width: 1px) {\n  }\n</style>\n';
+  assertLineFedParity('razor', code);
+  expect(tokenKinds('razor', code).slice(3, 6)).toEqual([
+    ['@', 'string.escape'],
+    ['@media', 'keyword'],
+    ['(', 'punctuation.bracket'],
+  ]);
+});

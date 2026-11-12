@@ -71,7 +71,8 @@
   ;; $expect is the pending capture from $c3WordHl: 1 while a function head
   ;; is open - its return type and receiver are types, the name before `(`
   ;; the definition - 2 for a type name and 3 for a dotted module path.
-  ;; $member is 1 after `.` and 2 after `::`. All are checkpointed.
+  ;; $member is 1 after `.` and 2 after `::`. $strCont is the quote of a
+  ;; literal left open at an escaped line break. All are checkpointed.
   (func $hlC3
     (local $c i32)
     (local $c2 i32)
@@ -84,7 +85,9 @@
     (local $hl i32)
     (local $expect i32)
     (local $member i32)
+    (local $strCont i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -125,14 +128,9 @@
               (enum.get $Token.comment.doc))
             (br $next)))
 
-        (if (i32.eq (local.get $c) (i32.const 34))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
-            (local.set $member (i32.const 0))
-            (br $next)))
-        (if (i32.eq (local.get $c) (i32.const 39))
-          (then
-            (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
+            (local.set $strCont (call $lexCString (enum.get $Token.string)))
             (local.set $member (i32.const 0))
             (br $next)))
         ;; raw strings span lines and have no escapes

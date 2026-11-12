@@ -1,14 +1,14 @@
 (module
   (import "../emitter.wat")
   (import "@pierre/wat-tools/lexer-state.wat")
-  (memory-region $mem.vhdlWords 416)
+  (memory-region $mem.vhdlWords 464)
 
   (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. High byte: capture the next name as 1 a type or unit, 2 a
-  ;; subprogram, 3 library names up to `;`. Plain `keyword` words keep a pending
-  ;; capture; others drop it.
-  (keyword-table $vhdlWords $mem.vhdlWords $mem.vhdlWords+416
+  ;; subprogram, 3 library names up to `;`, 4 none (`attribute keep of cnt`), 8 none.
+  ;; Plain `keyword` words keep a pending capture; others drop it.
+  (keyword-table $vhdlWords $mem.vhdlWords $mem.vhdlWords+464
     (group $Token.keyword.control
       "if" "then" "elsif" "else" "case" "when" "others" "for" "while" "loop" "exit" "next"
       "return" "wait" "until" "after" "assert" "report" "severity" "generate" "select")
@@ -16,12 +16,16 @@
       "entity" "architecture" "component" "package" "configuration" "type" "subtype")
     (group $Token.keyword.declaration+512 "function" "procedure")
     (group $Token.keyword.declaration
-      "signal" "variable" "constant" "port" "generic" "map" "process" "block" "attribute" "alias"
-      "file" "shared" "impure" "pure" "record" "array" "range" "access" "units")
+      "signal" "variable" "constant" "port" "generic" "map" "process" "block" "alias"
+      "file" "shared" "impure" "pure" "record" "array" "range" "access" "units" "protected"
+      "group" "label" "disconnect")
+    (group $Token.keyword.declaration+1024 "attribute")
     (group $Token.keyword
-      "is" "begin" "end" "in" "out" "inout" "buffer" "body" "to" "downto" "with" "all" "open"
-      "new" "transport" "inertial" "postponed")
+      "begin" "end" "in" "out" "inout" "buffer" "body" "to" "downto" "with" "all" "open"
+      "new" "transport" "inertial" "postponed" "on" "unaffected" "force" "release" "linkage"
+      "register" "bus" "guarded")
     (group $Token.keyword+256 "of")
+    (group $Token.keyword+2048 "is")
     (group $Token.keyword.import+768 "library" "use" "context")
     (group $Token.keyword.operator
       "and" "or" "xor" "not" "nand" "nor" "xnor" "mod" "rem" "sll" "srl" "sla" "sra" "rol" "ror"
@@ -140,12 +144,17 @@
                 (if (i32.ne (local.get $hl) (enum.get $Token.keyword))
                   (then (local.set $expect (i32.const 0))))
                 (if (i32.shr_u (local.get $v) (i32.const 8))
-                  (then (local.set $expect (i32.shr_u (local.get $v) (i32.const 8))))))
+                  (then
+                    (local.set $expect
+                      (select
+                        (i32.const 0)
+                        (i32.shr_u (local.get $v) (i32.const 8))
+                        (i32.eq (local.get $expect) (i32.const 4)))))))
               (else
                 (local.set $hl (enum.get $Token.variable))
                 (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
                   (then (local.set $hl (enum.get $Token.constant))))
-                (if (local.get $expect)
+                (if (i32.and (local.get $expect) (i32.const 3))
                   (then
                     (local.set $hl
                       (select
@@ -178,6 +187,20 @@
             (local.set $expect (i32.const 0))
             (br $next)))
         (local.set $hl (enum.get $Token.none))
+        (if (i32.eq (local.get $c) (i32.const 92))
+          (then
+            (local.set $p (global.get $ptr))
+            (block $extDone
+              (loop $ext
+                (local.set $p (call $scanFindSpecial (local.get $p) (global.get $end) (i32.const 92) (i32.const 0) (i32.const 1)))
+                (br_if $extDone (i32.ne (call $templateByte (local.get $p)) (i32.const 92)))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (if (i32.eq (call $templateByte (local.get $p)) (i32.const 92))
+                  (then
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (br $ext)))
+                (global.set $ptr (local.get $p))
+                (local.set $hl (enum.get $Token.variable))))))
         (if (byteset.get "\"'(),.:;[]{}" (local.get $c))
           (then (local.set $hl (enum.get $Token.punctuation.delimiter))))
         (if (byteset.get "()[]{}" (local.get $c))

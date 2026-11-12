@@ -277,3 +277,23 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'less: `;` separates mixin parameters without ending the head',
+  () => {
+    const src = '.m(@w; @s) when (@w > 1px) { a: b }\n';
+    assert.deepEqual(tokenKinds('less', src).slice(0, 10), [
+      ['.m', 'selector.class'],
+      ['(', 'punctuation.bracket'],
+      ['@w', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['@s', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['when', 'keyword.operator'],
+      ['(', 'punctuation.bracket'],
+      ['@w', 'variable'],
+      ['>', 'operator'],
+    ]);
+    assertLineFedParity('less', src);
+  }
+);

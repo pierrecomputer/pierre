@@ -201,3 +201,11 @@ void t.test('glimmer-ts: TypeScript syntax around templates', () => {
     )
   );
 });
+
+void t.test('glimmer: a metadata key never reads the next line', () => {
+  for (const lang of ['glimmer-js', 'glimmer-ts'] as const) {
+    for (const code of ['template\n{\n', 'template\n"x"\n']) {
+      assertLineFedParity(lang, code);
+    }
+  }
+});

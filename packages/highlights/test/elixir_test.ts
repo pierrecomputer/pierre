@@ -518,3 +518,50 @@ void t.test('elixir: character codes and quoted atoms', () => {
     ['c"', 'string.special.symbol'],
   ]);
 });
+
+void t.test('elixir: quoted strings span lines and resume per line', () => {
+  // a plain quote opened a one-line body, so the closing quote of a
+  // multi-line string opened a new one; `\` before a line break continues
+  const code = 'raise "first #{a <> "x\ny"}\nsecond"\nx = \'a \\\nb\'\ny = 1\n';
+  assertLineFedParity('elixir', code);
+  assert.deepEqual(tokenKinds('elixir', code), [
+    ['raise', 'keyword.control'],
+    ['"first', 'string'],
+    ['#{', 'punctuation.special'],
+    ['a', 'variable'],
+    ['<>', 'operator'],
+    ['"x', 'string'],
+    ['y"', 'string'],
+    ['}', 'punctuation.special'],
+    ['second"', 'string'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ["'a", 'string'],
+    ['\\', 'string.escape'],
+    ["b'", 'string'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+});
+
+void t.test('elixir: `@doc false` and sigil docs clear the doc flag', () => {
+  const code = '@doc false\ndef a, do: "s"\n@doc ~S"""\nd\n"""\nb = "t"\n';
+  assertLineFedParity('elixir', code);
+  assert.deepEqual(tokenKinds('elixir', code), [
+    ['@doc', 'attribute'],
+    ['false', 'boolean'],
+    ['def', 'keyword.declaration'],
+    ['a', 'function.definition'],
+    [',', 'punctuation.delimiter'],
+    ['do:', 'string.special.symbol'],
+    ['"s"', 'string'],
+    ['@doc', 'attribute'],
+    ['~S"""', 'comment.doc'],
+    ['d', 'comment.doc'],
+    ['"""', 'comment.doc'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['"t"', 'string'],
+  ]);
+});

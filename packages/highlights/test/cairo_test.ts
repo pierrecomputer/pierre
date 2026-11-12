@@ -134,7 +134,7 @@ test('cairo: attributes, modules, and comments', () => {
     ['[', 'punctuation.bracket'],
     ['starknet', 'attribute'],
     ['::', 'punctuation.delimiter'],
-    ['contract', 'property'],
+    ['contract', 'attribute'],
     [']', 'punctuation.bracket'],
     ['mod', 'keyword.declaration'],
     ['counter', 'type'],

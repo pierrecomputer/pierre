@@ -75,7 +75,8 @@
           (else (br_if $done (i32.eqz (i32.and (local.get $wide) (byteset.get "*o{|}" (local.get $c)))))))
         (local.set $last (local.get $c))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (br $run)))
+        ;; stop at three heads without a shaft, so a long `<<<` run stays linear
+        (br_if $run (i32.or (local.get $shaft) (i32.lt_u (i32.sub (local.get $q) (local.get $p)) (i32.const 3))))))
     ;; `--x` and `--o` heads, unless a lowercase word follows (`---other`);
     ;; sequence `--)` async heads; `->>+` activations
     (if
@@ -264,9 +265,12 @@
                         (i32.eq (i32.sub (local.get $p) (local.get $lhs)) (i32.const 2)))
                       (i32.and
                         (i32.eq (call $templateByte (local.get $p)) (i32.const 32))
-                        (i32.or
-                          (i32.eq (local.get $c2) (local.get $c))
-                          (i32.eq (local.get $c2) (i32.const ".")))))
+                        ;; `..` never closes: the closer search finds only `-` and `=`
+                        (i32.and
+                          (i32.ne (local.get $c) (i32.const "."))
+                          (i32.or
+                            (i32.eq (local.get $c2) (local.get $c))
+                            (i32.eq (local.get $c2) (i32.const "."))))))
                     (then
                       ;; a `.->` closer is found at its `-`
                       (local.set $q (local.get $p))
@@ -289,21 +293,34 @@
                           (br $label)))))
                   (br $next)))))
 
-          ;; `-->|label|`: a bar after a link opens its label
           (if (i32.eq (local.get $c) (i32.const "|"))
             (then
               (local.set $v (call $lexLineByteBefore (local.get $lhs)))
-              (local.set $p (call $scanFind3 (global.get $ptr) (i32.const "|") (i32.const 10) (i32.const 13)))
-              (if
-                (i32.and
-                  (byteset.get "-.<=>~" (local.get $v))
-                  (i32.eq (call $templateByte (local.get $p)) (i32.const "|")))
+              (if (byteset.get "-.<=>~" (local.get $v))
                 (then
-                  (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-                  (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $p))
-                  (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-                  (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (global.get $ptr))
-                  (br $next)))))
+                  (local.set $p (global.get $ptr))
+                  (if (i32.eq (call $templateByte (local.get $p)) (i32.const 34))
+                    (then
+                      (local.set $q (local.get $p))
+                      (loop $quoted
+                        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                        (local.set $tok (call $templateByte (local.get $q)))
+                        (br_if $quoted
+                          (i32.and
+                            (i32.ne (local.get $tok) (i32.const 34))
+                            (i32.and
+                              (i32.ne (local.get $tok) (i32.const 10))
+                              (i32.and (i32.ne (local.get $tok) (i32.const 13)) (i32.ne (local.get $tok) (i32.const 0)))))))
+                      (if (i32.eq (local.get $tok) (i32.const 34))
+                        (then (local.set $p (local.get $q))))))
+                  (local.set $p (call $scanFind3 (local.get $p) (i32.const "|") (i32.const 10) (i32.const 13)))
+                  (if (i32.eq (call $templateByte (local.get $p)) (i32.const "|"))
+                    (then
+                      (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
+                      (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $p))
+                      (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                      (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (global.get $ptr))
+                      (br $next)))))))
 
           (if (i32.eq (local.get $c) (i32.const ":"))
             (then

@@ -149,13 +149,13 @@
               (i32.eq (i32.load (local.get $name)) (i32.const "cons"))
               (i32.eq (i32.load8_u offset=4 (local.get $name)) (i32.const "t"))))
           (then
-            (local.set $c (call $jsxSpaceEndAt (local.get $p)))
+            (local.set $c (call $lexSkipSpaceAt (local.get $p)))
             (if
               (i32.and
                 (i32.gt_u (local.get $c) (local.get $p))
                 (call $jsxNameStart (call $tsxByte (local.get $c))))
               (then (local.set $p (call $jsxNameEndAt (local.get $c)))))))
-        (local.set $p (call $jsxSpaceEndAt (local.get $p)))
+        (local.set $p (call $lexSkipSpaceAt (local.get $p)))
         (local.set $c (call $tsxByte (local.get $p)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const "=")))
           (then (return (i32.const 0))))
@@ -171,17 +171,21 @@
             (if (i32.eqz (call $jsxNameCont (call $tsxByte (i32.add (local.get $p) (i32.const 7)))))
               (then
                 (local.set $c
-                  (call $tsxByte (call $jsxSpaceEndAt (i32.add (local.get $p) (i32.const 7)))))
+                  (call $tsxByte (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 7)))))
                 (if
                   (i32.eqz
                     (i32.or
                       (i32.eq (local.get $c) (i32.const "="))
                       (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "/")))))
                   (then (return (i32.const 0)))))))))
-      (else (local.set $p (call $jsxSpaceEndAt (local.get $p)))))
-    (if (i32.ge_u (local.get $p) (global.get $end))
+      (else (local.set $p (call $lexSkipSpaceAt (local.get $p)))))
+    ;; a line-fed chunk ends at a line break, so the tag may go on there
+    (local.set $c (call $tsxByte (local.get $p)))
+    (if
+      (i32.or
+        (i32.eqz (local.get $c))
+        (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
       (then (return (i32.const 1))))
-    (local.set $c (i32.load8_u (local.get $p)))
     (i32.or
       (i32.or
         (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "/")))
@@ -397,40 +401,29 @@
       (global.get $ptr)))
 
   ;; the lenient tail of a close tag after its name: whitespace, then `>`;
-  ;; stray bytes stay plain and a `<` stops early. Returns 1 once the tag
-  ;; ended, 0 at the input end; the caller pops the element
+  ;; any other byte ends it early. Returns 1 once the tag ended, 0 at the
+  ;; input end; the caller pops the element
   (func $jsxCloseTagTail (result i32)
     (local $seg i32)
-    (local $c i32)
-    (block $tDone
-      (loop $t
-        (local.set $seg (global.get $ptr))
-        (global.set $ptr (call $jsxSpaceEndAt (global.get $ptr)))
-        (call $jsxGap (local.get $seg) (global.get $ptr))
-        (if (i32.ge_u (global.get $ptr) (global.get $end))
-          (then (return (i32.const 0))))
-        (local.set $seg (global.get $ptr))
-        (local.set $c (i32.load8_u (global.get $ptr)))
-        (if (i32.eq (local.get $c) (i32.const ">"))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $jsxEmit
-              (enum.get $Token.punctuation.bracket.jsx)
-              (local.get $seg)
-              (global.get $ptr))
-            (br $tDone)))
-        ;; a `<` here starts something new: stop the close tag leniently
-        (br_if $tDone (i32.eq (local.get $c) (i32.const "<")))
+    (local.set $seg (global.get $ptr))
+    (global.set $ptr (call $jsxSpaceEndAt (global.get $ptr)))
+    (call $jsxGap (local.get $seg) (global.get $ptr))
+    (if (i32.ge_u (global.get $ptr) (global.get $end))
+      (then (return (i32.const 0))))
+    (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ">"))
+      (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $jsxEmit (enum.get $Token.none) (local.get $seg) (global.get $ptr))
-        (br $t)))
+        (call $jsxEmit
+          (enum.get $Token.punctuation.bracket.jsx)
+          (i32.sub (global.get $ptr) (i32.const 1))
+          (global.get $ptr))))
     (i32.const 1))
 
-  ;; one step in a TSRX dynamic close tag `</{expr}>` after its container
-  ;; closed (mode 7): the tail, then the element pops
+  ;; a tail cut at the input end waits in mode 7 (CLOSE TAIL)
   (func $jsxCloseTailStep
     (if (call $jsxCloseTagTail)
-      (then (call $jsxPop))))
+      (then (call $jsxPop))
+      (else (i32.store (call $jsxTopSlot) (i32.const 7)))))
 
   ;; MDX sets this to 1 while it resumes a JSX tag that an earlier chunk left
   ;; open. When the root tag ends, the markup steps store the end here and
@@ -630,8 +623,7 @@
             (i32.store (call $jsxTopSlot) (i32.const 7))
             (call $jsxOpenContainer)
             (return)))
-        (drop (call $jsxCloseTagTail))
-        (call $jsxPop)
+        (call $jsxCloseTailStep)
         (return)))
     ;; `<name` / `<>` opens a child; TSRX also `<{expr}`
     (if

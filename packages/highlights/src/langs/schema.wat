@@ -359,7 +359,8 @@
                     (global.set $ptr (local.get $lhs))
                     (call $lexLineComment (i32.const 0) (local.get $hl))
                     (br $next)))
-                ;; the Smithy shape id separator: `smithy.api#String`
+                (if (i32.gt_u (local.get $p) (i32.add (local.get $lhs) (i32.const 2)))
+                  (then (global.set $ptr (i32.sub (local.get $p) (i32.const 1)))))
                 (local.set $nctx (i32.const 2))
                 (local.set $hl (enum.get $Token.punctuation.delimiter))
                 (br $emit)))

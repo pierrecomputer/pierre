@@ -506,3 +506,20 @@ void t.test(
     assertLineFedParity('glsl', code);
   }
 );
+
+void t.test('glsl: a float with an empty fraction is one number', () => {
+  assert.deepEqual(tokenKinds('glsl', 'x = 1.f + 2. + 1.e5 + 0.xxxx;'), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1.f', 'number'],
+    ['+', 'operator'],
+    ['2.', 'number'],
+    ['+', 'operator'],
+    ['1.e5', 'number'],
+    ['+', 'operator'],
+    ['0', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['xxxx', 'property'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

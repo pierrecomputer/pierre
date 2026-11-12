@@ -359,6 +359,25 @@
                       (i32.eq (local.get $g) (i32.const 2)))
                     (i32.eq (local.get $g) (i32.const 1)))))
               (else
+                (if
+                  (i32.and
+                    (i32.eq (call $cmakeByte (local.get $rhs)) (i32.const "{"))
+                    (i32.or
+                      (i32.and
+                        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))
+                        (i32.eq
+                          (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
+                          (i32.const "ENV")))
+                      (i32.and
+                        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+                        (i32.and
+                          (i32.eq (i32.load (local.get $lhs)) (i32.const "CACH"))
+                          (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "E"))))))
+                  (then
+                    (global.set $ptr (local.get $lhs))
+                    (call $cmakeReference)
+                    (local.set $setVar (i32.const 0))
+                    (br $next)))
                 (local.set $g (keyword-table.get $cmakeWords (local.get $lhs) (local.get $rhs)))
                 (local.set $hl
                   (select

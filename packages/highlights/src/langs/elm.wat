@@ -141,6 +141,11 @@
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $hl) (enum.get $Token.type.builtin))
+                    (i32.eq (call $elmByte (local.get $rhs)) (i32.const ".")))
+                  (then (local.set $hl (enum.get $Token.namespace))))
                 (if (i32.shr_u (local.get $kind) (i32.const 8))
                   (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8))))))
               (else
@@ -160,7 +165,38 @@
                           (then (local.set $hl (enum.get $Token.property)))
                           (else
                             (if (i32.eqz (local.get $midLine))
-                              (then (local.set $hl (enum.get $Token.function.definition))))))))))))
+                              (then
+                                (local.set $kind (i32.le_u (local.get $lhs) (global.get $srcBase)))
+                                (if (i32.eqz (local.get $kind))
+                                  (then
+                                    (local.set $c2 (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))))
+                                    (local.set $kind
+                                      (i32.or (i32.eq (local.get $c2) (i32.const 10)) (i32.eq (local.get $c2) (i32.const 13))))))
+                                (if (i32.eqz (local.get $kind))
+                                  (then
+                                    (global.set $ptr (local.get $rhs))
+                                    (block $argsDone
+                                      (loop $args
+                                        (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
+                                        (local.set $c2 (call $elmByte (global.get $ptr)))
+                                        (br_if $argsDone
+                                          (i32.eqz
+                                            (i32.and
+                                              (call $lexIsIdentStart (local.get $c2))
+                                              (i32.ne (local.get $c2) (i32.const "$")))))
+                                        (call $scanIdentRun (i32.const "_"))
+                                        (br $args)))
+                                    (local.set $kind
+                                      (i32.or
+                                        (i32.and
+                                          (i32.eq (local.get $c2) (i32.const "="))
+                                          (i32.ne (call $elmByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "=")))
+                                        (i32.and
+                                          (i32.eq (local.get $c2) (i32.const ":"))
+                                          (i32.eq (global.get $ptr) (call $lexSkipSpaceAt (local.get $rhs))))))
+                                    (global.set $ptr (local.get $rhs))))
+                                (if (local.get $kind)
+                                  (then (local.set $hl (enum.get $Token.function.definition))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (local.set $midLine (i32.const 1))

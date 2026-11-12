@@ -175,8 +175,36 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (global.set $ptr (local.get $lhs))
-            (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
+            (local.set $gap (local.get $lhs))
+            (block $strDone
+              (loop $str
+                (local.set $p
+                  (call $scanFindSpecial (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 1)))
+                (global.set $ptr (local.get $p))
+                (br_if $strDone (i32.ge_u (local.get $p) (global.get $end)))
+                (local.set $c (i32.load8_u (local.get $p)))
+                (if (i32.eq (local.get $c) (i32.const 34))
+                  (then
+                    (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                    (br $strDone)))
+                (br_if $strDone (i32.ne (local.get $c) (i32.const 92)))
+                (call $emitTok (enum.get $Token.string) (local.get $gap) (local.get $p))
+                (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+                (local.set $gap
+                  (if (result i32) (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "u"))
+                    (then
+                      (call $scanHexRun
+                        (i32.add (local.get $p) (i32.const 2))
+                        (select (i32.const 6) (i32.const 4) (i32.eq (local.get $c) (i32.const "U")))))
+                    (else
+                      (select
+                        (i32.add (local.get $p) (i32.const 1))
+                        (call $lexEscapeEnd (local.get $p))
+                        (i32.or (i32.eqz (local.get $c)) (byteset.get "\n\r" (local.get $c)))))))
+                (call $emitTok (enum.get $Token.string.escape) (local.get $p) (local.get $gap))
+                (global.set $ptr (local.get $gap))
+                (br $str)))
+            (call $emitTok (enum.get $Token.string) (local.get $gap) (global.get $ptr))
             (br $next)))
         (local.set $p (call $templateByte (global.get $ptr)))
         (if

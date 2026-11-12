@@ -152,6 +152,8 @@
               (i32.and (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c2) (i32.const "-"))))
             (then
               (call $imbaName)
+              (if (i32.eq (global.get $ptr) (local.get $lhs))
+                (then (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))))
               (local.set $hl (enum.get $Token.variable))
               (br $emit)))
           (if (call $lexIsIdentStart (local.get $c))

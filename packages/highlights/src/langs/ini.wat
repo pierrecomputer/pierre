@@ -128,7 +128,38 @@
         (br $plain)))
     (i32.and (local.get $slashes) (i32.const 1)))
 
-  ;; $line: 0 at a line start, 1 in a value, 2 after a section header.
+  ;; Lex a section header after its `[` up to `]` or the line end. Returns
+  ;; 3 when a `\` line break left a string open at the chunk end, else 2.
+  (func $iniHeader (result i32)
+    (local $lhs i32)
+    (local $c i32)
+    (block $headerDone
+      (loop $header
+        (br_if $headerDone (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $lhs (global.get $ptr))
+        (local.set $c (i32.load8_u (local.get $lhs)))
+        (br_if $headerDone (byteset.get "\n\r" (local.get $c)))
+        (if (i32.eq (local.get $c) (i32.const "]"))
+          (then
+            (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
+            (br $headerDone)))
+        (if (i32.eq (local.get $c) (i32.const 34))
+          (then
+            (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
+            (if (i32.eq (global.get $streamMode) (i32.const 2))
+              (then (return (i32.const 3))))
+            (br $header)))
+        (global.set $ptr (call $iniFind (i32.add (local.get $lhs) (i32.const 1)) (i32.const 3)))
+        (call $emitTok (enum.get $Token.type) (local.get $lhs) (global.get $ptr))
+        (br $header)))
+    (i32.const 2))
+
+  ;; a copy for the chunk-start resume keeps the header path inlined
+  (func-variant $iniHeaderResume $iniHeader)
+
+  ;; $line: 0 at a line start, 1 in a value, 2 after a section header, 3 in
+  ;; a section header string that continues in the next chunk.
   (func $hlIni
     (local $c i32)
     (local $lhs i32)
@@ -137,6 +168,8 @@
     (local $line i32)
     (local $cont i32)
     (call $lexEmitLeadingContinuation)
+    (if (i32.eq (local.get $line) (i32.const 3))
+      (then (local.set $line (call $iniHeaderResume))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -184,25 +217,7 @@
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (block $headerDone
-              (loop $header
-                (br_if $headerDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (local.set $lhs (global.get $ptr))
-                (local.set $c (i32.load8_u (local.get $lhs)))
-                (br_if $headerDone (byteset.get "\n\r" (local.get $c)))
-                (if (i32.eq (local.get $c) (i32.const "]"))
-                  (then
-                    (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
-                    (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-                    (br $headerDone)))
-                (if (i32.eq (local.get $c) (i32.const 34))
-                  (then
-                    (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
-                    (br $header)))
-                (global.set $ptr (call $iniFind (i32.add (local.get $lhs) (i32.const 1)) (i32.const 3)))
-                (call $emitTok (enum.get $Token.type) (local.get $lhs) (global.get $ptr))
-                (br $header)))
-            (local.set $line (i32.const 2))
+            (local.set $line (call $iniHeader))
             (br $next)))
         ;; Without `=` or `:`, a key ends at a blank, as in properties `key value`.
         (local.set $p (call $iniFind (local.get $lhs) (i32.const 1)))

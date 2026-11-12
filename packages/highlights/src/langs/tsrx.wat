@@ -78,8 +78,7 @@
           (then (return (enum.get $Lex.identifier))))
         (if (i64.ne (call $tsrxWord (local.get $lhs) (i32.const 6)) (i64.const "module"))
           (then (return (enum.get $Lex.identifier))))))
-    ;; the next non-blank byte decides
-    (local.set $c (call $tsxByte (call $jsxSpaceEndAt (local.get $rhs))))
+    (local.set $c (call $tsxByte (call $lexSkipSpaceAt (local.get $rhs))))
     (if (i32.eq (local.get $len) (i32.const 8))
       (then
         (if
@@ -276,8 +275,7 @@
     (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
     (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $p) (global.get $ptr))
     (drop (call $jsxEmitName))
-    (drop (call $jsxCloseTagTail))
-    (call $jsxPop))
+    (call $jsxCloseTailStep))
 
   ;; emit a `@{` statement-container opener - the scanner's two-byte
   ;; l_brace: the `@` keeps the directive color, the `{` is an ordinary

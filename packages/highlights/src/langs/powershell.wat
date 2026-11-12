@@ -210,7 +210,9 @@
 
   ;; $strKind is the open string body - see $psStringBody - with $seg the
   ;; start of its bytes not yet emitted; $interp counts parens inside a
-  ;; `$(` subexpression and $interpKind remembers which body to return to.
+  ;; `$(` subexpression and $interpKind remembers which body to return to:
+  ;; low byte its kind, each higher byte an outer one (kind | parens << 3).
+  ;; $enum is 1 after `enum`, 2 inside its braces.
   ;; $cmdPos is 1 where a bare word is a command name: at the start of a
   ;; statement, after a pipe, and after an assignment. $expect is 1 after
   ;; `function`, 2 after `class` or a class name's `:`, and 3 after a class
@@ -235,6 +237,7 @@
     (local $interpKind i32)
     (local $status i32)
     (local $closed i32)
+    (local $enum i32)
     (local.set $cmdPos (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -258,7 +261,17 @@
             (if (i32.eq (local.get $status) (i32.const 2))
               (then
                 ;; `$(` opened a subexpression: code until the matching `)`
-                (local.set $interpKind (local.get $strKind))
+                (local.set $interpKind
+                  (select
+                    (i32.or
+                      (i32.shl
+                        (i32.or
+                          (i32.and (local.get $interpKind) (i32.const -249))
+                          (i32.and (i32.shl (local.get $interp) (i32.const 3)) (i32.const 248)))
+                        (i32.const 8))
+                      (local.get $strKind))
+                    (local.get $strKind)
+                    (local.get $interp)))
                 (local.set $interp (i32.const 1))
                 (local.set $strKind (i32.const 0))
                 (local.set $seg (i32.const 0))
@@ -290,8 +303,18 @@
 
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
-            (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
-            (br $next)))
+            (if
+              (if (result i32) (i32.gt_u (global.get $ptr) (local.get $gap))
+                (then (i32.const 1))
+                (else
+                  (i32.or
+                    (i32.le_u (global.get $ptr) (global.get $srcBase))
+                    (i32.eqz
+                      (call $lexIsIdentContinue
+                        (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))))))))
+              (then
+                (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
+                (br $next)))))
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c2) (i32.const "#")))
           (then
@@ -540,7 +563,9 @@
                         (if (i32.eq (local.get $g) (i32.const 3))
                           (then
                             (local.set $hl (enum.get $Token.keyword.declaration))
-                            (local.set $expect (i32.const 2))))
+                            (local.set $expect (i32.const 2))
+                            (local.set $enum
+                              (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4)))))
                         (if (i32.eq (local.get $g) (i32.const 4))
                           (then (local.set $hl (enum.get $Token.keyword.declaration))))
                         (if (i32.eq (local.get $g) (i32.const 5))
@@ -557,7 +582,12 @@
                             (i32.or
                               (local.get $cmdPos)
                               (i32.eq (call $templateByte (local.get $rhs)) (i32.const "("))))
-                          (then (local.set $hl (enum.get $Token.function))))))))))
+                          (then
+                            (local.set $hl
+                              (select
+                                (enum.get $Token.property)
+                                (enum.get $Token.function)
+                                (i32.eq (local.get $enum) (i32.const 2))))))))))))
             (br $valueTok)))
 
         (if
@@ -582,13 +612,22 @@
                     (if (i32.eqz (local.get $interp))
                       (then
                         ;; the paren matching `$(` returns to the string body
-                        (local.set $strKind (local.get $interpKind))
-                        (local.set $interpKind (i32.const 0))
+                        (local.set $strKind (i32.and (local.get $interpKind) (i32.const 7)))
+                        (local.set $interpKind (i32.shr_u (local.get $interpKind) (i32.const 8)))
+                        (local.set $interp
+                          (i32.and (i32.shr_u (local.get $interpKind) (i32.const 3)) (i32.const 31)))
+                        (local.set $interpKind (i32.and (local.get $interpKind) (i32.const -249)))
                         (local.set $seg (global.get $ptr))
                         (local.set $member (i32.const 0))
                         (local.set $expect (i32.const 0))
                         (local.set $hl (enum.get $Token.punctuation.special))
                         (br $tok)))))))
+            (if (local.get $enum)
+              (then
+                (if (i32.eq (local.get $c) (i32.const "{"))
+                  (then (local.set $enum (i32.const 2))))
+                (if (i32.eq (local.get $c) (i32.const "}"))
+                  (then (local.set $enum (i32.const 0))))))
             (local.set $member (i32.const 0))
             (local.set $expect (i32.const 0))
             (local.set $cmdPos

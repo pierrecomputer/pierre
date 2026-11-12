@@ -213,3 +213,32 @@ test('jinja: multi-line tags, comments, and start tags stream like the whole', (
     assertLineFedParity('jinja', code);
   }
 });
+
+test('jinja: an operator keyword before a paren is no call', () => {
+  expect(
+    tokenKinds('jinja', '{% if (a or b) and (c) %}{{ x in (1, 2) }}{% endif %}')
+  ).toEqual([
+    ['{%', 'punctuation.special'],
+    ['if', 'keyword.control'],
+    ['(', 'punctuation.bracket'],
+    ['a', 'variable'],
+    ['or', 'keyword.operator'],
+    ['b', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['and', 'keyword.operator'],
+    ['(', 'punctuation.bracket'],
+    ['c', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['%}{{', 'punctuation.special'],
+    ['x', 'variable'],
+    ['in', 'keyword.operator'],
+    ['(', 'punctuation.bracket'],
+    ['1', 'number'],
+    [',', 'punctuation.delimiter'],
+    ['2', 'number'],
+    [')', 'punctuation.bracket'],
+    ['}}{%', 'punctuation.special'],
+    ['endif', 'keyword.control'],
+    ['%}', 'punctuation.special'],
+  ]);
+});

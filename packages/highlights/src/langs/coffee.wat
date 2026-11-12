@@ -388,13 +388,18 @@
               (then (local.set $v (keyword-table.value $coffeeWords (local.get $lhs) (global.get $ptr)))))
             (if (i32.ne (local.get $v) (i32.const -1))
               (then
-                (local.set $hl (i32.and (local.get $v) (i32.const 127)))
-                (local.set $prev (i32.and (i32.shr_u (local.get $v) (i32.const 7)) (i32.const 3)))
-                (local.set $p (i32.shr_u (local.get $v) (i32.const 9)))
-                (local.set $member (i32.const 0))
-                (local.set $param (i32.const 0))
-                (local.set $decl (local.get $p))
-                (br $tok)))
+                (if
+                  (i32.or
+                    (i32.ne (call $templateByte (global.get $ptr)) (i32.const ":"))
+                    (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ":")))
+                  (then
+                    (local.set $hl (i32.and (local.get $v) (i32.const 127)))
+                    (local.set $prev (i32.and (i32.shr_u (local.get $v) (i32.const 7)) (i32.const 3)))
+                    (local.set $p (i32.shr_u (local.get $v) (i32.const 9)))
+                    (local.set $member (i32.const 0))
+                    (local.set $param (i32.const 0))
+                    (local.set $decl (local.get $p))
+                    (br $tok)))))
             (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
             (local.set $c2 (call $templateByte (local.get $p)))
             (local.set $hl

@@ -374,3 +374,68 @@ void t.test('fsharp: multi-line constructs stream line-fed', () => {
     assertLineFedParity('fsharp', code);
   }
 });
+
+void t.test('fsharp: strings inside comments do not end them', () => {
+  assert.deepEqual(tokenKinds('fsharp', '(* see "*)" *)\nlet x = 1\n'), [
+    ['(* see "*)" *)', 'comment'],
+    ['let', 'keyword.declaration'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity(
+    'fsharp',
+    '(* a "open\n*) still" (* n\n*) *)\nlet x = 1\n'
+  );
+});
+
+void t.test('fsharp: verbatim and triple-quoted strings in comments', () => {
+  const src =
+    '(* @"C:\\" *) let a = 1\n(* """x\\""" *) let b = 2\n(* @"a""b\\" and\n @"c\\" *) let c = 3\n(* """x\n" y\\""" *) let d = 4\n';
+  assert.deepEqual(
+    tokenKinds('fsharp', src).filter(([, kind]) => kind === 'comment'),
+    [
+      ['(* @"C:\\" *)', 'comment'],
+      ['(* """x\\""" *)', 'comment'],
+      ['(* @"a""b\\" and', 'comment'],
+      ['@"c\\" *)', 'comment'],
+      ['(* """x', 'comment'],
+      ['" y\\""" *)', 'comment'],
+    ]
+  );
+  assertLineFedParity('fsharp', src);
+});
+
+void t.test('fsharp: triple-quoted strings have no escapes', () => {
+  assert.deepEqual(
+    tokenKinds('fsharp', 'let p = """C:\\temp\\"""\nlet x = 1'),
+    [
+      ['let', 'keyword.declaration'],
+      ['p', 'variable'],
+      ['=', 'operator'],
+      ['"""C:\\temp\\"""', 'string'],
+      ['let', 'keyword.declaration'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+    ]
+  );
+});
+
+void t.test('fsharp: numeric escapes are one escape token', () => {
+  assert.deepEqual(
+    tokenKinds('fsharp', '\'\\u0041\' "\\065\\x41\\U0001F600"'),
+    [
+      ["'", 'string'],
+      ['\\u0041', 'string.escape'],
+      ['\' "', 'string'],
+      ['\\065\\x41\\U0001F600', 'string.escape'],
+      ['"', 'string'],
+    ]
+  );
+});
+
+void t.test('fsharp: a tick before a line break is not a char literal', () => {
+  assertLineFedParity('fsharp', "let c = '\n'\n");
+  assertLineFedParity('fsharp', "let c = '\\\n'\\\n");
+});
