@@ -79,10 +79,6 @@
   ;; region: closing a region clears every lexer's saved locals.
   (func $qmlJs (param $to i32) (param $reset i32) (result i32)
     (local $save i32)
-    (local $from i32)
-    (local $saved i64)
-    (local.set $from (global.get $ptr))
-    (local.set $saved (call $embedScanSave))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ecmaFeatures (i32.const 0))
@@ -92,9 +88,6 @@
     (if (local.get $reset)
       (then (global.set $tsxStreamExpressionDepth (i32.const 0))))
     (call $hlEcmaImpl (local.get $reset))
-    (call $embedScanRestore
-      (local.get $saved) (enum.get $Language.js) (local.get $from) (global.get $ptr)
-      (local.get $reset) (i32.const -7))
     (global.set $end (local.get $save))
     (select
       (i32.const 0)

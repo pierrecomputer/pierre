@@ -49,7 +49,8 @@ Each module under `@pierre/highlights/langs/*` contains a standalone Wasm lexer
 as base64. The TypeScript module supports TypeScript, JavaScript, TSX, and JSX.
 Embedded code uses the registered languages too. With `langs: [ts, html]`, HTML
 script bodies use JavaScript, while style bodies remain plain text until you
-register CSS.
+register CSS. Vue, Svelte, Astro, MDX, and QML contain the lexer for their
+expressions.
 
 Use `buildHighlightsLexer` from `@pierre/wat-tools` at build time to add a
 custom WAT lexer. Save the returned `Language` descriptor in a JavaScript module
@@ -57,7 +58,8 @@ and include it in `langs`. Markdown fences also accept its registered names and
 aliases. With the main entry, `registerLanguages([language])` adds it to the
 shared `codeToHtml()` and `codeToTokens()` functions, where its names override
 built-in names. Built-in lexers do not embed registered languages, and the
-tokenizer classes use built-in lexers only.
+tokenizer classes use built-in lexers only. `isRegisteredLanguage(name)` checks
+for a registered lexer.
 
 For all languages and themes, use the combined lexer bundle:
 
@@ -345,9 +347,10 @@ Unsupported or unloaded names cause a `RangeError`. Highlights does not detect
 the language from the code or filename.
 
 Use `isSupportedLanguage(value)` to validate a string and narrow its type to
-`Lang`. It checks the built-in catalog. Use `highlighter.getLoadedLanguages()`
-for the names that one configured highlighter accepts. Use `plain` for text
-without syntax colors. Its aliases are `text`, `plaintext`, and `txt`.
+`Lang`. It checks the built-in catalog, not the names from
+`registerLanguages()`. Use `highlighter.getLoadedLanguages()` for the names that
+one configured highlighter accepts. Use `plain` for text without syntax colors.
+Its aliases are `text`, `plaintext`, and `txt`.
 
 #### ANSI output
 

@@ -34,10 +34,4 @@
 
   (func (export "lexStream") (param $reset i32)
     (call $lexerRun (i32.const 1) (local.get $reset)))
-
-  (func (export "record") (param $type i32) (param $end i32)
-    (call $recTok (local.get $type) (local.get $end)))
-
-  (func (export "gap") (param $end i32)
-    (call $emitGap (global.get $srcBase) (local.get $end)))
 )

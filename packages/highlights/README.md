@@ -19,8 +19,19 @@ The package has two entries:
 | `@pierre/highlights`      | All lexers in one Wasm module, initialized at import, and all themes                     |
 | `@pierre/highlights/core` | No lexers or themes. `createHighlighter()` compiles the language modules that you select |
 
-Both entries export the same functions and types. In `/core`, call `init()`
-before the shared functions and tokenizers.
+Both entries export the same functions and types. In `/core`, call `init()` with
+the combined module before the shared functions and tokenizers. The package
+exports that module as `@pierre/highlights/highlights.wasm`:
+
+```ts
+import { init } from '@pierre/highlights/core';
+
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/highlights/highlights.wasm', import.meta.url))
+  )
+);
+```
 
 The package runs in Node.js, browsers, and Cloudflare Workers. Workers cannot
 compile WebAssembly from bytes, so the `workerd` export condition selects
@@ -65,6 +76,8 @@ only the languages and themes that your application needs.
 Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
 script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text
 until you add CSS. Code fences also accept registered custom language names.
+Vue, Svelte, Astro, MDX, and QML contain the lexer for their expressions, and
+TypeScript contains the markup lexer for `html` tagged templates.
 
 `highlighter.getLoadedLanguages()` returns the names and aliases that `lang`
 accepts. A `ThemeFamily` in `themes` registers each of its members.
@@ -111,10 +124,12 @@ When two lexers in `langs` declare the same name, the later one wins.
 With the main entry, `registerLanguages([language])` adds the lexer to the
 shared `codeToHtml()` and `codeToTokens()` functions. Its names override
 built-in names there. Registration compiles base64 lexers synchronously and uses
-the emitter in the combined module, so no other Wasm loads. Built-in lexers do
-not embed registered languages, and `StreamTokenizer` and `LiveTokenizer` use
-only built-in lexers. The [lexer guide](../wat-tools/README.md) describes the
-shared scanners, token types, and memory declarations.
+the emitter in the combined module, so no other Wasm loads. The combined module
+also lexes the built-in languages that a registered lexer embeds. Built-in
+lexers do not embed registered languages, and `StreamTokenizer` and
+`LiveTokenizer` use only built-in lexers. `isRegisteredLanguage(name)` tells you
+if a name has a registered lexer. The [lexer guide](../wat-tools/README.md)
+describes the shared scanners, token types, and memory declarations.
 
 ## Output and shared runtime
 

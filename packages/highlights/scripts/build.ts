@@ -8,6 +8,8 @@ import {
   wat2wasm,
 } from '@pierre/wat-tools';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
+import { isMainThread, Worker, workerData } from 'node:worker_threads';
 import { gzipSync } from 'node:zlib';
 
 export {
@@ -109,6 +111,13 @@ export function transformLexer(
       .trimEnd()
       .slice(0, -1)
   );
+  // WARNING: A pattern that no longer matches the WAT source would leave dead
+  // lexers in every standalone module, with no other sign.
+  const remove = (text: string, pattern: RegExp): string => {
+    const pruned = text.replace(pattern, '');
+    if (pruned === text) throw new Error(`${pattern} matches nothing`);
+    return pruned;
+  };
   const imports = new Map([
     [
       '$embedLanguage',
@@ -139,108 +148,76 @@ export function transformLexer(
             selected.has(language) ? entry : `(language "${language}" $hlPlain`
         );
       if (form.head !== 'func') return text;
-      if (
-        selected !== undefined &&
-        ['$streamChunk', '$ecmaStreamLang', '$streamResumeLang'].includes(
-          name ?? ''
-        )
-      ) {
-        text = text.replace(
-          /\(i32\.eq \(local\.get \$lang\) \(enum\.get \$Language\.([\w-]+)\)\)/g,
-          (comparison, language: string) =>
-            selected.has(language) ? comparison : '(i32.const 0)'
-        );
-      }
-      if (selected !== undefined && name === '$streamResetGlobals') {
+      if (selected !== undefined) {
+        const has = (...languages: string[]): boolean =>
+          languages.some((language) => selected.has(language));
         if (
-          ![...selected].some((name) =>
-            ['js', 'jsx', 'ts', 'tsx', 'tsrx'].includes(name)
-          )
-        )
+          name === '$streamChunk' ||
+          name === '$ecmaStreamLang' ||
+          name === '$streamResumeLang'
+        ) {
           text = text.replace(
-            /\(global\.set \$ecmaImport \(i32\.const 0\)\)/,
-            ''
+            /\(i32\.eq\s+\(local\.get\s+\$lang\)\s+\(enum\.get\s+\$Language\.([\w-]+)\)\)/g,
+            (comparison, language: string) =>
+              selected.has(language) ? comparison : '(i32.const 0)'
           );
-        if (!selected.has('markdown') && !selected.has('mdx'))
-          text = text.replace(
-            /\(global\.set \$markdown\w+ \(i32\.const 0\)\)|\(memory\.fill \(i32\.const \$mem\.markdownFenceStack\) \(i32\.const 0\) \(i32\.const 96\)\)/g,
-            ''
-          );
-        if (
-          !selected.has('php') &&
-          !selected.has('hack') &&
-          !selected.has('blade')
-        )
-          text = text.replace(/\(global\.set \$php\w+ \(i32\.const 0\)\)/g, '');
-      }
-      if (selected !== undefined && name === '$streamResumeLang') {
-        for (const [call, needed] of [
-          ['$httpStreamResume', selected.has('http')],
-          ['$shaderlabStreamResume', selected.has('shaderlab')],
-          ['$streamResumeAnyRegion', regions],
-        ] as const) {
-          if (needed) continue;
+          const left = text
+            .match(/\$Language\.[\w-]+/g)
+            ?.find((reference) => !selected.has(reference.slice(10)));
+          if (left !== undefined)
+            throw new Error(`${name}: cannot prune ${left}`);
+        }
+        if (name === '$streamResetGlobals') {
+          if (!has('js', 'jsx', 'ts', 'tsx', 'tsrx'))
+            text = remove(
+              text,
+              /\(global\.set \$ecmaImport \(i32\.const 0\)\)/
+            );
+          if (!has('markdown', 'mdx'))
+            text = remove(
+              text,
+              /\(global\.set \$markdown\w+ \(i32\.const 0\)\)|\(memory\.fill \(i32\.const \$mem\.markdownFenceStack\) \(i32\.const 0\) \(i32\.const 96\)\)/g
+            );
+          if (!has('php', 'hack', 'blade'))
+            text = remove(text, /\(global\.set \$php\w+ \(i32\.const 0\)\)/g);
+        }
+        const drop: string[] = [];
+        if (name === '$streamResumeLang') {
+          if (!has('http')) drop.push('(call $httpStreamResume');
+          if (!has('shaderlab')) drop.push('(call $shaderlabStreamResume');
+          if (!regions) drop.push('(call $streamResumeAnyRegion');
+        }
+        if (name === '$streamResumeAnyRegion') {
+          if (!has('xml')) drop.push('(call $xmlStreamResumeTag');
+          if (!has('vue')) drop.push('(call $vueStreamResumeTag');
+          if (!has('svelte', 'astro')) drop.push('(call $braceStreamResumeTag');
+        }
+        if (name === '$streamResumeRegion') {
+          if (!has('mdx')) drop.push('(global.set $jsxRootEnd');
+          if (!has('vue', 'svelte', 'astro', 'mdx'))
+            drop.push('(call $hlTsxExpressionStream');
+        }
+        if (name === '$markdownStreamResume' && !has('mdx'))
+          drop.push('(call $mdxEsmResume');
+        if (drop.length > 0) {
           const parts = splitTopLevelForms(text.slice(1, -1));
+          for (const needle of drop)
+            if (
+              !parts.some(
+                (part) => part.head === 'if' && part.text.includes(needle)
+              )
+            )
+              throw new Error(`${name}: no branch has ${needle}`);
           text = `(${parts
             .filter(
               (part) =>
-                part.head !== 'if' || !part.text.includes(`(call ${call}`)
+                part.head !== 'if' ||
+                !drop.some((needle) => part.text.includes(needle))
             )
             .map((part) => part.text)
             .join(' ')})`;
         }
       }
-      if (selected !== undefined && name === '$streamResumeAnyRegion') {
-        const branches = [
-          ['$xmlStreamResumeTag', ['xml']],
-          ['$vueStreamResumeTag', ['vue']],
-          ['$braceStreamResumeTag', ['svelte', 'astro']],
-        ] as const;
-        for (const [call, languages] of branches) {
-          if (languages.some((language) => selected.has(language))) continue;
-          text = `(${splitTopLevelForms(text.slice(1, -1))
-            .filter(
-              (part) =>
-                part.head !== 'if' || !part.text.includes(`(call ${call}`)
-            )
-            .map((part) => part.text)
-            .join(' ')})`;
-        }
-      }
-      if (selected !== undefined && name === '$streamResumeRegion') {
-        const parts = splitTopLevelForms(text.slice(1, -1));
-        text = `(${parts
-          .filter((part) => {
-            if (part.head !== 'if') return true;
-            if (
-              part.text.includes('(global.set $jsxRootEnd') &&
-              !selected.has('mdx')
-            )
-              return false;
-            if (
-              part.text.includes('(call $hlTsxExpressionStream') &&
-              !['vue', 'svelte', 'astro', 'mdx'].some((language) =>
-                selected.has(language)
-              )
-            )
-              return false;
-            return true;
-          })
-          .map((part) => part.text)
-          .join(' ')})`;
-      }
-      if (
-        selected !== undefined &&
-        !selected.has('mdx') &&
-        name === '$markdownStreamResume'
-      )
-        text = `(${splitTopLevelForms(text.slice(1, -1))
-          .filter(
-            (part) =>
-              part.head !== 'if' || !part.text.includes('(call $mdxEsmResume')
-          )
-          .map((part) => part.text)
-          .join(' ')})`;
       if (
         text.includes('$externalEmbedding') ||
         (text.includes('(i32.const 0)') &&
@@ -339,15 +316,117 @@ function writeIfChanged(url: URL, content: string): void {
   if (current !== content) writeFileSync(url, content, 'utf-8');
 }
 
+// WARNING: This file is also its build worker (see `new Worker` below). A
+// worker compiles the lexer modules named in `workerData`; `all` is the bundle
+// of every lexer.
+if (!isMainThread && Array.isArray(workerData)) {
+  const languageDir = new URL('../dist/langs/', import.meta.url);
+  const languageDts =
+    "import type { Language } from '../index.js';\n\n" +
+    'declare const language: Language;\nexport default language;\n';
+  for (const name of workerData as string[]) {
+    const selected =
+      name === 'all'
+        ? undefined
+        : name === 'ts'
+          ? ['js', 'jsx', 'ts', 'tsx']
+          : [name];
+    const entry = name === 'ts' ? 'typescript' : name;
+    const source = transformLexer(selected);
+    const ids = new Set(selected?.map((name) => source.languages[name]));
+    // WARNING: A lexer takes an alias with ID 0 as a name of its own, so the
+    // plain-text names must stay out, or `text` runs the lexer as a language.
+    const aliases = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(source.languages).filter(
+          ([, id]) => id !== 0 && (selected === undefined || ids.has(id))
+        )
+      )
+    );
+    const binary = optimizeWasm(wat2wasm(`${entry}.wat`, source.code));
+    const descriptor = `{"name":"${entry}","aliases":${aliases},"wasm":"${Buffer.from(binary).toString('base64')}"}`;
+    // WARNING: workerd cannot compile Wasm from bytes. Its export condition
+    // selects the `.workerd.js` modules, which import the compiled `.wasm`.
+    if (name === 'all') {
+      writeFileSync(
+        new URL('../langs.js', languageDir),
+        `export const langs = [${descriptor}];\n`
+      );
+      writeFileSync(new URL('../langs.wasm', languageDir), binary);
+      writeFileSync(
+        new URL('../langs.workerd.js', languageDir),
+        "import wasm from './langs.wasm';\n" +
+          `export const langs = [{ name: 'all', aliases: ${aliases}, wasm }];\n`
+      );
+      writeFileSync(
+        new URL('../langs.d.ts', languageDir),
+        "import type { Language } from './index.js';\n\n" +
+          'export declare const langs: readonly Language[];\n'
+      );
+      continue;
+    }
+    writeFileSync(
+      new URL(`${entry}.js`, languageDir),
+      `export default ${descriptor};\n`
+    );
+    writeFileSync(new URL(`${entry}.wasm`, languageDir), binary);
+    writeFileSync(
+      new URL(`${entry}.workerd.js`, languageDir),
+      `import wasm from './${entry}.wasm';\n` +
+        `export default { name: ${JSON.stringify(entry)}, aliases: ${aliases}, wasm };\n`
+    );
+    writeFileSync(new URL(`${entry}.d.ts`, languageDir), languageDts);
+    if (name === 'ts') {
+      for (const alias of ['ts', 'tsx', 'js', 'jsx', 'javascript']) {
+        writeFileSync(
+          new URL(`${alias}.js`, languageDir),
+          "export { default } from './typescript.js';\n"
+        );
+        writeFileSync(
+          new URL(`${alias}.workerd.js`, languageDir),
+          "export { default } from './typescript.workerd.js';\n"
+        );
+        writeFileSync(new URL(`${alias}.d.ts`, languageDir), languageDts);
+      }
+    }
+  }
+}
+
 // Emit the wasm, theme modules, and lazy loader before tsdown compiles the
 // glue so it picks up the regenerated token and language tables.
-if (import.meta.main) {
+if (isMainThread && import.meta.main) {
   const start = performance.now();
   const moduleUrl = import.meta.url;
   const sourceUrl = new URL('../src/highlights.wat', moduleUrl);
   const { code, enumMap, languages } = transformWat(sourceUrl);
+  mkdirSync(new URL('../dist/langs/', moduleUrl), { recursive: true });
+  // WARNING: The lexer modules take most of the build time, so workers
+  // compile them while this thread compiles the combined module. Plain text
+  // (ID 0) is built into every highlighter and has no module; the ECMAScript
+  // languages share the `ts` one.
+  const standalone = Object.keys(enumMap.get('$Language')!).filter(
+    (name) => languages[name] !== 0 && !['js', 'jsx', 'tsx'].includes(name)
+  );
+  const workerCount = Math.max(1, availableParallelism() - 2);
+  const workers = Array.from(
+    { length: workerCount + 1 },
+    (_, index) =>
+      new Promise<void>((resolve, reject) => {
+        const worker = new Worker(new URL(moduleUrl), {
+          workerData:
+            index === workerCount
+              ? ['all']
+              : standalone.filter((_, order) => order % workerCount === index),
+        });
+        worker.on('error', reject);
+        worker.on('exit', (exitCode) =>
+          exitCode === 0
+            ? resolve()
+            : reject(new Error(`lexer worker exited with code ${exitCode}`))
+        );
+      })
+  );
   const wasmBytes = optimizeWasm(wat2wasm(sourceUrl.pathname, code));
-  mkdirSync(new URL('../dist/', moduleUrl), { recursive: true });
   writeFileSync(new URL('../dist/highlights.wasm', moduleUrl), wasmBytes);
   writeFileSync(
     new URL('../dist/highlights.wasm.mjs', moduleUrl),
@@ -369,67 +448,7 @@ if (import.meta.main) {
       'for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n' +
       'export default b;\n'
   );
-  const lexer = transformLexer();
-  const combinedLexer = optimizeWasm(wat2wasm('lexer.wat', lexer.code));
-  const languageDts =
-    "import type { Language } from '../index.js';\n\n" +
-    'declare const language: Language;\nexport default language;\n';
-  const languageDir = new URL('../dist/langs/', moduleUrl);
-  mkdirSync(languageDir, { recursive: true });
-  const languageNames = Object.keys(lexer.enumMap.get('$Language')!);
-  const ecma = new Set(['js', 'jsx', 'ts', 'tsx']);
-  for (const name of languageNames) {
-    if (ecma.has(name) && name !== 'ts') continue;
-    const selected = ecma.has(name) ? [...ecma] : [name];
-    const ids = new Set(selected.map((name) => languages[name]));
-    const aliases = Object.fromEntries(
-      Object.entries(languages).filter(([, id]) => ids.has(id))
-    );
-    const entry = name === 'ts' ? 'typescript' : name;
-    const source = transformLexer(selected);
-    const binary = optimizeWasm(wat2wasm(`${entry}.wat`, source.code));
-    writeFileSync(
-      new URL(`${entry}.js`, languageDir),
-      `export default ${JSON.stringify({ name: entry, aliases, wasm: Buffer.from(binary).toString('base64') })};\n`
-    );
-    // WARNING: workerd cannot compile Wasm from bytes. Its export condition
-    // selects these modules, which import the compiled `.wasm` file.
-    writeFileSync(new URL(`${entry}.wasm`, languageDir), binary);
-    writeFileSync(
-      new URL(`${entry}.workerd.js`, languageDir),
-      `import wasm from './${entry}.wasm';\n` +
-        `export default { name: ${JSON.stringify(entry)}, aliases: ${JSON.stringify(aliases)}, wasm };\n`
-    );
-    writeFileSync(new URL(`${entry}.d.ts`, languageDir), languageDts);
-    if (name === 'ts') {
-      for (const alias of ['ts', 'tsx', 'js', 'jsx', 'javascript']) {
-        writeFileSync(
-          new URL(`${alias}.js`, languageDir),
-          "export { default } from './typescript.js';\n"
-        );
-        writeFileSync(
-          new URL(`${alias}.workerd.js`, languageDir),
-          "export { default } from './typescript.workerd.js';\n"
-        );
-        writeFileSync(new URL(`${alias}.d.ts`, languageDir), languageDts);
-      }
-    }
-  }
-  writeFileSync(
-    new URL('../dist/langs.js', moduleUrl),
-    `export const langs = [${JSON.stringify({ name: 'all', aliases: languages, wasm: Buffer.from(combinedLexer).toString('base64') })}];\n`
-  );
-  writeFileSync(new URL('../dist/langs.wasm', moduleUrl), combinedLexer);
-  writeFileSync(
-    new URL('../dist/langs.workerd.js', moduleUrl),
-    "import wasm from './langs.wasm';\n" +
-      `export const langs = [{ name: 'all', aliases: ${JSON.stringify(languages)}, wasm }];\n`
-  );
-  writeFileSync(
-    new URL('../dist/langs.d.ts', moduleUrl),
-    "import type { Language } from './index.js';\n\n" +
-      'export declare const langs: readonly Language[];\n'
-  );
+  await Promise.all(workers);
   // The `$Token` order is the theme-table ABI; regenerate the glue copy,
   // which tsdown then compiles into dist/ with the rest of lib/.
   writeIfChanged(

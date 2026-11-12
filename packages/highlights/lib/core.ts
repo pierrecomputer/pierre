@@ -262,6 +262,7 @@ export {
   codeToTokens,
   createHighlighter,
   init,
+  isRegisteredLanguage,
   isSupportedLanguage,
   registerLanguages,
   StreamTokenizer,

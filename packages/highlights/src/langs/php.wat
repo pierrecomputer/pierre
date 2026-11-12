@@ -836,16 +836,29 @@
         (br $l)))
     (local.get $p))
 
-  (global $phpHtmlStarted (mut i32) (i32.const 0))
+  (global $phpHtmlOpen (mut i32) (i32.const 0))
 
+  ;; WARNING: $hlHtml starts again after each PHP island: tag, script, and
+  ;; style state do not cross it. A modular build must lex each HTML segment
+  ;; as a whole body (-1) to match. Only the HTML that ends a stream chunk
+  ;; is a stream ($phpHtmlOpen), which the next chunk continues.
   (func $phpHtml
+    (local $reset i32)
     (if (global.get $externalEmbedding)
       (then
+        (local.set $reset (i32.const -1))
+        (if (global.get $streaming)
+          (then
+            (if (global.get $phpHtmlOpen)
+              (then (local.set $reset (i32.const 0)))
+              (else
+                (if (i32.eq (global.get $end) (global.get $eof))
+                  (then (local.set $reset (i32.const 1))))))
+            (global.set $phpHtmlOpen (i32.eq (global.get $end) (global.get $eof)))))
         (drop
           (call $embedLanguage
             (enum.get $Language.html) (global.get $ptr) (global.get $end)
-            (i32.eqz (global.get $phpHtmlStarted)) (i32.const -7)))
-        (global.set $phpHtmlStarted (i32.const 1))
+            (local.get $reset) (i32.const -7)))
         (global.set $ptr (global.get $end))
         (return)))
     (call $hlHtml))
@@ -865,7 +878,7 @@
     (if (global.get $externalEmbedding)
       (then
         (if (i32.or (i32.eqz (global.get $streaming)) (global.get $streamReset))
-          (then (global.set $phpHtmlStarted (i32.const 0))))))
+          (then (global.set $phpHtmlOpen (i32.const 0))))))
     (call $lexEmitLeadingContinuation)
     (local.set $snippet (i32.const 0))
     (block $out
@@ -909,6 +922,7 @@
                     (i32.const 3)
                     (i32.const 5)
                     (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "=")))))
+              (global.set $phpHtmlOpen (i32.const 0))
               (call $emitTok (enum.get $Token.preproc) (local.get $open) (global.get $ptr))))
           (local.set $snippet (i32.const 0))
           (call $phpCode (i32.const 0))

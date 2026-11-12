@@ -109,7 +109,8 @@ SGR colors, as in Shiki, and removes escape sequences from token content;
 in `createHighlighter({ langs })`, or in `registerLanguages(langs)` for the
 shared `codeToHtml` and `codeToTokens` functions. Registered names override
 built-in names there. Built-in lexers do not embed them, and the tokenizer
-classes use built-in lexers only.
+classes use built-in lexers only. `isSupportedLanguage()` does not know
+registered names; use `isRegisteredLanguage()` for them.
 
 ## Runtime and types
 
@@ -134,9 +135,10 @@ token records to the separate emitter Wasm.
 
 The `@pierre/highlights` entry initializes a shared highlighter at import and
 re-exports all themes. `@pierre/highlights/core` exports the same functions but
-loads no Wasm; call `init(module)` with a compiled combined module before its
-shared functions. `init` runs synchronously. `createHighlighter` does not accept
-a Wasm module or omitted options.
+loads no Wasm; call `init(module)` with a compiled combined module
+(`@pierre/highlights/highlights.wasm`) before its shared functions. `init` runs
+synchronously. `createHighlighter` does not accept a Wasm module or omitted
+options.
 
 Core public types are `Highlighter`, `RegisteredHighlighter`,
 `HighlighterOptions`, `Language`, `Lang`, `CodeToHtmlBaseOptions`,

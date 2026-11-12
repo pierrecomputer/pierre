@@ -38,7 +38,6 @@ interface LexerExports {
   scratchPtr: WebAssembly.Global;
   lex: () => void;
   lexStream: (reset: number) => void;
-  gap: (end: number) => void;
 }
 
 describe('buildHighlightsLexer', () => {
@@ -64,8 +63,10 @@ describe('buildHighlightsLexer', () => {
     expect(language.aliases).toEqual({ numbers: 0, nums: 0 });
     expect(WebAssembly.Module.imports(compiledModule)).toEqual([]);
     expect(
-      WebAssembly.Module.exports(compiledModule).map(({ name }) => name)
-    ).toContain('record');
+      WebAssembly.Module.exports(compiledModule)
+        .map(({ name }) => name)
+        .sort()
+    ).toEqual(['inputPtr', 'lex', 'lexStream', 'memory', 'scratchPtr']);
     expect(Number(lexer.scratchPtr.value) % 256).toBe(0);
     expect(Number(lexer.inputPtr.value)).toBeGreaterThan(
       Number(lexer.scratchPtr.value) + 31
@@ -110,7 +111,7 @@ describe('buildHighlightsLexer', () => {
     expect(WebAssembly.validate(Buffer.from(plain.wasm, 'base64'))).toBe(true);
   });
 
-  test('preserves leading gaps for the parent lexer and extends existing tokens', () => {
+  test('preserves leading gaps for the parent lexer', () => {
     const language = buildHighlightsLexer({
       name: 'gaps',
       wat: `(func $highlight
@@ -134,10 +135,6 @@ describe('buildHighlightsLexer', () => {
     expect(view.getUint32(10, true)).toBe(16);
     expect([...new Uint32Array(lexer.memory.buffer, out, 4)]).toEqual([
       1, 255, 4, 17,
-    ]);
-    lexer.gap(input + 5);
-    expect([...new Uint32Array(lexer.memory.buffer, out, 4)]).toEqual([
-      1, 255, 5, 17,
     ]);
   });
 

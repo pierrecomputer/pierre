@@ -1,5 +1,7 @@
+import { registerLanguages } from '@pierre/highlights';
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
 import pierreLight from '@pierre/highlights/themes/pierre-light';
+import { buildHighlightsLexer } from '@pierre/wat-tools';
 import { createHtmlSession, renderToHtml } from '@pierre/words';
 import { afterEach, describe, expect, expectTypeOf, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
@@ -1529,6 +1531,33 @@ describe('incremental streaming', () => {
         .split('\n')[0]
     );
     renderer.disconnect();
+  });
+  test('fences of a registered language use its lexer, open or closed', () => {
+    registerLanguages([
+      buildHighlightsLexer({
+        name: 'words-example',
+        wat: `(module
+          (func $highlight
+            (call $emitTok
+              (enum.get $Token.keyword)
+              (global.get $ptr)
+              (global.get $end))))`,
+      }),
+    ]);
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    const session = plugin.createSession!();
+    const code = 'a <b>\nc\n';
+    for (let end = 0; end <= code.length; end++) {
+      const options = {
+        code: code.slice(0, end),
+        language: 'words-example',
+        isIncomplete: true,
+      };
+      const html = plugin.highlight(options)!;
+      if (end > 0) expect(html).toContain('<span');
+      expect(session.highlightLines!(options)!.fullHtml).toBe(html);
+    }
+    session.dispose();
   });
   test('compares plugins by their parts, not by the wrapper object', () => {
     let calls = 0;

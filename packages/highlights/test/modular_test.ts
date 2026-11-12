@@ -458,7 +458,9 @@ test.each([
 test('tagged templates keep nested HTML state and use registered CSS', async () => {
   const code =
     'const view = html`<div class="${html`<b>${value}</b>`}">${value}</div>`;\n' +
-    'const style = css`a { color: ${color}; background: red; }`;';
+    'const style = css`a { color: ${color}; background: red; }`;\n' +
+    'const escaped = html`<a title="x\\"y">t</a>`;\n' +
+    'const raw = html`<style> a { color: red } </style><script>let a = 1</script>`;';
   const highlighter = await createHighlighter({
     langs: [typescript, html, css],
     themes: [pierreDark],
@@ -483,8 +485,8 @@ test('tagged templates keep nested HTML state and use registered CSS', async () 
   ).toBe(result.fg);
 });
 
-test.each(['vue', 'svelte', 'astro', 'mdx'] as const)(
-  '%s keeps expression boundaries when TypeScript is not registered',
+test.each(['vue', 'svelte', 'astro', 'mdx', 'qml'] as const)(
+  '%s highlights expressions with its own lexer',
   async (lang) => {
     const { default: language }: { default: Language } = await import(
       `@pierre/highlights/langs/${lang}`
@@ -494,28 +496,75 @@ test.each(['vue', 'svelte', 'astro', 'mdx'] as const)(
         ? '<div>{{ value + 1 }}</div>'
         : lang === 'mdx'
           ? 'export const value = {\n\n  count: 1\n}\n\nResult: {value + 1}\n'
-          : '<div>{value + 1}</div>';
-    const plain = await createHighlighter({
-      langs: [language],
-      themes: [pierreDark],
-    });
-    const result = plain.codeToTokens(code, { lang, theme: 'pierre-dark' });
-    expect(
-      result.tokens.flat().find((token) => token.content.includes('value + 1'))
-        ?.color
-    ).toBe(result.fg);
-    const registered = await createHighlighter({
-      langs: [language, typescript],
-      themes: [pierreDark],
-    });
-    expect(
-      registered.codeToTokens(code, { lang, theme: 'pierre-dark' })
-    ).toEqual(reference.codeToTokens(code, { lang, theme: pierreDark }));
+          : lang === 'qml'
+            ? 'Item { property int value: Math.max(1, 2) }'
+            : '<div>{value + 1}</div>';
+    for (const langs of [[language], [language, typescript]]) {
+      const highlighter = await createHighlighter({
+        langs,
+        themes: [pierreDark],
+      });
+      expect(
+        highlighter.codeToTokens(code, { lang, theme: 'pierre-dark' })
+      ).toEqual(reference.codeToTokens(code, { lang, theme: pierreDark }));
+    }
   }
 );
 
+test('PHP starts HTML again after each island, as the combined lexer does', async () => {
+  const { default: php }: { default: Language } =
+    await import('@pierre/highlights/langs/php');
+  const highlighter = await createHighlighter({
+    langs: [php, html, typescript, css, markdown],
+    themes: [pierreDark],
+  });
+  for (const code of [
+    '<a href="/u/<?= $id ?>/x" class="b">t</a>',
+    '<script>var a = <?= $x ?>; go(1);</script>',
+    '<style>a { color: <?= $c ?>; }</style><p>x</p>',
+  ]) {
+    expect(
+      highlighter.codeToTokens(code, { lang: 'php', theme: 'pierre-dark' })
+    ).toEqual(reference.codeToTokens(code, { lang: 'php', theme: pierreDark }));
+  }
+});
+
+test('nested Markdown fences stop at the depth limit of the combined lexer', async () => {
+  const highlighter = await createHighlighter({
+    langs: [markdown, json],
+    themes: [pierreDark],
+  });
+  for (const depth of [8, 9, 10, 70]) {
+    let code = '{"a": 1}';
+    for (let level = 0; level < depth; level++) {
+      const fence = '`'.repeat(level + 4);
+      code = `${fence}${level === 0 ? 'json' : 'markdown'}\n${code}\n${fence}`;
+    }
+    expect(
+      highlighter.codeToTokens(code, {
+        lang: 'markdown',
+        theme: 'pierre-dark',
+      })
+    ).toEqual(
+      reference.codeToTokens(code, { lang: 'markdown', theme: pierreDark })
+    );
+  }
+});
+
+test('the lexer bundle keeps the plain-text names as plain text', async () => {
+  const highlighter = await combinedPromise;
+  const code = '# t\n\n```text\nhello world\n```\n\n```txt\n<b>\n```\n';
+  expect(
+    highlighter.codeToTokens(code, { lang: 'markdown', theme: 'pierre-dark' })
+  ).toEqual(
+    reference.codeToTokens(code, { lang: 'markdown', theme: pierreDark })
+  );
+  for (const { aliases } of langs) {
+    expect(Object.values(aliases)).not.toContain(0);
+  }
+});
+
 test.each([
-  ['qml', 'Item { property int value: Math.max(1, 2) }', 'Math.max'],
   ['coffee', 'result = `Math.max(1, 2)`', 'Math.max'],
   ['php', '<div class="box"><?php echo "x"; ?></div>', '<div'],
 ] as const)(
@@ -567,6 +616,7 @@ test('the main entry adds the combined lexers and all themes to the core API', a
     'codeToTokens',
     'createHighlighter',
     'init',
+    'isRegisteredLanguage',
     'isSupportedLanguage',
     'registerLanguages',
     'tokenNames',

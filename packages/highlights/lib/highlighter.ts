@@ -50,10 +50,20 @@ export function langIdOf(lang: string): number {
 
 /**
  * Check whether a name or alias has a built-in lexer, including `plain`/`text`,
- * or is `ansi`.
+ * or is `ansi`. Names from `registerLanguages` are not built in; use
+ * `isRegisteredLanguage` for them.
  */
 export function isSupportedLanguage(lang: string): lang is Lang {
   return typeof LANGS[String(lang).toLowerCase()] === 'number' || isAnsi(lang);
+}
+
+/**
+ * Check whether `registerLanguages` added a name or alias. The shared
+ * `codeToHtml` and `codeToTokens` use its lexer; `StreamTokenizer` and
+ * `LiveTokenizer` do not.
+ */
+export function isRegisteredLanguage(lang: string): boolean {
+  return registeredNames.has(String(lang).toLowerCase());
 }
 
 export class HighlightsHighlighter implements Highlighter<
@@ -284,10 +294,16 @@ export class HighlightsHighlighter implements Highlighter<
 
   /**
    * Run record output and return the address of the records. Control word 10
-   * holds their byte length. `reset` starts or continues a stream.
+   * holds their byte length. `reset` starts or continues a stream. Mode 5
+   * makes the combined module return byte records, as a lexer module does.
    */
-  lexRecords(langId: number, inputLength: number, reset?: boolean): number {
-    this.#run(langId, 3, inputLength, reset);
+  lexRecords(
+    langId: number,
+    inputLength: number,
+    reset?: boolean,
+    mode = 3
+  ): number {
+    this.#run(langId, mode, inputLength, reset);
     return this.dv.getUint32(6, true);
   }
 
@@ -453,7 +469,10 @@ export function init(wasm: WebAssembly.Module): Highlighter {
   return (shared = new HighlightsHighlighter(wasm));
 }
 
-const lexerModules = new WeakMap<Language, Promise<WebAssembly.Module>>();
+const lexerModules = new WeakMap<
+  Language,
+  WebAssembly.Module | Promise<WebAssembly.Module>
+>();
 let emitterModule: Promise<WebAssembly.Module> | undefined;
 
 /**
@@ -489,24 +508,32 @@ export async function createHighlighter(
       if (typeof wasm !== 'string') return Promise.resolve(wasm);
       let compiledModule = lexerModules.get(language);
       if (compiledModule === undefined) {
-        compiledModule = WebAssembly.compile(lexerBytes(wasm));
+        compiledModule = WebAssembly.compile(lexerBytes(wasm)).then(
+          (module) => {
+            lexerModules.set(language, module);
+            return module;
+          }
+        );
         lexerModules.set(language, compiledModule);
       }
-      return compiledModule;
+      return Promise.resolve(compiledModule);
     }),
   ]);
-  return buildHighlighter(emitter, languages, compiled, options.themes);
+  return buildHighlighter(emitter, languages, compiled, options.themes, false);
 }
 
 /**
  * Register compiled lexers and themes with an emitter. Shared by
- * `createHighlighter` and `registerLanguages`.
+ * `createHighlighter` and `registerLanguages`. With `combined`, the emitter
+ * is the combined module, and it lexes the embedded built-in languages that
+ * have no registered lexer.
  */
 function buildHighlighter(
   emitter: WebAssembly.Module,
   languages: readonly Language[],
   compiled: readonly WebAssembly.Module[],
-  themeOptions: HighlighterOptions['themes']
+  themeOptions: HighlighterOptions['themes'],
+  combined: boolean
 ): RegisteredHighlighter {
   const registrations = new Map<
     number,
@@ -554,7 +581,6 @@ function buildHighlighter(
     compiledModule: WebAssembly.Module,
     depth: number
   ): HighlightsHighlighter {
-    // Open embedded streams by context. Each one keeps its own lexer state.
     const streams = new Map<
       number,
       { module: WebAssembly.Module; lexer: HighlightsHighlighter }
@@ -571,7 +597,6 @@ function buildHighlighter(
       module: WebAssembly.Module,
       child: HighlightsHighlighter
     ): void => {
-      // Do not retain unusually large buffers.
       if (child.pageN > 16) return;
       const free = idle[stream].get(module);
       if (free === undefined) idle[stream].set(module, [child]);
@@ -592,7 +617,6 @@ function buildHighlighter(
           lexer.bindMemory();
           const bytes = lexer.buffer;
           let name = '';
-          // ASCII names skip the slower decoder.
           for (let i = ptr; i < ptr + length; i++) {
             if (bytes[i] > 127) {
               name = dec.decode(bytes.subarray(ptr, ptr + length));
@@ -600,12 +624,11 @@ function buildHighlighter(
             }
             name += String.fromCharCode(bytes[i]);
           }
-          const id = languageIds.get(name.toLowerCase());
-          // `ansi` (-1) has no lexer.
+          name = name.toLowerCase();
+          const id =
+            languageIds.get(name) ?? (combined ? LANGS[name] : undefined);
           return id !== undefined && id > 0 ? id : 0;
         },
-        // `reset`: -1 lexes a whole body, 1 starts a stream, 0 continues it,
-        // and 2 ends the stream of `context`.
         embed: (
           id: number,
           from: number,
@@ -624,7 +647,11 @@ function buildHighlighter(
           // WARNING: An empty body can still start a stream. Its reset must
           // reach the child, or a reused lexer continues its last stream.
           if (to <= from && reset !== 1) return context;
-          const registration = registrations.get(id);
+          let registration = registrations.get(id);
+          if (registration === undefined && combined && id > 0 && id < 256) {
+            registration = { module: emitter, id };
+            registrations.set(id, registration);
+          }
           if (registration === undefined || depth >= 64) {
             append(0, from, to);
             return context;
@@ -647,14 +674,15 @@ function buildHighlighter(
                 idle[1].get(module)?.pop() ?? createLexer(module, depth + 1);
               streams.set(context, { module, lexer: child });
               // A reused lexer must not continue the state of its last stream.
-              if (reset === 0) child.lexRecords(registration.id, 0, true);
+              if (reset === 0) child.lexRecords(registration.id, 0, true, 5);
             }
           }
           lexer.bindMemory();
           const records = child.lexRecords(
             registration.id,
             child.writeInput(lexer.buffer.subarray(from, to)),
-            reset < 0 ? undefined : reset !== 0
+            reset < 0 ? undefined : reset !== 0,
+            5
           );
           const bytes = child.dv.getUint32(10, true);
           if (bytes > 0) {
@@ -672,6 +700,9 @@ function buildHighlighter(
         },
       }
     );
+    // WARNING: Markdown reads its nesting depth from control byte 14. It stops
+    // at 8 levels, as the combined lexer does.
+    lexer.buffer[14] = depth;
     const reserve = lexer.instance.exports.reserve as (bytes: number) => number;
     const append = lexer.instance.exports.append as (
       bytes: number,
@@ -683,7 +714,6 @@ function buildHighlighter(
   const themes = new Map<string, Theme>();
   for (const value of themeOptions) {
     const first = resolveTheme(value);
-    // A family name selects the first member, as a `ThemeFamily` option does.
     let names = first === value || !value.name ? [] : [value.name];
     for (const member of first === value
       ? [first]
@@ -780,7 +810,6 @@ function buildHighlighter(
         throw new RangeError(`theme is not loaded: ${reference}`);
       resolved[key] = theme;
     }
-    // Replace an emitter above 8 MiB when small inputs resume.
     if (
       highlighter.pageN > 128 &&
       (typeof input === 'string' ? input.length : input.byteLength) <= pageSize
@@ -813,7 +842,6 @@ function buildHighlighter(
 let registered: RegisteredHighlighter | undefined;
 let registeredLangs: Language[] = [];
 let registeredNames = new Set<string>();
-const compiledLexers = new WeakMap<Language, WebAssembly.Module>();
 
 /**
  * Add lexers to `codeToHtml` and `codeToTokens`. Their names and aliases
@@ -821,7 +849,22 @@ const compiledLexers = new WeakMap<Language, WebAssembly.Module>();
  * their HTML, so no other Wasm loads.
  */
 export function registerLanguages(langs: readonly Language[]): void {
-  const list = [...new Set([...registeredLangs, ...langs])];
+  const list = registeredLangs.slice();
+  for (const language of langs) {
+    // WARNING: A loader can return a new object for the same lexer on each
+    // call. Compare the content, or every call adds a lexer and builds all
+    // of them again.
+    if (
+      !list.some(
+        (old) =>
+          old === language ||
+          (old.name === language.name &&
+            old.wasm === language.wasm &&
+            JSON.stringify(old.aliases) === JSON.stringify(language.aliases))
+      )
+    )
+      list.push(language);
+  }
   if (registered !== undefined && list.length === registeredLangs.length) {
     return;
   }
@@ -830,14 +873,14 @@ export function registerLanguages(langs: readonly Language[]): void {
   const compiled = list.map((language) => {
     const { wasm } = language;
     if (typeof wasm !== 'string') return wasm;
-    let compiledModule = compiledLexers.get(language);
-    if (compiledModule === undefined) {
+    let compiledModule = lexerModules.get(language);
+    if (!(compiledModule instanceof WebAssembly.Module)) {
       compiledModule = new WebAssembly.Module(lexerBytes(wasm));
-      compiledLexers.set(language, compiledModule);
+      lexerModules.set(language, compiledModule);
     }
     return compiledModule;
   });
-  registered = buildHighlighter(assertWasmModule(), list, compiled, []);
+  registered = buildHighlighter(assertWasmModule(), list, compiled, [], true);
   registeredLangs = list;
   registeredNames = new Set(
     list.flatMap((language) =>

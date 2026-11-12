@@ -2,10 +2,13 @@ import {
   codeToHtml,
   codeToTokens,
   createHighlighter,
+  isRegisteredLanguage,
+  isSupportedLanguage,
   type Language,
   registerLanguages,
 } from '@pierre/highlights';
 import c from '@pierre/highlights/langs/c';
+import go from '@pierre/highlights/langs/go';
 import html from '@pierre/highlights/langs/html';
 import markdown from '@pierre/highlights/langs/markdown';
 import { cssVariables } from '@pierre/highlights/themes';
@@ -280,5 +283,37 @@ test('registerLanguages adds lexers to the shared functions of the full bundle',
   }
   expect(codeToTokens('hello', { ...options, lang: 'go' })).not.toEqual(
     builtIn
+  );
+  expect(isRegisteredLanguage('GO')).toBe(true);
+  expect(isRegisteredLanguage('example')).toBe(true);
+  expect(isSupportedLanguage('example')).toBe(false);
+  expect(isRegisteredLanguage('rust')).toBe(false);
+  // WARNING: Registration is global and Bun runs every test file in one
+  // process. The later lexer wins a name, so the built-in module gives `go`
+  // back to the Go lexer for the other files.
+  registerLanguages([go]);
+  expect(codeToTokens('hello', { ...options, lang: 'go' })).toEqual(builtIn);
+});
+
+test('a registered built-in module still embeds the other built-in languages', () => {
+  const options = { lang: 'html', theme: cssVariables } as const;
+  const code =
+    '<script>let a = 1</script>\n<style>a { color: red }</style>\n<p>x</p>';
+  const builtIn = codeToTokens(code, options);
+  registerLanguages([html]);
+  expect(isRegisteredLanguage('html')).toBe(true);
+  expect(codeToTokens(code, options)).toEqual(builtIn);
+  expect(codeToHtml(code, options)).toEqual(
+    new HighlightsHighlighter(
+      new WebAssembly.Module(
+        readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
+      )
+    ).codeToHtml(code, options)
+  );
+});
+
+test('the package exports the combined module for init()', () => {
+  expect(import.meta.resolve('@pierre/highlights/highlights.wasm')).toBe(
+    new URL('../dist/highlights.wasm', import.meta.url).href
   );
 });

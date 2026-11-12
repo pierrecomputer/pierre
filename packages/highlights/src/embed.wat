@@ -35,38 +35,6 @@
           (call $embedLanguage
             (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 2) (local.get $context))))))
 
-  ;; WARNING: Boundary scans can extend the preceding token. Restore its end
-  ;; before replacing scanner output with tokens from the registered lexer.
-  (func $embedScanSave (result i64)
-    (if (global.get $externalEmbedding)
-      (then
-        (return
-          (i64.or
-            (i64.extend_i32_u (global.get $out))
-            (i64.shl
-              (i64.extend_i32_u
-                (if (result i32) (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-                  (then (i32.load (i32.sub (global.get $out) (i32.const 8))))
-                  (else (i32.const 0))))
-              (i64.const 32))))))
-    (i64.const 0))
-
-  (func $embedScanRestore
-    (param $saved i64) (param $lang i32) (param $from i32) (param $to i32)
-    (param $reset i32) (param $context i32)
-    (if (i64.eqz (local.get $saved))
-      (then (return)))
-    (global.set $out (i32.wrap_i64 (local.get $saved)))
-    (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-      (then
-        (i32.store
-          (i32.sub (global.get $out) (i32.const 8))
-          (i32.wrap_i64 (i64.shr_u (local.get $saved) (i64.const 32))))))
-    (drop
-      (call $embedLanguage
-        (local.get $lang) (local.get $from) (local.get $to)
-        (local.get $reset) (local.get $context))))
-
   (func $embedRegionLanguage (param $kind i32) (result i32)
     (if (i32.eq (local.get $kind) (i32.const 1))
       (then (return (enum.get $Language.js))))
@@ -195,7 +163,6 @@
     (local $p i32)
     (local $found i32)
     (local $tag i32)
-    (local $saved i64)
     (local.set $kind (global.get $streamRegionKind))
     (local.set $close (global.get $end))
     (local.set $p (global.get $ptr))
@@ -237,12 +204,7 @@
           (then (global.set $jsxRootEnd (local.get $p)))
           (else
             (if (global.get $externalEmbedding)
-              (then
-                (local.set $saved (call $embedScanSave))
-                (call $hlTsxStream (i32.const 0))
-                (call $embedScanRestore
-                  (local.get $saved) (enum.get $Language.tsx) (local.get $p) (global.get $ptr)
-                  (i32.const 0) (i32.const -6)))
+              (then (call $hlTsxStream (i32.const 0)))
               (else (call $streamEmbedRange (local.get $kind) (local.get $p) (local.get $close))))))
         (local.set $close (global.get $jsxRootEnd))
         (global.set $jsxRootEnd (i32.const 0))

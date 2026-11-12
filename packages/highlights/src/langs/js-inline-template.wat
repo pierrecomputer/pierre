@@ -51,9 +51,12 @@
     (local $saveEnd i32)
     (local $angular i32)
     (local $context i32)
-    (if (global.get $externalEmbedding)
+    (local.set $angular (i32.and (global.get $jsTemplateState) (i32.const 0x80000000)))
+    ;; WARNING: Only Angular templates go to the host. The `html` lexer is not
+    ;; the template markup lexer below: it reads no JavaScript escapes, and it
+    ;; lexes script and style bodies.
+    (if (i32.and (global.get $externalEmbedding) (i32.ne (local.get $angular) (i32.const 0)))
       (then
-        (local.set $angular (i32.and (global.get $jsTemplateState) (i32.const 0x80000000)))
         (local.set $context
           (i32.shr_u
             (i32.and (global.get $jsTemplateState) (i32.const 0x7fffffff))
@@ -63,14 +66,12 @@
             (i32.or (local.get $angular) (i32.const 1))
             (i32.shl
               (call $embedLanguage
-                (select (enum.get $Language.angular-html) (enum.get $Language.html) (local.get $angular))
-                (local.get $from) (local.get $to)
+                (enum.get $Language.angular-html) (local.get $from) (local.get $to)
                 (i32.eqz (local.get $context)) (local.get $context))
               (i32.const 9))))
         (return)))
     (local.set $savePtr (global.get $ptr))
     (local.set $saveEnd (global.get $end))
-    (local.set $angular (i32.and (global.get $jsTemplateState) (i32.const 0x80000000)))
     (global.set $ptr (local.get $from))
     (global.set $end (local.get $to))
     (global.set $jsTemplateState
@@ -78,7 +79,10 @@
         (local.get $angular)
         (call $hlTemplateMarkup
           (i32.and (global.get $jsTemplateState) (i32.const 0x7fffffff))
-          (i32.ne (local.get $angular) (i32.const 0)))))
+          (select
+            (i32.const 0)
+            (i32.ne (local.get $angular) (i32.const 0))
+            (global.get $externalEmbedding)))))
     (global.set $ptr (local.get $savePtr))
     (global.set $end (local.get $saveEnd)))
 )
