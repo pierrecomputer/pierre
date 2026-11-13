@@ -80,6 +80,16 @@ export interface SplitNode {
 
 export type LayoutNode = PaneNode | StackNode | SplitNode;
 
+export interface TabOptions {
+  /** Defaults to true. False keeps the destination's active tab. */
+  readonly activate?: boolean;
+}
+
+export interface StoredLayoutTree {
+  readonly version: 3;
+  readonly root: LayoutNode;
+}
+
 /**
  * The rules of the tree's shape, and how a split and a close change it. The
  * geometry, the drag, and the view are the same for each model.

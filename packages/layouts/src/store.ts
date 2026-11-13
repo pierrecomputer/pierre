@@ -22,6 +22,8 @@ import type {
   LayoutNode,
   LayoutState,
   PaneNode,
+  StoredLayoutTree,
+  TabOptions,
   TreeModel,
 } from './types';
 
@@ -119,32 +121,51 @@ export class LayoutStore {
   /**
    * Add a new pane as a tab of a target pane, at `index` among the tabs of
    * its stack, or after the target. A target that is not in a stack gets a
-   * stack in its place. The new pane shows and takes the focus.
+   * stack in its place. The new pane shows and takes the focus unless
+   * `activate` is false.
    */
-  addTab(targetId: string, pane: PaneNode, index?: number): void {
+  addTab(
+    targetId: string,
+    pane: PaneNode,
+    index?: number,
+    options: TabOptions = {}
+  ): void {
     this.requirePane(targetId);
+    const activate = options.activate ?? true;
     const root = addToStack(
       this.state.root,
       targetId,
       { ...pane },
       this.nextId(this.state.root, 'stack'),
-      index
+      index,
+      activate
     );
-    this.commit({
-      root,
-      focusedPane: pane.id,
-      zoomedPane: this.zoomAfterTab(targetId, pane.id),
-    });
+    this.commit(
+      activate
+        ? {
+            root,
+            focusedPane: pane.id,
+            zoomedPane: this.zoomAfterTab(targetId, pane.id),
+          }
+        : { ...this.state, root }
+    );
   }
 
   /**
    * Move a pane into the stack of a target pane, at `index` among its tabs, or
    * after the target. A move inside one stack changes the order of its tabs.
+   * With `activate: false`, the destination keeps its active tab.
    */
-  moveToStack(sourceId: string, targetId: string, index?: number): void {
+  moveToStack(
+    sourceId: string,
+    targetId: string,
+    index?: number,
+    options: TabOptions = {}
+  ): void {
     this.requirePane(sourceId);
     this.requirePane(targetId);
     if (sourceId === targetId) return;
+    const activate = options.activate ?? true;
     const current = this.state.root;
     const source = getPanes(current).find(({ id }) => id === sourceId)!;
     const stack = stackOf(current, sourceId);
@@ -155,7 +176,8 @@ export class LayoutStore {
       root = moveTabTo(
         current,
         sourceId,
-        index ?? others.findIndex(({ id }) => id === targetId) + 1
+        index ?? others.findIndex(({ id }) => id === targetId) + 1,
+        activate
       );
     } else {
       const remaining = this.model.remove(current, sourceId);
@@ -165,10 +187,19 @@ export class LayoutStore {
         targetId,
         source,
         this.nextId(current, 'stack'),
-        index
+        index,
+        activate
       );
     }
-    this.commit({ root, focusedPane: sourceId, zoomedPane: null });
+    this.commit(
+      activate
+        ? { root, focusedPane: sourceId, zoomedPane: null }
+        : {
+            ...this.state,
+            root,
+            focusedPane: this.focusAfterLeaving(sourceId, root),
+          }
+    );
   }
 
   /**
@@ -294,6 +325,15 @@ export class LayoutStore {
 
   serialize(): string {
     return JSON.stringify({ version: 3, ...this.state });
+  }
+
+  /** Return the tree without the window's focus and zoom state. */
+  toStoredTree(): StoredLayoutTree {
+    return Object.freeze({ version: 3, root: this.state.root });
+  }
+
+  setStoredTree(tree: StoredLayoutTree): void {
+    this.setRoot(tree.root);
   }
 
   /**

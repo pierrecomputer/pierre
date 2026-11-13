@@ -14,11 +14,28 @@ import {
 } from './piecewise';
 import type {
   ChildSize,
+  Edge,
   LayoutNode,
   PaneNode,
   SplitNode,
   StackNode,
 } from './types';
+
+export type PaneEdges = Readonly<Record<Edge, boolean>>;
+
+export const ALL_EDGES: PaneEdges = Object.freeze({
+  top: true,
+  right: true,
+  bottom: true,
+  left: true,
+});
+
+const NO_EDGES: PaneEdges = Object.freeze({
+  top: false,
+  right: false,
+  bottom: false,
+  left: false,
+});
 
 export interface CSSRect {
   left: string;
@@ -43,6 +60,7 @@ export interface CSSPane {
    * size, and its content does not render.
    */
   collapsed: boolean;
+  edges: PaneEdges;
 }
 
 export interface CSSSeparator {
@@ -153,7 +171,12 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     throw new Error('Layout gap must be finite and non-negative');
   const panes: CSSPane[] = [];
   const separators: (Omit<CSSSeparator, 'rect'> & { box: Box })[] = [];
-  function visit(node: LayoutNode, box: Box, hidden: boolean): void {
+  function visit(
+    node: LayoutNode,
+    box: Box,
+    hidden: boolean,
+    edges: PaneEdges
+  ): void {
     // The root fills the container, so it does not collapse.
     const collapsed = node !== root && collapsedSizeOf(node) !== null;
     if (node.type === 'pane') {
@@ -163,6 +186,7 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
         hidden: hidden || node.hidden === true,
         stack: null,
         collapsed,
+        edges: hidden || node.hidden === true ? NO_EDGES : edges,
       });
       return;
     }
@@ -178,6 +202,7 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
           hidden: hidden || child !== shown,
           stack: node,
           collapsed,
+          edges: hidden || child !== shown ? NO_EDGES : edges,
         });
       return;
     }
@@ -206,12 +231,21 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     // A hidden child keeps the box that it would have if it were visible.
     const wouldHave =
       visible.length === all.length ? shown : placeChildren(node, all, box);
+    const [start, end]: [Edge, Edge] =
+      node.direction === 'horizontal' ? ['left', 'right'] : ['top', 'bottom'];
     node.children.forEach((child, index) => {
       const order = visible.indexOf(index);
       visit(
         child,
         order === -1 ? wouldHave.boxes[index] : shown.boxes[order],
-        hidden || order === -1
+        hidden || order === -1,
+        order === -1
+          ? NO_EDGES
+          : {
+              ...edges,
+              [start]: edges[start] && order === 0,
+              [end]: edges[end] && order === visible.length - 1,
+            }
       );
     });
   }
@@ -265,7 +299,8 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
       width: size(),
       height: size(),
     },
-    false
+    false,
+    ALL_EDGES
   );
   const byId = new Map(
     separators.map((separator) => [separator.id, separator])

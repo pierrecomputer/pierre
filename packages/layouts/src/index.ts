@@ -30,8 +30,37 @@ export type {
   SeparatorGeometry,
   SplitNode,
   StackNode,
+  StoredLayoutTree,
+  TabOptions,
   TreeModel,
 } from './types';
+export {
+  applyLayoutOperations,
+  type ApplyLayoutOperationsOptions,
+  LayoutOperationError,
+  type LayoutOperationErrorCode,
+  type LayoutTreeOperation,
+  type SplitAddress,
+  splitAddressOf,
+  splitOfTab,
+  type TabPlace,
+} from './operations';
+export {
+  DEFAULT_LAYOUT_GROUP_ID,
+  defaultLayoutTree,
+  reconcileLayoutTree,
+} from './reconcile';
+export { InvalidLayoutTreeError, parseStoredLayoutTree } from './stored-tree';
+export {
+  exceedsGroupLimit,
+  fromLayoutNodeView,
+  groupOf,
+  groupsOf,
+  type LayoutGroupView,
+  type LayoutNodeView,
+  type LayoutSplitView,
+  toLayoutNodeView,
+} from './view';
 export { computeCSSLayout } from './css-layout';
 export type {
   CSSCorner,
@@ -39,4 +68,5 @@ export type {
   CSSPane,
   CSSRect,
   CSSSeparator,
+  PaneEdges,
 } from './css-layout';

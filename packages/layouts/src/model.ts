@@ -284,18 +284,20 @@ export function activatePane(root: LayoutNode, id: string): LayoutNode {
 export function moveTabTo(
   root: LayoutNode,
   id: string,
-  index: number
+  index: number,
+  activate = true
 ): LayoutNode {
   const stack = stackOf(root, id);
   if (stack === null) throw new Error(`Pane not in a stack: ${id}`);
   const tabs = stack.children.filter((child) => child.id !== id);
   const pane = stack.children.find((child) => child.id === id) as PaneNode;
   tabs.splice(clampIndex(index, tabs.length, tabs.length), 0, pane);
-  if (sameNodes(tabs, stack.children) && stack.active === id) return root;
+  const active = activate ? id : stack.active;
+  if (sameNodes(tabs, stack.children) && stack.active === active) return root;
   return replaceNode(root, stack.id, () => ({
     ...stack,
     children: tabs,
-    active: id,
+    active,
   }));
 }
 
@@ -309,7 +311,8 @@ export function addToStack(
   targetId: string,
   pane: PaneNode,
   stackId: string,
-  index?: number
+  index?: number,
+  activate = true
 ): LayoutNode {
   const target = findNode(root, targetId);
   if (target === null || target.type === 'split')
@@ -324,7 +327,7 @@ export function addToStack(
       type: 'stack',
       id: stackId,
       children: tabs,
-      active: pane.id,
+      active: activate ? pane.id : shown.id,
       ...(collapsed === true ? { collapsed } : {}),
       ...(collapsedSize === undefined ? {} : { collapsedSize }),
     }));
@@ -338,7 +341,7 @@ export function addToStack(
   return replaceNode(root, stack.id, () => ({
     ...stack,
     children: tabs,
-    active: pane.id,
+    active: activate ? pane.id : stack.active,
   }));
 }
 
