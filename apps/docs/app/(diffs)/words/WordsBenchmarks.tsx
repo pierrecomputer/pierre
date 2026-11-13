@@ -145,25 +145,39 @@ function Comparison({
   const maximum = Math.max(words, streamdown);
 
   return (
-    <dl className="space-y-5">
+    <dl className="space-y-5 tabular-nums sm:space-y-6">
       {[
         { name: 'Words', value: words },
         { name: 'Streamdown', value: streamdown },
       ].map(({ name, value }) => (
-        <div key={name} className="grid grid-cols-2 items-baseline gap-y-2">
-          <dt className="text-md font-medium">{name}</dt>
+        <div
+          key={name}
+          className="grid grid-cols-[minmax(0,1fr)_7rem] items-center gap-x-3 gap-y-1.5"
+        >
+          <dt className="text-muted-foreground col-start-1 row-start-2 flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs leading-tight">
+            <span className="text-foreground text-sm font-medium">{name}</span>
+          </dt>
           <dd className="contents">
-            <span className="text-right text-2xl tracking-tight tabular-nums">
-              {decimal.format(value / divisor)}
-              <span className="text-muted-foreground ml-1 text-sm">{unit}</span>
-            </span>
-            <div className="col-span-2">
+            <div className="col-start-1 row-start-1">
               <BenchmarkBar
                 value={value}
                 maximum={maximum}
                 highlighted={name === 'Words'}
+                scaleFloor={6}
               />
             </div>
+            <span
+              className={`col-start-2 row-span-2 row-start-1 mt-[-16px] self-center text-right text-3xl whitespace-nowrap ${
+                name === 'Words'
+                  ? 'font-semibold'
+                  : 'text-foreground/50 font-normal'
+              }`}
+            >
+              {decimal.format(value / divisor)}
+              <span className="text-muted-foreground ml-1 text-sm font-normal">
+                {unit}
+              </span>
+            </span>
           </dd>
         </div>
       ))}
@@ -277,30 +291,37 @@ export function WordsBenchmarks() {
         <dl
           aria-labelledby="words-package-caption"
           aria-live="polite"
-          className="space-y-5 tabular-nums"
+          className="space-y-5 tabular-nums sm:space-y-6"
         >
           {results.map(({ engine, value }) => {
             const words = engine.startsWith('Words');
             return (
               <div
                 key={engine}
-                className="grid grid-cols-2 items-baseline gap-y-2"
+                className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_10rem]"
               >
-                <dt className="text-md font-medium">{engine}</dt>
-                <dd className="contents">
-                  <span className="text-right text-2xl tracking-tight tabular-nums">
-                    {value.toFixed(metric.decimals)}
-                    <span className="text-muted-foreground ml-1 text-sm">
-                      {metric.unit}
-                    </span>
+                <dt className="text-muted-foreground col-start-1 row-start-2 flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs leading-tight">
+                  <span className="text-foreground text-sm font-medium">
+                    {engine}
                   </span>
-                  <div className="col-span-2">
+                </dt>
+                <dd className="contents">
+                  <div className="col-start-1 row-start-1">
                     <BenchmarkBar
                       value={value}
                       maximum={maximum}
                       highlighted={words}
+                      scaleFloor={6}
                     />
                   </div>
+                  <span
+                    className={`col-start-2 row-span-2 row-start-1 mt-[-16px] self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
+                  >
+                    {value.toFixed(metric.decimals)}
+                    <span className="text-muted-foreground ml-1 text-sm font-normal">
+                      {metric.unit}
+                    </span>
+                  </span>
                 </dd>
               </div>
             );
