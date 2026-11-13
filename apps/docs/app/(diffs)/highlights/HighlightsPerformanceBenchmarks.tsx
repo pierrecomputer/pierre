@@ -11,9 +11,9 @@ import {
 import { cn } from '@/lib/utils';
 
 const memoryResults = [
-  { name: 'Highlights', peakRss: 50 },
-  { name: 'Shiki JS', peakRss: 155 },
-  { name: 'Shiki Wasm', peakRss: 349 },
+  { name: 'Highlights', peakRss: 54 },
+  { name: 'Shiki JS', peakRss: 157 },
+  { name: 'Shiki Wasm', peakRss: 347 },
 ];
 
 const memoryMaximum = 400;
@@ -150,7 +150,7 @@ export function HighlightsPerformanceBenchmarks() {
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded October 5, 2026 · Shiki 4.4.1 · Apple M4 Pro. Speedup is
+          Recorded November 13, 2026 · Shiki 4.4.1 · Apple M4 Pro. Speedup is
           median throughput relative to Shiki. Memory is median peak process RSS
           from five fresh processes, including the runtime.{' '}
           <Link

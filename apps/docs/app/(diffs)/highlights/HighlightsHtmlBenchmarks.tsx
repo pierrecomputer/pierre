@@ -1,37 +1,37 @@
 import { BenchmarkBar } from './BenchmarkBar';
 import styles from './HighlightsBenchmarkCard.module.css';
 
-const maximumSpeedup = 298;
+const maximumSpeedup = 282;
 const shikiBaselineSpeedup = 1;
 
 const rows = [
   {
     language: 'CSS',
     size: '379 KiB',
-    highlights: 297,
-    shiki: 1.22,
-    speedup: 244,
+    highlights: 272,
+    shiki: 1.2,
+    speedup: 227,
   },
   {
     language: 'HTML',
     size: '474 KiB',
-    highlights: 615,
-    shiki: 2.8,
-    speedup: 220,
+    highlights: 700,
+    shiki: 2.75,
+    speedup: 255,
   },
   {
     language: 'JSONC',
     size: '292 KiB',
-    highlights: 928,
-    shiki: 5.89,
-    speedup: 157,
+    highlights: 818,
+    shiki: 5.77,
+    speedup: 142,
   },
   {
     language: 'TypeScript',
     size: '517 KiB',
-    highlights: 320,
-    shiki: 1.07,
-    speedup: 298,
+    highlights: 293,
+    shiki: 1.04,
+    speedup: 282,
   },
 ] as const;
 
@@ -52,7 +52,7 @@ export function HighlightsHtmlBenchmarks() {
           Highlight a whole file in one pass. On the 517 KiB TypeScript fixture,
           Highlights delivers{' '}
           <strong className="text-foreground font-semibold">
-            298× Shiki’s HTML throughput
+            282× Shiki’s HTML throughput
           </strong>
           , including input encoding and output decoding.
         </p>
@@ -128,7 +128,7 @@ export function HighlightsHtmlBenchmarks() {
 
       <div className="text-muted-foreground max-w-3xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded October 5, 2026 · Bun 1.4.0 · Apple M4 Pro · macOS 27.0.1 ·
+          Recorded November 13, 2026 · Bun 1.4.0 · Apple M4 Pro · macOS 27.0.1 ·
           Shiki 4.4.1. Median throughput after a 200 ms warm-up, with at least
           20 samples per case and a 1.5 s sampling budget, rotating contenders.
           DOM rendering is excluded and highlighting quality is not measured.
