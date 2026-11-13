@@ -1,7 +1,7 @@
 'use client';
 
 import { IconCheck, IconChevronSm } from '@pierre/icons';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { BenchmarkBar } from '../highlights/BenchmarkBar';
 import cardStyles from '../highlights/HighlightsBenchmarkCard.module.css';
@@ -56,6 +56,9 @@ const measurements = [
   'Peak process memory added by loading the parser and rendering HTML. Lower is better.',
   'Peak process memory added by loading React and JSDOM and replaying the stream. Lower is better.',
 ];
+
+const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-4 sm:p-8 lg:p-10`;
+const browserCardClass = `${cardClass} lg:row-span-3 lg:grid lg:grid-rows-subgrid`;
 
 const decimal = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
@@ -185,6 +188,51 @@ function Comparison({
   );
 }
 
+// Keeps each browser benchmark on the shared caption, controls, and graph rows.
+function BrowserBenchmarkCard({
+  id,
+  title,
+  description,
+  controls,
+  controlsClassName = '',
+  words,
+  streamdown,
+  unit,
+  divisor,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  controls: ReactNode;
+  controlsClassName?: string;
+  words: number;
+  streamdown: number;
+  unit: string;
+  divisor?: number;
+}) {
+  return (
+    <figure className={browserCardClass} aria-labelledby={id}>
+      <figcaption className="mb-6 max-w-2xl">
+        <h3 id={id} className="text-xl font-semibold tracking-tight">
+          {title}
+        </h3>
+        <p className="text-muted-foreground text-sm text-pretty">
+          {description}
+        </p>
+      </figcaption>
+      <div className={`mb-6 ${controlsClassName}`}>{controls}</div>
+      <div aria-live="polite" aria-atomic="true">
+        <Comparison
+          words={words}
+          streamdown={streamdown}
+          unit={unit}
+          divisor={divisor}
+        />
+      </div>
+    </figure>
+  );
+}
+
 export function WordsBenchmarks() {
   const [metricIndex, setMetricIndex] = useState(0);
   const [scale, setScale] = useState(100);
@@ -222,8 +270,6 @@ export function WordsBenchmarks() {
     timeZone: 'UTC',
   });
   const measuredDate = date.format(new Date(run.date));
-  const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-4 sm:p-8 lg:p-10`;
-  const browserCardClass = `${cardClass} lg:row-span-3 lg:grid lg:grid-rows-subgrid`;
 
   return (
     <section
@@ -239,7 +285,7 @@ export function WordsBenchmarks() {
           >
             Markdown rendering benchmarks
           </h2>
-          <p className="text-muted-foreground text-pretty">
+          <p className="text-muted-foreground text-sm text-pretty">
             From everyday AI replies to full specifications, compare rendering
             speed, streaming work, memory use, and download size from Markdown
             to HTML and React.
@@ -340,68 +386,47 @@ export function WordsBenchmarks() {
         </p>
       </div>
       <div className="grid min-w-0 gap-8 lg:grid-cols-3 lg:gap-y-0">
-        <figure
-          className={browserCardClass}
-          aria-labelledby="words-update-chart"
-        >
-          <figcaption className="mb-6 max-w-2xl">
-            <h3
-              id="words-update-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Streaming updates
-            </h3>
-            <p className="text-muted-foreground text-pretty">
-              Time for incoming text to reach the DOM, before paint. 95% of
-              updates finish within this time. Lower is better.
-            </p>
-          </figcaption>
-          <div className="mb-6 grid grid-cols-2 gap-2">
-            <ChartMenu
-              label="Document"
-              value={String(scale)}
-              options={[
-                { value: '1', label: 'Long response · 8.5 KB' },
-                { value: '100', label: 'Repeated response · 853 KB' },
-              ]}
-              onValueChange={(value) => setScale(Number(value))}
-            />
-            <ChartMenu
-              label="Rendering"
-              value={mode}
-              options={modes.map((option) => ({
-                value: option.id,
-                label: option.label,
-              }))}
-              onValueChange={setMode}
-            />
-          </div>
-          <div aria-live="polite" aria-atomic="true">
-            <Comparison
-              words={browser.words.updateP95Ms}
-              streamdown={browser.streamdown.updateP95Ms}
-              unit="ms"
-            />
-          </div>
-        </figure>
+        <BrowserBenchmarkCard
+          id="words-update-chart"
+          title="Streaming updates"
+          description="Time for incoming text to reach the DOM, before paint. 95% of updates finish within this time. Lower is better."
+          controlsClassName="grid grid-cols-2 gap-2"
+          words={browser.words.updateP95Ms}
+          streamdown={browser.streamdown.updateP95Ms}
+          unit="ms"
+          controls={
+            <>
+              <ChartMenu
+                label="Document"
+                value={String(scale)}
+                options={[
+                  { value: '1', label: 'Long response · 8.5 KB' },
+                  { value: '100', label: 'Repeated response · 853 KB' },
+                ]}
+                onValueChange={(value) => setScale(Number(value))}
+              />
+              <ChartMenu
+                label="Rendering"
+                value={mode}
+                options={modes.map((option) => ({
+                  value: option.id,
+                  label: option.label,
+                }))}
+                onValueChange={setMode}
+              />
+            </>
+          }
+        />
 
-        <figure
-          className={browserCardClass}
-          aria-labelledby="words-memory-chart"
-        >
-          <figcaption className="mb-6 max-w-2xl">
-            <h3
-              id="words-memory-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Memory after streaming
-            </h3>
-            <p className="text-muted-foreground text-pretty">
-              JavaScript memory kept after the full document has rendered. Lower
-              is better.
-            </p>
-          </figcaption>
-          <div className="mb-6">
+        <BrowserBenchmarkCard
+          id="words-memory-chart"
+          title="Memory after streaming"
+          description="JavaScript memory kept after the full document has rendered. Lower is better."
+          words={memory.words.heapBytes}
+          streamdown={memory.streamdown.heapBytes}
+          divisor={1e6}
+          unit="MB"
+          controls={
             <ChartMenu
               label="Repeated response · 853 KB"
               value={memoryMode}
@@ -411,34 +436,18 @@ export function WordsBenchmarks() {
               }))}
               onValueChange={setMemoryMode}
             />
-          </div>
-          <div aria-live="polite" aria-atomic="true">
-            <Comparison
-              words={memory.words.heapBytes}
-              streamdown={memory.streamdown.heapBytes}
-              divisor={1e6}
-              unit="MB"
-            />
-          </div>
-        </figure>
+          }
+        />
 
-        <figure
-          className={browserCardClass}
-          aria-labelledby="words-footprint-chart"
-        >
-          <figcaption className="mb-6 max-w-2xl">
-            <h3
-              id="words-footprint-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Browser download
-            </h3>
-            <p className="text-muted-foreground text-pretty">
-              JavaScript transferred to load the renderer and selected
-              languages, compressed with gzip. Lower is better.
-            </p>
-          </figcaption>
-          <div className="mb-6">
+        <BrowserBenchmarkCard
+          id="words-footprint-chart"
+          title="Browser download"
+          description="JavaScript transferred to load the renderer and selected languages, compressed with gzip. Lower is better."
+          words={footprint.words}
+          streamdown={footprint.streamdown}
+          divisor={1000}
+          unit="KB"
+          controls={
             <ChartMenu
               label="React renderer · gzip"
               value={footprintId}
@@ -451,16 +460,8 @@ export function WordsBenchmarks() {
               ]}
               onValueChange={setFootprintId}
             />
-          </div>
-          <div aria-live="polite" aria-atomic="true">
-            <Comparison
-              words={footprint.words}
-              streamdown={footprint.streamdown}
-              divisor={1000}
-              unit="KB"
-            />
-          </div>
-        </figure>
+          }
+        />
       </div>
 
       <WordsDisclosure
