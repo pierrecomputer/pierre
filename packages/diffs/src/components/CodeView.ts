@@ -149,7 +149,7 @@ export interface CodeViewSearchOptions {
   /**
    * How the viewport moves to a match that navigation has to bring into
    * view. Reduced-motion preferences still force instant scrolling.
-   * @default 'smooth-auto'
+   * @default 'instant'
    */
   scrollBehavior?: CodeViewScrollBehavior;
   /**
@@ -1718,7 +1718,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       side: match.side,
       align: 'center',
       offset: -this.getSearchTopInset() / 2,
-      behavior: this.options.searchOptions?.scrollBehavior ?? 'smooth-auto',
+      behavior: this.options.searchOptions?.scrollBehavior ?? 'instant',
       searchMatch: true,
     };
     this.requestScroll(target);

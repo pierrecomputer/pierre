@@ -604,6 +604,40 @@ describe('CodeView search API', () => {
     }
   });
 
+  test('scrolls to matches instantly by default', async () => {
+    const dom = installDom();
+    const viewer = new CodeView();
+    const getScrollAnimation = () =>
+      (viewer as unknown as { scrollAnimation: unknown }).scrollAnimation;
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      // The second match is a few viewports away, close enough that a
+      // 'smooth-auto' scroll would animate.
+      await renderItems(viewer, [
+        {
+          id: 'file-a',
+          type: 'file',
+          file: {
+            name: 'file-a.ts',
+            contents: Array.from({ length: 300 }, (_, index) =>
+              index === 0 || index === 199 ? 'target' : `line ${index + 1}`
+            ).join('\n'),
+          },
+        },
+      ]);
+      viewer.openSearch({ query: 'target' });
+      viewer.navigateSearch('next');
+      expect(getSearchState(viewer).current?.lineNumber).toBe(200);
+      expect(getScrollAnimation()).toBeUndefined();
+      viewer.render(true);
+      expect(root.scrollTop).toBeGreaterThan(0);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('scrolls to matches with the configured behavior', async () => {
     const dom = installDom();
     const viewer = new CodeView({

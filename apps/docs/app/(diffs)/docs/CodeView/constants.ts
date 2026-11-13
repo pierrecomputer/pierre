@@ -190,8 +190,8 @@ const options: CodeViewOptions<undefined, undefined> = {
     // owns it. Escape and find-again still work while a panel is open.
     disableShortcuts: true,
     // How the viewport moves to a match that navigation has to bring into
-    // view: 'instant', 'smooth', or the default 'smooth-auto'.
-    scrollBehavior: 'instant',
+    // view: 'smooth', 'smooth-auto', or the default 'instant'.
+    scrollBehavior: 'smooth',
     // Matching options a fresh panel opens with.
     defaults: { caseSensitive: true },
   },
@@ -275,8 +275,8 @@ const viewer = new CodeView({
     // owns it. Escape and find-again still work while a panel is open.
     disableShortcuts: true,
     // How the viewport moves to a match that navigation has to bring into
-    // view: 'instant', 'smooth', or the default 'smooth-auto'.
-    scrollBehavior: 'instant',
+    // view: 'smooth', 'smooth-auto', or the default 'instant'.
+    scrollBehavior: 'smooth',
     // Matching options a fresh panel opens with.
     defaults: { caseSensitive: true },
   },
