@@ -138,7 +138,7 @@ these options:
 
 | Option                  | Behavior                                                                                                                                                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lang`                  | A built-in language name or alias                                                                                                                                                                       |
+| `lang`                  | A built-in or registered language name or alias                                                                                                                                                         |
 | `theme`                 | One Zed `Theme`, `ThemeFamily`, or registered name for a configured highlighter                                                                                                                         |
 | `themes`                | A non-empty map of named themes, such as `{ dark, light }`. The output includes styles for each theme.                                                                                                  |
 | `cssVariablePrefix`     | Prefix for CSS colors and properties for multiple themes. The default is `--hls-`.                                                                                                                      |
@@ -577,10 +577,7 @@ Both entries export these functions. The main entry also exports all themes:
 Its output methods accept registered theme names or theme objects. They reject
 languages absent from `langs`.
 
-The main entry initializes a shared instance at import. `init(module)` accepts a
-compiled combined `WebAssembly.Module`. `registerLanguages(langs)` adds custom
-lexers to the shared output functions. The previous no-argument and Wasm-module
-factory forms of `createHighlighter` are no longer supported.
+`init(module)` accepts a compiled combined `WebAssembly.Module`.
 
 The same entry exports the public types:
 

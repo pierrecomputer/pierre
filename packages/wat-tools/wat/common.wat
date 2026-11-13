@@ -619,9 +619,10 @@
   ;; 6-8 framework expressions, 9-13 unfinished HTML/XML/Vue/Svelte/Astro
   ;; start tags, 23 a Jinja-family start tag cut by a template tag, 26-27 an
   ;; ERB start tag or ERB tag, 28 a Haml or Pug body, 29 an HTTP or Hurl body,
-  ;; 38-39 a ShaderLab HLSL or GLSL body, 42 a Stylus style body, 92-93 an Org
-  ;; or Wikitext source block, 96 a Glimmer template. The owning lexer resumes
-  ;; start tags through highlights.wat.
+  ;; 14-16 a CSS preprocessor style body, 17-18 a TypeScript or plain-text
+  ;; script, 38-39 a ShaderLab HLSL or GLSL body, 42 a Stylus style body,
+  ;; 92-93 an Org or Wikitext source block, 96 a Glimmer template. The owning
+  ;; lexer resumes start tags through $streamResumeLang.
   (func $streamSetRegion (param $kind i32)
     (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof)))
       (then

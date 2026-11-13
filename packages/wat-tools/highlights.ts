@@ -87,7 +87,7 @@ export function buildHighlightsLexer({
  * - derive language IDs, dispatch, and aliases (`language-table`)
  * - expand enums
  * - copy a function with globals fixed to constants (`func-variant`)
- * - resolve named values (`const`; see `src/memory.wat`)
+ * - resolve named values (`const`) and allocate `memory-region`s
  * - emit CSS-variable tables (`css-variable-table`)
  * - emit enum bitsets (`bitset`)
  * - convert string operands for `i32.const` and `i64.const` to integer literals
@@ -98,7 +98,8 @@ export function transformWat(
   url: string | URL,
   content?: string
 ): TransformedWat {
-  // WARNING: `pathToFileURL` returns Node's URL type, which differs from the global URL under bun-types.
+  // WARNING: `pathToFileURL` returns Node's URL type, which differs from the
+  // global URL under bun-types.
   if (typeof url === 'string') url = new URL(pathToFileURL(url).href);
   content ??= readFileSync(url, 'utf-8');
   const enumMap: EnumMap = new Map();

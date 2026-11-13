@@ -770,7 +770,7 @@ function buildHighlighter(
     const recordsPtr =
       Math.ceil(Math.max(highlighter.inputPtr + length + 96, blobEnd) / 16) *
       16;
-    const pages = Math.ceil((recordsPtr + records.byteLength + 96) / 65536);
+    const pages = Math.ceil((recordsPtr + records.byteLength + 96) / pageSize);
     if (pages > highlighter.pageN) {
       highlighter.memory.grow(pages - highlighter.pageN);
       highlighter.bindMemory();

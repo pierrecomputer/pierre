@@ -298,6 +298,7 @@ import {
   codeToTokens,
   createHighlighter,
   init,
+  isRegisteredLanguage,
   isSupportedLanguage,
   LiveTokenizer,
   registerLanguages,
