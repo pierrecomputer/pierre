@@ -88,9 +88,11 @@ tasks:
 
   # Incremental LiveTokenizer benchmarks: eager indexing, cached reads, edit
   # latency versus the full-rebuild baseline, and retained-memory footprints.
-  # Compiles the WAT in-process, so it needs no build.
+  # Compiles the WAT in-process, so it needs only the wat-tools build.
   bench-live:
     command: 'bun ./benchmark/bench-live.ts'
+    deps:
+      - '^:build'
     options:
       cache: false
       runInCI: 'always'
@@ -98,6 +100,8 @@ tasks:
   # Compile in the parent; measure startup and highlighting in fresh processes.
   bench-memory:
     command: 'bun ./benchmark/bench-memory.ts'
+    deps:
+      - '^:build'
     options:
       cache: false
       runInCI: 'always'
