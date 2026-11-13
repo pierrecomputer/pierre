@@ -4757,7 +4757,7 @@ export const samples: Record<string, LangSample> = {
       'string.escape',
     ],
   },
-  batch: {
+  bat: {
     code: lines(
       '@echo off',
       'REM Build selected files',
@@ -4839,7 +4839,7 @@ export const samples: Record<string, LangSample> = {
       'number',
     ],
   },
-  fortran: {
+  'fortran-free-form': {
     code: lines(
       'program demo',
       '  use iso_fortran_env, only: real64',
@@ -5054,7 +5054,7 @@ export const samples: Record<string, LangSample> = {
       'string.special',
     ],
   },
-  bash: {
+  shellscript: {
     code: lines(
       '#!/usr/bin/env bash',
       'set -euo pipefail',
@@ -5559,7 +5559,7 @@ export const samples: Record<string, LangSample> = {
       'comment',
     ],
   },
-  dockerfile: {
+  docker: {
     code: lines(
       '# syntax=docker/dockerfile:1',
       'ARG NODE_VERSION=20',
@@ -6310,7 +6310,7 @@ export const samples: Record<string, LangSample> = {
       'keyword.operator',
     ],
   },
-  js: {
+  javascript: {
     code: lines(
       "import { readFile } from 'node:fs/promises';",
       'export default class Store extends EventEmitter {',
@@ -6696,7 +6696,7 @@ export const samples: Record<string, LangSample> = {
       'selector.id',
     ],
   },
-  lisp: {
+  'common-lisp': {
     code: lines(
       ';;; A small library',
       '(defpackage :shop (:use :cl))',
@@ -6791,7 +6791,7 @@ export const samples: Record<string, LangSample> = {
       'boolean',
     ],
   },
-  makefile: {
+  make: {
     code: lines(
       '# Build config',
       'CC := gcc',
@@ -7095,7 +7095,7 @@ export const samples: Record<string, LangSample> = {
       'namespace',
     ],
   },
-  objc: {
+  'objective-c': {
     code: lines(
       '#import <Foundation/Foundation.h>',
       '#define MAX_ITEMS 10',
@@ -8208,7 +8208,7 @@ export const samples: Record<string, LangSample> = {
       'string.escape',
     ],
   },
-  ts: {
+  typescript: {
     code: lines(
       "import type { Readable } from 'node:stream';",
       "import { EventEmitter } from 'node:events';",
@@ -8465,7 +8465,7 @@ export const samples: Record<string, LangSample> = {
       'constant.builtin',
     ],
   },
-  wat: {
+  wasm: {
     code: lines(
       ';; a small module',
       '(module',
@@ -9030,10 +9030,10 @@ export const tokenizerSamples: [Lang, string][] = [
   ['gdshader', samples.gdshader.code],
   ['gdresource', samples.gdresource.code],
   ['plain', 'one\ntwo\n'],
-  ['batch', samples.batch.code],
+  ['batch', samples.bat.code],
   ['elm', samples.elm.code],
   ['cuda', samples.cuda.code],
-  ['fortran', samples.fortran.code],
+  ['fortran', samples['fortran-free-form'].code],
   ['fortran-fixed-form', samples['fortran-fixed-form'].code],
   ['solidity', samples.solidity.code],
   [

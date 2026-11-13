@@ -38,7 +38,7 @@
 
   (func $embedRegionLanguage (param $kind i32) (result i32)
     (if (i32.eq (local.get $kind) (i32.const 1))
-      (then (return (enum.get $Language.js))))
+      (then (return (enum.get $Language.javascript))))
     (if (i32.eq (local.get $kind) (i32.const 2))
       (then (return (enum.get $Language.css))))
     (if (i32.eq (local.get $kind) (i32.const 4))
@@ -52,7 +52,7 @@
     (if (i32.eq (local.get $kind) (i32.const 42))
       (then (return (enum.get $Language.stylus))))
     (if (i32.eq (local.get $kind) (i32.const 17))
-      (then (return (enum.get $Language.ts))))
+      (then (return (enum.get $Language.typescript))))
     (if (i32.eq (local.get $kind) (i32.const 18))
       (then (return (enum.get $Language.plain))))
     (enum.get $Language.tsx))

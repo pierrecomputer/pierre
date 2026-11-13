@@ -175,7 +175,7 @@ export function transformLexer(
             throw new Error(`${name}: cannot prune ${left}`);
         }
         if (name === '$streamResetGlobals') {
-          if (!has('js', 'jsx', 'ts', 'tsx', 'tsrx'))
+          if (!has('javascript', 'jsx', 'typescript', 'tsx', 'tsrx'))
             text = remove(
               text,
               /\(global\.set \$ecmaImport \(i32\.const 0\)\)/
@@ -337,10 +337,10 @@ if (!isMainThread && Array.isArray(workerData)) {
     const selected =
       name === 'all'
         ? undefined
-        : name === 'ts'
-          ? ['js', 'jsx', 'ts', 'tsx']
+        : name === 'typescript'
+          ? ['javascript', 'jsx', 'typescript', 'tsx']
           : [name];
-    const entry = name === 'ts' ? 'typescript' : name;
+    const entry = name;
     const source = transformLexer(selected);
     const ids = new Set(selected?.map((name) => source.languages[name]));
     // WARNING: A lexer takes an alias with ID 0 as a name of its own, so the
@@ -385,7 +385,7 @@ if (!isMainThread && Array.isArray(workerData)) {
         `export default { name: ${JSON.stringify(entry)}, aliases: ${aliases}, wasm };\n`
     );
     writeFileSync(new URL(`${entry}.d.ts`, languageDir), languageDts);
-    if (name === 'ts') {
+    if (name === 'typescript') {
       for (const alias of ['ts', 'tsx', 'js', 'jsx', 'javascript']) {
         writeFileSync(
           new URL(`${alias}.js`, languageDir),
@@ -412,9 +412,10 @@ if (isMainThread && import.meta.main) {
   // WARNING: The lexer modules take most of the build time, so workers
   // compile them while this thread compiles the combined module. Plain text
   // (ID 0) is built into every highlighter and has no module; the ECMAScript
-  // languages share the `ts` one.
+  // languages share the `typescript` one.
   const standalone = Object.keys(enumMap.get('$Language')!).filter(
-    (name) => languages[name] !== 0 && !['js', 'jsx', 'tsx'].includes(name)
+    (name) =>
+      languages[name] !== 0 && !['javascript', 'jsx', 'tsx'].includes(name)
   );
   const workerCount = Math.max(1, availableParallelism() - 2);
   const workers = Array.from(

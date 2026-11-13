@@ -69,14 +69,15 @@ const htmlBytes = highlighter.codeToHtml('const a = 1', {
 const html = new TextDecoder().decode(htmlBytes);
 ```
 
-Each built-in language has a module with its name, such as
-`@pierre/highlights/langs/python`. The
-[language table](https://diffs.com/docs#highlights-languages) lists the names.
-The TypeScript module supports `ts`, `tsx`, `cts`, `mts`, `js`, `jsx`, `mjs`,
-and `cjs`. Its module names are `typescript`, `ts`, `tsx`, `javascript`, `js`,
-and `jsx`. Plain text and `ansi` need no module. Each language module contains
-its standalone Wasm as base64. Import only the languages and themes that your
-application needs.
+Each built-in language has a module with its ID, such as
+`@pierre/highlights/langs/python` or `@pierre/highlights/langs/shellscript`. The
+[language table](https://diffs.com/docs#highlights-languages) lists the IDs. An
+ID is the same as the Shiki ID when Shiki has the language. An alias such as
+`bash` has no module. The TypeScript module supports `ts`, `tsx`, `cts`, `mts`,
+`js`, `jsx`, `mjs`, and `cjs`. Its module names are `typescript`, `ts`, `tsx`,
+`javascript`, `js`, and `jsx`. Plain text and `ansi` need no module. Each
+language module contains its standalone Wasm as base64. Import only the
+languages and themes that your application needs.
 
 Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
 script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text

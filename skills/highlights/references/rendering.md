@@ -116,10 +116,12 @@ not embed them, and the tokenizer classes use built-in lexers only.
 `await createHighlighter({ langs, themes })` returns an isolated
 `RegisteredHighlighter`. Select only the language modules and themes that the
 application needs. Each built-in language has a default-export module with its
-canonical name, such as `@pierre/highlights/langs/python`. The TypeScript module
-supports `ts`, `tsx`, `cts`, `mts`, `js`, `jsx`, `mjs`, and `cjs`; import it as
-`typescript`, `ts`, `tsx`, `javascript`, `js`, or `jsx`. Plain text and `ansi`
-need no module.
+ID, such as `@pierre/highlights/langs/python`. IDs match Shiki's IDs, so Bash is
+`langs/shellscript`, Dockerfile is `langs/docker`, and Objective-C is
+`langs/objective-c`; an alias such as `bash` has no module. The TypeScript
+module supports `ts`, `tsx`, `cts`, `mts`, `js`, `jsx`, `mjs`, and `cjs`; import
+it as `typescript`, `ts`, `tsx`, `javascript`, `js`, or `jsx`. Plain text and
+`ansi` need no module.
 
 Embedded code uses the languages in `langs`. With `langs: [ts, html]`, script
 bodies use JavaScript and style bodies stay plain text until CSS is added. A
