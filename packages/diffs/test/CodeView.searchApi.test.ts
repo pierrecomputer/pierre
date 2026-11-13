@@ -660,4 +660,113 @@ describe('CodeView search API', () => {
       dom.cleanup();
     }
   });
+
+  test.each(['Escape', 'the close button'] as const)(
+    'returns focus to the root when a focused panel closes with %s',
+    async (how) => {
+      const dom = installDom();
+      const viewer = new CodeView();
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        await renderItems(viewer, [
+          {
+            id: 'read',
+            type: 'file',
+            file: { name: 'read.txt', contents: 'target' },
+          },
+        ]);
+        dispatchPrimaryFind(root);
+        await wait(0);
+        const input = getSearchInput(root);
+        expect(getSearchPanelRoot(root).activeElement).toBe(input);
+
+        if (how === 'Escape') {
+          input.dispatchEvent(
+            new window.KeyboardEvent('keydown', {
+              key: 'Escape',
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+            })
+          );
+        } else {
+          getSearchPanelRoot(root)
+            .querySelector<HTMLButtonElement>('[aria-label="Close"]')!
+            .click();
+        }
+
+        expect(root.querySelector('[data-search-panel]')).toBeNull();
+        expect(document.activeElement).toBe(root);
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
+  test('returns focus to the scoped editor when a focused panel closes', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      useTokenTransformer: true,
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target' },
+        },
+      ]);
+      const content = getEditorContent(viewer, 'a');
+      const contentRoot = content.getRootNode() as ShadowRoot;
+      content.focus();
+      viewer.getEditor('a')!.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'forward',
+        },
+      ]);
+      dispatchPrimaryFind(content);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'a' });
+      expect(getSearchPanelRoot(root).activeElement).toBe(getSearchInput(root));
+      expect(contentRoot.activeElement).toBeNull();
+
+      viewer.closeSearch();
+      await waitFor(() => contentRoot.activeElement === content);
+
+      expect(contentRoot.activeElement).toBe(content);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('leaves focus alone when the closing panel did not have it', async () => {
+    const dom = installDom();
+    const viewer = new CodeView();
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      outside.focus();
+
+      viewer.closeSearch();
+
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+      expect(document.activeElement).toBe(outside);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
 });

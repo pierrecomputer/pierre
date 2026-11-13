@@ -2530,6 +2530,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   /** Closes the find/replace panel and clears its match highlights. */
   public closeSearch(): void {
     const { searchPanel } = this;
+    const panelHadFocus = this.isSearchPanelFocused();
+    const { scope } = this.searchState;
     this.removeSearchFocusListeners();
     this.searchPanel = undefined;
     this.resetSearchState();
@@ -2537,8 +2539,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     searchPanel.cleanup();
+    if (panelHadFocus) {
+      this.returnSearchPanelFocus(scope?.itemId);
+    }
     const { onSearchStateChange } = this.options;
     onSearchStateChange?.(undefined);
+  }
+
+  // Removing a focused panel would leave focus on the page body. Keep it in
+  // the CodeView instead: on the editor the panel was searching, or on the
+  // root when there was none.
+  private returnSearchPanelFocus(scopedItemId: string | undefined): void {
+    this.root?.focus({ preventScroll: true });
+    const scopedItem =
+      scopedItemId != null ? this.idToItem.get(scopedItemId) : undefined;
+    if (scopedItem != null) {
+      this.focusedItemId = scopedItemId;
+      this.returnParkedFocus(scopedItem);
+    }
   }
 
   public isSearchOpen(): boolean {
