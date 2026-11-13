@@ -39,7 +39,9 @@ export default async function WordsPage() {
       WORDS_EXAMPLE_KINDS.map(async (kind) => [
         kind,
         await preloadCodeExample(
-          docsCodeSnippet(`words-${kind}.tsx`, getInitialWordsUsage(kind))
+          docsCodeSnippet(`words-${kind}.tsx`, getInitialWordsUsage(kind), {
+            disableFileHeader: false,
+          })
         ),
       ])
     )

@@ -1,4 +1,4 @@
-import { IconCheck, IconCopy } from '@pierre/icons';
+import { IconCheck, IconCopyFill } from '@pierre/icons';
 import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -41,11 +41,11 @@ export function CopyCodeButton({ content }: CopyButtonProps) {
       onClick={copyToClipboard}
       aria-label={copied ? 'Copied' : 'Copy code'}
       className={cn(
-        'hover:bg-accent -mr-[10px] cursor-pointer rounded-sm p-2 opacity-60 hover:opacity-100',
+        'text-muted-foreground hover:bg-accent hover:text-foreground -mr-[10px] cursor-pointer rounded-sm p-2',
         copied ? 'text-emerald-500' : undefined
       )}
     >
-      {copied ? <IconCheck /> : <IconCopy />}
+      {copied ? <IconCheck /> : <IconCopyFill />}
     </button>
   );
 }
