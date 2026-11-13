@@ -1201,3 +1201,60 @@ test('unsafeCSS reaches the CodeView search panel and wins over its own styles',
   await expect(input).toBeFocused();
   await expect(input).toHaveCSS('color', 'rgb(1, 2, 3)');
 });
+
+for (const kind of ['file', 'split'] as const) {
+  test(`find opens on the text selected in a ${kind} code line`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?highlight&kind=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.getByText('value', { exact: true }).first().dblclick();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root
+      .locator('[data-search-panel-overlay]')
+      .getByRole('textbox', { name: 'Search' });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue('value');
+    await expect(root.locator('[data-matches]')).toContainText('of');
+  });
+}
+
+test('find opens empty when the selection spans lines or sits outside the code', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?highlight&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  const firstLine = root.locator('[data-line="1"]').first();
+  const secondLine = root.locator('[data-line="2"]').first();
+  await expect(secondLine).toBeVisible();
+
+  // A selection that starts on one line and ends on the next.
+  const from = await firstLine.boundingBox();
+  const to = await secondLine.boundingBox();
+  if (from == null || to == null) throw new Error('Expected two code lines');
+  await page.mouse.move(from.x + 4, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 60, to.y + to.height / 2, { steps: 4 });
+  await page.mouse.up();
+  expect(
+    await page.evaluate(() => document.getSelection()?.toString() ?? '')
+  ).not.toBe('');
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('');
+  await input.press('Escape');
+
+  // A selection in the page around the CodeView.
+  await page.locator('[data-outside]').evaluate((button) => {
+    document.getSelection()?.selectAllChildren(button);
+  });
+  await page.evaluate(() => window.__codeView?.openSearch());
+  await expect(input).toHaveValue('');
+});

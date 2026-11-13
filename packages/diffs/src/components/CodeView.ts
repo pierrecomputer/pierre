@@ -88,6 +88,7 @@ import { linesFromFileContents } from '../utils/computeFileOffsets';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
+import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isUserScrollInput } from '../utils/isUserScrollInput';
@@ -1589,11 +1590,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   // A panel scoped to an editor opens on that editor's selection, or the
   // word under its caret, like the standalone editor's find. Searching every
-  // item opens empty.
+  // item opens on the text selected in a code line, when there is some.
   private getSearchQueryFromScope(): string {
     const { scope } = this.searchState;
-    const editor =
-      scope != null ? this.itemEditors.get(scope.itemId)?.editor : undefined;
+    if (scope == null) {
+      return this.getSelectedLineText();
+    }
+    const editor = this.itemEditors.get(scope.itemId)?.editor;
     const document = editor?.getEditState()?.document;
     if (editor == null || document == null) {
       return '';
@@ -1602,6 +1605,36 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       document,
       editor.getViewState().selections?.at(-1)
     );
+  }
+
+  // The text selected with the browser's own selection, when all of it sits in
+  // one code line of a rendered item. Empty otherwise.
+  private getSelectedLineText(): string {
+    const { firstIndex, lastIndex } = this.renderState;
+    for (let index = firstIndex; index >= 0 && index <= lastIndex; index++) {
+      const shadowRoot = this.items[index]?.element?.shadowRoot;
+      if (shadowRoot == null) {
+        continue;
+      }
+      const selected = getComposedSelectionRange(shadowRoot);
+      if (selected == null || selected.collapsed) {
+        continue;
+      }
+      const line = getCodeLineElement(selected.startContainer);
+      if (
+        line == null ||
+        !shadowRoot.contains(line) ||
+        line !== getCodeLineElement(selected.endContainer)
+      ) {
+        continue;
+      }
+      const range = document.createRange();
+      range.setStart(selected.startContainer, selected.startOffset);
+      range.setEnd(selected.endContainer, selected.endOffset);
+      const text = range.toString();
+      return text.includes('\n') ? '' : text;
+    }
+    return '';
   }
 
   private resetSearchState(): void {
@@ -5630,6 +5663,12 @@ function hasItemLayoutOptionChanged<LAnnotation, Caret>(
       (nextOptions.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
   );
+}
+
+// The code line row a node sits in, if any.
+function getCodeLineElement(node: Node): Element | undefined {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element?.closest('[data-line]') ?? undefined;
 }
 
 function hasSearchIndexOptionChanged<LAnnotation, Caret>(

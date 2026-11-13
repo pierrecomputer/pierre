@@ -176,7 +176,9 @@ appears. Collapsed items are skipped, and a diff's collapsed unchanged context
 is searched only while that item is the scope or the context is expanded.
 Opening while the panel itself has focus keeps the current scope and query. A
 fresh panel scoped to an editor opens on that editor's selection when it stays
-on one line, or the word under its caret.
+on one line, or the word under its caret. A fresh panel that searches every item
+opens on the text selected in a code line, when the selection stays on that
+line.
 
 Configure the panel through `searchOptions`:
 
