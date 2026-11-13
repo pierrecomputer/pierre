@@ -58,7 +58,7 @@ const measurements = [
 ];
 
 const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-4 sm:p-8 lg:p-10`;
-const browserCardClass = `${cardClass} lg:row-span-3 lg:grid lg:grid-rows-subgrid`;
+const browserCardClass = `${cardClass} lg:row-span-4 lg:grid lg:grid-rows-subgrid`;
 
 const decimal = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
@@ -220,6 +220,7 @@ function BrowserBenchmarkCard({
           {description}
         </p>
       </figcaption>
+      <hr />
       <div className={`mb-6 ${controlsClassName}`}>{controls}</div>
       <div aria-live="polite" aria-atomic="true">
         <Comparison
