@@ -76,13 +76,13 @@ function ChartMenu({
     options.find((option) => option.value === value)?.label ?? value;
 
   return (
-    <div className={labelInside ? 'min-w-0' : 'grid min-w-0 gap-1.5 text-xs'}>
+    <div className={labelInside ? 'min-w-0' : 'grid min-w-0 gap-1.5 text-sm'}>
       {!labelInside && <span className="text-muted-foreground">{label}</span>}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="group w-fit max-w-full min-w-0 justify-start px-3 font-normal"
+            className="dark group w-fit max-w-full min-w-0 justify-start border-neutral-800 bg-neutral-950 px-3 font-normal text-neutral-50 hover:bg-neutral-900 hover:text-neutral-50"
             aria-label={`${label}: ${selectedLabel}`}
           >
             {labelInside && (
@@ -94,13 +94,14 @@ function ChartMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="min-w-[var(--radix-dropdown-menu-trigger-width)]"
+          className="dark min-w-[var(--radix-dropdown-menu-trigger-width)] border-neutral-800 bg-neutral-950 text-neutral-50"
           scrollSelectedIntoView
         >
           {options.map((option) => (
             <DropdownMenuItem
               key={option.value}
               selected={option.value === value}
+              className="focus:bg-neutral-800 focus:text-neutral-50 data-[selected=true]:bg-neutral-800 data-[selected=true]:text-neutral-50"
               onSelect={() => onValueChange(option.value)}
             >
               {option.label}
@@ -237,7 +238,7 @@ export function WordsBenchmarks() {
             {measurements[metricIndex]}
           </p>
         </figcaption>
-        <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="mb-6 flex flex-wrap items-end gap-2">
           <ChartMenu
             label="Measures"
             value={String(metricIndex)}
@@ -246,7 +247,6 @@ export function WordsBenchmarks() {
               label,
             }))}
             onValueChange={(value) => setMetricIndex(Number(value))}
-            labelInside
           />
           <ChartMenu
             label="Document"
@@ -256,7 +256,6 @@ export function WordsBenchmarks() {
               label: documents[row.fixture].label,
             }))}
             onValueChange={setFixture}
-            labelInside
           />
         </div>
         <p
@@ -440,9 +439,9 @@ export function WordsBenchmarks() {
         onToggle={(event) => setMethodOpen(event.currentTarget.open)}
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
         summary="How we measure"
-        summaryClassName="text-sm font-medium -ml-3"
+        summaryClassName="text-sm font-medium"
       >
-        <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 text-sm leading-relaxed md:grid-cols-2">
+        <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 p-2 text-sm leading-relaxed md:grid-cols-2">
           <div className="space-y-3">
             <h3 className="text-foreground font-medium">
               HTML and React benchmarks
