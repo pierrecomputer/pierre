@@ -181,16 +181,16 @@ void test('resolves an exact module to one chunk on either path separator', () =
 
 void test('published coverage accounts for every installed Words lexer and real shared grammar', async () => {
   const coverage = await loadDownloadCoverage();
-  assert.equal(coverage.wordsLanguages.length, 152);
+  assert.equal(coverage.wordsLanguages.length, 190);
   assert.equal(coverage.streamdownLanguages.length, 242);
-  assert.equal(coverage.sharedLanguages.length, 148);
+  assert.equal(coverage.sharedLanguages.length, 186);
   assert.deepEqual(coverage.wordsOnlyLanguages, [
     'cuda',
     'groq',
     'promql',
     'tsrx',
   ]);
-  assert.equal(coverage.shared.loadedStreamdownLanguages.length, 163);
+  assert.equal(coverage.shared.loadedStreamdownLanguages.length, 203);
   assert.ok(coverage.shared.loadedStreamdownLanguages.includes('regexp'));
   assert.ok(
     !coverage.shared.loadedStreamdownLanguages.includes('shellsession')
