@@ -38,6 +38,9 @@ const reference = new HighlightsHighlighter(
     readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
   )
 );
+const loadLanguage = async (name: string): Promise<Language> =>
+  ((await import(`@pierre/highlights/langs/${name}`)) as { default: Language })
+    .default;
 
 test('createHighlighter requires options and returns a promise', () => {
   expectTypeOf(createHighlighter).parameters.toEqualTypeOf<
@@ -208,7 +211,7 @@ test('modular emission handles memory growth, byte input, and repeated calls', a
   );
 });
 
-test('standalone language modules embed smaller Wasm and the full bundle embeds one module', () => {
+test('standalone language modules embed smaller Wasm and langs holds one combined module', () => {
   expect(langs).toHaveLength(1);
   const size = (language: Language): number => (language.wasm as string).length;
   expect(size(typescript)).toBeLessThan(size(langs[0]));
@@ -253,7 +256,7 @@ test('themes contains every bundled JSON theme', () => {
   ).toBe(true);
 });
 
-test('the full theme bundle resolves canonical IDs, including accented display names', async () => {
+test('themes resolve by canonical ID, including accented display names', async () => {
   const highlighter = await combinedPromise;
   for (const theme of themes) {
     if (theme.id === undefined) throw new Error(`Missing ID: ${theme.name}`);
@@ -325,9 +328,7 @@ test.each(Object.entries(languageSamples))(
     const entry = ['ts', 'tsx', 'js', 'jsx'].includes(name)
       ? 'typescript'
       : name;
-    const { default: language }: { default: Language } = await import(
-      `@pierre/highlights/langs/${entry}`
-    );
+    const language = await loadLanguage(entry);
     const selective = await createHighlighter({
       langs: [...langs, language],
       themes: [cssVariables],
@@ -348,9 +349,7 @@ test.each(Object.entries(languageSamples))(
 test.each(['markdown', 'mdx'] as const)(
   'standalone %s uses registered TypeScript and Python fences',
   async (lang) => {
-    const { default: language }: { default: Language } = await import(
-      `@pierre/highlights/langs/${lang}`
-    );
+    const language = await loadLanguage(lang);
     const selective = await createHighlighter({
       langs: [language, typescript, python],
       themes: [cssVariables],
@@ -488,9 +487,7 @@ test('tagged templates keep nested HTML state and use registered CSS', async () 
 test.each(['vue', 'svelte', 'astro', 'mdx', 'qml'] as const)(
   '%s highlights expressions with its own lexer',
   async (lang) => {
-    const { default: language }: { default: Language } = await import(
-      `@pierre/highlights/langs/${lang}`
-    );
+    const language = await loadLanguage(lang);
     const code =
       lang === 'vue'
         ? '<div>{{ value + 1 }}</div>'
@@ -512,8 +509,7 @@ test.each(['vue', 'svelte', 'astro', 'mdx', 'qml'] as const)(
 );
 
 test('PHP starts HTML again after each island, as the combined lexer does', async () => {
-  const { default: php }: { default: Language } =
-    await import('@pierre/highlights/langs/php');
+  const php = await loadLanguage('php');
   const highlighter = await createHighlighter({
     langs: [php, html, typescript, css, markdown],
     themes: [pierreDark],
@@ -570,9 +566,7 @@ test.each([
 ] as const)(
   '%s leaves unregistered embedded syntax plain',
   async (lang, code, text) => {
-    const { default: language }: { default: Language } = await import(
-      `@pierre/highlights/langs/${lang}`
-    );
+    const language = await loadLanguage(lang);
     const highlighter = await createHighlighter({
       langs: [language],
       themes: [pierreDark],
@@ -758,8 +752,7 @@ test('embedded languages reuse child lexer instances', async () => {
 });
 
 test('a reused child lexer does not continue its last stream', async () => {
-  const { default: astro }: { default: Language } =
-    await import('@pierre/highlights/langs/astro');
+  const astro = await loadLanguage('astro');
   const highlighter = await createHighlighter({
     langs: [markdown, astro, typescript],
     themes: [pierreDark],
@@ -779,18 +772,8 @@ test('a reused child lexer does not continue its last stream', async () => {
 });
 
 test('HTTP keeps its own lexer for bodies that are not JSON or XML', async () => {
-  const modules = await Promise.all(
-    ['http', 'json', 'xml'].map(
-      async (name) =>
-        (
-          (await import(`@pierre/highlights/langs/${name}`)) as {
-            default: Language;
-          }
-        ).default
-    )
-  );
   const highlighter = await createHighlighter({
-    langs: modules,
+    langs: [await loadLanguage('http'), json, await loadLanguage('xml')],
     themes: [pierreDark],
   });
   for (const code of [
@@ -855,9 +838,7 @@ test.each(Object.entries(languageSamples))(
     const entry = ['ts', 'tsx', 'js', 'jsx'].includes(name)
       ? 'typescript'
       : name;
-    const { default: language }: { default: Language } = await import(
-      `@pierre/highlights/langs/${entry}`
-    );
+    const language = await loadLanguage(entry);
     const selective = await createHighlighter({
       langs: [...langs, markdown, language],
       themes: [cssVariables],
@@ -879,9 +860,7 @@ test.each(Object.entries(languageSamples))(
 test.each(['handlebars', 'jinja', 'liquid', 'twig', 'mermaid'])(
   'standalone %s resumes an embedded region when streamed',
   async (name) => {
-    const { default: language }: { default: Language } = await import(
-      `@pierre/highlights/langs/${name}`
-    );
+    const language = await loadLanguage(name);
     const selective = await createHighlighter({
       langs: [...langs, language],
       themes: [cssVariables],

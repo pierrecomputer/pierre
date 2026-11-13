@@ -92,9 +92,7 @@ import { themes } from '@pierre/highlights/themes';
 const highlighter = await createHighlighter({ langs, themes });
 ```
 
-`langs` contains one combined lexer Wasm module. It does not load each language
-module separately. The emitter Wasm receives the source and token records from
-the lexer.
+`langs` contains one combined lexer Wasm module.
 
 ## Custom lexers
 
@@ -105,7 +103,6 @@ import { buildHighlightsLexer } from '@pierre/wat-tools';
 
 const language = buildHighlightsLexer({
   name: 'language-id',
-  alias: {},
   wat: `(module
     (func $highlight
       (call $emitTok
@@ -137,14 +134,6 @@ describes the shared scanners, token types, and memory declarations.
 
 Decode the bytes before the next call to the highlighter. Use `.slice()` to keep
 a copy for later use.
-
-`createHighlighter({ langs, themes })` requires an options object and returns a
-promise. The previous no-argument and `WebAssembly.Module` forms are no longer
-supported.
-
-The top-level `codeToHtml()` and `codeToTokens()` functions, `StreamTokenizer`,
-and `LiveTokenizer` use the shared highlighter that the main entry initializes
-at import.
 
 Read the [API reference](https://diffs.com/docs#highlights) for tokens, input
 streams, document edits, and themes.
