@@ -163,6 +163,21 @@ export type TestSplitHl = (
   splitBytes: number
 ) => string;
 
+// WARNING: A language ID that differs from the name of its lexer file and
+// function needs an entry here, or loadSplitLang finds no lexer.
+const lexerNames: Record<string, string> = {
+  bat: 'batch',
+  'common-lisp': 'lisp',
+  docker: 'dockerfile',
+  'fortran-free-form': 'fortran',
+  javascript: 'js',
+  make: 'makefile',
+  'objective-c': 'objc',
+  shellscript: 'bash',
+  typescript: 'ts',
+  wasm: 'wat',
+};
+
 // WARNING: A language that shares another language's file needs an entry
 // here, or loadSplitLang looks for a file that does not exist.
 const splitLexerFiles: Record<string, string> = {
@@ -200,11 +215,12 @@ const splitLexerFiles: Record<string, string> = {
  * unbalanced spans at chunk and embedded-language boundaries.
  */
 export function loadSplitLang(name: Lang): TestSplitHl {
+  const lexer = lexerNames[name] ?? name;
   const entry =
     name === 'fortran-fixed-form'
       ? '$hlFortranFixed'
-      : `$hl${name.replace(/(?:^|-)(\w)/g, (_, c: string) => c.toUpperCase())}`;
-  const file = splitLexerFiles[name] ?? name;
+      : `$hl${lexer.replace(/(?:^|-)(\w)/g, (_, c: string) => c.toUpperCase())}`;
+  const file = splitLexerFiles[lexer] ?? lexer;
   const { highlighter, setSplit } = compileSplitLexer(name, file, entry);
   return (input, splitBytes) => {
     setSplit(splitBytes);

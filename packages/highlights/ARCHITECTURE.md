@@ -175,6 +175,11 @@ language's canonical name, aliases, and lexer function. The build generates Wasm
 IDs, JavaScript lookups, and language names for Markdown fences from this table.
 The host ignores case in language names and rejects unknown names.
 
+A canonical name is the Shiki ID of the language when Shiki has it, such as
+`javascript`, `typescript`, and `shellscript`. Short names such as `js`, `ts`,
+and `bash` are aliases. A lexer file and its function can have another name:
+`bash.wat` and `$hlBash` are the lexer of `shellscript`.
+
 Keep `plain` first so it and its aliases (`plaintext`, `text`, `txt`) have ID 0.
 Sort the other canonical names alphabetically. Use the generated JavaScript and
 Wasm files together. A change to the table order changes IDs in both files.
