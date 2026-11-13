@@ -159,7 +159,9 @@ plugins, and hooks. [`html/dom.ts`](./html/dom.ts) patches DOM nodes:
 
 The Highlights plugin uses `codeToHtml` for completed fences. An open fence
 keeps one live tokenizer, which the plugin releases when the fence closes or
-disappears.
+disappears. The live tokenizer has only the built-in lexers and keeps escape
+sequences as text. So an open fence in `ansi` or in a language from
+`registerLanguages` renders again with `codeToHtml` on each update.
 
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.

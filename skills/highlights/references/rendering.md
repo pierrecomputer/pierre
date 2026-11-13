@@ -115,8 +115,16 @@ not embed them, and the tokenizer classes use built-in lexers only.
 
 `await createHighlighter({ langs, themes })` returns an isolated
 `RegisteredHighlighter`. Select only the language modules and themes that the
-application needs. The TypeScript module supports `ts`, `tsx`, `cts`, `mts`,
-`js`, `jsx`, `mjs`, and `cjs`.
+application needs. Each built-in language has a default-export module with its
+canonical name, such as `@pierre/highlights/langs/python`. The TypeScript module
+supports `ts`, `tsx`, `cts`, `mts`, `js`, `jsx`, `mjs`, and `cjs`; import it as
+`typescript`, `ts`, `tsx`, `javascript`, `js`, or `jsx`. Plain text and `ansi`
+need no module.
+
+Embedded code uses the languages in `langs`. With `langs: [ts, html]`, script
+bodies use JavaScript and style bodies stay plain text until CSS is added. A
+Markdown fence is plain text until its language is added. Vue, Svelte, Astro,
+MDX, and QML contain the lexer for their expressions.
 
 For the full language and theme bundle:
 
@@ -135,8 +143,23 @@ token records to the separate emitter Wasm.
 The `@pierre/highlights` entry initializes a shared highlighter at import and
 re-exports all themes. `@pierre/highlights/core` exports the same functions but
 loads no Wasm; call `init(module)` with a compiled combined module
-(`@pierre/highlights/highlights.wasm`) before its shared functions. `init` runs
-synchronously.
+(`@pierre/highlights/highlights.wasm`) before its shared functions,
+`registerLanguages()`, `StreamTokenizer`, or `LiveTokenizer`. `init` runs
+synchronously. `createHighlighter()` does not need it.
+
+```ts
+import { init } from '@pierre/highlights/core';
+
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/highlights/highlights.wasm', import.meta.url))
+  )
+);
+```
+
+Both entries run in Node.js, browsers, and Cloudflare Workers. The `workerd`
+export condition selects modules that import compiled `.wasm` files, because
+Workers cannot compile WebAssembly from bytes.
 
 Core public types are `Highlighter`, `RegisteredHighlighter`,
 `HighlighterOptions`, `Language`, `Lang`, `CodeToHtmlBaseOptions`,

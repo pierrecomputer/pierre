@@ -331,7 +331,11 @@ function cleanMarkdown(md: string): string {
 }
 
 function processMdx(raw: string): string {
-  const withNotices = processNotices(raw);
+  // Keep the Markdown table inside a `<SearchableTable>` wrapper.
+  const withNotices = processNotices(raw).replace(
+    /^<\/?SearchableTable[^>]*>\n/gm,
+    ''
+  );
   const stripped = stripJsx(withNotices);
   return cleanMarkdown(stripped);
 }

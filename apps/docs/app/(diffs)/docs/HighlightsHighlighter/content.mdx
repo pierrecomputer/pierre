@@ -33,24 +33,24 @@ package includes the lexers, so it does not download language grammars.
 import, and all themes. Its `codeToHtml()` and `codeToTokens()` functions run
 synchronously:
 
-```ts
-import { codeToHtml, pierreDark } from '@pierre/highlights';
-
-const html = new TextDecoder().decode(
-  codeToHtml('const a = 1', { lang: 'ts', theme: pierreDark })
-);
-```
+<DocsCodeExample {...highlightsQuickStart} />
 
 `@pierre/highlights/core` contains no lexers or themes. Select the languages and
 themes that your application needs, then await `createHighlighter()` once. Its
 `codeToHtml()` and `codeToTokens()` methods run synchronously.
 
 Each module under `@pierre/highlights/langs/*` contains a standalone Wasm lexer
-as base64. The TypeScript module supports TypeScript, JavaScript, TSX, and JSX.
+as base64. A module has the name of its language in the
+[Languages](#highlights-languages) table, such as
+`@pierre/highlights/langs/python`. The TypeScript module supports TypeScript,
+JavaScript, TSX, and JSX. Its names are `typescript`, `ts`, `tsx`, `javascript`,
+`js`, and `jsx`. Plain text and `ansi` need no module.
+
 Embedded code uses the registered languages too. With `langs: [ts, html]`, HTML
 script bodies use JavaScript, while style bodies remain plain text until you
-register CSS. Vue, Svelte, Astro, MDX, and QML contain the lexer for their
-expressions.
+register CSS. Markdown fences work the same way: a fence is plain text until you
+register its language. Vue, Svelte, Astro, MDX, and QML contain the lexer for
+their expressions.
 
 Use `buildHighlightsLexer` from `@pierre/wat-tools` at build time to add a
 custom WAT lexer. Save the returned `Language` descriptor in a JavaScript module
@@ -63,18 +63,19 @@ for a registered lexer.
 
 For all languages and themes, use the combined lexer bundle:
 
-```ts
-import { createHighlighter } from '@pierre/highlights/core';
-import { langs } from '@pierre/highlights/langs';
-import { themes } from '@pierre/highlights/themes';
+<DocsCodeExample {...highlightsAllLanguages} />
 
-const highlighter = await createHighlighter({ langs, themes });
-```
+Both entries export the same functions. In `/core`, the shared functions and
+tokenizer classes need the combined module. Call `init(module)` first. The
+package exports that module as `@pierre/highlights/highlights.wasm`:
 
-Both entries export the same functions. In `/core`, call `init(module)` before
-the shared functions and tokenizer classes.
+<DocsCodeExample {...highlightsInit} />
 
-Both entries run in Node.js, browsers, and Cloudflare Workers.
+`createHighlighter()` does not need `init()`.
+
+Both entries run in Node.js, browsers, and Cloudflare Workers. Workers cannot
+compile WebAssembly from bytes, so the `workerd` export condition selects
+modules that import compiled `.wasm` files.
 
 ### Build with agents
 
@@ -304,12 +305,19 @@ stylesheet:
 
 <DocsCodeExample {...highlightsCssVariables} />
 
-Changes to these declarations update colors without another lexer scan.
-CSS-variable mode controls colors only. It ignores the theme's `font_style` and
-`font_weight` values. The default prefix is `--hls-`.
+Changes to these declarations update colors without another lexer scan. The HTML
+from `codeToHtml()` contains colors only, without the theme's `font_style` and
+`font_weight` values.
 
-Set `cssVariablePrefix` in the highlighter options to change the prefix. Pass
-the same prefix to `toCSS(theme, { cssVariablePrefix: '--code-' })`.
+For italics in a custom renderer, pass `{ fontStyle: true }` to `toCSS()`. It
+then adds a `-font-style` variable for each syntax scope, with the value
+`italic` or `normal`. `getFontStyle(token)` from `@pierre/highlights/themes`
+returns the matching value for a token, such as `var(--hls-comment-font-style)`.
+`font_weight` has no variable.
+
+The default prefix is `--hls-`. Set `cssVariablePrefix` in the output options to
+change the prefix. Pass the same prefix to
+`toCSS(theme, { cssVariablePrefix: '--code-' })`.
 
 This option also controls the properties for multiple themes.
 
@@ -370,6 +378,8 @@ terminal colors, as in Shiki. With `cssVariables`, palette colors are
 `LiveTokenizer` edits the raw text, so it treats `ansi` as `plain`.
 
 Built-in languages and their aliases are included in the `Lang` type:
+
+<SearchableTable label="Search languages">
 
 | Language             | Aliases                                                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -565,6 +575,8 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `zenscript`          | `zs`                                                                                                                               |
 | `zig`                | `zon`                                                                                                                              |
 
+</SearchableTable>
+
 ### API reference
 
 #### `@pierre/highlights`
@@ -577,7 +589,12 @@ Both entries export these functions. The main entry also exports all themes:
 Its output methods accept registered theme names or theme objects. They reject
 languages absent from `langs`.
 
-`init(module)` accepts a compiled combined `WebAssembly.Module`.
+`init(module)` accepts the compiled combined `WebAssembly.Module` from
+`@pierre/highlights/highlights.wasm`. The main entry calls it at import.
+
+`registerLanguages(langs)` adds lexers to the shared `codeToHtml()` and
+`codeToTokens()` functions. It runs synchronously and keeps the lexers from
+earlier calls.
 
 The same entry exports the public types:
 
@@ -588,14 +605,14 @@ The same entry exports the public types:
 The `langs` export contains one combined lexer Wasm module for all languages.
 Pass it directly to `createHighlighter({ langs, themes })`.
 
-Each `@pierre/highlights/langs/*` entry exports one standalone language module.
-Pass selected modules as an array, such as `langs: [ts]`.
+Each `@pierre/highlights/langs/*` entry has one standalone language module as
+its default export. Pass selected modules as an array, such as `langs: [ts]`.
 
 #### `@pierre/highlights/themes`
 
-The themes entry exports `cssVariables`, `toCSS()`, all themes as the `themes`
-array, and every bundled theme as a named `Theme`. Each theme also has a default
-export through its own import path, such as
+The themes entry exports `cssVariables`, `toCSS()`, `getFontStyle()`, all themes
+as the `themes` array, and every bundled theme as a named `Theme`. Each theme
+also has a default export through its own import path, such as
 `@pierre/highlights/themes/vitesse-dark`.
 
 #### `@pierre/highlights/themes/loader`

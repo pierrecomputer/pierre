@@ -192,12 +192,19 @@ registers a shared palette using `--diffs-*` variables automatically.
 
 Register a custom language loader and optionally map it to file names or
 extensions. By default the loader returns a TextMate grammar for Shiki. Pass
-`'highlights'` as the fourth argument for a loader that returns a Highlights
-lexer, such as `@pierre/wat-tools` output or a `@pierre/highlights/langs/*`
-module. Its `aliases` must include the registered name. Highlights ignores
-TextMate grammars, and Shiki ignores Highlights lexers. Highlights uses
-registered lexers for rendered code; its stream and editor tokenizers use
-built-in lexers only.
+`'highlights'` as the fourth argument for a loader that returns a module whose
+default export is a Highlights lexer. Build the lexer with
+`buildHighlightsLexer` from `@pierre/wat-tools` at build time and save it as a
+JavaScript module. Its `aliases` must include the registered name, or the load
+throws. To use a built-in lexer under a new name, copy a
+`@pierre/highlights/langs/*` module and add the name to its `aliases`.
+
+Highlights ignores TextMate grammars, and Shiki ignores Highlights lexers.
+Register one loader per name and type; a TextMate loader and a Highlights loader
+can share a name. Highlights uses registered lexers for rendered code; its
+stream and editor tokenizers use built-in lexers only. Highlights registers
+lexers for the whole page. Every name in `aliases` replaces a built-in lexer
+with the same name, and disposing the highlighter does not remove it.
 
 The grammar file or object returned by your loader has a `name` field and can
 have an `aliases` array. An alias is an additional language ID that uses the
