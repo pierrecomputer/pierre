@@ -18,7 +18,6 @@ export {
   wasmToText,
   wat2wasm,
 } from '@pierre/wat-tools';
-export type { TransformedWat } from '@pierre/wat-tools';
 
 /** Keep wider inlining while reducing the all-language browser download. */
 export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
@@ -437,27 +436,23 @@ if (isMainThread && import.meta.main) {
       })
   );
   const wasmBytes = optimizeWasm(wat2wasm(sourceUrl.pathname, code));
-  writeFileSync(new URL('../dist/highlights.wasm', moduleUrl), wasmBytes);
-  writeFileSync(
-    new URL('../dist/highlights.wasm.mjs', moduleUrl),
-    `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
-      `const b = new Uint8Array(s.length);\n` +
-      `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
-      `export default b;\n`,
-    'utf-8'
-  );
   const emitterUrl = new URL('../src/emitter.wat', moduleUrl);
   const emitter = optimizeWasm(
     wat2wasm(emitterUrl.pathname, transformWat(emitterUrl).code)
   );
-  writeFileSync(new URL('../dist/emitter.wasm', moduleUrl), emitter);
-  writeFileSync(
-    new URL('../dist/emitter.wasm.mjs', moduleUrl),
-    `const s = atob("${Buffer.from(emitter).toString('base64')}");\n` +
-      'const b = new Uint8Array(s.length);\n' +
-      'for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n' +
-      'export default b;\n'
-  );
+  for (const [name, bytes] of [
+    ['highlights', wasmBytes],
+    ['emitter', emitter],
+  ] as const) {
+    writeFileSync(new URL(`../dist/${name}.wasm`, moduleUrl), bytes);
+    writeFileSync(
+      new URL(`../dist/${name}.wasm.mjs`, moduleUrl),
+      `const s = atob("${Buffer.from(bytes).toString('base64')}");\n` +
+        'const b = new Uint8Array(s.length);\n' +
+        'for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n' +
+        'export default b;\n'
+    );
+  }
   await Promise.all(workers);
   // The `$Token` order is the theme-table ABI; regenerate the glue copy,
   // which tsdown then compiles into dist/ with the rest of lib/.

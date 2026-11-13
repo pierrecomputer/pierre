@@ -28,7 +28,6 @@
   (func $dmStrBody (param $kind i32) (param $seg i32) (result i32)
     (local $p i32)
     (local $c i32)
-    (local $e i32)
     (loop $l
       (local.set $p (call $scanFind3 (global.get $ptr) (i32.const 34) (i32.const 92) (i32.const "[")))
       (if (i32.eq (local.get $kind) (i32.const 34))

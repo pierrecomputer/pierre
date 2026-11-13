@@ -29,6 +29,11 @@ const custom: Language = buildHighlightsLexer({
         (global.get $ptr)
         (global.get $end))))`,
 });
+const combined = new HighlightsHighlighter(
+  new WebAssembly.Module(
+    readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
+  )
+);
 
 test('custom lexer descriptors work through the public API with their own memory layout', async () => {
   const highlighter = await createHighlighter({
@@ -193,13 +198,8 @@ test('a custom alias takes only its own name from a built-in language', async ()
       (func $highlight
         (call $emitTok (enum.get $Token.keyword) (global.get $ptr) (global.get $end))))`,
   });
-  const reference = new HighlightsHighlighter(
-    new WebAssembly.Module(
-      readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
-    )
-  );
   const code = 'int a = 1; // x';
-  const builtIn = reference.codeToTokens(code, {
+  const builtIn = combined.codeToTokens(code, {
     lang: 'c',
     theme: cssVariables,
   });
@@ -249,7 +249,7 @@ test('a custom alias takes only its own name from a built-in language', async ()
   expect(String(reserved)).toMatch(/reserved/);
 });
 
-test('registerLanguages adds lexers to the shared functions of the full bundle', async () => {
+test('registerLanguages adds lexers to the shared functions of the main entry', async () => {
   const override = buildHighlightsLexer({
     name: 'shared-override',
     alias: { go: 0 },
@@ -303,13 +303,7 @@ test('a registered built-in module still embeds the other built-in languages', (
   registerLanguages([html]);
   expect(isRegisteredLanguage('html')).toBe(true);
   expect(codeToTokens(code, options)).toEqual(builtIn);
-  expect(codeToHtml(code, options)).toEqual(
-    new HighlightsHighlighter(
-      new WebAssembly.Module(
-        readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
-      )
-    ).codeToHtml(code, options)
-  );
+  expect(codeToHtml(code, options)).toEqual(combined.codeToHtml(code, options));
 });
 
 test('the package exports the combined module for init()', () => {

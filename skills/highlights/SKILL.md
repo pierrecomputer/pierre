@@ -29,8 +29,6 @@ shared output functions.
 `@pierre/highlights/langs/*`, and supply theme objects. Await the factory once.
 Its output methods then run synchronously. Use the combined `langs` export from
 `@pierre/highlights/langs` when the application needs all languages.
-`createHighlighter` requires `{ langs, themes }` and returns a promise. Do not
-pass a Wasm module or omit the options.
 
 ## Select a reference
 

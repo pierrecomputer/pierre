@@ -540,8 +540,8 @@
       (then
         (call $highlightLang (local.get $lang))
         (return (i32.const 1))))
-    ;; WARNING: Org (92) and Wikitext (93) resume an open source block in their
-    ;; own lexer, which restores the body's own region kind first
+    ;; WARNING: Org (region kind 92) and Wikitext (93) resume an open source
+    ;; block in their own lexer, which restores the body's own region kind first
     (if
       (i32.or
         (i32.and

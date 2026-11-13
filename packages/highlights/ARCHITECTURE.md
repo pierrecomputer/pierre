@@ -63,10 +63,10 @@ Document edits ── liveRun ───────────── per-line s
 
 ## Runtime and memory
 
-The selective API owns separate lexer and emitter instances. Each lexer returns
-packed `(endByte: u32, tokenId: u32)` pairs as a `Uint8Array`. Record starts
-follow the previous end, with zero as the first start. The host transfers the
-source and these records to the emitter instance.
+A `createHighlighter()` highlighter owns separate lexer and emitter instances.
+Each lexer returns packed `(endByte: u32, tokenId: u32)` pairs as a
+`Uint8Array`. Record starts follow the previous end, with zero as the first
+start. The host transfers the source and these records to the emitter instance.
 
 The emitter reads the record address at control byte 22 and the record byte
 length at byte 26. It places its output after these records so HTML expansion
@@ -83,10 +83,6 @@ MiB is replaced when small inputs resume.
 Cloudflare Workers cannot compile WebAssembly from bytes. The `workerd` export
 condition selects modules that import the compiled emitter and lexer `.wasm`
 files, and `Language.wasm` accepts a `WebAssembly.Module`.
-
-The following combined-module details apply to the main entry. Its export
-conditions select an embedded-byte loader or a native Wasm import for workerd.
-Each loader calls `init` and exports the shared API.
 
 `init(module)` creates the shared instance used by `codeToHtml` and
 `codeToTokens`. `createHighlighter({ langs, themes })` always uses the separate

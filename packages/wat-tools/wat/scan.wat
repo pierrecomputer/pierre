@@ -214,7 +214,6 @@
         (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
     (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; clamp $e to $stop, then extend it over UTF-8 continuation bytes: an
   ;; Find the end of at most $max ASCII hex digits from $p, bounded by $end.
   ;; Escape spans include only digits present. Short `\uXXXX`, `\xNN`, or
   ;; CSS `\HHHHHH` escapes must not consume the string's closing quote.

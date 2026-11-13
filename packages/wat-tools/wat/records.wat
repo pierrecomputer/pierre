@@ -2,9 +2,6 @@
   (import "./memory.wat")
   (import "./input.wat")
   (import "./output.wat")
-  (import "./token.wat")
-
-  (global $tokens (mut i32) (i32.const 1))
 
   (func $emitTok (param $hl i32) (param $lhs i32) (param $rhs i32)
     (if (i32.lt_u (local.get $lhs) (local.get $rhs))

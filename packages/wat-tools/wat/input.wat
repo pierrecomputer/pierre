@@ -14,6 +14,7 @@
   (global $liveSuspended (mut i32) (i32.const 0))
   (global $liveEntering (mut i32) (i32.const 0))
 
+  ;; clamp $e to $stop, then extend it over UTF-8 continuation bytes: an
   ;; escape span must never split a code point
   (func $utf8SpanEnd (param $e i32) (param $stop i32) (result i32)
     (if (i32.gt_u (local.get $e) (local.get $stop))

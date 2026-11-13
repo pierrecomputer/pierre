@@ -31,7 +31,6 @@
   (global $tokens (mut i32) (i32.const 0))
   (global $recordInputEnd (mut i32) (i32.const 0))
 
-
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
     (i32.store8
@@ -902,7 +901,8 @@
     (memory.copy (global.get $out) (i32.const $mem.emitterHtml+126) (i32.const 13))
     (global.set $out (i32.add (global.get $out) (i32.const 13))))
 
-  ;; Initialize output for highlights.wat and per-language test harnesses.
+  ;; Initialize output for highlights.wat, `emit`, and per-language test
+  ;; harnesses.
   ;; Read the control block and write the wrapper. Output mode in [1]:
   ;; 0 inline colors, 1 CSS variables, 2 multiple themes, 3 UTF-16 line
   ;; records, 4 prepared HTML openers, 5 byte records.
@@ -1026,7 +1026,7 @@
       (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 
-  (func $emit (export "emit")
+  (func (export "emit")
     (local $record i32)
     (local $recordsEnd i32)
     (local $lhs i32)

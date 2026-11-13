@@ -5,7 +5,6 @@
   (func $lexBegin
     (global.set $srcBase (i32.const $mem.input))
     (global.set $streamDepth (i32.const 0))
-    (global.set $tokens (i32.const 1))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (i32.const $mem.input))

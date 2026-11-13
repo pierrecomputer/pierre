@@ -7,9 +7,9 @@ const tokenTypesPath = fileURLToPath(
 const themesPath = fileURLToPath(new URL('./themes/index.ts', import.meta.url));
 
 // The two configs share dist/, so neither may clean the other's output.
-// `scripts/build.ts` emits highlights.wasm and highlights.wasm.mjs
-// before tsdown runs (see moon.yml); keep ./highlights.wasm* imports as-is for
-// runtime resolution next to the glue. tsdown builds the two configs
+// `scripts/build.ts` emits the highlights and emitter Wasm modules before
+// tsdown runs (see moon.yml); keep their ./*.wasm* imports as-is for runtime
+// resolution next to the glue. tsdown builds the two configs
 // concurrently, which is why the wasm phase cannot live in a build hook: it
 // rewrites the token and language tables, which the first config compiles.
 const config: UserConfig[] = defineConfig([
@@ -52,6 +52,8 @@ const config: UserConfig[] = defineConfig([
       tsgo: true,
     },
     platform: 'neutral',
+    // WARNING: The type bundle follows `import type` into lib/highlighter.ts,
+    // which imports the emitter.
     deps: { neverBundle: [tokenTypesPath, /^\.\/emitter\.wasm/] },
     outputOptions: { paths: { [tokenTypesPath]: './token-types.js' } },
   },

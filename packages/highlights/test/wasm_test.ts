@@ -36,9 +36,10 @@ const common = transformWat(
     (global (export "scratch") i32 (i32.const $mem.lexLowerScratch))
     (global (export "input") i32 (i32.const $mem.input)))`
 );
-const instance = new WebAssembly.Instance(
-  new WebAssembly.Module(wat2wasm(commonUrl.pathname, common.code))
+const commonModule = new WebAssembly.Module(
+  wat2wasm(commonUrl.pathname, common.code)
 );
+const instance = new WebAssembly.Instance(commonModule);
 const {
   memory,
   lookup,
@@ -57,10 +58,7 @@ const inputPtr = Number(inputAt.value);
 const enc = new TextEncoder();
 
 void test('lib/highlighter.ts writes input at $mem.input', () => {
-  const highlighter = new HighlightsHighlighter(
-    new WebAssembly.Module(wat2wasm(commonUrl.pathname, common.code))
-  );
-  assert.equal(highlighter.inputPtr, inputPtr);
+  assert.equal(new HighlightsHighlighter(commonModule).inputPtr, inputPtr);
 });
 
 void test('keyword SIMD compares every byte at lengths 2 through 31', () => {
