@@ -96,7 +96,7 @@ function ChartMenu({
         <DropdownMenuContent
           align="start"
           className={`dark min-w-[var(--radix-dropdown-menu-trigger-width)] border-neutral-800 bg-neutral-950 text-neutral-50 ${
-            hasDescriptions ? 'w-96 max-w-[calc(100vw-2rem)]' : ''
+            hasDescriptions ? 'w-80 max-w-[calc(100vw-2rem)]' : ''
           }`}
           scrollSelectedIntoView
         >
@@ -110,7 +110,7 @@ function ChartMenu({
               <span className="min-w-0">
                 <span className="block">{option.label}</span>
                 {option.description != null && (
-                  <span className="mt-0.5 block text-xs leading-snug text-neutral-400">
+                  <span className="mt-0.5 block text-xs leading-snug text-pretty text-neutral-400">
                     {option.description}
                   </span>
                 )}
@@ -277,37 +277,30 @@ export function WordsBenchmarks() {
         <dl
           aria-labelledby="words-package-caption"
           aria-live="polite"
-          className="space-y-5 tabular-nums sm:space-y-6"
+          className="space-y-5 tabular-nums"
         >
           {results.map(({ engine, value }) => {
             const words = engine.startsWith('Words');
             return (
               <div
                 key={engine}
-                className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_10rem]"
+                className="grid grid-cols-2 items-baseline gap-y-2"
               >
-                <dt className="text-muted-foreground col-start-1 row-start-2 flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs leading-tight">
-                  <span className="text-foreground text-sm font-medium">
-                    {engine}
-                  </span>
-                </dt>
+                <dt className="text-md font-medium">{engine}</dt>
                 <dd className="contents">
-                  <div className="col-start-1 row-start-1">
+                  <span className="text-right text-2xl tracking-tight tabular-nums">
+                    {value.toFixed(metric.decimals)}
+                    <span className="text-muted-foreground ml-1 text-sm">
+                      {metric.unit}
+                    </span>
+                  </span>
+                  <div className="col-span-2">
                     <BenchmarkBar
                       value={value}
                       maximum={maximum}
                       highlighted={words}
-                      scaleFloor={6}
                     />
                   </div>
-                  <span
-                    className={`col-start-2 row-span-2 row-start-1 mt-[-16px] self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
-                  >
-                    {value.toFixed(metric.decimals)}
-                    <span className="text-muted-foreground ml-1 text-sm font-normal">
-                      {metric.unit}
-                    </span>
-                  </span>
                 </dd>
               </div>
             );
