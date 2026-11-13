@@ -662,9 +662,9 @@ export class VirtualizedFileDiff<
     // Hydrate the `isPartial: true` diff if we have a pending hydration
     if (pendingHydratedDiff != null) {
       this.pendingHydratedDiff = undefined;
-      if (pendingHydratedDiff.expectedDiff === fileDiff) {
-        // We intentionally keep diff equality referential,
-        // and treat it as a mutation
+      if (areDiffTargetsEqual(pendingHydratedDiff.expectedDiff, fileDiff)) {
+        // The loaded contents are written into the diff object the host
+        // passes now, which may be a new object for the same diff.
         Object.assign(fileDiff, pendingHydratedDiff.nextDiff);
         this.setHydratedState(pendingHydratedDiff.files);
         this.installHydratedDiff(fileDiff);
