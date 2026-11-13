@@ -5,6 +5,7 @@ import { type ComponentProps, useState } from 'react';
 
 import { BenchmarkBar } from '../highlights/BenchmarkBar';
 import cardStyles from '../highlights/HighlightsBenchmarkCard.module.css';
+import { WordsDisclosure } from './WordsDisclosure';
 import benchmark from '@/public/words/benchmark.json';
 
 const methodologyUrl =
@@ -404,15 +405,14 @@ export function WordsBenchmarks() {
         </figure>
       </div>
 
-      <details
+      <WordsDisclosure
         id="words-benchmark-method"
         open={methodOpen}
         onToggle={(event) => setMethodOpen(event.currentTarget.open)}
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
+        summary="How we measure"
+        summaryClassName="text-sm font-medium"
       >
-        <summary className="cursor-pointer text-sm font-medium">
-          How we measure
-        </summary>
         <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 text-sm leading-relaxed md:grid-cols-2">
           <div className="space-y-3">
             <h3 className="text-foreground font-medium">
@@ -524,7 +524,7 @@ export function WordsBenchmarks() {
             </ul>
           </div>
         </div>
-      </details>
+      </WordsDisclosure>
     </section>
   );
 }

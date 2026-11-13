@@ -129,22 +129,6 @@
 .usage {
   font-size: 13px;
 }
-.usage summary {
-  width: fit-content;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.usage pre {
-  overflow: auto;
-  margin-top: 16px;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--muted);
-  font-family: var(--font-berkeley-mono), monospace;
-  font-size: 12px;
-  line-height: 1.8;
-}
 .customHeading {
   display: flex;
   align-items: baseline;
