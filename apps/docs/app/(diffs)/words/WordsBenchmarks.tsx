@@ -256,7 +256,7 @@ export function WordsBenchmarks() {
                     />
                   </div>
                   <span
-                    className={`col-start-2 row-span-2 row-start-1 self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
+                    className={`col-start-2 row-span-2 row-start-1 mt-[-16px] self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
                   >
                     {value.toFixed(metric.decimals)}
                     <span className="text-muted-foreground ml-1 text-sm font-normal">
