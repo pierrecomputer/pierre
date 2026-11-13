@@ -25,7 +25,7 @@ export function WordsDisclosure({
     <details {...props} className={cn('group', className)}>
       <summary
         className={cn(
-          '-m-3 flex min-h-11 w-[calc(100%+1.5rem)] cursor-pointer list-none items-center gap-1 p-3 [&::-webkit-details-marker]:hidden',
+          '-m-3 flex min-h-11 w-[calc(100%+1.5rem)] cursor-pointer list-none select-none items-center gap-1 p-3 [&::-webkit-details-marker]:hidden',
           summaryClassName
         )}
       >
