@@ -60,6 +60,7 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
 
 export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
+  #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #initializeMatches: () => void;
   #mount?: () => void;
@@ -555,16 +556,15 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       ).setAttribute(UNSAFE_CSS_ATTRIBUTE, '');
     }
 
+    this.#widgetElement = h('div', {
+      dataset: 'editorWidget',
+      children: [gridElement],
+    });
     h(
       'div',
       {
         dataset: 'searchPanel',
-        children: [
-          h('div', {
-            dataset: 'editorWidget',
-            children: [gridElement],
-          }),
-        ],
+        children: [this.#widgetElement],
       },
       shadowRoot
     );
@@ -597,6 +597,10 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
   getHostElement(): HTMLDivElement {
     return this.#host;
+  }
+
+  getBounds(): DOMRect {
+    return this.#widgetElement.getBoundingClientRect();
   }
 
   hasQuery(): boolean {

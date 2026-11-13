@@ -813,17 +813,21 @@ for (const kind of ['file', 'split', 'unified'] as const) {
         root.locator(
           `[data-line="${line}"]:not([data-line-type="change-deletion"])`
         );
+      // Centered in the part of the viewport below the find panel.
       const expectCentered = (line: number) =>
         expect
           .poll(() =>
             row(line).evaluate((element) => {
-              const viewport = document
-                .querySelector('[data-code-view-root]')!
+              const root = document.querySelector('[data-code-view-root]')!;
+              const viewport = root.getBoundingClientRect();
+              const panel = root
+                .querySelector('[data-search-panel]')!
+                .shadowRoot!.querySelector('[data-editor-widget]')!
                 .getBoundingClientRect();
               const rect = element.getBoundingClientRect();
               return Math.abs(
                 (rect.top + rect.bottom) / 2 -
-                  (viewport.top + viewport.bottom) / 2
+                  (panel.bottom + viewport.bottom) / 2
               );
             })
           )
@@ -1257,4 +1261,136 @@ test('find opens empty when the selection spans lines or sits outside the code',
   });
   await page.evaluate(() => window.__codeView?.openSearch());
   await expect(input).toHaveValue('');
+});
+
+test('a match under the find panel is moved out from under it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?viewport&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await page.evaluate(() =>
+    window.__codeView?.scrollTo({
+      type: 'line',
+      id: 'item',
+      lineNumber: 20,
+      align: 'start',
+      behavior: 'instant',
+    })
+  );
+  await expect(root.locator('[data-line="20"]')).toBeInViewport();
+  await root.click({ position: { x: 20, y: 300 } });
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await input.fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1 of 4');
+
+  // Line 20 was at the top of the viewport, where the panel sits.
+  await expect
+    .poll(() =>
+      root.evaluate((element) => {
+        const match = [
+          ...(CSS.highlights.get('diffs-search-current') ?? []),
+        ][0] as Range | undefined;
+        const panel = element
+          .querySelector('[data-search-panel]')
+          ?.shadowRoot?.querySelector('[data-editor-widget]')
+          ?.getBoundingClientRect();
+        if (match == null || panel == null) return 'not painted';
+        const rect = match.getBoundingClientRect();
+        return rect.width > 0 &&
+          rect.top < panel.bottom &&
+          rect.bottom > panel.top &&
+          rect.left < panel.right &&
+          rect.right > panel.left
+          ? 'covered'
+          : 'clear';
+      })
+    )
+    .toBe('clear');
+});
+
+test('the find panel stays at the top of the scroll view above a CodeView header', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?viewport&kind=file&header'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.getByText('CodeView header')).toBeVisible();
+  await root.click({ position: { x: 20, y: 300 } });
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await expect(input).toBeFocused();
+  const panelTop = () =>
+    root.evaluate((element) => {
+      const panel = element
+        .querySelector('[data-search-panel]')!
+        .shadowRoot!.querySelector('[data-editor-widget]')!
+        .getBoundingClientRect();
+      return Math.round(panel.top - element.getBoundingClientRect().top);
+    });
+
+  // 16px is the panel's own inset. The 200px header does not push it down.
+  expect(await panelTop()).toBe(16);
+  await page.evaluate(() =>
+    window.__codeView?.scrollTo({
+      type: 'position',
+      position: 600,
+      behavior: 'instant',
+    })
+  );
+  await expect.poll(() => root.evaluate((el) => el.scrollTop)).toBe(600);
+  expect(await panelTop()).toBe(16);
+});
+
+test('a match in the last row of a tall wrapped line is brought into view', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?horizontal&kind=file&wrap'
+  );
+  await page.addStyleTag({
+    content: '[data-code-view-root] { height: 260px !important; }',
+  });
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.locator('[data-line="8"]')).toBeVisible();
+  await root.click({ position: { x: 20, y: 10 } });
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await input.fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1 of 4');
+  // Wrap around to the last match: the end of line 201, far below.
+  await input.press('Shift+Enter');
+  await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+
+  await expect
+    .poll(() =>
+      root.evaluate((element) => {
+        const match = [
+          ...(CSS.highlights.get('diffs-search-current') ?? []),
+        ][0] as Range | undefined;
+        const panel = element
+          .querySelector('[data-search-panel]')
+          ?.shadowRoot?.querySelector('[data-editor-widget]')
+          ?.getBoundingClientRect();
+        if (match == null || panel == null) return 'not painted';
+        const rect = match.getBoundingClientRect();
+        const viewport = element.getBoundingClientRect();
+        if (rect.height === 0) return 'not painted';
+        if (rect.bottom > viewport.bottom + 1) return 'below the view';
+        if (rect.top < panel.bottom - 1) return 'under the panel';
+        return 'visible';
+      })
+    )
+    .toBe('visible');
 });
