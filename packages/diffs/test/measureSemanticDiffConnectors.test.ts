@@ -185,7 +185,7 @@ describe('measureSemanticDiffConnectors', () => {
     ]);
   });
 
-  test('omits a connector until its attached row is mounted', () => {
+  test('throws when a connector ends on a line that has no row', () => {
     const regions: SemanticDiffConnectorRegion[] = [
       {
         id: 'added',
@@ -197,14 +197,17 @@ describe('measureSemanticDiffConnectors', () => {
     ];
     const additions = column(lines(1), ORIGIN_TOP);
 
-    expect(
+    // Old line 9 has no row, and there is no layout to ask for its position.
+    expect(() =>
       measureSemanticDiffConnectors(
         regions,
         column(lines(3), ORIGIN_TOP),
         additions,
         ORIGIN_TOP
       )
-    ).toEqual([]);
+    ).toThrow(
+      'measureSemanticDiffConnectors: a connector ends on old line 9, which has no row'
+    );
     expect(
       measureSemanticDiffConnectors(
         regions,
@@ -602,10 +605,12 @@ describe('measureSemanticDiffConnectors with a rendered window', () => {
         target: { top: topOf(11), bottom: bottomOf(14) },
       },
     ]);
-    // Without the row math the band is left out.
-    expect(
+    // Without the row math there is no position for old line 8.
+    expect(() =>
       measureSemanticDiffConnectors(regions, deletions, additions, ORIGIN_TOP)
-    ).toEqual([]);
+    ).toThrow(
+      'measureSemanticDiffConnectors: a connector ends on old line 8, which has no row'
+    );
   });
 
   test('a band that ends below the window takes its bottom from the row math', () => {
@@ -758,6 +763,34 @@ describe('measureSemanticDiffConnectors with a rendered window', () => {
         target: { top: topOf(30), bottom: bottomOf(31) },
       },
     ]);
+  });
+
+  test('throws when a line that is not rendered has no computed position', () => {
+    const { deletions, additions } = mountWindow();
+    const { computeLineBounds } = rowMath();
+    // The window shows lines 11-20. Old line 3 is not rendered, and the row
+    // math has no position for it.
+    const withoutLineThree: ComputeLineBounds = (side, line) =>
+      side === 'old' && line === 3 ? undefined : computeLineBounds(side, line);
+    expect(() =>
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'moved',
+            kind: 'moved',
+            rank: 1,
+            base: { start: 3, end: 3 },
+            target: { start: 12, end: 12 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP,
+        withoutLineThree
+      )
+    ).toThrow(
+      'measureSemanticDiffConnectors: no computed position for old line 3'
+    );
   });
 
   test("an end on a closed fold that is not rendered is at the fold row's 1px line", () => {

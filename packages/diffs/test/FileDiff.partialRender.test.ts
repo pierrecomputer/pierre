@@ -118,6 +118,72 @@ describe('FileDiff window renders', () => {
     }
   });
 
+  test('a split semantic diff cannot take a render range', () => {
+    const { cleanup } = installDom();
+    let instance: FileDiff<string> | undefined;
+    try {
+      // The first line moves to the end. Both ends of its connector are
+      // inside the diff's one hunk.
+      const fileDiff = parseDiffFromFile(
+        { name: 'x.txt', contents: 'moved\na\nb\nc\nd\n' },
+        { name: 'x.txt', contents: 'a\nb\nc\nd\nmoved\n' }
+      );
+      fileDiff.semanticOperations = [
+        {
+          type: 'moved',
+          spans: [
+            {
+              role: 'root',
+              relation: 'moved',
+              old: [
+                {
+                  start: { line: 1, character: 0 },
+                  end: { line: 2, character: 0 },
+                },
+              ],
+              new: [
+                {
+                  start: { line: 5, character: 0 },
+                  end: { line: 6, character: 0 },
+                },
+              ],
+              linePairs: [
+                { old: { start: 1, end: 1 }, new: { start: 5, end: 5 } },
+              ],
+            },
+          ],
+          lines: {
+            old: [{ start: 1, end: 1, spanIndex: 0 }],
+            new: [{ start: 5, end: 5, spanIndex: 0 }],
+          },
+        },
+      ];
+      const created = new FileDiff<string>({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        diffStyle: 'split',
+      });
+      instance = created;
+      expect(() =>
+        created.render({
+          fileDiff,
+          fileContainer: document.createElement('div'),
+          renderRange: {
+            startingLine: 0,
+            totalLines: 3,
+            bufferBefore: 0,
+            bufferAfter: 60,
+          },
+        })
+      ).toThrow(
+        'FileDiff: a split semantic diff needs a virtualized diff to render a render range'
+      );
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
   test('line lookup excludes unavailable source lines in a partial patch', async () => {
     const { cleanup } = installDom();
     const instance = new FileDiff({ diffStyle: 'unified' });

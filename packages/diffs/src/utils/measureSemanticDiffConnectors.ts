@@ -84,9 +84,9 @@ export type ComputeLineBounds = (
 // `openSemanticFolds` holds the semantic folds that are open, by first old
 // line. Every other fold is closed.
 //
-// A connector is left out when one of its ends cannot be placed. That happens
-// when a line it needs is not rendered and `computeLineBounds` is not given, or
-// when a hunk separator sits in the middle of an end.
+// A connector never ends on a collapsed line: its lines are always inside a
+// hunk. So each one has a row, or a position `computeLineBounds` can give.
+// This throws for a line that has neither.
 export function measureSemanticDiffConnectors(
   regions: readonly SemanticDiffConnectorRegion[],
   deletions: HTMLElement,
@@ -189,7 +189,8 @@ export function measureSemanticDiffConnectors(
             originTop,
             computeLineBounds
           );
-    // Step 4d: Leave the connector out when an end has no position.
+    // Step 4d: With no line rendered there is nothing to place an end
+    // against. Leave the connector out.
     if (base == null || target == null) {
       continue;
     }
@@ -296,10 +297,16 @@ function wrapComputeLineBounds(
     return undefined;
   };
   return (column, line) => {
+    // With no rendered line there is nothing to work the offset out from.
+    const lineOffset = getOffset();
+    if (lineOffset == null) return undefined;
     // Ask where the line is, then move the answer by the offset.
     const bounds = computeLineBounds(column.side, line);
-    const lineOffset = getOffset();
-    if (bounds == null || lineOffset == null) return undefined;
+    if (bounds == null) {
+      throw new Error(
+        `measureSemanticDiffConnectors: no computed position for ${column.side} line ${line}`
+      );
+    }
     return {
       top: bounds.top + lineOffset,
       bottom: bounds.bottom + lineOffset,
@@ -307,6 +314,22 @@ function wrapComputeLineBounds(
       reachesNoNewline: bounds.reachesNoNewline,
     };
   };
+}
+
+// The computed position of a line that has no row. Without
+// `computeLineBounds` every line a connector needs is rendered, so a missing
+// row means the connector ends on a collapsed line.
+function getUnrenderedBounds(
+  column: MountedColumn,
+  line: number,
+  computeLineBounds: ComputeUnrenderedBounds | undefined
+): ComputedLineBounds | undefined {
+  if (computeLineBounds == null) {
+    throw new Error(
+      `measureSemanticDiffConnectors: a connector ends on ${column.side} line ${line}, which has no row`
+    );
+  }
+  return computeLineBounds(column, line);
 }
 
 // The top and bottom a connector uses for a line that is not rendered. A
@@ -422,7 +445,9 @@ function measureRun(
   // The top is measured from the first line's row. When that line is not
   // rendered, its computed position is used instead.
   const computedFirst =
-    first == null ? computeLineBounds?.(column, range.start) : undefined;
+    first == null
+      ? getUnrenderedBounds(column, range.start, computeLineBounds)
+      : undefined;
   const top =
     first != null
       ? getLineTop(first, rects) - originTop
@@ -431,7 +456,9 @@ function measureRun(
         : undefined;
   // The bottom is found the same way, from the last line.
   const computedLast =
-    last == null ? computeLineBounds?.(column, range.end) : undefined;
+    last == null
+      ? getUnrenderedBounds(column, range.end, computeLineBounds)
+      : undefined;
   const bottom =
     last != null
       ? measureLineBottom(
@@ -483,7 +510,11 @@ function measureAttachment(
             );
     } else {
       // The line is not rendered: use its computed position instead.
-      const computed = computeLineBounds?.(column, attachment.line);
+      const computed = getUnrenderedBounds(
+        column,
+        attachment.line,
+        computeLineBounds
+      );
       if (computed == null) return;
       const edges = getComputedLineEdges(computed);
       y = attachment.edge === 'before' ? edges.top : edges.bottom;

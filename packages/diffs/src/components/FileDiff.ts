@@ -130,6 +130,7 @@ import { createGutterWrapper } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
+import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import {
@@ -973,6 +974,19 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // the page. Nothing is drawn until drawSemanticConnectors, so a caller
   // with several diffs can measure them all before any of them writes.
   public measureSemanticConnectors(): void {
+    const { computeLineBounds, renderRange, semanticConnectorColumn } = this;
+    // A render range leaves rows out, and only a virtualized diff can say
+    // where a line without a row is.
+    if (
+      semanticConnectorColumn != null &&
+      computeLineBounds == null &&
+      renderRange != null &&
+      !isDefaultRenderRange(renderRange)
+    ) {
+      throw new Error(
+        'FileDiff: a split semantic diff needs a virtualized diff to render a render range'
+      );
+    }
     const layout = this.getSemanticConnectorLayout();
     if (layout == null) {
       this.semanticConnector.measured = undefined;

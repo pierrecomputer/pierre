@@ -2290,6 +2290,18 @@ export class VirtualizedFileDiff<
       }
     }
 
+    // Mostly for safety and to help catch bugs in semantic conversion. A
+    // connector line after the last hunk is outside the hunks too.
+    if (lineCursor != null) {
+      const { lines, oldIndex, newIndex } = lineCursor;
+      if (oldIndex < lines.old.length) {
+        throwConnectorLineOutsideHunks('old', lines.old[oldIndex]);
+      }
+      if (newIndex < lines.new.length) {
+        throwConnectorLineOutsideHunks('new', lines.new[newIndex]);
+      }
+    }
+
     this.cache.totalLines = renderedLineIndex;
   }
 
@@ -2875,18 +2887,18 @@ function takeHunkLineRows(
     getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) + 1;
   let newLine =
     getHunkSideStartBoundary(hunk.additionStart, hunk.additionCount) + 1;
-  // A line before the hunk has no row in it.
-  while (
+  // A connector never ends on a line outside the hunks.
+  if (
     cursor.oldIndex < oldLines.length &&
     oldLines[cursor.oldIndex] < oldLine
   ) {
-    cursor.oldIndex++;
+    throwConnectorLineOutsideHunks('old', oldLines[cursor.oldIndex]);
   }
-  while (
+  if (
     cursor.newIndex < newLines.length &&
     newLines[cursor.newIndex] < newLine
   ) {
-    cursor.newIndex++;
+    throwConnectorLineOutsideHunks('new', newLines[cursor.newIndex]);
   }
   const hasOldLine =
     cursor.oldIndex < oldLines.length &&
@@ -2933,6 +2945,15 @@ function takeHunkLineRows(
     newLine += newCount;
   }
   return rows;
+}
+
+function throwConnectorLineOutsideHunks(
+  side: 'old' | 'new',
+  line: number
+): never {
+  throw new Error(
+    `VirtualizedFileDiff: a semantic connector ends on ${side} line ${line}, which is not in a hunk`
+  );
 }
 
 // A run of a hunk's rows that show one after another: `rowCount` rows from

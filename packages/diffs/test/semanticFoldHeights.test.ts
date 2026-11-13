@@ -1132,6 +1132,43 @@ describe('connector line positions from the layout pass', () => {
     }
   });
 
+  test('a connector that ends on a line outside the hunks throws', () => {
+    // One changed line in the middle of 200. A move from old line 20 to new
+    // line 150 ends on lines that are in collapsed context on both sides.
+    const lines = Array.from({ length: 200 }, (_, index) => `line ${index}`);
+    const fileDiff = parseDiffFromFile(
+      { name: 'a.txt', contents: `${lines.join('\n')}\n` },
+      {
+        name: 'a.txt',
+        contents: `${lines.map((line, index) => (index === 99 ? 'changed' : line)).join('\n')}\n`,
+      }
+    );
+    fileDiff.semanticOperations = [
+      movedOperation({ start: 20, end: 20 }, { start: 150, end: 150 }),
+    ];
+
+    const dom = installDom();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const virtualizer = new Virtualizer();
+    virtualizer.setup(root);
+    const instance = new VirtualizedFileDiff<undefined>(
+      { diffStyle: 'split' },
+      virtualizer,
+      layoutMetrics
+    );
+    try {
+      instance.updateCodeViewLayout(fileDiff, 0);
+      const inspect = instance as unknown as Inspectable;
+      expect(() => inspect.computeLineBounds('old', 20)).toThrow(
+        'VirtualizedFileDiff: a semantic connector ends on old line 20, which is not in a hunk'
+      );
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('they match the positions found by walking when one hunk has many closed folds', () => {
     // Forty two-line moves with five unchanged lines between them, all in
     // one hunk, each with a closed fold. The moved code lands at the end.
