@@ -1690,7 +1690,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchState.pendingHorizontalReveal = true;
     this.searchState.current = match;
     this.render();
-    this.paintSearchHighlights();
+    this.paintSearchRanges();
     const rect = this.measureCurrentSearchMatch();
     const visible =
       rect != null
@@ -1920,10 +1920,23 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
   };
 
-  // DOM ranges belong to the mounted text nodes. Rebuild them after rendering
-  // so scrolling, tokenization, and edits cannot leave ranges on recycled rows.
+  // Paints the highlights for a frame, then scrolls the current match's code
+  // column sideways if navigation asked for it. The sideways scroll only runs
+  // here, once per frame: split columns copy each other's scroll position a
+  // frame late, and a second scroll in between would be overwritten.
   private paintSearchHighlights = (): void => {
     dequeueRender(this.paintSearchHighlights);
+    this.paintSearchRanges();
+    if (this.searchState.pendingHorizontalReveal) {
+      const range = this.searchHighlighter?.currentMatchRange;
+      this.searchState.pendingHorizontalReveal =
+        range == null || !revealMatchHorizontally(range);
+    }
+  };
+
+  // DOM ranges belong to the mounted text nodes. Rebuild them after rendering
+  // so scrolling, tokenization, and edits cannot leave ranges on recycled rows.
+  private paintSearchRanges(): void {
     const { searchHighlighter: highlighter } = this;
     if (highlighter == null) return;
     highlighter.clear();
@@ -1945,12 +1958,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         );
       }
     }
-    if (this.searchState.pendingHorizontalReveal) {
-      const range = highlighter.currentMatchRange;
-      this.searchState.pendingHorizontalReveal =
-        range == null || !revealMatchHorizontally(range);
-    }
-  };
+  }
 
   private searchCodeView(
     searchParams: SearchParams

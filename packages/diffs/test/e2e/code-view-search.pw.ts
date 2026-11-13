@@ -1394,3 +1394,24 @@ test('a match in the last row of a tall wrapped line is brought into view', asyn
     )
     .toBe('visible');
 });
+
+test('two quick steps in split view leave the last match scrolled into view', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?horizontal&kind=split&diffStyle=split'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill('target');
+  await expectCurrentMatchHorizontallyVisible(page);
+  // Line 8 has a match at each end, on each side. Step from the far end of
+  // the old side to the near end of the new side with no frame in between.
+  await page.evaluate(() => {
+    window.__codeView!.navigateSearch('next');
+    window.__codeView!.navigateSearch('next');
+  });
+  await expect(root.locator('[data-matches]')).toContainText('3 of');
+  await expectCurrentMatchHorizontallyVisible(page);
+});
