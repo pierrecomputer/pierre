@@ -68,12 +68,13 @@ function ChartMenu({
 }: {
   label: string;
   value: string;
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: string; label: string; description?: string }[];
   onValueChange: (value: string) => void;
   labelInside?: boolean;
 }) {
   const selectedLabel =
     options.find((option) => option.value === value)?.label ?? value;
+  const hasDescriptions = options.some((option) => option.description != null);
 
   return (
     <div className={labelInside ? 'min-w-0' : 'grid min-w-0 gap-1.5 text-sm'}>
@@ -94,20 +95,31 @@ function ChartMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="dark min-w-[var(--radix-dropdown-menu-trigger-width)] border-neutral-800 bg-neutral-950 text-neutral-50"
+          className={`dark min-w-[var(--radix-dropdown-menu-trigger-width)] border-neutral-800 bg-neutral-950 text-neutral-50 ${
+            hasDescriptions ? 'w-96 max-w-[calc(100vw-2rem)]' : ''
+          }`}
           scrollSelectedIntoView
         >
           {options.map((option) => (
             <DropdownMenuItem
               key={option.value}
               selected={option.value === value}
-              className="focus:bg-neutral-800 focus:text-neutral-50 data-[selected=true]:bg-neutral-800 data-[selected=true]:text-neutral-50"
+              className="items-start focus:bg-neutral-800 focus:text-neutral-50 data-[selected=true]:bg-neutral-800 data-[selected=true]:text-neutral-50"
               onSelect={() => onValueChange(option.value)}
             >
-              {option.label}
+              <span className="min-w-0">
+                <span className="block">{option.label}</span>
+                {option.description != null && (
+                  <span className="mt-0.5 block text-xs leading-snug text-neutral-400">
+                    {option.description}
+                  </span>
+                )}
+              </span>
               <IconCheck
                 className={
-                  option.value === value ? 'ml-auto' : 'invisible ml-auto'
+                  option.value === value
+                    ? 'mt-0.5 ml-auto'
+                    : 'invisible mt-0.5 ml-auto'
                 }
                 aria-hidden="true"
               />
@@ -214,7 +226,8 @@ export function WordsBenchmarks() {
           </h2>
           <p className="text-muted-foreground text-pretty">
             From everyday AI replies to full specifications, compare rendering
-            speed, streaming work, memory use, and download size.
+            speed, streaming work, memory use, and download size from Markdown
+            to HTML and React.
           </p>
         </div>
         <a
@@ -226,18 +239,10 @@ export function WordsBenchmarks() {
         </a>
       </div>
 
-      <figure className={cardClass} aria-labelledby="words-package-chart">
-        <figcaption className="mb-6 max-w-2xl">
-          <h3
-            id="words-package-chart"
-            className="text-xl font-semibold tracking-tight"
-          >
-            Markdown to HTML and React
-          </h3>
-          <p className="text-muted-foreground text-pretty">
-            {measurements[metricIndex]}
-          </p>
-        </figcaption>
+      <figure
+        className={cardClass}
+        aria-label="Markdown to HTML and React benchmarks"
+      >
         <div className="mb-6 flex flex-wrap items-end gap-2">
           <ChartMenu
             label="Measures"
@@ -245,6 +250,7 @@ export function WordsBenchmarks() {
             options={suite.metrics.map(({ label }, index) => ({
               value: String(index),
               label,
+              description: measurements[index],
             }))}
             onValueChange={(value) => setMetricIndex(Number(value))}
           />
