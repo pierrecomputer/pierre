@@ -223,6 +223,7 @@ export function WordsBenchmarks() {
   });
   const measuredDate = date.format(new Date(run.date));
   const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-4 sm:p-8 lg:p-10`;
+  const browserCardClass = `${cardClass} lg:row-span-3 lg:grid lg:grid-rows-subgrid`;
 
   return (
     <section
@@ -338,8 +339,11 @@ export function WordsBenchmarks() {
           and repeated 100 times to show how each renderer scales.
         </p>
       </div>
-      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
-        <figure className={cardClass} aria-labelledby="words-update-chart">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-3 lg:gap-y-0">
+        <figure
+          className={browserCardClass}
+          aria-labelledby="words-update-chart"
+        >
           <figcaption className="mb-6 max-w-2xl">
             <h3
               id="words-update-chart"
@@ -381,7 +385,10 @@ export function WordsBenchmarks() {
           </div>
         </figure>
 
-        <figure className={cardClass} aria-labelledby="words-memory-chart">
+        <figure
+          className={browserCardClass}
+          aria-labelledby="words-memory-chart"
+        >
           <figcaption className="mb-6 max-w-2xl">
             <h3
               id="words-memory-chart"
@@ -415,7 +422,10 @@ export function WordsBenchmarks() {
           </div>
         </figure>
 
-        <figure className={cardClass} aria-labelledby="words-footprint-chart">
+        <figure
+          className={browserCardClass}
+          aria-labelledby="words-footprint-chart"
+        >
           <figcaption className="mb-6 max-w-2xl">
             <h3
               id="words-footprint-chart"
