@@ -203,29 +203,41 @@ export function WordsBenchmarks() {
       aria-labelledby="words-benchmarks"
       className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div className="max-w-2xl">
-            <h2
-              id="words-benchmarks"
-              className="text-2xl font-semibold tracking-tight"
-            >
-              Markdown rendering benchmarks
-            </h2>
-            <p className="text-muted-foreground text-pretty">
-              From everyday AI replies to full specifications, compare rendering
-              speed, streaming work, memory use, and download size.
-            </p>
-          </div>
-          <a
-            href="#words-benchmark-method"
-            className="styled-link text-sm"
-            onClick={() => setMethodOpen(true)}
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div className="max-w-2xl">
+          <h2
+            id="words-benchmarks"
+            className="text-2xl font-semibold tracking-tight"
           >
-            How we measure ↓
-          </a>
+            Markdown rendering benchmarks
+          </h2>
+          <p className="text-muted-foreground text-pretty">
+            From everyday AI replies to full specifications, compare rendering
+            speed, streaming work, memory use, and download size.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center">
+        <a
+          href="#words-benchmark-method"
+          className="styled-link text-sm"
+          onClick={() => setMethodOpen(true)}
+        >
+          How we measure ↓
+        </a>
+      </div>
+
+      <figure className={cardClass} aria-labelledby="words-package-chart">
+        <figcaption className="mb-6 max-w-2xl">
+          <h3
+            id="words-package-chart"
+            className="text-xl font-semibold tracking-tight"
+          >
+            Markdown to HTML and React
+          </h3>
+          <p className="text-muted-foreground text-pretty">
+            {measurements[metricIndex]}
+          </p>
+        </figcaption>
+        <div className="mb-6 flex flex-wrap items-center gap-2">
           <ChartMenu
             label="Measures"
             value={String(metricIndex)}
@@ -247,20 +259,6 @@ export function WordsBenchmarks() {
             labelInside
           />
         </div>
-      </div>
-
-      <figure className={cardClass} aria-labelledby="words-package-chart">
-        <figcaption className="mb-6 max-w-2xl">
-          <h3
-            id="words-package-chart"
-            className="text-xl font-semibold tracking-tight"
-          >
-            Markdown to HTML and React
-          </h3>
-          <p className="text-muted-foreground text-pretty">
-            {measurements[metricIndex]}
-          </p>
-        </figcaption>
         <p
           id="words-package-caption"
           className="text-muted-foreground mb-5 text-sm"
@@ -442,7 +440,7 @@ export function WordsBenchmarks() {
         onToggle={(event) => setMethodOpen(event.currentTarget.open)}
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
         summary="How we measure"
-        summaryClassName="text-sm font-medium"
+        summaryClassName="text-sm font-medium -ml-3"
       >
         <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 text-sm leading-relaxed md:grid-cols-2">
           <div className="space-y-3">
