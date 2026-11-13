@@ -9,6 +9,7 @@ interface WordsDisclosureProps extends Omit<
 > {
   summary: ReactNode;
   summaryClassName?: string;
+  iconClassName?: string;
   contentClassName?: string;
   children: ReactNode;
 }
@@ -16,6 +17,7 @@ interface WordsDisclosureProps extends Omit<
 export function WordsDisclosure({
   summary,
   summaryClassName,
+  iconClassName,
   contentClassName,
   children,
   className,
@@ -31,7 +33,10 @@ export function WordsDisclosure({
       >
         <IconChevronSm
           aria-hidden="true"
-          className="text-muted-foreground size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0"
+          className={cn(
+            'text-muted-foreground size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0',
+            iconClassName
+          )}
         />
         <span>{summary}</span>
       </summary>

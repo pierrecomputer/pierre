@@ -476,6 +476,7 @@ export function WordsBenchmarks() {
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
         summary="How we measure"
         summaryClassName="text-sm font-medium"
+        iconClassName="-ml-3"
       >
         <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 p-2 text-sm leading-relaxed md:grid-cols-2">
           <div className="space-y-3">
