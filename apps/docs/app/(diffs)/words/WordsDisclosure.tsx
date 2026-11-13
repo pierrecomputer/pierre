@@ -31,7 +31,7 @@ export function WordsDisclosure({
       >
         <IconChevronSm
           aria-hidden="true"
-          className="text-muted-foreground -ml-3 size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0"
+          className="text-muted-foreground size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0"
         />
         <span>{summary}</span>
       </summary>

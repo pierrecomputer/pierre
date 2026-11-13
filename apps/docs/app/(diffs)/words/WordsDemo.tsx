@@ -491,6 +491,7 @@ function WordsExample({
       </div>
       <WordsDisclosure
         summary="Use it in React"
+        className="rounded-lg bg-neutral-50 p-4 dark:bg-neutral-900"
         summaryClassName="text-muted-foreground text-sm font-medium"
         contentClassName="mt-4"
       >
