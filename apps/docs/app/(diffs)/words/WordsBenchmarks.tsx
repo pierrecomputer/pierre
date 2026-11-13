@@ -1,6 +1,6 @@
 'use client';
 
-import { IconCheck, IconChevronSm } from '@pierre/icons';
+import { IconArrow, IconCheck, IconChevronSm } from '@pierre/icons';
 import { type ReactNode, useState } from 'react';
 
 import { BenchmarkBar } from '../highlights/BenchmarkBar';
@@ -294,10 +294,14 @@ export function WordsBenchmarks() {
         </div>
         <a
           href="#words-benchmark-method"
-          className="styled-link text-sm"
+          className="styled-link inline-flex items-center gap-1 text-sm"
           onClick={() => setMethodOpen(true)}
         >
-          How we measure ↓
+          How we measure
+          <IconArrow
+            aria-hidden="true"
+            className="text-muted-foreground size-4 rotate-90"
+          />
         </a>
       </div>
 
