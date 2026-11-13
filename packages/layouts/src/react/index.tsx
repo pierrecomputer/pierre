@@ -17,7 +17,12 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout, type CSSLayout } from '../css-layout';
+import {
+  ALL_EDGES,
+  computeCSSLayout,
+  type CSSLayout,
+  type PaneEdges,
+} from '../css-layout';
 import {
   animateFromBoxes,
   cancelFlipAnimations,
@@ -25,10 +30,12 @@ import {
   readBoxes,
 } from '../dom/flip';
 import {
+  focusOwner,
   focusPane,
   focusTab,
   focusZoomedPane,
   hideCoveredAfterAnimation,
+  hostOf,
   notifyHidden,
   readPixelGeometry,
   separatorIdsAt,
@@ -41,19 +48,25 @@ import {
   clearTabDrop,
   readTabEdges,
   showTabDrop,
+  TAB_CLOSE_ATTRIBUTE,
   type TabEdges,
+  TABLIST_ATTRIBUTE,
+  tablistAt,
+  tabsOf,
 } from '../dom/tab-drag';
 import {
   dragSizes,
   dropTarget,
-  type DropTarget,
   getExitEdges,
   keySizes,
   paneAt,
   tabBoundaryAt,
+  type TabDropTarget,
+  tabDropTarget,
+  tabInsertIndex,
   tabMoveIndex,
 } from '../gestures';
-import { getPanes, shownPanes, stackOf } from '../model';
+import { findNode, getPanes, shownPanes, stackOf } from '../model';
 import type { LayoutStore } from '../store';
 import type {
   ChildSize,
@@ -68,6 +81,8 @@ import type {
 
 export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
 export type { ResizeStrategy } from '../dom/resize-work';
+export type { PaneEdges } from '../css-layout';
+export type { DropPlace } from '../gestures';
 
 /**
  * A button in a pane header: drag to move, zoom, close, or collapse. The
@@ -81,6 +96,39 @@ const DEFAULT_PANE_LAYERS = { minPanes: 6 };
 
 const ALL_PANE_ACTIONS: readonly PaneAction[] = ['move', 'zoom', 'close'];
 
+export interface LayoutTablistProps {
+  role: 'tablist';
+  'aria-label': string;
+  'data-layout-tablist': '';
+}
+
+export interface LayoutTabProps {
+  id: string;
+  role: 'tab';
+  'aria-selected': boolean;
+  'aria-controls': string;
+  tabIndex: number;
+  'data-layout-tab': string;
+  onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+  onClick: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+}
+
+export interface PaneHeaderProps {
+  pane: PaneNode;
+  stack: StackNode | null;
+  tabs: readonly PaneNode[];
+  edges: PaneEdges;
+  focused: boolean;
+  zoomed: boolean;
+  collapsed: boolean;
+  canClose: (id: string) => boolean;
+  close: (id: string) => void;
+  select: (id: string) => void;
+  tablistProps: LayoutTablistProps;
+  getTabProps: (tab: PaneNode) => LayoutTabProps;
+}
+
 export interface LayoutProps {
   store: LayoutStore;
   /**
@@ -90,6 +138,10 @@ export interface LayoutProps {
    * render, and receives `PANE_VISIBILITY_EVENT` instead.
    */
   renderPane: (pane: PaneNode) => ReactNode;
+  /** Replace the shown pane's header; spread the supplied tab props to retain keyboard and drag behavior. */
+  renderHeader?: (header: PaneHeaderProps) => ReactNode;
+  /** Give a pane outside a stack its own single-tab strip. */
+  loneTabStrip?: boolean;
   getPaneTitle?: (pane: PaneNode) => string;
   /**
    * Which changes animate. `layout` covers changes of the split tree: split,
@@ -97,7 +149,7 @@ export interface LayoutProps {
    * by default; with `false`, the change applies at once. A user's
    * `prefers-reduced-motion: reduce` turns both off.
    */
-  animate?: { layout?: boolean; zoom?: boolean };
+  animate?: boolean | { layout?: boolean; zoom?: boolean };
   /**
    * Whether each pane host is its own compositor layer: `true`, `false`, or
    * `{ minPanes }` to turn the layers on from that number of visible panes.
@@ -119,6 +171,8 @@ export interface LayoutProps {
    * to hide the pane with `store.setHidden` so that it keeps its content.
    */
   onPaneClose?: (pane: PaneNode) => void;
+  /** Report changed split sizes at pointer release or after a keyboard resize. Cancellation reports nothing. */
+  onResize?: (sizes: Readonly<Record<string, readonly ChildSize[]>>) => void;
   className?: string;
   style?: CSSProperties;
   gap?: number;
@@ -154,7 +208,11 @@ interface MoveGesture {
   paneId: string;
 }
 
-/** A drag of a tab to a new place in its tab list. */
+interface TabTarget extends TabDropTarget {
+  index?: number;
+}
+
+/** A tab drag can reorder its list, join another group, or split at a pane edge. */
 interface TabGesture {
   type: 'tab';
   pointerId: number;
@@ -169,6 +227,8 @@ interface TabGesture {
   edges: TabEdges[] | null;
   /** The boundary of the list where the tab would go. */
   boundary: number | null;
+  target: TabTarget | null;
+  marked: HTMLElement | null;
 }
 
 // The compiled CSS of each tree, by gap. The view reads it before a change,
@@ -286,6 +346,15 @@ const PaneBody = memo(function PaneBody({
   return <div className="pierre-layout-content">{renderPane(pane)}</div>;
 }, sameContentProps);
 
+function CustomHeader({
+  render,
+  ...header
+}: PaneHeaderProps & {
+  render: (header: PaneHeaderProps) => ReactNode;
+}): ReactNode {
+  return render(header);
+}
+
 // The box of a zoomed pane and of the focus indicator while a pane is zoomed.
 const FULL_SIZE: CSSProperties = {
   left: 0,
@@ -301,10 +370,25 @@ const rectStyle = (rect: Rect): CSSProperties => ({
   height: rect.height,
 });
 
+const EDGE_ORDER = ['top', 'right', 'bottom', 'left'] as const;
+
+const edgeList = (edges: PaneEdges): string =>
+  EDGE_ORDER.filter((edge) => edges[edge]).join(' ');
+
+const sameDrop = (a: TabDropTarget | null, b: TabDropTarget | null): boolean =>
+  a === b ||
+  (a !== null &&
+    b !== null &&
+    a.paneId === b.paneId &&
+    a.place === b.place &&
+    JSON.stringify(a.rect) === JSON.stringify(b.rect));
+
 /** Flat, keyed pane hosts retain application content while the split tree changes around them. */
 export function Layout({
   store,
   renderPane,
+  renderHeader,
+  loneTabStrip = false,
   getPaneTitle = (pane) => pane.id,
   className,
   style,
@@ -312,6 +396,7 @@ export function Layout({
   label = 'Workspace',
   paneActions = ALL_PANE_ACTIONS,
   onPaneClose,
+  onResize,
   animate: animateOptions,
   paneLayers = DEFAULT_PANE_LAYERS,
   experimentalResize = 'live',
@@ -321,9 +406,9 @@ export function Layout({
   const gesture = useRef<ResizeGesture | MoveGesture | TabGesture | null>(null);
   const [resizing, setResizing] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
-  const [drop, setDrop] = useState<DropTarget | null>(null);
+  const [drop, setDrop] = useState<TabDropTarget | null>(null);
   const [exitEdges, setExitEdges] = useState<Record<string, Edge>>({});
-  const dropRef = useRef<DropTarget | null>(null);
+  const dropRef = useRef<TabDropTarget | null>(null);
   const prefix = useId();
 
   // Boxes before a store change, for the FLIP animation after React commits it.
@@ -331,8 +416,15 @@ export function Layout({
   // The tree of the last commit. The DOM shows it until React commits the
   // next tree, which can hold more than one store change.
   const committedRoot = useRef<LayoutNode | null>(null);
-  const animateLayout = animateOptions?.layout !== false;
-  const animateZoom = animateOptions?.zoom !== false;
+  const zoomFocusOwner = useRef<string | null>(null);
+  const animateLayout =
+    typeof animateOptions === 'object'
+      ? animateOptions.layout !== false
+      : animateOptions !== false;
+  const animateZoom =
+    typeof animateOptions === 'object'
+      ? animateOptions.zoom !== false
+      : animateOptions !== false;
   // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
   const resizeWork = useMemo(() => createResizeWork(store), [store]);
 
@@ -370,6 +462,8 @@ export function Layout({
               cssLayoutOf(next.root, gap)
             ));
         const zoomStarts = zoomChanges && zoom !== null;
+        if (element !== null && zoomStarts)
+          zoomFocusOwner.current = focusOwner(element);
         if (element !== null && (animate || zoomStarts)) {
           // Layout is clean here, before React applies the change, so these reads are cheap.
           const boxes = readBoxes(element);
@@ -570,8 +664,10 @@ export function Layout({
   useEffect(() => {
     const element = rootRef.current;
     const zoomedPane = state.zoomedPane;
+    const owner = zoomFocusOwner.current;
+    zoomFocusOwner.current = null;
     if (element === null || zoomedPane === null) return;
-    focusZoomedPane(element, zoomedPane);
+    focusZoomedPane(element, zoomedPane, owner);
     let current = true;
     // A tree change during the zoom cancels its animations, and the covered
     // panes then hide at once. A zoom change also cancels them, before React
@@ -660,7 +756,7 @@ export function Layout({
     event: KeyboardEvent<HTMLElement>,
     tabs: readonly PaneNode[],
     tab: PaneNode,
-    stack: StackNode
+    stack: StackNode | null
   ): void {
     const at = tabs.indexOf(tab);
     if (
@@ -671,7 +767,7 @@ export function Layout({
       // The browser does not move its own tab for a key that the page uses.
       event.preventDefault();
       const boundary = event.key === 'PageUp' ? at - 1 : at + 2;
-      if (boundary >= 0 && boundary <= tabs.length)
+      if (stack !== null && boundary >= 0 && boundary <= tabs.length)
         moveTabTo(
           stack,
           tabs.map((pane) => pane.id),
@@ -728,12 +824,13 @@ export function Layout({
     id: string,
     tabs: readonly PaneNode[]
   ): void {
-    const tablist = event.currentTarget.parentElement;
+    const tablist = event.currentTarget.closest<HTMLElement>(
+      `[${TABLIST_ATTRIBUTE}]`
+    );
     if (
       event.button !== 0 ||
-      tabs.length < 2 ||
       tablist === null ||
-      (event.target as Element).closest('.pierre-layout-tab-close') !== null
+      (event.target as Element).closest(`[${TAB_CLOSE_ATTRIBUTE}]`) !== null
     )
       return;
     gesture.current = {
@@ -747,13 +844,80 @@ export function Layout({
       visible: tabs.map((tab) => tab.id),
       edges: null,
       boundary: null,
+      target: null,
+      marked: null,
     };
+  }
+
+  function markTablist(active: TabGesture, tablist: HTMLElement | null): void {
+    if (active.marked !== null && active.marked !== tablist)
+      clearTabDrop(active.marked);
+    active.marked = tablist;
+  }
+
+  function showTabTarget(active: TabGesture, target: TabTarget | null): void {
+    active.target = target;
+    if (!sameDrop(dropRef.current, target)) {
+      dropRef.current = target;
+      setDrop(target);
+    }
+    setDragging(target === null ? null : active.paneId);
+  }
+
+  function groupTargetAt(
+    active: TabGesture,
+    clientX: number,
+    clientY: number
+  ): TabTarget | null {
+    const element = rootRef.current;
+    if (element === null || store.getSnapshot().zoomedPane !== null) {
+      markTablist(active, null);
+      return null;
+    }
+    const bounds = element.getBoundingClientRect();
+    const x = clientX - bounds.left;
+    const y = clientY - bounds.top;
+    const pixels = readGeometry();
+    const hit = paneAt(pixels, x, y, '');
+    if (hit !== undefined && !active.visible.includes(hit.pane.id)) {
+      const host = hostOf(element, hit.pane.id);
+      const tablist =
+        host === undefined ? null : tablistAt(host, clientX, clientY);
+      const target = tabDropTarget(
+        pixels,
+        x,
+        y,
+        active.paneId,
+        active.visible,
+        true
+      );
+      if (tablist !== null && target !== null) {
+        const edges = readTabEdges(tablist);
+        const boundary = tabBoundaryAt(
+          edges,
+          clientX - tablist.getBoundingClientRect().left
+        );
+        const stack = stackOf(store.getSnapshot().root, hit.pane.id);
+        markTablist(active, tablist);
+        showTabDrop(tablist, boundaryOffset(edges, boundary));
+        return {
+          ...target,
+          index: tabInsertIndex(
+            stack?.children.map(({ id }) => id) ?? [hit.pane.id],
+            tabsOf(tablist).map((tab) => tab.dataset.layoutTab ?? ''),
+            boundary
+          ),
+        };
+      }
+    }
+    markTablist(active, null);
+    return tabDropTarget(pixels, x, y, active.paneId, active.visible);
   }
 
   /**
    * Follow a tab drag: show where the tab would go. The tab edges are read
-   * once, when the drag starts, so a move writes one transform and reads
-   * nothing.
+   * once, when the drag starts. The current list box and other groups are
+   * read during the drag so that cross-group targets follow the pointer.
    */
   function dragTab(active: TabGesture, event: PointerEvent): void {
     if (active.edges === null) {
@@ -767,9 +931,25 @@ export function Layout({
       }
       active.tab.dataset.dragging = 'true';
     }
-    const x = event.clientX - active.tablist.getBoundingClientRect().left;
-    active.boundary = tabBoundaryAt(active.edges, x);
-    showTabDrop(active.tablist, boundaryOffset(active.edges, active.boundary));
+    const box = active.tablist.getBoundingClientRect();
+    const inTablist =
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom;
+    if (inTablist) {
+      markTablist(active, null);
+      showTabTarget(active, null);
+      active.boundary = tabBoundaryAt(active.edges, event.clientX - box.left);
+      showTabDrop(
+        active.tablist,
+        boundaryOffset(active.edges, active.boundary)
+      );
+      return;
+    }
+    active.boundary = null;
+    clearTabDrop(active.tablist);
+    showTabTarget(active, groupTargetAt(active, event.clientX, event.clientY));
   }
 
   function pointerMove(event: PointerEvent<HTMLDivElement>): void {
@@ -799,10 +979,14 @@ export function Layout({
       const x = event.clientX - bounds.left;
       const y = event.clientY - bounds.top;
       const target = paneAt(readGeometry(), x, y, active.paneId);
-      const next =
+      const edge =
         target === undefined
           ? null
           : dropTarget(target.pane.id, target.rect, x, y);
+      const next =
+        edge === null
+          ? null
+          : { paneId: edge.paneId, place: edge.edge, rect: edge.rect };
       dropRef.current = next;
       setDrop(next);
     }
@@ -819,16 +1003,46 @@ export function Layout({
     gesture.current = null;
     if (active.type === 'tab') {
       clearTabDrop(active.tablist);
+      markTablist(active, null);
       delete active.tab.dataset.dragging;
       const stack = stackOf(store.getSnapshot().root, active.paneId);
-      if (!cancel && active.boundary !== null && stack !== null)
+      const target = active.target;
+      dropRef.current = null;
+      setDrop(null);
+      setDragging(null);
+      if (cancel) return;
+      if (target !== null) {
+        tabToFocus.current = active.paneId;
+        if (target.place === 'center')
+          store.moveToStack(active.paneId, target.paneId, target.index);
+        else store.move(active.paneId, target.paneId, target.place);
+      } else if (active.boundary !== null && stack !== null)
         moveTabTo(stack, active.visible, active.paneId, active.boundary);
       return;
     }
     if (active.type === 'resize' && cancel)
       store.setSizes(active.originalSizes);
-    if (active.type === 'move' && !cancel && dropRef.current !== null) {
-      store.move(active.paneId, dropRef.current.paneId, dropRef.current.edge);
+    if (active.type === 'resize' && !cancel) {
+      const root = store.getSnapshot().root;
+      const changed = Object.fromEntries(
+        Object.entries(active.originalSizes).flatMap(([id, original]) => {
+          const split = findNode(root, id);
+          return split?.type === 'split' &&
+            JSON.stringify(split.sizes) !== JSON.stringify(original)
+            ? [[id, split.sizes]]
+            : [];
+        })
+      );
+      if (Object.keys(changed).length > 0) onResize?.(changed);
+    }
+    const moveTo = dropRef.current;
+    if (
+      active.type === 'move' &&
+      !cancel &&
+      moveTo !== null &&
+      moveTo.place !== 'center'
+    ) {
+      store.move(active.paneId, moveTo.paneId, moveTo.place);
     }
     dropRef.current = null;
     setResizing(false);
@@ -847,7 +1061,18 @@ export function Layout({
     );
     if (sizes !== null) {
       event.preventDefault();
+      const before = store.getSnapshot().root;
       store.setSizes(sizes);
+      const changed = Object.fromEntries(
+        Object.entries(sizes).filter(([id, next]) => {
+          const split = findNode(before, id);
+          return (
+            split?.type !== 'split' ||
+            JSON.stringify(split.sizes) !== JSON.stringify(next)
+          );
+        })
+      );
+      if (Object.keys(changed).length > 0) onResize?.(changed);
     }
   }
 
@@ -872,17 +1097,24 @@ export function Layout({
         }
       }}
     >
-      {paneHosts.map(({ pane, hidden: notShown, stack, collapsed }) => {
+      {paneHosts.map(({ pane, hidden: notShown, stack, collapsed, edges }) => {
         const covered =
           !notShown &&
           state.zoomedPane !== null &&
           state.zoomedPane !== pane.id;
         const hidden = notShown || covered;
-        const tabs = stack?.children.filter((tab) => tab.hidden !== true) ?? [];
+        const tabs =
+          stack !== null
+            ? stack.children.filter((tab) => tab.hidden !== true)
+            : loneTabStrip
+              ? [pane]
+              : [];
         const tabbed = tabs.length > 0;
+        const labelled = tabbed && !notShown;
         const zoomed = state.zoomedPane === pane.id;
         // A zoomed pane shows its content, also when it is collapsed.
         const folded = collapsed && !zoomed;
+        const contact = zoomed ? ALL_EDGES : edges;
         const actions = actionsOf(pane);
         const edge = exitEdges[pane.id] ?? 'left';
         // A covered pane keeps its geometry and moves past an edge with a
@@ -896,19 +1128,153 @@ export function Layout({
               : edge === 'top'
                 ? `translateY(calc(-100cqh - ${gap}px))`
                 : `translateY(calc(100cqh + ${gap}px))`;
+        const tablistProps: LayoutTablistProps = {
+          role: 'tablist',
+          'aria-label': `Tabs of ${getPaneTitle(pane)}`,
+          'data-layout-tablist': '',
+        };
+        const getTabProps = (tab: PaneNode): LayoutTabProps => {
+          const selected = tab.id === pane.id;
+          return {
+            id: tabIdOf(prefix, pane.id, tab.id),
+            role: 'tab',
+            'aria-selected': selected,
+            'aria-controls': `${prefix}-${encodeURIComponent(tab.id)}`,
+            tabIndex: selected ? 0 : -1,
+            'data-layout-tab': tab.id,
+            onPointerDown: (event) => startTabDrag(event, tab.id, tabs),
+            onClick: () => {
+              if (!selected) selectTab(tab.id);
+            },
+            onKeyDown: (event) => tabKey(event, tabs, tab, stack),
+          };
+        };
+        const tabById = (id: string): PaneNode | undefined =>
+          tabs.find((tab) => tab.id === id) ??
+          (id === pane.id ? pane : undefined);
+        const header = notShown ? null : renderHeader !== undefined ? (
+          <CustomHeader
+            render={renderHeader}
+            pane={pane}
+            stack={stack}
+            tabs={tabs}
+            edges={contact}
+            focused={state.focusedPane === pane.id}
+            zoomed={zoomed}
+            collapsed={folded}
+            canClose={(id) => {
+              const tab = tabById(id);
+              return tab !== undefined && closable(tab, stack);
+            }}
+            close={(id) => {
+              const tab = tabById(id);
+              if (tab !== undefined && closable(tab, stack)) closePane(tab);
+            }}
+            select={(id) => {
+              if (id !== pane.id && stack !== null && tabById(id) !== undefined)
+                selectTab(id);
+            }}
+            tablistProps={tablistProps}
+            getTabProps={getTabProps}
+          />
+        ) : (
+          <header className="pierre-layout-header">
+            {actions.includes('move') && (
+              <button
+                type="button"
+                className="pierre-layout-grip"
+                aria-label={`Drag ${getPaneTitle(pane)}`}
+                title="Drag to move this pane beside another"
+                // Not `disabled`, and only on the zoomed pane: a state
+                // change on every pane would lay each grip out again.
+                // startMove ignores a drag while a pane is zoomed.
+                aria-disabled={zoomed || undefined}
+                onPointerDown={(event) => startMove(event, pane.id)}
+              >
+                ⠿
+              </button>
+            )}
+            {tabbed ? (
+              <div {...tablistProps} className="pierre-layout-tabs">
+                {tabs.map((tab) => {
+                  const title = getPaneTitle(tab);
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className="pierre-layout-tab"
+                      {...getTabProps(tab)}
+                    >
+                      <span className="pierre-layout-tab-title">{title}</span>
+                      {actionsOf(tab).includes('close') &&
+                        closable(tab, stack) && (
+                          // A pointer shortcut: Delete on the tab and the
+                          // header's close button do the same.
+                          <span
+                            className="pierre-layout-tab-close"
+                            data-layout-tab-close=""
+                            aria-hidden="true"
+                            title={`Close ${title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closePane(tab);
+                            }}
+                          >
+                            ×
+                          </span>
+                        )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className="pierre-layout-title">{getPaneTitle(pane)}</span>
+            )}
+            {actions.includes('collapse') && (
+              <button
+                type="button"
+                aria-label={`Collapse ${getPaneTitle(pane)}`}
+                aria-pressed={collapsed}
+                onClick={() => store.setCollapsed(pane.id, !collapsed)}
+              >
+                {collapsed ? '▸' : '▾'}
+              </button>
+            )}
+            {actions.includes('zoom') && (
+              <button
+                type="button"
+                aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
+                aria-pressed={zoomed}
+                onClick={() => store.toggleZoom(pane.id)}
+              >
+                {zoomed ? '↙' : '↗'}
+              </button>
+            )}
+            {actions.includes('close') && (
+              <button
+                type="button"
+                aria-label={`Close ${getPaneTitle(pane)}`}
+                disabled={!closable(pane, stack)}
+                onClick={() => closePane(pane)}
+              >
+                ×
+              </button>
+            )}
+          </header>
+        );
         return (
           <section
             key={pane.id}
             id={`${prefix}-${encodeURIComponent(pane.id)}`}
             data-layout-pane={pane.id}
             data-layout-flip={`pane:${pane.id}`}
+            data-layout-edges={edgeList(contact)}
             className="pierre-layout-pane"
             tabIndex={hidden ? -1 : 0}
-            // The host of a tab is its tab panel, named by its tab.
             role={tabbed ? 'tabpanel' : undefined}
-            aria-label={tabbed ? undefined : getPaneTitle(pane)}
+            aria-label={labelled ? undefined : getPaneTitle(pane)}
             aria-labelledby={
-              tabbed ? tabIdOf(prefix, pane.id, pane.id) : undefined
+              labelled ? tabIdOf(prefix, pane.id, pane.id) : undefined
             }
             aria-hidden={hidden}
             // A covered pane becomes inert when its content stops rendering,
@@ -929,112 +1295,9 @@ export function Layout({
             onFocusCapture={() => store.focusPane(pane.id)}
             onPointerDown={() => store.focusPane(pane.id)}
           >
-            {/* The inner wrapper takes the inverse of the host's FLIP scale,
-                so the header and the content keep their shape. */}
+            {/* The inner wrapper counters the host's FLIP scale to preserve the content's shape. */}
             <div className="pierre-layout-pane-inner">
-              <header className="pierre-layout-header">
-                {actions.includes('move') && (
-                  <button
-                    type="button"
-                    className="pierre-layout-grip"
-                    aria-label={`Drag ${getPaneTitle(pane)}`}
-                    title="Drag to move this pane beside another"
-                    // Not `disabled`, and only on the zoomed pane: a state
-                    // change on every pane would lay each grip out again.
-                    // startMove ignores a drag while a pane is zoomed.
-                    aria-disabled={zoomed || undefined}
-                    onPointerDown={(event) => startMove(event, pane.id)}
-                  >
-                    ⠿
-                  </button>
-                )}
-                {tabbed && stack !== null ? (
-                  <div
-                    role="tablist"
-                    className="pierre-layout-tabs"
-                    aria-label={`Tabs of ${getPaneTitle(pane)}`}
-                  >
-                    {tabs.map((tab) => {
-                      const selected = tab.id === pane.id;
-                      const title = getPaneTitle(tab);
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          role="tab"
-                          id={tabIdOf(prefix, pane.id, tab.id)}
-                          className="pierre-layout-tab"
-                          aria-selected={selected}
-                          aria-controls={`${prefix}-${encodeURIComponent(tab.id)}`}
-                          tabIndex={selected ? 0 : -1}
-                          data-layout-tab={tab.id}
-                          onPointerDown={(event) =>
-                            startTabDrag(event, tab.id, tabs)
-                          }
-                          onClick={() => {
-                            if (!selected) selectTab(tab.id);
-                          }}
-                          onKeyDown={(event) => tabKey(event, tabs, tab, stack)}
-                        >
-                          <span className="pierre-layout-tab-title">
-                            {title}
-                          </span>
-                          {actionsOf(tab).includes('close') &&
-                            closable(tab, stack) && (
-                              // A pointer shortcut: Delete on the tab and the
-                              // header's close button do the same.
-                              <span
-                                className="pierre-layout-tab-close"
-                                aria-hidden="true"
-                                title={`Close ${title}`}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  closePane(tab);
-                                }}
-                              >
-                                ×
-                              </span>
-                            )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <span className="pierre-layout-title">
-                    {getPaneTitle(pane)}
-                  </span>
-                )}
-                {actions.includes('collapse') && (
-                  <button
-                    type="button"
-                    aria-label={`Collapse ${getPaneTitle(pane)}`}
-                    aria-pressed={collapsed}
-                    onClick={() => store.setCollapsed(pane.id, !collapsed)}
-                  >
-                    {collapsed ? '▸' : '▾'}
-                  </button>
-                )}
-                {actions.includes('zoom') && (
-                  <button
-                    type="button"
-                    aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
-                    aria-pressed={zoomed}
-                    onClick={() => store.toggleZoom(pane.id)}
-                  >
-                    {zoomed ? '↙' : '↗'}
-                  </button>
-                )}
-                {actions.includes('close') && (
-                  <button
-                    type="button"
-                    aria-label={`Close ${getPaneTitle(pane)}`}
-                    disabled={!closable(pane, stack)}
-                    onClick={() => closePane(pane)}
-                  >
-                    ×
-                  </button>
-                )}
-              </header>
+              {header}
               <PaneBody pane={pane} renderPane={renderPane} />
             </div>
           </section>
@@ -1111,7 +1374,9 @@ export function Layout({
       )}
       <span className="pierre-layout-sr" role="status" aria-live="polite">
         {dragging !== null && drop !== null
-          ? `Move ${dragging} to the ${drop.edge} of ${drop.paneId}`
+          ? drop.place === 'center'
+            ? `Move ${dragging} into the group of ${drop.paneId}`
+            : `Move ${dragging} to the ${drop.place} of ${drop.paneId}`
           : state.zoomedPane !== null
             ? `${state.zoomedPane} zoomed`
             : `${visibleCount} panes`}

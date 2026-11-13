@@ -118,32 +118,46 @@ export function setCollapsedContent(
   }
 }
 
+/** Find a pane host among the layout's direct children. */
+export function hostOf(root: HTMLElement, id: string): HTMLElement | undefined {
+  return paneHosts(root).find(
+    (host) => host.getAttribute('data-layout-pane') === id
+  );
+}
+
 /** Focus a pane host. */
 export function focusPane(root: HTMLElement, id: string): void {
-  paneHosts(root)
-    .find((host) => host.getAttribute('data-layout-pane') === id)
-    ?.focus();
+  hostOf(root, id)?.focus();
 }
 
 /** Focus the tab of a pane in the header of the pane's own host. */
 export function focusTab(root: HTMLElement, id: string): void {
-  paneHosts(root)
-    .find((host) => host.getAttribute('data-layout-pane') === id)
+  hostOf(root, id)
     ?.querySelector<HTMLElement>(
       `[data-layout-tab="${CSS.escape(id)}"][aria-selected="true"]`
     )
     ?.focus();
 }
 
-/**
- * Move the focus into the zoomed pane, unless it is there already: a focused
- * element in a pane with `content-visibility: hidden` loses the focus to `body`.
- */
-export function focusZoomedPane(root: HTMLElement, id: string): void {
-  const active = paneHosts(root).find((host) =>
-    host.contains(document.activeElement)
-  );
-  if (active?.getAttribute('data-layout-pane') !== id) focusPane(root, id);
+/** Capture the focused pane before a zoom can hide it and move focus to body. */
+export function focusOwner(root: HTMLElement): string | null {
+  const active = document.activeElement;
+  if (active === null || !root.contains(active)) return null;
+  const host = paneHosts(root).find((pane) => pane.contains(active));
+  return host?.getAttribute('data-layout-pane') ?? '';
+}
+
+/** Move focus out of a covered pane without taking focus from outside the layout. */
+export function focusZoomedPane(
+  root: HTMLElement,
+  id: string,
+  owner: string | null
+): void {
+  if (owner === null || owner === id) return;
+  const active = document.activeElement;
+  if (active !== null && active !== document.body && !root.contains(active))
+    return;
+  if (focusOwner(root) !== id) focusPane(root, id);
 }
 
 /**

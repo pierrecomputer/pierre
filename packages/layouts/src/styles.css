@@ -254,6 +254,10 @@
 
 /* Where a tab that the pointer drags goes. The view moves it with a
    transform from the left edge of the tab list. */
+:where(.pierre-layout [data-layout-tablist]) {
+  position: relative;
+}
+
 .pierre-layout-tab-drop {
   position: absolute;
   top: 6px;

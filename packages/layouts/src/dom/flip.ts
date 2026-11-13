@@ -53,6 +53,7 @@ const GROWTH_START_PX = 1;
 
 /** The layout's running FLIP animations; animations in pane content are not included. */
 export function flipAnimations(root: HTMLElement): Animation[] {
+  if (typeof root.getAnimations !== 'function') return [];
   return root
     .getAnimations({ subtree: true })
     .filter((animation) => animation.id === FLIP_ANIMATION_ID);

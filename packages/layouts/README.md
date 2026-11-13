@@ -423,3 +423,9 @@ moon run layouts:test layouts:typecheck layouts:build layouts:build-demo
 moon run layouts:test-e2e
 moon run root:format root:lint root:check-licenses
 ```
+
+## Consumer controls and persistence
+
+See [the consumer guide](./consumer-guide.md) for custom headers, cross-group
+tab drops, stored trees, operations, and resize callbacks. The `/consumer.html`
+demo shows these controls.

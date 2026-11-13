@@ -3,13 +3,17 @@ import { describe, expect, test } from 'bun:test';
 import { computeLayout } from '../src/geometry';
 import {
   dragSizes,
+  dropPlace,
   dropTarget,
   getExitEdges,
   keySizes,
   moveSeparator,
   paneAt,
+  placeRect,
   separatorOffset,
   tabBoundaryAt,
+  tabDropTarget,
+  tabInsertIndex,
   tabMoveIndex,
 } from '../src/gestures';
 import type { ChildSize, LayoutNode } from '../src/types';
@@ -214,5 +218,99 @@ describe('tab reordering', () => {
     // After the last visible tab.
     expect(tabMoveIndex(order, visible, 'a', 3)).toBe(3);
     expect(tabMoveIndex(order, visible, 'missing', 0)).toBeNull();
+  });
+});
+describe('tab drops', () => {
+  const groups: LayoutNode = {
+    type: 'split',
+    id: 'row',
+    direction: 'horizontal',
+    sizes: [1, 1],
+    children: [
+      {
+        type: 'stack',
+        id: 'left',
+        active: 'a',
+        children: [
+          { type: 'pane', id: 'a' },
+          { type: 'pane', id: 'b' },
+        ],
+      },
+      { type: 'pane', id: 'c' },
+    ],
+  };
+  const pixels = computeLayout(groups, 808, 600, 8);
+
+  test('the middle of a group is its center and the borders are edges', () => {
+    const rect = { x: 0, y: 0, width: 100, height: 100 };
+    expect(dropPlace(rect, 50, 50)).toBe('center');
+    expect(dropPlace(rect, 10, 50)).toBe('left');
+    expect(dropPlace(rect, 90, 50)).toBe('right');
+    expect(dropPlace(rect, 50, 10)).toBe('top');
+    expect(dropPlace(rect, 50, 90)).toBe('bottom');
+  });
+
+  test('a center place covers the group and an edge covers half', () => {
+    const rect = { x: 10, y: 20, width: 100, height: 60 };
+    expect(placeRect(rect, 'center')).toEqual(rect);
+    expect(placeRect(rect, 'right')).toEqual({
+      x: 60,
+      y: 20,
+      width: 50,
+      height: 60,
+    });
+    expect(placeRect(rect, 'bottom')).toEqual({
+      x: 10,
+      y: 50,
+      width: 100,
+      height: 30,
+    });
+  });
+
+  test('a tab drops into the center or on an edge of another group', () => {
+    expect(tabDropTarget(pixels, 600, 300, 'b', ['a', 'b'])).toMatchObject({
+      paneId: 'c',
+      place: 'center',
+    });
+    expect(tabDropTarget(pixels, 790, 300, 'b', ['a', 'b'])).toMatchObject({
+      paneId: 'c',
+      place: 'right',
+    });
+    expect(
+      tabDropTarget(pixels, 790, 300, 'b', ['a', 'b'], true)
+    ).toMatchObject({ paneId: 'c', place: 'center' });
+  });
+
+  test('a tab leaves its own group only by an edge, beside a sibling', () => {
+    expect(tabDropTarget(pixels, 200, 300, 'a', ['a', 'b'])).toBeNull();
+    expect(tabDropTarget(pixels, 200, 590, 'a', ['a', 'b'])).toMatchObject({
+      paneId: 'b',
+      place: 'bottom',
+    });
+    expect(tabDropTarget(pixels, 200, 590, 'b', ['a', 'b'])).toMatchObject({
+      paneId: 'a',
+      place: 'bottom',
+    });
+  });
+
+  test('a lone tab has no place in its own pane', () => {
+    expect(tabDropTarget(pixels, 790, 300, 'c', ['c'])).toBeNull();
+    expect(tabDropTarget(pixels, 10, 300, 'c', ['c'])).toMatchObject({
+      paneId: 'a',
+      place: 'left',
+    });
+  });
+
+  test('a point outside every group has no target', () => {
+    expect(tabDropTarget(pixels, 900, 300, 'b', ['a', 'b'])).toBeNull();
+  });
+
+  test('a tablist boundary maps to an index in the full tab order', () => {
+    const order = ['x', 'hidden', 'y', 'z'];
+    const visible = ['x', 'y', 'z'];
+    expect(tabInsertIndex(order, visible, 0)).toBe(0);
+    expect(tabInsertIndex(order, visible, 1)).toBe(2);
+    expect(tabInsertIndex(order, visible, 3)).toBe(4);
+    expect(tabInsertIndex(['c'], ['c'], 1)).toBe(1);
   });
 });

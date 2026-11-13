@@ -17,6 +17,17 @@ export interface DropTarget {
   rect: Rect;
 }
 
+export type DropPlace = Edge | 'center';
+
+export interface TabDropTarget {
+  paneId: string;
+  place: DropPlace;
+  rect: Rect;
+}
+
+const EDGE_X_FRACTION = 0.28;
+const EDGE_Y_FRACTION = 0.3;
+
 const sum = (values: readonly number[]): number =>
   values.reduce((total, value) => total + value, 0);
 
@@ -283,4 +294,53 @@ export function getExitEdges(
       edges[key.slice(5)] = getExitEdge(box, width, height);
   }
   return edges;
+}
+export function dropPlace(rect: Rect, x: number, y: number): DropPlace {
+  const px = rect.width > 0 ? (x - rect.x) / rect.width : 0.5;
+  const py = rect.height > 0 ? (y - rect.y) / rect.height : 0.5;
+  if (px < EDGE_X_FRACTION) return 'left';
+  if (px > 1 - EDGE_X_FRACTION) return 'right';
+  if (py < EDGE_Y_FRACTION) return 'top';
+  if (py > 1 - EDGE_Y_FRACTION) return 'bottom';
+  return 'center';
+}
+
+export function placeRect(rect: Rect, place: DropPlace): Rect {
+  return {
+    x: rect.x + (place === 'right' ? rect.width / 2 : 0),
+    y: rect.y + (place === 'bottom' ? rect.height / 2 : 0),
+    width: place === 'left' || place === 'right' ? rect.width / 2 : rect.width,
+    height:
+      place === 'top' || place === 'bottom' ? rect.height / 2 : rect.height,
+  };
+}
+
+export function tabDropTarget(
+  geometry: LayoutGeometry,
+  x: number,
+  y: number,
+  tabId: string,
+  group: readonly string[],
+  center = false
+): TabDropTarget | null {
+  const hit = paneAt(geometry, x, y, '');
+  if (hit === undefined) return null;
+  const place = center ? 'center' : dropPlace(hit.rect, x, y);
+  if (!group.includes(hit.pane.id))
+    return { paneId: hit.pane.id, place, rect: placeRect(hit.rect, place) };
+  const sibling =
+    hit.pane.id === tabId ? group.find((id) => id !== tabId) : hit.pane.id;
+  if (place === 'center' || sibling === undefined) return null;
+  return { paneId: sibling, place, rect: placeRect(hit.rect, place) };
+}
+
+export function tabInsertIndex(
+  order: readonly string[],
+  visible: readonly string[],
+  boundary: number
+): number {
+  if (visible.length === 0) return order.length;
+  return boundary < visible.length
+    ? order.indexOf(visible[boundary])
+    : order.indexOf(visible[visible.length - 1]) + 1;
 }
