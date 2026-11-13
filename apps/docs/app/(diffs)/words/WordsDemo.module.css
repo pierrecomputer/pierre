@@ -126,9 +126,6 @@
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }
-.usage {
-  font-size: 13px;
-}
 .customHeading {
   display: flex;
   align-items: baseline;

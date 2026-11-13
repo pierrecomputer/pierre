@@ -57,7 +57,7 @@ function ChartSelect({ children, ...props }: ComponentProps<'select'>) {
     <span className="relative block min-w-0">
       <select
         {...props}
-        className="text-foreground h-9 w-full min-w-0 cursor-pointer appearance-none truncate rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pr-9 pl-3 text-xs leading-4 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        className="text-foreground h-9 w-full min-w-0 cursor-pointer appearance-none truncate rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pr-9 pl-3 text-sm leading-4 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
       >
         {children}
       </select>
@@ -90,7 +90,7 @@ function Comparison({
         { name: 'Streamdown', value: streamdown },
       ].map(({ name, value }) => (
         <div key={name} className="grid grid-cols-2 items-baseline gap-y-2">
-          <dt className="text-sm font-medium">{name}</dt>
+          <dt className="text-md font-medium">{name}</dt>
           <dd className="contents">
             <span className="text-right text-2xl tracking-tight tabular-nums">
               {decimal.format(value / divisor)}
@@ -147,7 +147,7 @@ export function WordsBenchmarks() {
     timeZone: 'UTC',
   });
   const measuredDate = date.format(new Date(run.date));
-  const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-5 sm:p-7`;
+  const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-4 sm:p-8 lg:p-10`;
 
   return (
     <section
@@ -156,7 +156,7 @@ export function WordsBenchmarks() {
       className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
       <div className="flex flex-wrap items-end justify-between gap-5">
-        <div className="max-w-2xl space-y-2">
+        <div className="max-w-2xl">
           <h2
             id="words-benchmarks"
             className="text-2xl font-semibold tracking-tight"
@@ -179,14 +179,14 @@ export function WordsBenchmarks() {
 
       <figure className={cardClass} aria-labelledby="words-package-chart">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <figcaption>
+          <figcaption className="max-w-2xl">
             <h3
               id="words-package-chart"
               className="text-xl font-semibold tracking-tight"
             >
               Markdown to HTML and React
             </h3>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <p className="text-muted-foreground text-pretty">
               {measurements[metricIndex]}
             </p>
           </figcaption>
@@ -270,25 +270,25 @@ export function WordsBenchmarks() {
         </dl>
       </figure>
 
-      <div className="space-y-2">
+      <div className="max-w-2xl">
         <h3 className="text-xl font-semibold tracking-tight">
           Streaming in the browser
         </h3>
-        <p className="text-muted-foreground max-w-2xl text-sm">
+        <p className="text-muted-foreground max-w-2xl text-pretty">
           A long response with paragraphs and TypeScript code, tested on its own
           and repeated 100 times to show how each renderer scales.
         </p>
       </div>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-3">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
         <figure className={cardClass} aria-labelledby="words-update-chart">
-          <figcaption className="mb-5 space-y-1.5">
+          <figcaption className="mb-6 max-w-2xl">
             <h3
               id="words-update-chart"
               className="text-xl font-semibold tracking-tight"
             >
               Streaming updates
             </h3>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-pretty">
               Time for incoming text to reach the DOM, before paint. 95% of
               updates finish within this time. Lower is better.
             </p>
@@ -330,14 +330,14 @@ export function WordsBenchmarks() {
         </figure>
 
         <figure className={cardClass} aria-labelledby="words-memory-chart">
-          <figcaption className="mb-5 space-y-1.5">
+          <figcaption className="mb-6 max-w-2xl">
             <h3
               id="words-memory-chart"
               className="text-xl font-semibold tracking-tight"
             >
               Memory after streaming
             </h3>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-pretty">
               JavaScript memory kept after the full document has rendered. Lower
               is better.
             </p>
@@ -369,14 +369,14 @@ export function WordsBenchmarks() {
         </figure>
 
         <figure className={cardClass} aria-labelledby="words-footprint-chart">
-          <figcaption className="mb-5 space-y-1.5">
+          <figcaption className="mb-6 max-w-2xl">
             <h3
               id="words-footprint-chart"
               className="text-xl font-semibold tracking-tight"
             >
               Browser download
             </h3>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-pretty">
               JavaScript transferred to load the renderer and selected
               languages, compressed with gzip. Lower is better.
             </p>

@@ -32,7 +32,6 @@ import styles from './WordsDemo.module.css';
 import { WordsDisclosure } from './WordsDisclosure';
 import { getWordsUsage, type WordsExampleKind } from './wordsUsage';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
-import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -323,11 +322,17 @@ function WordsExample({
       data-fade-duration={fadeDuration}
       data-highlight={highlight}
     >
-      <FeatureHeader
-        id={'words-' + kind}
-        title={title}
-        description={description}
-      />
+      <div className="mb-6 max-w-3xl space-y-2">
+        <h2
+          id={'words-' + kind}
+          className="scroll-mt-20 text-2xl font-semibold tracking-tight"
+        >
+          {title}
+        </h2>
+        <p className="text-muted-foreground strong-fg text-pretty">
+          {description}
+        </p>
+      </div>
       <div className="flex flex-wrap items-center gap-3" data-words-toolbar>
         {(fixedSpeed || playground) && replayButton}
         {kind === 'streaming' && (
@@ -485,9 +490,8 @@ function WordsExample({
         </div>
       </div>
       <WordsDisclosure
-        className={styles.usage}
         summary="Use it in React"
-        summaryClassName="text-muted-foreground"
+        summaryClassName="text-muted-foreground text-sm font-medium"
         contentClassName="mt-4"
       >
         <DocsCodeExample
