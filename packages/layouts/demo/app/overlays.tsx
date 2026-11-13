@@ -46,8 +46,13 @@ export function AppOverlays({
 
   return (
     <div className="app-overlay-buttons">
-      <button type="button" onClick={() => setReview(true)}>
-        Review changes
+      {/* A short visible label keeps the /app header on one row at 1440 px. */}
+      <button
+        type="button"
+        aria-label="Review changes"
+        onClick={() => setReview(true)}
+      >
+        Review
       </button>
       <Modal
         open={review}

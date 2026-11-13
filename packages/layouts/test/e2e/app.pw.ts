@@ -58,7 +58,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
       )
     );
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
   await finishLayoutAnimations();
 
   // Show the terminal, hold the layout's animations at their middle, and read
@@ -89,7 +89,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
   // With reduced motion, the pane shows at once.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
   const running = await terminal.evaluate(async (element) => {
     Array.from(
       document.querySelectorAll<HTMLButtonElement>('.app-toggles button')
@@ -100,7 +100,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
     return element.getAnimations().length;
   });
   expect(running).toBe(0);
-  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
+  await expect(terminal).toHaveAttribute('data-pane-hidden', 'false');
 });
 
 test('the close button of a tool hides it, and each pane has its own buttons', async ({

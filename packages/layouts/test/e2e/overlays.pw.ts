@@ -10,7 +10,7 @@ const host = (page: Page, id: string): Locator =>
 async function load(page: Page, query = ''): Promise<void> {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(`/app${query}`);
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(5);
+  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
 }
 
 /** Focus a header button and press Enter, as a keyboard user does. */
@@ -283,4 +283,31 @@ test('a <dialog> modal closes at once, with no exit animation', async ({
       };
     })
   ).toEqual({ open: false, animations: 0 });
+});
+
+test('an overlay keeps the state of tabs that do not show and of a collapsed pane', async ({
+  page,
+}) => {
+  await load(page, '?backdrop=opaque');
+  const terminal = host(page, 'terminal');
+  const collapse = terminal.getByRole('button', { name: 'Collapse Terminal' });
+  await collapse.click();
+  await expect(terminal).toHaveAttribute('data-collapsed', 'true');
+
+  await pressButton(page, 'Review changes');
+  const modal = page.getByRole('dialog', { name: 'Review changes' });
+  await expect(modal).toBeVisible();
+  // The collapsed pane renders its header, so the modal covers it. A tab that
+  // does not show renders nothing, so the modal leaves it as it is.
+  await expect(terminal).toHaveAttribute('data-overlay-covered', 'true');
+  for (const id of ['agent-review', 'terminal-server'])
+    await expect(host(page, id)).not.toHaveAttribute('data-overlay-covered');
+
+  await page.keyboard.press('Escape');
+  await expect(modal).toBeHidden();
+  for (const id of ['agent-review', 'terminal-server'])
+    await expect(host(page, id)).toHaveAttribute('inert', '');
+  await expect(terminal).not.toHaveAttribute('inert');
+  await collapse.click();
+  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
 });

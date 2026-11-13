@@ -164,10 +164,12 @@ function paneHostsOf(root: HTMLElement): HTMLElement[] {
 
 const paneIdOf = (host: HTMLElement): string => host.dataset.layoutPane ?? '';
 
-// A pane host that a hidden pane or a zoom keeps from rendering. An overlay
-// does not change its state.
+// A pane host that renders apart from overlays. A hidden pane or a tab that
+// does not show (`data-pane-hidden`) and a pane under a zoom (`data-hidden`)
+// keep their own `inert`, and an overlay does not change their state. A
+// collapsed pane renders its header, so an overlay can cover it.
 const rendersAlready = (host: HTMLElement): boolean =>
-  host.dataset.collapsed !== 'true' && host.dataset.hidden !== 'true';
+  host.dataset.paneHidden !== 'true' && host.dataset.hidden !== 'true';
 
 // The overlays that hide each pane host. A host shows again when the last of
 // them stops hiding it.
