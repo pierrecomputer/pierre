@@ -80,7 +80,7 @@ function ChartMenu({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="group w-full min-w-0 justify-start px-3 font-normal"
+            className="group w-fit max-w-full min-w-0 justify-start px-3 font-normal"
             aria-label={`${label}: ${selectedLabel}`}
           >
             <span className="truncate">{selectedLabel}</span>
