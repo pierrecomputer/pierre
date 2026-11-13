@@ -25,13 +25,13 @@ export function WordsDisclosure({
     <details {...props} className={cn('group', className)}>
       <summary
         className={cn(
-          'flex w-fit cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden',
+          '-m-3 flex min-h-11 w-[calc(100%+1.5rem)] cursor-pointer list-none items-center gap-1 p-3 [&::-webkit-details-marker]:hidden',
           summaryClassName
         )}
       >
         <IconChevronSm
           aria-hidden="true"
-          className="size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0"
+          className="text-muted-foreground -ml-3 size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0"
         />
         <span>{summary}</span>
       </summary>
