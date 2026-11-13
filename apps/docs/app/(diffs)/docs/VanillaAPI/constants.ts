@@ -451,6 +451,28 @@ const instance = new FileDiff<ThreadMetadata>({
   maxLineDiffLength: 1000,
 
   // ─────────────────────────────────────────────────────────────
+  // DIFF PARSING
+  // ─────────────────────────────────────────────────────────────
+
+  // Options for diffs computed from oldFile/newFile and for edited diffs.
+  // Hunks in supplied patches stay unchanged until an edit recomputes them.
+  parseDiffOptions: {
+    // Diff library for file diffs and inline change highlights:
+    // 'jsdiff' (default) - the jsdiff package
+    // '@pierre/patches' - WebAssembly diff library
+    preferredDiffLib: 'jsdiff',
+
+    // Unchanged lines around each change (default: 4)
+    context: 4,
+
+    // Compare lines without leading and trailing whitespace (default: false)
+    ignoreWhitespace: false,
+
+    // Remove the CR of each CRLF before the diff (default: false)
+    stripTrailingCr: false,
+  },
+
+  // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY
   // ─────────────────────────────────────────────────────────────
 
@@ -1155,9 +1177,9 @@ for (const patch of patches) {
     // Render hunks (async - waits for highlighter initialization)
     const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-    // result contains hast nodes based on diffStyle:
-    // - 'unified' mode: unifiedGutterAST/unifiedContentAST
-    // - 'split' mode: additionsGutterAST/additionsContentAST and deletionsGutterAST/deletionsContentAST
+    // result.columns holds the keyed rows of each column, by diffStyle:
+    // - 'unified' mode: columns.unified
+    // - 'split' mode: columns.deletions and columns.additions
 
     // Render to complete HTML (includes <pre> and <code> wrappers)
     const fullHTML: string = instance.renderFullHTML(result);

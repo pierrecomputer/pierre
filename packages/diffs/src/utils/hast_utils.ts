@@ -8,7 +8,7 @@ import type {
 } from 'hast';
 
 import type { SVGSpriteNames } from '../sprite';
-import type { LineTypes } from '../types';
+import type { HighlightedToken, LineTypes } from '../types';
 
 export function createTextNodeElement(value: string): Text {
   return { type: 'text', value };
@@ -26,7 +26,8 @@ interface CreateHastElementProps {
     | 'use'
     | 'style'
     | 'template'
-    | 'bdi';
+    | 'bdi'
+    | 'br';
   children?: ElementContent[];
   properties?: Properties;
 }
@@ -137,5 +138,46 @@ export function createGutterGap(
           ? `grid-row: span ${size};`
           : `grid-row: span ${size};min-height:calc(${size} * 1lh);`,
     },
+  });
+}
+
+// A row from the editor's tokens, shaped the way the token transformer shapes
+// highlighted rows: one span per token with the column it starts at, which
+// the editor reads to map carets, and a <br> for an empty line.
+export function createTokenRow(
+  tokens: readonly HighlightedToken[]
+): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    children: tokens.map(([char, color, text]) => {
+      if (char === 0 && color === '') {
+        return text === ''
+          ? createHastElement({ tagName: 'br' })
+          : createTextNodeElement(text);
+      }
+      return createHastElement({
+        tagName: 'span',
+        properties: { 'data-char': char, style: `color:${color};` },
+        children: [createTextNodeElement(text)],
+      });
+    }),
+  });
+}
+
+// A row for a line the editor has not tokenized yet, in the same shape: its
+// text in one span the editor can place a caret in, or a <br> when empty.
+export function createPlainRow(lineText: string): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    children:
+      lineText === ''
+        ? [createHastElement({ tagName: 'br' })]
+        : [
+            createHastElement({
+              tagName: 'span',
+              properties: { 'data-char': 0 },
+              children: [createTextNodeElement(lineText)],
+            }),
+          ],
   });
 }

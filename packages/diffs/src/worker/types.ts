@@ -2,6 +2,7 @@ import type { Language as HighlightsLanguage } from '@pierre/highlights';
 import type { LanguageRegistration } from 'shiki';
 
 import type {
+  DiffLib,
   DiffsTheme,
   DiffsThemeNames,
   ExtensionFormatMap,
@@ -24,6 +25,7 @@ export interface WorkerRenderingOptions {
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  preferredDiffLib?: DiffLib;
   maxLineDiffLength: number;
 }
 

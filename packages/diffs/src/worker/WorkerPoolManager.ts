@@ -119,6 +119,9 @@ export class WorkerPoolManager {
   // Tasks that map to highlightKey are essentially singular, so we only
   // need one map to include queued and active
   private taskByHighlightKey = new Map<string, RenderTask>();
+  // Highlight keys whose last task failed, bounded like the result caches
+  // and cleared with them when the render options change.
+  private failedHighlightKeys: LRUMap<string, true>;
 
   // Tasks that have already been sent to a worker and are awaiting a response.
   private activeTaskById = new Map<WorkerRequestId, AllWorkerTasks>();
@@ -145,6 +148,7 @@ export class WorkerPoolManager {
       theme = DEFAULT_THEMES,
       useTokenTransformer = false,
       lineDiffType = 'word-alt',
+      preferredDiffLib,
       maxLineDiffLength = 1000,
       tokenizeMaxLineLength = 1000,
       preferredHighlighter,
@@ -155,11 +159,15 @@ export class WorkerPoolManager {
       theme,
       useTokenTransformer,
       lineDiffType,
+      preferredDiffLib,
       maxLineDiffLength,
       tokenizeMaxLineLength,
     };
     this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
+    this.failedHighlightKeys = new LRUMapPkg.LRUMap(
+      options.totalASTLRUCacheSize ?? 100
+    );
     this.queueInitialization(langs);
   }
 
@@ -181,6 +189,20 @@ export class WorkerPoolManager {
         ? fileOrDiff.contents.length
         : fileOrDiff.deletionCharacterCount + fileOrDiff.additionCharacterCount;
     return characterCount <= mainThreadMaxCharacters;
+  }
+
+  /**
+   * Whether the last highlight of a file or diff failed under the current
+   * render options. Inputs without a cache key are never tracked.
+   */
+  public didHighlightFail(
+    fileOrDiff: FileContents | FileDiffMetadata
+  ): boolean {
+    const highlightKey =
+      'contents' in fileOrDiff
+        ? this.getFileHighlightKey(fileOrDiff)
+        : this.getDiffHighlightKey(fileOrDiff);
+    return highlightKey != null && this.failedHighlightKeys.has(highlightKey);
   }
 
   public getFileResultCache(file: FileContents): RenderFileResult | undefined {
@@ -256,6 +278,7 @@ export class WorkerPoolManager {
     theme = this.renderOptions.theme ?? DEFAULT_THEMES,
     useTokenTransformer = this.renderOptions.useTokenTransformer ?? false,
     lineDiffType = this.renderOptions.lineDiffType ?? 'word-alt',
+    preferredDiffLib = this.renderOptions.preferredDiffLib,
     maxLineDiffLength = this.renderOptions.maxLineDiffLength ?? 1000,
     tokenizeMaxLineLength = this.renderOptions.tokenizeMaxLineLength ?? 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
@@ -269,6 +292,7 @@ export class WorkerPoolManager {
         theme,
         useTokenTransformer,
         lineDiffType,
+        preferredDiffLib,
         maxLineDiffLength,
         tokenizeMaxLineLength,
       };
@@ -326,6 +350,7 @@ export class WorkerPoolManager {
       this.renderOptionsVersion++;
       this.diffCache.clear();
       this.fileCache.clear();
+      this.failedHighlightKeys.clear();
       this.invalidateRenderTasks();
 
       for (const instance of this.themeSubscribers) {
@@ -368,7 +393,12 @@ export class WorkerPoolManager {
     const taskPromises: Promise<void>[] = [];
     for (const managedWorker of this.workers) {
       if (!managedWorker.initialized) {
-        console.log({ managedWorker });
+        if (
+          typeof process !== 'undefined' &&
+          process.env.NODE_ENV === 'development'
+        ) {
+          console.log({ managedWorker });
+        }
         throw new Error(
           'setRenderOptionsOnWorkers: Somehow we have an uninitialized worker'
         );
@@ -826,7 +856,7 @@ export class WorkerPoolManager {
     file: FileContents,
     startingLine: number,
     totalLines: number,
-    lines?: string[]
+    lines?: readonly string[]
   ): ThemedFileResult | undefined {
     const highlighter = getHighlighterIfLoaded({
       theme: this.renderOptions.theme,
@@ -1007,6 +1037,7 @@ export class WorkerPoolManager {
     }
     this.fileCache.clear();
     this.diffCache.clear();
+    this.failedHighlightKeys.clear();
     this.activeRequestByInstance.clear();
     this.queuedTasks.length = 0;
     this.queuedTaskByInstance.clear();
@@ -1248,6 +1279,7 @@ export class WorkerPoolManager {
       }
       this.executeTask(availableWorker, task);
     } catch (error) {
+      this.notifyHighlightError(task, error);
       this.rejectRenderTaskCallbacks(task, normalizeWorkerError(error));
       this.cleanWorkerAndTask(availableWorker, task);
       this.queueBroadcastStateChanges();
@@ -1605,6 +1637,9 @@ export class WorkerPoolManager {
   }
 
   private resolveRenderTaskCallbacks(task: RenderTask): void {
+    if (task.highlightKey != null) {
+      this.failedHighlightKeys.delete(task.highlightKey);
+    }
     for (const callbacks of task.callbacks) {
       callbacks.resolve();
     }
@@ -1692,6 +1727,9 @@ export class WorkerPoolManager {
   }
 
   private notifyHighlightError(task: RenderTask, error: unknown): void {
+    if (task.highlightKey != null) {
+      this.failedHighlightKeys.set(task.highlightKey, true);
+    }
     for (const instance of getInstances(task)) {
       if (this.activeRequestByInstance.get(instance) === task.id) {
         instance.onHighlightError(error);

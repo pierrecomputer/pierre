@@ -47,6 +47,7 @@ async function createMarkerFixture(contents: string): Promise<MarkerFixture> {
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file');
   const initialFile: FileContents = { name: 'edits.ts', contents };

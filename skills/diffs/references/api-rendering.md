@@ -142,40 +142,39 @@ exports from `@pierre/diffs`.
 
 ## Constants
 
-| Export                                     | Purpose                                               |
-| ------------------------------------------ | ----------------------------------------------------- |
-| `DEFAULT_THEMES`                           | Provides the default light and dark theme names.      |
-| `DEFAULT_TOKENIZE_MAX_LENGTH`              | Provides the default total tokenization limit.        |
-| `DEFAULT_COLLAPSED_CONTEXT_THRESHOLD`      | Provides the default hidden-context threshold.        |
-| `DEFAULT_EXPANDED_REGION`                  | Provides the default hunk expansion state.            |
-| `DEFAULT_RENDER_RANGE`                     | Provides the full render range.                       |
-| `EMPTY_RENDER_RANGE`                       | Provides an empty render range.                       |
-| `DEFAULT_VIRTUAL_FILE_METRICS`             | Provides estimated file header and line heights.      |
-| `DEFAULT_CODE_VIEW_FILE_METRICS`           | Provides list item height estimates.                  |
-| `DEFAULT_CODE_VIEW_LAYOUT`                 | Provides an empty list layout.                        |
-| `DEFAULT_SMOOTH_SCROLL_SETTINGS`           | Provides the default smooth scroll settings.          |
-| `DIFFS_TAG_NAME`                           | Provides the `diffs-container` custom element name.   |
-| `CORE_CSS_ATTRIBUTE`                       | Provides the core style marker attribute.             |
-| `THEME_CSS_ATTRIBUTE`                      | Provides the theme style marker attribute.            |
-| `UNSAFE_CSS_ATTRIBUTE`                     | Provides the custom style marker attribute.           |
-| `DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE`        | Provides the scrollbar measurement attribute.         |
-| `DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY` | Provides the measured scrollbar CSS property.         |
-| `CODE_VIEW_HEADER_ATTRIBUTE`               | Provides the list header host attribute.              |
-| `CODE_VIEW_FOOTER_ATTRIBUTE`               | Provides the list footer host attribute.              |
-| `CUSTOM_HEADER_SLOT_ID`                    | Provides the custom header slot ID.                   |
-| `HEADER_PREFIX_SLOT_ID`                    | Provides the header prefix slot ID.                   |
-| `HEADER_FILENAME_SUFFIX_SLOT_ID`           | Provides the filename suffix slot ID.                 |
-| `HEADER_METADATA_SLOT_ID`                  | Provides the header metadata slot ID.                 |
-| `HUNK_HEADER`                              | Provides the patch hunk header marker.                |
-| `FILE_CONTEXT_BLOB`                        | Matches a patch hunk boundary.                        |
-| `INDEX_LINE_METADATA`                      | Provides the patch index metadata marker.             |
-| `COMMIT_METADATA_SPLIT`                    | Provides the commit metadata separator expression.    |
-| `FILENAME_HEADER_REGEX`                    | Matches a standard patch file header.                 |
-| `GIT_DIFF_FILE_BREAK_REGEX`                | Matches a Git patch file boundary.                    |
-| `UNIFIED_DIFF_FILE_BREAK_REGEX`            | Matches a unified patch file boundary.                |
-| `MERGE_CONFLICT_START_MARKER_REGEX`        | Matches a conflict start marker.                      |
-| `MERGE_CONFLICT_BASE_MARKER_REGEX`         | Matches a conflict base marker.                       |
-| `MERGE_CONFLICT_SEPARATOR_MARKER_REGEX`    | Matches a conflict separator marker.                  |
-| `MERGE_CONFLICT_END_MARKER_REGEX`          | Matches a conflict end marker.                        |
-| `SPLIT_WITH_NEWLINES`                      | Splits text while it preserves newline tokens.        |
-| `DIFFS_DEVELOPMENT_BUILD`                  | Reports whether the package uses a development build. |
+| Export                                     | Purpose                                             |
+| ------------------------------------------ | --------------------------------------------------- |
+| `DEFAULT_THEMES`                           | Provides the default light and dark theme names.    |
+| `DEFAULT_TOKENIZE_MAX_LENGTH`              | Provides the default total tokenization limit.      |
+| `DEFAULT_COLLAPSED_CONTEXT_THRESHOLD`      | Provides the default hidden-context threshold.      |
+| `DEFAULT_EXPANDED_REGION`                  | Provides the default hunk expansion state.          |
+| `DEFAULT_RENDER_RANGE`                     | Provides the full render range.                     |
+| `EMPTY_RENDER_RANGE`                       | Provides an empty render range.                     |
+| `DEFAULT_VIRTUAL_FILE_METRICS`             | Provides estimated file header and line heights.    |
+| `DEFAULT_CODE_VIEW_FILE_METRICS`           | Provides list item height estimates.                |
+| `DEFAULT_CODE_VIEW_LAYOUT`                 | Provides an empty list layout.                      |
+| `DEFAULT_SMOOTH_SCROLL_SETTINGS`           | Provides the default smooth scroll settings.        |
+| `DIFFS_TAG_NAME`                           | Provides the `diffs-container` custom element name. |
+| `CORE_CSS_ATTRIBUTE`                       | Provides the core style marker attribute.           |
+| `THEME_CSS_ATTRIBUTE`                      | Provides the theme style marker attribute.          |
+| `UNSAFE_CSS_ATTRIBUTE`                     | Provides the custom style marker attribute.         |
+| `DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE`        | Provides the scrollbar measurement attribute.       |
+| `DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY` | Provides the measured scrollbar CSS property.       |
+| `CODE_VIEW_HEADER_ATTRIBUTE`               | Provides the list header host attribute.            |
+| `CODE_VIEW_FOOTER_ATTRIBUTE`               | Provides the list footer host attribute.            |
+| `CUSTOM_HEADER_SLOT_ID`                    | Provides the custom header slot ID.                 |
+| `HEADER_PREFIX_SLOT_ID`                    | Provides the header prefix slot ID.                 |
+| `HEADER_FILENAME_SUFFIX_SLOT_ID`           | Provides the filename suffix slot ID.               |
+| `HEADER_METADATA_SLOT_ID`                  | Provides the header metadata slot ID.               |
+| `HUNK_HEADER`                              | Provides the patch hunk header marker.              |
+| `FILE_CONTEXT_BLOB`                        | Matches a patch hunk boundary.                      |
+| `INDEX_LINE_METADATA`                      | Provides the patch index metadata marker.           |
+| `COMMIT_METADATA_SPLIT`                    | Provides the commit metadata separator expression.  |
+| `FILENAME_HEADER_REGEX`                    | Matches a standard patch file header.               |
+| `GIT_DIFF_FILE_BREAK_REGEX`                | Matches a Git patch file boundary.                  |
+| `UNIFIED_DIFF_FILE_BREAK_REGEX`            | Matches a unified patch file boundary.              |
+| `MERGE_CONFLICT_START_MARKER_REGEX`        | Matches a conflict start marker.                    |
+| `MERGE_CONFLICT_BASE_MARKER_REGEX`         | Matches a conflict base marker.                     |
+| `MERGE_CONFLICT_SEPARATOR_MARKER_REGEX`    | Matches a conflict separator marker.                |
+| `MERGE_CONFLICT_END_MARKER_REGEX`          | Matches a conflict end marker.                      |
+| `SPLIT_WITH_NEWLINES`                      | Splits text while it preserves newline tokens.      |

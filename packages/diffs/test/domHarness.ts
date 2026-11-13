@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
 import { preloadHighlighter } from '../src/highlighter/shared_highlighter';
+import { i18n } from '../src/i18n/I18n';
 import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { resetPlatformDetection } from '../src/utils/platform';
@@ -42,8 +43,25 @@ export interface DomHandle {
 // returned cleanup() restores (or deletes) every global it touched.
 export function installDom(options: InstallDomOptions = {}): DomHandle {
   clearRenderQueue();
+  // Components a previous test left mounted belong to a DOM that is gone.
+  i18n.__clearSubscribers();
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
+  });
+  // jsdom supplies real DOM ranges but no Custom Highlight API. Model its
+  // range sets so component tests exercise native painting and cleanup.
+  class MockHighlight extends Set<AbstractRange> {
+    priority = 0;
+  }
+  Object.defineProperties(dom.window, {
+    Highlight: { value: MockHighlight },
+    CSS: {
+      value: {
+        ...dom.window.CSS,
+        highlights: new Map<string, MockHighlight>(),
+        registerProperty: () => {},
+      },
+    },
   });
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -68,9 +86,11 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MouseEvent: Reflect.get(globalThis, 'MouseEvent'),
     MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
     Node: Reflect.get(globalThis, 'Node'),
+    NodeFilter: Reflect.get(globalThis, 'NodeFilter'),
     PointerEvent: Reflect.get(globalThis, 'PointerEvent'),
     requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
     ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
+    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
     SVGElement: Reflect.get(globalThis, 'SVGElement'),
     SVGSVGElement: Reflect.get(globalThis, 'SVGSVGElement'),
     window: Reflect.get(globalThis, 'window'),
@@ -117,11 +137,22 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       resizeObservers.delete(this);
     }
 
+    // Delivers an entry shaped like a browser's, with the sizes taken from the
+    // target's rect (zero unless a test stubbed it).
     trigger(target: Element): void {
       if (!this.#targets.has(target)) {
         return;
       }
-      this.#callback([{ target } as ResizeObserverEntry], this);
+      const rect = target.getBoundingClientRect();
+      const size = [{ inlineSize: rect.width, blockSize: rect.height }];
+      const entry = {
+        target,
+        contentRect: rect,
+        borderBoxSize: size,
+        contentBoxSize: size,
+        devicePixelContentBoxSize: size,
+      } as unknown as ResizeObserverEntry;
+      this.#callback([entry], this);
     }
   }
 
@@ -240,6 +271,8 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MouseEvent: dom.window.MouseEvent,
     MutationObserver: dom.window.MutationObserver,
     Node: dom.window.Node,
+    NodeFilter: dom.window.NodeFilter,
+    ShadowRoot: dom.window.ShadowRoot,
     PointerEvent: MockPointerEvent,
     requestAnimationFrame: (callback: FrameRequestCallback) => {
       const id = ++nextFrameId;
@@ -295,6 +328,8 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     },
     cleanup() {
       clearRenderQueue();
+      i18n.__clearSubscribers();
+      i18n.set();
       for (const timeout of frames.values()) {
         clearTimeout(timeout);
       }
@@ -330,6 +365,41 @@ export interface CreateRootOptions {
 
 // Creates a scroll-container div with a stubbed scrollTo and a fixed
 // bounding rect, since jsdom performs no layout. Appends it to document.body.
+// Read registered ranges belonging to a surface, including its shadow roots,
+// in document order so tests can inspect matches without decoration elements.
+export function getSearchHighlightRanges(root: Node, current = false): Range[] {
+  const names = current
+    ? ['diffs-search-current']
+    : ['diffs-search-match', 'diffs-search-current'];
+  return names
+    .flatMap((name) => [...(window.CSS.highlights.get(name) ?? [])] as Range[])
+    .filter((range) => {
+      let node: Node | null = range.startContainer;
+      while (node != null) {
+        if (node === root) return true;
+        node =
+          node.parentNode ??
+          (node instanceof window.ShadowRoot ? node.host : null);
+      }
+      return false;
+    })
+    .sort((a, b) => {
+      const aRoot = a.startContainer.getRootNode();
+      const bRoot = b.startContainer.getRootNode();
+      if (aRoot === bRoot)
+        return a.compareBoundaryPoints(window.Range.START_TO_START, b);
+      const aHost =
+        aRoot instanceof window.ShadowRoot ? aRoot.host : a.startContainer;
+      const bHost =
+        bRoot instanceof window.ShadowRoot ? bRoot.host : b.startContainer;
+      return (aHost.compareDocumentPosition(bHost) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0
+        ? -1
+        : 1;
+    });
+}
+
 export function createRoot(options: CreateRootOptions = {}): HTMLDivElement {
   const { width = 1000, height = 800 } = options;
   const root = document.createElement('div');

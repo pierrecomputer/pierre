@@ -1,5 +1,5 @@
+import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
 
 import { CodeView } from '../src/components/CodeView';
 import { Editor } from '../src/editor/editor';
@@ -76,6 +76,7 @@ describe('CodeView partial hydration', () => {
       const viewer = new CodeView({
         createEditor: (type, options) => new Editor(type, options),
         loadDiffFiles: () => deferred.promise,
+        useTokenTransformer: true,
       });
       const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 

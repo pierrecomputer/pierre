@@ -1,6 +1,7 @@
 import type { Element as HASTElement, Properties } from 'hast';
 
 import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
+import { i18n } from '../i18n/I18n';
 import type {
   DiffLineAnnotation,
   FileDiffMetadata,
@@ -174,7 +175,7 @@ export class UnresolvedFileHunksRenderer<
     });
   }
 
-  protected override getUnifiedLineDecoration({
+  public override getUnifiedLineDecoration({
     type,
     lineType,
   }: UnifiedLineDecorationProps): LineDecoration {
@@ -194,7 +195,7 @@ export class UnresolvedFileHunksRenderer<
     };
   }
 
-  protected override getSplitLineDecoration({
+  public override getSplitLineDecoration({
     side,
     type,
   }: SplitLineDecorationProps): LineDecoration {
@@ -214,9 +215,9 @@ export class UnresolvedFileHunksRenderer<
     };
   }
 
-  protected override getUnifiedInjectedRowsForLine = (
+  public override getUnifiedInjectedRowsForLine(
     ctx: RenderedLineContext
-  ): UnifiedInjectedRowPlacement | undefined => {
+  ): UnifiedInjectedRowPlacement | undefined {
     const rows = this.injectedRows.get(`${ctx.hunkIndex}:${ctx.lineIndex}`);
     if (rows == null || rows.length === 0) {
       return undefined;
@@ -227,6 +228,7 @@ export class UnresolvedFileHunksRenderer<
     for (const row of rows) {
       if (row.type === 'actions') {
         before.push({
+          id: mergeConflictRowId(row.hunkIndex, row.conflictIndex, 'actions'),
           content: createMergeConflictActionsRowElement({
             row,
             includeDefaultActions: mergeConflictActionsType === 'default',
@@ -238,6 +240,7 @@ export class UnresolvedFileHunksRenderer<
       }
       const target = row.type === 'marker-end' ? after : before;
       target.push({
+        id: mergeConflictRowId(row.hunkIndex, row.conflictIndex, row.type),
         content: createMergeConflictMarkerRowElement(row),
         gutter: createMergeConflictGutterGap('marker', row.type),
       });
@@ -246,7 +249,7 @@ export class UnresolvedFileHunksRenderer<
       before: before.length > 0 ? before : undefined,
       after: after.length > 0 ? after : undefined,
     };
-  };
+  }
 
   protected override getOptionsWithDefaults(): BaseUnresolvedOptionsWithDefaults {
     const options = super.getOptionsWithDefaults();
@@ -257,6 +260,16 @@ export class UnresolvedFileHunksRenderer<
       this.options.mergeConflictActionsType ?? 'default';
     return options as BaseUnresolvedOptionsWithDefaults;
   }
+}
+
+// The row key of a conflict's action or marker row, so the row keeps its
+// element as the lines around it move.
+function mergeConflictRowId(
+  hunkIndex: number,
+  conflictIndex: number,
+  kind: string
+): string {
+  return `conflict:${hunkIndex}:${conflictIndex}:${kind}`;
 }
 
 function getMergeConflictGutterProperties(
@@ -371,19 +384,19 @@ function createMergeConflictActionsContent(
   return [
     createMergeConflictActionButton({
       resolution: 'current',
-      label: 'Accept current change',
+      label: i18n.t('acceptCurrentChange'),
       conflictIndex,
     }),
     createMergeConflictActionSeparator(),
     createMergeConflictActionButton({
       resolution: 'incoming',
-      label: 'Accept incoming change',
+      label: i18n.t('acceptIncomingChange'),
       conflictIndex,
     }),
     createMergeConflictActionSeparator(),
     createMergeConflictActionButton({
       resolution: 'both',
-      label: 'Accept both',
+      label: i18n.t('acceptBoth'),
       conflictIndex,
     }),
   ];

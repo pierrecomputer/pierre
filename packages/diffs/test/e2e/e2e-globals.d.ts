@@ -52,6 +52,8 @@ interface E2EEditor {
 }
 
 interface Window {
+  __codeView?: import('../../src/components/CodeView').CodeView;
+
   // Fixture ready flags.
   __diffReady?: boolean;
   __editReady?: boolean;
@@ -92,6 +94,23 @@ interface Window {
     getScrollTop(): number;
   };
 
+  // code-view-edit.html: several editable items and their hosts.
+  __codeViewEditReady?: boolean;
+  __codeViewEdit?: {
+    root: HTMLElement;
+    itemIds: string[];
+    getHost(id: string): HTMLElement | undefined;
+  };
+
+  // virtualizer-edit.html: several editable files under one Virtualizer.
+  __virtualizerEditReady?: boolean;
+  __virtualizerEdit?: {
+    root: HTMLElement;
+    ids: string[];
+    getHost(id: string): HTMLElement | undefined;
+    getEditor(id: string): E2EEditor | undefined;
+  };
+
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];
   __conflictResolutions?: string[];
@@ -107,7 +126,12 @@ interface Window {
   __completeEdit?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
+  // edit.html: the capture every host render path makes before swapping the
+  // editable DOM, on its own so a spec can act between it and the sync.
+  __captureEditorFocusForDOMReplacement?: () => void;
   __syncCount?: number;
+  // editable.html: force a full render, optionally moving its bounded window.
+  __renderEditorWindow?: (startingLine: number) => void;
 
   // edit-collapsed.html helpers: rendered new-file line numbers in the
   // editable column, and the primary caret's zero-based line.

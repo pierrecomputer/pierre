@@ -6,6 +6,8 @@ import {
 } from '@pierre/diffs';
 import type { PreloadFileDiffOptions } from '@pierre/diffs/ssr';
 
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
+
 export interface AcceptRejectMetadata {
   key: string;
   accepted?: boolean;
@@ -62,8 +64,13 @@ export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<
   AcceptRejectMetadata,
   undefined
 > = {
-  fileDiff: parseDiffFromFile(ACCEPT_REJECT_OLD_FILE, ACCEPT_REJECT_NEW_FILE),
+  fileDiff: parseDiffFromFile(
+    ACCEPT_REJECT_OLD_FILE,
+    ACCEPT_REJECT_NEW_FILE,
+    DEFAULT_PARSE_DIFF_OPTIONS
+  ),
   options: {
+    parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
     theme: DEFAULT_THEMES,
     themeType: 'dark',
     diffStyle: 'unified',

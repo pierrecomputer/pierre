@@ -1,6 +1,9 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
+import type { CreatePatchOptions } from '@pierre/patches';
+import type { CreatePatchOptionsNonabortable as JsdiffCreatePatchOptions } from 'diff';
 import type { ElementContent } from 'hast';
 import type { BundledLanguage, BundledTheme } from 'shiki';
+
+import type { DEFAULT_MESSAGES } from './constants';
 
 export type { DiffsTheme } from './highlighter/themes/types';
 export type {
@@ -8,16 +11,19 @@ export type {
   CodeToTokensOptions,
   DecorationItem,
   DiffsHighlighter,
-  DiffsEditorTokenizer,
   DiffsEditorTokenizerOptions,
   DiffsStreamTokenizer,
+  DiffsEditorTokenizer,
   ThemedToken,
   TokensResult,
 } from './highlighter/types';
 
-export type { CreatePatchOptionsNonabortable };
+export type { CreatePatchOptions };
+/** @deprecated Use `CreatePatchOptions`. */
+export type CreatePatchOptionsNonabortable = JsdiffCreatePatchOptions;
 
-export interface ParseDiffOptions extends CreatePatchOptionsNonabortable {
+export interface ParseDiffOptions extends CreatePatchOptions {
+  preferredDiffLib?: DiffLib; // jsdiff is default
   /**
    * Preserve the patch's change blocks and line order without similarity
    * realignment. Defaults to false.
@@ -43,6 +49,13 @@ export interface ParsePatchOptions {
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
 /**
+ * How a virtualizer requested line scroll ended: 'settled' after the render
+ * that finishes the scroll, so the line's rows exist, or 'cancelled' when the
+ * user took over or a newer request replaced it.
+ */
+export type ScrollRequestResult = 'settled' | 'cancelled';
+
+/**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
  * for when rendering a file directly using the File components
  */
@@ -55,7 +68,7 @@ export interface FileContents {
   /** Explicitly set the syntax highlighting language instead of inferring from
    * filename. Generally you should not be setting this. */
   lang?: SupportedLanguages;
-  /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
+  /** Optional header passed to the selected diff library. */
   header?: string;
   /** Identifies a file for worker pool highlight caching. */
   cacheKey?: string;
@@ -429,6 +442,8 @@ export type HunkSeparators =
 
 export type LineDiffTypes = 'word-alt' | 'word-line' | 'word' | 'char' | 'none';
 
+export type DiffLib = '@pierre/patches' | 'jsdiff';
+
 export type DiffIndicators = 'classic' | 'bars' | 'none';
 
 export interface BaseCodeOptions {
@@ -443,6 +458,14 @@ export interface BaseCodeOptions {
 
   // Highlighter options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
+  /**
+   * When hydrating prerendered HTML, wait to load the highlighter (Shiki, its
+   * engine, themes and languages) until a render needs it, such as new
+   * contents or options, instead of preloading it as soon as the component
+   * hydrates. Prerendered code that never changes then never downloads the
+   * highlighter. false is default
+   */
+  deferHydrationHighlight?: boolean;
   useCSSClasses?: boolean;
   useTokenTransformer?: boolean;
   tokenizeMaxLineLength?: number;
@@ -478,18 +501,39 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 
   /**
    * Parser options used when computing diffs from file contents
-   * (oldFile/newFile) or recomputing edited diffs. Includes jsdiff settings
+   * (oldFile/newFile) or recomputing edited diffs. Includes diff settings
    * and the disableLineMatching escape hatch. Also used when deriving cache
    * keys during partial diff hydration; use the same matching mode as the
    * supplied patch. Does not change the hunks in supplied pre-parsed patches.
+   * Without a worker pool, `preferredDiffLib` also selects the library for word
+   * and character highlights; a pool uses its own `preferredDiffLib` for them.
    */
   parseDiffOptions?: ParseDiffOptions;
+}
+
+export type DiffsMessageKey = keyof typeof DEFAULT_MESSAGES;
+
+/**
+ * Every user-visible string the diff renders, keyed like
+ * `DEFAULT_MESSAGES`. Set them through `i18n.set()`.
+ */
+export type DiffsMessages = Record<DiffsMessageKey, string>;
+
+export interface DiffsI18nConfig {
+  /** BCP 47 locale used to pick plural forms. Defaults to `en`. */
+  locale?: string;
+  /** Messages to use. Any left out fall back to English. */
+  messages?: Partial<DiffsMessages>;
 }
 
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
+    | 'unsafeCSS'
+    | 'preferredHighlighter'
+    | 'deferHydrationHighlight'
+    | 'parseDiffOptions'
+    | 'loadDiffFiles'
   >
 >;
 
@@ -806,7 +850,7 @@ export interface ForceFilePlainTextOptions {
   startingLine?: number;
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
-  lines?: string[];
+  lines?: readonly string[];
 }
 
 export interface RenderFileOptions {
@@ -816,6 +860,7 @@ export interface RenderFileOptions {
 }
 
 export interface RenderDiffOptions {
+  preferredDiffLib?: DiffLib;
   theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;

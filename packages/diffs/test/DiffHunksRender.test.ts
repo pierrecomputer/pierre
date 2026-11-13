@@ -1,9 +1,10 @@
-import { afterAll, describe, expect, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
+import { createTwoFilesPatch } from '@pierre/patches';
+import { afterAll, afterEach, describe, expect, test } from 'bun:test';
 
 import {
   DiffHunksRenderer,
   disposeHighlighter,
+  i18n,
   parseDiffFromFile,
   parsePatchFiles,
 } from '../src';
@@ -12,6 +13,8 @@ import { mockDiffs } from './mocks';
 import {
   assertDefined,
   collectAllElements,
+  columnContent,
+  contentAST,
   countSplitRows,
   projectColumn,
   rowDigests,
@@ -30,8 +33,8 @@ const loadedFiles: FileDiffLoadedFiles = {
 function countInlineDiffSpans(
   result: Awaited<ReturnType<DiffHunksRenderer['asyncRender']>>
 ) {
-  const additions = result.additionsContentAST ?? [];
-  const deletions = result.deletionsContentAST ?? [];
+  const additions = columnContent(result.columns.additions);
+  const deletions = columnContent(result.columns.deletions);
   return [
     ...collectAllElements(additions),
     ...collectAllElements(deletions),
@@ -140,17 +143,17 @@ describe('DiffHunksRenderer', () => {
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
 
-    const additionRows = projectColumn(result.additionsContentAST);
-    const deletionRows = projectColumn(result.deletionsContentAST);
+    const additionRows = projectColumn(contentAST(result, 'additions'));
+    const deletionRows = projectColumn(contentAST(result, 'deletions'));
     const surpluses = changeBlockSurpluses(diff);
     // The fixture has at least one block deleting more than it adds, so the
     // additions column must receive buffer rows of exactly those sizes
@@ -181,17 +184,17 @@ describe('DiffHunksRenderer', () => {
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
 
-    const additionRows = projectColumn(result.additionsContentAST);
-    const deletionRows = projectColumn(result.deletionsContentAST);
+    const additionRows = projectColumn(contentAST(result, 'additions'));
+    const deletionRows = projectColumn(contentAST(result, 'deletions'));
     const surpluses = changeBlockSurpluses(diff);
     // Reversed fixture: at least one block adds more than it deletes, so the
     // deletions column must receive buffer rows of exactly those sizes
@@ -234,16 +237,16 @@ describe('DiffHunksRenderer', () => {
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
 
-    const deletionRows = projectColumn(result.deletionsContentAST);
-    const additionRows = projectColumn(result.additionsContentAST);
+    const deletionRows = projectColumn(contentAST(result, 'deletions'));
+    const additionRows = projectColumn(contentAST(result, 'additions'));
     // The deletion column renders the gap above the paired old line.
     const bufferIndex = deletionRows.findIndex((row) => row.kind === 'buffer');
     const deletionLineIndex = deletionRows.findIndex((row) =>
@@ -268,15 +271,15 @@ describe('DiffHunksRenderer', () => {
     );
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
-    expect(result.additionsContentAST).toBeUndefined();
-    expect(result.deletionsContentAST).toBeUndefined();
+    expect(result.columns.additions).toBeUndefined();
+    expect(result.columns.deletions).toBeUndefined();
     assertDefined(
-      result.unifiedContentAST,
-      'result.unifiedContentAST should be defined'
+      contentAST(result, 'unified'),
+      'unified content should be defined'
     );
-    expect(rowDigests(projectColumn(result.unifiedContentAST))).toMatchSnapshot(
-      'rendered rows'
-    );
+    expect(
+      rowDigests(projectColumn(contentAST(result, 'unified')))
+    ).toMatchSnapshot('rendered rows');
   });
 
   test('a diff with only additions should have an empty deletions column', async () => {
@@ -290,14 +293,14 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
     expect(countSplitRows(result)).toBe(diff.splitLineCount);
-    expect(result.deletionsContentAST).toBeUndefined();
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.deletions).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
     expect(
-      rowDigests(projectColumn(result.additionsContentAST))
+      rowDigests(projectColumn(contentAST(result, 'additions')))
     ).toMatchSnapshot('rendered rows');
   });
 
@@ -312,14 +315,14 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
     expect(countSplitRows(result)).toBe(diff.splitLineCount);
-    expect(result.additionsContentAST).toBeUndefined();
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.additions).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
     expect(
-      rowDigests(projectColumn(result.deletionsContentAST))
+      rowDigests(projectColumn(contentAST(result, 'deletions')))
     ).toMatchSnapshot('rendered rows');
   });
 
@@ -485,5 +488,98 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
 
     expect(countInlineDiffSpans(result)).toBeGreaterThan(0);
+  });
+});
+
+describe('DiffHunksRenderer messages', () => {
+  afterEach(() => {
+    i18n.set();
+  });
+
+  // Twenty lines without a trailing newline, changed near the end so the hunk
+  // keeps the final line (and its no-newline marker) and the separator above
+  // it collapses the leading context.
+  function parseMessageFixture(): FileDiffMetadata {
+    const oldLines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    const newLines = oldLines.map((line, i) => (i === 18 ? 'changed' : line));
+    return parseDiffFromFile(
+      { name: 'messages.txt', contents: oldLines.join('\n') },
+      { name: 'messages.txt', contents: newLines.join('\n') }
+    );
+  }
+
+  test('renders the English defaults', async () => {
+    const diff = parseMessageFixture();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      expansionLineCount: 5,
+    });
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+    const collapsed = result.hunkData[0]?.lines;
+
+    expect(collapsed).toBeGreaterThan(5);
+    expect(html).toContain(`${collapsed} unmodified lines`);
+    expect(html).toContain('Expand all');
+    expect(html).toContain('No newline at end of file');
+  });
+
+  test('renders the configured messages', async () => {
+    i18n.set({
+      locale: 'fr',
+      messages: {
+        unmodifiedLines:
+          '{count, plural, one {# ligne inchangee} other {# lignes inchangees}}',
+        expandAll: 'Tout deplier',
+        noNewlineAtEndOfFile: 'Pas de saut de ligne a la fin du fichier',
+      },
+    });
+    const diff = parseMessageFixture();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      expansionLineCount: 5,
+    });
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+    const collapsed = result.hunkData[0]?.lines;
+
+    expect(html).toContain(`${collapsed} lignes inchangees`);
+    expect(html).toContain('Tout deplier');
+    expect(html).toContain('Pas de saut de ligne a la fin du fichier');
+    expect(html).not.toContain('unmodified line');
+    expect(html).not.toContain('Expand all');
+    expect(html).not.toContain('No newline at end of file');
+  });
+
+  test('messages left out fall back to English', async () => {
+    i18n.set({ messages: { expandAll: 'Tout deplier' } });
+    const diff = parseMessageFixture();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      expansionLineCount: 5,
+    });
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+
+    expect(html).toContain('Tout deplier');
+    expect(html).toContain(`${result.hunkData[0]?.lines} unmodified lines`);
+    expect(html).toContain('No newline at end of file');
+  });
+
+  test('renders the message for collapsed context of unknown size', async () => {
+    i18n.set({
+      messages: { unknownUnmodifiedLines: 'Plus de contexte disponible' },
+    });
+    const diff = parsePartialDiffWithCollapsedContext();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      hunkSeparators: 'line-info',
+      loadDiffFiles: () => Promise.resolve(loadedFiles),
+    });
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+
+    expect(html).toContain('Plus de contexte disponible');
+    expect(html).not.toContain('More unchanged context may be available');
   });
 });

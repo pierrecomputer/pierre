@@ -18,3 +18,20 @@ export function createSVGSpriteElement(): SVGElement | undefined {
   }
   return parsed.cloneNode(true) as SVGElement;
 }
+/**
+ * Prerendered HTML carries only the icons its own markup uses (see
+ * ssr/renderHTML.ts). Hydration swaps such a partial sheet for the full one,
+ * so icons the component renders later (separators, gutter utility, header
+ * changes) still resolve.
+ */
+export function hydrateSVGSpriteElement(element: SVGElement): SVGElement {
+  if (!element.hasAttribute('data-icon-sprite-partial')) {
+    return element;
+  }
+  const full = createSVGSpriteElement();
+  if (full == null) {
+    return element;
+  }
+  element.replaceWith(full);
+  return full;
+}
