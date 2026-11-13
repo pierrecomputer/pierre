@@ -1829,6 +1829,8 @@ describe('incremental streaming', () => {
     expectFreshDom(container, '```text\nhello', options);
     renderer.disconnect();
   });
+  // Warning: these exhaustive prefix tests repeatedly instantiate Wasm and can
+  // exceed Bun's 5 s default on a loaded CI runner.
   test('changed-line HTML reconstructs fresh highlighting and keeps older lazy strings', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
@@ -1891,7 +1893,7 @@ describe('incremental streaming', () => {
     } finally {
       session.dispose();
     }
-  });
+  }, 30_000);
   test('highlighted fence DOM matches fresh HTML at partial lines, closure, and replacements', () => {
     const options = {
       controls: false,
@@ -1917,7 +1919,7 @@ describe('incremental streaming', () => {
     } finally {
       renderer.disconnect();
     }
-  });
+  }, 30_000);
   test('a live fence that loses its final empty line patches from the right line', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
