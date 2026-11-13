@@ -220,7 +220,7 @@ function BrowserBenchmarkCard({
           {description}
         </p>
       </figcaption>
-      <hr />
+      <hr className="mb-7 border-neutral-800" />
       <div className={`mb-6 ${controlsClassName}`}>{controls}</div>
       <div aria-live="polite" aria-atomic="true">
         <Comparison
