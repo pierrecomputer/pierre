@@ -147,7 +147,8 @@ re-exports all themes. `@pierre/highlights/core` exports the same functions but
 loads no Wasm; call `init(module)` with a compiled combined module
 (`@pierre/highlights/highlights.wasm`) before its shared functions,
 `registerLanguages()`, `StreamTokenizer`, or `LiveTokenizer`. `init` runs
-synchronously. `createHighlighter()` does not need it.
+synchronously. `createHighlighter()` does not need it. This example needs a
+bundler such as Vite to resolve the URL.
 
 ```ts
 import { init } from '@pierre/highlights/core';

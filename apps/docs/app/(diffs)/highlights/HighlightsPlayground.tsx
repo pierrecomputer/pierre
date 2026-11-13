@@ -34,15 +34,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const FEATURED_LANGUAGES = [
-  'ts',
-  'js',
+  'typescript',
+  'javascript',
   'python',
   'go',
   'html',
 ] as const satisfies readonly PlaygroundLanguage[];
 const FEATURED_LANGUAGE_ICONS = {
-  ts: { icon: typescriptIcon, color: '#3178c6' },
-  js: { icon: javascriptIcon, color: '#f7df1e' },
+  typescript: { icon: typescriptIcon, color: '#3178c6' },
+  javascript: { icon: javascriptIcon, color: '#f7df1e' },
   python: { icon: pythonIcon, color: '#3776ab' },
   go: { icon: goIcon, color: '#00add8' },
   html: { icon: htmlIcon, color: '#e34f26' },
@@ -71,7 +71,7 @@ export function HighlightsPlayground({
   variant?: 'hero' | 'languages';
 }) {
   const [defaultLanguage, , defaultCode] = PLAYGROUND_LANGUAGES.find(
-    ([lang]) => lang === (variant === 'hero' ? 'tsx' : 'ts')
+    ([lang]) => lang === (variant === 'hero' ? 'tsx' : 'typescript')
   )!;
   const [selectedThemes, setSelectedThemes] = useState({
     light: 'pierre-light',
