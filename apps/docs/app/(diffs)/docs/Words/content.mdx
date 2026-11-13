@@ -79,9 +79,10 @@ Pass a theme object from `@pierre/highlights/themes`, not a theme name. The
 plugin accepts `theme` or `themes` and the Highlights HTML theme options. See
 [Highlights themes](#highlights-themes).
 
-Unsupported languages render as plain code. An open fence uses an incremental
-tokenizer. The renderer releases it when the fence closes or disappears. The
-same `plugins` object works with the HTML and DOM renderers.
+Unsupported languages render as plain code. To add a language, register a custom
+lexer with `registerLanguages()` from `@pierre/highlights`. An open fence uses
+an incremental tokenizer. The renderer releases it when the fence closes or
+disappears. The same `plugins` object works with the HTML and DOM renderers.
 
 ### HTML and DOM
 

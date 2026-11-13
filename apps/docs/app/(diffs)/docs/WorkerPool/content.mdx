@@ -41,8 +41,9 @@ dependencies. For static hosting, copy `dist/worker/worker-portable.js` from the
 package. The portable build bundles all highlighter backends and their
 dependencies into one script, so `new Worker(url)` and blob URLs work without
 additional files or a bundling step. It also supports `{ type: 'module' }`. The
-pool resolves themes and Shiki grammars on the main thread and sends them to the
-worker, so their catalogs are excluded from the portable script.
+pool resolves themes, Shiki grammars, and registered Highlights lexers on the
+main thread and sends them to the worker, so the theme and grammar catalogs are
+excluded from the portable script.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Only the Vite and NextJS examples have been tested by us. Additional examples

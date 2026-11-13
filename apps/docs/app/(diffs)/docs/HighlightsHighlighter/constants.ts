@@ -39,6 +39,41 @@ export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
     },
     options,
   },
+  highlightsQuickStart: {
+    file: {
+      name: 'quick-start.ts',
+      contents: `import { codeToHtml, pierreDark } from '@pierre/highlights';
+
+const html = new TextDecoder().decode(
+  codeToHtml('const a = 1', { lang: 'ts', theme: pierreDark })
+);`,
+    },
+    options,
+  },
+  highlightsAllLanguages: {
+    file: {
+      name: 'all-languages.ts',
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import { langs } from '@pierre/highlights/langs';
+import { themes } from '@pierre/highlights/themes';
+
+const highlighter = await createHighlighter({ langs, themes });`,
+    },
+    options,
+  },
+  highlightsInit: {
+    file: {
+      name: 'init.ts',
+      contents: `import { init } from '@pierre/highlights/core';
+
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/highlights/highlights.wasm', import.meta.url))
+  )
+);`,
+    },
+    options,
+  },
   highlightsHtml: {
     file: {
       name: 'html.ts',
@@ -349,6 +384,7 @@ import {
 >;
 
 export const {
+  highlightsAllLanguages: HIGHLIGHTS_ALL_LANGUAGES,
   highlightsApiRuntime: HIGHLIGHTS_API_RUNTIME,
   highlightsApiTypes: HIGHLIGHTS_API_TYPES,
   highlightsCssVariables: HIGHLIGHTS_CSS_VARIABLES,
@@ -356,8 +392,10 @@ export const {
   highlightsDualThemes: HIGHLIGHTS_DUAL_THEMES,
   highlightsDualThemesCss: HIGHLIGHTS_DUAL_THEMES_CSS,
   highlightsHtml: HIGHLIGHTS_HTML,
+  highlightsInit: HIGHLIGHTS_INIT,
   highlightsInstall: HIGHLIGHTS_INSTALL,
   highlightsLive: HIGHLIGHTS_LIVE,
+  highlightsQuickStart: HIGHLIGHTS_QUICK_START,
   highlightsSkill: HIGHLIGHTS_SKILL,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsStreamPipe: HIGHLIGHTS_STREAM_PIPE,

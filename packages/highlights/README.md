@@ -69,15 +69,21 @@ const htmlBytes = highlighter.codeToHtml('const a = 1', {
 const html = new TextDecoder().decode(htmlBytes);
 ```
 
+Each built-in language has a module with its name, such as
+`@pierre/highlights/langs/python`. The
+[language table](https://diffs.com/docs#highlights-languages) lists the names.
 The TypeScript module supports `ts`, `tsx`, `cts`, `mts`, `js`, `jsx`, `mjs`,
-and `cjs`. Each language module contains its standalone Wasm as base64. Import
-only the languages and themes that your application needs.
+and `cjs`. Its module names are `typescript`, `ts`, `tsx`, `javascript`, `js`,
+and `jsx`. Plain text and `ansi` need no module. Each language module contains
+its standalone Wasm as base64. Import only the languages and themes that your
+application needs.
 
 Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
 script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text
-until you add CSS. Code fences also accept registered custom language names.
-Vue, Svelte, Astro, MDX, and QML contain the lexer for their expressions, and
-TypeScript contains the markup lexer for `html` tagged templates.
+until you add CSS. A Markdown fence is plain text until you add its language.
+Code fences also accept registered custom language names. Vue, Svelte, Astro,
+MDX, and QML contain the lexer for their expressions, and TypeScript contains
+the markup lexer for `html` tagged templates.
 
 `highlighter.getLoadedLanguages()` returns the names and aliases that `lang`
 accepts. A `ThemeFamily` in `themes` registers each of its members.

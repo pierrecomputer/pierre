@@ -14,11 +14,11 @@ import { themes } from '@pierre/highlights/themes/loader';
 const { default: lazyTheme } = await themes['pierre-dark']();
 ```
 
-| Entry                              | Exports                                                          |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| `@pierre/highlights/themes`        | Named themes, full `themes` array, `cssVariables`, and `toCSS()` |
-| `@pierre/highlights/themes/<id>`   | One theme as the default export, e.g. `pierre-dark`              |
-| `@pierre/highlights/themes/loader` | `themes`, a map from bundled IDs to async module loaders         |
+| Entry                              | Exports                                                                            |
+| ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `@pierre/highlights/themes`        | Named themes, full `themes` array, `cssVariables`, `toCSS()`, and `getFontStyle()` |
+| `@pierre/highlights/themes/<id>`   | One theme as the default export, e.g. `pierre-dark`                                |
+| `@pierre/highlights/themes/loader` | `themes`, a map from bundled IDs to async module loaders                           |
 
 Pass theme objects to `createHighlighter({ themes })`. Output methods accept
 these objects or their registered IDs. A custom theme can supply `id` for a
@@ -101,7 +101,12 @@ Include the stylesheet with the markup. `toCSS(theme, options?)` accepts a
 `Theme` and returns declarations without a selector. Apply them to the code
 block or an ancestor. Keep its prefix and the highlighting prefix equal; both
 default to `--hls-`. Changing declarations updates colors without tokenization.
-This mode controls colors only and ignores theme font style and weight.
+HTML output in this mode contains colors only, without theme font style and
+weight. For italics in a custom token renderer, pass `{ fontStyle: true }` to
+`toCSS()` to add a `-font-style` variable (`italic` or `normal`) for each syntax
+scope, and set `font-style` to `getFontStyle(token)` from
+`@pierre/highlights/themes`, such as `var(--hls-comment-font-style)`. Font
+weight has no variable.
 
 ## Multiple themes
 
