@@ -420,7 +420,7 @@ service /greeter on new http:Listener(port) {
 }`,
   ],
   [
-    'bash',
+    'shellscript',
     'Bash',
     `#!/usr/bin/env bash
 set -euo pipefail
@@ -435,7 +435,7 @@ for name in Ada Linus; do
 done`,
   ],
   [
-    'batch',
+    'bat',
     'Windows Batch',
     `@echo off
 REM Build selected files
@@ -1218,7 +1218,7 @@ index 1a2b3c4..5d6e7f8 100644
  };`,
   ],
   [
-    'dockerfile',
+    'docker',
     'Dockerfile',
     `# syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
@@ -1434,7 +1434,7 @@ login-input = Email address
     .aria-label = Login email`,
   ],
   [
-    'fortran',
+    'fortran-free-form',
     'Fortran',
     `program demo
   use iso_fortran_env, only: real64
@@ -2272,7 +2272,7 @@ public record Counter(String label, int count) {
 {% endblock %}`,
   ],
   [
-    'js',
+    'javascript',
     'JavaScript',
     `/**
  * Memoizes a function.
@@ -2611,7 +2611,7 @@ end Demo`,
 %}`,
   ],
   [
-    'lisp',
+    'common-lisp',
     'Lisp',
     `;;; A labelled counter.
 (defpackage :demo (:use :cl))
@@ -2736,7 +2736,7 @@ local label = \`Total: {total({})} items\\n\`
 print(label, "tab\\there", nil, true, MAX_ITEMS)`,
   ],
   [
-    'makefile',
+    'make',
     'Makefile',
     `# Build config
 CC := gcc
@@ -3144,7 +3144,7 @@ def main [] {
 }`,
   ],
   [
-    'objc',
+    'objective-c',
     'Objective-C',
     `#import <Foundation/Foundation.h>
 
@@ -4619,7 +4619,7 @@ simd128 = true
 bulk_memory = true`,
   ],
   [
-    'ts',
+    'typescript',
     'TypeScript',
     `/**
  * An interface for a point in 2D space.
@@ -5038,7 +5038,7 @@ def deposit(amount: uint256) -> bool:
     return True`,
   ],
   [
-    'wat',
+    'wasm',
     'WebAssembly Text',
     `(module
   (memory (export "memory") 1)

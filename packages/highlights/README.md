@@ -21,7 +21,8 @@ The package has two entries:
 
 Both entries export the same functions and types. In `/core`, call `init()` with
 the combined module before the shared functions and tokenizers. The package
-exports that module as `@pierre/highlights/highlights.wasm`:
+exports that module as `@pierre/highlights/highlights.wasm`. This example needs
+a bundler such as Vite to resolve the URL:
 
 ```ts
 import { init } from '@pierre/highlights/core';

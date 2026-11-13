@@ -68,7 +68,8 @@ For all languages and themes, use the combined lexer bundle:
 
 Both entries export the same functions. In `/core`, the shared functions and
 tokenizer classes need the combined module. Call `init(module)` first. The
-package exports that module as `@pierre/highlights/highlights.wasm`:
+package exports that module as `@pierre/highlights/highlights.wasm`. This
+example needs a bundler such as Vite to resolve the URL:
 
 <DocsCodeExample {...highlightsInit} />
 
