@@ -64,18 +64,20 @@ function ChartMenu({
   value,
   options,
   onValueChange,
+  labelInside = false,
 }: {
   label: string;
   value: string;
   options: readonly { value: string; label: string }[];
   onValueChange: (value: string) => void;
+  labelInside?: boolean;
 }) {
   const selectedLabel =
     options.find((option) => option.value === value)?.label ?? value;
 
   return (
-    <div className="grid min-w-0 gap-1.5 text-xs">
-      <span className="text-muted-foreground">{label}</span>
+    <div className={labelInside ? 'min-w-0' : 'grid min-w-0 gap-1.5 text-xs'}>
+      {!labelInside && <span className="text-muted-foreground">{label}</span>}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -83,6 +85,9 @@ function ChartMenu({
             className="group w-fit max-w-full min-w-0 justify-start px-3 font-normal"
             aria-label={`${label}: ${selectedLabel}`}
           >
+            {labelInside && (
+              <span className="text-muted-foreground">{label}:</span>
+            )}
             <span className="truncate">{selectedLabel}</span>
             <IconChevronSm className="text-muted-foreground ml-auto shrink-0 transition-transform group-data-[state=open]:rotate-180" />
           </Button>
@@ -99,9 +104,12 @@ function ChartMenu({
               onSelect={() => onValueChange(option.value)}
             >
               {option.label}
-              {option.value === value && (
-                <IconCheck className="ml-auto" aria-hidden="true" />
-              )}
+              <IconCheck
+                className={
+                  option.value === value ? 'ml-auto' : 'invisible ml-auto'
+                }
+                aria-hidden="true"
+              />
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -217,15 +225,16 @@ export function WordsBenchmarks() {
             How we measure ↓
           </a>
         </div>
-        <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-wrap items-center">
           <ChartMenu
-            label="Measurement"
+            label="Measures"
             value={String(metricIndex)}
             options={suite.metrics.map(({ label }, index) => ({
               value: String(index),
               label,
             }))}
             onValueChange={(value) => setMetricIndex(Number(value))}
+            labelInside
           />
           <ChartMenu
             label="Document"
@@ -235,6 +244,7 @@ export function WordsBenchmarks() {
               label: documents[row.fixture].label,
             }))}
             onValueChange={setFixture}
+            labelInside
           />
         </div>
       </div>
