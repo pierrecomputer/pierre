@@ -196,7 +196,7 @@
               (then
                 (drop
                   (call $embedLanguage
-                    (enum.get $Language.js) (global.get $ptr) (local.get $p)
+                    (enum.get $Language.javascript) (global.get $ptr) (local.get $p)
                     (i32.const -1) (i32.const -3))))
               (else
                 (call $hlJs)

@@ -42,7 +42,8 @@ themes that your application needs, then await `createHighlighter()` once. Its
 Each module under `@pierre/highlights/langs/*` contains a standalone Wasm lexer
 as base64. A module has the name of its language in the
 [Languages](#highlights-languages) table, such as
-`@pierre/highlights/langs/python`. The TypeScript module supports TypeScript,
+`@pierre/highlights/langs/python` or `@pierre/highlights/langs/shellscript`. An
+alias such as `bash` has no module. The TypeScript module supports TypeScript,
 JavaScript, TSX, and JSX. Its names are `typescript`, `ts`, `tsx`, `javascript`,
 `js`, and `jsx`. Plain text and `ansi` need no module.
 
@@ -377,203 +378,204 @@ terminal colors, as in Shiki. With `cssVariables`, palette colors are
 
 `LiveTokenizer` edits the raw text, so it treats `ansi` as `plain`.
 
-Built-in languages and their aliases are included in the `Lang` type:
+Built-in languages and their aliases are included in the `Lang` type. A language
+ID is the same as its Shiki ID when Shiki has the language:
 
 <SearchableTable label="Search languages">
 
-| Language             | Aliases                                                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `plain`              | `plaintext`, `text`, `txt`                                                                                                         |
-| `abap`               | —                                                                                                                                  |
-| `ada`                | `adb`, `ads`                                                                                                                       |
-| `ahk`                | `ahk1`, `ahk2`, `autohotkey`                                                                                                       |
-| `angular-html`       | —                                                                                                                                  |
-| `apache`             | `apacheconf`, `htaccess`, `qmldir`, `ssh-config`                                                                                   |
-| `apex`               | —                                                                                                                                  |
-| `apl`                | —                                                                                                                                  |
-| `applescript`        | —                                                                                                                                  |
-| `asciidoc`           | `adoc`                                                                                                                             |
-| `asm`                | `assembly`, `mips`, `mipsasm`, `riscv`, `s`                                                                                        |
-| `astro`              | —                                                                                                                                  |
-| `awk`                | —                                                                                                                                  |
-| `ballerina`          | `bal`                                                                                                                              |
-| `bash`               | `console`, `hxml`, `sh`, `shell`, `shellscript`, `shellsession`, `zsh`                                                             |
-| `batch`              | `bat`, `batchfile`, `cmd`, `dos`                                                                                                   |
-| `beancount`          | —                                                                                                                                  |
-| `berry`              | `be`                                                                                                                               |
-| `bibtex`             | `bib`                                                                                                                              |
-| `bicep`              | —                                                                                                                                  |
-| `blade`              | `edge`                                                                                                                             |
-| `bsl`                | `1c`                                                                                                                               |
-| `c`                  | `h`                                                                                                                                |
-| `c3`                 | —                                                                                                                                  |
-| `cadence`            | `cdc`                                                                                                                              |
-| `cairo`              | —                                                                                                                                  |
-| `chapel`             | `chpl`                                                                                                                             |
-| `clojure`            | `clj`, `cljc`, `cljs`, `edn`, `fennel`, `hy`                                                                                       |
-| `cmake`              | —                                                                                                                                  |
-| `cobol`              | `cbl`, `cob`                                                                                                                       |
-| `codeowners`         | —                                                                                                                                  |
-| `codeql`             | `ql`                                                                                                                               |
-| `coffee`             | `coffeescript`                                                                                                                     |
-| `coq`                | `rocq`                                                                                                                             |
-| `cpp`                | `c++`, `cc`, `cxx`, `hh`, `hpp`, `hxx`                                                                                             |
-| `csharp`             | `c#`, `cs`, `genie`, `vala`                                                                                                        |
-| `css`                | `postcss`, `qss`                                                                                                                   |
-| `csv`                | —                                                                                                                                  |
-| `cuda`               | `cu`, `cuh`                                                                                                                        |
-| `cue`                | —                                                                                                                                  |
-| `cypher`             | `cql`                                                                                                                              |
-| `d`                  | —                                                                                                                                  |
-| `dart`               | —                                                                                                                                  |
-| `dax`                | —                                                                                                                                  |
-| `diff`               | `git-commit`, `git-rebase`, `patch`                                                                                                |
-| `dockerfile`         | `containerfile`, `docker`                                                                                                          |
-| `dotenv`             | `env`                                                                                                                              |
-| `dream-maker`        | `dm`                                                                                                                               |
-| `elixir`             | `ex`, `exs`                                                                                                                        |
-| `elm`                | —                                                                                                                                  |
-| `erb`                | —                                                                                                                                  |
-| `erlang`             | `erl`, `hrl`                                                                                                                       |
-| `fish`               | —                                                                                                                                  |
-| `fluent`             | `ftl`                                                                                                                              |
-| `fortran`            | `f03`, `f08`, `f18`, `f90`, `f95`, `fortran-free-form`                                                                             |
-| `fortran-fixed-form` | `f`, `for`, `f77`                                                                                                                  |
-| `fsharp`             | `f#`, `fs`, `fsi`, `fsx`                                                                                                           |
-| `gdresource`         | `godot-resource`, `tres`, `tscn`                                                                                                   |
-| `gdscript`           | `gd`                                                                                                                               |
-| `gdshader`           | `gdshaderinc`, `godot-shader`                                                                                                      |
-| `gherkin`            | `cucumber`, `feature`                                                                                                              |
-| `gleam`              | —                                                                                                                                  |
-| `glimmer-js`         | `gjs`                                                                                                                              |
-| `glimmer-ts`         | `gts`                                                                                                                              |
-| `glsl`               | `comp`, `frag`, `geom`, `vert`                                                                                                     |
-| `gnuplot`            | `gp`                                                                                                                               |
-| `go`                 | `golang`                                                                                                                           |
-| `graphql`            | `gql`                                                                                                                              |
-| `groq`               | —                                                                                                                                  |
-| `groovy`             | `gradle`, `gsh`, `gvy`, `gy`, `nextflow`, `nextflow-groovy`, `nf`                                                                  |
-| `hack`               | `ara`                                                                                                                              |
-| `haml`               | —                                                                                                                                  |
-| `handlebars`         | `hbs`, `mustache`                                                                                                                  |
-| `haskell`            | `hs`, `purescript`                                                                                                                 |
-| `haxe`               | `hx`                                                                                                                               |
-| `hjson`              | —                                                                                                                                  |
-| `hlsl`               | —                                                                                                                                  |
-| `html`               | `htm`, `html-derivative`                                                                                                           |
-| `http`               | —                                                                                                                                  |
-| `hurl`               | —                                                                                                                                  |
-| `imba`               | —                                                                                                                                  |
-| `ini`                | `desktop`, `properties`, `systemd`                                                                                                 |
-| `java`               | —                                                                                                                                  |
-| `jinja`              | `j2`, `jinja2`                                                                                                                     |
-| `js`                 | `cjs`, `javascript`, `mjs`                                                                                                         |
-| `json`               | `jsonc`                                                                                                                            |
-| `json5`              | —                                                                                                                                  |
-| `jsonl`              | —                                                                                                                                  |
-| `jsonnet`            | `libsonnet`                                                                                                                        |
-| `jsx`                | —                                                                                                                                  |
-| `julia`              | `jl`                                                                                                                               |
-| `just`               | `justfile`                                                                                                                         |
-| `kdl`                | —                                                                                                                                  |
-| `kotlin`             | `kt`, `kts`                                                                                                                        |
-| `kusto`              | `kql`                                                                                                                              |
-| `latex`              | `tex`                                                                                                                              |
-| `lean`               | `lean4`                                                                                                                            |
-| `less`               | —                                                                                                                                  |
-| `liquid`             | —                                                                                                                                  |
-| `lisp`               | `cl`, `clarity`, `common-lisp`, `el`, `elisp`, `emacs-lisp`, `lsp`, `racket`, `rkt`, `scheme`, `scm`                               |
-| `llvm`               | —                                                                                                                                  |
-| `log`                | —                                                                                                                                  |
-| `lua`                | —                                                                                                                                  |
-| `luau`               | —                                                                                                                                  |
-| `makefile`           | `make`, `mk`                                                                                                                       |
-| `markdown`           | `mdc`, `md`                                                                                                                        |
-| `marko`              | —                                                                                                                                  |
-| `matlab`             | `octave`                                                                                                                           |
-| `mdx`                | —                                                                                                                                  |
-| `mermaid`            | `mmd`                                                                                                                              |
-| `moonbit`            | `mbt`, `mbti`                                                                                                                      |
-| `move`               | —                                                                                                                                  |
-| `nginx`              | `bird`, `bird2`                                                                                                                    |
-| `nim`                | —                                                                                                                                  |
-| `nix`                | —                                                                                                                                  |
-| `nsis`               | `nsi`, `nsh`                                                                                                                       |
-| `nushell`            | `nu`                                                                                                                               |
-| `objc`               | `m`, `mm`, `objcpp`, `objective-c`, `objective-cpp`, `objectivec`                                                                  |
-| `ocaml`              | `ml`, `mli`                                                                                                                        |
-| `odin`               | —                                                                                                                                  |
-| `openscad`           | `scad`                                                                                                                             |
-| `org`                | —                                                                                                                                  |
-| `pascal`             | `delphi`, `dpk`, `dpr`, `lpr`, `object-pascal`, `objectpascal`, `pas`, `pp`                                                        |
-| `perl`               | `pl`, `pm`                                                                                                                         |
-| `php`                | —                                                                                                                                  |
-| `pkl`                | —                                                                                                                                  |
-| `plsql`              | —                                                                                                                                  |
-| `po`                 | `pot`, `potx`                                                                                                                      |
-| `powerquery`         | `pq`                                                                                                                               |
-| `powershell`         | `ps`, `ps1`, `psd1`, `psm1`, `pwsh`                                                                                                |
-| `prisma`             | —                                                                                                                                  |
-| `prolog`             | —                                                                                                                                  |
-| `promql`             | —                                                                                                                                  |
-| `proto`              | `protobuf`                                                                                                                         |
-| `pug`                | `jade`                                                                                                                             |
-| `puppet`             | —                                                                                                                                  |
-| `python`             | `mojo`, `py`, `vy`, `vyper`                                                                                                        |
-| `qml`                | —                                                                                                                                  |
-| `r`                  | `rscript`                                                                                                                          |
-| `raku`               | `perl6`                                                                                                                            |
-| `razor`              | `cshtml`                                                                                                                           |
-| `reg`                | —                                                                                                                                  |
-| `regexp`             | `regex`                                                                                                                            |
-| `rosmsg`             | —                                                                                                                                  |
-| `rst`                | `restructuredtext`                                                                                                                 |
-| `ruby`               | `crystal`, `rb`, `rbs`, `ruby-signature`                                                                                           |
-| `rust`               | `ron`, `rs`                                                                                                                        |
-| `sas`                | —                                                                                                                                  |
-| `sass`               | —                                                                                                                                  |
-| `scala`              | `sbt`, `sc`                                                                                                                        |
-| `scss`               | —                                                                                                                                  |
-| `sdbl`               | `1c-query`                                                                                                                         |
-| `shaderlab`          | `shader`                                                                                                                           |
-| `smalltalk`          | `st`                                                                                                                               |
-| `smithy`             | —                                                                                                                                  |
-| `solidity`           | `sol`                                                                                                                              |
-| `sparql`             | —                                                                                                                                  |
-| `splunk`             | `spl`                                                                                                                              |
-| `sql`                | —                                                                                                                                  |
-| `stata`              | —                                                                                                                                  |
-| `stylus`             | `styl`                                                                                                                             |
-| `surrealql`          | `surql`                                                                                                                            |
-| `svelte`             | —                                                                                                                                  |
-| `swift`              | —                                                                                                                                  |
-| `talonscript`        | `talon`                                                                                                                            |
-| `tcl`                | —                                                                                                                                  |
-| `templ`              | —                                                                                                                                  |
-| `terraform`          | `gn`, `hcl`, `tf`, `tfvars`                                                                                                        |
-| `toml`               | —                                                                                                                                  |
-| `ts`                 | `actionscript`, `actionscript-3`, `angular-ts`, `as3`, `cts`, `lit`, `mts`, `ts-tags`, `tsp`, `typescript`, `typespec`, `vue-vine` |
-| `tsrx`               | —                                                                                                                                  |
-| `tsv`                | —                                                                                                                                  |
-| `tsx`                | —                                                                                                                                  |
-| `turtle`             | `ttl`                                                                                                                              |
-| `twig`               | —                                                                                                                                  |
-| `typst`              | `typ`                                                                                                                              |
-| `v`                  | —                                                                                                                                  |
-| `vb`                 | `vba`, `vbnet`, `vbscript`                                                                                                         |
-| `verilog`            | `sv`, `svh`, `system-verilog`, `systemverilog`                                                                                     |
-| `vhdl`               | `vhd`                                                                                                                              |
-| `viml`               | `vim`, `vimscript`                                                                                                                 |
-| `vue`                | `vue-html`                                                                                                                         |
-| `wat`                | `wasm`                                                                                                                             |
-| `wgsl`               | —                                                                                                                                  |
-| `wikitext`           | `mediawiki`, `wiki`                                                                                                                |
-| `wit`                | —                                                                                                                                  |
-| `wolfram`            | `mathematica`, `wl`                                                                                                                |
-| `xml`                | `svg`, `xsd`, `xsl`, `xslt`                                                                                                        |
-| `yaml`               | `yml`                                                                                                                              |
-| `zenscript`          | `zs`                                                                                                                               |
-| `zig`                | `zon`                                                                                                                              |
+| Language             | Aliases                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `plain`              | `plaintext`, `text`, `txt`                                                                                                 |
+| `abap`               | —                                                                                                                          |
+| `ada`                | `adb`, `ads`                                                                                                               |
+| `ahk`                | `ahk1`, `ahk2`, `autohotkey`                                                                                               |
+| `angular-html`       | —                                                                                                                          |
+| `apache`             | `apacheconf`, `htaccess`, `qmldir`, `ssh-config`                                                                           |
+| `apex`               | —                                                                                                                          |
+| `apl`                | —                                                                                                                          |
+| `applescript`        | —                                                                                                                          |
+| `asciidoc`           | `adoc`                                                                                                                     |
+| `asm`                | `assembly`, `mips`, `mipsasm`, `riscv`, `s`                                                                                |
+| `astro`              | —                                                                                                                          |
+| `awk`                | —                                                                                                                          |
+| `ballerina`          | `bal`                                                                                                                      |
+| `bat`                | `batch`, `batchfile`, `cmd`, `dos`                                                                                         |
+| `beancount`          | —                                                                                                                          |
+| `berry`              | `be`                                                                                                                       |
+| `bibtex`             | `bib`                                                                                                                      |
+| `bicep`              | —                                                                                                                          |
+| `blade`              | `edge`                                                                                                                     |
+| `bsl`                | `1c`                                                                                                                       |
+| `c`                  | `h`                                                                                                                        |
+| `c3`                 | —                                                                                                                          |
+| `cadence`            | `cdc`                                                                                                                      |
+| `cairo`              | —                                                                                                                          |
+| `chapel`             | `chpl`                                                                                                                     |
+| `clojure`            | `clj`, `cljc`, `cljs`, `edn`, `fennel`, `hy`                                                                               |
+| `cmake`              | —                                                                                                                          |
+| `cobol`              | `cbl`, `cob`                                                                                                               |
+| `codeowners`         | —                                                                                                                          |
+| `codeql`             | `ql`                                                                                                                       |
+| `coffee`             | `coffeescript`                                                                                                             |
+| `common-lisp`        | `cl`, `clarity`, `el`, `elisp`, `emacs-lisp`, `lisp`, `lsp`, `racket`, `rkt`, `scheme`, `scm`                              |
+| `coq`                | `rocq`                                                                                                                     |
+| `cpp`                | `c++`, `cc`, `cxx`, `hh`, `hpp`, `hxx`                                                                                     |
+| `csharp`             | `c#`, `cs`, `genie`, `vala`                                                                                                |
+| `css`                | `postcss`, `qss`                                                                                                           |
+| `csv`                | —                                                                                                                          |
+| `cuda`               | `cu`, `cuh`                                                                                                                |
+| `cue`                | —                                                                                                                          |
+| `cypher`             | `cql`                                                                                                                      |
+| `d`                  | —                                                                                                                          |
+| `dart`               | —                                                                                                                          |
+| `dax`                | —                                                                                                                          |
+| `diff`               | `git-commit`, `git-rebase`, `patch`                                                                                        |
+| `docker`             | `containerfile`, `dockerfile`                                                                                              |
+| `dotenv`             | `env`                                                                                                                      |
+| `dream-maker`        | `dm`                                                                                                                       |
+| `elixir`             | `ex`, `exs`                                                                                                                |
+| `elm`                | —                                                                                                                          |
+| `erb`                | —                                                                                                                          |
+| `erlang`             | `erl`, `hrl`                                                                                                               |
+| `fish`               | —                                                                                                                          |
+| `fluent`             | `ftl`                                                                                                                      |
+| `fortran-fixed-form` | `f`, `for`, `f77`                                                                                                          |
+| `fortran-free-form`  | `f03`, `f08`, `f18`, `f90`, `f95`, `fortran`                                                                               |
+| `fsharp`             | `f#`, `fs`, `fsi`, `fsx`                                                                                                   |
+| `gdresource`         | `godot-resource`, `tres`, `tscn`                                                                                           |
+| `gdscript`           | `gd`                                                                                                                       |
+| `gdshader`           | `gdshaderinc`, `godot-shader`                                                                                              |
+| `gherkin`            | `cucumber`, `feature`                                                                                                      |
+| `gleam`              | —                                                                                                                          |
+| `glimmer-js`         | `gjs`                                                                                                                      |
+| `glimmer-ts`         | `gts`                                                                                                                      |
+| `glsl`               | `comp`, `frag`, `geom`, `vert`                                                                                             |
+| `gnuplot`            | `gp`                                                                                                                       |
+| `go`                 | `golang`                                                                                                                   |
+| `graphql`            | `gql`                                                                                                                      |
+| `groq`               | —                                                                                                                          |
+| `groovy`             | `gradle`, `gsh`, `gvy`, `gy`, `nextflow`, `nextflow-groovy`, `nf`                                                          |
+| `hack`               | `ara`                                                                                                                      |
+| `haml`               | —                                                                                                                          |
+| `handlebars`         | `hbs`, `mustache`                                                                                                          |
+| `haskell`            | `hs`, `purescript`                                                                                                         |
+| `haxe`               | `hx`                                                                                                                       |
+| `hjson`              | —                                                                                                                          |
+| `hlsl`               | —                                                                                                                          |
+| `html`               | `htm`, `html-derivative`                                                                                                   |
+| `http`               | —                                                                                                                          |
+| `hurl`               | —                                                                                                                          |
+| `imba`               | —                                                                                                                          |
+| `ini`                | `desktop`, `properties`, `systemd`                                                                                         |
+| `java`               | —                                                                                                                          |
+| `javascript`         | `cjs`, `js`, `mjs`                                                                                                         |
+| `jinja`              | `j2`, `jinja2`                                                                                                             |
+| `json`               | `jsonc`                                                                                                                    |
+| `json5`              | —                                                                                                                          |
+| `jsonl`              | —                                                                                                                          |
+| `jsonnet`            | `libsonnet`                                                                                                                |
+| `jsx`                | —                                                                                                                          |
+| `julia`              | `jl`                                                                                                                       |
+| `just`               | `justfile`                                                                                                                 |
+| `kdl`                | —                                                                                                                          |
+| `kotlin`             | `kt`, `kts`                                                                                                                |
+| `kusto`              | `kql`                                                                                                                      |
+| `latex`              | `tex`                                                                                                                      |
+| `lean`               | `lean4`                                                                                                                    |
+| `less`               | —                                                                                                                          |
+| `liquid`             | —                                                                                                                          |
+| `llvm`               | —                                                                                                                          |
+| `log`                | —                                                                                                                          |
+| `lua`                | —                                                                                                                          |
+| `luau`               | —                                                                                                                          |
+| `make`               | `makefile`, `mk`                                                                                                           |
+| `markdown`           | `mdc`, `md`                                                                                                                |
+| `marko`              | —                                                                                                                          |
+| `matlab`             | `octave`                                                                                                                   |
+| `mdx`                | —                                                                                                                          |
+| `mermaid`            | `mmd`                                                                                                                      |
+| `moonbit`            | `mbt`, `mbti`                                                                                                              |
+| `move`               | —                                                                                                                          |
+| `nginx`              | `bird`, `bird2`                                                                                                            |
+| `nim`                | —                                                                                                                          |
+| `nix`                | —                                                                                                                          |
+| `nsis`               | `nsi`, `nsh`                                                                                                               |
+| `nushell`            | `nu`                                                                                                                       |
+| `objective-c`        | `m`, `mm`, `objc`, `objcpp`, `objective-cpp`, `objectivec`                                                                 |
+| `ocaml`              | `ml`, `mli`                                                                                                                |
+| `odin`               | —                                                                                                                          |
+| `openscad`           | `scad`                                                                                                                     |
+| `org`                | —                                                                                                                          |
+| `pascal`             | `delphi`, `dpk`, `dpr`, `lpr`, `object-pascal`, `objectpascal`, `pas`, `pp`                                                |
+| `perl`               | `pl`, `pm`                                                                                                                 |
+| `php`                | —                                                                                                                          |
+| `pkl`                | —                                                                                                                          |
+| `plsql`              | —                                                                                                                          |
+| `po`                 | `pot`, `potx`                                                                                                              |
+| `powerquery`         | `pq`                                                                                                                       |
+| `powershell`         | `ps`, `ps1`, `psd1`, `psm1`, `pwsh`                                                                                        |
+| `prisma`             | —                                                                                                                          |
+| `prolog`             | —                                                                                                                          |
+| `promql`             | —                                                                                                                          |
+| `proto`              | `protobuf`                                                                                                                 |
+| `pug`                | `jade`                                                                                                                     |
+| `puppet`             | —                                                                                                                          |
+| `python`             | `mojo`, `py`, `vy`, `vyper`                                                                                                |
+| `qml`                | —                                                                                                                          |
+| `r`                  | `rscript`                                                                                                                  |
+| `raku`               | `perl6`                                                                                                                    |
+| `razor`              | `cshtml`                                                                                                                   |
+| `reg`                | —                                                                                                                          |
+| `regexp`             | `regex`                                                                                                                    |
+| `rosmsg`             | —                                                                                                                          |
+| `rst`                | `restructuredtext`                                                                                                         |
+| `ruby`               | `crystal`, `rb`, `rbs`, `ruby-signature`                                                                                   |
+| `rust`               | `ron`, `rs`                                                                                                                |
+| `sas`                | —                                                                                                                          |
+| `sass`               | —                                                                                                                          |
+| `scala`              | `sbt`, `sc`                                                                                                                |
+| `scss`               | —                                                                                                                          |
+| `sdbl`               | `1c-query`                                                                                                                 |
+| `shaderlab`          | `shader`                                                                                                                   |
+| `shellscript`        | `bash`, `console`, `hxml`, `sh`, `shell`, `shellsession`, `zsh`                                                            |
+| `smalltalk`          | `st`                                                                                                                       |
+| `smithy`             | —                                                                                                                          |
+| `solidity`           | `sol`                                                                                                                      |
+| `sparql`             | —                                                                                                                          |
+| `splunk`             | `spl`                                                                                                                      |
+| `sql`                | —                                                                                                                          |
+| `stata`              | —                                                                                                                          |
+| `stylus`             | `styl`                                                                                                                     |
+| `surrealql`          | `surql`                                                                                                                    |
+| `svelte`             | —                                                                                                                          |
+| `swift`              | —                                                                                                                          |
+| `talonscript`        | `talon`                                                                                                                    |
+| `tcl`                | —                                                                                                                          |
+| `templ`              | —                                                                                                                          |
+| `terraform`          | `gn`, `hcl`, `tf`, `tfvars`                                                                                                |
+| `toml`               | —                                                                                                                          |
+| `tsrx`               | —                                                                                                                          |
+| `tsv`                | —                                                                                                                          |
+| `tsx`                | —                                                                                                                          |
+| `turtle`             | `ttl`                                                                                                                      |
+| `twig`               | —                                                                                                                          |
+| `typescript`         | `actionscript`, `actionscript-3`, `angular-ts`, `as3`, `cts`, `lit`, `mts`, `ts`, `ts-tags`, `tsp`, `typespec`, `vue-vine` |
+| `typst`              | `typ`                                                                                                                      |
+| `v`                  | —                                                                                                                          |
+| `vb`                 | `vba`, `vbnet`, `vbscript`                                                                                                 |
+| `verilog`            | `sv`, `svh`, `system-verilog`, `systemverilog`                                                                             |
+| `vhdl`               | `vhd`                                                                                                                      |
+| `viml`               | `vim`, `vimscript`                                                                                                         |
+| `vue`                | `vue-html`                                                                                                                 |
+| `wasm`               | `wat`                                                                                                                      |
+| `wgsl`               | —                                                                                                                          |
+| `wikitext`           | `mediawiki`, `wiki`                                                                                                        |
+| `wit`                | —                                                                                                                          |
+| `wolfram`            | `mathematica`, `wl`                                                                                                        |
+| `xml`                | `svg`, `xsd`, `xsl`, `xslt`                                                                                                |
+| `yaml`               | `yml`                                                                                                                      |
+| `zenscript`          | `zs`                                                                                                                       |
+| `zig`                | `zon`                                                                                                                      |
 
 </SearchableTable>
 

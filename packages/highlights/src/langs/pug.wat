@@ -32,7 +32,7 @@
       (then
         (drop
           (call $embedLanguage
-            (enum.get $Language.js) (global.get $ptr) (local.get $stop)
+            (enum.get $Language.javascript) (global.get $ptr) (local.get $stop)
             (i32.const -1) (i32.const -3)))
         (global.set $ptr (local.get $stop))
         (return)))

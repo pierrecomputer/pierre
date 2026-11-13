@@ -106,7 +106,7 @@
         (drop
           (call $embedLanguage
             (select
-              (enum.get $Language.js)
+              (enum.get $Language.javascript)
               (select
                 (enum.get $Language.ruby)
                 (select

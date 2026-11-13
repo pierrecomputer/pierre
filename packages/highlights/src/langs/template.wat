@@ -171,7 +171,7 @@
             (then
               (drop
                 (call $embedLanguage
-                  (enum.get $Language.js) (local.get $lhs) (local.get $p) (i32.eqz (local.get $c)) (i32.const -1)))
+                  (enum.get $Language.javascript) (local.get $lhs) (local.get $p) (i32.eqz (local.get $c)) (i32.const -1)))
               (global.set $ptr (local.get $p)))
             (else (drop (call $embedJsLine (local.get $p) (i32.eqz (local.get $c)) (i32.const 0)))))
           (local.set $c (i32.const 1)))

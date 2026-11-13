@@ -325,7 +325,7 @@ test('selective browser bundles omit the combined Wasm and unused theme data', a
 test.each(Object.entries(languageSamples))(
   'standalone %s preserves output with embedded languages registered',
   async (name, { code }) => {
-    const entry = ['ts', 'tsx', 'js', 'jsx'].includes(name)
+    const entry = ['tsx', 'javascript', 'jsx'].includes(name)
       ? 'typescript'
       : name;
     const language = await loadLanguage(entry);
@@ -835,7 +835,7 @@ test('a large input does not pin the emitter memory', async () => {
 test.each(Object.entries(languageSamples))(
   'standalone %s matches the combined lexer when streamed',
   async (name, { code }) => {
-    const entry = ['ts', 'tsx', 'js', 'jsx'].includes(name)
+    const entry = ['tsx', 'javascript', 'jsx'].includes(name)
       ? 'typescript'
       : name;
     const language = await loadLanguage(entry);
