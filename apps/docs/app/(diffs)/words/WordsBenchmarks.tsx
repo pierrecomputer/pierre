@@ -155,70 +155,70 @@ export function WordsBenchmarks() {
       aria-labelledby="words-benchmarks"
       className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div className="max-w-2xl">
-          <h2
-            id="words-benchmarks"
-            className="text-2xl font-semibold tracking-tight"
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <h2
+              id="words-benchmarks"
+              className="text-2xl font-semibold tracking-tight"
+            >
+              Markdown rendering benchmarks
+            </h2>
+            <p className="text-muted-foreground text-pretty">
+              From everyday AI replies to full specifications, compare rendering
+              speed, streaming work, memory use, and download size.
+            </p>
+          </div>
+          <a
+            href="#words-benchmark-method"
+            className="styled-link text-sm"
+            onClick={() => setMethodOpen(true)}
           >
-            Markdown rendering benchmarks
-          </h2>
-          <p className="text-muted-foreground text-pretty">
-            From everyday AI replies to full specifications, compare rendering
-            speed, streaming work, memory use, and download size.
-          </p>
+            How we measure ↓
+          </a>
         </div>
-        <a
-          href="#words-benchmark-method"
-          className="styled-link text-sm"
-          onClick={() => setMethodOpen(true)}
-        >
-          How we measure ↓
-        </a>
+        <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="grid min-w-0 gap-1.5 text-xs">
+            <span className="text-muted-foreground">Measurement</span>
+            <ChartSelect
+              value={metricIndex}
+              onChange={(event) => setMetricIndex(Number(event.target.value))}
+            >
+              {suite.metrics.map(({ label }, index) => (
+                <option key={label} value={index}>
+                  {label}
+                </option>
+              ))}
+            </ChartSelect>
+          </label>
+          <label className="grid min-w-0 gap-1.5 text-xs">
+            <span className="text-muted-foreground">Document</span>
+            <ChartSelect
+              value={fixture}
+              onChange={(event) => setFixture(event.target.value)}
+            >
+              {metric.rows.map((row) => (
+                <option key={row.fixture} value={row.fixture}>
+                  {documents[row.fixture].label}
+                </option>
+              ))}
+            </ChartSelect>
+          </label>
+        </div>
       </div>
 
       <figure className={cardClass} aria-labelledby="words-package-chart">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <figcaption className="max-w-2xl">
-            <h3
-              id="words-package-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Markdown to HTML and React
-            </h3>
-            <p className="text-muted-foreground text-pretty">
-              {measurements[metricIndex]}
-            </p>
-          </figcaption>
-          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Measurement</span>
-              <ChartSelect
-                value={metricIndex}
-                onChange={(event) => setMetricIndex(Number(event.target.value))}
-              >
-                {suite.metrics.map(({ label }, index) => (
-                  <option key={label} value={index}>
-                    {label}
-                  </option>
-                ))}
-              </ChartSelect>
-            </label>
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Document</span>
-              <ChartSelect
-                value={fixture}
-                onChange={(event) => setFixture(event.target.value)}
-              >
-                {metric.rows.map((row) => (
-                  <option key={row.fixture} value={row.fixture}>
-                    {documents[row.fixture].label}
-                  </option>
-                ))}
-              </ChartSelect>
-            </label>
-          </div>
-        </div>
+        <figcaption className="mb-6 max-w-2xl">
+          <h3
+            id="words-package-chart"
+            className="text-xl font-semibold tracking-tight"
+          >
+            Markdown to HTML and React
+          </h3>
+          <p className="text-muted-foreground text-pretty">
+            {measurements[metricIndex]}
+          </p>
+        </figcaption>
         <p
           id="words-package-caption"
           className="text-muted-foreground mb-5 text-sm"
