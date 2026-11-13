@@ -84,10 +84,17 @@ across backends, use `createCSSVariablesTheme` or a `DiffsTheme` containing both
 ## Languages
 
 `registerCustomLanguage(name, loader, extensions?, type?)` registers TextMate
-grammars for Shiki. With `type: 'highlights'`, the loader returns a Highlights
-`Language` lexer, such as `@pierre/wat-tools` output. Highlights ignores
-TextMate grammars. Explicit unknown languages fall back to plain text in
-Highlights.
+grammars for Shiki. With `type: 'highlights'`, the loader returns a module whose
+default export is a Highlights `Language` lexer, such as saved
+`buildHighlightsLexer` output from `@pierre/wat-tools`. The lexer's `aliases`
+must include the registered name, or the load throws. Register one loader per
+name and type. Highlights ignores TextMate grammars. Explicit unknown languages
+fall back to plain text in Highlights.
+
+Highlights registers lexers globally: every name in `aliases` replaces a
+built-in lexer with the same name, and disposal does not remove it. Rendered
+code uses registered lexers. Stream and editor tokenizers use built-in lexers
+only.
 
 `resolveLanguage(s)`, `getResolvedLanguages`, `hasResolvedLanguages`,
 `getResolvedOrResolveLanguage`, `attachResolvedLanguages`,

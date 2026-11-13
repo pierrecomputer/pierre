@@ -75,6 +75,11 @@ Pass the same `plugins` option as for Mermaid. Use a Highlights theme object.
 The fence supplies the language. Unknown languages fall back to plain code.
 During an active stream, an open fence reuses a live tokenizer.
 
+The plugin uses the main `@pierre/highlights` entry, which loads all built-in
+lexers. To add a language, call `registerLanguages([lexer])` from
+`@pierre/highlights` with a lexer from `@pierre/wat-tools`. An open fence in
+such a language renders again in full on each update.
+
 ## Custom code blocks
 
 Use `plugins.renderers` to replace an entire fenced block. Use `plugins.code` to
