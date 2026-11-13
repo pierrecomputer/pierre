@@ -1,11 +1,18 @@
 'use client';
 
-import { IconChevronSm } from '@pierre/icons';
-import { type ComponentProps, useState } from 'react';
+import { IconCheck, IconChevronSm } from '@pierre/icons';
+import { useState } from 'react';
 
 import { BenchmarkBar } from '../highlights/BenchmarkBar';
 import cardStyles from '../highlights/HighlightsBenchmarkCard.module.css';
 import { WordsDisclosure } from './WordsDisclosure';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import benchmark from '@/public/words/benchmark.json';
 
 const methodologyUrl =
@@ -52,21 +59,54 @@ const measurements = [
 
 const decimal = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
-function ChartSelect({ children, ...props }: ComponentProps<'select'>) {
+function ChartMenu({
+  label,
+  value,
+  options,
+  onValueChange,
+}: {
+  label: string;
+  value: string;
+  options: readonly { value: string; label: string }[];
+  onValueChange: (value: string) => void;
+}) {
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label ?? value;
+
   return (
-    <span className="relative block min-w-0">
-      <select
-        {...props}
-        className="text-foreground h-9 w-full min-w-0 cursor-pointer appearance-none truncate rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pr-9 pl-3 text-sm leading-4 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-      >
-        {children}
-      </select>
-      <IconChevronSm
-        aria-hidden="true"
-        size={16}
-        className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
-      />
-    </span>
+    <div className="grid min-w-0 gap-1.5 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className="group w-full min-w-0 justify-start px-3 font-normal"
+            aria-label={`${label}: ${selectedLabel}`}
+          >
+            <span className="truncate">{selectedLabel}</span>
+            <IconChevronSm className="text-muted-foreground ml-auto shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="min-w-[var(--radix-dropdown-menu-trigger-width)]"
+          scrollSelectedIntoView
+        >
+          {options.map((option) => (
+            <DropdownMenuItem
+              key={option.value}
+              selected={option.value === value}
+              onSelect={() => onValueChange(option.value)}
+            >
+              {option.label}
+              {option.value === value && (
+                <IconCheck className="ml-auto" aria-hidden="true" />
+              )}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -178,32 +218,24 @@ export function WordsBenchmarks() {
           </a>
         </div>
         <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="grid min-w-0 gap-1.5 text-xs">
-            <span className="text-muted-foreground">Measurement</span>
-            <ChartSelect
-              value={metricIndex}
-              onChange={(event) => setMetricIndex(Number(event.target.value))}
-            >
-              {suite.metrics.map(({ label }, index) => (
-                <option key={label} value={index}>
-                  {label}
-                </option>
-              ))}
-            </ChartSelect>
-          </label>
-          <label className="grid min-w-0 gap-1.5 text-xs">
-            <span className="text-muted-foreground">Document</span>
-            <ChartSelect
-              value={fixture}
-              onChange={(event) => setFixture(event.target.value)}
-            >
-              {metric.rows.map((row) => (
-                <option key={row.fixture} value={row.fixture}>
-                  {documents[row.fixture].label}
-                </option>
-              ))}
-            </ChartSelect>
-          </label>
+          <ChartMenu
+            label="Measurement"
+            value={String(metricIndex)}
+            options={suite.metrics.map(({ label }, index) => ({
+              value: String(index),
+              label,
+            }))}
+            onValueChange={(value) => setMetricIndex(Number(value))}
+          />
+          <ChartMenu
+            label="Document"
+            value={fixture}
+            options={metric.rows.map((row) => ({
+              value: row.fixture,
+              label: documents[row.fixture].label,
+            }))}
+            onValueChange={setFixture}
+          />
         </div>
       </div>
 
@@ -294,31 +326,24 @@ export function WordsBenchmarks() {
             </p>
           </figcaption>
           <div className="mb-6 grid grid-cols-2 gap-2">
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Document</span>
-              <ChartSelect
-                aria-label="Benchmark document size"
-                value={scale}
-                onChange={(event) => setScale(Number(event.target.value))}
-              >
-                <option value={1}>Long response · 8.5 KB</option>
-                <option value={100}>Repeated response · 853 KB</option>
-              </ChartSelect>
-            </label>
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Rendering</span>
-              <ChartSelect
-                aria-label="Benchmark rendering mode"
-                value={mode}
-                onChange={(event) => setMode(event.target.value)}
-              >
-                {modes.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </ChartSelect>
-            </label>
+            <ChartMenu
+              label="Document"
+              value={String(scale)}
+              options={[
+                { value: '1', label: 'Long response · 8.5 KB' },
+                { value: '100', label: 'Repeated response · 853 KB' },
+              ]}
+              onValueChange={(value) => setScale(Number(value))}
+            />
+            <ChartMenu
+              label="Rendering"
+              value={mode}
+              options={modes.map((option) => ({
+                value: option.id,
+                label: option.label,
+              }))}
+              onValueChange={setMode}
+            />
           </div>
           <div aria-live="polite" aria-atomic="true">
             <Comparison
@@ -342,22 +367,17 @@ export function WordsBenchmarks() {
               is better.
             </p>
           </figcaption>
-          <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
-            <span className="text-muted-foreground">
-              Repeated response · 853 KB
-            </span>
-            <ChartSelect
-              aria-label="Benchmark memory configuration"
+          <div className="mb-6">
+            <ChartMenu
+              label="Repeated response · 853 KB"
               value={memoryMode}
-              onChange={(event) => setMemoryMode(event.target.value)}
-            >
-              {modes.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </ChartSelect>
-          </label>
+              options={modes.map((option) => ({
+                value: option.id,
+                label: option.label,
+              }))}
+              onValueChange={setMemoryMode}
+            />
+          </div>
           <div aria-live="polite" aria-atomic="true">
             <Comparison
               words={memory.words.heapBytes}
@@ -381,19 +401,20 @@ export function WordsBenchmarks() {
               languages, compressed with gzip. Lower is better.
             </p>
           </figcaption>
-          <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
-            <span className="text-muted-foreground">React renderer · gzip</span>
-            <ChartSelect
-              aria-label="Benchmark download configuration"
+          <div className="mb-6">
+            <ChartMenu
+              label="React renderer · gzip"
               value={footprintId}
-              onChange={(event) => setFootprintId(event.target.value)}
-            >
-              <option value="base">Base renderer · initial load</option>
-              <option value="shared">
-                With {coverage.sharedLanguages.length} languages · total
-              </option>
-            </ChartSelect>
-          </label>
+              options={[
+                { value: 'base', label: 'Base renderer · initial load' },
+                {
+                  value: 'shared',
+                  label: `With ${coverage.sharedLanguages.length} languages · total`,
+                },
+              ]}
+              onValueChange={setFootprintId}
+            />
+          </div>
           <div aria-live="polite" aria-atomic="true">
             <Comparison
               words={footprint.words}
