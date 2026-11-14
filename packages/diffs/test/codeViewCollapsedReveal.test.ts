@@ -60,7 +60,7 @@ test('selecting a line inside a collapsed region expands it and scrolls it into 
     if (editor == null || !(instance instanceof VirtualizedFileDiff)) {
       throw new Error('expected an editor on a diff');
     }
-    expect(instance.isLineRenderable(500)).toBe(false);
+    expect(instance.isLineInCollapsedContext(500)).toBe(true);
 
     editor.setSelections([
       {
@@ -71,7 +71,7 @@ test('selecting a line inside a collapsed region expands it and scrolls it into 
     ]);
     await wait(50);
 
-    expect(instance.isLineRenderable(500)).toBe(true);
+    expect(instance.isLineInCollapsedContext(500)).toBe(false);
     expect(root.scrollTop).toBeGreaterThan(0);
     const row = viewer
       .getRenderedItems()[0]

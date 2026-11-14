@@ -1145,7 +1145,7 @@ for (const kind of ['file', 'split', 'unified']) {
 }
 
 for (const diffStyle of ['split', 'unified']) {
-  test(`collapsed hits stay searchable without becoming rendered candidates in ${diffStyle}`, async ({
+  test(`a match hidden under an on-screen separator is the first match and is revealed in ${diffStyle}`, async ({
     page,
   }) => {
     await page.goto(
@@ -1171,24 +1171,25 @@ for (const diffStyle of ['split', 'unified']) {
       return Number(row?.getAttribute('data-line'));
     });
     expect(firstVisibleLine).toBeGreaterThan(1);
+    // Lines above the first visible one sit in collapsed context, under the
+    // separator at the top of the view.
     await page.keyboard.press('ControlOrMeta+f');
     await root.getByRole('textbox', { name: 'Search' }).fill('target');
-    await expect(root.locator('[data-matches]')).toHaveText(
-      `${firstVisibleLine} of 10000`
-    );
-    await expect(rows).toHaveCount(rowCount);
-    expect(
-      await page.evaluate(() => {
-        const range = [
-          ...CSS.highlights.get('diffs-search-current')!,
-        ][0] as Range;
-        return Number(
-          range.startContainer.parentElement
-            ?.closest('[data-line]')
-            ?.getAttribute('data-line')
-        );
-      })
-    ).toBe(firstVisibleLine);
+    await expect(root.locator('[data-matches]')).toHaveText('1 of 10000');
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const range = [
+            ...(CSS.highlights.get('diffs-search-current') ?? []),
+          ][0] as Range | undefined;
+          return Number(
+            range?.startContainer.parentElement
+              ?.closest('[data-line]')
+              ?.getAttribute('data-line')
+          );
+        })
+      )
+      .toBe(1);
   });
 }
 

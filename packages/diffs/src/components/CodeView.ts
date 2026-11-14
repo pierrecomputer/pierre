@@ -1659,21 +1659,21 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // header. Lines hidden in collapsed diff context are treated as offscreen.
   private isSearchMatchInView(match: CodeViewSearchMatch): boolean {
     const item = this.idToItem.get(match.itemId);
-    if (
-      item == null ||
-      (item.type === 'diff' &&
-        match.side === 'additions' &&
-        !item.instance.isLineRenderable(match.lineNumber))
-    ) {
+    if (item == null) {
       return false;
     }
-    const rect = this.getScrollTargetRect({
-      type: 'line',
-      id: match.itemId,
-      lineNumber: match.lineNumber,
-      side: match.side,
-      align: 'nearest',
-    });
+    // A collapsed file is stood in for by its header. A line in collapsed
+    // context resolves to the separator that hides it.
+    const rect =
+      item.item.collapsed === true
+        ? { top: item.top, height: item.height }
+        : this.getScrollTargetRect({
+            type: 'line',
+            id: match.itemId,
+            lineNumber: match.lineNumber,
+            side: match.side,
+            align: 'nearest',
+          });
     if (rect == null) return false;
     const top = this.getItemTopOffset() + rect.top;
     const bottom = top + rect.height;
@@ -1690,25 +1690,22 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchState.pendingHorizontalReveal = true;
     this.searchState.current = match;
     this.render();
-    this.paintSearchRanges();
-    const rect = this.measureCurrentSearchMatch();
-    const visible =
-      rect != null
-        ? this.isSearchMatchRectVisible(rect)
-        : this.isSearchMatchInView(match);
-    if (visible && !this.searchState.centerNavigation) {
-      this.clearPendingScroll();
-      return;
+    const item = this.idToItem.get(match.itemId);
+    if (item != null && this.isSearchMatchHidden(item, match)) {
+      this.revealSearchMatch(item, match);
+    } else {
+      this.paintSearchRanges();
+      const rect = this.measureCurrentSearchMatch();
+      const visible =
+        rect != null
+          ? this.isSearchMatchRectVisible(rect)
+          : this.isSearchMatchInView(match);
+      if (visible && !this.searchState.centerNavigation) {
+        this.clearPendingScroll();
+        return;
+      }
     }
     this.searchState.centerNavigation = true;
-    const item = this.idToItem.get(match.itemId);
-    if (
-      item?.type === 'diff' &&
-      match.side === 'additions' &&
-      !item.instance.isLineRenderable(match.lineNumber)
-    ) {
-      item.instance.revealLine(match.lineNumber);
-    }
     // Centered in the part of the viewport that the sticky file header and
     // the find panel leave uncovered.
     const target: PendingLineTarget = {
@@ -1722,6 +1719,40 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       searchMatch: true,
     };
     this.requestScroll(target);
+  }
+
+  private isSearchMatchHidden(
+    item: CodeViewContextItem<LAnnotation, Caret>,
+    match: CodeViewSearchMatch
+  ): boolean {
+    if (item.item.collapsed === true) {
+      return true;
+    }
+    return (
+      item.type === 'diff' &&
+      item.instance.isLineInCollapsedContext(match.lineNumber, match.side)
+    );
+  }
+
+  // Opens whatever hides a match: the collapsed file it is in, and the
+  // collapsed context around its line.
+  private revealSearchMatch(
+    item: CodeViewContextItem<LAnnotation, Caret>,
+    match: CodeViewSearchMatch
+  ): void {
+    if (item.item.collapsed === true) {
+      this.updateItem({
+        ...item.item,
+        collapsed: false,
+        version: (item.item.version ?? 0) + 1,
+      });
+    }
+    if (
+      item.type === 'diff' &&
+      item.instance.isLineInCollapsedContext(match.lineNumber, match.side)
+    ) {
+      item.instance.revealLine(match.lineNumber, match.side);
+    }
   }
 
   // How far down from the top of the viewport find's own chrome reaches: the
@@ -1980,9 +2011,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         break;
       }
 
-      if (item.item.collapsed === true) {
-        continue;
-      }
       const nextMatches =
         (scope != null || item.type === 'file'
           ? this.searchEditedItem(item, searchParams, remaining)
@@ -1990,16 +2018,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         (item.type === 'file'
           ? this.searchFileItem(item, searchParams, remaining)
           : this.searchDiffItem(item, searchParams, remaining));
+      // A collapsed file renders no lines, so its header stands in for all
+      // of its matches.
+      const collapsed = item.item.collapsed === true;
       const bounds =
-        item.element == null ? undefined : item.instance.getRenderedBounds();
+        item.element == null || collapsed
+          ? undefined
+          : item.instance.getRenderedBounds();
       for (const match of nextMatches) {
-        const canBeRendered = firstVisible == null && bounds != null;
+        const canBeRendered =
+          firstVisible == null &&
+          (collapsed ? item.element != null : bounds != null);
         const canBeAfter =
           firstAfterRendered == null &&
           lastRenderedItem != null &&
           item.index >= lastRenderedItem.index;
         const position =
-          canBeRendered || (canBeAfter && item === lastRenderedItem)
+          !collapsed &&
+          (canBeRendered || (canBeAfter && item === lastRenderedItem))
             ? this.getLineScrollPosition(item, {
                 type: 'line',
                 id: match.itemId,
@@ -2007,15 +2043,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
                 side: match.side,
               })
             : undefined;
+        // A line in collapsed context resolves to the separator that hides
+        // it, so a hidden match counts as rendered while that row is.
         if (
           canBeRendered &&
-          position != null &&
-          position.height > 0 &&
-          position.top >= bounds.top &&
-          position.top < bounds.bottom &&
-          (item.type !== 'diff' ||
-            match.side !== 'additions' ||
-            item.instance.isLineRenderable(match.lineNumber))
+          (collapsed ||
+            (position != null &&
+              bounds != null &&
+              position.height > 0 &&
+              position.top >= bounds.top &&
+              position.top < bounds.bottom))
         ) {
           firstRendered ??= matches.length;
           if (this.isSearchMatchInView(match)) firstVisible = matches.length;
@@ -2102,10 +2139,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         : (item.instance.getDiffForSearch() ?? item.item.fileDiff);
     const scoped = this.searchState.scope?.itemId === item.item.id;
     const diffStyle = this.options.diffStyle ?? 'split';
-    const expandedHunks =
-      scoped || this.options.expandUnchanged === true
-        ? true
-        : item.instance.getExpandedHunksForSearch();
     const lines: CodeViewSearchLine[] = [];
 
     const addLine = (
@@ -2138,10 +2171,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       });
     };
 
+    // Every line is searched, collapsed context included.
     iterateOverDiff({
       diff: fileDiff,
       diffStyle,
-      expandedHunks,
+      expandedHunks: true,
       collapsedContextThreshold:
         this.options.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,

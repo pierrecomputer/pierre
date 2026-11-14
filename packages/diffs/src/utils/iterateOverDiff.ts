@@ -2,9 +2,9 @@ import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ChangeContent,
   ContextContent,
+  ExpandedHunksMap,
   FileDiffMetadata,
   Hunk,
-  HunkExpansionRegion,
 } from '../types';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import {
@@ -125,7 +125,7 @@ export interface IterateOverDiffProps {
   diffStyle: DiffStyle;
   startingLine?: number;
   totalLines?: number;
-  expandedHunks?: Map<number, HunkExpansionRegion> | true;
+  expandedHunks?: ExpandedHunksMap | true;
   collapsedContextThreshold?: number;
   /**
    * Also emit a row for the empty line after the new file's final line

@@ -66,8 +66,9 @@ import type {
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
-  ExpansionDirections,
   DiffsHighlighter,
+  ExpandedHunksMap,
+  ExpansionDirections,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -140,10 +141,10 @@ import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import {
   getExpandedRegion,
-  getHunkAdditionLineRange,
+  getHunkLineRange,
   getNearestRenderableAdditionLine,
   getTrailingExpandedRegion,
-  isAdditionLineRenderable,
+  isDiffLineInCollapsedContext,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
@@ -2349,35 +2350,38 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return lines;
   }
 
-  // Editor-facing visibility oracle: whether a one-based new-file line has
-  // (or will have on scroll) a rendered row under the current expansion
-  // state. See isAdditionLineRenderable.
-  public isLineRenderable(lineNumber: number): boolean {
-    const fileDiff = this.getRenderedDiff();
+  // Whether a one-based line of the given side is hidden inside collapsed
+  // unchanged context under the current expansion state, so it has no row.
+  // See isDiffLineInCollapsedContext.
+  public isLineInCollapsedContext(
+    lineNumber: number,
+    side: SelectionSide = 'additions',
+    expandedHunks: ExpandedHunksMap = this.hunksRenderer.getExpandedHunksMap()
+  ): boolean {
+    const fileDiff = this.getRenderedDiff() ?? this.getWorkingDiff();
     if (fileDiff == null) {
-      return true;
+      return false;
     }
     const {
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
-    return isAdditionLineRenderable({
+    return isDiffLineInCollapsedContext({
       fileDiff,
       lineNumber,
-      expandedHunks: expandUnchanged
-        ? true
-        : this.hunksRenderer.getExpandedHunksMap(),
+      side,
+      expandedHunks: expandUnchanged ? true : expandedHunks,
       collapsedContextThreshold,
     });
   }
 
-  // Fold-skip companion to isLineRenderable: the nearest renderable one-based
+  // Fold-skip companion to isLineInCollapsedContext: the nearest one-based
   // new-file line at or beyond lineNumber in the given direction.
   public getNearestRenderableLine(
     lineNumber: number,
     direction: 'up' | 'down'
   ): number | undefined {
-    const fileDiff = this.getRenderedDiff();
+    const fileDiff = this.getRenderedDiff() ?? this.getWorkingDiff();
     if (fileDiff == null) {
       return lineNumber;
     }
@@ -2396,13 +2400,16 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
-  // Expand collapsed context so a one-based new-file line can render: one
-  // deterministic expansion from the nearest gap edge, sized to reach the
-  // target plus the normal expansion step (clamped to the gap at render).
-  // Routed through expandHunk so subclass expansion flows (CodeView's
-  // deferred pendingExpansions) apply.
-  public revealLine(lineNumber: number): boolean {
-    const fileDiff = this.getRenderedDiff();
+  // Expand collapsed context so a one-based line of the given side can
+  // render: one deterministic expansion from the nearest gap edge, sized to
+  // reach the target plus the normal expansion step (clamped to the gap at
+  // render). Routed through expandHunk so subclass expansion flows (CodeView's
+  // pending expansions) apply.
+  public revealLine(
+    lineNumber: number,
+    side: SelectionSide = 'additions'
+  ): boolean {
+    const fileDiff = this.getRenderedDiff() ?? this.getWorkingDiff();
     const {
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
@@ -2414,7 +2421,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const expandedHunks = this.hunksRenderer.getExpandedHunksMap();
 
     for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
-      const [hunkStart, hunkEnd] = getHunkAdditionLineRange(hunk);
+      const [hunkStart, hunkEnd] = getHunkLineRange(hunk, side);
       if (lineNumber < hunkStart) {
         const region = getExpandedRegion({
           isPartial: fileDiff.isPartial,
@@ -2465,7 +2472,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return false;
     }
     const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
-    const [, trailingStart] = getHunkAdditionLineRange(lastHunk);
+    const [, trailingStart] = getHunkLineRange(lastHunk, side);
     if (
       lineNumber < trailingStart + trailingRegion.fromStart ||
       lineNumber >= trailingStart + trailingRegion.rangeSize

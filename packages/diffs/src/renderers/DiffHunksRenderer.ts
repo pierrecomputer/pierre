@@ -47,6 +47,7 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
+  ExpandedHunksMap,
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
@@ -80,6 +81,7 @@ import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { reportEditWithoutTokenTransformer } from '../utils/reportEditWithoutTokenTransformer';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
+import { growExpandedRegion } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
 
@@ -604,18 +606,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     expansionLineCount: number = this.getOptionsWithDefaults()
       .expansionLineCount
   ): void {
-    const region = {
-      ...(this.expandedHunks.get(index) ?? {
-        fromStart: 0,
-        fromEnd: 0,
-      }),
-    };
-    if (direction === 'up' || direction === 'both') {
-      region.fromStart += expansionLineCount;
-    }
-    if (direction === 'down' || direction === 'both') {
-      region.fromEnd += expansionLineCount;
-    }
+    this.expandedHunks.set(
+      index,
+      growExpandedRegion(
+        this.expandedHunks.get(index),
+        direction,
+        expansionLineCount
+      )
+    );
+    this.handleExpansionChange();
+  }
+
+  // Runs after the expansion state changes, however it changed.
+  private handleExpansionChange(): void {
     // NOTE(amadeus): If our render cache is not highlighted, we need to clear
     // it, otherwise we won't have the correct AST lines. Clearing is safe
     // mid-edit-session even though the dirty cache carries live edits: both
@@ -624,9 +627,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (this.renderCache?.highlighted !== true) {
       this.clearRenderCache();
     }
-    this.expandedHunks.set(index, region);
-    // The expansion moves rows; the map is changed in place, so the layout
-    // cannot see that on its own.
+    // The expansion moves rows, and the layout cannot see that on its own.
     this.layout?.invalidateLines();
   }
 
@@ -634,15 +635,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.expandedHunks.get(hunkIndex) ?? DEFAULT_EXPANDED_REGION;
   }
 
-  public getExpandedHunksMap(): Map<number, HunkExpansionRegion> {
+  public getExpandedHunksMap(): ExpandedHunksMap {
     return this.expandedHunks;
   }
 
-  /** Replace the whole expansion map (session-exit expansion remapping). */
-  public setExpandedHunksMap(
-    expandedHunks: Map<number, HunkExpansionRegion>
-  ): void {
+  /** Replace the whole expansion state, such as with a pending one. */
+  public setExpandedHunksMap(expandedHunks: ExpandedHunksMap): void {
     this.expandedHunks = expandedHunks;
+    this.handleExpansionChange();
   }
 
   public setLineAnnotations(

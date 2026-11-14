@@ -448,7 +448,7 @@ describe('CodeView search', () => {
         if (instance.type !== 'file-diff') {
           throw new Error('Expected diff instance');
         }
-        expect(instance.isLineRenderable(101)).toBe(false);
+        expect(instance.isLineInCollapsedContext(101)).toBe(true);
         const originalSelection = viewer
           .getEditor('diff')!
           .getViewState().selections;
@@ -465,8 +465,8 @@ describe('CodeView search', () => {
             ) != null
           );
         });
-        expect(instance.isLineRenderable(101)).toBe(true);
-        expect(instance.isLineRenderable(210)).toBe(false);
+        expect(instance.isLineInCollapsedContext(101)).toBe(false);
+        expect(instance.isLineInCollapsedContext(210)).toBe(true);
         expect(viewer.getEditor('diff')!.getViewState().selections).toEqual(
           originalSelection
         );
@@ -734,8 +734,10 @@ describe('CodeView search', () => {
       });
       viewer.render(true);
       await wait(0);
+      // A collapsed item stops being the scope, and its match still counts.
       expect(getSearchState(viewer).scope).toBeUndefined();
-      expect(getSearchState(viewer).matches).toHaveLength(2);
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+      expect(viewer.getItem('renamed')?.collapsed).toBe(true);
       viewer.updateItem({ ...viewer.getItem('b')!, edit: true, version: 2 });
       viewer.render(true);
       await wait(0);
@@ -1123,7 +1125,7 @@ describe('CodeView search', () => {
     }
   });
 
-  test('searches collapsed context only while scoped or explicitly expanded', async () => {
+  test('searches collapsed context in every scope', async () => {
     const dom = installDom();
     const viewer = new CodeView({
       useTokenTransformer: true,
@@ -1149,35 +1151,188 @@ describe('CodeView search', () => {
           ),
         },
       ]);
+      const sides = () =>
+        getSearchState(viewer).matches.map(({ side, lineNumber }) => ({
+          side,
+          lineNumber,
+        }));
       dispatchPrimaryFind(root);
       await wait(0);
       fillSearch(root, 'target');
-      expect(getSearchState(viewer).matches).toHaveLength(0);
+      expect(sides()).toEqual([
+        { side: 'deletions', lineNumber: 61 },
+        { side: 'additions', lineNumber: 61 },
+      ]);
       const content = getEditorContent(viewer, 'diff');
       content.focus();
       dispatchPrimaryFind(content);
       await wait(0);
       viewer.render(true);
-      expect(
-        getSearchState(viewer).matches.map(({ side, lineNumber }) => ({
-          side,
-          lineNumber,
-        }))
-      ).toEqual([{ side: 'additions', lineNumber: 61 }]);
+      expect(sides()).toEqual([{ side: 'additions', lineNumber: 61 }]);
       root.focus();
       await wait(0);
       viewer.render(true);
-      expect(getSearchState(viewer).matches).toHaveLength(0);
-      viewer.setOptions({
-        createEditor: (type, options, key) => new Editor(type, options, key),
-        expandUnchanged: true,
-      });
-      await wait(0);
-      viewer.render(true);
-      expect(getSearchState(viewer).matches.map(({ side }) => side)).toEqual([
-        'deletions',
-        'additions',
+      expect(sides()).toEqual([
+        { side: 'deletions', lineNumber: 61 },
+        { side: 'additions', lineNumber: 61 },
       ]);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test.each(['split', 'unified'] as const)(
+    'landing on a match in collapsed context expands it in %s',
+    async (diffStyle) => {
+      const dom = installDom();
+      const viewer = new CodeView({ diffStyle });
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        const lines = Array.from({ length: 80 }, (_, index) =>
+          index === 60 ? 'hidden target' : `line ${index}`
+        );
+        // A line added near the top, so the target is line 61 of the old
+        // file and line 62 of the new one.
+        const next = [...lines];
+        next.splice(1, 0, 'added');
+        await renderItems(viewer, [
+          {
+            id: 'diff',
+            type: 'diff',
+            fileDiff: parseDiffFromFile(
+              { name: 'context.txt', contents: lines.join('\n') },
+              { name: 'context.txt', contents: next.join('\n') }
+            ),
+          },
+        ]);
+        const rendered = viewer.getRenderedItems()[0];
+        if (rendered?.type !== 'diff') {
+          throw new Error('expected a rendered diff item');
+        }
+        expect(rendered.instance.isLineInCollapsedContext(62)).toBe(true);
+        expect(
+          rendered.instance.isLineInCollapsedContext(61, 'deletions')
+        ).toBe(true);
+
+        dispatchPrimaryFind(root);
+        await wait(0);
+        fillSearch(root, 'target');
+
+        // Split view lands on the old side first, unified on the new side.
+        expect(getSearchState(viewer).current).toMatchObject(
+          diffStyle === 'split'
+            ? { side: 'deletions', lineNumber: 61 }
+            : { side: 'additions', lineNumber: 62 }
+        );
+        expect(rendered.instance.isLineInCollapsedContext(62)).toBe(false);
+        expect(
+          rendered.instance.isLineInCollapsedContext(61, 'deletions')
+        ).toBe(false);
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
+  test.each(['simple', 'metadata', 'line-info'] as const)(
+    'scrolls to a revealed match past the last hunk with %s separators',
+    async (hunkSeparators) => {
+      const dom = installDom();
+      const viewer = new CodeView({ hunkSeparators });
+      const warn = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        const lines = Array.from({ length: 200 }, (_, index) =>
+          index === 190 ? 'hidden target' : `line ${index}`
+        );
+        const next = [...lines];
+        next[5] = 'changed';
+        await renderItems(viewer, [
+          {
+            id: 'diff',
+            type: 'diff',
+            fileDiff: parseDiffFromFile(
+              { name: 'context.txt', contents: lines.join('\n') },
+              { name: 'context.txt', contents: next.join('\n') }
+            ),
+          },
+        ]);
+        dispatchPrimaryFind(root);
+        await wait(0);
+        fillSearch(root, 'target');
+        viewer.render(true);
+        await wait(0);
+        viewer.render(true);
+
+        expect(getSearchState(viewer).current?.lineNumber).toBe(191);
+        expect(root.scrollTop).toBeGreaterThan(0);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
+  test('landing on a match in a collapsed file expands the file', async () => {
+    const dom = installDom();
+    const viewer = new CodeView();
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          collapsed: true,
+          version: 1,
+          file: { name: 'a.txt', contents: 'first\nhidden target\n' },
+        },
+      ]);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      expect(getSearchState(viewer).current?.itemId).toBe('a');
+      expect(viewer.getItem('a')?.collapsed).toBe(false);
+      expect(viewer.getItem('a')?.version).toBe(2);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('with every file collapsed find starts in the first file on screen', async () => {
+    const dom = installDom();
+    const viewer = new CodeView();
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(
+        viewer,
+        ['a', 'b', 'c'].map((id) => ({
+          id,
+          type: 'file' as const,
+          collapsed: true,
+          version: 1,
+          file: { name: `${id}.txt`, contents: 'target\n' },
+        }))
+      );
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+      expect(getSearchState(viewer).current?.itemId).toBe('a');
+      expect(viewer.getItem('a')?.collapsed).toBe(false);
+      expect(viewer.getItem('b')?.collapsed).toBe(true);
+      expect(viewer.getItem('c')?.collapsed).toBe(true);
     } finally {
       viewer.cleanUp();
       dom.cleanup();

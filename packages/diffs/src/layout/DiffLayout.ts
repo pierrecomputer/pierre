@@ -12,8 +12,8 @@ import type {
   CodeColumnType,
   DiffLib,
   DiffLineAnnotation,
+  ExpandedHunksMap,
   HunkData,
-  HunkExpansionRegion,
   HunkSeparators,
   LineDiffTypes,
   LineTypes,
@@ -70,7 +70,7 @@ export interface DiffLayoutInput<LAnnotation> {
   model: DiffModel;
   rows: RowSource;
   renderRange: RenderRange;
-  expandedHunks: Map<number, HunkExpansionRegion>;
+  expandedHunks: ExpandedHunksMap;
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
   additionAnnotations: AnnotationLineMap<LAnnotation>;
   annotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;

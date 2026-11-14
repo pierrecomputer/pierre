@@ -297,13 +297,13 @@ describe('diff editor: reveal-on-jump', () => {
     const fixture = await createFoldFixture();
     const { container, editor, fileDiff } = fixture;
     try {
-      expect(fileDiff.isLineRenderable(30)).toBe(false);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(true);
 
       // Jump the caret to line 30 (index 29), hidden inside the gap.
       setCaret(editor, 29);
       await wait(20);
 
-      expect(fileDiff.isLineRenderable(30)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(false);
       const content = findAdditionContent(container);
       expect(content?.querySelector('[data-line="30"]')).not.toBeNull();
     } finally {
@@ -339,7 +339,7 @@ describe('diff editor: reveal-on-jump', () => {
       await wait(20);
       expect(editor.getFile()?.contents).not.toContain('edited line 30');
       // The caret restore targeted line 30, so it stays revealed.
-      expect(fileDiff.isLineRenderable(30)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(false);
     } finally {
       await fixture.cleanup();
     }
