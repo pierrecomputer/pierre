@@ -2,14 +2,11 @@ import {
   directionOf,
   halfOf,
   joinChildren,
-  parentOf,
   removePane,
-  replaceNode,
   requireSlot,
-  sameNodes,
-  validateLayout,
   wrapPane,
-} from '../model';
+} from '../edits-model';
+import { parentOf, replaceNode, sameNodes, validateLayout } from '../model';
 import type { Direction, LayoutNode, TreeModel } from '../types';
 
 /**

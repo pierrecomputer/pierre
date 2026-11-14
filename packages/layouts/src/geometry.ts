@@ -309,18 +309,3 @@ export function computeLayout(
   }
   return { panes, separators, corners };
 }
-
-/** Choose the direction of a zoom exit, preferring an edge the pane already touches. */
-export function getExitEdge(
-  rect: Rect,
-  width: number,
-  height: number
-): 'left' | 'right' | 'top' | 'bottom' {
-  const distances = [
-    ['left', rect.x],
-    ['right', width - rect.x - rect.width],
-    ['top', rect.y],
-    ['bottom', height - rect.y - rect.height],
-  ] as const;
-  return [...distances].sort((a, b) => a[1] - b[1])[0][0];
-}

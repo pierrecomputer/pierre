@@ -1,10 +1,5 @@
-import {
-  isFixed,
-  removePane,
-  sameNodes,
-  validateLayout,
-  wrapPane,
-} from '../model';
+import { removePane, wrapPane } from '../edits-model';
+import { isFixed, sameNodes, validateLayout } from '../model';
 import type { ChildSize, LayoutNode, TreeModel } from '../types';
 
 /**

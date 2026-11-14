@@ -56,19 +56,10 @@ import {
   tablistAt,
   tabsOf,
 } from '../dom/tab-drag';
-import {
-  dragSizes,
-  dropTarget,
-  getExitEdges,
-  keySizes,
-  paneAt,
-  tabBoundaryAt,
-  type TabDropTarget,
-  tabDropTarget,
-  tabInsertIndex,
-  tabMoveIndex,
-} from '../gestures';
+import { dropTarget, paneAt, type TabDropTarget, tabDropTarget } from '../drop';
+import { dragSizes, keySizes } from '../gestures';
 import { findNode, getPanes, shownPanes, stackOf } from '../model';
+import { tabBoundaryAt, tabInsertIndex, tabMoveIndex } from '../stacks-model';
 import type { LayoutStore } from '../store';
 import type {
   ChildSize,
@@ -80,11 +71,12 @@ import type {
   SeparatorGeometry,
   StackNode,
 } from '../types';
+import { getExitEdges } from '../zoom';
 
 export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
 export type { ResizeStrategy } from '../dom/resize-work';
 export type { PaneEdges } from '../css-layout';
-export type { DropPlace } from '../gestures';
+export type { DropPlace } from '../drop';
 
 /**
  * A button in a pane header: drag to move, zoom, close, or collapse. The

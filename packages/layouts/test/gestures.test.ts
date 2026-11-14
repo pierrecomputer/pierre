@@ -1,22 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 
+import {
+  dropPlace,
+  dropTarget,
+  paneAt,
+  placeRect,
+  tabDropTarget,
+} from '../src/drop';
 import { computeLayout } from '../src/geometry';
 import {
   dragSizes,
-  dropPlace,
-  dropTarget,
-  getExitEdges,
   keySizes,
   moveSeparator,
-  paneAt,
-  placeRect,
   separatorOffset,
+} from '../src/gestures';
+import {
   tabBoundaryAt,
-  tabDropTarget,
   tabInsertIndex,
   tabMoveIndex,
-} from '../src/gestures';
+} from '../src/stacks-model';
 import type { ChildSize, LayoutNode } from '../src/types';
+import { getExitEdges } from '../src/zoom';
 
 const root: LayoutNode = {
   type: 'split',

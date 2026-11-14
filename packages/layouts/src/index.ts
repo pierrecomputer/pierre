@@ -1,19 +1,18 @@
-export { computeLayout, getExitEdge } from './geometry';
+export { swapPanes } from './edits-model';
+export { computeLayout } from './geometry';
 export {
-  type BinaryLayoutNode,
-  fromBinaryLayout,
   getPanes,
   hasVisiblePane,
   replaceNode,
   setPaneHidden,
   shownPanes,
   stackOf,
-  swapPanes,
   validateLayout,
   visibleTree,
 } from './model';
 export { binaryTree } from './models/binary';
 export { naryTree } from './models/n-ary';
+export { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
 export { LayoutStore, type LayoutStoreOptions } from './store';
 export type {
   ChildExtent,
@@ -70,3 +69,4 @@ export type {
   CSSSeparator,
   PaneEdges,
 } from './css-layout';
+export { getExitEdge } from './zoom';

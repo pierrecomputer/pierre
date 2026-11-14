@@ -1,10 +1,6 @@
 import {
   activatePane,
-  addToStack,
-  type BinaryLayoutNode,
-  fromBinaryLayout,
   getPanes,
-  moveTabTo,
   parentOf,
   replaceNode,
   sameNodes,
@@ -16,6 +12,8 @@ import {
   validateLayout,
 } from './model';
 import { binaryTree } from './models/binary';
+import { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
+import { addToStack, moveTabTo } from './stacks-model';
 import type {
   ChildSize,
   Edge,
