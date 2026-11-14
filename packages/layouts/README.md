@@ -379,8 +379,9 @@ and so on. Resize separators with arrow keys; hold Shift for larger steps. Home
 and End move a separator until the child before or after it has its minimum
 size; Enter gives the two children beside it the same size. Corner controls
 accept arrows on both axes. Escape cancels an active gesture or restores a
-zoomed layout. Hidden panes remain mounted but are inert and excluded from the
-accessibility tree. Motion respects `prefers-reduced-motion`.
+zoomed layout, unless pane content handled it with `preventDefault()`. Hidden
+panes remain mounted but are inert and excluded from the accessibility tree.
+Motion respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer
@@ -427,5 +428,6 @@ moon run root:format root:lint root:check-licenses
 ## Consumer controls and persistence
 
 See [the consumer guide](./consumer-guide.md) for custom headers, cross-group
-tab drops, stored trees, operations, and resize callbacks. The `/consumer.html`
-demo shows these controls.
+tab drops, stored trees, operations, resize callbacks, resize sessions that
+constrain the sizes, and props for separators and pane hosts. The
+`/consumer.html` demo shows these controls.

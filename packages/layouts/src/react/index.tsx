@@ -2,6 +2,7 @@
 
 import {
   type CSSProperties,
+  type HTMLAttributes,
   type JSX,
   type KeyboardEvent,
   memo,
@@ -21,6 +22,7 @@ import {
   ALL_EDGES,
   computeCSSLayout,
   type CSSLayout,
+  type CSSSeparator,
   type PaneEdges,
 } from '../css-layout';
 import {
@@ -173,6 +175,36 @@ export interface LayoutProps {
   onPaneClose?: (pane: PaneNode) => void;
   /** Report changed split sizes at pointer release or after a keyboard resize. Cancellation reports nothing. */
   onResize?: (sizes: Readonly<Record<string, readonly ChildSize[]>>) => void;
+  /**
+   * Called when a pointer resize starts and for each keyboard resize. It can
+   * return a `LayoutResizeSession` that constrains the sizes and releases app
+   * state when the resize ends. The view keeps pointer capture and keyboard
+   * handling.
+   */
+  onResizeStart?: (context: LayoutResizeContext) => LayoutResizeSession | void;
+  /**
+   * Extra props of each pane host: classes, the tab order, a label for a host
+   * without tabs, and `data-*` attributes. The view's own attributes, such as
+   * `data-layout-pane`, take precedence. A hidden host is never in the tab
+   * order.
+   */
+  getPaneProps?: (pane: PaneNode) => Pick<
+    HTMLAttributes<HTMLElement>,
+    'className' | 'tabIndex' | 'aria-label'
+  > & {
+    [Attribute in `data-${string}`]?: string | boolean | undefined;
+  };
+  /**
+   * Extra props of each separator: classes, children such as a larger hit
+   * area, an accessible label, `hidden`, and a double-click handler. The view
+   * keeps the geometry, the focus, and the resize handlers.
+   */
+  getSeparatorProps?: (
+    separator: CSSSeparator
+  ) => Pick<
+    HTMLAttributes<HTMLDivElement>,
+    'className' | 'children' | 'onDoubleClick' | 'aria-label' | 'hidden'
+  >;
   className?: string;
   style?: CSSProperties;
   gap?: number;
@@ -191,13 +223,47 @@ export interface LayoutProps {
   experimentalSizeAnimation?: 'counter-scale' | 'scale';
 }
 
+/** The start of a resize, for `onResizeStart`. */
+export interface LayoutResizeContext {
+  /** The separator or the corner that the user resizes with. */
+  element: HTMLElement;
+  /** The pixel geometry of the separators that the resize changes. */
+  separators: readonly SeparatorGeometry[];
+  source: 'pointer' | 'keyboard';
+}
+
+/**
+ * An app's part in one resize: a pointer drag from press to release, or one
+ * key press.
+ */
+export interface LayoutResizeSession {
+  /**
+   * Returns the sizes to apply in place of the proposed sizes, for example
+   * sizes that snap to a position. `point` is the pointer position, or null
+   * for a keyboard resize.
+   */
+  update?: (
+    sizes: Record<string, ChildSize[]>,
+    point: { clientX: number; clientY: number } | null
+  ) => Record<string, ChildSize[]>;
+  /**
+   * Called once when the resize ends: with `false` after it applies, and with
+   * `true` after a cancellation or an unmount, which restore the sizes from
+   * before the resize.
+   */
+  end?: (cancelled: boolean) => void;
+}
+
 interface ResizeGesture {
   type: 'resize';
+  /** The separator or the corner that holds the pointer capture. */
+  element: HTMLElement;
   pointerId: number;
   x: number;
   y: number;
   separators: readonly SeparatorGeometry[];
   originalSizes: Record<string, readonly ChildSize[]>;
+  session: LayoutResizeSession | void;
 }
 
 interface MoveGesture {
@@ -383,6 +449,21 @@ const sameDrop = (a: TabDropTarget | null, b: TabDropTarget | null): boolean =>
     a.place === b.place &&
     JSON.stringify(a.rect) === JSON.stringify(b.rect));
 
+/** The class of an element of the view, with an app's classes after it. */
+const withClasses = (own: string, app: string | undefined): string =>
+  app === undefined || app === '' ? own : `${own} ${app}`;
+
+/**
+ * Releases the pointer capture of a resize that ends before the pointer
+ * release, for example on Escape or a window blur, so that the separator gets
+ * no more events of that pointer. A DOM without pointer capture, such as a
+ * test DOM, has nothing to release.
+ */
+function releaseCapture(active: ResizeGesture): void {
+  if (active.element.hasPointerCapture?.(active.pointerId))
+    active.element.releasePointerCapture(active.pointerId);
+}
+
 /** Flat, keyed pane hosts retain application content while the split tree changes around them. */
 export function Layout({
   store,
@@ -397,6 +478,9 @@ export function Layout({
   paneActions = ALL_PANE_ACTIONS,
   onPaneClose,
   onResize,
+  onResizeStart,
+  getPaneProps,
+  getSeparatorProps,
   animate: animateOptions,
   paneLayers = DEFAULT_PANE_LAYERS,
   experimentalResize = 'live',
@@ -427,6 +511,33 @@ export function Layout({
       : animateOptions !== false;
   // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
   const resizeWork = useMemo(() => createResizeWork(store), [store]);
+
+  // A window that loses the focus during a pointer resize, for example to
+  // another app, may never send the pointer release. The resize then applies
+  // its current sizes and ends. The ref holds the gesture end of the last
+  // render, with its current props (see `finishGesture`).
+  const finishGestureRef = useRef<(cancel: boolean) => void>(() => {});
+  useEffect(() => {
+    if (!resizing) return;
+    const finish = () => finishGestureRef.current(false);
+    window.addEventListener('blur', finish);
+    return () => window.removeEventListener('blur', finish);
+  }, [resizing]);
+
+  // An unmount during a pointer resize restores the sizes from before it and
+  // ends the app's session, so that no app state stays in a resize.
+  useEffect(
+    () => () => {
+      const active = gesture.current;
+      if (active?.type !== 'resize') return;
+      gesture.current = null;
+      releaseCapture(active);
+      resizeWork.end(true);
+      store.setSizes(active.originalSizes);
+      active.session?.end?.(true);
+    },
+    [resizeWork, store]
+  );
 
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(
@@ -693,6 +804,7 @@ export function Layout({
     event.currentTarget.setPointerCapture(event.pointerId);
     gesture.current = {
       type: 'resize',
+      element: event.currentTarget,
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
@@ -700,6 +812,11 @@ export function Layout({
       originalSizes: Object.fromEntries(
         separators.map(({ split }) => [split.id, split.sizes])
       ),
+      session: onResizeStart?.({
+        element: event.currentTarget,
+        separators,
+        source: 'pointer',
+      }),
     };
     setResizing(true);
   }
@@ -960,15 +1077,16 @@ export function Layout({
     } else if (active.type === 'resize') {
       const element = rootRef.current;
       if (element === null) return;
+      const proposed = dragSizes(
+        active.separators,
+        event.clientX - active.x,
+        event.clientY - active.y
+      );
       resizeWork.apply(
         element,
         experimentalResize,
         active.separators,
-        dragSizes(
-          active.separators,
-          event.clientX - active.x,
-          event.clientY - active.y
-        ),
+        active.session?.update?.(proposed, event) ?? proposed,
         geometry.corners
       );
     } else {
@@ -1001,6 +1119,9 @@ export function Layout({
       return;
     if (active.type === 'resize') resizeWork.end(cancel);
     gesture.current = null;
+    // After the gesture ends, so that the `lostpointercapture` of the release
+    // finds no gesture to cancel.
+    if (active.type === 'resize') releaseCapture(active);
     if (active.type === 'tab') {
       clearTabDrop(active.tablist);
       markTablist(active, null);
@@ -1035,6 +1156,7 @@ export function Layout({
       );
       if (Object.keys(changed).length > 0) onResize?.(changed);
     }
+    if (active.type === 'resize') active.session?.end?.(cancel);
     const moveTo = dropRef.current;
     if (
       active.type === 'move' &&
@@ -1049,18 +1171,28 @@ export function Layout({
     setDragging(null);
     setDrop(null);
   }
+  useLayoutEffect(() => {
+    finishGestureRef.current = finishGesture;
+  });
 
+  // A key press that resizes is a whole resize: it starts a session, applies
+  // the session's sizes, and ends it. The key does not reach the app's own
+  // key handlers above the layout.
   function resizeKey(
     event: KeyboardEvent<HTMLElement>,
     ids: readonly string[]
   ): void {
-    const sizes = keySizes(
-      separatorsAt(event.currentTarget, ids),
-      event.key,
-      event.shiftKey
-    );
-    if (sizes !== null) {
+    const separators = separatorsAt(event.currentTarget, ids);
+    const proposed = keySizes(separators, event.key, event.shiftKey);
+    if (proposed !== null) {
       event.preventDefault();
+      event.stopPropagation();
+      const session = onResizeStart?.({
+        element: event.currentTarget,
+        separators,
+        source: 'keyboard',
+      });
+      const sizes = session?.update?.(proposed, null) ?? proposed;
       const before = store.getSnapshot().root;
       store.setSizes(sizes);
       const changed = Object.fromEntries(
@@ -1073,6 +1205,7 @@ export function Layout({
         })
       );
       if (Object.keys(changed).length > 0) onResize?.(changed);
+      session?.end?.(false);
     }
   }
 
@@ -1091,6 +1224,9 @@ export function Layout({
       onPointerCancel={(event) => finishGesture(true, event.pointerId)}
       onLostPointerCapture={(event) => finishGesture(true, event.pointerId)}
       onKeyDown={(event) => {
+        // Pane content that handles a key, for example Escape in a menu,
+        // prevents its default, and the layout then leaves the key alone.
+        if (event.defaultPrevented) return;
         if (event.key === 'Escape') {
           finishGesture(true);
           if (state.zoomedPane !== null) store.toggleZoom();
@@ -1098,6 +1234,7 @@ export function Layout({
       }}
     >
       {paneHosts.map(({ pane, hidden: notShown, stack, collapsed, edges }) => {
+        const custom = getPaneProps?.(pane);
         const covered =
           !notShown &&
           state.zoomedPane !== null &&
@@ -1265,14 +1402,20 @@ export function Layout({
         return (
           <section
             key={pane.id}
+            // First, so that the view's own attributes below take precedence.
+            {...custom}
             id={`${prefix}-${encodeURIComponent(pane.id)}`}
             data-layout-pane={pane.id}
             data-layout-flip={`pane:${pane.id}`}
             data-layout-edges={edgeList(contact)}
-            className="pierre-layout-pane"
-            tabIndex={hidden ? -1 : 0}
+            className={withClasses('pierre-layout-pane', custom?.className)}
+            tabIndex={hidden ? -1 : (custom?.tabIndex ?? 0)}
             role={tabbed ? 'tabpanel' : undefined}
-            aria-label={labelled ? undefined : getPaneTitle(pane)}
+            aria-label={
+              labelled
+                ? undefined
+                : (custom?.['aria-label'] ?? getPaneTitle(pane))
+            }
             aria-labelledby={
               labelled ? tabIdOf(prefix, pane.id, pane.id) : undefined
             }
@@ -1320,6 +1463,7 @@ export function Layout({
       )}
       {state.zoomedPane === null &&
         geometry.separators.map((separator) => {
+          const custom = getSeparatorProps?.(separator);
           // The separator resizes the two children beside it first.
           const before = shownPanes(separator.before);
           const after = shownPanes(separator.split.children[separator.index]);
@@ -1327,10 +1471,17 @@ export function Layout({
           return (
             <div
               key={separator.id}
-              className="pierre-layout-separator"
+              {...custom}
+              className={withClasses(
+                'pierre-layout-separator',
+                custom?.className
+              )}
               role="separator"
               tabIndex={0}
-              aria-label={`Resize ${before.map(getPaneTitle).join(', ')} and ${after.map(getPaneTitle).join(', ')}`}
+              aria-label={
+                custom?.['aria-label'] ??
+                `Resize ${before.map(getPaneTitle).join(', ')} and ${after.map(getPaneTitle).join(', ')}`
+              }
               aria-orientation={
                 separator.split.direction === 'horizontal'
                   ? 'vertical'
