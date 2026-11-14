@@ -379,7 +379,7 @@ interface EditSession<LAnnotation> {
 }
 
 // The settings the managers (resize observers, scroll sync, pointer
-// handling) attach to the rendered DOM with. flushManagers compares them
+// handling) attach to the rendered DOM with. setUpManagers compares them
 // with the last render's so the managers only re-attach when a setting or
 // the DOM changed, instead of on every render.
 interface ManagerSetup {
@@ -845,10 +845,19 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
+  // Sets up the managers for a render that deferred them, then syncs the
+  // editor. The editor reads row positions, which the managers can change.
+  public flushManagers(): void {
+    this.setUpManagers();
+    if (this.editor != null && this.placeHolder == null) {
+      this.syncRenderViewToEditor();
+    }
+  }
+
   // Sets the managers up again when the DOM they watch changed (the dirty
   // bit, set by the code that wrote it) or when what they are set up with
   // changed; otherwise a render leaves them alone.
-  public flushManagers(): void {
+  private setUpManagers(): void {
     if (this.pre == null) {
       this.managersDirty = false;
       return;
@@ -1108,7 +1117,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     editor?.__assertOutsideChangeCallback('FileDiff.cleanUp');
     this.clearSemanticConnectors();
     dequeueRender(this.handleEditSessionRender);
-    this.emitPostRender(true);
+    this.__emitPostRender(true);
     // Tear the editor down while the code scrollers still exist. A recycle
     // keeps its document and undo history; a full teardown drops them as the
     // session ends.
@@ -1244,7 +1253,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       });
     }
     if (!preventEmit) {
-      this.emitPostRender();
+      this.__emitPostRender();
     }
   }
 
@@ -1253,7 +1262,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     prerenderedHTML: string | undefined
   ): void {
     if (this.fileContainer !== fileContainer) {
-      this.emitPostRender(true);
+      this.__emitPostRender(true);
     }
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
@@ -1351,7 +1360,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.renderGutterUtility();
     this.injectUnsafeCSS();
     this.managersDirty = true;
-    this.flushManagers();
+    this.setUpManagers();
     this.renderSemanticConnectors();
   }
 
@@ -1885,6 +1894,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (collapsed) {
       this.removeRenderedCode();
       this.clearAuxiliaryNodes();
+      this.placeHolder?.remove();
+      this.placeHolder = undefined;
 
       try {
         const hunksResult = this.hunksRenderer.renderDiff(
@@ -1919,8 +1930,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         }
       }
       this.finalizeRender();
-      if (!preventEmit) {
-        this.emitPostRender();
+      if (!preventEmit && !deferManagers) {
+        this.__emitPostRender();
       }
       return true;
     }
@@ -1984,12 +1995,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.renderGutterUtility();
 
       if (!deferManagers) {
-        this.flushManagers();
+        this.setUpManagers();
         this.renderSemanticConnectors();
       }
 
       this.finalizeRender();
-      if (this.editor != null) {
+      if (!deferManagers && this.editor != null) {
         this.syncRenderViewToEditor(editorRenderRange);
       }
     } catch (error: unknown) {
@@ -2001,15 +2012,19 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.applyErrorToDOM(error, fileContainer);
       }
     }
-    if (!preventEmit) {
-      this.emitPostRender();
+    if (!preventEmit && !deferManagers) {
+      this.__emitPostRender();
     }
     return true;
   }
 
   protected finalizeRender(): void {}
 
-  protected emitPostRender(unmount = false): void {
+  /**
+   * @internal CodeView and the Virtualizer call this last for a render that
+   * deferred its managers, so onPostRender sees the finished DOM.
+   */
+  public __emitPostRender(unmount = false): void {
     const {
       fileContainer,
       options: { onPostRender },
@@ -2027,7 +2042,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
 
-    if (fileContainer == null) {
+    if (fileContainer == null || this.placeHolder != null) {
       return;
     }
 
@@ -2774,7 +2789,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     // The placeholder removes the rows the caret sits in. The editor keeps
     // the focus it had, to put back when the rows render again.
     this.editor?.__captureFocusForDOMReplacement();
-    this.emitPostRender(true);
+    this.__emitPostRender(true);
     this.cleanChildNodes();
 
     if (this.placeHolder == null) {
@@ -2995,7 +3010,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.editor?.__captureFocusForDOMReplacement();
     }
     if (containerChanged) {
-      this.emitPostRender(true);
+      this.__emitPostRender(true);
     }
     this.fileContainer = nextContainer;
     if (previousContainer != null && containerChanged) {

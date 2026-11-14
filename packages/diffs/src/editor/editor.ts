@@ -487,6 +487,8 @@ export class Editor<
   #contentOffset?: { left: number; top: number };
   #gutterWidthCache?: number;
   #contentWidthCache?: number;
+  // Only tracked while there are annotations.
+  #contentHeightCache?: number;
   #lineYCache = new Map<number, number>();
   #wrapLineOffsetsCache = new Map<number, Uint32Array>();
   #lastAccessedCharX?: [
@@ -1331,6 +1333,7 @@ export class Editor<
     // cache
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
+    this.#contentHeightCache = undefined;
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
     this.#lastAccessedCharX = undefined;
@@ -3105,6 +3108,7 @@ export class Editor<
 
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = new ResizeObserver(this.#handleLayoutResize);
+    this.#contentHeightCache = undefined;
     this.#resizeObserver.observe(contentEl);
     this.#resizeObserver.observe(contentEl.parentElement!);
     this.#computeContentOffset(contentEl);
@@ -3827,15 +3831,27 @@ export class Editor<
     this.#contentWidthCache = undefined;
     const gutterWidthChanged = this.#getGutterWidth() !== prevGutterWidth;
     const contentWidthChanged = this.#getContentWidth() !== prevContentWidth;
-    if (!gutterWidthChanged && !contentWidthChanged) {
+    // An annotation that changes height moves the lines below it.
+    const prevContentHeight = this.#contentHeightCache;
+    this.#contentHeightCache =
+      lineAnnotations > 0 ? this.#contentElement?.offsetHeight : undefined;
+    const contentHeightChanged =
+      lineAnnotations > 0 && this.#contentHeightCache !== prevContentHeight;
+    const widthChanged = gutterWidthChanged || contentWidthChanged;
+    if (!widthChanged && !contentHeightChanged) {
       return;
     }
 
-    this.#lastAccessedCharX = undefined;
-    // A width change means the inherited font/metrics may have changed (e.g. a
-    // web font finished loading) while this same content element survived, so
-    // discard memoized non-ASCII text widths and let them re-measure.
-    this.#metrics.clearTextWidthCache();
+    if (contentHeightChanged) {
+      this.#lineYCache.clear();
+    }
+    if (widthChanged) {
+      this.#lastAccessedCharX = undefined;
+      // A width change means the inherited font/metrics may have changed (e.g.
+      // a web font finished loading) while this same content element survived,
+      // so discard memoized non-ASCII text widths and let them re-measure.
+      this.#metrics.clearTextWidthCache();
+    }
     if (contentWidthChanged) {
       // Wrap points depend on the content width, so cached offsets go stale
       // even while wrap is off — the mode can be toggled back on before the
@@ -3852,14 +3868,24 @@ export class Editor<
     ) {
       this.#updateSelections(this.#selections ?? []);
       // Virtualized row swaps can resize a blurred editor. Repaint its overlays
-      // without letting that layout work reclaim DOM focus.
-      if (this.#selections !== undefined && this.#contentHasFocus) {
+      // without letting that layout work reclaim DOM focus. A height change
+      // alone leaves the text in place, so the native selection is kept.
+      if (
+        widthChanged &&
+        this.#selections !== undefined &&
+        this.#contentHasFocus
+      ) {
         this.focus();
       }
     }
-    this.#markerRenderer?.removePopover();
+    // A height change alone only moves the popover with its marker.
+    if (widthChanged) {
+      this.#markerRenderer?.removePopover();
+    } else {
+      this.#markerRenderer?.updatePopoverPosition();
+    }
     this.#computeContentOffset(this.#contentElement!);
-    // Reposition remote carets after a gutter or content-width change. Their
+    // Reposition remote carets after the gutter or content changed size. Their
     // transforms and wrapped rows use the same geometry caches as selections.
     this.#renderCarets();
   };

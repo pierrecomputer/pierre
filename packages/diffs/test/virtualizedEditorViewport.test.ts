@@ -20,8 +20,13 @@ function createSimpleVirtualizer(root: HTMLElement) {
     getRoot: () => root,
     getWindowSpecs: () => ({ top: 0, bottom: 800 }),
     getOffsetInScrollContainer: () => 0,
-    instanceChanged(instance: { onRender(dirty: boolean): boolean }) {
-      instance.onRender(true);
+    instanceChanged(instance: {
+      onRender(dirty: boolean): boolean;
+      flushManagers(): void;
+    }) {
+      if (instance.onRender(true)) {
+        instance.flushManagers();
+      }
     },
     isInstanceVisible: () => true,
     markDOMDirty() {},

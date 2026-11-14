@@ -657,7 +657,7 @@ export class VirtualizedFileDiff<
     if (dirty) {
       this.top = this.getVirtualizedTop();
     }
-    return this.render();
+    return this.render({ deferManagers: true });
   };
 
   // A structural change (line count or collapsed regions) also moves the
