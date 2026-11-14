@@ -110,3 +110,70 @@ names the split directly above the tab's group. Higher levels name its
 ancestors. Each child has a positive weight or `{ px: nonNegativePixels }`; the
 count must match the split's children. Storage and network writes remain the
 consumer's responsibility.
+
+## Control a resize
+
+`Layout.onResizeStart(context)` runs when a pointer resize starts and for each
+keyboard resize. `context` holds the separator or corner `element`, the pixel
+geometry of the `separators` that the resize changes, and its `source`:
+`pointer` or `keyboard`. The callback can return a `LayoutResizeSession`:
+
+```tsx
+<Layout
+  store={store}
+  renderPane={renderPane}
+  onResizeStart={() => {
+    setResizing(true);
+    return {
+      update: (sizes) => snapToColumns(sizes),
+      end: () => setResizing(false),
+    };
+  }}
+/>
+```
+
+- `update(sizes, point)` returns the sizes to apply in place of the proposed
+  sizes, for example sizes that snap to a position. `point` holds the pointer's
+  `clientX` and `clientY`, or is null for a keyboard resize.
+- `end(cancelled)` runs once when the resize ends: with `false` after the sizes
+  apply, and with `true` after a cancellation or an unmount. A cancellation and
+  an unmount restore the sizes from before the resize.
+
+A pointer resize is one session from press to release. Each key press that
+resizes is a session of its own. A window blur during a pointer resize applies
+the current sizes and ends the session, because the pointer release may never
+come. The view keeps the pointer capture and the keyboard handling: a key that
+resizes does not reach key handlers above the layout. `onResize` reports the
+applied sizes before `end` runs.
+
+## Add props to separators and pane hosts
+
+`getSeparatorProps(separator)` adds props to each separator: `className`,
+`children`, `aria-label`, `hidden`, and `onDoubleClick`. `separator` is the
+`CSSSeparator` of `computeCSSLayout`, with its split and the index of the child
+after it. For example, children can give the separator a larger hit area, and a
+double click can reset the split. The view keeps the geometry, the focus, and
+the resize handlers. Without `aria-label`, the label names the panes on both
+sides.
+
+`getPaneProps(pane)` adds props to each pane host: `className`, `tabIndex`,
+`aria-label`, and `data-*` attributes. An app can mark its own drop targets with
+a data attribute, and leave it out on a structural host, such as the host of a
+sidebar, which also needs no tab stop:
+
+```tsx
+<Layout
+  store={store}
+  renderPane={renderPane}
+  getPaneProps={(pane) =>
+    pane.id === 'sidebar' ? { tabIndex: -1 } : { 'data-drop-target': pane.id }
+  }
+/>
+```
+
+The view's own attributes, such as `data-layout-pane` and `data-focused`, take
+precedence. A hidden host is never a tab stop. `aria-label` names a host without
+tabs; a host with tabs takes its name from its tab.
+
+A key that pane content handles with `preventDefault()`, for example Escape in a
+menu, does not cancel a gesture or restore a zoom.
