@@ -182,6 +182,24 @@
     (global.set $atxLevel (local.get $n))
     (i32.sub (local.get $i) (local.get $p)))
 
+  ;; Remove trailing space and an optional space-separated closing hash run.
+  (func $atxContentEnd (param $beg i32) (param $end i32) (result i32)
+    (local $hash i32)
+    (local.set $end (call $trimSpaceBack (local.get $end) (local.get $beg)))
+    (local.set $hash (local.get $end))
+    (block $done
+      (loop $back
+        (br_if $done (i32.le_u (local.get $hash) (local.get $beg)))
+        (br_if $done (i32.ne (i32.load8_u (i32.sub (local.get $hash) (i32.const 1))) (i32.const "#")))
+        (local.set $hash (i32.sub (local.get $hash) (i32.const 1)))
+        (br $back)))
+    (if (i32.ne (local.get $hash) (local.get $end))
+      (then
+        (if (i32.or (i32.eq (local.get $hash) (local.get $beg))
+              (call $isSpaceByte (i32.load8_u (i32.sub (local.get $hash) (i32.const 1)))))
+          (then (local.set $end (call $trimSpaceBack (local.get $hash) (local.get $beg)))))))
+    (local.get $end))
+
   ;; three or more backticks or tildes; a backtick fence may not be followed by
   ;; a backtick anywhere on the line
   (func $scanOpenFence (param $p i32) (result i32)
@@ -493,6 +511,7 @@
         (local.set $cellStart (local.get $p))
         (block $cellDone
           (loop $byte
+            (local.set $p (call $findCellBoundary (local.get $p) (local.get $end)))
             (br_if $cellDone (i32.ge_u (local.get $p) (local.get $end)))
             (local.set $c (i32.load8_u (local.get $p)))
             (if (i32.eq (local.get $c) (i32.const "\5c"))

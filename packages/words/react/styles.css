@@ -137,16 +137,13 @@
   height: auto;
 }
 
-[data-markdown='token'][data-animated='true'] {
+[data-markdown][data-animated='true'] {
   animation: markdown-fade-in 180ms ease-out backwards;
 }
 
 @keyframes markdown-fade-in {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 
@@ -158,7 +155,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   [data-markdown='caret'],
-  [data-markdown='token'][data-animated='true'] {
+  [data-markdown][data-animated='true'] {
     animation: none;
   }
 }

@@ -67,6 +67,10 @@ export function environment(
   return {
     date: new Date().toISOString(),
     node: process.version,
+    runtime: {
+      name: process.versions.bun == null ? 'node' : 'bun',
+      version: process.versions.bun ?? process.version,
+    },
     platform: platform(),
     arch: arch(),
     cpu: cpus()[0]?.model,

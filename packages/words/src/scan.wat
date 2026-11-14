@@ -260,9 +260,9 @@
   (global $plainRunJoined (mut i32) (i32.const 0))
 
   ;; Scan ordinary root-paragraph lines with one table load and cached masks
-  ;; across line feeds. Consume each mask with a fixed vector base, advancing
-  ;; only between masks. Stop before a possible block start, or after the first
-  ;; line needing general inline processing. Return the final physical line's
+  ;; across line feeds. After inline syntax, collect further ordinary lines
+  ;; with a newline scan; inline parsing still processes the full span. Stop
+  ;; before a possible block start or CR. Return the final physical line's
   ;; begin/end so its predecessors can share one descriptor without losing the
   ;; line needed for table conversion. The caller has checked the first byte.
   (func $findPlainParagraphRun (param $start i32) (result i64)
@@ -281,55 +281,66 @@
     (local.set $lo (v128.load (i32.const $mem.paragraphLo)))
     (local.set $hi (v128.load (i32.const $mem.markHi)))
     (block $done
-      (loop $vectors
-        (block $haveMask
-          (loop $scan
-            (if (i32.ge_u (local.get $base) (global.get $eof))
-              (then (local.set $p (global.get $eof)) (br $done)))
-            (local.set $flags (call $markFlags
-              (local.get $base) (local.get $lo) (local.get $hi)))
-            (if (i64.ne (i64.or
-                  (i64x2.extract_lane 0 (local.get $flags))
-                  (i64x2.extract_lane 1 (local.get $flags))) (i64.const 0))
-              (then
-                (local.set $mask (i8x16.bitmask
-                  (i8x16.ne (local.get $flags) (i8x16.splat (i32.const 0)))))
-                (br $haveMask)))
-            (local.set $base (i32.add (local.get $base) (i32.const 16)))
-            (br $scan)))
-        (loop $candidate
-          (block $nextCandidate
-            (local.set $p (i32.add (local.get $base) (call $firstBit (local.get $mask))))
-            (if (i32.ge_u (local.get $p) (global.get $eof))
-              (then (local.set $p (global.get $eof)) (br $done)))
-            (local.set $c (i32.load8_u (local.get $p)))
-            (if (i32.eq (local.get $c) (i32.const 10))
-              (then
-                ;; Interior trailing whitespace may create a hard break. EOF
-                ;; whitespace is instead removed when the leaf is finalized.
-                (if (call $isSpaceByte (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
-                  (then (global.set $plainRunLiteral (i32.const 0)) (br $done)))
-                (local.set $next (i32.add (local.get $p) (i32.const 1)))
-                (br_if $done (i32.ge_u (local.get $next) (global.get $eof)))
-                (br_if $done (call $mayStartBlock (i32.load8_u (local.get $next))))
-                (local.set $beg (local.get $next))
-                (local.set $lines (i32.add (local.get $lines) (i32.const 1)))
-                (br $nextCandidate)))
-            (if (i32.eq (local.get $c) (i32.const 13))
-              (then (global.set $plainRunLiteral (i32.const 0)) (br $done)))
-            (if (i32.eq (local.get $c) (i32.const "."))
-              (then
-                (br_if $nextCandidate (i32.ne (i32.or
-                  (i32.and (i32.load (i32.sub (local.get $p) (i32.const 3)))
-                    (i32.const 0xffffff)) (i32.const 0x202020)) (i32.const "www")))))
-            (global.set $plainRunLiteral (i32.const 0))
-            (local.set $p (call $findLineEnd (local.get $p)))
-            (br $done))
-          (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (local.get $mask) (i32.const 1))))
-          (br_if $candidate (local.get $mask)))
-        (local.set $base (i32.add (local.get $base) (i32.const 16)))
-        (br $vectors)))
+      (block $general
+        (loop $vectors
+          (block $haveMask
+            (loop $scan
+              (if (i32.ge_u (local.get $base) (global.get $eof))
+                (then (local.set $p (global.get $eof)) (br $done)))
+              (local.set $flags (call $markFlags
+                (local.get $base) (local.get $lo) (local.get $hi)))
+              (if (i64.ne (i64.or
+                    (i64x2.extract_lane 0 (local.get $flags))
+                    (i64x2.extract_lane 1 (local.get $flags))) (i64.const 0))
+                (then
+                  (local.set $mask (i8x16.bitmask
+                    (i8x16.ne (local.get $flags) (i8x16.splat (i32.const 0)))))
+                  (br $haveMask)))
+              (local.set $base (i32.add (local.get $base) (i32.const 16)))
+              (br $scan)))
+          (loop $candidate
+            (block $nextCandidate
+              (local.set $p (i32.add (local.get $base) (call $firstBit (local.get $mask))))
+              (if (i32.ge_u (local.get $p) (global.get $eof))
+                (then (local.set $p (global.get $eof)) (br $done)))
+              (local.set $c (i32.load8_u (local.get $p)))
+              (if (i32.eq (local.get $c) (i32.const 10))
+                (then
+                  ;; Interior trailing whitespace may create a hard break. EOF
+                  ;; whitespace is instead removed when the leaf is finalized.
+                  (if (call $isSpaceByte (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
+                    (then (global.set $plainRunLiteral (i32.const 0)) (br $general)))
+                  (local.set $next (i32.add (local.get $p) (i32.const 1)))
+                  (br_if $done (i32.ge_u (local.get $next) (global.get $eof)))
+                  (br_if $done (call $mayStartBlock (i32.load8_u (local.get $next))))
+                  (local.set $beg (local.get $next))
+                  (local.set $lines (i32.add (local.get $lines) (i32.const 1)))
+                  (br $nextCandidate)))
+              (if (i32.eq (local.get $c) (i32.const 13))
+                (then (global.set $plainRunLiteral (i32.const 0)) (br $done)))
+              (if (i32.eq (local.get $c) (i32.const "."))
+                (then
+                  (br_if $nextCandidate (i32.ne (i32.or
+                    (i32.and (i32.load (i32.sub (local.get $p) (i32.const 3)))
+                      (i32.const 0xffffff)) (i32.const 0x202020)) (i32.const "www")))))
+              (global.set $plainRunLiteral (i32.const 0))
+              (br $general))
+            (local.set $mask (i32.and (local.get $mask)
+              (i32.sub (local.get $mask) (i32.const 1))))
+            (br_if $candidate (local.get $mask)))
+          (local.set $base (i32.add (local.get $base) (i32.const 16)))
+          (br $vectors)))
+      (loop $rest
+        (local.set $p (call $findLineEnd (local.get $p)))
+        (br_if $done (i32.ge_u (local.get $p) (global.get $eof)))
+        (br_if $done (i32.ne (i32.load8_u (local.get $p)) (i32.const 10)))
+        (local.set $next (i32.add (local.get $p) (i32.const 1)))
+        (br_if $done (i32.ge_u (local.get $next) (global.get $eof)))
+        (br_if $done (call $mayStartBlock (i32.load8_u (local.get $next))))
+        (local.set $beg (local.get $next))
+        (local.set $lines (i32.add (local.get $lines) (i32.const 1)))
+        (local.set $p (local.get $next))
+        (br $rest)))
     (global.set $plainRunJoined (i32.ge_u (local.get $lines) (i32.const 2)))
     (i64.or (i64.extend_i32_u (local.get $beg))
       (i64.shl (i64.extend_i32_u (local.get $p)) (i64.const 32))))

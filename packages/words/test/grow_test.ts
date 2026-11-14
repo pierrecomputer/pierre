@@ -66,8 +66,7 @@ const docs = {
     { length: 800 },
     (_, i) => `| a${i} | b |\n| --- | --: |\n| ${i} | *v* |`
   ).join('\n\n'),
-  // More cells than the ANSI width cache holds; exercise remeasurement while
-  // alternating input aliases and escaped-pipe copies in the same table.
+  // Alternate input aliases and escaped-pipe copies while table output grows.
   tableWidthOverflow:
     '| a | b |\n| --- | --- |\n' +
     Array.from({ length: 3200 }, (_, i) => `| \\*${i} | \`<&"\\|é\` |\n`).join(
@@ -93,6 +92,35 @@ const docs = {
       ` P${i}P`
   ).join('\n\n'),
 };
+
+void test('a render that traps after growing memory leaves usable views', () => {
+  const renderer = init(wasm);
+  const render = renderer.wasmRender;
+  renderer.wasmRender = () => {
+    renderer.memory.grow(1);
+    throw new WebAssembly.RuntimeError('render failed');
+  };
+  assert.throws(() => renderer.render('text', 0), WebAssembly.RuntimeError);
+  assert.equal(renderer.buffer.buffer, renderer.memory.buffer);
+  renderer.wasmRender = render;
+  assert.equal(
+    dec.decode(renderer.render('# next', 0).output),
+    '<h1>next</h1>\n'
+  );
+});
+
+void test('string encoding survives growth between multibyte characters', () => {
+  for (const length of [16000, 26023, 65536, 262144]) {
+    for (const tail of ['é中', '😀', '\ud800x\udc00', '\0']) {
+      const source = 'é'.repeat(length) + tail.repeat(10000) + ' finished';
+      const cold = init(wasm);
+      assert.equal(
+        dec.decode(cold.render(source, 0, {}).output),
+        dec.decode(warm.render(new TextEncoder().encode(source), 0, {}).output)
+      );
+    }
+  }
+});
 
 void test(
   'growth past 2.5 GiB clamps to the wasm32 limit instead of trapping',

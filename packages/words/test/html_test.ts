@@ -65,6 +65,65 @@ void test('headings end on their own line', () => {
   }
 });
 
+void test('root headings match indented headings through completion and reuse', () => {
+  const prefixes = [
+    '',
+    'paragraph\n\n',
+    '- item\n\n',
+    '> quote\n\n',
+    '```\nx\n```\n',
+  ];
+  const contents = ['', '**open', '[link](', 'a #', 'a\\#', '###', 'é 中 😀'];
+  for (const prefix of prefixes) {
+    for (let level = 1; level <= 6; level++) {
+      for (const content of contents) {
+        for (const ending of ['', '\n', '\r\n', '\t\n\n- after']) {
+          const heading = `${'#'.repeat(level)} ${content}${ending}`;
+          for (const incomplete of [false, true]) {
+            const options = { incomplete, skipHtml: true };
+            assert.equal(
+              dec.decode(renderToHtml(prefix + heading, options)),
+              dec.decode(renderToHtml(prefix + ' ' + heading, options)),
+              JSON.stringify({ prefix, heading, incomplete })
+            );
+          }
+        }
+      }
+    }
+  }
+});
+
+void test('root fences preserve markers, line endings, and incomplete state', () => {
+  for (const marker of ['`', '~']) {
+    for (const length of [3, 4, 6]) {
+      for (const info of ['', 'js', '&quot;', '`invalid']) {
+        for (const newline of ['\n', '\r\n', '\r']) {
+          for (const closed of [false, true]) {
+            const fence = marker.repeat(length);
+            const body = `${info}${newline}é 中 <&>${newline}`;
+            const tail = closed ? `${fence}${newline}# after` : '';
+            for (const incomplete of [false, true]) {
+              const options = { incomplete, skipHtml: true };
+              assert.equal(
+                dec.decode(renderToHtml(fence + body + tail, options)),
+                dec.decode(renderToHtml(' ' + fence + body + tail, options)),
+                JSON.stringify({
+                  marker,
+                  length,
+                  info,
+                  newline,
+                  closed,
+                  incomplete,
+                })
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
 void test('plain paragraph runs stop at syntax, whitespace, and block boundaries', () => {
   const tails = [
     ['ordinary. Unicode 界é.', 'ordinary. Unicode 界é.'],
@@ -1283,6 +1342,33 @@ void test('container markers past the nesting limit stay text on every line', ()
   assert.match(out, /<li>- a<\/li>\n<li>b<\/li>/);
 });
 
+void test('multiline inline content preserves breaks and block endings', () => {
+  const lines = ['first *marked*', 'second  ', 'third `code`', 'fourth'];
+  const content =
+    'first <em>marked</em>\nsecond<br />\nthird <code>code</code>\nfourth';
+  for (const ending of ['\n', '\r\n', '\r']) {
+    const source = lines.join(ending);
+    assert.equal(html(`${source}\t `), `<p>${content}</p>\n`);
+    assert.equal(html(`${source}${ending}---`), `<h2>${content}</h2>\n`);
+    assert.equal(
+      html(`${source}${ending}a | b${ending}--|--`),
+      `<p>${content}</p>\n` +
+        '<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n</table>\n'
+    );
+  }
+});
+
+void test('table counting preserves escapes across vector boundaries', () => {
+  for (const length of [0, 14, 15, 16, 17, 30, 31, 32, 33]) {
+    const text = 'a'.repeat(length);
+    assert.equal(
+      html(`| ${text}\\|b | c |\n| - | - |\n| ${text}\\\\| d |`),
+      `<table>\n<thead>\n<tr>\n<th>${text}|b</th>\n<th>c</th>\n</tr>\n</thead>\n` +
+        `<tbody>\n<tr>\n<td>${text}\\</td>\n<td>d</td>\n</tr>\n</tbody>\n</table>\n`
+    );
+  }
+});
+
 void test('a table can start under any line of a paragraph', () => {
   assert.equal(
     html('Notes:\n| a | b |\n| - | - |\n| 1 | 2 |'),
@@ -1463,7 +1549,7 @@ void test('email autolinks take underscore runs into the local part', () => {
   );
 });
 
-void test('named references decode from the table and its lookup cache', async () => {
+void test('named references decode exactly and reject near misses', async () => {
   const { readFileSync } = await import('node:fs');
   const table = new Map<string, string>();
   for (const line of readFileSync(
@@ -1497,9 +1583,13 @@ void test('named references decode from the table and its lookup cache', async (
   const names = [...table.keys()];
   const source = names.map((n) => `&${n};`).join(' ');
   const expected = `<p>${names.map((n) => escape(table.get(n)!)).join(' ')}</p>\n`;
-  // the second render answers short names from the cache
   assert.equal(html(source), expected);
   assert.equal(html(source), expected);
+  for (const malformed of ['Ecy\0Edot\0Efr', 'zdot\0zeetrf\0zeta'])
+    assert.equal(
+      html(`&${malformed};`),
+      `<p>&amp;${malformed.replaceAll('\0', '\ufffd')};</p>\n`
+    );
   // near misses: a suffix, a dropped last byte, and flipped case
   for (const n of names) {
     for (const miss of [

@@ -14,6 +14,9 @@
   ;; whenever $sp is not zero and needs no reset between renders.
   (global $top (mut i32) (i32.const 0))
   (global $leaf (mut i32) (i32.const 0))     ;; $Blk of the open leaf, or none
+  (global $tableHead (mut i32) (i32.const 0))
+  ;; Only the open table can acquire more automatically filled cells.
+  (global $tableAutoCells (mut i32) (i32.const 0))
   (global $leafRec (mut i32) (i32.const 0))
   (global $leafBlank (mut i32) (i32.const 0))
   (global $plainRunLiteral (mut i32) (i32.const 0)) ;; result of the current run scan
@@ -58,8 +61,8 @@
         (local.set $missing (i32.sub (i32.load offset=8 (local.get $r))
           (call $countRowCells (local.get $beg) (global.get $lineEnd))))
         (if (i32.gt_s (local.get $missing) (i32.const 0))
-          (then (i32.store offset=12 (local.get $r)
-            (i32.add (i32.load offset=12 (local.get $r)) (local.get $missing)))))))
+          (then (global.set $tableAutoCells
+            (i32.add (global.get $tableAutoCells) (local.get $missing)))))))
     ;; HTML can retain an unindented LF-separated fenced block as one input
     ;; span. ANSI keeps individual lines so it can reapply their prefixes.
     (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
@@ -158,17 +161,84 @@
     ;; zero only when no line was added
     (i32.or (i32.gt_u (local.get $line) (local.get $p)) (i32.ne (local.get $p) (local.get $start))))
 
-  ;; Conservative first-byte filter shared by paragraph continuations and new
-  ;; blocks. Indentation is checked separately; non-ASCII text cannot open one.
+  ;; One bit per input byte marks possible block starts. Non-ASCII bytes have
+  ;; no bit set; indentation and block precedence are checked by the caller.
+  (data (i32.const $mem.blockStarts)
+    "\00\26\00\00\09\2c\ff\77\00\00\00\88\01\00\00\50"
+    "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
   (func $mayStartBlock (param $ch i32) (result i32)
-    (i32.and (i32.lt_u (local.get $ch) (i32.const 128))
-      (i64.ne (i64.and
-        (i64.shl (i64.const 1) (i64.extend_i32_u (local.get $ch)))
-        (select
-          (i64.const 0x5000000188000000)
-          (i64.const 0x77ff2c0900002600)
-          (i32.ge_u (local.get $ch) (i32.const 64))))
-        (i64.const 0))))
+    (i32.and (i32.shr_u
+      (i32.load (i32.add (i32.const $mem.blockStarts)
+        (i32.shl (i32.shr_u (local.get $ch) (i32.const 5)) (i32.const 2))))
+      (local.get $ch)) (i32.const 1)))
+
+  ;; A root heading is already complete. Write its final record without
+  ;; opening a leaf or running container bookkeeping; zero means no heading.
+  (func $rootHeading (param $start i32) (result i32)
+    (local $p i32)
+    (local $level i32)
+    (local $beg i32)
+    (local $end i32)
+    (local $lineEnd i32)
+    (local $r i32)
+    (local $size i32)
+    (local.set $p (local.get $start))
+    (loop $hashes
+      (local.set $level (i32.add (local.get $level) (i32.const 1)))
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+      (if (i32.gt_u (local.get $level) (i32.const 6)) (then (return (i32.const 0))))
+      (br_if $hashes (i32.eq (i32.load8_u (local.get $p)) (i32.const "#"))))
+    (if (i32.lt_u (local.get $p) (global.get $eof))
+      (then
+        (if (i32.eqz (i32.or (call $isSpaceByte (i32.load8_u (local.get $p)))
+              (i32.or (i32.eq (i32.load8_u (local.get $p)) (i32.const 10))
+                (i32.eq (i32.load8_u (local.get $p)) (i32.const 13)))))
+          (then (return (i32.const 0))))))
+    (local.set $lineEnd (call $findLineEnd (local.get $p)))
+    (local.set $beg (call $skipSpace (local.get $p) (local.get $lineEnd)))
+    (local.set $end (call $atxContentEnd (local.get $beg) (local.get $lineEnd)))
+    (local.set $size (i32.add (i32.const $R.header)
+      (i32.mul (i32.gt_u (local.get $end) (local.get $beg)) (i32.const $R.line))))
+    (call $ensureRec (local.get $size))
+    (local.set $r (global.get $rec))
+    (i64.store (local.get $r) (i64.or
+      (i64.shl (i64.extend_i32_u (local.get $size)) (i64.const 32))
+      (i64.or (i64.shl (i64.extend_i32_u (i32.const $R.header)) (i64.const 16))
+        (i64.extend_i32_u (enum.get $Blk.heading)))))
+    (i64.store offset=8 (local.get $r) (i64.extend_i32_u (local.get $level)))
+    (i64.store offset=$R.nLines (local.get $r)
+      (i64.extend_i32_u (i32.gt_u (local.get $end) (local.get $beg))))
+    (if (i32.gt_u (local.get $end) (local.get $beg))
+      (then
+        (i32.store offset=$R.header (local.get $r) (local.get $beg))
+        (i32.store offset=$R.header+4 (local.get $r) (local.get $end))))
+    (global.set $leafRec (local.get $r))
+    (global.set $leafBlank (i32.const 0))
+    (global.set $rec (i32.add (local.get $r) (local.get $size)))
+    (call $lineAfter (local.get $lineEnd)))
+
+  ;; An unindented root fence needs no container matching or indentation state.
+  ;; Initialize the leaf once, then let the code-run scanner consume its body.
+  (func $rootFence (param $p i32) (result i32)
+    (local $n i32)
+    (local $r i32)
+    (local $beg i32)
+    (global.set $lineEnd (call $findLineEnd (local.get $p)))
+    (local.set $n (call $scanOpenFence (local.get $p)))
+    (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+    (local.set $r (call $recNew (i32.or (enum.get $Blk.code)
+      (i32.shl (i32.const $F.fenced) (i32.const 8)))))
+    (global.set $leafRec (local.get $r))
+    (global.set $leaf (enum.get $Blk.code))
+    (global.set $leafBlank (i32.const 0))
+    (global.set $curLevel (i32.const 1))
+    (global.set $codeFenceCh (i32.load8_u (local.get $p)))
+    (global.set $codeFenceN (local.get $n))
+    (global.set $codeFenceOff (i32.const 0))
+    (local.set $beg (call $skipSpace (i32.add (local.get $p) (local.get $n)) (global.get $lineEnd)))
+    (i32.store offset=8 (local.get $r) (local.get $beg))
+    (i32.store offset=12 (local.get $r) (call $trimSpaceBack (global.get $lineEnd) (local.get $beg)))
+    (call $lineAfter (global.get $lineEnd)))
 
   ;; A non-block first byte at an empty document spine guarantees a paragraph.
   ;; Scan first, then reserve its header and one or two unpadded ranges together.
@@ -619,7 +689,7 @@
               ;; Warning: sparse rows can amplify tiny input into gigabytes of
               ;; output. Match cmark-gfm's budget and close the table afterward.
               (br_if $unmatched (i32.and (i32.eq (local.get $t) (enum.get $Blk.table))
-                (i32.gt_u (i32.load offset=12 (global.get $leafRec)) (i32.const $MaxTableAutoCells))))
+                (i32.gt_u (global.get $tableAutoCells) (i32.const $MaxTableAutoCells))))
               ;; A pipe starts no block, so the line is the next table row.
               (if (i32.and (i32.eq (local.get $t) (enum.get $Blk.table))
                     (i32.and (i32.lt_u (global.get $indent) (i32.const 4))
@@ -659,7 +729,6 @@
     (local $footDst i32)
     (local $footNormalized i64)
     (local $headEnd i32)
-    (local $hashN i32)
     (local $setextC i32)
     (local $setextI i32)
     (local $depth i32)
@@ -736,21 +805,7 @@
                ;; drop trailing spaces, then a closing run of `#` that follows
                ;; a space or tab
                (local.set $save (global.get $pos))
-               (local.set $headEnd (call $trimSpaceBack (global.get $lineEnd) (local.get $save)))
-               (local.set $hashN (local.get $headEnd))
-               (block $hashesDone
-                 (loop $hashes
-                   (br_if $hashesDone (i32.le_u (local.get $hashN) (local.get $save)))
-                   (br_if $hashesDone (i32.ne
-                     (i32.load8_u (i32.sub (local.get $hashN) (i32.const 1))) (i32.const "#")))
-                   (local.set $hashN (i32.sub (local.get $hashN) (i32.const 1)))
-                   (br $hashes)))
-               (if (i32.ne (local.get $hashN) (local.get $headEnd))
-                 (then
-                   (if (i32.or (i32.le_u (local.get $hashN) (local.get $save))
-                         (call $isSpaceByte (i32.load8_u (i32.sub (local.get $hashN) (i32.const 1)))))
-                     (then (local.set $headEnd
-                       (call $trimSpaceBack (local.get $hashN) (local.get $save)))))))
+               (local.set $headEnd (call $atxContentEnd (local.get $save) (global.get $lineEnd)))
                (call $openLeaf (enum.get $Blk.heading))
                (i32.store offset=8 (global.get $leafRec) (global.get $atxLevel))
                ;; nothing reads the true line end after a block start took the line
@@ -942,7 +997,10 @@
           (i32.sub (local.get $tableN) (i32.const 1)))
         (call $closeLeaf)
         (call $openLeaf (enum.get $Blk.table))
+        (global.set $tableAutoCells (i32.const 0))
         (i32.store offset=8 (global.get $leafRec) (local.get $tableCols))
+        (i32.store offset=12 (global.get $leafRec) (global.get $tableHead))
+        (global.set $tableHead (global.get $leafRec))
         ;; Alignment bytes sit between the header and line array.
         (local.set $tableExtra
           (i32.and (i32.add (local.get $tableCols) (i32.const 7)) (i32.const -8)))
