@@ -57,6 +57,7 @@ const DIFFS_SECTIONS = [
   'Utilities',
   'Styling',
   'Theming',
+  'Internationalization',
   'TokenHooks',
   'WorkerPool',
   'SSR',
@@ -111,6 +112,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     Styling: 'CSS variables, inline styles, and unsafe CSS injection',
     Theming:
       'Pierre Light/Dark themes, custom theme creation, and registration',
+    Internationalization:
+      'Translating diff text with the i18n store and ICU plural messages',
     TokenHooks:
       'Experimental token-level enter/leave/click callbacks for hover UI and LSP integrations',
     WorkerPool:

@@ -6,6 +6,7 @@ import {
 import { cache } from 'react';
 
 export interface CodeExampleHTML {
+  sprite: string;
   shared: { html: string };
   content: string;
 }
@@ -17,13 +18,15 @@ export interface PreloadedCodeExample<LAnnotation, Caret> extends Omit<
   prerenderedHTML: CodeExampleHTML;
 }
 
-// React serializes a reused object once per server render. Keep the sprite
-// and core stylesheet in that object instead of repeating them in every prop.
+// React serializes a reused object once per server render. Keep the core
+// stylesheet in that object instead of repeating it in every prop.
 const shareHTML = cache((html: string) => ({ html }));
 
 // Diffs starts each preloaded file with its icon sprite and core stylesheet.
-// Separate that prefix so RSC can share it while File still receives the
-// complete, unchanged markup for server rendering and browser hydration.
+// The sprite carries only the icons that example uses, so it stays per
+// example; the core stylesheet is identical everywhere, so RSC shares it.
+// File still receives the complete, unchanged markup for server rendering and
+// browser hydration.
 export async function preloadCodeExample<
   LAnnotation = undefined,
   Caret = undefined,
@@ -41,7 +44,8 @@ export async function preloadCodeExample<
   return {
     ...result,
     prerenderedHTML: {
-      shared: shareHTML(prerenderedHTML.slice(0, contentStart)),
+      sprite: prerenderedHTML.slice(0, styleStart),
+      shared: shareHTML(prerenderedHTML.slice(styleStart, contentStart)),
       content: prerenderedHTML.slice(contentStart),
     },
   };

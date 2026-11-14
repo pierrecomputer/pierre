@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
+import { createTwoFilesPatch } from '@pierre/patches';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import {
   CodeView,
@@ -44,6 +44,12 @@ import {
   wait,
   waitFor,
 } from './domHarness';
+import {
+  applySessionEdits,
+  createTextDocumentFromLines,
+  documentEdit,
+  lineEdit,
+} from './editorTestUtils';
 
 type TestEditorComponent<EType extends EditorType> = EType extends 'file'
   ? File<undefined>
@@ -148,6 +154,25 @@ function insertAtStart(
 function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
   return (instance as { editSession?: { diff: FileDiffMetadata } }).editSession
     ?.diff;
+}
+
+// The editor's document for the item's file, and the change that replaces
+// its text with `next`, as the editor hands them to the component.
+function replaceItemContents(item: CodeViewItem<undefined>, next: string) {
+  if (item.type !== 'file') {
+    throw new Error('Expected a file item');
+  }
+  const document = new TextDocument<'file', undefined>(
+    `inmemory://${item.id}`,
+    item.file.contents
+  );
+  const change = document.applyEdits([
+    documentEdit(document, next.split(/(?<=\n)/)),
+  ]);
+  if (change == null) {
+    throw new Error('the edit applied nothing');
+  }
+  return { document, change };
 }
 
 function getEditSessionFile(instance: unknown): FileContents | undefined {
@@ -271,6 +296,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
         editStateKey?: string
       ): Editor<EType, undefined> => new Editor(type, options, editStateKey);
       const firstViewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         getEditStateKey: () => key,
       });
@@ -308,6 +334,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
         const changes: string[] = [];
         let attaches = 0;
         secondViewer = new CodeView({
+          useTokenTransformer: true,
           createEditor: (type, options, editStateKey) =>
             new Editor(
               type,
@@ -369,9 +396,13 @@ describe('programmatic edits on suspended CodeView editors', () => {
         );
         insertAtStart(editor, '// after\n');
         expect(changes.at(-1)).toBe(editor.getText());
-        expect(
-          secondViewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
-        ).toContain('// after');
+        // The rows follow in CodeView's frame.
+        await waitFor(
+          () =>
+            secondViewer
+              ?.getRenderedItems()[0]
+              ?.element.shadowRoot?.textContent?.includes('// after') === true
+        );
       } finally {
         secondViewer?.cleanUp();
         firstViewer.cleanUp();
@@ -393,6 +424,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
         editStateKey?: string
       ): Editor<EType, undefined> => new Editor(type, options, editStateKey);
       const firstViewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         getEditStateKey: () => key,
       });
@@ -439,6 +471,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
           throw new Error('Expected replacement partial diff');
         }
         secondViewer = new CodeView({
+          useTokenTransformer: true,
           createEditor,
           getEditStateKey: () => key,
           loadDiffFiles: (fileDiff) =>
@@ -522,6 +555,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
       editStateKey?: string
     ): Editor<EType, undefined> => new Editor(type, options, editStateKey);
     const firstViewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       getEditStateKey: () => key,
     });
@@ -543,6 +577,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
         version: 1,
       };
       secondViewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         getEditStateKey: () => key,
       });
@@ -588,6 +623,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
           return getEditSessionDiff(instance)?.additionLines.join('') ?? '';
         };
         const viewer = new CodeView({
+          useTokenTransformer: true,
           createEditor: (editorType, options, key) =>
             new Editor(
               editorType,
@@ -667,7 +703,6 @@ describe('programmatic edits on suspended CodeView editors', () => {
           expect(
             changes.every(({ document, session }) => document === session)
           ).toBe(true);
-          expect(getCachedRenderTarget(instance)).toBeUndefined();
 
           if (suspension === 'scroll') {
             viewer.scrollTo({
@@ -717,6 +752,7 @@ describe('programmatic edits on suspended CodeView editors', () => {
             : makeEditDiffItem('target');
         const completions: string[] = [];
         const viewer = new CodeView({
+          useTokenTransformer: true,
           createEditor: (editorType, options, key) =>
             new Editor(editorType, options, key),
           onItemEditComplete(event) {
@@ -789,6 +825,7 @@ describe('CodeView item edit mode', () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         parseDiffOptions: { disableLineMatching },
         onItemEditComplete() {
@@ -843,6 +880,7 @@ describe('CodeView item edit mode', () => {
     const { cleanup } = installDom();
     const root = createRoot();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (type, options) => new Editor(type, options),
     });
     const partial = parsePatchFiles(
@@ -948,7 +986,7 @@ describe('CodeView item edit mode', () => {
   test('uses the factory only when creating an edit session', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const active = makeTextEditFileItem('active');
 
     try {
@@ -984,6 +1022,7 @@ describe('CodeView item edit mode', () => {
     const resolvedIds: string[] = [];
     let revision = 'first';
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       getEditStateKey(item) {
         resolvedIds.push(item.id);
@@ -1038,7 +1077,7 @@ describe('CodeView item edit mode', () => {
   test('attaches factory editors to edit-mode items on mount', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [
@@ -1066,7 +1105,7 @@ describe('CodeView item edit mode', () => {
     const { editors, createEditor } = createEditorHarness({
       attachmentError,
     });
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     try {
       viewer.setup(createRoot());
       viewer.setItems([makeEditFileItem('a')]);
@@ -1085,7 +1124,7 @@ describe('CodeView item edit mode', () => {
   test('supports multiple simultaneously edited items', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [makeEditFileItem('a'), makeEditDiffItem('b')]);
@@ -1113,6 +1152,7 @@ describe('CodeView item edit mode', () => {
       const parseDiffOptions = { ignoreWhitespace, context: 0 };
       let completedDiff: FileDiffMetadata | undefined;
       const options: CodeViewOptions<undefined, undefined> = {
+        useTokenTransformer: true,
         createEditor,
         parseDiffOptions: updateOptions
           ? { ignoreWhitespace: !ignoreWhitespace, context: 4 }
@@ -1213,6 +1253,7 @@ describe('CodeView item edit mode', () => {
           | FileDiffEditCompleteEvent<undefined, undefined>
           | undefined;
         const viewer = new CodeView({
+          useTokenTransformer: true,
           createEditor,
           diffStyle,
           onItemEditComplete(event, editedItem) {
@@ -1345,6 +1386,7 @@ describe('CodeView item edit mode', () => {
             | FileDiffEditCompleteEvent<undefined, undefined>
             | undefined;
           const viewer = new CodeView({
+            useTokenTransformer: true,
             createEditor,
             diffStyle,
             onItemEditComplete(event, editedItem) {
@@ -1499,7 +1541,7 @@ describe('CodeView item edit mode', () => {
   test('does not append CR-only editor rows as a final row', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const fileDiff = parseDiffFromFile(null, {
       name: 'cr.txt',
       contents: 'l0\rl1\rl2\r',
@@ -1544,6 +1586,10 @@ describe('CodeView item edit mode', () => {
   test('edited items keep pass-through options untouched', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
+    // Rendering edited items without the transformer is the point here, so
+    // the misconfiguration error is expected for both edited items: the
+    // highlighted file and the plain-text diff each report it.
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const viewer = new CodeView({
       createEditor,
       enableLineSelection: true,
@@ -1560,6 +1606,7 @@ describe('CodeView item edit mode', () => {
         makeEditDiffItem('b'),
         makeEditFileItem('c', false),
       ]);
+      expect(consoleError).toHaveBeenCalledTimes(2);
 
       const [renderedA, renderedB, renderedC] = viewer.getRenderedItems();
       // Edited items keep the pass-through options untouched; the edit
@@ -1591,6 +1638,7 @@ describe('CodeView item edit mode', () => {
       expect(restoredA.instance.options.lineHoverHighlight).toBe('both');
     } finally {
       viewer.cleanUp();
+      consoleError.mockRestore();
       await wait(0);
       cleanup();
     }
@@ -1599,7 +1647,7 @@ describe('CodeView item edit mode', () => {
   test('toggling edit off discards the editor; re-toggling creates a fresh one', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const item = makeEditFileItem('a');
     try {
       viewer.setup(createRoot());
@@ -1623,7 +1671,7 @@ describe('CodeView item edit mode', () => {
   test('collapsed wins over edit', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const item = makeEditFileItem('a');
     try {
       viewer.setup(createRoot());
@@ -1660,6 +1708,7 @@ describe('CodeView item edit mode', () => {
     test(`collapse preserves ${itemType} contents and undo history`, async () => {
       const { cleanup } = installDom();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor: (editorType, options) => new Editor(editorType, options),
       });
       const item = makeItem();
@@ -1710,6 +1759,7 @@ describe('CodeView item edit mode', () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       enableLineSelection: true,
       onLineSelectionChange() {},
@@ -1746,7 +1796,7 @@ describe('CodeView item edit mode', () => {
   test('removing an edited item cleans up its editor', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const kept = makeEditFileItem('kept', false);
     try {
       viewer.setup(createRoot());
@@ -1766,7 +1816,7 @@ describe('CodeView item edit mode', () => {
   test('reuses the same editor across virtualization unmount and remount', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const items: CodeViewItem<undefined>[] = [
       makeEditFileItem('edited', true, 30),
       ...Array.from({ length: 39 }, (_, index) =>
@@ -1809,7 +1859,7 @@ describe('CodeView item edit mode', () => {
   test('remounts an edited file whose document grew without crashing', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const items: CodeViewItem<undefined>[] = [
       makeEditFileItem('edited', true, 30),
       ...Array.from({ length: 39 }, (_, index) =>
@@ -1821,9 +1871,8 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic an edit session that grew the document: the editor pushes the
-      // larger document into the host, which patches its render caches and
-      // remembers the document's line count.
+      // Mimic an edit session that grew the document: the editor hands the
+      // change to the component, whose model takes the new line count.
       const edited = viewer.getRenderedItems()[0];
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
@@ -1833,12 +1882,8 @@ describe('CodeView item edit mode', () => {
         { length: lineCount },
         (_, i) => `edited ${i}`
       ).join('\n');
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file', undefined>(
-          'inmemory://code-view-file',
-          documentText
-        )
-      );
+      const grown = replaceItemContents(items[0], documentText);
+      edited.instance.applyChange(grown.document, grown.change);
 
       // Scroll the edited item out (recycle) and back in. The private session
       // keeps its patched render cache, so the remount renders its grown
@@ -1882,7 +1927,7 @@ describe('CodeView item edit mode', () => {
   test('a mid-session document change reconciles the file item layout', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const items: CodeViewItem<undefined>[] = [
       makeEditFileItem('edited', true, 200),
       makeEditFileItem('below', false, 10),
@@ -1904,12 +1949,8 @@ describe('CodeView item edit mode', () => {
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
       }
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file', undefined>(
-          'inmemory://code-view-shrunk',
-          'only line'
-        )
-      );
+      const shrunk = replaceItemContents(items[0], 'only line');
+      edited.instance.applyChange(shrunk.document, shrunk.change);
       await wait(0);
 
       expect(viewer.getScrollHeight()).toBeLessThan(heightBefore);
@@ -1928,7 +1969,7 @@ describe('CodeView item edit mode', () => {
   test('a mid-session document change reconciles a diff item that scrolls out', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const items: CodeViewItem<undefined>[] = [
       makeEditDiffItem('edited', true),
       ...Array.from({ length: 5 }, (_, index) =>
@@ -1947,15 +1988,18 @@ describe('CodeView item edit mode', () => {
         (_, i) => `edited ${i}`
       ).join('\n');
       const edited = viewer.getRenderedItems()[0];
-      if (edited.type !== 'diff') {
+      const item = items[0];
+      if (edited.type !== 'diff' || item.type !== 'diff') {
         throw new Error('Expected an edited diff');
       }
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file-diff', undefined>(
-          'inmemory://code-view-diff',
-          documentText
-        )
+      const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        item.fileDiff.additionLines,
+        'inmemory://code-view-diff'
       );
+      applySessionEdits(edited.instance, sessionDocument, [
+        documentEdit(sessionDocument, [documentText]),
+      ]);
       // Scroll the edited item out before any render pass reconciles it: the
       // released item's cached layout height must still pick up the change.
       root.scrollTop = 10_000;
@@ -1977,7 +2021,7 @@ describe('CodeView item edit mode', () => {
   test('remounts an edited file with the session text after a recycle', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     const items: CodeViewItem<undefined>[] = [
       makeEditFileItem('edited', true, 30),
       ...Array.from({ length: 39 }, (_, index) =>
@@ -1989,12 +2033,26 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic a same-line-count edit: the editor pushes the dirty line's
-      // tokens into the host render caches, exactly like #applyChange does
-      // after a keystroke.
+      // Mimic a same-line-count edit: the editor hands the change and the
+      // line's tokens to the component, as it does after a keystroke.
       const edited = viewer.getRenderedItems()[0];
+      if (edited.type !== 'file') {
+        throw new Error('Expected an edited file');
+      }
       const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
-      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
+      const document = new TextDocument<'file', undefined>(
+        'inmemory://edited',
+        items[0].type === 'file' ? items[0].file.contents : ''
+      );
+      const change = document.applyEdits([
+        lineEdit(document, 0, 'edited marker line'),
+      ]);
+      if (change == null) {
+        throw new Error('the edit applied nothing');
+      }
+      edited.instance.applyChange(document, change, {
+        tokens: new Map([[0, tokens]]),
+      });
 
       // Scroll the edited item out (recycle) and back in. The private session
       // retains its patched render cache across the remount.
@@ -2035,7 +2093,7 @@ describe('CodeView item edit mode', () => {
   test('entering edit mode keeps the collapsed layout height', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
-    const viewer = new CodeView({ createEditor });
+    const viewer = new CodeView({ createEditor, useTokenTransformer: true });
     // A diff with a large unchanged region: collapsed regions stay collapsed
     // during editing, so entering edit mode must not change the layout.
     const oldContents = Array.from(
@@ -2076,6 +2134,7 @@ describe('CodeView item edit mode', () => {
     // file and return the nextItem CodeView built. CodeView installs the
     // file and applies nextItem through updateItem itself.
     const viewer: CodeView = new CodeView({
+      useTokenTransformer: true,
       createEditor: (editorType, options) =>
         new Editor(editorType, { ...options }),
       onItemEditComplete(event, item, nextItem) {
@@ -2144,6 +2203,7 @@ describe('CodeView item edit mode', () => {
     const completions: FileEditCompleteEvent<undefined, undefined>[] = [];
     const completionStates: EditorViewState[] = [];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor: (editorType, options) => new Editor(editorType, options),
       onItemEditComplete(event) {
         if ('file' in event) {
@@ -2190,6 +2250,7 @@ describe('CodeView item edit mode', () => {
         ?.element.shadowRoot?.querySelector('[data-code]');
       expect(code).toBeInstanceOf(HTMLElement);
       (code as HTMLElement).scrollLeft = 24;
+      dispatchScroll(code as HTMLElement);
       root.scrollTop = 48;
       const finalState: EditorViewState = {
         selections: [
@@ -2242,6 +2303,7 @@ describe('CodeView item edit mode', () => {
     const { editors, createEditor } = createEditorHarness();
     const changes: string[] = [];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       onItemEditChange(_event, item) {
         changes.push(item.id);
@@ -2269,6 +2331,7 @@ describe('CodeView item edit mode', () => {
     const { editors, createEditor } = createEditorHarness();
     const changes: Array<[string, string, EditorViewState]> = [];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       onItemEditChange(event, item) {
         changes.push([
@@ -2328,6 +2391,7 @@ describe('CodeView item edit mode', () => {
     }
     initial.fileDiff.cacheKey = 'active:v1';
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -2415,6 +2479,7 @@ describe('CodeView item edit mode', () => {
       ),
     ];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -2471,7 +2536,11 @@ describe('CodeView item edit mode', () => {
       expect(replacementSession?.additionLines.join('')).toBe(
         'one\nexternal value\nthree\n'
       );
-      expect(changes).toEqual(['one\nlocal value\nthree\n']);
+      // The replacement reaches the retained document at once.
+      expect(changes).toEqual([
+        'one\nlocal value\nthree\n',
+        'one\nexternal value\nthree\n',
+      ]);
 
       root.scrollTop = 0;
       dispatchScroll(root);
@@ -2513,6 +2582,7 @@ describe('CodeView item edit mode', () => {
       ),
     ];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -2570,7 +2640,8 @@ describe('CodeView item edit mode', () => {
       const replacementSession = getEditSessionFile(rendered.instance);
       expect(replacementSession).not.toBe(previousSession);
       expect(replacementSession?.contents).toBe(externalContents);
-      expect(changes).toEqual([localContents]);
+      // The replacement reaches the retained document at once.
+      expect(changes).toEqual([localContents, externalContents]);
 
       root.scrollTop = 0;
       dispatchScroll(root);
@@ -2609,6 +2680,7 @@ describe('CodeView item edit mode', () => {
     }
     initial.fileDiff.cacheKey = 'active:v1';
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor(editorType, options) {
         const editor = new Editor(editorType, options);
         editors.push(
@@ -2700,6 +2772,7 @@ describe('CodeView item edit mode', () => {
         | undefined;
     }> = [];
     const viewer = new CodeView({
+      useTokenTransformer: true,
       createEditor,
       onItemEditChange(event, item) {
         changes.push({ item, lineAnnotations: event.lineAnnotations });
@@ -2765,14 +2838,23 @@ describe('CodeView item edit mode', () => {
         .getRenderedItems()
         .find((entry) => entry.id === item.id);
       expect(rendered).toBeDefined();
-      const tokens: HighlightedToken[] = [[0, '', 'line 10']];
-      rendered!.instance.updateRenderCache(new Map([[10, tokens]]), 'light');
+      if (rendered?.type !== 'diff' || item.type !== 'diff') {
+        throw new Error('Expected a diff edit-session item.');
+      }
+      const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        item.fileDiff.additionLines,
+        'inmemory://code-view-revert'
+      );
+      applySessionEdits(rendered.instance, sessionDocument, [
+        lineEdit(sessionDocument, 10, 'line 10'),
+      ]);
     }
 
     test('a region-changing render flushes deferred line state', async () => {
       const { cleanup } = installDom();
       const { createEditor } = createEditorHarness();
-      const viewer = new CodeView({ createEditor });
+      const viewer = new CodeView({ createEditor, useTokenTransformer: true });
       const edited = makeSessionDiffItem('edited');
       if (edited.type !== 'diff') {
         throw new Error('Expected a diff edit-session item.');
@@ -2785,10 +2867,17 @@ describe('CodeView item edit mode', () => {
         expect(rendered).toBeDefined();
         const externalBefore = structuredClone(edited.fileDiff);
         const externalHunks = edited.fileDiff.hunks;
-        rendered.instance.updateRenderCache(
-          new Map([[25, [[0, '', 'line 25 changed']]]]),
-          'light'
+        if (rendered.type !== 'diff') {
+          throw new Error('Expected a diff edit-session item.');
+        }
+        const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+          'file-diff',
+          edited.fileDiff.additionLines,
+          'inmemory://code-view-region'
         );
+        applySessionEdits(rendered.instance, sessionDocument, [
+          lineEdit(sessionDocument, 25, 'line 25 changed'),
+        ]);
         expect(edited.fileDiff).toEqual(externalBefore);
         expect(edited.fileDiff.hunks).toBe(externalHunks);
 
@@ -2822,7 +2911,7 @@ describe('CodeView item edit mode', () => {
     test('session-shaped hunks survive a recycle and remount', async () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
-      const viewer = new CodeView({ createEditor });
+      const viewer = new CodeView({ createEditor, useTokenTransformer: true });
       const edited = makeSessionDiffItem('edited');
       if (edited.type !== 'diff') {
         throw new Error('Expected a diff edit-session item.');
@@ -2900,6 +2989,7 @@ describe('CodeView item edit mode', () => {
       const { editors, createEditor } = createEditorHarness();
       const completions: Completion[] = [];
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete(event, item) {
           expect(event.editor).toBe(editors[0]);
@@ -2944,6 +3034,7 @@ describe('CodeView item edit mode', () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete(event, item, nextItem) {
           if (item.type !== 'file' || !('file' in event)) {
@@ -2982,6 +3073,7 @@ describe('CodeView item edit mode', () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete() {
           return 'reject';
@@ -3011,6 +3103,7 @@ describe('CodeView item edit mode', () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete() {
           return 'reject';
@@ -3041,6 +3134,7 @@ describe('CodeView item edit mode', () => {
       const { editors, createEditor } = createEditorHarness();
       const completions: Completion[] = [];
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete(event, item, _nextItem) {
           completions.push({ event, item });
@@ -3078,6 +3172,7 @@ describe('CodeView item edit mode', () => {
       const { editors, createEditor } = createEditorHarness();
       const completions: Completion[] = [];
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete(event, item) {
           completions.push({ event, item });
@@ -3123,6 +3218,7 @@ describe('CodeView item edit mode', () => {
       const { createEditor } = createEditorHarness();
       let completions = 0;
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete() {
           completions += 1;
@@ -3164,6 +3260,7 @@ describe('CodeView item edit mode', () => {
         return 'reject';
       };
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete,
       });
@@ -3209,6 +3306,7 @@ describe('CodeView item edit mode', () => {
       const completions: Completion[] = [];
       const item = makeEditFileItem('a');
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete(event, completing, _nextItem) {
           completions.push({ event, item: completing });
@@ -3250,6 +3348,7 @@ describe('CodeView item edit mode', () => {
       const { editors, createEditor } = createEditorHarness();
       const completions: Completion[] = [];
       const viewer = new CodeView({
+        useTokenTransformer: true,
         createEditor,
         onItemEditComplete(event, item) {
           completions.push({ event, item });

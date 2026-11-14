@@ -5,11 +5,18 @@ const DELETIONS = '[data-code][data-deletions] [data-content]';
 
 async function openFixture(
   page: Page,
-  options: { annotations?: boolean; gutterUtility?: boolean } = {}
+  options: {
+    annotations?: boolean;
+    gutterUtility?: boolean;
+    mixedBlocks?: boolean;
+    unified?: boolean;
+  } = {}
 ): Promise<void> {
   const searchParams = new URLSearchParams();
   if (options.annotations === true) searchParams.set('annotations', '');
   if (options.gutterUtility === true) searchParams.set('gutterUtility', '');
+  if (options.mixedBlocks === true) searchParams.set('mixedBlocks', '');
+  if (options.unified === true) searchParams.set('unified', '');
   const query = searchParams.size === 0 ? '' : `?${searchParams}`;
   await page.goto(`/test/e2e/fixtures/edit.html${query}`);
   await page.waitForFunction(() => window.__editReady === true);
@@ -31,7 +38,7 @@ const editorHasFocus = (page: Page): Promise<boolean> =>
 // Real user path: a plain click into the editable additions column places the
 // caret, then typing flows through the genuine keyboard -> beforeinput ->
 // onChange pipeline. This guards the shadow-selection fallback in
-// src/editor/editor.ts: the pinned Chromium here lacks
+// src/utils/getComposedSelectionRange.ts: the pinned Chromium here lacks
 // Selection.getComposedRanges, so the editor reads the caret via
 // ShadowRoot.getSelection() instead. Without that fallback a click left the
 // caret unseeded and every keystroke was silently dropped.
@@ -146,6 +153,47 @@ test.describe('edit mode', () => {
 
     await expect(page.locator(ADDITIONS)).toContainText('Z');
     await expect.poll(() => changeCount(page)).toBeGreaterThan(0);
+  });
+
+  test('uses the native caret during composition and restores the overlay', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await clickIntoAdditions(page);
+
+    const content = page.locator(ADDITIONS);
+    const caret = page
+      .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
+      .first();
+    const transparent = 'rgba(0, 0, 0, 0)';
+    await expect(content).toHaveCSS('caret-color', transparent);
+    await expect(caret).toHaveCSS('visibility', 'visible');
+
+    // Synthetic events check rendered caret modes; OS IME placement is manual.
+    for (const data of ['가', '']) {
+      await content.evaluate((element) => {
+        element.dispatchEvent(
+          new CompositionEvent('compositionstart', {
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+      await expect(content).not.toHaveCSS('caret-color', transparent);
+      await expect(caret).toHaveCSS('visibility', 'hidden');
+
+      await content.evaluate((element, data) => {
+        element.dispatchEvent(
+          new CompositionEvent('compositionend', {
+            bubbles: true,
+            composed: true,
+            data,
+          })
+        );
+      }, data);
+      await expect(content).toHaveCSS('caret-color', transparent);
+      await expect(caret).toHaveCSS('visibility', 'visible');
+    }
   });
 
   test('additions are editable while deletions stay read-only', async ({
@@ -389,6 +437,119 @@ test.describe('edit mode', () => {
     await expect.poll(() => editorHasFocus(page)).toBe(false);
   });
 
+  test('a queued focus yields to the search panel when the host render lands later', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    await clickIntoAdditions(page);
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+    await page.keyboard.press('ControlOrMeta+Alt+f');
+    const replacement = page.locator('[data-search-panel] input[data-replace]');
+    await expect(replacement).toBeVisible();
+
+    // The editor asks for focus and the host captures for a DOM write whose
+    // sync has not landed yet. The user moves into the replace input before
+    // it lands; the sync then lands with a full render. The editor's earlier
+    // request must not take focus back from the input.
+    const syncsBefore = await page.evaluate(() => window.__syncCount ?? 0);
+    await page.evaluate(() => {
+      window.__editor?.focus();
+      window.__captureEditorFocusForDOMReplacement?.();
+    });
+    await replacement.focus();
+    await page.evaluate(() => window.__forceEditorFullRender?.());
+    await expect
+      .poll(() => page.evaluate(() => window.__syncCount ?? 0))
+      .toBeGreaterThan(syncsBefore);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        })
+    );
+
+    await expect(replacement).toBeFocused();
+    await page.keyboard.type('Z');
+    await expect(replacement).toHaveValue('Z');
+    expect(await changeCount(page)).toBe(0);
+  });
+
+  // Drives Chromium's own IME pipeline (the DevTools Input domain), so the
+  // browser produces the real composition events, preedit text, and
+  // selectionchange events an OS input method would.
+  test('a second IME syllable composed while the first commit settles keeps its order', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await clickIntoAdditions(page);
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+
+    await page.evaluate(() => {
+      const editor = window.__editor;
+      if (editor == null) throw new Error('missing editor');
+      const lineLength = editor.getText().split('\n')[0].length;
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: lineLength },
+          },
+          newText: '앞뒤',
+        },
+      ]);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ]);
+    });
+    await expect.poll(() => editorHasFocus(page)).toBe(true);
+
+    const cdp = await page.context().newCDPSession(page);
+    const compose = (text: string) =>
+      cdp.send('Input.imeSetComposition', {
+        text,
+        selectionStart: text.length,
+        selectionEnd: text.length,
+      });
+    const frames = (count: number) =>
+      page.evaluate(
+        (count) =>
+          new Promise<void>((resolve) => {
+            const step = (left: number) =>
+              left === 0
+                ? resolve()
+                : requestAnimationFrame(() => step(left - 1));
+            step(count);
+          }),
+        count
+      );
+
+    // Commit 가, then start composing 나 right away. The commit scheduled the
+    // editor's deferred focus frames; the next jamo arrives after they settle,
+    // which is where the caret used to jump past 뒤.
+    await compose('ㄱ');
+    await compose('가');
+    await cdp.send('Input.insertText', { text: '가' });
+    await compose('ㄴ');
+    await frames(3);
+    await compose('나');
+    await frames(1);
+    await cdp.send('Input.insertText', { text: '나' });
+    await frames(3);
+
+    const state = await page.evaluate(() => {
+      const editor = window.__editor;
+      const caret = editor?.getViewState().selections?.[0]?.start;
+      return { text: editor?.getText().split('\n')[0], caret };
+    });
+    expect(state.text).toBe('앞가나뒤');
+    expect(state.caret).toEqual({ line: 0, character: 3 });
+  });
+
   test('undo and redo round-trip a typed edit', async ({ page }) => {
     await openFixture(page);
 
@@ -484,4 +645,220 @@ test.describe('edit mode', () => {
       .toContain('Z');
     await expect.poll(() => changeCount(page)).toBeGreaterThan(changesBefore);
   });
+});
+
+// Clicking text the editor cannot edit (the deletions column in split view,
+// deleted rows in unified view) moves the caret to where editing continues on
+// the editable side. The mixedBlocks diff has one of every block: context,
+// a change with additions, a pure deletion mid-file, and one at end of file.
+test.describe('clicking read-only diff text', () => {
+  const UNIFIED = '[data-code][data-unified] [data-content]';
+  const deletedRow = (column: 'deletions' | 'unified', line: number) =>
+    `[data-code][data-${column}] [data-content] [data-line="${line}"][data-line-type="change-deletion"]`;
+
+  // The caret's position: both ends of the primary selection, so a collapsed
+  // selection reads as one point.
+  const primarySelection = (page: Page) =>
+    page.evaluate(() => {
+      const selection = window.__editor?.getViewState().selections?.at(-1);
+      return selection != null
+        ? { start: selection.start, end: selection.end }
+        : undefined;
+    });
+  const contentHasFocus = (page: Page, selector: string) =>
+    page.evaluate((selector) => {
+      const root = document.querySelector('diffs-container')?.shadowRoot;
+      return root?.activeElement === root?.querySelector(selector);
+    }, selector);
+
+  // The page point just inside `character` of the row's text, on the row's
+  // vertical center, so a click there lands the caret on that character.
+  async function characterPoint(
+    page: Page,
+    rowSelector: string,
+    character: number
+  ): Promise<{ x: number; y: number }> {
+    return page.evaluate(
+      ({ rowSelector, character }) => {
+        const root = document.querySelector('diffs-container')?.shadowRoot;
+        const row = root?.querySelector(rowSelector);
+        if (!(row instanceof HTMLElement)) {
+          throw new Error(`missing row ${rowSelector}`);
+        }
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        let remaining = character;
+        for (
+          let node = walker.nextNode();
+          node != null;
+          node = walker.nextNode()
+        ) {
+          const length = node.textContent?.length ?? 0;
+          if (remaining <= length) {
+            const range = document.createRange();
+            range.setStart(node, remaining);
+            range.collapse(true);
+            const rect = range.getBoundingClientRect();
+            const rowRect = row.getBoundingClientRect();
+            return { x: rect.left + 1, y: rowRect.top + rowRect.height / 2 };
+          }
+          remaining -= length;
+        }
+        throw new Error(`row ${rowSelector} has no character ${character}`);
+      },
+      { rowSelector, character }
+    );
+  }
+
+  async function clickRow(page: Page, rowSelector: string, character = 0) {
+    const point = await characterPoint(page, rowSelector, character);
+    await page.mouse.click(point.x, point.y);
+  }
+
+  async function dragWithinRow(page: Page, rowSelector: string) {
+    const from = await characterPoint(page, rowSelector, 2);
+    const to = await characterPoint(page, rowSelector, 13);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 4 });
+    await page.mouse.up();
+  }
+
+  test('a context line on the deletions side focuses the same line and column', async ({
+    page,
+  }) => {
+    await openFixture(page, { mixedBlocks: true });
+
+    await clickRow(page, `${DELETIONS} [data-line="3"]`, 6);
+
+    await expect
+      .poll(() => primarySelection(page))
+      .toEqual({
+        start: { line: 2, character: 6 },
+        end: { line: 2, character: 6 },
+      });
+    await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
+    await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
+      0
+    );
+  });
+
+  test('a deleted line focuses the first added line of its block', async ({
+    page,
+  }) => {
+    await openFixture(page, { mixedBlocks: true });
+
+    await clickRow(page, deletedRow('deletions', 2), 8);
+
+    await expect
+      .poll(() => primarySelection(page))
+      .toEqual({
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 0 },
+      });
+    await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
+    await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
+      0
+    );
+  });
+
+  test('a deleted line with no additions focuses the line after it', async ({
+    page,
+  }) => {
+    await openFixture(page, { mixedBlocks: true });
+
+    await clickRow(page, deletedRow('deletions', 4), 8);
+
+    await expect
+      .poll(() => primarySelection(page))
+      .toEqual({
+        start: { line: 3, character: 0 },
+        end: { line: 3, character: 0 },
+      });
+    await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
+  });
+
+  test('a deleted line at the end of the file focuses the end of the document', async ({
+    page,
+  }) => {
+    await openFixture(page, { mixedBlocks: true });
+
+    await clickRow(page, deletedRow('deletions', 6), 3);
+
+    const lines = (
+      await page.evaluate(() => window.__editor?.getText() ?? '')
+    ).split('\n');
+    const end = {
+      line: lines.length - 1,
+      character: lines[lines.length - 1].length,
+    };
+    await expect
+      .poll(() => primarySelection(page))
+      .toEqual({
+        start: end,
+        end,
+      });
+    await expect.poll(() => contentHasFocus(page, ADDITIONS)).toBe(true);
+  });
+
+  test('unified: a deleted line focuses the first added line of its block', async ({
+    page,
+  }) => {
+    await openFixture(page, { mixedBlocks: true, unified: true });
+
+    await clickRow(page, deletedRow('unified', 2), 8);
+
+    await expect
+      .poll(() => primarySelection(page))
+      .toEqual({
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 0 },
+      });
+    await expect.poll(() => contentHasFocus(page, UNIFIED)).toBe(true);
+    await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(
+      0
+    );
+  });
+
+  test('unified: a deleted line with no additions focuses the line after it', async ({
+    page,
+  }) => {
+    await openFixture(page, { mixedBlocks: true, unified: true });
+
+    await clickRow(page, deletedRow('unified', 4), 8);
+
+    await expect
+      .poll(() => primarySelection(page))
+      .toEqual({
+        start: { line: 3, character: 0 },
+        end: { line: 3, character: 0 },
+      });
+    await expect.poll(() => contentHasFocus(page, UNIFIED)).toBe(true);
+  });
+
+  for (const unified of [false, true]) {
+    test(`${unified ? 'unified' : 'split'}: dragging across deleted text keeps the native selection`, async ({
+      page,
+    }) => {
+      await openFixture(page, { mixedBlocks: true, unified });
+
+      await dragWithinRow(
+        page,
+        deletedRow(unified ? 'unified' : 'deletions', 2)
+      );
+
+      await expect
+        .poll(() =>
+          page.evaluate(() => window.getSelection()?.toString() ?? '')
+        )
+        .toContain('removed');
+      expect(
+        await page.evaluate(
+          () => window.__editor?.getViewState().selections?.length ?? 0
+        )
+      ).toBe(0);
+      await expect(
+        page.locator('pre[data-deleted-text-selection]')
+      ).toHaveCount(1);
+    });
+  }
 });

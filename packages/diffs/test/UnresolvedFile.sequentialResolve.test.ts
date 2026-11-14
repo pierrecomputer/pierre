@@ -143,7 +143,7 @@ function clickActionButton(button: HTMLButtonElement): void {
 describe('UnresolvedFile sequential conflict resolution', () => {
   test('a second conflict can still be resolved after the first', async () => {
     const { cleanup } = installDom();
-    const { fileContainer, getState } =
+    const { instance, fileContainer, getState } =
       mountControlledUnresolvedFile(TWO_CONFLICT_FILE);
     try {
       // Both conflicts start unresolved with clickable action buttons.
@@ -175,6 +175,7 @@ describe('UnresolvedFile sequential conflict resolution', () => {
       // BUG: clicking the second conflict's action does nothing.
       expect(getState().actions[1]).toBeUndefined();
     } finally {
+      instance.cleanUp();
       document.body.innerHTML = '';
       await wait(0);
       cleanup();

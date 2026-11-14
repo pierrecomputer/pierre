@@ -11,6 +11,7 @@ import type {
   SelectionSide,
   TokenEventBase,
 } from '../types';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
@@ -281,6 +282,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private proposedSelectedRange: SelectedLineRange | null | undefined;
   private renderedSelectedLinesState: LineRenderState | undefined;
   private renderedEditorActiveLineState: LineRenderState | undefined;
+  // The elements carrying each mark, so clearing them never scans the tree.
+  // Undefined until the first render, when markup may already carry marks.
+  private markedSelectedElements: Element[] | undefined;
+  private markedEditorActiveElements: Element[] | undefined;
   private selectionAnchor: SelectionPoint | undefined;
   private pointerSession: PointerSession = { mode: 'idle' };
 
@@ -289,8 +294,16 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     private options: InteractionManagerOptions<TMode>
   ) {}
 
+  // New options take effect on the pre already set up; unchanged options are
+  // a no-op.
   setOptions(options: InteractionManagerOptions<TMode>): void {
+    if (areObjectsEqual(this.options, options)) {
+      return;
+    }
     this.options = options;
+    if (this.pre != null) {
+      this.setup(this.pre);
+    }
   }
 
   cleanUp(): void {
@@ -314,11 +327,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.interactiveLinesAttr = false;
     this.interactiveLineNumbersAttr = false;
     this.hasPointerListeners = false;
+    this.markedSelectedElements = undefined;
+    this.markedEditorActiveElements = undefined;
     this.setSelectionDirty();
   }
 
+  // Rows keep the selection marks written on them; the component calls
+  // `setSelectionDirty` when a render wrote rows that have none.
   setup(pre: HTMLPreElement): void {
-    this.setSelectionDirty();
     const { usesCustomGutterUtility = false, enableGutterUtility = false } =
       this.options;
 
@@ -450,12 +466,17 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    debugLogIfEnabled(
-      this.options.__debugPointerEvents,
-      'click',
-      'FileDiff.DEBUG.handlePointerClick:',
-      event
-    );
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
+      debugLogIfEnabled(
+        this.options.__debugPointerEvents,
+        'click',
+        'FileDiff.DEBUG.handlePointerClick:',
+        event
+      );
+    }
     this.handlePointerEvent({ eventType: 'click', event });
   };
 
@@ -484,12 +505,27 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    debugLogIfEnabled(
-      this.options.__debugPointerEvents,
-      'move',
-      'FileDiff.DEBUG.handlePointerMove:',
-      event
-    );
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
+      debugLogIfEnabled(
+        this.options.__debugPointerEvents,
+        'move',
+        'FileDiff.DEBUG.handlePointerMove:',
+        event
+      );
+    }
+    // A mouse button held outside of a selection gesture means the browser is
+    // dragging, usually to select text. That is not hover, so hover ends until
+    // the button is released. A press on the gutter utility leaves it in place
+    // so its click can still land.
+    if (event.buttons !== 0 && this.pointerSession.mode === 'idle') {
+      if (!isGutterUtilityPath(event.composedPath())) {
+        this.endHover(event);
+      }
+      return;
+    }
     // should we perhaps throttle this a bit because move can be fast as fuk
     // boiiii
     this.handlePointerEvent({ eventType: 'move', event });
@@ -497,50 +533,80 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   handlePointerLeave = (event: PointerEvent): void => {
     const { __debugPointerEvents } = this.options;
-    debugLogIfEnabled(
-      __debugPointerEvents,
-      'move',
-      'FileDiff.DEBUG.handlePointerLeave: no event'
-    );
-    if (this.hoveredLine == null && this.hoveredToken == null) {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
       debugLogIfEnabled(
         __debugPointerEvents,
         'move',
-        'FileDiff.DEBUG.handlePointerLeave: returned early, no hovered line or token'
+        'FileDiff.DEBUG.handlePointerLeave: no event'
       );
+    }
+    if (this.hoveredLine == null && this.hoveredToken == null) {
+      if (
+        typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development'
+      ) {
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'move',
+          'FileDiff.DEBUG.handlePointerLeave: returned early, no hovered line or token'
+        );
+      }
       return;
     }
+    this.endHover(event);
+  };
+
+  // Ends hover: tells the host the pointer left the hovered token and line,
+  // then places the gutter utility as if nothing is hovered.
+  private endHover(event: PointerEvent): void {
+    if (this.hoveredLine == null && this.hoveredToken == null) {
+      return;
+    }
+    const { onTokenLeave, onLineLeave } = this.options;
     if (this.hoveredToken != null) {
-      this.options.onTokenLeave?.(this.hoveredToken, event);
+      onTokenLeave?.(this.hoveredToken, event);
       this.clearHoveredToken();
     }
 
     if (this.hoveredLine != null) {
-      this.options.onLineLeave?.({
+      onLineLeave?.({
         ...this.hoveredLine,
         event,
       } as PointerEventEnterLeaveProps<TMode>);
       this.clearHoveredLine();
     }
     this.placeUtility();
-  };
+  }
 
   private handlePointerEvent({ eventType, event }: HandlePointerEventProps) {
     const { __debugPointerEvents } = this.options;
     const composedPath = event.composedPath();
-    debugLogIfEnabled(
-      __debugPointerEvents,
-      eventType,
-      'FileDiff.DEBUG.handlePointerEvent:',
-      { eventType, composedPath }
-    );
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
+      debugLogIfEnabled(
+        __debugPointerEvents,
+        eventType,
+        'FileDiff.DEBUG.handlePointerEvent:',
+        { eventType, composedPath }
+      );
+    }
     const target = this.resolvePointerTarget(composedPath);
-    debugLogIfEnabled(
-      __debugPointerEvents,
-      eventType,
-      'FileDiff.DEBUG.handlePointerEvent: resolvePointerTarget result:',
-      target
-    );
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
+      debugLogIfEnabled(
+        __debugPointerEvents,
+        eventType,
+        'FileDiff.DEBUG.handlePointerEvent: resolvePointerTarget result:',
+        target
+      );
+    }
 
     const {
       onLineClick,
@@ -685,42 +751,47 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       pre.addEventListener('pointerleave', this.handlePointerLeave);
       this.hasPointerListeners = true;
 
-      debugLogIfEnabled(
-        __debugPointerEvents,
-        'click',
-        'FileDiff.DEBUG.attachEventListeners: Attaching click events for:',
-        (() => {
-          const reasons: string[] = [];
-          if (
-            __debugPointerEvents === 'both' ||
-            __debugPointerEvents === 'click'
-          ) {
-            if (onLineClick != null) {
-              reasons.push('onLineClick');
+      if (
+        typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development'
+      ) {
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'click',
+          'FileDiff.DEBUG.attachEventListeners: Attaching click events for:',
+          (() => {
+            const reasons: string[] = [];
+            if (
+              __debugPointerEvents === 'both' ||
+              __debugPointerEvents === 'click'
+            ) {
+              if (onLineClick != null) {
+                reasons.push('onLineClick');
+              }
+              if (onLineNumberClick != null) {
+                reasons.push('onLineNumberClick');
+              }
+              if (onHunkExpand != null) {
+                reasons.push('expandable hunk separators');
+              }
+              if (onMergeConflictActionClick != null) {
+                reasons.push('merge conflict actions');
+              }
             }
-            if (onLineNumberClick != null) {
-              reasons.push('onLineNumberClick');
-            }
-            if (onHunkExpand != null) {
-              reasons.push('expandable hunk separators');
-            }
-            if (onMergeConflictActionClick != null) {
-              reasons.push('merge conflict actions');
-            }
-          }
-          return reasons;
-        })()
-      );
-      debugLogIfEnabled(
-        __debugPointerEvents,
-        'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching pointer move event'
-      );
-      debugLogIfEnabled(
-        __debugPointerEvents,
-        'move',
-        'FileDiff.DEBUG.attachEventListeners: Attaching pointer leave event'
-      );
+            return reasons;
+          })()
+        );
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'move',
+          'FileDiff.DEBUG.attachEventListeners: Attaching pointer move event'
+        );
+        debugLogIfEnabled(
+          __debugPointerEvents,
+          'move',
+          'FileDiff.DEBUG.attachEventListeners: Attaching pointer leave event'
+        );
+      }
     } else if (!shouldAttachPointerListeners && this.hasPointerListeners) {
       pre.removeEventListener('click', this.handlePointerClick);
       pre.removeEventListener('pointerdown', this.handlePointerDown);
@@ -1189,16 +1260,27 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     return true;
   }
 
+  // Shows the utility on a line, moving it only when the line changes.
   private showUtilityOnLine(line: EventBaseProps<TMode>): void {
-    if (this.gutterUtilityContainer == null) {
+    const { gutterUtilityContainer } = this;
+    if (gutterUtilityContainer == null) {
       return;
     }
     this.gutterUtilityLine = line;
-    line.numberElement.appendChild(this.gutterUtilityContainer);
+    gutterUtilityContainer.style.visibility = '';
+    if (gutterUtilityContainer.parentNode !== line.numberElement) {
+      line.numberElement.appendChild(gutterUtilityContainer);
+    }
   }
 
+  // Hides the utility where it sits instead of detaching it. Hover can end in
+  // the middle of a mouse drag, and Safari crashes when a slot is added or
+  // removed during one: https://bugs.webkit.org/show_bug.cgi?id=330739
   private hideUtility(): void {
-    this.gutterUtilityContainer?.remove();
+    const { gutterUtilityContainer } = this;
+    if (gutterUtilityContainer != null) {
+      gutterUtilityContainer.style.visibility = 'hidden';
+    }
     this.gutterUtilityLine = undefined;
   }
 
@@ -1739,16 +1821,15 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       columns.some((column) => column.renderEditorActiveLine);
 
     if (selectedLinesChanged) {
-      for (const element of this.pre.querySelectorAll('[data-selected-line]')) {
-        element.removeAttribute('data-selected-line');
-      }
+      this.clearMarks('data-selected-line', this.markedSelectedElements);
+      this.markedSelectedElements = [];
     }
     if (editorActiveLineChanged) {
-      for (const element of this.pre.querySelectorAll(
-        '[data-editor-active-line]'
-      )) {
-        element.removeAttribute('data-editor-active-line');
-      }
+      this.clearMarks(
+        'data-editor-active-line',
+        this.markedEditorActiveElements
+      );
+      this.markedEditorActiveElements = [];
     }
 
     const selectedFirst =
@@ -1800,11 +1881,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
               : lineIndex === selectedLast
                 ? 'last'
                 : '';
-          gutterElement.setAttribute('data-selected-line', attributeValue);
+          this.markSelected(gutterElement, attributeValue);
           // A number-only highlight marks just the gutter number, leaving the
           // line background and any annotation rows untouched.
           if (!selectedLines.lineNumberOnly) {
-            contentElement.setAttribute('data-selected-line', attributeValue);
+            this.markSelected(contentElement, attributeValue);
             if (
               gutterElement.nextSibling instanceof HTMLElement &&
               contentElement.nextSibling instanceof HTMLElement &&
@@ -1817,27 +1898,21 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             ) {
               if (selectedIsSingle) {
                 attributeValue = 'last';
-                contentElement.setAttribute('data-selected-line', 'first');
+                this.markSelected(contentElement, 'first');
               } else if (lineIndex === selectedFirst) {
                 attributeValue = '';
               } else if (lineIndex === selectedLast) {
-                contentElement.setAttribute('data-selected-line', '');
+                this.markSelected(contentElement, '');
               }
-              contentElement.nextSibling.setAttribute(
-                'data-selected-line',
-                attributeValue
-              );
-              gutterElement.nextSibling.setAttribute(
-                'data-selected-line',
-                attributeValue
-              );
+              this.markSelected(contentElement.nextSibling, attributeValue);
+              this.markSelected(gutterElement.nextSibling, attributeValue);
             }
           }
         }
         if (renderEditorActiveLine && lineIndex === editorLineIndex) {
-          gutterElement.setAttribute('data-editor-active-line', '');
+          this.markEditorActive(gutterElement);
           if (!editorActiveLine.lineNumberOnly) {
-            contentElement.setAttribute('data-editor-active-line', '');
+            this.markEditorActive(contentElement);
           }
         }
       }
@@ -1850,6 +1925,26 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       this.renderedEditorActiveLineState = editorActiveLine;
     }
   };
+
+  // Removes a mark from the elements carrying it: the ones marked here, or,
+  // before anything was marked, whatever the markup came with.
+  private clearMarks(attribute: string, marked: Element[] | undefined): void {
+    const elements =
+      marked ?? this.pre?.querySelectorAll(`[${attribute}]`) ?? [];
+    for (const element of elements) {
+      element.removeAttribute(attribute);
+    }
+  }
+
+  private markSelected(element: Element, value: string): void {
+    element.setAttribute('data-selected-line', value);
+    this.markedSelectedElements?.push(element);
+  }
+
+  private markEditorActive(element: Element): void {
+    element.setAttribute('data-editor-active-line', '');
+    this.markedEditorActiveElements?.push(element);
+  }
 
   private notifySelectionCommitted(range: SelectedLineRange | null): void {
     this.options.onLineSelected?.(range);

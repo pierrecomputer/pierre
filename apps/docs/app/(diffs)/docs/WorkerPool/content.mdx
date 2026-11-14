@@ -136,10 +136,12 @@ automatically. If you're using the Vanilla JS APIs, we provide a
 you can then manually pass to all your File/FileDiff instances.
 
 <Notice icon={<IconInfoFill />} variant="warning">
-  When using the worker pool, the `theme`, `lineDiffType`,
+  When using the worker pool, the `theme`, `lineDiffType`, `preferredDiffLib`,
   `tokenizeMaxLineLength`, and `useTokenTransformer` render options are
   controlled by `WorkerPoolManager`, not individual components. Passing these
-  options into component instances will be ignored.
+  options into component instances will be ignored. A component's
+  `parseDiffOptions.preferredDiffLib` still selects the library for its file
+  diffs.
 </Notice>
 
 To change render options after `WorkerPoolManager` instantiates, call
@@ -152,12 +154,14 @@ move highlighting work off the main thread, but they do not reduce the extra DOM
 size created by token metadata. For token callback behavior and performance
 tradeoffs, see [Token Hooks](#token-hooks).
 
-[Edit mode](#edit-mode) needs no pool configuration: a file being edited renders
-on the main thread with the token metadata the editor needs, while the pool
-keeps rendering every other file. Enabling `useTokenTransformer: true` on the
-pool is an optional optimization for edit-heavy apps — pool markup is then
-already editor-compatible, so entering edit mode skips a one-time re-render of
-that file.
+Set `useTokenTransformer: true` on the pool when pool-rendered files can enter
+[edit mode](#edit-mode). A file being edited renders on the main thread with the
+token metadata the editor reads, while the pool keeps rendering every other
+file. Pool markup rendered without the transformer lacks that metadata, so
+entering edit mode re-highlights and re-renders the whole file synchronously
+before anything paints, which blocks the page for seconds on large files.
+Development builds log an error when that happens. See
+[Edit mode: Worker Pool](#edit-mode-performance-and-loading-worker-pool).
 
 Set `preferredHighlighter` when initializing the pool to choose `'shiki-js'`
 (the default), `'shiki-wasm'`, or `'highlights'`. The portable worker includes
@@ -276,6 +280,16 @@ Results highlighted on the main thread through
 the same way.
 
 <DocsCodeExample {...cachingExample} />
+
+### Editing
+
+Edit mode starts from the pool's rows when it can. A file or diff with a
+`cacheKey`, rendered by a pool whose highlighter options set
+`useTokenTransformer: true`, waits for a highlight still in flight before its
+session starts, instead of highlighting again on the main thread. React and
+`CodeView` wait for you; vanilla code awaits `instance.prepareForEditing()`
+before `editor.edit()`. See
+[Edit mode → Worker Pool](#edit-mode-performance-and-loading-worker-pool).
 
 ### API Reference
 

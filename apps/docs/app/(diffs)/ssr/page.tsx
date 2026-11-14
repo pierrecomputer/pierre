@@ -4,6 +4,7 @@ import { preloadMultiFileDiff } from '@pierre/diffs/ssr';
 import type { AnnotationMetadata } from './ssr_types';
 import { SSRPage } from './SSRPage';
 import { pageMetadata } from '@/lib/page-metadata';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 export const metadata = pageMetadata({
   title: 'SSR demos — Pierre Diffs',
@@ -65,6 +66,7 @@ export default async function Ssr() {
     oldFile: OLD_FILE,
     newFile: NEW_FILE,
     options: {
+      parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
       theme: 'pierre-dark',
       diffStyle: 'split',
       diffIndicators: 'bars',

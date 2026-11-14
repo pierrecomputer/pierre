@@ -20,6 +20,7 @@ import { Swatches } from './Swatches';
 import { useTreeStatePreview } from './useTreeStatePreview';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 function ModeToggle({
   mode,
@@ -113,6 +114,7 @@ function DiffCard({
         className="overflow-hidden rounded-sm border"
         style={{ colorScheme: theme.type as 'light' | 'dark' }}
         options={{
+          parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
           theme: { dark: theme.name, light: theme.name },
           themeType: theme.type as 'light' | 'dark',
           diffStyle: 'unified',
@@ -154,6 +156,7 @@ function CombinedCard({
             fileDiff={fileDiff}
             className="h-full overflow-hidden"
             options={{
+              parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
               theme: { dark: theme.name, light: theme.name },
               themeType: theme.type as 'light' | 'dark',
               diffStyle: 'unified',

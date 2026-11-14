@@ -73,6 +73,7 @@ async function createFoldFixture(platform?: string): Promise<FoldFixture> {
 
   const fileDiff = new TestFileDiff({
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });

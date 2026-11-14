@@ -1,0 +1,43 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['publishable']
+
+tasks:
+  # scripts/build.ts compiles the WAT sources and writes the wasm artifacts to
+  # dist/, then tsdown compiles the glue next to them. The wasm artifacts are
+  # gitignored, so workspace consumers (diffs) reach them through their
+  # `^:build` deps.
+  build:
+    script: 'rm -rf dist && bun ./scripts/build.ts && tsdown'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'lib/**/*'
+      - 'scripts/build.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # The suite compiles the wasm from the WAT sources itself and imports the
+  # glue straight from lib/, so it needs no build.
+  test:
+    command: 'bun test'
+    options:
+      merge: 'replace'
+
+  prepublish:
+    deps:
+      - 'test'
+
+  # Local-only benchmark against jsdiff; it compiles the WAT in-process.
+  # Explicit options instead of a preset keep it runnable in CI-marked agent
+  # shells. Pass `-- --memory` or `-- --chart` for the extra reports.
+  bench:
+    command: 'bun ./benchmark/bench.ts'
+    options:
+      cache: false
+      runInCI: 'always'

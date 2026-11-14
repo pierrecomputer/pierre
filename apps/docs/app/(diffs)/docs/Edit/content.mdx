@@ -44,12 +44,19 @@ creation-time inputs for an editor. Changing them does not replace an active
 editor; the latest values apply when a later edit session creates another
 editor. Keep factories and object props stable across renders.
 
-Setting `edit` on a partial `FileDiff` starts loading the full files through
-`loadDiffFiles`. The editor attaches after loading finishes, so `onAttach` runs
-then, not when `edit` first becomes true. Without `loadDiffFiles`, or for a
-partial `new` or `deleted` file that has nothing to load, rendering throws;
-catch it with an error boundary. A failed load logs and retries on the next
-render, or throws when `disableErrorHandling` is set.
+The editor attaches once the component is ready to edit, which can be later than
+when `edit` first becomes true; `onAttach` runs then. Two things delay it:
+
+- A partial `FileDiff` first loads its full files through `loadDiffFiles`.
+  Without `loadDiffFiles`, or for a partial `new` or `deleted` file that has
+  nothing to load, rendering throws; catch it with an error boundary. A failed
+  load logs and retries on the next render, or throws when
+  `disableErrorHandling` is set.
+- A file or diff a [worker pool](#edit-mode-performance-and-loading-worker-pool)
+  is still highlighting waits for that result, so the session starts from the
+  pool's rows instead of highlighting the whole file again on the main thread.
+  This needs the pool's `useTokenTransformer: true` and a `cacheKey` on the
+  input; otherwise the session starts at once.
 
 <EditComponentTabs
   fileExample={editReactExample}
@@ -59,16 +66,26 @@ render, or throws when `disableErrorHandling` is set.
 
 #### Vanilla JS
 
-Render the component first, then attach an editor of the matching type. Keep the
-function returned by `edit()` and call it for a normal, install-capable
-completion.
+Render the component, await `instance.prepareForEditing()`, then attach an
+editor of the matching type. Keep the function returned by `edit()` and call it
+for a normal, install-capable completion.
 
-If a `FileDiff` may be partial, configure `loadDiffFiles`, render, then await
-`fileDiffInstance.prepareForEditing()` before calling
-`editor.edit(fileDiffInstance)`. It resolves once the full files are loaded and
-rejects when `loadDiffFiles` is missing, when the partial diff cannot be
-hydrated (`new` or `deleted` files), or when loading fails. `editor.edit()`
-throws while the diff is partial.
+`prepareForEditing()` resolves once the component can start a session, and at
+once when nothing stands in the way. It waits for a partial `FileDiff` to load
+its full files through `loadDiffFiles`, and for a
+[worker pool](#edit-mode-performance-and-loading-worker-pool) highlight the
+session can reuse that is still in flight. It rejects when `loadDiffFiles` is
+missing, when the partial diff cannot be hydrated (`new` or `deleted` files), or
+when loading fails. `editor.edit()` throws while the component is not ready.
+
+To start editing synchronously when nothing needs waiting for, check
+`instance.isReadyToEdit()` first and call `editor.edit()` directly when it is
+true; await `prepareForEditing()` only when it is false. This keeps a click
+handler on the same tick as the gesture. The editor has its document a little
+later either way, once it has synced with the rendered rows, so focus it from
+the `onAttach` option rather than right after `edit()`.
+
+<DocsCodeExample {...editVanillaReadyExample} />
 
 Set `onEditChange` in the component's `FileOptions` or `FileDiffOptions` to
 monitor live changes while in edit mode. Use `onEditComplete` to accept or
@@ -135,10 +152,24 @@ Use the callbacks exposed by each component:
   `event.editor.getViewState()` or `event.editor.getEditState()` only when
   needed.
 
+`onEditChange`, and the editor's own `onChange`, run synchronously whenever the
+document changes: typing, undo and redo, `applyEdits`, and a new `file` or
+`fileDiff` passed to a component with an editor attached, which the editor
+applies as one undoable edit when the old side, name and language are unchanged,
+and as a fresh document with fresh history otherwise. They report the document,
+not the screen. The rows may not show the change yet when the callback runs, for
+example in a virtualized component whose render is queued or while a theme is
+still loading, so do not read the component's DOM from the callback.
+
 Do not feed `event.file` or `event.lineAnnotations` back into the active
 component on every change. Edit mode already owns the live document and
 annotation positions. Use the event for autosave, validation, or application
-side effects.
+side effects. Calling back into the editor or the component from inside the
+callback throws: `render` with a new `file` or `fileDiff`, `applyEdits`, `undo`,
+`redo`, `edit`, and `cleanUp`. If a change should lead to another change, make
+that call after the callback returns. An error thrown by the callback, including
+that one, is logged with `console.error` and does not stop the update that
+raised it.
 
 Most of the time you probably won't need this API.
 
@@ -428,10 +459,27 @@ window.
 
 #### Worker Pool
 
-The edited file renders on the main thread while a worker pool continues to
-render other components. Setting `useTokenTransformer: true` in the pool's
-highlighter options can avoid a one-time re-render when entering edit mode, at
-the cost of larger markup for every pool-rendered file.
+A worker pool highlights the first render of a file or diff off the main thread,
+except inputs under `mainThreadMaxCharacters`. Once a session is running, the
+edited file renders on the main thread while the pool continues to render other
+components.
+
+Set `useTokenTransformer: true` on any file that can enter edit mode: in the
+component options, or in the pool's highlighter options when a pool renders it.
+The editor reads token metadata that only the transformer emits. Markup rendered
+without it cannot be reused, so the whole file is re-highlighted and re-rendered
+synchronously on the main thread when editing starts. Development builds log an
+error whenever this happens. The transformer makes the rendered markup larger;
+which is the tradeoff for editable files.
+
+With the transformer on and a `cacheKey` on the file or diff, a session started
+while the pool is still highlighting waits for that result and starts from its
+rows, so a large file is not highlighted twice when the session starts from the
+input's own contents. A retained draft with other contents still highlights
+locally after the wait. React and `CodeView` wait for you; vanilla code awaits
+`instance.prepareForEditing()` before `editor.edit()`. Without a `cacheKey` the
+pool's task cannot be joined, so the session starts at once and highlights
+locally. A highlight the pool refused is not waited for either.
 
 <EditWorkerPoolTabs
   vanillaExample={editWorkerPoolVanillaExample}

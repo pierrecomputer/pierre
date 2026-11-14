@@ -161,10 +161,26 @@ export function PlaygroundVirtualizerView({
       readmeDispose = undefined;
       readmeButtons.setEditing(false);
     };
+    let readmeAttaching = false;
     const readmeButtons = createEditSessionButtons({
       onEdit() {
-        readmeDispose = readmeEditor.edit(fileInstance);
-        readmeButtons.setEditing(true);
+        if (readmeAttaching || readmeDispose != null) {
+          return;
+        }
+        // A pool highlight still in flight is waited for first.
+        readmeAttaching = true;
+        void fileInstance
+          .prepareForEditing()
+          .then(() => {
+            readmeDispose = readmeEditor.edit(fileInstance);
+            readmeButtons.setEditing(true);
+          })
+          .catch((error: unknown) => {
+            console.error(error);
+          })
+          .finally(() => {
+            readmeAttaching = false;
+          });
       },
       onCancel() {
         readmeCancelled = true;
@@ -308,10 +324,26 @@ export function PlaygroundVirtualizerView({
         dispose = undefined;
         buttons.setEditing(false);
       };
+      let attaching = false;
       const buttons = createEditSessionButtons({
         onEdit() {
-          dispose = editor.edit(instance);
-          buttons.setEditing(true);
+          if (attaching || dispose != null) {
+            return;
+          }
+          // A pool highlight still in flight is waited for first.
+          attaching = true;
+          void instance
+            .prepareForEditing()
+            .then(() => {
+              dispose = editor.edit(instance);
+              buttons.setEditing(true);
+            })
+            .catch((error: unknown) => {
+              console.error(error);
+            })
+            .finally(() => {
+              attaching = false;
+            });
         },
         onCancel() {
           cancelled = true;
