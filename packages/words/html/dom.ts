@@ -1,6 +1,11 @@
 import { delta, type InternalHtmlUpdate } from '../lib/internal';
 import type { InternalCodeUpdate } from './render';
-import { controlFlags, createHtmlRenderer, decodeHtml } from './render';
+import {
+  controlFlags,
+  createHtmlRenderer,
+  decodeHtml,
+  rewritesElements,
+} from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
 
 const isFade = (node: Node): node is HTMLElement =>
@@ -10,9 +15,12 @@ const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
   '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"]';
 
+// Must equal the `markdown-fade-in` duration in react/styles.css: fades with
+// this duration carry no inline style, and cleanup is timed from this value.
+const fadeDuration = 180;
+
 /** Wrap new text in fade spans, and unwrap each span when its animation ends. */
 function createFades(root: HTMLElement) {
-  // A negative deadline marks an existing block, which needs no wrapper removal.
   const nodes: HTMLElement[] = [];
   const deadlines: number[] = [];
   const document = root.ownerDocument;
@@ -22,7 +30,7 @@ function createFades(root: HTMLElement) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timerDeadline = Infinity;
   let requested = false;
-  let duration = 180;
+  let duration = fadeDuration;
   const enabled = (): boolean =>
     requested && duration > 0 && query?.matches !== true;
   const arm = (next: number): void => {
@@ -91,7 +99,8 @@ function createFades(root: HTMLElement) {
     const span = document.createElement('span');
     span.dataset.markdown = 'token';
     span.dataset.animated = 'true';
-    if (duration !== 180) span.style.animationDuration = `${duration}ms`;
+    if (duration !== fadeDuration)
+      span.style.animationDuration = `${duration}ms`;
     text.replaceWith(span);
     span.append(text);
     nodes.push(span);
@@ -123,8 +132,10 @@ function createFades(root: HTMLElement) {
     update(active: boolean, options: boolean | AnimateOptions): void {
       requested = active && options !== false;
       const value =
-        typeof options === 'object' ? (options.duration ?? 180) : 180;
-      duration = Number.isFinite(value) ? Math.max(0, value) : 180;
+        typeof options === 'object'
+          ? (options.duration ?? fadeDuration)
+          : fadeDuration;
+      duration = Number.isFinite(value) ? Math.max(0, value) : fadeDuration;
       if (!enabled()) stop();
     },
     tree(node: Node, completed = false): void {
@@ -155,7 +166,7 @@ function createFades(root: HTMLElement) {
               kind === 'code-lines')
           ) {
             element.setAttribute('data-animated', 'true');
-            if (duration !== 180)
+            if (duration !== fadeDuration)
               element.style.animationDuration = `${duration}ms`;
             nodes.push(element);
             deadlines.push(-(performance.now() + duration));
@@ -208,8 +219,7 @@ function patchHtml(
   html: string,
   first: Node | null,
   committed: number,
-  template: HTMLTemplateElement,
-  marker?: Comment
+  template: HTMLTemplateElement
 ): Node | null {
   const document = root.ownerDocument!;
   let at = 0;
@@ -219,7 +229,6 @@ function patchHtml(
       if (
         parent === root &&
         current === null &&
-        marker === undefined &&
         html.length - at >= 1024 &&
         html.charCodeAt(at) === 60
       ) {
@@ -248,10 +257,6 @@ function patchHtml(
         return;
       }
       const pending = parent === root && at >= committed;
-      if (pending && marker !== undefined && firstPending === null) {
-        parent.insertBefore(marker, current);
-        firstPending = marker;
-      }
       let actual: Node;
       if (html.charCodeAt(at) !== 60) {
         let end = html.indexOf('<', at);
@@ -378,10 +383,6 @@ function patchHtml(
     }
   };
   children(root, first);
-  if (marker !== undefined && firstPending === null) {
-    root.appendChild(marker);
-    firstPending = marker;
-  }
   return firstPending;
 }
 
@@ -770,9 +771,7 @@ export function createDomRenderer(
       const direct =
         animated === false &&
         options.plugins === undefined &&
-        Object.keys(options.components ?? {}).length === 0 &&
-        options.allowedElements === undefined &&
-        options.disallowedElements === undefined;
+        !rewritesElements(options);
       if (
         changed &&
         !reset &&
@@ -785,16 +784,7 @@ export function createDomRenderer(
       ) {
         if (textAppend !== '') {
           if (animated !== false) fades.append(pending, textAppend, null);
-          else {
-            const text = pending.lastChild as Text;
-            if (text.length < 4096) text.appendData(textAppend);
-            else {
-              // Partial edits can synchronously reshape a long paragraph. Native
-              // coalescing preserves the text node and selections while deferring layout.
-              pending.appendChild(document.createTextNode(textAppend));
-              pending.normalize();
-            }
-          }
+          else (pending.lastChild as Text).appendData(textAppend);
         }
       } else if (
         changed &&

@@ -611,15 +611,11 @@
                   (if (local.get $cached)
                     (then (i32.store (i32.add (global.get $cellWidths)
                       (i32.shl (local.get $cell) (i32.const 2))) (local.get $w))))
-                  (if (local.get $col)
-                    (then
-                      (if (i32.or (i32.eqz (local.get $row))
-                            (i32.gt_u (local.get $w) (i32.load (local.get $col))))
-                        (then (i32.store (local.get $col) (local.get $w)))))))
+                  (if (i32.or (i32.eqz (local.get $row))
+                        (i32.gt_u (local.get $w) (i32.load (local.get $col))))
+                    (then (i32.store (local.get $col) (local.get $w)))))
                 (else
-                  (local.set $pad (i32.sub
-                    (select (i32.load (local.get $col)) (i32.const 0) (local.get $col))
-                    (local.get $w)))
+                  (local.set $pad (i32.sub (i32.load (local.get $col)) (local.get $w)))
                   (if (i32.lt_s (local.get $pad) (i32.const 0)) (then (local.set $pad (i32.const 0))))
                   ;; right alignment pads before the cell, center splits the padding
                   (local.set $lead (i32.load8_u
@@ -716,8 +712,7 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $cols)))
         (if (local.get $i) (then (out.str "\e2\94\bc")))
         (local.set $col (call $ansiColumn (local.get $i)))
-        (call $ansiRule (i32.add
-          (select (i32.load (local.get $col)) (i32.const 0) (local.get $col))
+        (call $ansiRule (i32.add (i32.load (local.get $col))
           (i32.add (i32.ne (local.get $i) (i32.const 0))
             (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $cols)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

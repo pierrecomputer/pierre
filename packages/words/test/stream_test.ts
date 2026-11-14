@@ -274,6 +274,68 @@ void test('plain paragraph appends fall back for syntax, links, controls, and bl
   }
 });
 
+void test('paragraph appends wait for the parser while completion hides or holds syntax', () => {
+  for (const [first, chunk] of [
+    ['a cute cat ![a cute cat', ' photo'],
+    ['x ![a][b x', ' y'],
+    ['[a] b x  ```   \u3000  ', 'x'],
+  ]) {
+    const session = createHtmlSession();
+    session.render(first, { incomplete: true });
+    assert.equal(
+      session.render(first + chunk, { incomplete: true }).html,
+      full(first + chunk, { incomplete: true }),
+      first
+    );
+  }
+});
+
+void test('paragraphs append directly once their start cannot become another block', () => {
+  for (const incomplete of [false, true]) {
+    for (const [start, direct] of [
+      ['2024 was', true],
+      ['-x and', true],
+      ['#tag is', true],
+      ['2024', false],
+      ['--', false],
+      ['#', false],
+    ] as const) {
+      const session = createHtmlSession();
+      session.render(start, { incomplete });
+      let source = start;
+      for (const chunk of [' a', '. b', ' -', ' - c']) {
+        source += chunk;
+        const update = session.render(source, { incomplete });
+        if (chunk === ' a')
+          assert.equal(
+            typeof (update as InternalHtmlUpdate)[delta] === 'string',
+            direct,
+            start
+          );
+        assert.equal(update.html, full(source, { incomplete }), source);
+      }
+    }
+  }
+});
+
+void test('fence lines that start with the marker append until one closes the fence', () => {
+  const source =
+    'Before.\n\n````js\n' +
+    '`a` and `b`\n``` is too short\n```\n  ```` x\n`'.repeat(4) +
+    '\n  ````  \n\nAfter.';
+  for (const incomplete of [false, true]) {
+    const session = createHtmlSession();
+    let changes = 0;
+    for (let end = 1; end <= source.length; end++) {
+      const prefix = source.slice(0, end);
+      const update = session.render(prefix, { incomplete });
+      if (typeof (update as InternalHtmlUpdate)[delta] === 'object') changes++;
+      assert.equal(update.html, full(prefix, { incomplete }), prefix);
+    }
+    assert.ok(changes > 100, String(changes));
+  }
+});
+
 void test('ordinary paragraph runs keep append boundaries through table conversion', () => {
   const source =
     'Alpha.\nBeta.\nGamma.\n\nBefore.\nMore.\nA | B\n' +

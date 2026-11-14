@@ -1868,7 +1868,34 @@ describe('direct HTML sessions', () => {
     expectFreshDom(container, source, options);
     renderer.disconnect();
   });
-  test('completed fences are formatted independently across positions and document resets', () => {
+  test('a live highlighter is released when its fence closes at the end of the document', () => {
+    let open = 0;
+    const formatter = createHtmlRenderer({
+      plugins: {
+        code: {
+          highlight: ({ code }) => code,
+          createSession: () => {
+            open++;
+            return {
+              highlight: ({ code }) => code,
+              dispose: () => {
+                open--;
+              },
+            };
+          },
+        },
+      },
+    });
+    try {
+      formatter.render('```js\na\n', true, true);
+      expect(open).toBe(1);
+      formatter.render('```js\na\n```', true, true);
+      expect(open).toBe(0);
+    } finally {
+      formatter.dispose();
+    }
+  });
+  test('completed fences reuse their highlight across positions and document resets', () => {
     let calls = 0;
     const formatter = createHtmlRenderer({
       plugins: {
@@ -1883,9 +1910,9 @@ describe('direct HTML sessions', () => {
     const fences = '```text\nsame code\n```\n\n'.repeat(3);
     try {
       formatter.render('First\n\n' + fences, true);
-      expect(calls).toBe(3);
+      expect(calls).toBe(1);
       formatter.render('Replacement\n\n' + fences, true);
-      expect(calls).toBe(6);
+      expect(calls).toBe(1);
     } finally {
       formatter.dispose();
     }

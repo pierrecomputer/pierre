@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { environment, median } from './shared.ts';
@@ -12,12 +12,10 @@ const { values: flags } = parseArgs({
   options: {
     baseline: { type: 'string' },
     candidate: { type: 'string' },
-    entry: { type: 'string', default: 'package' },
     json: { type: 'string' },
   },
 });
 assert.ok(flags.baseline !== undefined, '--baseline is required');
-assert.ok(flags.entry === 'package' || flags.entry === 'portable');
 const repositories = [
   resolve(flags.baseline),
   flags.candidate === undefined
@@ -48,13 +46,9 @@ console.log(JSON.stringify({ elapsed, resolvedEntry: import.meta.resolve(specifi
 for (let round = 0; round < 30; round++)
   for (const side of round % 2 === 0 ? [0, 1] : [1, 0]) {
     const entry = entries[side];
-    const specifier: string =
-      flags.entry === 'package'
-        ? '@pierre/words'
-        : pathToFileURL(entry.repo + '/packages/words/dist/index.js').href;
     const result = spawnSync(
       process.execPath,
-      ['--input-type=module', '--eval', cold, specifier],
+      ['--input-type=module', '--eval', cold, '@pierre/words'],
       { cwd: entry.repo + '/packages/words', encoding: 'utf8' }
     );
     assert.equal(result.status, 0, result.stderr);
@@ -88,8 +82,6 @@ const results = entries.map(({ module: _module, ...entry }) => ({
   instanceMedianMs: median(entry.instanceSamplesMs),
 }));
 const report = {
-  protocol: 'startup-v2',
-  entryMode: flags.entry,
   environment: environment([]),
   runtime: {
     executable: process.execPath,

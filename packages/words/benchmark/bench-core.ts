@@ -200,7 +200,6 @@ for (const [name, source, mode] of cases) {
   console.log(name, speedup, result.baselineMs, result.candidateMs);
 }
 const report = {
-  protocol: 'core-public-entry-v2',
   environment: environment([]),
   runtime: {
     node: process.version,

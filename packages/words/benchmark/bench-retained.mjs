@@ -57,7 +57,6 @@ const after = {
   peakRssKiB: process.resourceUsage().maxRSS,
 };
 const report = {
-  protocol: 'retained-sessions-v4',
   environment: {
     date: new Date().toISOString(),
     node: process.version,
@@ -65,7 +64,6 @@ const report = {
     arch: arch(),
     cpu: cpus()[0]?.model,
     memoryBytes: totalmem(),
-    versions: {},
   },
   directory,
   entry,

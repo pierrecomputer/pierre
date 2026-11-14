@@ -72,6 +72,13 @@ function lineNumbers(count: number): string {
   return html;
 }
 
+/** Whether an element filter or hook can rewrite formatted HTML, so output cannot be extended in place. */
+export const rewritesElements = (options: HtmlOptions): boolean =>
+  options.allowedElements !== undefined ||
+  options.disallowedElements !== undefined ||
+  (options.components !== undefined &&
+    Object.values(options.components).some((hook) => hook !== undefined));
+
 /** The code buttons as bits: 1 for copy, 2 for download. Equal inline option objects give equal bits. */
 export const controlFlags = (controls: HtmlOptions['controls']): number => {
   const code = typeof controls === 'object' ? controls.code : controls;
@@ -464,6 +471,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let pendingFence: InternalCodeUpdate | undefined;
   // Raw end, formatted end, and next code index at fences in the current pending output.
   let pendingFences: number[] = [];
+  // Completed fence HTML by language and code. Resets keep only the fences they reuse.
+  let codeCache = new Map<string, string>();
+  let oldCodeCache = new Map<string, string>();
   // The open fence, the formatted HTML around it, and its previous escaped and decoded code.
   let fenceKey = 0;
   let fence:
@@ -507,6 +517,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     pendingCode = -1;
     pendingFence = undefined;
     pendingFences = [];
+    codeCache = new Map();
+    oldCodeCache = new Map();
     fence = undefined;
   };
 
@@ -516,12 +528,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     active: boolean,
     fences?: number[]
   ): [string, number] => {
-    if (
-      options.allowedElements !== undefined ||
-      options.disallowedElements !== undefined ||
-      Object.values(options.components ?? {}).some((hook) => hook !== undefined)
-    )
-      fences = undefined;
+    if (rewritesElements(options)) fences = undefined;
     const decorated = decorate(input, options);
     let html = '';
     let index = firstCode;
@@ -579,10 +586,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         liveUses++;
         highlighted = live.session.highlight({ code, language, isIncomplete });
       } else if (plugin !== undefined) {
-        highlighted = plugin.highlight({ code, language, isIncomplete });
+        const key = language + '\0' + code;
+        highlighted = isIncomplete
+          ? undefined
+          : (codeCache.get(key) ?? oldCodeCache.get(key));
+        if (highlighted === undefined) {
+          highlighted = plugin.highlight({ code, language, isIncomplete });
+          if (!isIncomplete && typeof highlighted === 'string')
+            codeCache.set(key, highlighted);
+        } else codeCache.set(key, highlighted);
       }
       if (highlighted != null && typeof highlighted !== 'string')
         throw new TypeError('Code highlighters must return HTML strings');
+      if (!isIncomplete && live?.index === number) dispose();
       let count = 1;
       for (
         let line = code.indexOf('\n');
@@ -687,14 +703,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     firstCode: number,
     active: boolean
   ): InternalCodeUpdate | undefined => {
-    if (
-      !active ||
-      options.allowedElements !== undefined ||
-      options.disallowedElements !== undefined ||
-      (options.components !== undefined &&
-        Object.values(options.components).some((hook) => hook !== undefined))
-    )
-      return;
+    if (!active || rewritesElements(options)) return;
     // Wasm marks only the fence that is still open at the end of the source.
     const start = input.indexOf('<pre data-markdown-incomplete');
     if (start < 0) return;
@@ -850,9 +859,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       fence === undefined ||
       fence.firstCode !== firstCode ||
       options.plugins !== undefined ||
-      options.allowedElements !== undefined ||
-      options.disallowedElements !== undefined ||
-      Object.values(options.components ?? {}).some((hook) => hook !== undefined)
+      rewritesElements(options)
     )
       return;
     const escaped = update.fullHtml;
@@ -954,6 +961,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             stable = '';
             stableRaw = '';
             nextCode = 0;
+            oldCodeCache = codeCache;
+            codeCache = new Map();
           }
           // Link definitions reset every update. Keep whole top-level blocks
           // that did not change since the previous update as completed HTML,
@@ -1002,11 +1011,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         const textAppend =
           changed &&
           paragraphDelta !== undefined &&
-          options.allowedElements === undefined &&
-          options.disallowedElements === undefined &&
-          !Object.values(options.components ?? {}).some(
-            (hook) => hook !== undefined
-          ) &&
+          !rewritesElements(options) &&
           (pendingParagraph !== undefined ||
             (pendingFence === undefined &&
               pendingHtml.startsWith(paragraphStart) &&

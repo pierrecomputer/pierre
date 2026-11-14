@@ -135,7 +135,6 @@ for (const size of sizes) {
   console.log({ ...row, samples: samples.length });
 }
 const record = {
-  protocol: 'incremental-public-entry-v2',
   environment: runtimeEnvironment(['react', 'jsdom']),
   directory,
   entry,

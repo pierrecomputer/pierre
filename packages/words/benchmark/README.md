@@ -6,12 +6,6 @@ browser rendering. The Node modes use the five Markdown files in
 [`fixtures/index.ts`](./fixtures/index.ts), which the `/words` demo also uses.
 Recorded measurement dates use UTC.
 
-The reference tables below identify their measured revisions and environments.
-The [streaming optimization comparison](./results/streaming.json) summarizes
-before/after measurements against main at `ff3f0ed1` on Apple M5 Max. It labels
-the original suites separately from the added entity, ANSI, single-block,
-startup, and retained-session cases.
-
 ## Run
 
 ```sh
@@ -69,8 +63,6 @@ before attributing an improvement to the package.
 Measured on 2026-11-12 with Node 26.13.1 and Bun 1.4.4 on Apple M5 Max (36 GiB
 RAM), comparing main at `ff3f0ed1` with `1ba7741d`. These are medians of three
 runs of the original HTML-string benchmark; input MiB/s is higher-is-better.
-[Detailed results](./results/streaming.json) also include React streaming,
-additional core cases, startup, memory, browser rendering, and package sizes.
 
 | Original fixture       | Node before | Node after | Improvement | Bun before |  Bun after | Improvement |
 | ---------------------- | ----------: | ---------: | ----------: | ---------: | ---------: | ----------: |
@@ -91,9 +83,6 @@ with lower being better.
 | Long paragraph  |      21.245 |  **20.849** |       1.02× |     15.919 | **15.877** |      1.003× |
 | Short lines     |      38.282 |  **38.078** |       1.01× |     30.078 | **29.097** |       1.03× |
 | Table           |     119.729 | **103.820** |       1.15× |     97.610 | **93.519** |       1.04× |
-
-Package, startup, and memory measurements in the detailed results include the
-original shared Wasm loader used by both revisions.
 
 ### Historical reference
 
@@ -292,9 +281,6 @@ checkouts first, alternate baseline/candidate order between fresh processes, and
 compare only matching kind, mode, sizes, chunk size, runtime versions, and
 output hashes.
 
-The `incremental-public-entry-v2` protocol resolves the package export selected
-by the runtime and records that entry in the JSON.
-
 ### Browser scaling
 
 `bench-incremental-browser` uses the same generated paragraph or code fence in
@@ -339,7 +325,7 @@ and long paragraphs, thousands of short lines, and tables with inline
 formatting. These use `mode: html-string` and include output decoding, like the
 original full-HTML benchmark. They are synthetic workloads, separate from its
 five fixtures. `bench-core-bun` runs the same comparison with the pinned Bun
-runtime. Both use `core-public-entry-v2` and record the resolved package entry.
+runtime.
 
 ```sh
 moonx words:bench-core --ignore-ci-checks -- --baseline /absolute/path/to/baseline --json core.json
@@ -358,18 +344,15 @@ another built checkout. Use at least three alternating fresh processes per
 revision; do not average repeated runs in one process because peak RSS and
 allocator capacity persist.
 
-The `retained-sessions-v4` protocol uses a JavaScript runner to exclude the
-TypeScript loader's compiler allocations, lets deferred work settle before both
-samples, and resolves the runtime's public package export. Compare revisions
-using the same runner and runtime.
+The runner is JavaScript to exclude the TypeScript loader's compiler
+allocations, and it lets deferred work settle before both samples. Compare
+revisions using the same runner and runtime.
 
 `bench-startup` compares two built checkouts in Node; `bench-startup-bun` uses
-Bun. The `startup-v2` protocol measures 30 alternating fresh-process imports of
-`@pierre/words`, including package resolution, byte decoding, Wasm compilation,
-and initialization but excluding process launch and the first render. Each child
-records the entry it loaded. `--entry portable` measures `dist/index.js`
-directly for loader diagnostics. Keep entry modes and runtimes separate.
-Filesystem contents may already be cached by the OS. Separately, it measures 500
-alternating Wasm instantiations, discarding the first 100 per revision and
-excluding compilation. These are different startup costs; keep their samples
-separate.
+Bun. It measures 30 alternating fresh-process imports of `@pierre/words`,
+including package resolution, byte decoding, Wasm compilation, and
+initialization but excluding process launch and the first render. Each child
+records the entry it loaded. Keep runtimes separate. Filesystem contents may
+already be cached by the OS. Separately, it measures 500 alternating Wasm
+instantiations, discarding the first 100 per revision and excluding compilation.
+These are different startup costs; keep their samples separate.

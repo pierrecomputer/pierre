@@ -20,19 +20,18 @@ export type {
 } from './types';
 
 type Input = string | Uint8Array | ArrayBuffer;
-/** `boundary` makes Wasm measure the session's safe boundary in UTF-16 units. */
 type Options = AnsiOptions & RenderOptions & { boundary?: boolean };
 
 const enc = new TextEncoder();
-// Keep a leading U+FEFF so string lengths match the UTF-16 counts from Wasm.
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
-// Records use 30-bit addresses; completion also needs a page of slack.
 const maxInput = 2 ** 30 - 2 * pageSize;
+
 // Keep the core entrypoint self-contained while sharing the renderer's private key.
 const delta = Symbol.for(
   '@pierre/words/stream-delta/v1'
 ) as typeof protocolDelta;
+
 // oxlint-disable-next-line no-control-regex -- Control bytes require parser normalization.
 const paragraphSyntax = /[\u0000-\u001f"&<>@\\[\]`*_~:\uD800-\uDFFF]/u;
 
@@ -52,17 +51,28 @@ function escapeCode(value: string): string {
   });
 }
 
-/** A possible closing fence must go through the full block parser. */
+/**
+ * A possible closing fence must go through the full block parser: a finished
+ * line that closes the fence, or a last line that can still grow into one.
+ */
 function fenceMayClose(
   input: string,
   previousLength: number,
   line: number,
-  marker: number
+  marker: number,
+  count: number
 ): boolean {
   for (;;) {
     let at = line;
     while (at < line + 3 && input.charCodeAt(at) === 32) at++;
-    if (input.charCodeAt(at) === marker) return true;
+    const run = at;
+    while (input.charCodeAt(at) === marker) at++;
+    if (at > run) {
+      const length = at - run;
+      let code = input.charCodeAt(at);
+      while (code === 32 || code === 9) code = input.charCodeAt(++at);
+      if (at === input.length || (code === 10 && length >= count)) return true;
+    }
     const end = input.indexOf('\n', Math.max(line, previousLength));
     if (end < 0) return false;
     line = end + 1;
@@ -102,24 +112,27 @@ class Renderer {
     }
     let inputLength;
     if (typeof input === 'string') {
-      this.grow(Math.min(input.length, maxInput + 1) + 8192);
-      let { read, written } = enc.encodeInto(
-        input,
-        this.buffer.subarray(pageSize, pageSize + maxInput + 1)
-      );
-      if (read < input.length && written <= maxInput) {
-        this.grow(
-          Math.min(written + (input.length - read) * 3, maxInput + 1) + 8192
-        );
+      // Encode in chunks that each have worst-case room. One worst-case
+      // buffer would triple the memory of ASCII text, and Bun's encodeInto is
+      // several times slower when the text may not fit.
+      let written = 0;
+      for (let read = 0; read < input.length; ) {
+        let end = Math.min(read + 16384, input.length);
+        // keep a surrogate pair in one chunk
+        if (
+          end < input.length &&
+          (input.charCodeAt(end - 1) & 0xfc00) === 0xd800
+        )
+          end--;
+        this.grow(Math.min(written + (end - read) * 3, maxInput + 1) + 8192);
         const next = enc.encodeInto(
-          input.slice(read),
+          end - read === input.length ? input : input.slice(read, end),
           this.buffer.subarray(pageSize + written, pageSize + maxInput + 1)
         );
-        read += next.read;
         written += next.written;
+        if (next.read < end - read || written > maxInput) throw tooLarge();
+        read = end;
       }
-      if (read < input.length || written > maxInput) throw tooLarge();
-      this.grow(written + 8192);
       inputLength = written;
     } else {
       if (input instanceof ArrayBuffer) input = new Uint8Array(input);
@@ -238,6 +251,7 @@ export function createHtmlSession(): {
         prefix: string;
         body: string;
         marker: number;
+        count: number;
         line: number;
         tail: string;
         firstLine: number;
@@ -316,7 +330,8 @@ export function createHtmlSession(): {
             input,
             previous.length,
             openFence.line,
-            openFence.marker
+            openFence.marker,
+            openFence.count
           )
         ) {
           // Own the new text: source slices could otherwise retain every earlier document.
@@ -427,8 +442,11 @@ export function createHtmlSession(): {
       incomplete = wanted;
       const completedHtml = stable;
       paragraph = undefined;
+      // Option bit 7: completion hid or closed something, so the source no
+      // longer tells what the paragraph shows.
       if (
         !definitions &&
+        (shared.dv.getUint8(1) & 128) === 0 &&
         pending.startsWith('<p>') &&
         pending.endsWith('</p>\n')
       ) {
@@ -436,28 +454,30 @@ export function createHtmlSession(): {
         let end = input.length;
         while (input.charCodeAt(end - 1) === 32) end--;
         const tail = input.slice(offset, end).trimStart();
+        // A literal final word excludes synthetic inline closers. New block
+        // markers, unfinished HTML, entities, and autolinks need the parser.
+        const word = tail.slice(tail.lastIndexOf(' ') + 1);
         if (
-          !body.includes('</p>') &&
-          !/^[#=+0-9-]/.test(tail) &&
+          word !== '' &&
+          !paragraphSyntax.test(tail.slice(-2)) &&
+          // Completion skips Unicode whitespace at the end, so only a visible
+          // last character shows that it left nothing waiting to close.
+          !/\s/.test(tail.slice(-1)) &&
+          !/[&<>@:]/.test(word) &&
+          !/www\./i.test(word) &&
+          body.endsWith(word) &&
+          // Only digits or only marker characters can still become a list
+          // marker, a heading, or a thematic break.
+          !/^(?:\d+[.)]?|[-=+# ]+)$/.test(tail) &&
           !(tail.startsWith('[') && tail.includes(']:')) &&
-          !/[<\r\n\t\0]/.test(tail) &&
-          !paragraphSyntax.test(tail.slice(-2))
-        ) {
-          // A literal final word excludes synthetic inline closers. New block
-          // markers, unfinished HTML, entities, and autolinks need the parser.
-          const word = tail.slice(tail.lastIndexOf(' ') + 1);
-          if (
-            word !== '' &&
-            body.endsWith(word) &&
-            !/[&<>@:]/.test(word) &&
-            !/www\./i.test(word)
-          )
-            paragraph = {
-              body,
-              spaces: input.length - end,
-              links: tail.includes('['),
-            };
-        }
+          // This reads the whole paragraph, so it runs last.
+          !/[<\r\n\t\0]/.test(tail)
+        )
+          paragraph = {
+            body,
+            spaces: input.length - end,
+            links: tail.includes('['),
+          };
       }
       openFence = undefined;
       if (
@@ -489,10 +509,14 @@ export function createHtmlSession(): {
           )
             line++;
           const source = input.slice(offset);
+          const marker = opener.charCodeAt(0);
+          let count = 3;
+          while (opener.charCodeAt(count) === marker) count++;
           openFence = {
             prefix: pending.slice(0, start),
             body,
-            marker: opener.charCodeAt(0),
+            marker,
+            count,
             line:
               offset +
               Math.max(source.lastIndexOf('\n'), source.lastIndexOf('\r')) +

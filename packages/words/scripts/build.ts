@@ -87,24 +87,31 @@ function codePointRanges(
   return ranges;
 }
 
-// HTML5 named references: 512 displacement seeds followed by the packed table
-// below. $unpackEntities expands it into name/value records at instantiation.
-// `base` below starts after the seeds; pairs keep their address during expansion.
-//   [base+0]   values pointer u16, name count u16
-//   [base+4]   u16 per block of 64 names: where its first name starts
+// HTML5 named references: `(entity-table <start> <end> <slots> <names>)`.
+// [start, slots) holds one u16 displacement seed per hash bucket, and the
+// packed table below starts at `slots`. $unpackEntities expands it at
+// instantiation into u32 name/value records in [slots, names) and the names
+// after them; pairs keep their address.
+//   [slots+0]  u16 offset of the values from `slots`, name count u16
 //   names      sorted by byte and front-coded. Each name is a byte below '0'
-//              with the length it shares with the previous name (0 at a block
-//              start), then its other bytes. A 0 byte and 0x7f end the list.
+//              with the length it shares with the previous name, then its
+//              other bytes. A 0 byte ends the list.
 //   values     two planes of one byte per name: the low and high byte of a
 //              u16. It is a code point, or a surrogate as an escape: 0xD800
 //              plus the offset of a letter from U+1D400, or 0xDC00 plus the
 //              1-based index of a pair.
 //   pairs      two u16 code points each. Pair i ends 4 * (i - 1) bytes before
 //              `end`, so its address needs no pointer.
-table('entity-table', (base, inner) => {
-  const end = Number(inner.match(/^\s*\d+\s+(\d+)/)![1]);
-  const tableBase = base;
-  base += 1024;
+table('entity-table', (tableBase, inner) => {
+  const [end, base, namesBase] = inner
+    .match(/^\s*\d+\s+(\d+)\s+(\d+)\s+(\d+)/)!
+    .slice(1)
+    .map(Number);
+  const seedCount = (base - tableBase) / 2;
+  const slotCount = (namesBase - base) / 4;
+  // $entitySlot has these sizes as masks and shifts.
+  if (seedCount !== 512 || slotCount !== 4096)
+    throw new Error('entity-table sizes differ from $entitySlot');
   const entities: Record<string, string> = {};
   for (const line of fs
     .readFileSync(new URL('../src/entities.txt', import.meta.url), 'utf-8')
@@ -128,16 +135,13 @@ table('entity-table', (base, inner) => {
   const n = names.length;
   const pairs: string[] = [];
   const stream: number[] = [];
-  const blocks: number[] = [];
-  const blockStart = base + 4 + Math.ceil(n / 64) * 2;
   const values = new Uint8Array(n * 2);
   let prev = '';
   names.forEach((name, i) => {
     if (!/^[a-zA-Z][a-zA-Z0-9]{0,30}$/.test(name))
       throw new Error(`entity name exceeds packed format: ${name}`);
     let shared = 0;
-    if (i % 64 === 0) blocks.push(blockStart + stream.length);
-    else while (name[shared] === prev[shared]) shared++;
+    while (name[shared] === prev[shared]) shared++;
     stream.push(shared);
     for (let j = shared; j < name.length; j++) stream.push(name.charCodeAt(j));
     prev = name;
@@ -158,18 +162,16 @@ table('entity-table', (base, inner) => {
     values[i] = value & 0xff;
     values[n + i] = value >> 8;
   });
-  stream.push(0, 0x7f);
-  const valuesPtr = blockStart + stream.length;
-  if (valuesPtr > 0xffff) throw new Error(`entity-table pointers exceed u16`);
-  if (valuesPtr + values.length > end - pairs.length * 4)
+  stream.push(0);
+  const valuesAt = 4 + stream.length;
+  if (base + valuesAt + values.length > end - pairs.length * 4)
     throw new Error(`entity-table needs more than [${base}:${end})`);
   const bytes = new Uint8Array(end - base);
   const dv = new DataView(bytes.buffer);
-  dv.setUint16(0, valuesPtr, true);
+  dv.setUint16(0, valuesAt, true);
   dv.setUint16(2, n, true);
-  blocks.forEach((at, i) => dv.setUint16(4 + i * 2, at, true));
-  bytes.set(stream, blockStart - base);
-  bytes.set(values, valuesPtr - base);
+  bytes.set(stream, 4);
+  bytes.set(values, valuesAt);
   pairs.forEach((pair, i) => {
     dv.setUint16(bytes.length - (i + 1) * 4, pair.charCodeAt(0), true);
     dv.setUint16(bytes.length - (i + 1) * 4 + 2, pair.charCodeAt(1), true);
@@ -194,10 +196,10 @@ table('entity-table', (base, inner) => {
   });
   if (new Set(hashes).size !== names.length)
     throw new Error('entity-table name hash collision');
-  const buckets = Array.from({ length: 512 }, () => [] as number[]);
-  hashes.forEach((hash, at) => buckets[hash & 511].push(at));
-  const slots = Array<number>(4096).fill(-1);
-  const seeds = new Uint16Array(512);
+  const buckets = Array.from({ length: seedCount }, () => [] as number[]);
+  hashes.forEach((hash, at) => buckets[hash & (seedCount - 1)].push(at));
+  const slots = Array<number>(slotCount).fill(-1);
+  const seeds = new Uint16Array(seedCount);
   const order = buckets
     .map((_, at) => at)
     .sort((a, b) => buckets[b].length - buckets[a].length);
@@ -234,8 +236,8 @@ table('entity-table', (base, inner) => {
     seeds[bucket] = 32768 | free;
   }
   const expanded =
-    1024 +
-    slots.length * 4 +
+    namesBase -
+    tableBase +
     names.reduce((size, name) => size + name.length + 1, 0) +
     pairs.length * 4;
   if (expanded + 16 > end - tableBase)
@@ -245,7 +247,7 @@ table('entity-table', (base, inner) => {
   const output = new Uint8Array(end - tableBase);
   const outputView = new DataView(output.buffer);
   seeds.forEach((seed, at) => outputView.setUint16(at * 2, seed, true));
-  output.set(bytes, 1024);
+  output.set(bytes, base - tableBase);
   return output;
 });
 

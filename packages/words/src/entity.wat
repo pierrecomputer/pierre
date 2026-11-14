@@ -78,7 +78,8 @@
         (i32.const 2))))
 
   ;; Expand front-coded names once into flat records. The input page is free
-  ;; during instantiation and holds the packed source while its area is reused.
+  ;; during instantiation and holds the packed header, names, and values while
+  ;; their area is reused. The pairs at the end of the table stay in place.
   (func $unpackEntities
     (local $n i32)
     (local $values i32)
@@ -88,14 +89,14 @@
     (local $i i32)
     (local $length i32)
     (local $c i32)
+    (local.set $n (i32.load16_u (i32.const $mem.entitySlots+2)))
+    (local.set $values (i32.load16_u (i32.const $mem.entitySlots)))
     (memory.copy (i32.const $mem.input) (i32.const $mem.entitySlots)
-      (i32.const 32976))
+      (i32.add (local.get $values) (i32.shl (local.get $n) (i32.const 1))))
+    ;; the 4096 slots of [$mem.entitySlots, $mem.entityNames)
     (memory.fill (i32.const $mem.entitySlots) (i32.const 0) (i32.const 16384))
-    (local.set $n (i32.load16_u (i32.const $mem.input+2)))
-    (local.set $values (i32.add (i32.sub (i32.const $mem.input) (i32.const $mem.entitySlots))
-      (i32.load16_u (i32.const $mem.input))))
-    (local.set $src (i32.add (i32.const $mem.input+4)
-      (i32.shl (i32.shr_u (i32.add (local.get $n) (i32.const 63)) (i32.const 6)) (i32.const 1))))
+    (local.set $values (i32.add (local.get $values) (i32.const $mem.input)))
+    (local.set $src (i32.const $mem.input+4))
     (local.set $dst (i32.const $mem.entityNames+1))
     (loop $entry
       (local.set $length (i32.load8_u (local.get $src)))

@@ -16,8 +16,9 @@
   ;; Regions live above the input, in the order they stop growing:
   ;;
   ;;   [$metaBase   .. $recBase)   frontmatter JSON, written before block analysis
-  ;;   [$recBase    .. $rec)       block records, appended during block analysis
-  ;;   [$rec        .. $outBase)   reference indices and temporary ANSI table widths
+  ;;   [$recBase    .. $rec)       block records, appended during block analysis,
+  ;;                               then the reference hash table and footnote order
+  ;;   [$rec        .. $outBase)   temporary ANSI table widths
   ;;   [$outBase    .. $out)       rendered output, appended during rendering
   ;;   [$scratchBase.. memory end) rebuilt content and marks grow up, tags grow down
   ;;

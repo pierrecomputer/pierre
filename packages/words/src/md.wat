@@ -9,7 +9,8 @@
                       units and mark an open fence,
                       bit 4 = completion appended a pending link destination,
                       bit 5 = ansi input is bytes and may hold invalid UTF-8,
-                      bit 6 = complete unfinished inline syntax
+                      bit 6 = complete unfinished inline syntax,
+                      bit 7 = completion changed the input (set by render)
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
@@ -53,7 +54,7 @@
   (import "./frontmatter.wat")
   (import "./complete.wat")
 
-  (entity-table $mem.entities $mem.entitiesEnd)
+  (entity-table $mem.entities $mem.entitiesEnd $mem.entitySlots $mem.entityNames)
   (string-pool $mem.strings $mem.stringsEnd)
 
   ;; The first record after the safe append boundary, and the output position
@@ -301,7 +302,9 @@
       (then
         (i32.store8 (i32.const 1) (i32.and (i32.load8_u (i32.const 1)) (i32.const 191)))
         (if (call $complete (i32.shr_u (local.get $safeEnd) (i32.const 31)))
-          (then (local.set $safeEnd (call $analyze))))))
+          (then
+            (i32.store8 (i32.const 1) (i32.or (i32.load8_u (i32.const 1)) (i32.const 128)))
+            (local.set $safeEnd (call $analyze))))))
     (global.set $out (i32.and (i32.add (global.get $rec) (i32.const 15)) (i32.const -16)))
     (call $setOutCap)
     (if (global.get $mode) (then (call $ansiTableSpace)))
