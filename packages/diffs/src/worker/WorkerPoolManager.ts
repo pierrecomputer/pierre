@@ -519,14 +519,10 @@ export class WorkerPoolManager {
               return;
             }
 
-            let resolvedLanguages: ResolvedLanguage[];
-            if (this.preferredHighlighter === 'highlights') {
-              resolvedLanguages = await resolveHighlightsLanguages(languages);
-            } else {
-              resolvedLanguages = hasResolvedLanguages(languages)
-                ? getResolvedLanguages(languages)
-                : await resolveLanguages(languages);
-            }
+            const resolving = this.resolveWorkerLanguages(languages);
+            const resolvedLanguages = Array.isArray(resolving)
+              ? resolving
+              : await resolving;
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               resolve();
               return;
@@ -1224,6 +1220,19 @@ export class WorkerPoolManager {
     this.queueDrain();
   }
 
+  // Cached Shiki grammars return without a promise, so a task can start in
+  // the same tick.
+  private resolveWorkerLanguages(
+    langs: SupportedLanguages[]
+  ): ResolvedLanguage[] | Promise<ResolvedLanguage[]> {
+    if (this.preferredHighlighter === 'highlights') {
+      return resolveHighlightsLanguages(langs);
+    }
+    return hasResolvedLanguages(langs)
+      ? getResolvedLanguages(langs)
+      : resolveLanguages(langs);
+  }
+
   private async resolveLanguagesAndExecuteTask(
     availableWorker: ManagedWorker,
     task: RenderFileTask | RenderDiffTask,
@@ -1254,16 +1263,10 @@ export class WorkerPoolManager {
       );
 
       if (workerMissingLangs.length > 0) {
-        if (this.preferredHighlighter === 'highlights') {
-          task.request.resolvedLanguages =
-            await resolveHighlightsLanguages(workerMissingLangs);
-        } else if (hasResolvedLanguages(workerMissingLangs)) {
-          task.request.resolvedLanguages =
-            getResolvedLanguages(workerMissingLangs);
-        } else {
-          task.request.resolvedLanguages =
-            await resolveLanguages(workerMissingLangs);
-        }
+        const resolving = this.resolveWorkerLanguages(workerMissingLangs);
+        task.request.resolvedLanguages = Array.isArray(resolving)
+          ? resolving
+          : await resolving;
       }
       // If the task has been cleaned up after awaiting language resolving,
       // lets fully clean it up

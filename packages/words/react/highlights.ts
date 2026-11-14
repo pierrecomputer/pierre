@@ -56,8 +56,10 @@ export function createHighlightsPlugin(
         language: nextLanguage,
         isIncomplete,
       }: CodeOptions): CodeHighlightUpdate | null => {
-        const registered = isRegisteredLanguage(nextLanguage);
-        if (!registered && !isSupportedLanguage(nextLanguage)) {
+        if (
+          !isSupportedLanguage(nextLanguage) &&
+          !isRegisteredLanguage(nextLanguage)
+        ) {
           dispose();
           return null;
         }
@@ -87,11 +89,9 @@ export function createHighlightsPlugin(
         // The prefix checks below compare slices: V8 uses memcmp for them, but
         // its startsWith reads each character.
         let fenceLines: string[] | undefined;
-        if (registered || nextLanguage.toLowerCase() === 'ansi') {
-          // Warning: LiveTokenizer keeps escape sequences as text and does not
-          // use a registered built-in module, so ANSI and registered languages
-          // render the whole fence. ANSI appends can change only the last line; a
-          // registered lexer can change any line.
+        if (nextLanguage.toLowerCase() === 'ansi') {
+          // Warning: LiveTokenizer keeps escape sequences as text, so ANSI
+          // renders the whole fence. An append can change only the last line.
           fenceLines = highlight({
             code,
             language: nextLanguage,
@@ -100,8 +100,7 @@ export function createHighlightsPlugin(
           const head = previous.endsWith('\n')
             ? previous.slice(0, -1)
             : previous;
-          if (!registered && code.slice(0, head.length) === head)
-            first = previousContentLine;
+          if (code.slice(0, head.length) === head) first = previousContentLine;
         } else if (tokenizer === undefined) {
           tokenizer = new LiveTokenizer({
             ...options,

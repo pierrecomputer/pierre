@@ -1547,6 +1547,8 @@ describe('incremental streaming', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
     const code = 'a <b>\nc\n';
+    const text = (html: string): string => html.replace(/<[^>]+>/g, '');
+    let lines = 0;
     for (let end = 0; end <= code.length; end++) {
       const options = {
         code: code.slice(0, end),
@@ -1555,7 +1557,15 @@ describe('incremental streaming', () => {
       };
       const html = plugin.highlight(options)!;
       if (end > 0) expect(html).toContain('<span');
-      expect(session.highlightLines!(options)!.fullHtml).toBe(html);
+      const update = session.highlightLines!(options)!;
+      expect(text(update.fullHtml)).toBe(text(html));
+      // The token covers both lines. Each line of the update must still be
+      // balanced HTML, and an append must not render the lines before it.
+      for (const line of update.html.split('\n'))
+        expect(line.split('<span').length).toBe(line.split('</span>').length);
+      if (update.lineCount > lines && lines > 1)
+        expect(update.firstLine).toBeGreaterThan(0);
+      lines = update.lineCount;
     }
     session.dispose();
   });
