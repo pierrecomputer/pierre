@@ -2570,7 +2570,6 @@ export class Editor<
               startScrollLeft: contentEl.parentElement?.scrollLeft ?? 0,
             };
             this.#reservedSelections = undefined;
-            this.#selections = undefined;
             this.#updateSelections([]);
             selectEventDisposes.push(
               addEventListener(
@@ -5739,12 +5738,17 @@ export class Editor<
     this.#primaryCaretElement = undefined;
     this.#setEditorActiveLineSafe(null);
 
+    // An empty list always clears the selection, even while search matches or
+    // markers keep the overlay drawn.
+    if (selections.length === 0) {
+      this.#selections = undefined;
+    }
+
     if (
       selections.length === 0 &&
       this.#matches === undefined &&
       this.#markerRenderer === undefined
     ) {
-      this.#selections = undefined;
       this.#searchHighlighter?.clear();
       this.#overlayElements?.forEach((el) => el.remove());
       this.#overlayElements?.clear();
