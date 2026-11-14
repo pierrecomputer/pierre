@@ -1,10 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type UserConfig } from 'tsdown';
 
 const tokenTypesPath = fileURLToPath(
   new URL('./lib/token-types.ts', import.meta.url)
 );
-const themesPath = fileURLToPath(new URL('./themes/index.ts', import.meta.url));
+const themesDir = fileURLToPath(new URL('./themes/', import.meta.url));
+const themesPath = `${themesDir}index.ts`;
 
 // The two configs share dist/, so neither may clean the other's output.
 // `scripts/build.ts` emits the highlights and emitter Wasm modules before
@@ -55,6 +57,21 @@ const config: UserConfig[] = defineConfig([
     // WARNING: The type bundle follows `import type` into lib/highlighter.ts,
     // which imports the emitter.
     deps: { neverBundle: [tokenTypesPath, /^\.\/emitter\.wasm/] },
+    plugins: [
+      {
+        name: 'theme-style-json',
+        // WARNING: `lazyTheme` in themes/index.ts parses this string on first
+        // use. The object literals of all themes cost about 4 ms at import.
+        load(id: string) {
+          if (!id.startsWith(themesDir) || !id.endsWith('.json')) return;
+          const theme = JSON.parse(readFileSync(id, 'utf-8'));
+          return {
+            code: `export default ${JSON.stringify({ ...theme, style: JSON.stringify(theme.style) })};`,
+            moduleType: 'js',
+          };
+        },
+      },
+    ],
     outputOptions: { paths: { [tokenTypesPath]: './token-types.js' } },
   },
 ]);
