@@ -7,6 +7,7 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   dispatchEscape,
@@ -1302,6 +1303,90 @@ describe('CodeView search', () => {
       expect(getSearchState(viewer).current?.itemId).toBe('a');
       expect(viewer.getItem('a')?.collapsed).toBe(false);
       expect(viewer.getItem('a')?.version).toBe(2);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('reports a file that find opens, and not one the host changes', async () => {
+    const dom = installDom();
+    const changes: [CodeViewItem<undefined>, CodeViewItem<undefined>][] = [];
+    const viewer = new CodeView({
+      onItemCollapsedChange: (item, nextItem) => {
+        changes.push([item, nextItem]);
+      },
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          collapsed: true,
+          version: 1,
+          file: { name: 'a.txt', contents: 'first\nhidden target\n' },
+        },
+      ]);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+
+      expect(changes).toHaveLength(1);
+      const [[item, nextItem]] = changes;
+      expect(item).toMatchObject({ id: 'a', collapsed: true, version: 1 });
+      expect(nextItem).toMatchObject({ id: 'a', collapsed: false, version: 2 });
+      expect(viewer.getItem('a')).toBe(nextItem);
+
+      viewer.updateItem({ ...nextItem, collapsed: true, version: 3 });
+      viewer.render(true);
+      await wait(0);
+      expect(changes).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a file find opened stays open when the host keeps the reported item', async () => {
+    const dom = installDom();
+    let hostItems: CodeViewItem<undefined>[] = ['a', 'b'].map((id) => ({
+      id,
+      type: 'file',
+      collapsed: true,
+      version: 1,
+      file: {
+        name: `${id}.txt`,
+        contents: id === 'a' ? 'target\n' : 'other\n',
+      },
+    }));
+    const viewer = new CodeView({
+      onItemCollapsedChange: (_item, nextItem) => {
+        hostItems = hostItems.map((hostItem) =>
+          hostItem.id === nextItem.id ? nextItem : hostItem
+        );
+      },
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, hostItems);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+      expect(viewer.getItem('a')?.collapsed).toBe(false);
+
+      // The host changes another file and hands over its whole list again.
+      hostItems = hostItems.map((hostItem) =>
+        hostItem.id === 'b'
+          ? { ...hostItem, collapsed: false, version: 2 }
+          : hostItem
+      );
+      await renderItems(viewer, hostItems);
+
+      expect(viewer.getItem('a')?.collapsed).toBe(false);
+      expect(viewer.getItem('b')?.collapsed).toBe(false);
     } finally {
       viewer.cleanUp();
       dom.cleanup();

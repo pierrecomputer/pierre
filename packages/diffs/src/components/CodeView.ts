@@ -733,6 +733,19 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * final pre-detach state.
    */
   onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation, Caret>;
+  /**
+   * Called after CodeView itself changes an item's `collapsed` state, as find
+   * does when it lands on a match inside a collapsed item. `item` is the item
+   * before the change and `nextItem` is the one CodeView has already applied:
+   * the new `collapsed` and a bumped `version`. An owner that keeps its own
+   * items records the change, or its next list collapses the item again.
+   *
+   * Not called for changes the owner makes through `updateItem` or `setItems`.
+   */
+  onItemCollapsedChange?(
+    item: CodeViewItem<LAnnotation>,
+    nextItem: CodeViewItem<LAnnotation>
+  ): void;
 
   /** Render a non-virtualized element at the very start of the scroll content,
    * before the first item. It is always rendered and scrolls with the content.
@@ -1740,12 +1753,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     item: CodeViewContextItem<LAnnotation, Caret>,
     match: CodeViewSearchMatch
   ): void {
-    if (item.item.collapsed === true) {
-      this.updateItem({
-        ...item.item,
+    const { item: collapsedItem } = item;
+    if (collapsedItem.collapsed === true) {
+      const openedItem = {
+        ...collapsedItem,
         collapsed: false,
-        version: (item.item.version ?? 0) + 1,
-      });
+        version: (collapsedItem.version ?? 0) + 1,
+      };
+      this.updateItem(openedItem);
+      const { onItemCollapsedChange } = this.options;
+      onItemCollapsedChange?.(collapsedItem, openedItem);
     }
     if (
       item.type === 'diff' &&

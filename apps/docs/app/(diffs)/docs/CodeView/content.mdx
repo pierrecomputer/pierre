@@ -194,6 +194,13 @@ Configure the panel through `searchOptions`:
 available, the match count, and the current match index after every change, and
 `undefined` when the panel closes.
 
+`onItemCollapsedChange(item, nextItem)` runs after `CodeView` changes an item's
+`collapsed` itself, which find does when it opens a collapsed item to show a
+match. `CodeView` has already applied `nextItem`, with the new `collapsed` and a
+bumped `version`. If you keep your own items, record the change there, or your
+next list collapses the item again. It does not run for changes you make
+yourself.
+
 Drive the panel with `openSearch`, `closeSearch`, `isSearchOpen`, and
 `navigateSearch`. In React they live on the ref. `openSearch` takes a requested
 `mode`, a `scope` of `'focused'` (the default), `'all'`, or `{ itemId }`, and a
