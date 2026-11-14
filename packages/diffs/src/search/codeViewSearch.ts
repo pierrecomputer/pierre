@@ -68,41 +68,6 @@ class CodeViewLineSearchDocument implements SearchableDocument {
     }
     return metadata;
   }
-
-  charAt(offset: number): string {
-    if (offset < 0 || offset >= this.textLength || this.lines.length === 0) {
-      return '';
-    }
-
-    const lineIndex = this.getLineIndexAtOffset(offset);
-    const line = this.lines[lineIndex];
-    const lineStart = this.getLineStartOffset(lineIndex);
-    if (line === undefined) {
-      return '';
-    }
-
-    const character = offset - lineStart;
-    return character < line.text.length ? line.text.charAt(character) : '\n';
-  }
-
-  getLineIndexAtOffset(offset: number): number {
-    let low = 0;
-    let high = this.lineStarts.length - 1;
-    let result = 0;
-
-    while (low <= high) {
-      const mid = (low + high) >> 1;
-      const lineStart = this.lineStarts[mid] ?? 0;
-      if (lineStart <= offset) {
-        result = mid;
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    return result;
-  }
 }
 
 // Build source matches during the search pass instead of resolving each

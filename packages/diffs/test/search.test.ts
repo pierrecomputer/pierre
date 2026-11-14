@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { PieceTable } from '../src/editor/pieceTable';
 import { TextDocument } from '../src/editor/textDocument';
 import {
   buildSearchReplacementText,
@@ -8,6 +9,10 @@ import {
   searchDocument,
   type SearchParams,
 } from '../src/search';
+import {
+  type CodeViewSearchLine,
+  collectCodeViewLineMatches,
+} from '../src/search/codeViewSearch';
 
 function createSearchDocument(text: string): SearchableDocument {
   const lineStarts = [0];
@@ -20,7 +25,6 @@ function createSearchDocument(text: string): SearchableDocument {
   const getLineStartOffset = (line: number) => lineStarts[line] ?? text.length;
 
   return {
-    textLength: text.length,
     lineCount: lineStarts.length,
     getLineStartOffset,
     getLineText(line) {
@@ -31,9 +35,6 @@ function createSearchDocument(text: string): SearchableDocument {
         end--;
       }
       return text.slice(start, end);
-    },
-    charAt(offset) {
-      return text.charAt(offset);
     },
   };
 }
@@ -147,6 +148,90 @@ describe('searchDocument', () => {
     ).toEqual([]);
   });
 
+  test('matches whole words at both edges of first, middle CRLF, and last lines', () => {
+    const text = 'foo foo\nfoo foo\r\nfoo foo';
+    const params = searchParams({ text: 'foo', wholeWord: true });
+    const expected: MatchRange[] = [
+      [0, 3],
+      [4, 7],
+      [8, 11],
+      [12, 15],
+      [17, 20],
+      [21, 24],
+    ];
+
+    expect(searchDocument(createSearchDocument(text), params)).toEqual(
+      expected
+    );
+    expect(new PieceTable('foo foo\nfoo foo\nfoo foo').search(params)).toEqual([
+      [0, 3],
+      [4, 7],
+      [8, 11],
+      [12, 15],
+      [16, 19],
+      [20, 23],
+    ]);
+  });
+
+  test('stops at the limit part-way through a line', () => {
+    const document = createSearchDocument('foo foo foo\nfoo');
+    const visited: number[][] = [];
+
+    expect(
+      searchDocument(
+        document,
+        searchParams({ text: 'foo', wholeWord: true }),
+        2,
+        (_range, _index, line, startCharacter, endCharacter) => {
+          visited.push([line, startCharacter, endCharacter]);
+        }
+      )
+    ).toEqual([
+      [0, 3],
+      [4, 7],
+    ]);
+    expect(visited).toEqual([
+      [0, 0, 3],
+      [0, 4, 7],
+    ]);
+  });
+
+  test('matches whole words at CodeView line edges after trimming CRLF', () => {
+    const lines: CodeViewSearchLine[] = [];
+    for (const text of ['foo foo\n', 'foo foo\r\n', 'foo foo']) {
+      lines.push({
+        text,
+        metadata: {
+          itemId: 'word-boundaries',
+          itemType: 'file',
+          side: undefined,
+          lineIndex: lines.length,
+          lineNumber: lines.length + 1,
+        },
+      });
+    }
+    const matches = collectCodeViewLineMatches(
+      lines,
+      searchParams({ text: 'foo', wholeWord: true }),
+      100
+    );
+
+    expect(
+      matches.map(({ lineIndex, startCharacter, endCharacter }) => [
+        lineIndex,
+        startCharacter,
+        endCharacter,
+      ])
+    ).toEqual([
+      [0, 0, 3],
+      [0, 4, 7],
+      [1, 0, 3],
+      [1, 4, 7],
+      [2, 0, 3],
+      [2, 4, 7],
+    ]);
+  });
+
   test('does not match newline-spanning queries', () => {
     const document = createSearchDocument('foo\nbar');
 
@@ -179,5 +264,19 @@ describe('searchDocument', () => {
         text.length
       )
     ).toBe('answer: 42');
+  });
+
+  test('keeps replacement text literal when the regex query cannot be searched', () => {
+    const document = new TextDocument('inmemory://replacement-fallback', 'foo');
+    for (const text of ['', '[', '(foo)|\\n', '(foo)|\n']) {
+      expect(
+        buildSearchReplacementText(
+          document,
+          searchParams({ text, replaceText: '$1!', regex: true }),
+          0,
+          3
+        )
+      ).toBe('$1!');
+    }
   });
 });
