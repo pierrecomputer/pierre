@@ -1057,7 +1057,9 @@ for (const kind of ['file', 'split', 'unified']) {
       else await root.focus();
       await page.keyboard.press('ControlOrMeta+f');
       await root.getByRole('textbox', { name: 'Search' }).fill('target');
-      await expect(root.locator('[data-matches]')).toHaveText(/\d+ of \d{5}/);
+      await expect(root.locator('[data-matches]')).toHaveText(
+        /[\d,]+ of \d{2},\d{3}/
+      );
 
       const measureRepaint = () =>
         page.evaluate(() => {
@@ -1175,7 +1177,7 @@ for (const diffStyle of ['split', 'unified']) {
     // separator at the top of the view.
     await page.keyboard.press('ControlOrMeta+f');
     await root.getByRole('textbox', { name: 'Search' }).fill('target');
-    await expect(root.locator('[data-matches]')).toHaveText('1 of 10000');
+    await expect(root.locator('[data-matches]')).toHaveText('1 of 10,000');
     await expect
       .poll(() =>
         page.evaluate(() => {

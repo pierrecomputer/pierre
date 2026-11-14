@@ -4,21 +4,23 @@ import { i18n } from '../src';
 import { compileMessage } from '../src/i18n/compileMessage';
 
 const en = new Intl.PluralRules('en');
+const enNumbers = new Intl.NumberFormat('en');
 
 describe('compileMessage', () => {
   test('returns plain text unchanged', () => {
-    expect(compileMessage('Expand all', en)()).toBe('Expand all');
+    expect(compileMessage('Expand all', en, enNumbers)()).toBe('Expand all');
   });
 
   test('substitutes {name} arguments', () => {
-    const message = compileMessage('{index} of {count}', en);
+    const message = compileMessage('{index} of {count}', en, enNumbers);
     expect(message({ index: 2, count: 7 })).toBe('2 of 7');
   });
 
   test('picks the plural branch for the locale and fills #', () => {
     const message = compileMessage(
       '{count, plural, one {# line} other {# lines}}',
-      en
+      en,
+      enNumbers
     );
     expect(message({ count: 0 })).toBe('0 lines');
     expect(message({ count: 1 })).toBe('1 line');
@@ -28,7 +30,8 @@ describe('compileMessage', () => {
   test('supports locales with more than two plural forms', () => {
     const message = compileMessage(
       '{count, plural, one {# строка} few {# строки} many {# строк} other {# строки}}',
-      new Intl.PluralRules('ru')
+      new Intl.PluralRules('ru'),
+      new Intl.NumberFormat('ru')
     );
     expect(message({ count: 1 })).toBe('1 строка');
     expect(message({ count: 3 })).toBe('3 строки');
@@ -37,75 +40,123 @@ describe('compileMessage', () => {
   });
 
   test('falls back to other when the locale picks an absent category', () => {
-    const message = compileMessage('{count, plural, other {# 行}}', en);
+    const message = compileMessage(
+      '{count, plural, other {# 行}}',
+      en,
+      enNumbers
+    );
     expect(message({ count: 1 })).toBe('1 行');
   });
 
   test('keeps text around the plural block and other arguments', () => {
     const message = compileMessage(
       'Found {count, plural, one {# match} other {# matches}} in {file}',
-      en
+      en,
+      enNumbers
     );
     expect(message({ count: 2, file: 'a.ts' })).toBe('Found 2 matches in a.ts');
   });
 
   test('rejects a plural block without other', () => {
-    expect(() => compileMessage('{count, plural, one {# line}}', en)).toThrow(
-      '"other"'
-    );
+    expect(() =>
+      compileMessage('{count, plural, one {# line}}', en, enNumbers)
+    ).toThrow('"other"');
   });
 
   test('rejects an unknown plural category', () => {
     expect(() =>
-      compileMessage('{count, plural, single {# line} other {# lines}}', en)
+      compileMessage(
+        '{count, plural, single {# line} other {# lines}}',
+        en,
+        enNumbers
+      )
     ).toThrow('unknown plural category "single"');
   });
 
   test('accepts ICU whitespace around the plural argument', () => {
     const message = compileMessage(
       '{count , plural , one {# line} other {# lines}}',
-      en
+      en,
+      enNumbers
     );
     expect(message({ count: 1 })).toBe('1 line');
   });
 
   test('rejects a malformed plural block', () => {
-    expect(() => compileMessage('{count, plural, one # line}', en)).toThrow(
-      'unsupported syntax'
-    );
+    expect(() =>
+      compileMessage('{count, plural, one # line}', en, enNumbers)
+    ).toThrow('unsupported syntax');
   });
 
   test('rejects more than one plural block', () => {
     expect(() =>
-      compileMessage('{a, plural, other {#}} and {b, plural, other {#}}', en)
+      compileMessage(
+        '{a, plural, other {#}} and {b, plural, other {#}}',
+        en,
+        enNumbers
+      )
     ).toThrow('unsupported syntax');
   });
 
   test('rejects ICU syntax outside the subset at compile time', () => {
     expect(() =>
-      compileMessage('{mode, select, compact {Short} other {Long}}', en)
+      compileMessage(
+        '{mode, select, compact {Short} other {Long}}',
+        en,
+        enNumbers
+      )
     ).toThrow('unsupported syntax');
-    expect(() => compileMessage('{count, number}', en)).toThrow(
+    expect(() => compileMessage('{count, number}', en, enNumbers)).toThrow(
       'unsupported syntax'
     );
-    expect(() => compileMessage('stray } brace', en)).toThrow(
+    expect(() => compileMessage('stray } brace', en, enNumbers)).toThrow(
       'unsupported syntax'
     );
   });
 
   test('rejects a duplicate plural category', () => {
     expect(() =>
-      compileMessage('{count, plural, one {a} one {b} other {c}}', en)
+      compileMessage(
+        '{count, plural, one {a} one {b} other {c}}',
+        en,
+        enNumbers
+      )
     ).toThrow('duplicate plural category "one"');
   });
 
   test('throws when an argument is missing at format time', () => {
-    const message = compileMessage('{count} results', en);
+    const message = compileMessage('{count} results', en, enNumbers);
     expect(() => message()).toThrow('"count" was not provided');
   });
 
+  test('groups the digits of # and of numeric arguments for the locale', () => {
+    const lines = '{count, plural, one {# line} other {# lines}}';
+    expect(compileMessage(lines, en, enNumbers)({ count: 12345 })).toBe(
+      '12,345 lines'
+    );
+    expect(
+      compileMessage(
+        lines,
+        new Intl.PluralRules('de'),
+        new Intl.NumberFormat('de')
+      )({ count: 12345 })
+    ).toBe('12.345 lines');
+    expect(
+      compileMessage(
+        '{index} of {count}',
+        en,
+        enNumbers
+      )({ index: 1000, count: 12345 })
+    ).toBe('1,000 of 12,345');
+  });
+
+  test('leaves string arguments as they are', () => {
+    const message = compileMessage('{name}', en, enNumbers);
+    expect(message({ name: '12345' })).toBe('12345');
+  });
+
   test('throws when the plural argument is not a number', () => {
-    const message = compileMessage('{count, plural, other {#}}', en);
+    const message = compileMessage('{count, plural, other {#}}', en, enNumbers);
     expect(() => message({ count: 'many' })).toThrow('must be a number');
   });
 });
@@ -197,6 +248,24 @@ describe('i18n', () => {
     expect(i18n.t('unknownUnmodifiedLines')).toBe(
       'More unchanged context may be available'
     );
+  });
+
+  test('groups digits in messages and formatNumber for the locale', () => {
+    expect(i18n.formatNumber(12345)).toBe('12,345');
+    expect(i18n.t('unmodifiedLines', { count: 12345 })).toBe(
+      '12,345 unmodified lines'
+    );
+    expect(i18n.t('searchResultCount', { count: 1234 })).toBe('1,234 results');
+    expect(i18n.t('searchResultPosition', { index: 1000, count: 1234 })).toBe(
+      '1,000 of 1,234'
+    );
+
+    i18n.set({ locale: 'de' });
+    expect(i18n.formatNumber(12345)).toBe('12.345');
+    expect(i18n.t('searchResultCount', { count: 1234 })).toBe('1.234 results');
+
+    i18n.set();
+    expect(i18n.formatNumber(12345)).toBe('12,345');
   });
 
   test('set with no config restores English and the English locale', () => {

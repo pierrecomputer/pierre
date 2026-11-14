@@ -328,6 +328,7 @@ interface HeaderCache {
   lastRenderedHTML: string | undefined;
   html: string | undefined;
   fileDiff: FileDiffMetadata | undefined;
+  messagesVersion: number | undefined;
 }
 
 export interface FileDiffRenderData<LAnnotation> {
@@ -430,6 +431,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     lastRenderedHTML: undefined,
     html: undefined,
     fileDiff: undefined,
+    messagesVersion: undefined,
   };
   protected lastRowCount: number | undefined;
   // The keyed row writer of each code element on screen.
@@ -469,9 +471,15 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.getLineIndex
       )
     );
+    this.enabled = true;
+  }
+
+  // An instance listens for theme and message changes from the moment it gets
+  // a container to render into until `cleanUp`. Without a container it has
+  // nothing on screen to update.
+  private subscribeToChanges(): void {
     this.workerManager?.subscribeToThemeChanges(this);
     i18n.subscribe(this);
-    this.enabled = true;
   }
 
   protected handleHighlightRender = (): void => {
@@ -975,8 +983,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   public virtualizedSetup(): void {
     this.enabled = true;
-    this.workerManager?.subscribeToThemeChanges(this);
-    i18n.subscribe(this);
   }
 
   public hydrate({
@@ -1100,6 +1106,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.pre != null) {
       this.syncCodeNodesFromPre(this.pre);
       this.pre.removeAttribute('data-dehydrated');
+    }
+    if (this.fileContainer == null) {
+      this.subscribeToChanges();
     }
     this.fileContainer = fileContainer;
     this.hydrateMeasuredScrollbar();
@@ -2776,6 +2785,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (containerChanged) {
       this.emitPostRender(true);
     }
+    if (previousContainer == null) {
+      this.subscribeToChanges();
+    }
     this.fileContainer = nextContainer;
     if (previousContainer != null && containerChanged) {
       this.headerCache.lastRenderedHTML = undefined;
@@ -2888,17 +2900,21 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         fileDiff: cachedHeaderDiff,
         html: cachedHeaderHTML,
         lastRenderedHTML,
+        messagesVersion: cachedMessagesVersion,
       },
     } = this;
     const editSessionDiff = this.editSession?.diff;
+    const { version: messagesVersion } = i18n;
     const reusableHeaderHTML =
       fileDiff !== editSessionDiff &&
+      cachedMessagesVersion === messagesVersion &&
       areDiffTargetsEqual(cachedHeaderDiff, fileDiff)
         ? cachedHeaderHTML
         : undefined;
     const headerHTML = reusableHeaderHTML ?? hastToHtml(headerAST);
     this.headerCache.html = headerHTML;
     this.headerCache.fileDiff = fileDiff;
+    this.headerCache.messagesVersion = messagesVersion;
     if (headerHTML !== lastRenderedHTML) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = headerHTML;

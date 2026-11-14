@@ -333,6 +333,12 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       'file',
       pluckInteractionOptions(options)
     );
+  }
+
+  // An instance listens for theme changes from the moment it gets a container
+  // to render into until `cleanUp`. Without a container it has nothing on
+  // screen to update.
+  private subscribeToChanges(): void {
     this.workerManager?.subscribeToThemeChanges(this);
   }
 
@@ -949,7 +955,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
   public virtualizedSetup(): void {
     this.enabled = true;
-    this.workerManager?.subscribeToThemeChanges(this);
   }
 
   public hydrate(props: FileHydrateProps<LAnnotation>): void {
@@ -1046,6 +1051,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (this.pre != null) {
       this.syncCodeNodeFromPre(this.pre);
       this.pre.removeAttribute('data-dehydrated');
+    }
+    if (this.fileContainer == null) {
+      this.subscribeToChanges();
     }
     this.fileContainer = fileContainer;
     this.hydrateMeasuredScrollbar();
@@ -2232,6 +2240,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
     if (containerChanged) {
       this.emitPostRender(true);
+    }
+    if (previousContainer == null) {
+      this.subscribeToChanges();
     }
     this.fileContainer = nextContainer;
     if (previousContainer != null && containerChanged) {

@@ -6,6 +6,7 @@ import {
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../constants';
+import { i18n } from '../i18n/I18n';
 import type {
   ChangeTypes,
   FileContents,
@@ -145,7 +146,7 @@ function createMetadataElement(
       children.push(
         createHastElement({
           tagName: 'span',
-          children: [createTextNodeElement(`-${deletions}`)],
+          children: [createTextNodeElement(`-${i18n.formatNumber(deletions)}`)],
           properties: { 'data-deletions-count': '' },
         })
       );
@@ -154,7 +155,7 @@ function createMetadataElement(
       children.push(
         createHastElement({
           tagName: 'span',
-          children: [createTextNodeElement(`+${additions}`)],
+          children: [createTextNodeElement(`+${i18n.formatNumber(additions)}`)],
           properties: { 'data-additions-count': '' },
         })
       );
