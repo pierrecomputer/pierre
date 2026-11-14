@@ -25,6 +25,7 @@ UTF-8 input
 | `src/inline.wat`, `link.wat`, `extlink.wat`  | Inline syntax, references, and autolinks       |
 | `src/scan.wat`, `entity.wat`, `htmlscan.wat` | SIMD scans, entities, and HTML grammar         |
 | `src/render.wat`, `html.wat`, `ansi.wat`     | Record traversal and output backends           |
+| `src/format.wat`                             | Final markup for the HTML renderer             |
 | `src/frontmatter.wat`, `complete.wat`        | YAML frontmatter and unfinished syntax         |
 | `scripts/build.ts`                           | WAT preprocessor and compiler                  |
 | `lib/`                                       | Wasm loaders, byte APIs, and HTML sessions     |
@@ -62,7 +63,8 @@ The fixed prefix holds control fields, generated tables, and work buffers. See
 [`memory.wat`](./src/memory.wat) for exact addresses. Input starts at byte
 65,536; JavaScript grows memory before writing it after this fixed prefix. Named
 entities expand from front-coded names into an immutable index at instantiation.
-Document data comes after:
+The last 4 KiB of the prefix hold the id prefix of formatted HTML. Document data
+comes after:
 
 ```text
 input + NUL sentinel + at least 32 bytes of slack
@@ -147,9 +149,10 @@ contain completed inline formatting before its final literal word. Syntax
 characters, possible closing fences, control characters, and structural changes
 return to the parser. Changed-text and changed-line metadata let the DOM
 renderer append content without scanning or materializing the whole pending
-HTML. This metadata uses a private symbol shared by the core and renderer
-bundles; public result types and enumerable string keys stay unchanged. Each
-result still provides independent full HTML through lazy getters.
+HTML. This metadata and the format option use private symbols shared by the core
+and renderer bundles; public result types and enumerable string keys stay
+unchanged. Each result still provides independent full HTML through lazy
+getters.
 
 An edit, a changed `incomplete` option, a BOM at the boundary, or a link or
 footnote definition resets the session. Definitions can change earlier output,
@@ -162,8 +165,31 @@ pairs delimiter runs as the parser does, and it writes no closer that might not
 pair, because that closer would show as text. React asks for repairs only while
 the stream is active.
 
-[`html/render.ts`](./html/render.ts) adds URL checks, element filters, code
-plugins, and hooks. [`html/dom.ts`](./html/dom.ts) patches DOM nodes:
+## Formatted HTML
+
+The HTML renderer needs more than CommonMark HTML: each tag names itself in
+`data-markdown`, links pass the URL rules, generated ids take a prefix, and a
+code block has a header, line numbers, and line groups. A second pass over the
+output in JavaScript cost more than the parse. So a session can ask Wasm for
+this markup with a private option, and [`format.wat`](./src/format.wat) and the
+tag writers of `html.wat` write it in the same pass. The option is a set of flag
+bits (control byte 26) and the escaped id prefix. Public sessions and
+`renderToHtml` still write plain HTML.
+
+[`html/render.ts`](./html/render.ts) only runs what needs the host:
+
+- A URL hook (`urlTransform`). Wasm then leaves URLs unchecked, and the host
+  checks the result of the hook.
+- Element filters, code plugins, and custom code renderers. Wasm then writes
+  each code block in slots: the language, the markup before `<code>`, the
+  `<code>` tag, and the escaped code, each after a NUL. The output holds no
+  other NUL, so a single-character search finds every block.
+- Element hooks, which run last on the finished HTML.
+
+The fence that is still open is always in slots, without its gutter, so the host
+can update single lines and add line numbers as they arrive.
+
+[`html/dom.ts`](./html/dom.ts) patches DOM nodes:
 
 - Node references separate completed content from the part that can still
   change. Comments retain boundaries only where fade cleanup can merge text. A
@@ -191,8 +217,9 @@ does not reconcile individual Markdown nodes.
 
 ## Constraints
 
-- Keep Markdown syntax and output backends in WAT. Host sessions may extend
-  parser-validated literal content; syntax changes return to the parser.
+- Keep Markdown syntax and output backends in WAT, and the markup of the HTML
+  renderer too. Host sessions may extend parser-validated literal content;
+  syntax changes return to the parser.
 - Every scanner must advance and stay in its range. Malformed input must not
   trap or loop forever.
 - Line scans can read up to 31 bytes past the input, and other SIMD scans up to
@@ -205,7 +232,8 @@ does not reconcile individual Markdown nodes.
 - Limits: 250 container levels, 999 characters per link or footnote label, nine
   digits per ordered-list start, 512 table columns, 255 backticks per code span,
   256 open brackets per leaf, 64 open delimiter runs in the block that
-  completion repairs, and 1,073,610,752 bytes (2^30 − 128 KiB) of input.
+  completion repairs, 4,096 bytes of escaped id prefix, and 1,073,610,752 bytes
+  (2^30 − 128 KiB) of input.
 - A table closes after a row takes it past 524,288 auto-filled cells, matching
   cmark-gfm. Later lines parse as normal Markdown. Supplied cells do not count
   toward this limit.

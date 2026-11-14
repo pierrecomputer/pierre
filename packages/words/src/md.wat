@@ -17,6 +17,10 @@
       [14:18)         frontmatter JSON start (u32 LE, 0 when absent)
       [18:22)         frontmatter JSON length (u32 LE)
       [22:26)         ansi wrap width (u32 LE, 0 = no wrapping)
+      [26]            HTML format flags (u8, see $Fmt in format.wat); 0 = plain HTML
+      [27]            the output has a code block in slots (set by render; the
+                      host clears it)
+      [28:30)         byte length of the id prefix at $mem.idPrefix (u16 LE)
       [30]            document contains global definitions
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
@@ -53,6 +57,7 @@
   (import "./render.wat")
   (import "./frontmatter.wat")
   (import "./complete.wat")
+  (import "./format.wat")
 
   (entity-table $mem.entities $mem.entitiesEnd $mem.entitySlots $mem.entityNames)
   (string-pool $mem.strings $mem.stringsEnd)
@@ -100,6 +105,7 @@
     (global.set $boundaryRec (i32.const 0))
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
+    (global.set $fmt (i32.load8_u (i32.const 26)))
     (global.set $tableHead (i32.const 0))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $src (i32.const $mem.input))

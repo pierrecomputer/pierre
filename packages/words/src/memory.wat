@@ -3,7 +3,7 @@
   (const $mem.numbufEnd 64)
   (const $mem.hexdigits 64)
   (const $mem.strings 80)
-  (const $mem.stringsEnd 967)
+  (const $mem.stringsEnd 1344)
   (const $mem.paragraphLo $mem.stringsEnd)
   (const $mem.crByte $mem.paragraphLo+16)
   (const $mem.quoteEscape $mem.crByte+1)
@@ -63,5 +63,8 @@
   ;; them into $mem.punct, $mem.width and $mem.wide at instantiation.
   (const $mem.packed $mem.itemIndent+256)
   (const $mem.packedEnd $mem.packed+2048)
+  ;; The id prefix of formatted HTML, already escaped: the host writes it here
+  ;; and its length in control bytes [28:30).
+  (const $mem.idPrefix 61440)
   (const $mem.input 65536)
 )

@@ -1,7 +1,10 @@
 import type {
   FenceDelta,
+  HtmlFormat,
   InternalHtmlUpdate,
+  InternalSessionOptions,
   delta as protocolDelta,
+  format as protocolFormat,
 } from './internal';
 import type {
   AnsiOptions,
@@ -20,17 +23,25 @@ export type {
 } from './types';
 
 type Input = string | Uint8Array | ArrayBuffer;
-type Options = AnsiOptions & RenderOptions & { boundary?: boolean };
+type Options = AnsiOptions &
+  RenderOptions & { boundary?: boolean; format?: HtmlFormat };
 
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const maxInput = 2 ** 30 - 2 * pageSize;
 
-// Keep the core entrypoint self-contained while sharing the renderer's private key.
+// `$mem.idPrefix` in src/memory.wat, and the room it has.
+const idPrefixAt = 61440;
+const idPrefixRoom = 4096;
+
+// Keep the core entrypoint self-contained while sharing the renderer's private keys.
 const delta = Symbol.for(
   '@pierre/words/stream-delta/v1'
 ) as typeof protocolDelta;
+const format: typeof protocolFormat = Symbol.for(
+  '@pierre/words/html-format/v1'
+) as typeof protocolFormat;
 
 // oxlint-disable-next-line no-control-regex -- Control bytes require parser normalization.
 const paragraphSyntax = /[\u0000-\u001f"&<>@\\[\]`*_~:\uD800-\uDFFF]/u;
@@ -85,6 +96,8 @@ class Renderer {
   buffer!: Uint8Array<ArrayBuffer>;
   dv!: DataView<ArrayBuffer>;
   pages!: number;
+  idPrefix = '';
+  idPrefixLength = 0;
 
   constructor(wasmModule: WebAssembly.Module) {
     const instance = new WebAssembly.Instance(wasmModule, {});
@@ -153,6 +166,24 @@ class Renderer {
         (options?.incomplete === true ? 64 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
+    const format = options?.format;
+    // The byte after the flags tells whether a code block is in slots.
+    this.dv.setUint16(26, format?.flags ?? 0, true);
+    if (format !== undefined) {
+      if (format.idPrefix !== this.idPrefix) {
+        const { read, written } = enc.encodeInto(
+          format.idPrefix,
+          this.buffer.subarray(idPrefixAt, idPrefixAt + idPrefixRoom)
+        );
+        if (read < format.idPrefix.length)
+          throw new RangeError(
+            `idPrefix exceeds ${idPrefixRoom} bytes of UTF-8`
+          );
+        this.idPrefix = format.idPrefix;
+        this.idPrefixLength = written;
+      }
+      this.dv.setUint16(28, this.idPrefixLength, true);
+    }
     this.dv.setUint32(
       22,
       options?.width != null && options.width > 0
@@ -243,12 +274,17 @@ export function createHtmlSession(): {
   let offset = 0;
   let definitions = false;
   let incomplete: boolean | undefined;
+  let flags: number | undefined;
+  let idPrefix: string | undefined;
   let result: InternalHtmlUpdate | undefined;
   let revision = 0;
-  let paragraph: { body: string; spaces: number; links: boolean } | undefined;
+  let paragraph:
+    | { open: string; body: string; spaces: number; links: boolean }
+    | undefined;
   let openFence:
     | {
         prefix: string;
+        suffix: string;
         body: string;
         marker: number;
         count: number;
@@ -258,18 +294,23 @@ export function createHtmlSession(): {
       }
     | undefined;
   return {
-    render(input, options) {
+    render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
       // A missing option and `false` are the same mode.
       const wanted = options?.incomplete === true;
-      if (input === previous && incomplete === wanted && result != null)
-        return result;
+      // The HTML renderer asks for its final markup with a private option.
+      const form = options?.[format];
+      const sameMode =
+        incomplete === wanted &&
+        flags === form?.flags &&
+        idPrefix === form?.idPrefix;
+      if (input === previous && sameMode && result != null) return result;
       // V8 compares slices with memcmp, but its startsWith reads each character.
       let reset =
         input.length < previous.length ||
         input.slice(0, previous.length) !== previous ||
-        incomplete !== wanted ||
+        !sameMode ||
         definitions;
       if (offset !== 0 && input.charCodeAt(offset) === 0xfeff) reset = true;
       if (!reset && paragraph !== undefined) {
@@ -287,6 +328,7 @@ export function createHtmlSession(): {
               : ' '.repeat(paragraph.spaces) +
                 dec.decode(enc.encode(appended.slice(0, end)));
           const context = {
+            open: paragraph.open,
             body: paragraph.body + text,
             links: paragraph.links,
             spaces:
@@ -297,8 +339,8 @@ export function createHtmlSession(): {
           let pending: string | undefined;
           const getPending = (): string => {
             if (pending === undefined) {
-              pending = '<p>' + context.body + '</p>\n';
-              context.body = pending.slice(3, -5);
+              pending = context.open + context.body + '</p>\n';
+              context.body = pending.slice(context.open.length, -5);
             }
             return pending;
           };
@@ -361,7 +403,7 @@ export function createHtmlSession(): {
             tail: changed.slice(lastStart),
             firstLine: Math.max(0, lineCount - 2),
           };
-          const suffix = ending + '</code></pre>\n';
+          const suffix = ending + openFence.suffix;
           const fence: FenceDelta = {
             text: literal,
             replaceNewline: openFence.body !== '' && !previous.endsWith('\n'),
@@ -404,6 +446,8 @@ export function createHtmlSession(): {
             revision: ++revision,
             [delta]: fence,
           };
+          // A formatted open fence is in slots.
+          if (flags !== undefined) result[format] = true;
           return result;
         }
       }
@@ -414,6 +458,7 @@ export function createHtmlSession(): {
         skipHtml: true,
         incomplete: wanted,
         boundary: true,
+        format: form,
       };
       let tail = input.slice(nextOffset);
       let rendered = shared.render(tail, 0, renderOptions);
@@ -426,6 +471,7 @@ export function createHtmlSession(): {
       }
       const html = dec.decode(rendered.output);
       definitions = shared.dv.getUint8(30) !== 0;
+      const slots = shared.dv.getUint8(27) !== 0;
       // Wasm measures the source and HTML before the boundary in UTF-16 units.
       const completed = definitions ? 0 : shared.dv.getUint32(36, true);
       let pending = html;
@@ -440,17 +486,20 @@ export function createHtmlSession(): {
       offset = nextOffset;
       previous = input;
       incomplete = wanted;
+      flags = form?.flags;
+      idPrefix = form?.idPrefix;
       const completedHtml = stable;
       paragraph = undefined;
+      const open = form === undefined ? '<p>' : '<p data-markdown="p">';
       // Option bit 7: completion hid or closed something, so the source no
       // longer tells what the paragraph shows.
       if (
         !definitions &&
         (shared.dv.getUint8(1) & 128) === 0 &&
-        pending.startsWith('<p>') &&
+        pending.startsWith(open) &&
         pending.endsWith('</p>\n')
       ) {
-        const body = pending.slice(3, -5);
+        const body = pending.slice(open.length, -5);
         let end = input.length;
         while (input.charCodeAt(end - 1) === 32) end--;
         const tail = input.slice(offset, end).trimStart();
@@ -474,16 +523,24 @@ export function createHtmlSession(): {
           !/[<\r\n\t\0]/.test(tail)
         )
           paragraph = {
+            open,
             body,
             spaces: input.length - end,
             links: tail.includes('['),
           };
       }
       openFence = undefined;
+      // A formatted open fence is in slots after NULs: its state ("1", or "2"
+      // while the stream is active) and language, the markup before `<code>`,
+      // the `<code>` tag, then the code.
+      const suffix =
+        form === undefined ? '</code></pre>\n' : '\0</code></pre></div>\n';
       if (
         !definitions &&
-        pending.startsWith('<pre data-markdown-incomplete><code') &&
-        pending.endsWith('</code></pre>\n')
+        (form === undefined
+          ? pending.startsWith('<pre data-markdown-incomplete><code')
+          : pending.charCodeAt(0) === 0 && pending.charCodeAt(1) !== 48) &&
+        pending.endsWith(suffix)
       ) {
         const firstLine = input.indexOf('\n', offset);
         const opener = input.slice(offset, firstLine);
@@ -494,8 +551,13 @@ export function createHtmlSession(): {
           last !== 13 &&
           !(last >= 0xd800 && last <= 0xdbff)
         ) {
-          const start = pending.indexOf('>', pending.indexOf('<code')) + 1;
-          let body = pending.slice(start, -14);
+          let start = pending.indexOf('>', pending.indexOf('<code')) + 1;
+          if (form !== undefined) {
+            start = 0;
+            for (let slot = 0; slot < 4; slot++)
+              start = pending.indexOf('\0', start) + 1;
+          }
+          let body = pending.slice(start, -suffix.length);
           if (input.length > firstLine + 1 && !input.endsWith('\n'))
             body = body.slice(0, -1);
           const length = body.endsWith('\n') ? body.length - 1 : body.length;
@@ -514,6 +576,7 @@ export function createHtmlSession(): {
           while (opener.charCodeAt(count) === marker) count++;
           openFence = {
             prefix: pending.slice(0, start),
+            suffix,
             body,
             marker,
             count,
@@ -538,6 +601,8 @@ export function createHtmlSession(): {
         reset,
         revision: ++revision,
       };
+      // A computed key would slow every literal: add this one only when set.
+      if (slots) result[format] = true;
       return result;
     },
   };
