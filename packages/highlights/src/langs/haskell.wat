@@ -128,7 +128,7 @@
 
   ;; Returns 1 when open at $end, 0 when closed, -1 with $ptr unchanged when
   ;; $ptr opens none. Decided on the opener's line, so stream chunks agree.
-  ;; WARNING: keep two callers (opener and resume); inlined into $hlHaskell
+  ;; Keep two callers (opener and resume); inlined into $hlHaskell
   ;; it made JavaScriptCore 8% slower.
   (func $hsQuasiQuote (param $resume i32) (result i32)
     (local $p i32)

@@ -7,7 +7,7 @@
   (import "./org.wat")
   (import "./xml.wat")
 
-  ;; WARNING: Wikitext gets its own copy of the entity scan. With two callers
+  ;; Wikitext gets its own copy of the entity scan. With two callers
   ;; Binaryen stops inlining $xmlEntity into the XML lexer.
   (func-variant $wikiEntity $xmlEntity)
 
@@ -658,7 +658,7 @@
                   (if (i32.ge_u (local.get $c) (i32.const 4))
                     (then
                       (local.set $c (call $orgLanguageByName (global.get $wikiLangFrom) (global.get $wikiLangTo)))
-                      ;; WARNING: a Wikitext body would reuse our checkpoint window
+                      ;; a Wikitext body would reuse our checkpoint window
                       (if (i32.ne (local.get $c) (enum.get $Language.wikitext))
                         (then
                           (local.set $block (i32.or (local.get $block) (i32.shl (local.get $c) (i32.const 8))))))))))

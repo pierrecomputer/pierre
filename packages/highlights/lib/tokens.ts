@@ -439,9 +439,8 @@ export function lineRecordsToTokens(
   const { styles, fg, role } = themes[0];
   const htmlStyles =
     role === 'single' ? undefined : themeHtmlStyles(themes, cssVariablePrefix);
-  // WARNING: Read the line marker as -1. JSC compiles a `Uint32Array` read as
-  // int32, and 0xffffffff made the optimized code exit on every call: small
-  // inputs took twice as long in Bun.
+  // Read the line marker as -1. JSC compiles a `Uint32Array` read as int32,
+  // and 0xffffffff makes its optimized code exit on every call.
   const types = new Int32Array(recs.buffer, recs.byteOffset, recs.length);
   let start = 0;
   for (let rec = 0; ; rec += 2) {

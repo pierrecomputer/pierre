@@ -1251,7 +1251,7 @@
 
   (global $phpHtmlOpen (mut i32) (i32.const 0))
 
-  ;; WARNING: $hlHtml starts again after each PHP island: tag, script, and
+  ;; $hlHtml starts again after each PHP island: tag, script, and
   ;; style state do not cross it. A modular build must lex each HTML segment
   ;; as a whole body (-1) to match. Only the HTML that ends a stream chunk
   ;; is a stream ($phpHtmlOpen), which the next chunk continues.

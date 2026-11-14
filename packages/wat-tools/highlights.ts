@@ -98,7 +98,7 @@ export function transformWat(
   url: string | URL,
   content?: string
 ): TransformedWat {
-  // WARNING: `pathToFileURL` returns Node's URL type, which differs from the
+  // `pathToFileURL` returns Node's URL type, which differs from the
   // global URL under bun-types.
   if (typeof url === 'string') url = new URL(pathToFileURL(url).href);
   content ??= readFileSync(url, 'utf-8');
@@ -392,7 +392,7 @@ export function transformWat(
   // where $base calls $from. Binaryen then drops the branches the copy never
   // takes, so a dialect can get its own loop without slowing the lexer it
   // shares code with.
-  // WARNING: Binaryen inlines a larger helper only while it has one caller,
+  // Binaryen inlines a larger helper only while it has one caller,
   // and the copy calls the helpers of $base too. Give the copy its own copy
   // of such a helper with `call`, or $base loses the inlined code.
   const variants: {
@@ -443,7 +443,7 @@ export function transformWat(
             new RegExp(`\\(\\s*call\\s+\\${from}(?![\\w.])`, 'g'),
             `(call ${to}`
           );
-        // WARNING: Binaryen merges identical functions before it inlines, so
+        // Binaryen merges identical functions before it inlines, so
         // an exact copy would be the base again. A trailing nop keeps the
         // copy apart until then.
         if (variant.globals.length === 0) body += '\n    (nop)';

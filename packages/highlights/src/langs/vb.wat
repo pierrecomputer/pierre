@@ -124,7 +124,7 @@
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
-        ;; WARNING: check before the end test, so a line-fed chunk sees its
+        ;; Check before the end test, so a line-fed chunk sees its
         ;; own line break. An interpolation hole or attribute list ends with
         ;; its line.
         (if (i32.or (local.get $hole) (local.get $attr))

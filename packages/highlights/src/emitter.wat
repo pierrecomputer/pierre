@@ -910,7 +910,7 @@
   ;; Read the control block and write the wrapper. Output mode in [1]:
   ;; 0 inline colors, 1 CSS variables, 2 multiple themes, 3 UTF-16 line
   ;; records, 4 prepared HTML openers, 5 byte records.
-  ;; WARNING: Mode 5 ($tokens 2) is the output of a lexer module: byte ends
+  ;; Mode 5 ($tokens 2) is the output of a lexer module: byte ends
   ;; and a leading gap of type 255. The host uses it when this module lexes
   ;; an embedded body for a registered lexer.
   (func $hlBegin
@@ -1032,10 +1032,10 @@
 
   ;; Write the output for the lexer records at control word 22 (byte length
   ;; in word 26): [end:u32, type:u32], with ends relative to the input.
-  ;; WARNING: A custom lexer can report ends that go backward, pass the
+  ;; A custom lexer can report ends that go backward, pass the
   ;; input, or stop before it, and types that do not exist. Emit each input
   ;; byte exactly once.
-  ;; WARNING: Lexing no longer runs between two tokens here, so the address
+  ;; Lexing no longer runs between two tokens here, so the address
   ;; of the next output byte is the critical path. The HTML loop keeps it and
   ;; the open span in locals: a global costs a store and a load for each
   ;; update. Inline colors (mode 0) switch to a cached span opener here; the

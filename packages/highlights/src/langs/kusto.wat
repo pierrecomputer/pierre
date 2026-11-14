@@ -152,7 +152,7 @@
               (i32.gt_u (local.get $lhs) (global.get $srcBase))
               (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "="))))
           (then
-            ;; WARNING: the number branch below scans from $ptr, past the sign
+            ;; the number branch below scans from $ptr, past the sign
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (local.set $c (i32.const "0"))))
         ;; the identifier run takes timespan units (`5m`, `1.5h`); Splunk

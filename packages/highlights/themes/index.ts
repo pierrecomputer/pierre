@@ -148,9 +148,9 @@ export function getFontStyle(token: ThemedToken): string | undefined {
   return undefined;
 }
 
-// WARNING: The build stores each bundled `style` as a JSON string (see
-// tsdown.config.ts): 75 object literals cost about 4 ms at import. Parse a
-// style on first use. Without the build, `style` is the object.
+// The build stores each bundled `style` as a JSON string (see
+// tsdown.config.ts), because the object literals cost about 4 ms at import.
+// Without the build, `style` is the object.
 function lazyTheme(id: string, { style, ...rest }: Theme): Theme {
   let value: unknown = style;
   return {

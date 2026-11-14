@@ -329,7 +329,7 @@
               (drop (call $templGo (select (local.get $p) (local.get $lineEnd) (local.get $p)) (i32.const -1)))
               (br_if $next (i32.eqz (local.get $p)))
               (call $templBracket (local.get $p))
-              ;; WARNING: the Go lines' saved locals would keep live line states apart
+              ;; the Go lines' saved locals would keep live line states apart
               (call $streamClearCheckpoints)
               (local.set $go (i32.const 0))
               (local.set $sec (local.get $r))
