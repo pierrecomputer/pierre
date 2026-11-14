@@ -1,0 +1,50 @@
+import { IconChevronSm } from '@pierre/icons';
+import type { ComponentProps, ReactNode } from 'react';
+
+import { cn } from '@/lib/utils';
+
+interface WordsDisclosureProps extends Omit<
+  ComponentProps<'details'>,
+  'children'
+> {
+  summary: ReactNode;
+  summaryClassName?: string;
+  iconClassName?: string;
+  contentClassName?: string;
+  children: ReactNode;
+}
+
+export function WordsDisclosure({
+  summary,
+  summaryClassName,
+  iconClassName,
+  contentClassName,
+  children,
+  className,
+  ...props
+}: WordsDisclosureProps) {
+  return (
+    <details {...props} className={cn('group', className)}>
+      <summary
+        className={cn(
+          '-m-3 flex min-h-11 w-[calc(100%+1.5rem)] cursor-pointer list-none select-none items-center gap-1 p-3 [&::-webkit-details-marker]:hidden',
+          summaryClassName
+        )}
+      >
+        <IconChevronSm
+          aria-hidden="true"
+          className={cn(
+            'text-muted-foreground size-4 shrink-0 -rotate-90 transition-transform group-open:rotate-0',
+            iconClassName
+          )}
+        />
+        <span>{summary}</span>
+      </summary>
+      {contentClassName == null ? (
+        children
+      ) : (
+        <div className={contentClassName}>{children}</div>
+      )}
+    </details>
+  );
+}

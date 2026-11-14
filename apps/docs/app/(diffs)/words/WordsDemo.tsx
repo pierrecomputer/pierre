@@ -29,7 +29,9 @@ import {
 import { getBenchmarkGradientStyle } from '../highlights/BenchmarkBar';
 import rainbowStyles from '../highlights/HighlightsRainbow.module.css';
 import styles from './WordsDemo.module.css';
-import { FeatureHeader } from '@/components/FeatureHeader';
+import { WordsDisclosure } from './WordsDisclosure';
+import { getWordsUsage, type WordsExampleKind } from './wordsUsage';
+import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -39,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 const samples = {
   conversation: `## A little room for better ideas\n\nGood tools get out of your way. **Great tools make you want to keep going.**\n\nThis response arrives a few characters at a time. Watch *emphasis*, [links](https://diffs.com), and code find their shape.\n\n### Built for the conversation\n\n- [x] Write naturally, with **GitHub Flavored Markdown**\n- [x] Customize the generated HTML\n- [ ] Make something worth sharing\n\n\`\`\`tsx\nimport { Markdown } from '@pierre/words/react';
@@ -67,7 +70,6 @@ const overrides: Components = {
     html.replace('<code ', `<code class="${styles.customInline}" `),
 };
 
-type ExampleKind = 'streaming' | 'fades' | 'code' | 'hooks' | 'playground';
 type Playback =
   | { status: 'ready' | 'waiting' | 'complete' }
   | { status: 'streaming'; cursor: number };
@@ -143,10 +145,12 @@ function WordsExample({
   kind,
   title,
   description,
+  preloadedUsage,
 }: {
-  kind: ExampleKind;
+  kind: WordsExampleKind;
   title: string;
   description: ReactNode;
+  preloadedUsage: PreloadedCodeExample<undefined, undefined>;
 }) {
   const playground = kind === 'playground';
   const fixedSpeed =
@@ -231,28 +235,13 @@ function WordsExample({
   const replay = (): void => {
     setPlayback({ status: 'streaming', cursor: 0 });
   };
-  const usage = [
-    "import { Markdown } from '@pierre/words/react';",
-    "import '@pierre/words/styles.css';",
-    highlight
-      ? "import { createHighlightsPlugin } from '@pierre/words/highlights';\nimport light from '@pierre/highlights/themes/pierre-light';\nimport dark from '@pierre/highlights/themes/pierre-dark';\n\nconst plugins = {\n  code: createHighlightsPlugin({ themes: { light, dark }, defaultColor: 'light-dark()' }),\n};"
-      : '',
-    '',
-    '<Markdown',
-    '  isAnimating={isStreaming}',
-    !repair ? '  parseIncompleteMarkdown={false}' : '',
-    "  animated={{ animation: 'fadeIn', duration: " + fadeDuration + ' }}',
-    highlight ? '  plugins={plugins}' : '',
-    lineNumbers ? '' : '  lineNumbers={false}',
-    custom
-      ? "  components={{\n    a: (html) => html.replace('<a ', '<a class=\"your-link\" '),\n  }}"
-      : '',
-    '>',
-    '  {text}',
-    '</Markdown>',
-  ]
-    .filter((line) => line !== '')
-    .join('\n');
+  const usage = getWordsUsage({
+    custom,
+    fadeDuration,
+    highlight,
+    lineNumbers,
+    repair,
+  });
   const selectedSample =
     sampleOptions.find(({ value }) => value === sample)?.label ?? 'Your text';
 
@@ -333,11 +322,17 @@ function WordsExample({
       data-fade-duration={fadeDuration}
       data-highlight={highlight}
     >
-      <FeatureHeader
-        id={'words-' + kind}
-        title={title}
-        description={description}
-      />
+      <div className="mb-6 max-w-3xl space-y-2">
+        <h2
+          id={'words-' + kind}
+          className="scroll-mt-20 text-2xl font-semibold tracking-tight"
+        >
+          {title}
+        </h2>
+        <p className="text-muted-foreground strong-fg text-pretty">
+          {description}
+        </p>
+      </div>
       <div className="flex flex-wrap items-center gap-3" data-words-toolbar>
         {(fixedSpeed || playground) && replayButton}
         {kind === 'streaming' && (
@@ -494,21 +489,34 @@ function WordsExample({
           </span>
         </div>
       </div>
-      <details className={styles.usage}>
-        <summary>Use it in React</summary>
-        <pre>
-          <code>{usage}</code>
-        </pre>
-      </details>
+      <WordsDisclosure
+        summary="Use it in React"
+        className="rounded-lg bg-neutral-50 p-4 dark:bg-neutral-900"
+        summaryClassName="text-muted-foreground text-sm font-medium"
+        contentClassName="mt-4"
+      >
+        <DocsCodeExample
+          {...preloadedUsage}
+          file={{ ...preloadedUsage.file, contents: usage }}
+        />
+      </WordsDisclosure>
     </section>
   );
 }
 
-export function WordsDemo() {
+export function WordsDemo({
+  usageExamples,
+}: {
+  usageExamples: Record<
+    WordsExampleKind,
+    PreloadedCodeExample<undefined, undefined>
+  >;
+}) {
   return (
     <div id="examples" className="scroll-mt-20">
       <WordsExample
         kind="fades"
+        preloadedUsage={usageExamples.fades}
         title="A softer arrival"
         description={
           <>
@@ -520,6 +528,7 @@ export function WordsDemo() {
       />
       <WordsExample
         kind="streaming"
+        preloadedUsage={usageExamples.streaming}
         title="Built for the conversation"
         description={
           <>
@@ -530,6 +539,7 @@ export function WordsDemo() {
       />
       <WordsExample
         kind="code"
+        preloadedUsage={usageExamples.code}
         title="Code that keeps up"
         description={
           <>
@@ -540,6 +550,7 @@ export function WordsDemo() {
       />
       <WordsExample
         kind="hooks"
+        preloadedUsage={usageExamples.hooks}
         title="Your HTML, your way"
         description={
           <>
@@ -551,6 +562,7 @@ export function WordsDemo() {
       />
       <WordsExample
         kind="playground"
+        preloadedUsage={usageExamples.playground}
         title="Take it for a longer run"
         description={
           <>

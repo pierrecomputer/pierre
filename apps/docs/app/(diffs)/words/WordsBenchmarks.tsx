@@ -1,10 +1,18 @@
 'use client';
 
-import { IconChevronSm } from '@pierre/icons';
-import { type ComponentProps, useState } from 'react';
+import { IconArrow, IconCheck, IconChevronSm } from '@pierre/icons';
+import { type ReactNode, useState } from 'react';
 
 import { BenchmarkBar } from '../highlights/BenchmarkBar';
 import cardStyles from '../highlights/HighlightsBenchmarkCard.module.css';
+import { WordsDisclosure } from './WordsDisclosure';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import benchmark from '@/public/words/benchmark.json';
 
 const methodologyUrl =
@@ -49,23 +57,80 @@ const measurements = [
   'Peak process memory added by loading React and JSDOM and replaying the stream. Lower is better.',
 ];
 
+const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-4 sm:p-8 lg:p-10`;
+const browserCardClass = `${cardClass} lg:row-span-4 lg:grid lg:grid-rows-subgrid`;
+
 const decimal = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 
-function ChartSelect({ children, ...props }: ComponentProps<'select'>) {
+function ChartMenu({
+  label,
+  value,
+  options,
+  onValueChange,
+  labelInside = false,
+}: {
+  label: string;
+  value: string;
+  options: readonly { value: string; label: string; description?: string }[];
+  onValueChange: (value: string) => void;
+  labelInside?: boolean;
+}) {
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label ?? value;
+  const hasDescriptions = options.some((option) => option.description != null);
+
   return (
-    <span className="relative block min-w-0">
-      <select
-        {...props}
-        className="text-foreground h-9 w-full min-w-0 cursor-pointer appearance-none truncate rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pr-9 pl-3 text-xs leading-4 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-      >
-        {children}
-      </select>
-      <IconChevronSm
-        aria-hidden="true"
-        size={16}
-        className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
-      />
-    </span>
+    <div className={labelInside ? 'min-w-0' : 'grid min-w-0 gap-1.5 text-sm'}>
+      {!labelInside && <span className="text-muted-foreground">{label}</span>}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className="dark group w-fit max-w-full min-w-0 justify-start border-neutral-800 bg-neutral-950 px-3 font-normal text-neutral-50 hover:bg-neutral-900 hover:text-neutral-50"
+            aria-label={`${label}: ${selectedLabel}`}
+          >
+            {labelInside && (
+              <span className="text-muted-foreground">{label}:</span>
+            )}
+            <span className="truncate">{selectedLabel}</span>
+            <IconChevronSm className="text-muted-foreground ml-auto shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className={`dark min-w-[var(--radix-dropdown-menu-trigger-width)] border-neutral-800 bg-neutral-950 text-neutral-50 ${
+            hasDescriptions ? 'w-80 max-w-[calc(100vw-2rem)]' : ''
+          }`}
+          scrollSelectedIntoView
+        >
+          {options.map((option) => (
+            <DropdownMenuItem
+              key={option.value}
+              selected={option.value === value}
+              className="items-start focus:bg-neutral-800 focus:text-neutral-50 data-[selected=true]:bg-neutral-800 data-[selected=true]:text-neutral-50"
+              onSelect={() => onValueChange(option.value)}
+            >
+              <span className="min-w-0">
+                <span className="block">{option.label}</span>
+                {option.description != null && (
+                  <span className="mt-0.5 block text-xs leading-snug text-pretty text-neutral-400">
+                    {option.description}
+                  </span>
+                )}
+              </span>
+              <IconCheck
+                className={
+                  option.value === value
+                    ? 'mt-0.5 ml-auto'
+                    : 'invisible mt-0.5 ml-auto'
+                }
+                aria-hidden="true"
+              />
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -83,29 +148,89 @@ function Comparison({
   const maximum = Math.max(words, streamdown);
 
   return (
-    <dl className="space-y-5">
+    <dl className="space-y-5 tabular-nums sm:space-y-6">
       {[
         { name: 'Words', value: words },
         { name: 'Streamdown', value: streamdown },
       ].map(({ name, value }) => (
-        <div key={name} className="grid grid-cols-2 items-baseline gap-y-2">
-          <dt className="text-sm font-medium">{name}</dt>
+        <div
+          key={name}
+          className="grid grid-cols-[minmax(0,1fr)_7rem] items-center gap-x-3 gap-y-1.5"
+        >
+          <dt className="text-muted-foreground col-start-1 row-start-2 flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs leading-tight">
+            <span className="text-foreground text-sm font-medium">{name}</span>
+          </dt>
           <dd className="contents">
-            <span className="text-right text-2xl tracking-tight tabular-nums">
-              {decimal.format(value / divisor)}
-              <span className="text-muted-foreground ml-1 text-sm">{unit}</span>
-            </span>
-            <div className="col-span-2">
+            <div className="col-start-1 row-start-1">
               <BenchmarkBar
                 value={value}
                 maximum={maximum}
                 highlighted={name === 'Words'}
+                scaleFloor={6}
               />
             </div>
+            <span
+              className={`col-start-2 row-span-2 row-start-1 mt-[-16px] self-center text-right text-3xl whitespace-nowrap ${
+                name === 'Words'
+                  ? 'font-semibold'
+                  : 'text-foreground/50 font-normal'
+              }`}
+            >
+              {decimal.format(value / divisor)}
+              <span className="text-muted-foreground ml-1 text-sm font-normal">
+                {unit}
+              </span>
+            </span>
           </dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+// Keeps each browser benchmark on the shared caption, controls, and graph rows.
+function BrowserBenchmarkCard({
+  id,
+  title,
+  description,
+  controls,
+  controlsClassName = '',
+  words,
+  streamdown,
+  unit,
+  divisor,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  controls: ReactNode;
+  controlsClassName?: string;
+  words: number;
+  streamdown: number;
+  unit: string;
+  divisor?: number;
+}) {
+  return (
+    <figure className={browserCardClass} aria-labelledby={id}>
+      <figcaption className="mb-6 max-w-2xl">
+        <h3 id={id} className="text-xl font-semibold tracking-tight">
+          {title}
+        </h3>
+        <p className="text-muted-foreground text-sm text-pretty">
+          {description}
+        </p>
+      </figcaption>
+      <hr className="mb-7 border-neutral-800" />
+      <div className={`mb-6 ${controlsClassName}`}>{controls}</div>
+      <div aria-live="polite" aria-atomic="true">
+        <Comparison
+          words={words}
+          streamdown={streamdown}
+          unit={unit}
+          divisor={divisor}
+        />
+      </div>
+    </figure>
   );
 }
 
@@ -146,7 +271,6 @@ export function WordsBenchmarks() {
     timeZone: 'UTC',
   });
   const measuredDate = date.format(new Date(run.date));
-  const cardClass = `${cardStyles.card} dark text-foreground flex min-w-0 flex-col rounded-lg p-5 sm:p-7`;
 
   return (
     <section
@@ -155,68 +279,56 @@ export function WordsBenchmarks() {
       className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
       <div className="flex flex-wrap items-end justify-between gap-5">
-        <div className="max-w-2xl space-y-2">
+        <div className="max-w-2xl">
           <h2
             id="words-benchmarks"
             className="text-2xl font-semibold tracking-tight"
           >
             Markdown rendering benchmarks
           </h2>
-          <p className="text-muted-foreground text-pretty">
+          <p className="text-muted-foreground text-sm text-pretty">
             From everyday AI replies to full specifications, compare rendering
-            speed, streaming work, memory use, and download size.
+            speed, streaming work, memory use, and download size from Markdown
+            to HTML and React.
           </p>
         </div>
         <a
           href="#words-benchmark-method"
-          className="styled-link text-sm"
+          className="styled-link inline-flex items-center gap-1 text-sm"
           onClick={() => setMethodOpen(true)}
         >
-          How we measure ↓
+          How we measure
+          <IconArrow
+            aria-hidden="true"
+            className="text-muted-foreground size-4 rotate-90"
+          />
         </a>
       </div>
 
-      <figure className={cardClass} aria-labelledby="words-package-chart">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <figcaption>
-            <h3
-              id="words-package-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Markdown to HTML and React
-            </h3>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {measurements[metricIndex]}
-            </p>
-          </figcaption>
-          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Measurement</span>
-              <ChartSelect
-                value={metricIndex}
-                onChange={(event) => setMetricIndex(Number(event.target.value))}
-              >
-                {suite.metrics.map(({ label }, index) => (
-                  <option key={label} value={index}>
-                    {label}
-                  </option>
-                ))}
-              </ChartSelect>
-            </label>
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Document</span>
-              <ChartSelect
-                value={fixture}
-                onChange={(event) => setFixture(event.target.value)}
-              >
-                {metric.rows.map((row) => (
-                  <option key={row.fixture} value={row.fixture}>
-                    {documents[row.fixture].label}
-                  </option>
-                ))}
-              </ChartSelect>
-            </label>
-          </div>
+      <figure
+        className={cardClass}
+        aria-label="Markdown to HTML and React benchmarks"
+      >
+        <div className="mb-6 flex flex-wrap items-end gap-2">
+          <ChartMenu
+            label="Measures"
+            value={String(metricIndex)}
+            options={suite.metrics.map(({ label }, index) => ({
+              value: String(index),
+              label,
+              description: measurements[index],
+            }))}
+            onValueChange={(value) => setMetricIndex(Number(value))}
+          />
+          <ChartMenu
+            label="Document"
+            value={fixture}
+            options={metric.rows.map((row) => ({
+              value: row.fixture,
+              label: documents[row.fixture].label,
+            }))}
+            onValueChange={setFixture}
+          />
         </div>
         <p
           id="words-package-caption"
@@ -255,7 +367,7 @@ export function WordsBenchmarks() {
                     />
                   </div>
                   <span
-                    className={`col-start-2 row-span-2 row-start-1 self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
+                    className={`col-start-2 row-span-2 row-start-1 mt-[-16px] self-center text-right text-2xl whitespace-nowrap sm:text-3xl ${words ? 'font-semibold' : 'text-foreground/50 font-normal'}`}
                   >
                     {value.toFixed(metric.decimals)}
                     <span className="text-muted-foreground ml-1 text-sm font-normal">
@@ -269,151 +381,104 @@ export function WordsBenchmarks() {
         </dl>
       </figure>
 
-      <div className="space-y-2">
+      <div className="max-w-2xl">
         <h3 className="text-xl font-semibold tracking-tight">
           Streaming in the browser
         </h3>
-        <p className="text-muted-foreground max-w-2xl text-sm">
+        <p className="text-muted-foreground max-w-2xl text-pretty">
           A long response with paragraphs and TypeScript code, tested on its own
           and repeated 100 times to show how each renderer scales.
         </p>
       </div>
-      <div className="grid min-w-0 gap-4 lg:grid-cols-3">
-        <figure className={cardClass} aria-labelledby="words-update-chart">
-          <figcaption className="mb-5 space-y-1.5">
-            <h3
-              id="words-update-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Streaming updates
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              Time for incoming text to reach the DOM, before paint. 95% of
-              updates finish within this time. Lower is better.
-            </p>
-          </figcaption>
-          <div className="mb-6 grid grid-cols-2 gap-2">
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Document</span>
-              <ChartSelect
-                aria-label="Benchmark document size"
-                value={scale}
-                onChange={(event) => setScale(Number(event.target.value))}
-              >
-                <option value={1}>Long response · 8.5 KB</option>
-                <option value={100}>Repeated response · 853 KB</option>
-              </ChartSelect>
-            </label>
-            <label className="grid min-w-0 gap-1.5 text-xs">
-              <span className="text-muted-foreground">Rendering</span>
-              <ChartSelect
-                aria-label="Benchmark rendering mode"
+      <div className="grid min-w-0 gap-8 lg:grid-cols-3 lg:gap-y-0">
+        <BrowserBenchmarkCard
+          id="words-update-chart"
+          title="Streaming updates"
+          description="Time for incoming text to reach the DOM, before paint. 95% of updates finish within this time. Lower is better."
+          controlsClassName="grid grid-cols-2 gap-2"
+          words={browser.words.updateP95Ms}
+          streamdown={browser.streamdown.updateP95Ms}
+          unit="ms"
+          controls={
+            <>
+              <ChartMenu
+                label="Document"
+                value={String(scale)}
+                options={[
+                  { value: '1', label: 'Long response · 8.5 KB' },
+                  { value: '100', label: 'Repeated response · 853 KB' },
+                ]}
+                onValueChange={(value) => setScale(Number(value))}
+              />
+              <ChartMenu
+                label="Rendering"
                 value={mode}
-                onChange={(event) => setMode(event.target.value)}
-              >
-                {modes.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </ChartSelect>
-            </label>
-          </div>
-          <div aria-live="polite" aria-atomic="true">
-            <Comparison
-              words={browser.words.updateP95Ms}
-              streamdown={browser.streamdown.updateP95Ms}
-              unit="ms"
-            />
-          </div>
-        </figure>
+                options={modes.map((option) => ({
+                  value: option.id,
+                  label: option.label,
+                }))}
+                onValueChange={setMode}
+              />
+            </>
+          }
+        />
 
-        <figure className={cardClass} aria-labelledby="words-memory-chart">
-          <figcaption className="mb-5 space-y-1.5">
-            <h3
-              id="words-memory-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Memory after streaming
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              JavaScript memory kept after the full document has rendered. Lower
-              is better.
-            </p>
-          </figcaption>
-          <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
-            <span className="text-muted-foreground">
-              Repeated response · 853 KB
-            </span>
-            <ChartSelect
-              aria-label="Benchmark memory configuration"
+        <BrowserBenchmarkCard
+          id="words-memory-chart"
+          title="Memory after streaming"
+          description="JavaScript memory kept after the full document has rendered. Lower is better."
+          words={memory.words.heapBytes}
+          streamdown={memory.streamdown.heapBytes}
+          divisor={1e6}
+          unit="MB"
+          controls={
+            <ChartMenu
+              label="Repeated response · 853 KB"
               value={memoryMode}
-              onChange={(event) => setMemoryMode(event.target.value)}
-            >
-              {modes.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </ChartSelect>
-          </label>
-          <div aria-live="polite" aria-atomic="true">
-            <Comparison
-              words={memory.words.heapBytes}
-              streamdown={memory.streamdown.heapBytes}
-              divisor={1e6}
-              unit="MB"
+              options={modes.map((option) => ({
+                value: option.id,
+                label: option.label,
+              }))}
+              onValueChange={setMemoryMode}
             />
-          </div>
-        </figure>
+          }
+        />
 
-        <figure className={cardClass} aria-labelledby="words-footprint-chart">
-          <figcaption className="mb-5 space-y-1.5">
-            <h3
-              id="words-footprint-chart"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Browser download
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              JavaScript transferred to load the renderer and selected
-              languages, compressed with gzip. Lower is better.
-            </p>
-          </figcaption>
-          <label className="mb-6 grid min-w-0 gap-1.5 text-xs">
-            <span className="text-muted-foreground">React renderer · gzip</span>
-            <ChartSelect
-              aria-label="Benchmark download configuration"
+        <BrowserBenchmarkCard
+          id="words-footprint-chart"
+          title="Browser download"
+          description="JavaScript transferred to load the renderer and selected languages, compressed with gzip. Lower is better."
+          words={footprint.words}
+          streamdown={footprint.streamdown}
+          divisor={1000}
+          unit="KB"
+          controls={
+            <ChartMenu
+              label="React renderer · gzip"
               value={footprintId}
-              onChange={(event) => setFootprintId(event.target.value)}
-            >
-              <option value="base">Base renderer · initial load</option>
-              <option value="shared">
-                With {coverage.sharedLanguages.length} languages · total
-              </option>
-            </ChartSelect>
-          </label>
-          <div aria-live="polite" aria-atomic="true">
-            <Comparison
-              words={footprint.words}
-              streamdown={footprint.streamdown}
-              divisor={1000}
-              unit="KB"
+              options={[
+                { value: 'base', label: 'Base renderer · initial load' },
+                {
+                  value: 'shared',
+                  label: `With ${coverage.sharedLanguages.length} languages · total`,
+                },
+              ]}
+              onValueChange={setFootprintId}
             />
-          </div>
-        </figure>
+          }
+        />
       </div>
 
-      <details
+      <WordsDisclosure
         id="words-benchmark-method"
         open={methodOpen}
         onToggle={(event) => setMethodOpen(event.currentTarget.open)}
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
+        summary="How we measure"
+        summaryClassName="text-sm font-medium"
+        iconClassName="-ml-3"
       >
-        <summary className="cursor-pointer text-sm font-medium">
-          How we measure
-        </summary>
-        <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 text-sm leading-relaxed md:grid-cols-2">
+        <div className="text-muted-foreground mt-5 grid min-w-0 gap-6 p-2 text-sm leading-relaxed md:grid-cols-2">
           <div className="space-y-3">
             <h3 className="text-foreground font-medium">
               HTML and React benchmarks
@@ -524,7 +589,7 @@ export function WordsBenchmarks() {
             </ul>
           </div>
         </div>
-      </details>
+      </WordsDisclosure>
     </section>
   );
 }
