@@ -1,4 +1,4 @@
-import { type CodeToTokensOptions, LiveTokenizer } from '@pierre/highlights';
+import { LiveTokenizer, type LiveTokenizerOptions } from '@pierre/highlights';
 
 import { appendItems } from '../utils/appendItems';
 import { BaseStreamTokenizer } from './stream-tokenizer';
@@ -13,7 +13,7 @@ export class HighlightsStreamTokenizer extends BaseStreamTokenizer {
   #tokenizer: LiveTokenizer;
   #trimLineCount = TRIM_LINE_COUNT;
 
-  constructor(private readonly options: CodeToTokensOptions) {
+  constructor(private readonly options: LiveTokenizerOptions) {
     super();
     this.#tokenizer = new LiveTokenizer(options);
   }

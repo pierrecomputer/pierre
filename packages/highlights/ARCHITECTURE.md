@@ -85,11 +85,21 @@ module, which also exports `emit`. The shared functions send registered names to
 it. When a registered lexer embeds a built-in language that has no registered
 lexer, the host runs the combined module in mode 5 as the child lexer.
 
-`StreamTokenizer` and `LiveTokenizer` use the combined module and only its
-built-in lexers. Each active stream or live document owns its instance and lexer
-state. A completed stream can return its instance to a pool with one slot, if
-its memory is at most 1 MiB. A new stream can reuse that instance. Live
-documents do not share a pool.
+`StreamTokenizer` and `LiveTokenizer` use the combined module. Each active
+stream or live document owns its instance and lexer state. For a custom lexer
+from `registerLanguages`, each one also owns an instance of that lexer. A stream
+sends each chunk to the lexer, and the combined module converts the records with
+`emit`. A live document calls the host import `lex_line` for each line. The host
+runs the line in the lexer and copies back the records and the lexer state. The
+lexer exports `saveState` and `loadState` for this: `buildHighlightsLexer` adds
+them, and they copy every mutable global and memory region that a run does not
+set again. The document stores this state for each line, as it does for a
+built-in lexer, and loads it to start from a line. A registered built-in
+language module has no such exports, because its child lexers hold a part of the
+state. For its names, both classes use the built-in lexer with the same ID. A
+completed stream can return its instance to a pool with one slot, if its memory
+is at most 1 MiB. A new stream can reuse that instance. Live documents do not
+share a pool.
 
 Each module reserves its own static memory with
 `(memory-region $mem.name bytes)`. The compiler aligns these regions after the

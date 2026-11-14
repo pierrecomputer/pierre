@@ -23,8 +23,7 @@ import type { CodeToTokensOptions, TokensResult } from '../types';
 
 /**
  * Highlights uses bundled lexers and lexers registered with the `'highlights'`
- * type. Other languages render as text, and stream and editor tokenizers use
- * bundled lexers only.
+ * type. Other languages render as text.
  */
 export class HighlightsHighlighter extends DiffsHighlighter {
   // Independent instances need their themes after the shared cache is cleared.
@@ -50,13 +49,7 @@ export class HighlightsHighlighter extends DiffsHighlighter {
     this.assertNotDisposed();
     // Warning: use the library's shared Wasm instance. It replaces instances
     // above 8 MiB; a private instance keeps its peak memory.
-    const resolved = this.resolveOptions(options);
-    return codeToTokens(
-      code,
-      this.attachedLanguages.has(options.lang)
-        ? { ...resolved, lang: options.lang }
-        : resolved
-    );
+    return codeToTokens(code, this.resolveOptions(options));
   }
 
   createEditorTokenizer(
@@ -130,8 +123,12 @@ export class HighlightsHighlighter extends DiffsHighlighter {
     theme,
     themes,
     ...options
-  }: CodeToTokensOptions): HighlightsOptions {
-    const lang = isSupportedLanguage(options.lang) ? options.lang : 'text';
+  }: CodeToTokensOptions): HighlightsOptions<Theme, string> {
+    const lang =
+      this.attachedLanguages.has(options.lang) ||
+      isSupportedLanguage(options.lang)
+        ? options.lang
+        : 'text';
     if (theme != null) {
       return { ...options, lang, theme: this.getZedTheme(theme) };
     }

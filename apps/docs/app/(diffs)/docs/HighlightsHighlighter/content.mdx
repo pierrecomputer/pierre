@@ -58,9 +58,10 @@ custom WAT lexer. Save the returned `Language` descriptor in a JavaScript module
 and include it in `langs`. Markdown fences also accept its registered names and
 aliases. With the main entry, `registerLanguages([language])` adds it to the
 shared `codeToHtml()` and `codeToTokens()` functions, where its names override
-built-in names. Built-in lexers do not embed registered languages, and the
-tokenizer classes use built-in lexers only. `isRegisteredLanguage(name)` checks
-for a registered lexer.
+built-in names. The tokenizer classes use a registered custom lexer too. For a
+registered built-in language module, they use the built-in lexer of that
+language. Built-in lexers do not embed registered languages.
+`isRegisteredLanguage(name)` checks for a registered lexer.
 
 For all languages and themes, use the combined lexer bundle:
 

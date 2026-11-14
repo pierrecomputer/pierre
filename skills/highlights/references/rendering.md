@@ -108,8 +108,9 @@ terminal SGR colors, as in Shiki, and removes escape sequences from token
 content; `LiveTokenizer` treats it as `plain`. Custom lexers from
 `@pierre/wat-tools` go in `createHighlighter({ langs })`, or in
 `registerLanguages(langs)` for the shared `codeToHtml` and `codeToTokens`
-functions. Registered names override built-in names there. Built-in lexers do
-not embed them, and the tokenizer classes use built-in lexers only.
+functions. Registered names override built-in names there. The tokenizer classes
+use a registered custom lexer too; for a registered built-in language module,
+they use the built-in lexer. Built-in lexers do not embed registered languages.
 
 ## Runtime and types
 

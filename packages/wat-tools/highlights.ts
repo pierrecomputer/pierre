@@ -68,9 +68,70 @@ export function buildHighlightsLexer({
     )
   )
     throw new TypeError('wat must define a $highlight function');
+  const lexer = `(module\n(import "@pierre/wat-tools/lexer.wat")\n${body}`;
+  // `saveState` writes the lexer state after the records and returns its
+  // byte length. `loadState` reads it back from the input address. The state
+  // is every mutable global and memory region that a run does not set again,
+  // so an editor can start the lexer at any line.
+  let save = '';
+  let load = '';
+  let size = 0;
+  for (const form of splitTopLevelForms(
+    flattenWat(url, `${lexer})`)
+      .code.replace(/^\s*\(module/, '')
+      .trimEnd()
+      .slice(0, -1)
+  )) {
+    // `value` is the type of a global or the byte size of a region.
+    const [, global, region, value] =
+      form.text.match(
+        /^\(\s*(?:global\s+(\$[\w.]+)\s+\(\s*mut|memory-region\s+(\$mem\.[\w.]+))\s+(\w+)/
+      ) ?? [];
+    if (
+      value === undefined ||
+      /^\$(?:srcBase|docStart|eof|end|ptr|out|cap|live(?:Limit|Suspended|Entering)|stream(?:ing|Reset|Depth|Window)|mem\.(?:input|byteSets|keywordPool|lexLowerScratch|streamState))$/.test(
+        global ?? region
+      )
+    )
+      continue;
+    if (global === undefined) {
+      save += `(memory.copy (i32.add (local.get $p) (i32.const ${size})) (i32.const ${region}) (i32.const ${value}))\n`;
+      load += `(memory.copy (i32.const ${region}) (i32.const $mem.input+${size}) (i32.const ${value}))\n`;
+      size += Number(value);
+    } else {
+      if (!/^[if](?:32|64)$/.test(value))
+        throw new TypeError(`Unsupported type of global ${global}: ${value}`);
+      save += `(${value}.store offset=${size} (local.get $p) (global.get ${global}))\n`;
+      load += `(global.set ${global} (${value}.load (i32.const $mem.input+${size})))\n`;
+      size += Number(value.slice(1)) / 8;
+    }
+  }
   const { code } = transformWat(
     url,
-    `(module\n(import "@pierre/wat-tools/lexer.wat")\n${body})`
+    `${lexer}
+  (func (export "saveState") (result i32)
+    (local $p i32)
+    (local $n i32)
+    (if (i32.lt_u (global.get $streamStateLo) (global.get $streamStateHi))
+      (then (local.set $n (i32.sub (global.get $streamStateHi) (global.get $streamStateLo)))))
+    (call $ensureCap (i32.add (local.get $n) (i32.const ${size + 16})))
+    (local.set $p (global.get $out))
+    ${save}
+    (memory.copy
+      (i32.add (local.get $p) (i32.const ${size}))
+      (i32.add (i32.const $mem.streamState) (global.get $streamStateLo))
+      (local.get $n))
+    (i32.add (local.get $n) (i32.const ${size})))
+  (func (export "loadState")
+    (call $streamClearCheckpoints)
+    ${load}
+    (if (i32.lt_u (global.get $streamStateLo) (global.get $streamStateHi))
+      (then
+        (memory.copy
+          (i32.add (i32.const $mem.streamState) (global.get $streamStateLo))
+          (i32.const $mem.input+${size})
+          (i32.sub (global.get $streamStateHi) (global.get $streamStateLo))))))
+)`
   );
   const bytes = optimizeWasm(wat2wasm(`${name}.wat`, code), {
     filename: `${name}.wat`,

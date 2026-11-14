@@ -31,6 +31,11 @@
   (import "@pierre/wat-tools/scan.wat")
   (import "./emitter.wat")
 
+  ;; Lex the line [$ptr, $ptr+$len) in the registered lexer of this document.
+  ;; A nonzero $stateLen makes the host load that lexer state first. The
+  ;; result is the byte length of the records; see $lvRunLine.
+  (import "env" "lex_line" (func $hostLexLine (param $ptr i32) (param $len i32) (param $reset i32) (param $state i32) (param $stateLen i32) (result i32)))
+
   ;; allocator
   (global $lvHeapEnd (mut i32) (i32.const 0))   ;; bump cursor
   (global $lvHeapCeil (mut i32) (i32.const 0))  ;; heap top, scratch base
@@ -957,6 +962,9 @@
     (local $w i32)
     (local $node i32)
     (local $remaining i32)
+    (local $external i32)
+    ;; IDs from 256 are lexers that the host registered
+    (local.set $external (i32.gt_u (global.get $lvLang) (i32.const 255)))
     (local.set $slot (call $lvSlot (local.get $i)))
     (local.set $flags (i32.load offset=24 (local.get $slot)))
     (local.set $byteLen (i32.load offset=4 (local.get $slot)))
@@ -972,21 +980,27 @@
           (else
             (if (i32.ne (global.get $lvMachineId) (global.get $lvIncoming))
               (then
-                ;; blobs are stored zero-trimmed: rebuild the full image in the
-                ;; scratch area, which the line copy below then overwrites
                 (local.set $node
                   (i32.load
                     (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-                ;; a trimmed blob reads as zeros past its end: pad the head
-                ;; (308), the stack prefixes at their caps (8192), and the
-                ;; checkpoint offset (2); checkpoint bytes are copied by length
-                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $streamStateUsed+8502)))
-                (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8502))
-                (memory.copy
-                  (local.get $inBase)
-                  (i32.add (local.get $node) (i32.const 24))
-                  (i32.load offset=8 (local.get $node)))
-                (call $lvRestoreBlob (local.get $inBase) (i32.load offset=8 (local.get $node)))))))
+                (if (local.get $external)
+                  (then
+                    ;; the host loads this blob into the registered lexer
+                    (local.set $blobBase (i32.add (local.get $node) (i32.const 24)))
+                    (local.set $blobLen (i32.load offset=8 (local.get $node))))
+                  (else
+                    ;; blobs are stored zero-trimmed: rebuild the full image in the
+                    ;; scratch area, which the line copy below then overwrites
+                    ;; a trimmed blob reads as zeros past its end: pad the head
+                    ;; (308), the stack prefixes at their caps (8192), and the
+                    ;; checkpoint offset (2); checkpoint bytes are copied by length
+                    (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $streamStateUsed+8502)))
+                    (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8502))
+                    (memory.copy
+                      (local.get $inBase)
+                      (i32.add (local.get $node) (i32.const 24))
+                      (i32.load offset=8 (local.get $node)))
+                    (call $lvRestoreBlob (local.get $inBase) (i32.load offset=8 (local.get $node)))))))))
         (global.set $lvMachineId (i32.const -1))
         (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
         (if (i32.eq (local.get $termBytes) (i32.const 2))
@@ -995,40 +1009,59 @@
             (if (local.get $termBytes)
               (then (i32.store8 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 10))))))
         (i32.store8 (i32.add (local.get $inBase) (local.get $total)) (i32.const 0))
-        (i32.store8 (i32.const 1) (i32.const 3))
-        (i32.store (i32.const 2) (local.get $total))
-        (global.set $srcBase (local.get $inBase))
-        (global.set $streaming (i32.const 1))
-        (global.set $streamReset (local.get $reset))
-        (global.set $docStart (select (local.get $inBase) (i32.const 0) (local.get $reset)))
-        (global.set $streamDepth (i32.const 0))
-        (call $hlBegin)
-        (call $recStreamBegin (local.get $reset))
+        (if (local.get $external)
+          (then
+            ;; A registered lexer has its own instance, so it runs the whole
+            ;; line in this call. The host copies its records to the address
+            ;; that $hlBegin would use, with the outgoing state after them,
+            ;; and writes the byte length of that state to control word 10.
+            (local.set $recLen
+              (call $hostLexLine
+                (local.get $inBase) (local.get $total) (local.get $reset)
+                (local.get $blobBase) (local.get $blobLen)))
+            (local.set $recStart
+              (i32.and
+                (i32.add (i32.add (local.get $inBase) (local.get $total)) (i32.const 47))
+                (i32.const -16)))
+            (local.set $blobBase (i32.add (local.get $recStart) (local.get $recLen)))
+            (local.set $blobLen (i32.load (i32.const 10))))
+          (else
+            (i32.store8 (i32.const 1) (i32.const 3))
+            (i32.store (i32.const 2) (local.get $total))
+            (global.set $srcBase (local.get $inBase))
+            (global.set $streaming (i32.const 1))
+            (global.set $streamReset (local.get $reset))
+            (global.set $docStart (select (local.get $inBase) (i32.const 0) (local.get $reset)))
+            (global.set $streamDepth (i32.const 0))
+            (call $hlBegin)
+            (call $recStreamBegin (local.get $reset))))
         (global.set $lvLinePhase (i32.const 1)))
       (else (local.set $reset (i32.const 0))))
     (if (i32.eq (global.get $lvLinePhase) (i32.const 1))
       (then
-        (global.set $liveLimit
-          (select (i32.add (global.get $ptr) (local.get $work)) (i32.const 0x7fffffff) (local.get $work)))
-        (call $streamChunk (global.get $lvLang) (local.get $reset))
-        (global.set $liveLimit (i32.const 0x7fffffff))
-        (if (global.get $liveSuspended) (then (return (i32.const -1))))
-        (call $recStreamEnd)
-        (global.set $streaming (i32.const 0))
-        (global.set $streamDepth (i32.const 0))
-        (local.set $recStart (i32.load (i32.const 6)))
-        (local.set $recLen (i32.sub (global.get $out) (local.get $recStart)))
-        ;; capture the outgoing state right after the records
-        (local.set $blobBase
-          (i32.and
-            (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
-            (i32.const -8)))
-        ;; head, globals, delimiter, and fence registers (308) plus the five
-        ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoint
-        ;; offset (2) and bytes
-        (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $streamStateUsed+8580)))
-        (local.set $blobLen
-          (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
+        (if (i32.eqz (local.get $external))
+          (then
+            (global.set $liveLimit
+              (select (i32.add (global.get $ptr) (local.get $work)) (i32.const 0x7fffffff) (local.get $work)))
+            (call $streamChunk (global.get $lvLang) (local.get $reset))
+            (global.set $liveLimit (i32.const 0x7fffffff))
+            (if (global.get $liveSuspended) (then (return (i32.const -1))))
+            (call $recStreamEnd)
+            (global.set $streaming (i32.const 0))
+            (global.set $streamDepth (i32.const 0))
+            (local.set $recStart (i32.load (i32.const 6)))
+            (local.set $recLen (i32.sub (global.get $out) (local.get $recStart)))
+            ;; capture the outgoing state right after the records
+            (local.set $blobBase
+              (i32.and
+                (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
+                (i32.const -8)))
+            ;; head, globals, delimiter, and fence registers (308) plus the five
+            ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoint
+            ;; offset (2) and bytes
+            (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $streamStateUsed+8580)))
+            (local.set $blobLen
+              (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))))
         (global.set $lvTransLo (local.get $recStart))
         (global.set $lvTransHi (i32.add (local.get $blobBase) (local.get $blobLen)))
         ;; the common line leaves the state unchanged: compare against the

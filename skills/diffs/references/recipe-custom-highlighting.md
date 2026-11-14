@@ -43,8 +43,9 @@ registerCustomLanguage(
 );
 ```
 
-Highlights uses registered lexers for rendered code. Its stream and editor
-tokenizers use built-in lexers only. A registered name replaces a built-in lexer
+Highlights uses registered lexers for rendered code and in its stream and editor
+tokenizers. For a `@pierre/highlights/langs/*` module, the tokenizers use the
+built-in lexer of that language. A registered name replaces a built-in lexer
 with the same name on the whole page.
 
 To use a built-in lexer under another name, add the name to a copy of its

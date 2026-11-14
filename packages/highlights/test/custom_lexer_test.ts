@@ -5,7 +5,9 @@ import {
   isRegisteredLanguage,
   isSupportedLanguage,
   type Language,
+  LiveTokenizer,
   registerLanguages,
+  StreamTokenizer,
 } from '@pierre/highlights';
 import c from '@pierre/highlights/langs/c';
 import go from '@pierre/highlights/langs/go';
@@ -304,6 +306,143 @@ test('a registered built-in module still embeds the other built-in languages', (
   expect(isRegisteredLanguage('html')).toBe(true);
   expect(codeToTokens(code, options)).toEqual(builtIn);
   expect(codeToHtml(code, options)).toEqual(combined.codeToHtml(code, options));
+});
+
+test('StreamTokenizer and LiveTokenizer use a registered custom lexer', () => {
+  // `#` switches words between two token types, and the switch is a global
+  // of the lexer. Block comments use the shared scanner.
+  const stateful = buildHighlightsLexer({
+    name: 'example-state',
+    wat: `(module
+      (global $exampleOn (mut i32) (i32.const 0))
+      (func $highlight
+        (local $lhs i32)
+        (if (global.get $streamReset)
+          (then (global.set $exampleOn (i32.const 0))))
+        (block $done
+          (loop $next
+            (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $lhs (global.get $ptr))
+            (if (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "/*"))
+              (then
+                (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
+                (br $next)))
+            (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "#"))
+              (then (global.set $exampleOn (i32.eqz (global.get $exampleOn)))))
+            (global.set $ptr
+              (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+            (call $emitTok
+              (select
+                (enum.get $Token.keyword)
+                (enum.get $Token.variable)
+                (global.get $exampleOn))
+              (local.get $lhs)
+              (global.get $ptr))
+            (br $next)))))`,
+  });
+  registerLanguages([stateful]);
+  const options = { lang: 'example-state', theme: cssVariables } as const;
+  let code = 'a # b\n你好 /* open\n# still */ c\n\nd # e 🙂\nf';
+  const expected = codeToTokens(code, options).tokens;
+  expect(expected[1].map((token) => token.content)).toEqual([
+    '你好 ',
+    '/* open',
+  ]);
+  expect(expected[4][0].color).toBe('var(--hls-keyword)');
+  for (const size of [1, 4, code.length]) {
+    const stream = new StreamTokenizer(options);
+    const lines = [];
+    for (let at = 0; at < code.length; at += size)
+      lines.push(...stream.pushCode(code.slice(at, at + size)));
+    expect([...lines, ...stream.end()]).toEqual(expected);
+  }
+  // A built-in stream must not get the instance of a custom stream from the
+  // pool.
+  const builtIn = new StreamTokenizer({ lang: 'c', theme: cssVariables });
+  expect(builtIn.end()).toEqual([[]]);
+
+  const live = new LiveTokenizer({ ...options, code });
+  const expectLines = (): void =>
+    expect(
+      Array.from({ length: live.lineCount }, (_, line) =>
+        live
+          .getLineTokens(line)
+          .tokens.map(({ content, color }) => [content, color])
+      )
+    ).toEqual(
+      codeToTokens(code, options).tokens.map((line) =>
+        line.map(({ content, color }) => [content, color])
+      )
+    );
+  expectLines();
+  // The edited line keeps its outgoing state, so the next lines keep their
+  // tokens.
+  code = code.replace('a #', 'ax #');
+  expect(
+    live.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+        },
+        newText: 'x',
+      },
+    ]).lineChanges
+  ).toEqual([
+    { oldStartLine: 0, oldEndLine: 1, newStartLine: 0, newEndLine: 1 },
+  ]);
+  expectLines();
+  // Removing the switch changes the state of every line after it.
+  code = code.replace('ax # b', 'ax b');
+  expect(
+    live.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 4 },
+        },
+        newText: '',
+      },
+    ]).lineChanges
+  ).toEqual([
+    { oldStartLine: 0, oldEndLine: 6, newStartLine: 0, newEndLine: 6 },
+  ]);
+  expectLines();
+  code = 'x /*\n# y';
+  live.reset(code);
+  expectLines();
+  live.dispose();
+});
+
+test('StreamTokenizer and LiveTokenizer keep the built-in lexer for a registered built-in module', () => {
+  // Earlier tests registered the HTML and Go modules.
+  const options = { lang: 'html', theme: cssVariables } as const;
+  const code = '<script>let a = 1</script>\n<p>x</p>';
+  expect(isRegisteredLanguage('html')).toBe(true);
+  const stream = new StreamTokenizer(options);
+  const expected = combined.codeToTokens(code, options).tokens;
+  expect([...stream.pushCode(code), ...stream.end()]).toEqual(expected);
+  const live = new LiveTokenizer({ ...options, code });
+  expect(
+    live.getLineTokens(0).tokens.map(({ content, color }) => [content, color])
+  ).toEqual(expected[0].map(({ content, color }) => [content, color]));
+  live.dispose();
+  // A new name for a built-in module selects the built-in lexer with its ID.
+  registerLanguages([
+    {
+      ...html,
+      aliases: { ...html.aliases, 'example-html': html.aliases.html },
+    },
+  ]);
+  const alias = new StreamTokenizer({ ...options, lang: 'example-html' });
+  expect([...alias.pushCode(code), ...alias.end()]).toEqual(expected);
+  const aliasLive = new LiveTokenizer({
+    ...options,
+    lang: 'example-html',
+    code,
+  });
+  expect(aliasLive.getLineTokens(0).tokens[0].color).toBe(expected[0][0].color);
+  aliasLive.dispose();
 });
 
 test('the package exports the combined module for init()', () => {

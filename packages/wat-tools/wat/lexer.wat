@@ -16,7 +16,13 @@
         (global.set $streamMode (i32.const 0))
         (global.set $streamA (i32.const 0))
         (global.set $streamB (i32.const 0))
-        (global.set $streamC (i32.const 0))))
+        (global.set $streamC (i32.const 0))
+        ;; These have no effect while $streamMode is 0, but `saveState`
+        ;; copies them. Equal states must have equal bytes.
+        (global.set $streamHl (i32.const 0))
+        (global.set $streamRegionKind (i32.const 0))
+        (global.set $streamRegionStarted (i32.const 0))
+        (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (i32.const $mem.input))
@@ -26,6 +32,16 @@
     (call $recStreamBegin (local.get $reset))
     (if (i32.eqz (call $streamResumeCommon))
       (then (call $highlight)))
+    ;; Bytes after the last token are plain text. An editor reads the records
+    ;; of each line, so they must cover it.
+    (call $emitTok
+      (enum.get $Token.none)
+      (i32.add
+        (global.get $srcBase)
+        (if (result i32) (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+          (then (i32.load (i32.sub (global.get $out) (i32.const 8))))
+          (else (i32.const 0))))
+      (global.get $eof))
     (call $recStreamEnd)
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 

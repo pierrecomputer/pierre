@@ -59,8 +59,8 @@ A name starts with a lowercase letter and can contain `a-z`, `0-9`, `_`, `.`,
 
 With the main `@pierre/highlights` entry, `registerLanguages([example])` adds
 the lexer to the shared `codeToHtml()` and `codeToTokens()` functions. Its names
-override built-in names there. `StreamTokenizer` and `LiveTokenizer` use
-built-in lexers only. A Markdown fence uses a custom lexer only when the
+override built-in names there. `StreamTokenizer` and `LiveTokenizer` use it too.
+A Markdown fence uses a custom lexer only when the
 `@pierre/highlights/langs/markdown` module is in the same `langs` list or is
 registered too.
 
@@ -126,6 +126,13 @@ Markdown fence. A stateful lexer must keep its own state between chunks. Keep
 that state in globals, and reset them when `$streamReset` is `1`. The shared
 comment and string scanners keep their modes. When an open string or comment
 covers a whole chunk, `$highlight` does not run for that chunk.
+
+`LiveTokenizer` runs the lexer on one line at a time. After an edit, it starts
+again at the changed line and stops when the lexer state is the same as before.
+For this, the compiled module saves and loads the state: all mutable globals and
+all memory regions of your lexer. Keep these regions small, because the
+tokenizer copies them for each line. Give equal states equal bytes: for example,
+clear a stack entry when you pop it.
 
 ## License
 

@@ -65,6 +65,18 @@ test('Highlights attaches lexers registered with the highlights type', async () 
     highlighter.codeToTokens(code, { lang, theme: 'pierre-dark' }).tokens;
   expect(tokens('my-json')).toEqual(tokens('json'));
   expect(tokens('my-json')).not.toEqual(tokens('text'));
+  // The stream and editor tokenizers use the attached lexer too.
+  const streamed = async (lang: string) => {
+    const stream = highlighter.createStreamTokenizer({
+      lang,
+      theme: 'pierre-dark',
+    });
+    const { stable, unstable } = await stream.enqueue(code);
+    stream.dispose();
+    return [...stable, ...unstable];
+  };
+  expect(await streamed('my-json')).toEqual(await streamed('json'));
+  expect(await streamed('my-json')).not.toEqual(await streamed('text'));
   // Workers receive a structured clone of the resolved lexer.
   const worker = await createHighlighter('highlights');
   attachResolvedLanguages(

@@ -88,9 +88,9 @@ export function createHighlightsPlugin(
         // its startsWith reads each character.
         let fenceLines: string[] | undefined;
         if (registered || nextLanguage.toLowerCase() === 'ansi') {
-          // Warning: LiveTokenizer keeps escape sequences as text and has only
-          // the built-in lexers, so ANSI and registered languages render the
-          // whole fence. ANSI appends can change only the last line; a
+          // Warning: LiveTokenizer keeps escape sequences as text and does not
+          // use a registered built-in module, so ANSI and registered languages
+          // render the whole fence. ANSI appends can change only the last line; a
           // registered lexer can change any line.
           fenceLines = highlight({
             code,

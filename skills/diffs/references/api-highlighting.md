@@ -93,8 +93,9 @@ fall back to plain text in Highlights.
 
 Highlights registers lexers globally: every name in `aliases` replaces a
 built-in lexer with the same name, and disposal does not remove it. Rendered
-code uses registered lexers. Stream and editor tokenizers use built-in lexers
-only.
+code and the stream and editor tokenizers use registered lexers. For a
+`@pierre/highlights/langs/*` module, the tokenizers use the built-in lexer of
+that language.
 
 `resolveLanguage(s)`, `getResolvedLanguages`, `hasResolvedLanguages`,
 `getResolvedOrResolveLanguage`, `attachResolvedLanguages`,
