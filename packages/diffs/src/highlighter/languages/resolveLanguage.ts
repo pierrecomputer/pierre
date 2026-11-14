@@ -5,6 +5,7 @@ import { isWorkerContext } from '../../utils/isWorkerContext';
 import type { ResolvedLanguage } from '../../worker';
 import {
   RegisteredCustomLanguages,
+  RegisteredHighlightsLanguages,
   ResolvedLanguages,
   ResolvingLanguages,
 } from './constants';
@@ -32,11 +33,23 @@ export async function resolveLanguage(
       if (Object.prototype.hasOwnProperty.call(bundledLanguages, lang))
         loader = bundledLanguages[lang as BundledLanguage];
     }
-    if (loader == null)
+    if (loader == null && !RegisteredHighlightsLanguages.has(lang))
       throw new Error(
         `resolveLanguage: "${lang}" not found in bundled or custom languages`
       );
-    const { default: data } = await loader();
+    // Shiki ignores Highlights lexers: a name with only a Highlights lexer
+    // gets an empty grammar and renders as plain text.
+    const data =
+      loader == null
+        ? [
+            {
+              name: lang,
+              scopeName: `text.${lang}`,
+              patterns: [],
+              repository: {},
+            },
+          ]
+        : (await loader()).default;
     const resolvedLang = { name: lang, data };
     if (!ResolvedLanguages.has(lang)) ResolvedLanguages.set(lang, resolvedLang);
     return resolvedLang;

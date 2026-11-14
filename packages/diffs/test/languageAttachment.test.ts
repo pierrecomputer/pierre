@@ -98,6 +98,30 @@ test('Highlights attaches lexers registered with the highlights type', async () 
   expect(highlighter.hasLoadedLanguages(['bad-json'])).toBe(false);
 });
 
+test('Shiki renders a name with only a Highlights lexer as plain text', async () => {
+  registerCustomLanguage(
+    'my-json',
+    () => import('@pierre/highlights/langs/json'),
+    [],
+    'highlights'
+  );
+  const highlighter = await getSharedHighlighter({
+    preferredHighlighter: 'shiki-js',
+    themes: ['pierre-dark'],
+    langs: ['my-json'],
+  });
+  expect(highlighter.hasLoadedLanguages(['my-json'])).toBe(true);
+  const code = '{"a": [1, true]}\n\nb';
+  const { tokens } = highlighter.codeToTokens(code, {
+    lang: 'my-json',
+    theme: 'pierre-dark',
+  });
+  expect(
+    tokens.map((line) => line.map((token) => token.content).join(''))
+  ).toEqual(code.split('\n'));
+  expect(new Set(tokens.flat().map((token) => token.color)).size).toBe(1);
+});
+
 describe('language attachment', () => {
   for (const preloadTerraform of [false, true]) {
     test(`rejects a mismatched custom loader and cached retries, Terraform ${preloadTerraform ? 'loaded' : 'absent'}`, async () => {

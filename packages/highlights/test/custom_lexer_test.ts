@@ -14,7 +14,11 @@ import go from '@pierre/highlights/langs/go';
 import html from '@pierre/highlights/langs/html';
 import markdown from '@pierre/highlights/langs/markdown';
 import { cssVariables } from '@pierre/highlights/themes';
-import { buildHighlightsLexer } from '@pierre/wat-tools';
+import {
+  buildHighlightsLexer,
+  transformWat,
+  wat2wasm,
+} from '@pierre/wat-tools';
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
@@ -314,11 +318,11 @@ test('StreamTokenizer and LiveTokenizer use a registered custom lexer', () => {
   const stateful = buildHighlightsLexer({
     name: 'example-state',
     wat: `(module
-      (global $exampleOn (mut i32) (i32.const 0))
+      (global $example-on (mut i32) (i32.const 0))
       (func $highlight
         (local $lhs i32)
         (if (global.get $streamReset)
-          (then (global.set $exampleOn (i32.const 0))))
+          (then (global.set $example-on (i32.const 0))))
         (block $done
           (loop $next
             (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -328,14 +332,14 @@ test('StreamTokenizer and LiveTokenizer use a registered custom lexer', () => {
                 (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
                 (br $next)))
             (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "#"))
-              (then (global.set $exampleOn (i32.eqz (global.get $exampleOn)))))
+              (then (global.set $example-on (i32.eqz (global.get $example-on)))))
             (global.set $ptr
               (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
             (call $emitTok
               (select
                 (enum.get $Token.keyword)
                 (enum.get $Token.variable)
-                (global.get $exampleOn))
+                (global.get $example-on))
               (local.get $lhs)
               (global.get $ptr))
             (br $next)))))`,
@@ -356,6 +360,19 @@ test('StreamTokenizer and LiveTokenizer use a registered custom lexer', () => {
       lines.push(...stream.pushCode(code.slice(at, at + size)));
     expect([...lines, ...stream.end()]).toEqual(expected);
   }
+  // Open streams share one emitter, and each keeps its own lexer state.
+  const streams = [code, `# ${code}`].map((text) => ({
+    text,
+    stream: new StreamTokenizer(options),
+    lines: [] as ReturnType<StreamTokenizer['pushCode']>,
+  }));
+  for (let at = 0; at < code.length + 2; at += 3)
+    for (const { text, stream, lines } of streams)
+      lines.push(...stream.pushCode(text.slice(at, at + 3)));
+  for (const { text, stream, lines } of streams)
+    expect([...lines, ...stream.end()]).toEqual(
+      codeToTokens(text, options).tokens
+    );
   // A built-in stream must not get the instance of a custom stream from the
   // pool.
   const builtIn = new StreamTokenizer({ lang: 'c', theme: cssVariables });
@@ -374,6 +391,18 @@ test('StreamTokenizer and LiveTokenizer use a registered custom lexer', () => {
         line.map(({ content, color }) => [content, color])
       )
     );
+  expectLines();
+  // An edit on a later line starts from the saved state of the line before.
+  code = code.replace('d #', 'dx #');
+  live.applyEdits([
+    {
+      range: {
+        start: { line: 4, character: 1 },
+        end: { line: 4, character: 1 },
+      },
+      newText: 'x',
+    },
+  ]);
   expectLines();
   // The edited line keeps its outgoing state, so the next lines keep their
   // tokens.
@@ -443,6 +472,37 @@ test('StreamTokenizer and LiveTokenizer keep the built-in lexer for a registered
   });
   expect(aliasLive.getLineTokens(0).tokens[0].color).toBe(expected[0][0].color);
   aliasLive.dispose();
+});
+
+test('a lexer that cannot save its state works in streams and throws in LiveTokenizer', () => {
+  const { code: wat } = transformWat(
+    new URL('./example-stateless.wat', import.meta.url),
+    `(module
+      (import "@pierre/wat-tools/lexer.wat")
+      (func $highlight
+        (call $emitTok
+          (enum.get $Token.keyword)
+          (global.get $ptr)
+          (global.get $end))))`
+  );
+  const wasm = Buffer.from(wat2wasm('example-stateless.wat', wat)).toString(
+    'base64'
+  );
+  // Entry 20 is another language in the combined module.
+  for (const id of [0, 20]) {
+    const lang = `example-stateless-${id}`;
+    registerLanguages([{ name: lang, aliases: { [lang]: id }, wasm }]);
+    const options = { lang, theme: cssVariables } as const;
+    const code = 'if (x) return "s"; // c\n';
+    const stream = new StreamTokenizer(options);
+    const lines = [...stream.pushCode(code), ...stream.end()];
+    expect(lines).toEqual(codeToTokens(code, options).tokens);
+    expect(lines[0]).toHaveLength(1);
+    expect(lines[0][0].color).toBe('var(--hls-keyword)');
+    expect(() => new LiveTokenizer({ ...options, code })).toThrow(
+      /cannot save its state/
+    );
+  }
 });
 
 test('the package exports the combined module for init()', () => {

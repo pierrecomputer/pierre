@@ -100,6 +100,7 @@ export class HighlightsHighlighter implements Highlighter<
       reset?: boolean
     ) => void,
     imports: Record<string, (...args: number[]) => number> = {},
+    emitter = false,
     languageIds?: ReadonlyMap<string, number>
   ) {
     this.#beforeRun = beforeRun;
@@ -121,8 +122,8 @@ export class HighlightsHighlighter implements Highlighter<
     this.themePtr = Number(
       (instance.exports.themePtr as WebAssembly.Global | undefined)?.value ?? 0
     );
-    // Only an emitter gets `languageIds`; the combined module has `emit` too.
-    const emit = languageIds === undefined ? undefined : instance.exports.emit;
+    // The combined module exports `highlight` and `emit`.
+    const emit = emitter ? instance.exports.emit : undefined;
     this.#highlight = (emit ??
       instance.exports.highlight ??
       instance.exports.lex) as () => void;
@@ -138,14 +139,14 @@ export class HighlightsHighlighter implements Highlighter<
   writeInput(input: string | Uint8Array | ArrayBuffer, offset = 0): number {
     if (typeof input === 'string') {
       // Use spare capacity for UTF-8, keeping 96 bytes for lexer lookahead.
-      this.#growMemoryIfNeeded(offset + input.length + 96);
+      this.grow(this.inputPtr + offset + input.length + 96);
       let { read, written } = enc.encodeInto(
         input,
         this.buffer.subarray(this.inputPtr + offset, this.buffer.length - 96)
       );
       if (read < input.length) {
         const rest = input.slice(read);
-        this.#growMemoryIfNeeded(offset + written + rest.length * 3 + 96);
+        this.grow(this.inputPtr + offset + written + rest.length * 3 + 96);
         written += enc.encodeInto(
           rest,
           this.buffer.subarray(
@@ -162,7 +163,7 @@ export class HighlightsHighlighter implements Highlighter<
     if (!(input instanceof Uint8Array)) {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
-    this.#growMemoryIfNeeded(offset + input.length + 96);
+    this.grow(this.inputPtr + offset + input.length + 96);
     this.buffer.set(input, this.inputPtr + offset);
     return input.length;
   }
@@ -258,7 +259,7 @@ export class HighlightsHighlighter implements Highlighter<
     }
     const inputLength = this.writeInput(input);
     if (blob !== undefined) {
-      this.#growMemoryIfNeeded(inputLength + blob.length + 96);
+      this.grow(this.inputPtr + inputLength + blob.length + 96);
       const blobPtr = (this.inputPtr + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
       this.dv.setUint32(14, blobPtr, true);
@@ -269,7 +270,7 @@ export class HighlightsHighlighter implements Highlighter<
         this.#htmlPrefix = cssVariablePrefix;
       }
       const bytes = this.#htmlPrefixBytes;
-      this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
+      this.grow(this.inputPtr + inputLength + bytes.length + 96);
       const prefixPtr = (this.inputPtr + inputLength + 47) & ~15;
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
@@ -309,29 +310,42 @@ export class HighlightsHighlighter implements Highlighter<
   }
 
   /**
-   * Copy lexer records to this emitter, after the input and the theme data.
-   * Only the first record can be a leading gap (255), and the emitter has no
-   * gap type.
+   * Lex this emitter's input with `lexer` and copy the records here. Only the
+   * first record can be a leading gap (255). The document root has no previous
+   * token for it, so it becomes plain text.
    */
-  writeRecords(mode: number, length: number, records: Uint32Array): void {
-    if (records.length > 0 && records[1] === 255) records[1] = 0;
+  lexWith(
+    lexer: HighlightsHighlighter,
+    langId: number,
+    mode: number,
+    length: number,
+    reset?: boolean
+  ): void {
+    const at = lexer.lexRecords(
+      langId,
+      lexer.writeInput(
+        this.buffer.subarray(this.inputPtr, this.inputPtr + length)
+      ),
+      reset
+    );
+    const bytes = lexer.dv.getUint32(10, true);
+    if (bytes > 0 && lexer.dv.getUint32(at + 4, true) === 255)
+      lexer.dv.setUint32(at + 4, 0, true);
+    this.writeRecords(mode, length, lexer.buffer.subarray(at, at + bytes));
+  }
+
+  /** Copy lexer records to this emitter, after the input and the theme data. */
+  writeRecords(mode: number, length: number, records: Uint8Array): void {
     const blobEnd =
       mode === 0 || mode === 3
         ? 0
         : this.dv.getUint32(14, true) + this.dv.getUint32(18, true);
     const recordsPtr =
       Math.ceil(Math.max(this.inputPtr + length + 96, blobEnd) / 16) * 16;
-    const pages = Math.ceil((recordsPtr + records.byteLength + 96) / pageSize);
-    if (pages > this.pageN) {
-      this.memory.grow(pages - this.pageN);
-      this.bindMemory();
-    }
-    this.buffer.set(
-      new Uint8Array(records.buffer, records.byteOffset, records.byteLength),
-      recordsPtr
-    );
+    this.grow(recordsPtr + records.length + 96);
+    this.buffer.set(records, recordsPtr);
     this.dv.setUint32(22, recordsPtr, true);
-    this.dv.setUint32(26, records.byteLength, true);
+    this.dv.setUint32(26, records.length, true);
   }
 
   /** Return UTF-16 token records; `reset` starts or continues a stream. */
@@ -389,11 +403,11 @@ export class HighlightsHighlighter implements Highlighter<
     return { tokens, ...themeMeta(themes, cssVariablePrefix) };
   }
 
-  /** Grow the wasm linear memory if needed. */
-  #growMemoryIfNeeded(len: number): void {
-    const neededPages = Math.ceil((this.inputPtr + len) / pageSize);
-    if (neededPages > this.pageN) {
-      this.memory.grow(neededPages - this.pageN);
+  /** Grow the Wasm memory to hold `end` bytes. */
+  grow(end: number): void {
+    const pages = Math.ceil(end / pageSize);
+    if (pages > this.pageN) {
+      this.memory.grow(pages - this.pageN);
       this.bindMemory();
     }
   }
@@ -465,17 +479,39 @@ let wasmModule: WebAssembly.Module | undefined;
 // while one slot keeps concurrent streams isolated and bounds retained memory.
 let pooledStreamHighlighter: HighlightsHighlighter | undefined;
 
+// Every stream of a custom lexer shares this combined-module instance. It
+// only converts the records of `streamLexer`, the lexer of the running
+// stream, to line records, so it keeps no stream state.
+let streamEmitter: HighlightsHighlighter | undefined;
+let streamLexer: HighlightsHighlighter | undefined;
+// One idle lexer for each custom module; a new stream resets it.
+const idleStreamLexers = new WeakMap<
+  WebAssembly.Module,
+  HighlightsHighlighter
+>();
+
+// Wasm memory cannot shrink. An instance above 8 MiB is replaced when small
+// inputs resume; consecutive large calls keep reusing the capacity.
+function oversized(
+  hl: HighlightsHighlighter,
+  input: string | Uint8Array | ArrayBuffer | number
+): boolean {
+  return (
+    hl.pageN > 128 &&
+    (typeof input === 'number'
+      ? input
+      : typeof input === 'string'
+        ? input.length
+        : input.byteLength) <= pageSize
+  );
+}
+
 /** The shared highlighter, or throw before `init`. */
 function assertShared(
   input: string | Uint8Array | ArrayBuffer
 ): HighlightsHighlighter {
   if (shared == null) throw new Error('highlights is not initialized');
-  // Wasm memory cannot shrink. Replace instances above 8 MiB when small
-  // inputs resume, but keep reusing capacity for consecutive large calls.
-  if (
-    shared.pageN > 128 &&
-    (typeof input === 'string' ? input.length : input.byteLength) <= pageSize
-  ) {
+  if (oversized(shared, input)) {
     shared = new HighlightsHighlighter(shared.wasmModule);
   }
   return shared;
@@ -501,6 +537,29 @@ const lexerModules = new WeakMap<
   WebAssembly.Module | Promise<WebAssembly.Module>
 >();
 let emitterModule: Promise<WebAssembly.Module> | undefined;
+
+// `registerLanguages` is synchronous, so `sync` compiles on this thread.
+function compileLexer(
+  language: Language,
+  sync: boolean
+): WebAssembly.Module | Promise<WebAssembly.Module> {
+  const { wasm } = language;
+  if (typeof wasm !== 'string') return wasm;
+  let compiled = lexerModules.get(language);
+  if (
+    compiled === undefined ||
+    (sync && !(compiled instanceof WebAssembly.Module))
+  ) {
+    compiled = sync
+      ? new WebAssembly.Module(wasmBytes(wasm))
+      : WebAssembly.compile(wasmBytes(wasm)).then((module) => {
+          lexerModules.set(language, module);
+          return module;
+        });
+    lexerModules.set(language, compiled);
+  }
+  return compiled;
+}
 
 /**
  * Supply a compiled emitter module. Use it where the runtime cannot compile
@@ -546,19 +605,7 @@ export async function createHighlighter(
   const languages = [...new Set(options.langs)];
   const [emitter, ...compiled] = await Promise.all([
     emitterModule,
-    ...languages.map((language) => {
-      const { wasm } = language;
-      if (typeof wasm !== 'string') return Promise.resolve(wasm);
-      let compiledModule = lexerModules.get(language);
-      if (compiledModule === undefined) {
-        compiledModule = WebAssembly.compile(wasmBytes(wasm)).then((module) => {
-          lexerModules.set(language, module);
-          return module;
-        });
-        lexerModules.set(language, compiledModule);
-      }
-      return Promise.resolve(compiledModule);
-    }),
+    ...languages.map((language) => compileLexer(language, false)),
   ]);
   return buildHighlighter(emitter, languages, compiled, options.themes, false);
 }
@@ -791,36 +838,30 @@ function buildHighlighter(
     }
   }
   const plainRecord = new Uint32Array(2);
+  const plainBytes = new Uint8Array(plainRecord.buffer);
   const beforeEmit = (id: number, mode: number, length: number): void => {
-    let records: Uint32Array;
     if (id === 0) {
       plainRecord[0] = length;
-      records = length === 0 ? plainRecord.subarray(0, 0) : plainRecord;
-    } else {
-      const registration = registrations.get(id)!;
-      let lexer = roots.get(registration.module);
-      // Wasm memory cannot shrink. Replace a lexer above 8 MiB when small
-      // inputs resume.
-      if (lexer === undefined || (lexer.pageN > 128 && length <= pageSize)) {
-        lexer = createLexer(registration.module, 0);
-        roots.set(registration.module, lexer);
-      }
-      records = lexer.tokenizeLineRecords(
-        registration.id,
-        lexer.writeInput(
-          highlighter.buffer.subarray(
-            highlighter.inputPtr,
-            highlighter.inputPtr + length
-          )
-        )
+      highlighter.writeRecords(
+        mode,
+        length,
+        length === 0 ? plainBytes.subarray(0, 0) : plainBytes
       );
+      return;
     }
-    highlighter.writeRecords(mode, length, records);
+    const registration = registrations.get(id)!;
+    let lexer = roots.get(registration.module);
+    if (lexer === undefined || oversized(lexer, length)) {
+      lexer = createLexer(registration.module, 0);
+      roots.set(registration.module, lexer);
+    }
+    highlighter.lexWith(lexer, registration.id, mode, length);
   };
   let highlighter = new HighlightsHighlighter(
     emitter,
     beforeEmit,
-    {},
+    undefined,
+    true,
     languageIds
   );
   const resolveOptions = (
@@ -845,14 +886,12 @@ function buildHighlighter(
         throw new RangeError(`theme is not loaded: ${reference}`);
       resolved[key] = theme;
     }
-    if (
-      highlighter.pageN > 128 &&
-      (typeof input === 'string' ? input.length : input.byteLength) <= pageSize
-    ) {
+    if (oversized(highlighter, input)) {
       highlighter = new HighlightsHighlighter(
         emitter,
         beforeEmit,
-        {},
+        undefined,
+        true,
         languageIds
       );
     }
@@ -917,25 +956,17 @@ export function registerLanguages(langs: readonly Language[]): void {
   if (registered !== undefined && list.length === registeredLangs.length) {
     return;
   }
-  const compiled = list.map((language) => {
-    const { wasm } = language;
-    if (typeof wasm !== 'string') return wasm;
-    let compiledModule = lexerModules.get(language);
-    if (!(compiledModule instanceof WebAssembly.Module)) {
-      compiledModule = new WebAssembly.Module(wasmBytes(wasm));
-      lexerModules.set(language, compiledModule);
-    }
-    return compiledModule;
-  });
+  const compiled = list.map((language) => compileLexer(language, true));
   registered = buildHighlighter(assertWasmModule(), list, compiled, [], true);
   registeredLangs = list;
   registeredLexers = new Map();
   for (let i = 0; i < list.length; i++) {
+    // Only a built-in language module exports `reserve`.
     const custom = WebAssembly.Module.exports(compiled[i]).some(
-      ({ name }) => name === 'saveState'
+      ({ name }) => name === 'reserve'
     )
-      ? compiled[i]
-      : undefined;
+      ? undefined
+      : compiled[i];
     for (const [alias, id] of Object.entries(list[i].aliases))
       registeredLexers.set(alias.toLowerCase(), { module: custom, id });
   }
@@ -999,7 +1030,7 @@ export class StreamTokenizer extends TransformStream<
   #tail = '';
   #streamChar = 0;
   #streamStarted = false;
-  #pooled = true;
+  #lexer: HighlightsHighlighter | undefined;
 
   constructor(
     options: CodeToTokensOptions<Theme | ThemeFamily, Lang | (string & {})>
@@ -1038,31 +1069,21 @@ export class StreamTokenizer extends TransformStream<
           : new HighlightsHighlighter(compiledWasm);
       pooledStreamHighlighter = undefined;
     } else {
-      // The custom lexer keeps the stream state. The combined module only
-      // converts its records to line records, so it cannot go to the pool.
-      this.#pooled = false;
-      const lexer = new HighlightsHighlighter(registered.module);
-      const emitter = new HighlightsHighlighter(
-        compiledWasm,
-        (id, mode, length, reset) =>
-          emitter.writeRecords(
-            mode,
-            length,
-            lexer.tokenizeLineRecords(
-              id,
-              lexer.writeInput(
-                emitter.buffer.subarray(
-                  emitter.inputPtr,
-                  emitter.inputPtr + length
-                )
-              ),
-              reset
-            )
-          ),
-        {},
-        new Map()
-      );
-      this.#hl = emitter;
+      this.#lexer =
+        idleStreamLexers.get(registered.module) ??
+        new HighlightsHighlighter(registered.module);
+      idleStreamLexers.delete(registered.module);
+      if (streamEmitter?.wasmModule !== compiledWasm) {
+        const emitter: HighlightsHighlighter = new HighlightsHighlighter(
+          compiledWasm,
+          (id, mode, length, reset) =>
+            emitter.lexWith(streamLexer!, id, mode, length, reset),
+          undefined,
+          true
+        );
+        streamEmitter = emitter;
+      }
+      this.#hl = streamEmitter;
     }
     this.#cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
@@ -1155,9 +1176,14 @@ export class StreamTokenizer extends TransformStream<
   dispose(): void {
     const hl = this.#hl;
     if (hl == null) return;
-    // Do not retain unusually large stream buffers in the single pool slot.
-    if (
-      this.#pooled &&
+    // Do not retain unusually large stream buffers.
+    if (this.#lexer !== undefined) {
+      if (streamLexer === this.#lexer) streamLexer = undefined;
+      if (this.#lexer.pageN <= 16)
+        idleStreamLexers.set(this.#lexer.wasmModule, this.#lexer);
+      if (streamEmitter === hl && hl.pageN > 16) streamEmitter = undefined;
+      this.#lexer = undefined;
+    } else if (
       pooledStreamHighlighter == null &&
       hl.wasmModule === wasmModule &&
       hl.pageN <= 16
@@ -1198,6 +1224,7 @@ export class StreamTokenizer extends TransformStream<
     if (this.#ansi === undefined) {
       let byteLen = prefix === '' ? 0 : hl.writeInput(prefix);
       byteLen += hl.writeInput(input, byteLen);
+      streamLexer = this.#lexer;
       const recs = hl.tokenizeLineRecords(
         this.#langId,
         byteLen,

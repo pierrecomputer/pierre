@@ -85,7 +85,7 @@ export function buildHighlightsLexer({
     // `value` is the type of a global or the byte size of a region.
     const [, global, region, value] =
       form.text.match(
-        /^\(\s*(?:global\s+(\$[\w.]+)\s+\(\s*mut|memory-region\s+(\$mem\.[\w.]+))\s+(\w+)/
+        /^\(\s*(?:global\s+(\$[^\s()]+)\s+\(\s*mut|memory-region\s+(\$mem\.[\w.]+))\s+(\w+)/
       ) ?? [];
     if (
       value === undefined ||
