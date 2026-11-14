@@ -1,11 +1,7 @@
 import { delta, type InternalHtmlUpdate } from '../lib/internal';
+import { decodeHtml } from '../lib/utils';
 import type { InternalCodeUpdate } from './render';
-import {
-  controlFlags,
-  createHtmlRenderer,
-  decodeHtml,
-  rewritesElements,
-} from './render';
+import { controlFlags, createHtmlRenderer, rewritesElements } from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
 
 const isFade = (node: Node): node is HTMLElement =>
