@@ -52,15 +52,40 @@ const CONSUMERS: Record<string, string> = {
   ].join('\n'),
 };
 
+// Each example app is a module of an app that renders a layout, with the
+// stylesheets that it loads. Its size is the JavaScript file and the CSS file
+// that the app ships, each compressed alone, added together. The apps match
+// the examples of the modular entry points proposal, so that the sizes before
+// and after the change compare: A is a fixed two-pane split with collapse, B a
+// tiled grid with move and zoom, C the full set of features, and D the side
+// panel of an agent app.
+const APPS: Record<string, string> = {
+  'app A: two-pane split': 'bench/apps/two-pane.tsx',
+  'app B: tiled grid': 'bench/apps/tiled.tsx',
+  'app C: full set': 'bench/apps/full.tsx',
+  'app D: side panel': 'bench/apps/side-panel.tsx',
+};
+
 const MODES: readonly BundleMode[] = ['app', 'library'];
 
 // The ID of the entry module that the step writes for a stylesheet or a consumer.
 const VIRTUAL_ENTRY = 'virtual:bench-entry';
 
-/** One bundle: an entry file of the package, or the source of an entry module that the step writes. */
-type BundleInput =
-  | { kind: 'file'; path: string }
-  | { kind: 'module'; source: string; css: boolean };
+/**
+ * One bundle: an entry file of the package, or the source of an entry module
+ * that the step writes. `output` names the files of the build that count: the
+ * JavaScript, the CSS, or both.
+ */
+interface BundleInput {
+  entry: { file: string } | { source: string };
+  output: 'js' | 'css' | 'both';
+}
+
+/** The JavaScript and the CSS of one build. Each is empty when the build has none. */
+interface BundleOutput {
+  js: string;
+  css: string;
+}
 
 function compress(code: string): BundleSize {
   const input = Buffer.from(code);
@@ -81,22 +106,39 @@ function compress(code: string): BundleSize {
   };
 }
 
-// Build one bundle with Vite's library mode and return its JavaScript, or its
-// CSS for a stylesheet.
-async function bundle(input: BundleInput, mode: BundleMode): Promise<string> {
-  const css = input.kind === 'module' && input.css;
-  const source = input.kind === 'module' ? input.source : null;
+// The sizes of two files that an app ships side by side.
+function addSizes(a: BundleSize, b: BundleSize): BundleSize {
+  return {
+    minified: a.minified + b.minified,
+    gzip: a.gzip + b.gzip,
+    brotli: a.brotli + b.brotli,
+    zstd: a.zstd + b.zstd,
+  };
+}
+
+// Build one bundle with Vite's library mode and return its JavaScript chunks
+// and its CSS assets, each joined into one string.
+async function bundle(
+  input: BundleInput,
+  mode: BundleMode
+): Promise<BundleOutput> {
+  const source = 'source' in input.entry ? input.entry.source : null;
   const result = await build({
     configFile: false,
     logLevel: 'silent',
     root: PACKAGE_DIR,
+    // An app build replaces `process.env.NODE_ENV`, so that code for
+    // development only drops.
+    ...(mode === 'app'
+      ? { define: { 'process.env.NODE_ENV': JSON.stringify('production') } }
+      : {}),
     build: {
       write: false,
       minify: true,
       cssMinify: true,
       cssCodeSplit: false,
       lib: {
-        entry: input.kind === 'file' ? input.path : VIRTUAL_ENTRY,
+        entry: 'file' in input.entry ? input.entry.file : VIRTUAL_ENTRY,
         formats: ['es'],
         fileName: 'entry',
       },
@@ -127,30 +169,49 @@ async function bundle(input: BundleInput, mode: BundleMode): Promise<string> {
     Array.isArray(result) ? result : [result]
   ) as Rolldown.RolldownOutput[];
   const files = outputs.flatMap((output) => output.output);
-  const wanted = files.filter((file) =>
-    css
-      ? file.type === 'asset' && file.fileName.endsWith('.css')
-      : file.type === 'chunk'
-  );
-  if (wanted.length === 0) {
-    throw new Error(
-      `No output for ${input.kind === 'file' ? input.path : input.source}`
-    );
+  return {
+    js: files
+      .flatMap((file) => (file.type === 'chunk' ? [file.code] : []))
+      .join('\n'),
+    css: files
+      .flatMap((file) =>
+        file.type === 'asset' && file.fileName.endsWith('.css')
+          ? [String(file.source)]
+          : []
+      )
+      .join('\n'),
+  };
+}
+
+// Build one bundle and return the size of the files that count. Each file is
+// compressed alone, as a server sends it.
+async function measure(
+  input: BundleInput,
+  mode: BundleMode
+): Promise<BundleSize> {
+  const { js, css } = await bundle(input, mode);
+  const wanted = [
+    ...(input.output === 'css' ? [] : [js]),
+    ...(input.output === 'js' ? [] : [css]),
+  ];
+  if (wanted.some((code) => code === '')) {
+    throw new Error(`No ${input.output} output for ${JSON.stringify(input)}`);
   }
-  return wanted
-    .map((file) => (file.type === 'chunk' ? file.code : String(file.source)))
-    .join('\n');
+  return wanted.map(compress).reduce(addSizes);
 }
 
 // The input of an entry point. A stylesheet needs an entry module that
 // imports it, so that the build writes it as an asset.
 function entryInput(path: string): BundleInput {
   return path.endsWith('.css')
-    ? { kind: 'module', source: `import '/${path}';`, css: true }
-    : { kind: 'file', path };
+    ? { entry: { source: `import '/${path}';` }, output: 'css' }
+    : { entry: { file: path }, output: 'js' };
 }
 
-/** Bundle, minify, and compress each entry point and each consumer, in each mode. */
+/**
+ * Bundle, minify, and compress each entry point, each consumer, and each
+ * example app, in each mode.
+ */
 export async function measureBundles(): Promise<BundleSizes> {
   const inputs: [string, BundleInput][] = [
     ...Object.entries(ENTRIES).map(([name, path]): [string, BundleInput] => [
@@ -160,14 +221,18 @@ export async function measureBundles(): Promise<BundleSizes> {
     ...Object.entries(CONSUMERS).map(
       ([name, source]): [string, BundleInput] => [
         name,
-        { kind: 'module', source, css: false },
+        { entry: { source }, output: 'js' },
       ]
     ),
+    ...Object.entries(APPS).map(([name, file]): [string, BundleInput] => [
+      name,
+      { entry: { file }, output: 'both' },
+    ]),
   ];
   const sizes: BundleSizes = { app: {}, library: {} };
   for (const mode of MODES) {
     for (const [name, input] of inputs) {
-      sizes[mode][name] = compress(await bundle(input, mode));
+      sizes[mode][name] = await measure(input, mode);
     }
   }
   return sizes;

@@ -233,7 +233,7 @@ field, this test fails.
 
 Each run measures the code that an app loads. It builds each bundle with its
 imports and with React as an external, through Vite (Rolldown and the Oxc
-minifier, Lightning CSS for the stylesheets). There are two kinds of bundle:
+minifier, Lightning CSS for the stylesheets). There are three kinds of bundle:
 
 - An entry point on its own, as an app that imports only that entry gets it.
 - A consumer: a module that imports what an app uses, from one or more entry
@@ -241,19 +241,25 @@ minifier, Lightning CSS for the stylesheets). There are two kinds of bundle:
   which an app that renders a layout loads. The React entry imports
   `LayoutStore` only as a type, so the entry alone leaves out the store. To add
   a consumer, add its imports to `CONSUMERS` in `lib/bundle.ts`.
+- An example app: a module in `apps/` that renders a layout as an app does, with
+  the stylesheets that it loads. Its size is the JavaScript file plus the CSS
+  file, each compressed alone. `app A` is a fixed two-pane split with collapse,
+  `app B` a tiled grid with move and zoom, `app C` the full set of features, and
+  `app D` the side panel of an agent app. To add an app, add its module to
+  `apps/` and to `APPS` in `lib/bundle.ts`.
 
 The run builds each bundle in two modes:
 
-| Mode      | Build                                                                                                                                                                                                 |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app`     | Library mode with `rolldownOptions.output = { minify: true, comments: false }`. The minifier removes whitespace and comments, as an app build ships the code. Use these values.                       |
-| `library` | Vite library mode with the `es` format. Vite runs the minifier without its code generator, so whitespace and region comments stay. Reports before the `app` mode have only these values, in `bundle`. |
+| Mode      | Build                                                                                                                                                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app`     | Library mode with `rolldownOptions.output = { minify: true, comments: false }`, and `process.env.NODE_ENV` set to `production`. The minifier removes whitespace and comments, as an app build ships the code. Use these values. |
+| `library` | Vite library mode with the `es` format. Vite runs the minifier without its code generator, so whitespace and region comments stay. Reports before the `app` mode have only these values, in `bundle`.                           |
 
 The report's `bundles` section holds, for each mode, the minified bytes of each
 bundle and the wire bytes after gzip (level 9, for reference), brotli (quality
-11), and Zstandard (level 19). A stylesheet has the same size in both modes. An
-app that renders a layout also loads `@pierre/layouts/styles.css`, which the
-report gives as an entry point.
+11), and Zstandard (level 19). A stylesheet has the same size in both modes. A
+consumer does not include `@pierre/layouts/styles.css`, which the report gives
+as an entry point. An example app includes the stylesheets that it loads.
 
 To compare the bundle sizes of two reports, run
 `moon run layouts:bench-compare -- <before.json> <after.json>`. With a report
