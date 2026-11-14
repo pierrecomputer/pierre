@@ -341,6 +341,70 @@ test.describe('file-tree composition surfaces', () => {
     expect(fileMarkerPadding.bottom).toBe(0);
   });
 
+  test('a narrow flattened row truncates the leading run and keeps the terminal directory', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/file-tree-composition.html');
+    await page.waitForFunction(
+      () => window.__fileTreeCompositionFixtureReady === true
+    );
+
+    const measureFlattenedRow = (mountWidth: string) =>
+      page.evaluate((width) => {
+        const mount = document.querySelector(
+          '[data-file-tree-composition-mount]'
+        );
+        if (!(mount instanceof HTMLElement)) {
+          throw new Error('Expected file-tree composition mount.');
+        }
+        mount.style.width = width;
+
+        const host = document.querySelector('file-tree-container');
+        const row = Array.from(
+          host?.shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+        ).find(
+          (candidate) =>
+            candidate.querySelector('[data-item-flattened-subitems]') != null
+        );
+        if (!(row instanceof HTMLElement)) {
+          throw new Error(
+            'Expected a flattened row in the composition fixture.'
+          );
+        }
+
+        const segments = Array.from(
+          row.querySelectorAll('[data-item-flattened-subitem]')
+        );
+        const terminal = segments.at(-1);
+
+        return {
+          // A segment carrying its own marker is a segment truncating alone.
+          segmentsWithOwnMarker: segments.filter(
+            (segment) => segment.querySelector('[data-truncate-marker]') != null
+          ).length,
+          segmentCount: segments.length,
+          terminalName: terminal?.textContent ?? null,
+          terminalWidth: terminal?.getBoundingClientRect().width ?? 0,
+        };
+      }, mountWidth);
+
+    const wide = await measureFlattenedRow('360px');
+    expect(wide.segmentCount).toBeGreaterThan(1);
+
+    const narrow = await measureFlattenedRow('120px');
+
+    // Narrowing the row spends the shrinking on the leading run. Every segment
+    // truncating on its own is what left a deep path rendering as
+    // "t… / kc… / … / se…", with none of it readable.
+    expect(wide.segmentsWithOwnMarker).toBe(0);
+    expect(narrow.segmentsWithOwnMarker).toBe(0);
+
+    // The terminal directory is the one the row opens, so it keeps its width
+    // rather than being truncated away with the rest of the path.
+    expect(narrow.terminalName).toBe(wide.terminalName);
+    expect(narrow.terminalWidth).toBeCloseTo(wide.terminalWidth, 1);
+  });
+
   test('keyboard navigation retargets the focused row trigger away from a stale hover', async ({
     page,
   }) => {
