@@ -55,38 +55,23 @@ const html = new TextDecoder().decode(
 
 ```ts
 import { createHighlighter } from '@pierre/highlights/core';
-import ts from '@pierre/highlights/langs/typescript';
+import typescript from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const highlighter = await createHighlighter({
-  langs: [ts],
+  langs: [typescript],
   themes: [pierreDark],
 });
 
 const htmlBytes = highlighter.codeToHtml('const a = 1', {
-  lang: 'js',
+  lang: 'javascript',
   theme: 'pierre-dark',
 });
 const html = new TextDecoder().decode(htmlBytes);
 ```
 
 Each built-in language has a module with its ID, such as
-`@pierre/highlights/langs/python` or `@pierre/highlights/langs/shellscript`. The
-[language table](https://diffs.com/docs#highlights-languages) lists the IDs. An
-ID is the same as the Shiki ID when Shiki has the language. An alias such as
-`bash` has no module. The TypeScript module supports `ts`, `tsx`, `cts`, `mts`,
-`js`, `jsx`, `mjs`, and `cjs`. Its module names are `typescript`, `ts`, `tsx`,
-`javascript`, `js`, and `jsx`. Plain text and `ansi` need no module.
-
-Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
-script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text
-until you add CSS. A Markdown fence is plain text until you add its language.
-Code fences also accept registered custom language names. Vue, Svelte, Astro,
-MDX, and QML contain the lexer for their expressions, and TypeScript contains
-the markup lexer for `html` tagged templates.
-
-`highlighter.getLoadedLanguages()` returns the names and aliases that `lang`
-accepts. A `ThemeFamily` in `themes` registers each of its members.
+`@pierre/highlights/langs/typescript`.
 
 All languages and themes are also available as registered names:
 
@@ -123,14 +108,6 @@ module and pass it to `createHighlighter({ langs: [language], themes })`. A
 custom name that a built-in language also uses takes only that name: the other
 names of the built-in language and its embedded code keep the built-in lexer.
 When two lexers in `langs` declare the same name, the later one wins.
-
-With the main entry, `registerLanguages([language])` adds the lexer to the
-shared `codeToHtml()` and `codeToTokens()` functions, where its names override
-built-in names. Built-in lexers do not embed registered languages, and
-`StreamTokenizer` and `LiveTokenizer` use only built-in lexers.
-`isRegisteredLanguage(name)` tells you if a name has a registered lexer. The
-[lexer guide](../wat-tools/README.md) describes the shared scanners, token
-types, and memory declarations.
 
 ## Output and shared runtime
 
