@@ -1,37 +1,37 @@
 import { BenchmarkBar } from './BenchmarkBar';
 import styles from './HighlightsBenchmarkCard.module.css';
 
-const maximumSpeedup = 282;
+const maximumSpeedup = 310;
 const shikiBaselineSpeedup = 1;
 
 const rows = [
   {
     language: 'CSS',
     size: '379 KiB',
-    highlights: 272,
-    shiki: 1.2,
-    speedup: 227,
+    highlights: 284,
+    shiki: 1.23,
+    speedup: 231,
   },
   {
     language: 'HTML',
     size: '474 KiB',
-    highlights: 700,
-    shiki: 2.75,
-    speedup: 255,
+    highlights: 592,
+    shiki: 2.82,
+    speedup: 210,
   },
   {
     language: 'JSONC',
     size: '292 KiB',
-    highlights: 818,
-    shiki: 5.77,
-    speedup: 142,
+    highlights: 849,
+    shiki: 6.09,
+    speedup: 139,
   },
   {
     language: 'TypeScript',
     size: '517 KiB',
-    highlights: 293,
-    shiki: 1.04,
-    speedup: 282,
+    highlights: 335,
+    shiki: 1.08,
+    speedup: 310,
   },
 ] as const;
 
@@ -52,7 +52,7 @@ export function HighlightsHtmlBenchmarks() {
           Highlight a whole file in one pass. On the 517 KiB TypeScript fixture,
           Highlights delivers{' '}
           <strong className="text-foreground font-semibold">
-            282× Shiki’s HTML throughput
+            310× Shiki’s HTML throughput
           </strong>
           , including input encoding and output decoding.
         </p>

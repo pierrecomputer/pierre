@@ -33,7 +33,8 @@
     (global.set $streamDepth (i32.const 0)))
 
   ;; Make room for the records of an embedded body and return the address
-  ;; where the host must copy them.
+  ;; where the host must copy them. The host calls it only when the records
+  ;; do not fit before $cap.
   (func (export "reserve") (param $bytes i32) (result i32)
     (call $ensureCap (i32.add (local.get $bytes) (i32.const 16)))
     (global.get $out))
@@ -45,7 +46,7 @@
   ;; record just read, because appending never adds records.
   ;; WARNING: A custom lexer can stop early or pass the body end. Clamp each
   ;; end and cover the rest, or the next token takes those bytes.
-  (func (export "append") (param $bytes i32) (param $from i32) (param $to i32)
+  (func $embedAppend (param $bytes i32) (param $from i32) (param $to i32)
     (local $record i32)
     (local $stop i32)
     (local $end i32)
@@ -67,4 +68,24 @@
         (br $records)))
     (if (i32.lt_u (local.get $end) (local.get $to))
       (then (call $recTok (enum.get $Token.none) (local.get $to)))))
+
+  ;; Lex the body [$from, $to) in a child lexer of the host and append its
+  ;; records. The host gets $out and $cap, copies the records to $out when
+  ;; they fit (or calls `reserve`), and writes their byte length to control
+  ;; word 10. Reset 2 only ends a stream context.
+  ;; WARNING: scripts/build.ts gives this function the name $embedLanguage in
+  ;; a lexer module, in place of the one in embed.wat.
+  (func $embedHost
+    (param $lang i32) (param $from i32) (param $to i32)
+    (param $reset i32) (param $context i32) (result i32)
+    (i32.store (i32.const 10) (i32.const 0))
+    (local.set $context
+      (call $hostEmbed
+        (local.get $lang) (local.get $from) (local.get $to)
+        (local.get $reset) (local.get $context)
+        (global.get $out) (global.get $cap)))
+    (if (i32.ne (local.get $reset) (i32.const 2))
+      (then
+        (call $embedAppend (i32.load (i32.const 10)) (local.get $from) (local.get $to))))
+    (local.get $context))
 )

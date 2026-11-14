@@ -11,9 +11,9 @@ import {
 import { cn } from '@/lib/utils';
 
 const memoryResults = [
-  { name: 'Highlights', peakRss: 54 },
-  { name: 'Shiki JS', peakRss: 157 },
-  { name: 'Shiki Wasm', peakRss: 347 },
+  { name: 'Highlights', peakRss: 55 },
+  { name: 'Shiki JS', peakRss: 156 },
+  { name: 'Shiki Wasm', peakRss: 351 },
 ];
 
 const memoryMaximum = 400;

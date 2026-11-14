@@ -5,6 +5,7 @@ import {
   optimizeWasm as optimize,
   splitTopLevelForms,
   transformWat,
+  wasmToText,
   wat2wasm,
 } from '@pierre/wat-tools';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -21,12 +22,46 @@ export {
 
 /** Keep wider inlining while reducing the all-language browser download. */
 export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
-  return optimize(wasmBytes, {
+  const bytes = optimize(wasmBytes, {
     filename: 'highlights.wat',
     shrinkLevel: 1,
     flexibleInlineMaxSize: 60,
     oneCallerInlineMaxSize: 200,
   });
+  // WARNING: V8 and JSC scale their Wasm inlining budget by the module's share
+  // of function bodies under 50 bytes: lowest at 25%, full at 50%. Binaryen
+  // inlines most small helpers, so the share is about 33%. There the lexers
+  // ran 7% slower in both engines (geometric mean of 151 languages). Empty
+  // functions raise the share to 50% at 3 bytes each.
+  let offset = 8;
+  const leb = (): number => {
+    let value = 0;
+    for (let shift = 0; ; shift += 7) {
+      const byte = bytes[offset++];
+      value |= (byte & 127) << shift;
+      if (byte < 128) return value >>> 0;
+    }
+  };
+  let pads = 0;
+  while (offset < bytes.length) {
+    const id = bytes[offset++];
+    const length = leb();
+    const end = offset + length;
+    if (id === 10) {
+      for (let count = leb(); count > 0; count--) {
+        const size = leb();
+        pads += size < 50 ? -1 : 1;
+        offset += size;
+      }
+    }
+    offset = end;
+  }
+  if (pads <= 0) return bytes;
+  const text = wasmToText(bytes);
+  return wat2wasm(
+    'highlights.wat',
+    `${text.slice(0, text.lastIndexOf(')'))}${'(func)'.repeat(pads)})`
+  );
 }
 
 /** Fold build-time branches before tracing lexer dependencies. */
@@ -104,11 +139,7 @@ export function transformLexer(
   ]);
   const flattened = flattenWat(url, readFileSync(url, 'utf-8'), { overrides });
   const selected = names === undefined ? undefined : new Set(names);
-  // Only the module of all lexers keeps the pad functions of highlights.wat.
-  const exported =
-    selected === undefined
-      ? /\(export "(?:inputPtr|lex|lexStream|reserve|append|pad\d+)"\)/
-      : /\(export "(?:inputPtr|lex|lexStream|reserve|append)"\)/;
+  const exported = /\(export "(?:inputPtr|lex|lexStream|reserve)"\)/;
   const forms = splitTopLevelForms(
     flattened.code
       .replace(/^\s*\(module/, '')
@@ -122,16 +153,6 @@ export function transformLexer(
     if (pruned === text) throw new Error(`${pattern} matches nothing`);
     return pruned;
   };
-  const imports = new Map([
-    [
-      '$embedLanguage',
-      '(import "env" "embed" (func $embedLanguage (param i32 i32 i32 i32 i32) (result i32)))',
-    ],
-    [
-      '$hostLanguage',
-      '(import "env" "language" (func $hostLanguage (param i32 i32) (result i32)))',
-    ],
-  ]);
   let entries = forms
     .filter(
       (form) =>
@@ -142,7 +163,10 @@ export function transformLexer(
     .map((form) => {
       let text = form.text;
       const name = text.match(/^\((?:func|func-variant)\s+(\$\w+)/)?.[1];
-      if (name === '$embedLanguage') return imports.get(name)!;
+      // WARNING: lexer.wat's $embedHost replaces the in-module function.
+      if (name === '$embedLanguage') return '';
+      if (name === '$embedHost')
+        return text.replace('$embedHost', '$embedLanguage');
       if (name === '$embedLanguageByName')
         return '(func $embedLanguageByName (param $from i32) (param $to i32) (result i32) (call $hostLanguage (local.get $from) (i32.sub (local.get $to) (local.get $from))))';
       if (form.head === 'language-table' && selected !== undefined)
@@ -239,7 +263,10 @@ export function transformLexer(
         );
       return text;
     });
-  entries.push(imports.get('$hostLanguage')!);
+  entries.push(
+    '(import "env" "embed" (func $hostEmbed (param i32 i32 i32 i32 i32 i32 i32) (result i32)))',
+    '(import "env" "language" (func $hostLanguage (param i32 i32) (result i32)))'
+  );
   entries.push(...flattened.imports);
   const definitions = new Map<string, string[]>();
   for (const text of entries) {
@@ -448,10 +475,7 @@ if (isMainThread && import.meta.main) {
     writeFileSync(new URL(`../dist/${name}.wasm`, moduleUrl), bytes);
     writeFileSync(
       new URL(`../dist/${name}.wasm.mjs`, moduleUrl),
-      `const s = atob("${Buffer.from(bytes).toString('base64')}");\n` +
-        'const b = new Uint8Array(s.length);\n' +
-        'for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n' +
-        'export default b;\n'
+      `export default "${Buffer.from(bytes).toString('base64')}";\n`
     );
   }
   await Promise.all(workers);
@@ -507,12 +531,16 @@ if (isMainThread && import.meta.main) {
   );
   const pkgUrl = new URL('../package.json', moduleUrl);
   const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8'));
-  pkg.meta = {
-    'highlights.wasm': wasmBytes.length,
-    'highlights.wasm.gz': gzipSync(wasmBytes, { level: 9 }).length,
-  };
+  pkg.meta = {};
+  for (const [name, bytes] of [
+    ['emitter', emitter],
+    ['langs', readFileSync(new URL('../dist/langs.wasm', moduleUrl))],
+  ] as const) {
+    pkg.meta[`${name}.wasm`] = bytes.length;
+    pkg.meta[`${name}.wasm.gz`] = gzipSync(bytes, { level: 9 }).length;
+  }
   writeIfChanged(pkgUrl, JSON.stringify(pkg, null, 2) + '\n');
   console.log(
-    `✨ Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${pkg.meta['highlights.wasm']} bytes, gzipped: ${pkg.meta['highlights.wasm.gz']} bytes, -O3)`
+    `✨ Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${wasmBytes.length} bytes, -O3)`
   );
 }
