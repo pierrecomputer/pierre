@@ -15,7 +15,7 @@
   (import "./langs/astro.wat")
   (import "./langs/markdown.wat")
 
-  ;; WARNING: Modular builds enable this flag and replace these host callbacks.
+  ;; Modular builds enable this flag and replace these host callbacks.
   (global $externalEmbedding i32 (i32.const 0))
 
   (func $embedLanguage
@@ -27,7 +27,7 @@
   (func $embedLanguageByName (param $from i32) (param $to i32) (result i32)
     (call $languageByName (local.get $from) (local.get $to)))
 
-  ;; WARNING: The host keeps one child lexer for each open stream context.
+  ;; The host keeps one child lexer for each open stream context.
   ;; End the context when its body closes, or the host cannot reuse the lexer.
   (func $embedEnd (param $context i32)
     (if (local.get $context)

@@ -42,9 +42,9 @@
   ;; Append the $bytes of child records at $out for the body [$from, $to).
   ;; Their ends are relative to $from. Type 255 is a leading gap: it extends
   ;; the previous record.
-  ;; WARNING: The records are read in place. A write lands at or before the
+  ;; The records are read in place. A write lands at or before the
   ;; record just read, because appending never adds records.
-  ;; WARNING: A custom lexer can stop early or pass the body end. Clamp each
+  ;; A custom lexer can stop early or pass the body end. Clamp each
   ;; end and cover the rest, or the next token takes those bytes.
   (func $embedAppend (param $bytes i32) (param $from i32) (param $to i32)
     (local $record i32)
@@ -73,7 +73,7 @@
   ;; records. The host gets $out and $cap, copies the records to $out when
   ;; they fit (or calls `reserve`), and writes their byte length to control
   ;; word 10. Reset 2 only ends a stream context.
-  ;; WARNING: scripts/build.ts gives this function the name $embedLanguage in
+  ;; scripts/build.ts gives this function the name $embedLanguage in
   ;; a lexer module, in place of the one in embed.wat.
   (func $embedHost
     (param $lang i32) (param $from i32) (param $to i32)

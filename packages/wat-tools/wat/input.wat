@@ -27,5 +27,4 @@
         (local.set $e (i32.add (local.get $e) (i32.const 1)))
         (br $l)))
     (local.get $e))
-
 )

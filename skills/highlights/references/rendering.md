@@ -138,10 +138,6 @@ import { themes } from '@pierre/highlights/themes';
 const highlighter = await createHighlighter({ langs, themes });
 ```
 
-`langs` contains one combined lexer Wasm. Individual language modules contain
-standalone Wasm as base64 in JavaScript. Each lexer supplies source bytes and
-token records to the separate emitter Wasm.
-
 The `@pierre/highlights` entry initializes a shared highlighter at import and
 re-exports all themes. `@pierre/highlights/core` exports the same functions but
 loads no Wasm; call `init(module)` with a compiled combined module

@@ -163,7 +163,7 @@ export type TestSplitHl = (
   splitBytes: number
 ) => string;
 
-// WARNING: A language ID that differs from the name of its lexer file and
+// A language ID that differs from the name of its lexer file and
 // function needs an entry here, or loadSplitLang finds no lexer.
 const lexerNames: Record<string, string> = {
   bat: 'batch',
@@ -178,7 +178,7 @@ const lexerNames: Record<string, string> = {
   wasm: 'wat',
 };
 
-// WARNING: A language that shares another language's file needs an entry
+// A language that shares another language's file needs an entry
 // here, or loadSplitLang looks for a file that does not exist.
 const splitLexerFiles: Record<string, string> = {
   js: 'tsx',

@@ -76,9 +76,7 @@ Each built-in language has a module with its ID, such as
 ID is the same as the Shiki ID when Shiki has the language. An alias such as
 `bash` has no module. The TypeScript module supports `ts`, `tsx`, `cts`, `mts`,
 `js`, `jsx`, `mjs`, and `cjs`. Its module names are `typescript`, `ts`, `tsx`,
-`javascript`, `js`, and `jsx`. Plain text and `ansi` need no module. Each
-language module contains its standalone Wasm as base64. Import only the
-languages and themes that your application needs.
+`javascript`, `js`, and `jsx`. Plain text and `ansi` need no module.
 
 Embedded code uses the same registered languages. With `langs: [ts, html]`, HTML
 script bodies use TypeScript's JavaScript lexer. Style bodies remain plain text
@@ -127,14 +125,12 @@ names of the built-in language and its embedded code keep the built-in lexer.
 When two lexers in `langs` declare the same name, the later one wins.
 
 With the main entry, `registerLanguages([language])` adds the lexer to the
-shared `codeToHtml()` and `codeToTokens()` functions. Its names override
-built-in names there. Registration compiles base64 lexers synchronously and uses
-the emitter in the combined module, so no other Wasm loads. The combined module
-also lexes the built-in languages that a registered lexer embeds. Built-in
-lexers do not embed registered languages, and `StreamTokenizer` and
-`LiveTokenizer` use only built-in lexers. `isRegisteredLanguage(name)` tells you
-if a name has a registered lexer. The [lexer guide](../wat-tools/README.md)
-describes the shared scanners, token types, and memory declarations.
+shared `codeToHtml()` and `codeToTokens()` functions, where its names override
+built-in names. Built-in lexers do not embed registered languages, and
+`StreamTokenizer` and `LiveTokenizer` use only built-in lexers.
+`isRegisteredLanguage(name)` tells you if a name has a registered lexer. The
+[lexer guide](../wat-tools/README.md) describes the shared scanners, token
+types, and memory declarations.
 
 ## Output and shared runtime
 

@@ -6,7 +6,7 @@
   (import "./markdown.wat")
   (import "./rst.wat")
 
-  ;; WARNING: Org and Wikitext get their own copy of the language lookup. With
+  ;; Org and Wikitext get their own copy of the language lookup. With
   ;; more callers Binaryen stops inlining it into the Markdown lexer.
   (func-variant $orgLanguageByName $embedLanguageByName)
 
@@ -548,7 +548,7 @@
                           (if (i32.eq (local.get $c) (i32.const 1))
                             (then
                               (local.set $c (call $orgLanguageByName (local.get $p) (local.get $q)))
-                              ;; WARNING: an Org body would reuse our checkpoint window
+                              ;; an Org body would reuse our checkpoint window
                               (if (i32.ne (local.get $c) (enum.get $Language.org))
                                 (then
                                   (local.set $block

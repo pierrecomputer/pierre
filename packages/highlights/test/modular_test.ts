@@ -845,7 +845,7 @@ test('a large input does not pin the emitter memory', async () => {
   );
 });
 
-// WARNING: A quoted fence streams its body line by line. That is the only
+// A quoted fence streams its body line by line. That is the only
 // path through the resume branches that the build drops from a standalone
 // lexer, so a wrong drop shows only here.
 test.each(Object.entries(languageSamples))(

@@ -29,7 +29,7 @@ export function SearchableTable({
         onChange={(event) => {
           const query = event.target.value.trim().toLowerCase();
           let count = 0;
-          // WARNING: The server renders the rows, so React keeps no state for
+          // The server renders the rows, so React keeps no state for
           // them. Hide them in the DOM.
           for (const row of ref.current!.querySelectorAll<HTMLElement>(
             'tbody tr'

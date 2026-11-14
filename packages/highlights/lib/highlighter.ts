@@ -119,8 +119,7 @@ export class HighlightsHighlighter implements Highlighter<
     this.themePtr = Number(
       (instance.exports.themePtr as WebAssembly.Global | undefined)?.value ?? 0
     );
-    // WARNING: Only an emitter gets `languageIds`. The combined module also
-    // exports `emit`, so it can be the emitter for registered lexers.
+    // Only an emitter gets `languageIds`; the combined module has `emit` too.
     this.#highlight = (
       languageIds === undefined
         ? (instance.exports.highlight ?? instance.exports.lex)
@@ -410,7 +409,7 @@ export class HighlightsHighlighter implements Highlighter<
 
   /** Rebind views after growing wasm memory. */
   bindMemory(): void {
-    // WARNING: Growth detaches the old buffer, so its view has length 0.
+    // Growth detaches the old buffer, so its view has length 0.
     // This check avoids the slow `memory.buffer` getter on every call.
     if (this.buffer.length !== 0) return;
     this.pageN = this.memory.buffer.byteLength / pageSize;
@@ -485,9 +484,8 @@ export function initEmitter(wasm: WebAssembly.Module): void {
 
 /** Decode base64 Wasm. */
 export function wasmBytes(wasm: string): Uint8Array<ArrayBuffer> {
-  // WARNING: This runs at import, before the JIT. For the combined module,
-  // the loop took 0.7 ms (Bun) and 0.9 ms (Node) longer than a native
-  // decoder. Node has `fromBase64` from version 25.
+  // This runs at import, before the JIT: the `atob` loop is about 1 ms slower
+  // than a native decoder for the combined module.
   const native = globalThis as unknown as {
     Uint8Array: { fromBase64?: (text: string) => Uint8Array<ArrayBuffer> };
     Buffer?: { from: (text: string, encoding: 'base64') => Uint8Array };
@@ -570,10 +568,9 @@ function buildHighlighter(
         throw new RangeError(`invalid lexer entry: ${alias}`);
       }
       if (name === 'ansi') throw new RangeError('reserved language name: ansi');
-      // WARNING: A built-in ID also routes embedded languages, and several
-      // names can share it. Only a built-in module (its entry is that ID)
-      // takes the ID. Another lexer gets its own ID, so its alias cannot
-      // reroute the other names or embedded code. ID 0 is plain text.
+      // A built-in ID also routes embedded languages. Only a built-in module
+      // keeps it; any other lexer gets a new ID, so its alias cannot reroute
+      // embedded code.
       let externalId: number | undefined;
       if (id > 0 && id === LANGS[name]) {
         registrations.set(id, { module: compiled[i], id });
@@ -600,21 +597,20 @@ function buildHighlighter(
       number,
       { module: WebAssembly.Module; lexer: HighlightsHighlighter }
     >();
-    // WARNING: Wasm instantiation is expensive, so finished child lexers wait
-    // here for reuse. Whole-body lexers [0] and stream lexers [1] stay
-    // separate: a whole-body run does not clear an unfinished stream's state.
+    // Finished child lexers wait here for reuse. Whole-body lexers [0] and
+    // stream lexers [1] stay separate: a whole-body run does not clear an
+    // unfinished stream's state.
     const idle = [
       new Map<WebAssembly.Module, HighlightsHighlighter[]>(),
       new Map<WebAssembly.Module, HighlightsHighlighter[]>(),
     ];
     const release = (
-      stream: number,
       module: WebAssembly.Module,
       child: HighlightsHighlighter
     ): void => {
       if (child.pageN > 16) return;
-      const free = idle[stream].get(module);
-      if (free === undefined) idle[stream].set(module, [child]);
+      const free = idle[1].get(module);
+      if (free === undefined) idle[1].set(module, [child]);
       else free.push(child);
     };
     const lexer = new HighlightsHighlighter(
@@ -622,7 +618,7 @@ function buildHighlighter(
       (_id, _mode, _length, reset) => {
         if (reset !== false && streams.size > 0) {
           for (const child of streams.values()) {
-            release(1, child.module, child.lexer);
+            release(child.module, child.lexer);
           }
           streams.clear();
         }
@@ -644,10 +640,8 @@ function buildHighlighter(
             languageIds.get(name) ?? (combined ? LANGS[name] : undefined);
           return id !== undefined && id > 0 ? id : 0;
         },
-        // WARNING: This runs once for each embedded body, and most bodies
-        // are under 32 bytes. Short copies use loops because a typed array
-        // view costs about 30 ns. The lexer appends the records itself: it
-        // reads their byte length from control word 10.
+        // Most embedded bodies are under 32 bytes. Short copies use loops: a
+        // typed array view costs about 30 ns.
         embed: (
           id: number,
           from: number,
@@ -661,11 +655,11 @@ function buildHighlighter(
             const child = streams.get(context);
             if (child !== undefined) {
               streams.delete(context);
-              release(1, child.module, child.lexer);
+              release(child.module, child.lexer);
             }
             return 0;
           }
-          // WARNING: An empty body can still start a stream. Its reset must
+          // An empty body can still start a stream. Its reset must
           // reach the child, or a reused lexer continues its last stream.
           if (to <= from && reset !== 1) return context;
           let registration = registrations.get(id);
@@ -688,7 +682,7 @@ function buildHighlighter(
             const open = streams.get(context);
             if (open?.module === module) child = open.lexer;
             else {
-              if (open !== undefined) release(1, open.module, open.lexer);
+              if (open !== undefined) release(open.module, open.lexer);
               child =
                 idle[1].get(module)?.pop() ?? createLexer(module, depth + 1);
               streams.set(context, { module, lexer: child });
@@ -699,7 +693,7 @@ function buildHighlighter(
           lexer.bindMemory();
           let length = to - from;
           let at = child.inputPtr;
-          // WARNING: The four-byte steps can pass the end by three bytes.
+          // The four-byte steps can pass the end by three bytes.
           // Both buffers keep 96 spare bytes there.
           if (length <= 96 && at + 192 <= child.buffer.length) {
             for (let i = 0; i < length; i += 4)
@@ -717,7 +711,6 @@ function buildHighlighter(
           );
           length = child.dv.getUint32(10, true);
           if (length > 0) {
-            // WARNING: `reserve` can grow the memory and detach the buffer.
             if (out + length + 16 > cap) {
               out = reserve(length);
               lexer.bindMemory();
@@ -741,8 +734,7 @@ function buildHighlighter(
         },
       }
     );
-    // WARNING: Markdown reads its nesting depth from control byte 14. It stops
-    // at 8 levels, as the combined lexer does.
+    // Markdown reads its nesting depth from control byte 14.
     lexer.buffer[14] = depth;
     const reserve = lexer.instance.exports.reserve as (bytes: number) => number;
     return lexer;
@@ -794,7 +786,7 @@ function buildHighlighter(
           )
         )
       );
-      // WARNING: Only the first record can be a gap (255): later gaps extend
+      // Only the first record can be a gap (255): later gaps extend
       // the previous record. The emitter has no gap type.
       if (records.length > 0 && records[1] === 255) records[1] = 0;
     }
@@ -862,7 +854,7 @@ function buildHighlighter(
       : { ...value, theme: undefined, themes: resolved };
   };
   return {
-    // WARNING: `resolveOptions` can replace `highlighter`. Call it first.
+    // `resolveOptions` can replace `highlighter`. Call it first.
     codeToHtml: (input, value) => {
       const resolved = resolveOptions(input, value);
       return highlighter.codeToHtml(input, resolved);
@@ -887,9 +879,8 @@ let registeredNames = new Set<string>();
 export function registerLanguages(langs: readonly Language[]): void {
   const list = registeredLangs.slice();
   for (const language of langs) {
-    // WARNING: A loader can return a new object for the same lexer on each
-    // call. Compare the content, or every call adds a lexer and builds all
-    // of them again.
+    // A loader can return a new object for the same lexer on each call, so
+    // compare the content.
     if (
       !list.some(
         (old) =>
@@ -904,8 +895,6 @@ export function registerLanguages(langs: readonly Language[]): void {
   if (registered !== undefined && list.length === registeredLangs.length) {
     return;
   }
-  // WARNING: Base64 lexers compile synchronously. Browsers allow this on the
-  // main thread only for modules up to 8 MB.
   const compiled = list.map((language) => {
     const { wasm } = language;
     if (typeof wasm !== 'string') return wasm;

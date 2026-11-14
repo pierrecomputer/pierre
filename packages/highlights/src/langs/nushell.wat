@@ -192,7 +192,7 @@
                         (global.set $ptr (i32.add (global.get $ptr) (local.get $kind)))
                         (local.set $kind (i32.const 0))))
                     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-                    ;; WARNING: the closer must fit the 32-byte delimiter region
+                    ;; the closer must fit the 32-byte delimiter region
                     (if (i32.and (i32.ne (local.get $kind) (i32.const 0)) (i32.lt_u (local.get $kind) (i32.const 32)))
                       (then
                         (i32.store8 (i32.const $mem.streamDelimiter) (i32.const 39))

@@ -28,11 +28,10 @@ export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
     flexibleInlineMaxSize: 60,
     oneCallerInlineMaxSize: 200,
   });
-  // WARNING: V8 and JSC scale their Wasm inlining budget by the module's share
-  // of function bodies under 50 bytes: lowest at 25%, full at 50%. Binaryen
-  // inlines most small helpers, so the share is about 33%. There the lexers
-  // ran 7% slower in both engines (geometric mean of 151 languages). Empty
-  // functions raise the share to 50% at 3 bytes each.
+  // V8 and JSC scale their Wasm inlining budget by the module's share of
+  // function bodies under 50 bytes: lowest at 25%, full at 50%. Binaryen
+  // leaves about 33%, which makes the lexers 7% slower. Empty functions raise
+  // the share to 50%.
   let offset = 8;
   const leb = (): number => {
     let value = 0;
@@ -146,8 +145,8 @@ export function transformLexer(
       .trimEnd()
       .slice(0, -1)
   );
-  // WARNING: A pattern that no longer matches the WAT source would leave dead
-  // lexers in every standalone module, with no other sign.
+  // A pattern that no longer matches the WAT source would silently leave
+  // dead lexers in every standalone module.
   const remove = (text: string, pattern: RegExp): string => {
     const pruned = text.replace(pattern, '');
     if (pruned === text) throw new Error(`${pattern} matches nothing`);
@@ -163,7 +162,7 @@ export function transformLexer(
     .map((form) => {
       let text = form.text;
       const name = text.match(/^\((?:func|func-variant)\s+(\$\w+)/)?.[1];
-      // WARNING: lexer.wat's $embedHost replaces the in-module function.
+      // $embedHost in lexer.wat replaces the in-module function.
       if (name === '$embedLanguage') return '';
       if (name === '$embedHost')
         return text.replace('$embedHost', '$embedLanguage');
@@ -308,9 +307,8 @@ export function transformLexer(
   for (const name of used)
     for (const text of definitions.get(name) ?? []) visit(text);
   entries = entries.filter((text) => keep.has(text));
-  // WARNING: A lexer that still opens a stream region needs the region
-  // resume branch dropped above, or it is wrong when streamed. Build again
-  // and keep it. ShaderLab resumes its own regions.
+  // A lexer that still opens a stream region needs the region resume branch
+  // dropped above. Build again and keep it. ShaderLab resumes its own regions.
   if (
     selected !== undefined &&
     !regions &&
@@ -352,9 +350,8 @@ function writeIfChanged(url: URL, content: string): void {
   if (current !== content) writeFileSync(url, content, 'utf-8');
 }
 
-// WARNING: This file is also its build worker (see `new Worker` below). A
-// worker compiles the lexer modules named in `workerData`; `all` is the bundle
-// of every lexer.
+// This file is also its own build worker. A worker compiles the lexer modules
+// named in `workerData`; `all` is the bundle of every lexer.
 if (!isMainThread && Array.isArray(workerData)) {
   const languageDir = new URL('../dist/langs/', import.meta.url);
   const languageDts =
@@ -367,11 +364,10 @@ if (!isMainThread && Array.isArray(workerData)) {
         : name === 'typescript'
           ? ['javascript', 'jsx', 'typescript', 'tsx']
           : [name];
-    const entry = name;
     const source = transformLexer(selected);
     const ids = new Set(selected?.map((name) => source.languages[name]));
-    // WARNING: A lexer takes an alias with ID 0 as a name of its own, so the
-    // plain-text names must stay out, or `text` runs the lexer as a language.
+    // A lexer takes an alias with ID 0 as a name of its own, so the plain-text
+    // names must stay out.
     const aliases = JSON.stringify(
       Object.fromEntries(
         Object.entries(source.languages).filter(
@@ -379,10 +375,10 @@ if (!isMainThread && Array.isArray(workerData)) {
         )
       )
     );
-    const binary = optimizeWasm(wat2wasm(`${entry}.wat`, source.code));
-    const descriptor = `{"name":"${entry}","aliases":${aliases},"wasm":"${Buffer.from(binary).toString('base64')}"}`;
-    // WARNING: workerd cannot compile Wasm from bytes. Its export condition
-    // selects the `.workerd.js` modules, which import the compiled `.wasm`.
+    const binary = optimizeWasm(wat2wasm(`${name}.wat`, source.code));
+    const descriptor = `{"name":"${name}","aliases":${aliases},"wasm":"${Buffer.from(binary).toString('base64')}"}`;
+    // workerd cannot compile Wasm from bytes, so its export condition selects
+    // the `.workerd.js` modules, which import the `.wasm` files.
     if (name === 'all') {
       writeFileSync(
         new URL('../langs.js', languageDir),
@@ -402,16 +398,16 @@ if (!isMainThread && Array.isArray(workerData)) {
       continue;
     }
     writeFileSync(
-      new URL(`${entry}.js`, languageDir),
+      new URL(`${name}.js`, languageDir),
       `export default ${descriptor};\n`
     );
-    writeFileSync(new URL(`${entry}.wasm`, languageDir), binary);
+    writeFileSync(new URL(`${name}.wasm`, languageDir), binary);
     writeFileSync(
-      new URL(`${entry}.workerd.js`, languageDir),
-      `import wasm from './${entry}.wasm';\n` +
-        `export default { name: ${JSON.stringify(entry)}, aliases: ${aliases}, wasm };\n`
+      new URL(`${name}.workerd.js`, languageDir),
+      `import wasm from './${name}.wasm';\n` +
+        `export default { name: ${JSON.stringify(name)}, aliases: ${aliases}, wasm };\n`
     );
-    writeFileSync(new URL(`${entry}.d.ts`, languageDir), languageDts);
+    writeFileSync(new URL(`${name}.d.ts`, languageDir), languageDts);
     if (name === 'typescript') {
       for (const alias of ['ts', 'tsx', 'js', 'jsx', 'javascript']) {
         writeFileSync(
@@ -436,10 +432,8 @@ if (isMainThread && import.meta.main) {
   const sourceUrl = new URL('../src/highlights.wat', moduleUrl);
   const { code, enumMap, languages } = transformWat(sourceUrl);
   mkdirSync(new URL('../dist/langs/', moduleUrl), { recursive: true });
-  // WARNING: The lexer modules take most of the build time, so workers
-  // compile them while this thread compiles the combined module. Plain text
-  // (ID 0) is built into every highlighter and has no module; the ECMAScript
-  // languages share the `typescript` one.
+  // Plain text (ID 0) has no module, and the ECMAScript languages share the
+  // `typescript` one.
   const standalone = Object.keys(enumMap.get('$Language')!).filter(
     (name) =>
       languages[name] !== 0 && !['javascript', 'jsx', 'tsx'].includes(name)

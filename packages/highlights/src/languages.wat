@@ -144,7 +144,7 @@
   (import "./langs/xml.wat")
   (import "./langs/yaml.wat")
   (import "./langs/zig.wat")
-  ;; WARNING: Import order sets the memory addresses and byte-set numbers of
+  ;; Import order sets the memory addresses and byte-set numbers of
   ;; every lexer. Add new lexers at the end, or the code of existing lexers
   ;; changes and the engines inline it differently.
   (import "./langs/ahk.wat")
@@ -520,7 +520,7 @@
           (i32.eq (local.get $lang) (enum.get $Language.haml))
           (i32.eq (local.get $lang) (enum.get $Language.pug))))
       (then (return (call $indentStreamResume))))
-    ;; WARNING: Blade, Razor, Glimmer, Marko, and templ resume an open
+    ;; Blade, Razor, Glimmer, Marko, and templ resume an open
     ;; script or style body in their own lexer: the body's end clears every
     ;; checkpoint, so they load state first
     (if
@@ -540,7 +540,7 @@
       (then
         (call $highlightLang (local.get $lang))
         (return (i32.const 1))))
-    ;; WARNING: Org (region kind 92) and Wikitext (93) resume an open source
+    ;; Org (region kind 92) and Wikitext (93) resume an open source
     ;; block in their own lexer, which restores the body's own region kind first
     (if
       (i32.or

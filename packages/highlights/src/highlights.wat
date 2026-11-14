@@ -94,7 +94,7 @@
     (if (local.get $reset)
       (then (call $streamResetGlobals)))
     (call $hlBegin)
-    ;; WARNING: Byte records go to a parent lexer, which owns the token before
+    ;; Byte records go to a parent lexer, which owns the token before
     ;; a chunk. A carried record would take a leading gap from it.
     (if (i32.ne (global.get $tokens) (i32.const 2))
       (then (call $recStreamBegin (local.get $reset))))

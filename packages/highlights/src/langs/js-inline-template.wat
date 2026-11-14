@@ -52,7 +52,7 @@
     (local $angular i32)
     (local $context i32)
     (local.set $angular (i32.and (global.get $jsTemplateState) (i32.const 0x80000000)))
-    ;; WARNING: Only Angular templates go to the host. The `html` lexer is not
+    ;; Only Angular templates go to the host. The `html` lexer is not
     ;; the template markup lexer below: it reads no JavaScript escapes, and it
     ;; lexes script and style bodies.
     (if (i32.and (global.get $externalEmbedding) (i32.ne (local.get $angular) (i32.const 0)))

@@ -347,7 +347,7 @@
                     (i32.or (global.get $tsxStreamMode) (global.get $jsTemplateLexSp))))))))
         (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
         (global.set $eof (local.get $p))
-        ;; WARNING: A modular build has no `tsx` entry for $markdownCodeRange
+        ;; A modular build has no `tsx` entry for $markdownCodeRange
         ;; to call, so it runs the TSX lexer here. Past the depth limit (see
         ;; $markdownCodeRange) the lines stay literal text.
         (if

@@ -15,25 +15,6 @@ JavaScript, TSX, and JSX dialects, and `langs/ts`, `langs/tsx`, `langs/js`,
 `@pierre/highlights/langs` contains one lexer Wasm for all languages. The
 `/core` entry imports neither that bundle nor the themes.
 
-```ts
-import { createHighlighter } from '@pierre/highlights/core';
-import ts from '@pierre/highlights/langs/typescript';
-import { pierreDark } from '@pierre/highlights/themes';
-
-const highlighter = await createHighlighter({
-  langs: [ts],
-  themes: [pierreDark],
-});
-const html = highlighter.codeToHtml('const a = 1', {
-  lang: 'js',
-  theme: 'pierre-dark',
-});
-```
-
-`createHighlighter()` compiles the selected modules and registers the supplied
-themes. Subsequent output calls are synchronous. Theme selection does not change
-the lexer records.
-
 The `@pierre/highlights` entry uses a combined lexer/emitter module for shared
 calls, streams, and editable documents:
 
@@ -71,23 +52,18 @@ Document edits ── liveRun ───────────── per-line s
 
 A `createHighlighter()` highlighter owns separate lexer and emitter instances.
 Each lexer returns packed `(endByte: u32, tokenId: u32)` pairs as a
-`Uint8Array`. Record starts follow the previous end, with zero as the first
-start. A lexer module writes whitespace at the start of its input as a record of
-type 255. A parent lexer extends its previous record with it, and the host
-changes it to `none` at the document root. Plain text has no lexer module: the
-host writes one record. The host transfers the source and these records to the
-emitter instance.
+`Uint8Array`. A lexer module writes whitespace at the start of its input as a
+record of type 255. A parent lexer extends its previous record with it, and the
+host changes it to `none` at the document root. Plain text has no lexer module:
+the host writes one record. The host transfers the source and these records to
+the emitter instance.
 
 The emitter reads the record address at control byte 22 and the record byte
 length at byte 26. It places its output after these records so HTML expansion
 and UTF-16 conversion cannot overwrite records that it has not read. It clamps
 each record end to the input and emits uncovered bytes as plain text, so a
-custom lexer with wrong ends cannot drop text or read past the input.
-
-No lexing runs between two tokens in this pass, so the address of the next
-output byte is its critical path. The HTML loop of `emit` and `$recLinesPost`
-keep that address in a local: a global costs a store and a load for each update.
-For line records, `emit` checks the lexer records and converts them in place.
+custom lexer with wrong ends cannot drop text or read past the input. For line
+records, `emit` checks the lexer records and converts them in place.
 
 [`lib/core.ts`](./lib/core.ts) is the `/core` entry. It loads no Wasm at import,
 so the shared functions and tokenizers need `init(module)` first.
@@ -257,16 +233,11 @@ returns. The host calls `reserve` only when the records do not fit. Each open
 embedded stream has its own child instance, so nested templates and multiline
 fences preserve independent state.
 
-`embed` runs once for each embedded body, and most bodies are under 32 bytes.
-The host copies short bodies and records four bytes at a time through the
-`DataView`, because a typed array view costs more than the copy.
-
-Wasm instantiation is expensive, so each lexer keeps its finished child lexers
-for reuse. Whole-body lexers and stream lexers wait in separate pools, because a
-whole-body run does not clear the state of an unfinished stream. A template ends
-its stream context with `$embedEnd` when it closes. A stream that starts with an
-empty body still resets its child. A child above 1 MiB does not go back to its
-pool. At 64 levels of child lexers, the host emits the body as plain text.
+Each lexer keeps its finished child lexers for reuse. Whole-body lexers and
+stream lexers wait in separate pools, because a whole-body run does not clear
+the state of an unfinished stream. A template ends its stream context with
+`$embedEnd` when it closes. A child above 1 MiB does not go back to its pool. At
+64 levels of child lexers, the host emits the body as plain text.
 
 With `langs: [ts, html]`, script bodies use the registered JavaScript lexer.
 Style bodies remain plain text because CSS is absent. Markdown fences resolve
@@ -305,9 +276,7 @@ ASCII record needs one subtraction. ID `0xffffffff` marks a line terminator.
 That record ends after the terminator.
 
 `lineRecordsToTokens` splits the source string into one `ThemedToken` array per
-line. It reads the line marker as `-1` through an `Int32Array`: JSC compiles a
-`Uint32Array` read as int32, and `0xffffffff` made its optimized code exit on
-every call. The arrays exclude line terminators. Offsets for complete input and
+line. The arrays exclude line terminators. Offsets for complete input and
 streams are UTF-16 indices from the start of the input. Live document offsets
 are relative to each line. Comment, string, and regex IDs also provide standard
 token types for bracket matching.
@@ -360,9 +329,8 @@ theme styles for theme sets. Token calls keep the HTML caches.
 
 [`themes/index.ts`](./themes/index.ts) exports bundled themes, `cssVariables`,
 and `toCSS`, which produces CSS custom-property declarations. In the bundle,
-each theme holds its `style` as a JSON string and parses it on first use,
-because the object literals of all themes cost about 4 ms at import. The build
-also emits individual theme modules and a lazy loader.
+each theme holds its `style` as a JSON string and parses it on first use. The
+build also emits individual theme modules and a lazy loader.
 
 ## ANSI input
 
