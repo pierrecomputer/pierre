@@ -7,7 +7,7 @@ import { BENCH_OUTPUT_DIR, BENCH_VIEWPORT } from './playwright.config';
 
 /** Merge the records of every benchmark test into one report and print the baseline checks. */
 export default async function globalTeardown(): Promise<void> {
-  const bundle = await measureBundles();
+  const bundles = await measureBundles();
   const result = writeReport({
     recordsDirectory: BENCH_OUTPUT_DIR,
     resultsDirectory: options.save
@@ -17,7 +17,7 @@ export default async function globalTeardown(): Promise<void> {
     viewport: BENCH_VIEWPORT,
     runs: options.runs,
     warmupRuns: options.warmupRuns,
-    bundle,
+    bundles,
     variant: options.query,
   });
   if (result === null) {
@@ -26,5 +26,5 @@ export default async function globalTeardown(): Promise<void> {
   }
   console.log(`\n[layouts:bench] Report: ${result.path}\n`);
   console.log(formatChecks(result.report.checks));
-  console.log(`\n${formatBundles(bundle)}`);
+  console.log(`\n${formatBundles(bundles)}`);
 }

@@ -1,8 +1,9 @@
 // Compare two benchmark reports: `moon run layouts:bench-compare -- <before.json> <after.json>`.
 // Prints the checks that changed state, the metrics and the memory values that
-// changed in each record, the repeat scenario, and the bundle sizes.
+// changed in each record, the repeat scenario, and the bundle sizes of each mode.
 import { readFileSync } from 'node:fs';
 
+import type { BundleMode, BundleSize } from './lib/bundle';
 import type { Report } from './lib/report';
 
 // The metrics that the comparison prints, in this order.
@@ -26,6 +27,15 @@ const METRICS = [
 type Metric = (typeof METRICS)[number];
 type ReportRecord = Report['records'][number];
 
+// A report as a file holds it. A report before the app mode has `bundle`, the
+// library-mode sizes, in place of `bundles`.
+type StoredReport = Omit<Report, 'bundles'> & {
+  bundles?: Report['bundles'];
+  bundle?: Record<string, BundleSize>;
+};
+
+const BUNDLE_MODES: readonly BundleMode[] = ['app', 'library'];
+
 // The memory values that the comparison prints, from the memory run of each record.
 const MEMORY_VALUES = [
   'tileMemoryMb',
@@ -37,8 +47,18 @@ const MEMORY_VALUES = [
   'layers',
 ] as const;
 
-function load(path: string): Report {
-  return JSON.parse(readFileSync(path, 'utf8')) as Report;
+function load(path: string): StoredReport {
+  return JSON.parse(readFileSync(path, 'utf8')) as StoredReport;
+}
+
+// The bundle sizes of one mode, also from a report before the app mode.
+function bundleSizes(
+  report: StoredReport,
+  mode: BundleMode
+): Record<string, BundleSize> | undefined {
+  return (
+    report.bundles?.[mode] ?? (mode === 'library' ? report.bundle : undefined)
+  );
 }
 
 function value(record: ReportRecord, metric: Metric): number | undefined {
@@ -65,7 +85,7 @@ function significant(before: number, after: number): boolean {
 }
 
 function sameRecord(
-  report: Report,
+  report: StoredReport,
   record: ReportRecord
 ): ReportRecord | undefined {
   return report.records.find(
@@ -100,7 +120,7 @@ for (const check of after.checks) {
     `  ${check.id}: ${state(old.pass)} ${old.value ?? '-'} -> ${state(check.pass)} ${check.value ?? '-'}`
   );
 }
-const passing = (report: Report): number =>
+const passing = (report: StoredReport): number =>
   report.checks.filter((check) => check.pass === true).length;
 console.log(
   `  checks that pass: ${passing(before)} -> ${passing(after)} of ${after.checks.length}\n`
@@ -161,14 +181,21 @@ if (after.repeats !== undefined) {
   }
 }
 
-if (before.bundle !== undefined && after.bundle !== undefined) {
-  console.log('\nBundle sizes in bytes (minified / brotli / zstd):');
-  for (const [entry, size] of Object.entries(after.bundle)) {
-    const old = before.bundle[entry];
+// A bundle that the earlier report does not have, or a mode that it did not
+// measure, prints the later value alone.
+for (const mode of BUNDLE_MODES) {
+  const sizes = bundleSizes(after, mode);
+  if (sizes === undefined) continue;
+  const oldSizes = bundleSizes(before, mode);
+  console.log(
+    `\nBundle sizes in bytes, ${mode} mode (minified / brotli / zstd):`
+  );
+  for (const [name, size] of Object.entries(sizes)) {
+    const old = oldSizes?.[name];
     const pair = (a: number | undefined, b: number): string =>
       a === undefined ? `${b}` : `${a} -> ${b}`;
     console.log(
-      `  ${entry}: ${pair(old?.minified, size.minified)} / ${pair(old?.brotli, size.brotli)} / ${pair(old?.zstd, size.zstd)}`
+      `  ${name}: ${pair(old?.minified, size.minified)} / ${pair(old?.brotli, size.brotli)} / ${pair(old?.zstd, size.zstd)}`
     );
   }
 }
