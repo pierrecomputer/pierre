@@ -418,7 +418,7 @@ describe('CodeView worker rendering', () => {
       id: 'file:removed',
       type: 'file',
       file,
-      collapsed: true,
+      version: 0,
     };
     const instanceChanged = spyOn(viewer, 'instanceChanged');
 
@@ -427,7 +427,11 @@ describe('CodeView worker rendering', () => {
       viewer.setItems([item]);
       viewer.render(true);
 
+      // The highlight is requested while the file is open. A collapsed file
+      // asks for none.
       const request = await withTimeout(worker.waitForFileRequest());
+      viewer.setItems([{ ...item, collapsed: true, version: 1 }]);
+      viewer.render(true);
       viewer.setItems([]);
       viewer.render(true);
       instanceChanged.mockClear();

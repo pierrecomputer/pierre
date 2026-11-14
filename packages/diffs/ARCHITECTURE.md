@@ -168,10 +168,10 @@ editing continues from a read-only row, which the editor asks for when one is
 clicked. The editor's attach, resume, completion and state capture go through
 the `__`-prefixed hooks on the component, and the editor reaches the host's
 scroll through `scrollToLine`, `cancelScroll`, `getLinePosition` and
-`isLineRenderable`. Around its DOM write the component calls the editor's
-`__`-prefixed hooks: `__captureFocusForDOMReplacement` before rows are written
-and `__syncRenderView` after, which redraws the carets and selections and puts
-focus back on the rewritten content.
+`isLineInCollapsedContext`. Around its DOM write the component calls the
+editor's `__`-prefixed hooks: `__captureFocusForDOMReplacement` before rows are
+written and `__syncRenderView` after, which redraws the carets and selections
+and puts focus back on the rewritten content.
 
 ## Scrolling
 
