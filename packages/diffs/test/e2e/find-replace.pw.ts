@@ -650,7 +650,7 @@ test('first-visible lookup keeps full-document results with bounded DOM work', a
     () => window.__editor?.getViewState().selections
   );
   await page.keyboard.press('ControlOrMeta+f');
-  await expect(page.locator(MATCHES)).toContainText('of 10000');
+  await expect(page.locator(MATCHES)).toContainText('of 10,000');
   const result = await page.locator(SEARCH_INPUT).evaluate((input) => {
     const rect = Element.prototype.getBoundingClientRect;
     const query = ShadowRoot.prototype.querySelector;
@@ -688,7 +688,7 @@ test('first-visible lookup keeps full-document results with bounded DOM work', a
   expect(result.rowMeasurements).toBeLessThan(100);
   expect(result.headerQueries).toBeLessThan(5);
   expect(result.scrollAfter).toBe(result.scrollBefore);
-  await expect(page.locator(MATCHES)).toContainText('of 10000');
+  await expect(page.locator(MATCHES)).toContainText('of 10,000');
   expect(
     await page.evaluate(() => window.__editor?.getViewState().selections)
   ).toEqual(selected);

@@ -262,8 +262,8 @@ describe('diff editor: collapsed regions during edit', () => {
       // a mid-gap line has no row.
       expect(lineNumbers.length).toBeLessThan(60);
       expect(lineNumbers).not.toContain(30);
-      expect(fileDiff.isLineRenderable(30)).toBe(false);
-      expect(fileDiff.isLineRenderable(10)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(10)).toBe(false);
 
       // Separator rows inside the contenteditable column are read-only.
       const content = findAdditionContent(container);
@@ -510,7 +510,7 @@ describe('diff editor: collapsed regions during edit', () => {
       await wait(30);
       first.editor.undo();
       await wait(30);
-      expect(first.fileDiff.isLineRenderable(30)).toBe(true);
+      expect(first.fileDiff.isLineInCollapsedContext(30)).toBe(false);
 
       await first.cleanup();
       firstCleaned = true;
@@ -518,7 +518,7 @@ describe('diff editor: collapsed regions during edit', () => {
       const second = await createCollapsedEditFixture(documentKey);
       try {
         expect(second.editor.getText()).not.toContain('typed line 30');
-        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(second.fileDiff.isLineInCollapsedContext(30)).toBe(false);
         expect(
           findAdditionContent(second.container)?.querySelector(
             '[data-line="30"]'
@@ -528,7 +528,7 @@ describe('diff editor: collapsed regions during edit', () => {
         second.editor.redo();
         await wait(30);
         expect(second.editor.getText()).toContain('typed line 30');
-        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(second.fileDiff.isLineInCollapsedContext(30)).toBe(false);
       } finally {
         await second.cleanup();
       }
@@ -552,7 +552,7 @@ describe('diff editor: collapsed regions during edit', () => {
       await wait(30);
       first.editor.undo();
       await wait(30);
-      expect(first.fileDiff.isLineRenderable(30)).toBe(true);
+      expect(first.fileDiff.isLineInCollapsedContext(30)).toBe(false);
 
       await first.cleanup();
       firstCleaned = true;
@@ -562,7 +562,7 @@ describe('diff editor: collapsed regions during edit', () => {
       });
       try {
         expect(second.editor.getText()).not.toContain('typed line 30');
-        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(second.fileDiff.isLineInCollapsedContext(30)).toBe(false);
       } finally {
         await second.cleanup();
       }
@@ -582,7 +582,7 @@ describe('diff editor: collapsed regions during edit', () => {
       // an edit so a genuine exit recompute runs.
       fileDiff.handleExpandHunk(1, 'up', 5);
       await wait(10);
-      expect(fileDiff.isLineRenderable(15)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(15)).toBe(false);
       typeAt(editor, 49, 0, 'X');
       await wait(10);
 
@@ -592,10 +592,10 @@ describe('diff editor: collapsed regions during edit', () => {
       await wait(20);
 
       expect(fileDiff.fileDiff?.editSessionDirty).toBeUndefined();
-      expect(fileDiff.isLineRenderable(15)).toBe(true);
-      expect(fileDiff.isLineRenderable(19)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(15)).toBe(false);
+      expect(fileDiff.isLineInCollapsedContext(19)).toBe(false);
       // The gap interior stays collapsed.
-      expect(fileDiff.isLineRenderable(30)).toBe(false);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(true);
       const content = findAdditionContent(container);
       expect(content?.querySelector('[data-line="15"]')).not.toBeNull();
       expect(content?.querySelector('[data-line="30"]')).toBeNull();

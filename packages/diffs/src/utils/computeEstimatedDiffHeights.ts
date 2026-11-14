@@ -1,8 +1,8 @@
 import type {
   ChangeContent,
+  ExpandedHunksMap,
   FileDiffMetadata,
   Hunk,
-  HunkExpansionRegion,
   HunkSeparators,
   VirtualFileMetrics,
 } from '../types';
@@ -24,7 +24,7 @@ export interface ComputeEstimatedDiffHeightsOptions {
   disableFileHeader: boolean;
   hunkSeparators: HunkSeparators;
   expandUnchanged: boolean;
-  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
+  expandedHunks: ExpandedHunksMap | true | undefined;
   collapsedContextThreshold: number;
   canHydratePartialDiff: boolean;
   // Count the row for the empty line after the final newline; see

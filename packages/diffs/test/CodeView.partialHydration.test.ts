@@ -202,4 +202,58 @@ describe('CodeView partial hydration', () => {
       cleanup();
     }
   });
+
+  test('hydrates after the host replaces the partial diff with an equal one', async () => {
+    const { cleanup } = installDom();
+    const { oldFile, newFile, partial } = createPartialChange();
+    const { partial: recreated } = createPartialChange();
+    expect(recreated).not.toBe(partial);
+    assertDefined(partial.cacheKey, 'expected the partial diff to be keyed');
+    expect(recreated.cacheKey).toBe(partial.cacheKey);
+    const id = 'diff:partial.ts';
+    const viewer = new CodeView({
+      disableFileHeader: true,
+      loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+    });
+
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [
+        { id, type: 'diff', fileDiff: partial, version: 1 },
+      ]);
+      await waitFor(() => viewer.getRenderedItems().length === 1);
+      viewer.updateItem({ id, type: 'diff', fileDiff: recreated, version: 2 });
+      viewer.render(true);
+      await wait(0);
+
+      const renderedItem = viewer.getRenderedItems()[0];
+      assertDefined(renderedItem, 'expected partial diff to render');
+      if (renderedItem.type !== 'diff') {
+        throw new Error('expected a rendered diff item');
+      }
+      expect(getRenderedLineTexts(renderedItem.element)).not.toContain(
+        'keep 1'
+      );
+
+      renderedItem.instance.expandHunk(0, 'down', 1);
+      await waitFor(() => renderedItem.instance.fileDiff?.isPartial === false);
+      viewer.render(true);
+      await wait(0);
+
+      expect(renderedItem.instance.fileDiff).toBe(recreated);
+      expect(recreated.isPartial).toBe(false);
+      expect(getRenderedLineTexts(renderedItem.element)).toContain('keep 1');
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
 });
+
+function getRenderedLineTexts(element: HTMLElement): string[] {
+  return Array.from(
+    element.shadowRoot?.querySelectorAll('[data-line]') ?? [],
+    (line) => line.textContent.trim()
+  );
+}
