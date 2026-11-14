@@ -45,6 +45,7 @@ import { GitHubTokenControl } from '@/components/GitHubTokenControl';
 import { Switch } from '@/components/Switch';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import { cn } from '@/lib/cn';
+import type { GitHubTokenCapability } from '@/lib/githubTokenStorage';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 
@@ -63,13 +64,15 @@ interface HeaderProps {
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
   fileTreeOverlayOpen: boolean;
+  githubRepoOwner?: string;
   githubTokenActive: boolean;
+  githubTokenCapability: GitHubTokenCapability;
   initialUrl: string;
   lightThemeName: LightThemeName;
   lineNumbers: boolean;
   overflow: 'wrap' | 'scroll';
   onClearGitHubToken(): void;
-  onSaveGitHubToken(token: string): void;
+  onSaveGitHubToken(token: string, capability: GitHubTokenCapability): void;
   onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
   setColorMode(mode: ColorMode): void;
@@ -92,7 +95,9 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   diffStyle,
   fileTreeAvailable,
   fileTreeOverlayOpen,
+  githubRepoOwner,
   githubTokenActive,
+  githubTokenCapability,
   initialUrl,
   lightThemeName,
   lineNumbers,
@@ -250,8 +255,10 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
               >
                 <GitHubTokenControl
                   active={githubTokenActive}
+                  capability={githubTokenCapability}
                   onClear={onClearGitHubToken}
                   onSave={onSaveGitHubToken}
+                  resourceOwner={githubRepoOwner}
                 />
                 <div className="bg-border/70 my-2 h-px" />
                 <DropdownMenuItem
