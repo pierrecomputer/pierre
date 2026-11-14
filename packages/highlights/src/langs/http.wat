@@ -168,7 +168,7 @@
       (if (result i32) (global.get $httpHurl)
         (then (call $hurlBodyEnd (global.get $ptr)))
         (else (call $httpBodyEnd (global.get $ptr) (i32.eq (local.get $kind) (i32.const 3))))))
-    ;; WARNING: Only JSON and XML bodies have a host lexer. Other bodies need
+    ;; Only JSON and XML bodies have a host lexer. Other bodies need
     ;; the text scan below for `{{variable}}`.
     (if (i32.and (global.get $externalEmbedding) (i32.ge_u (local.get $kind) (i32.const 2)))
       (then

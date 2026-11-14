@@ -87,7 +87,7 @@
         (return)))
     ;; Past the limit the body stays literal text rather than growing the stack:
     ;; the contract says a lexer is total, and a trap would break that.
-    ;; WARNING: In a modular build each nested body has its own module
+    ;; In a modular build each nested body has its own module
     ;; instance, so $markdownDepth stays 0. The host writes the depth of the
     ;; instance to control byte 14.
     (if

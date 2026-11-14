@@ -79,5 +79,4 @@
     ;; resolved from theme.style, not from syntax
     "background"
     "foreground")
-
 )

@@ -54,13 +54,13 @@ const config: UserConfig[] = defineConfig([
       tsgo: true,
     },
     platform: 'neutral',
-    // WARNING: The type bundle follows `import type` into lib/highlighter.ts,
+    // The type bundle follows `import type` into lib/highlighter.ts,
     // which imports the emitter.
     deps: { neverBundle: [tokenTypesPath, /^\.\/emitter\.wasm/] },
     plugins: [
       {
         name: 'theme-style-json',
-        // WARNING: `lazyTheme` in themes/index.ts parses this string on first
+        // `lazyTheme` in themes/index.ts parses this string on first
         // use. The object literals of all themes cost about 4 ms at import.
         load(id: string) {
           if (!id.startsWith(themesDir) || !id.endsWith('.json')) return;

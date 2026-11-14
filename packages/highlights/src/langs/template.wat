@@ -456,7 +456,7 @@
         (br $next)))
     (local.get $state))
 
-  ;; WARNING: The copy gets its own $tmplIsVoid. With two callers Binaryen
+  ;; The copy gets its own $tmplIsVoid. With two callers Binaryen
   ;; stops inlining it into $tmplMarkup.
   (func-variant $tmplIsVoidBrace $tmplIsVoid)
   (func-variant $tmplMarkupBrace $tmplMarkup

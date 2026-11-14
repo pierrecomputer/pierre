@@ -288,7 +288,7 @@ test('registerLanguages adds lexers to the shared functions of the main entry', 
   expect(isRegisteredLanguage('example')).toBe(true);
   expect(isSupportedLanguage('example')).toBe(false);
   expect(isRegisteredLanguage('rust')).toBe(false);
-  // WARNING: Registration is global and Bun runs every test file in one
+  // Registration is global and Bun runs every test file in one
   // process. The later lexer wins a name, so the built-in module gives `go`
   // back to the Go lexer for the other files.
   registerLanguages([go]);

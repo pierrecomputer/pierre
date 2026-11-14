@@ -6,7 +6,7 @@
   (import "@pierre/wat-tools/common.wat")
   (import "./coffee.wat")
 
-  ;; WARNING: Imba gets its own copy of the CoffeeScript regex scan. With two
+  ;; Imba gets its own copy of the CoffeeScript regex scan. With two
   ;; callers Binaryen stops inlining $coffeeRegex into the CoffeeScript lexer.
   (func-variant $imbaRegex $coffeeRegex)
 

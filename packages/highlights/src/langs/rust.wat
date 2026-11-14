@@ -7,7 +7,7 @@
   (import "@pierre/wat-tools/common.wat")
 
   ;; 1 only in $hlCairo, the build's copy of $hlRust for Cairo.
-  ;; WARNING: guard Cairo-only code in $hlRust with this global. Binaryen
+  ;; Guard Cairo-only code in $hlRust with this global. Binaryen
   ;; then drops it from the Rust copy, so Rust keeps its speed.
   (global $rustCairo i32 (i32.const 0))
 
@@ -338,7 +338,7 @@
                     (i32.eq (i32.load16_u (local.get $rhs)) (i32.const "::")))))
               (else
                 ;; Token in the low byte; bit 8 expects a function name and
-                ;; bit 9 a type. WARNING: keep this lookup inline; a shared
+                ;; bit 9 a type. Keep this lookup inline; a shared
                 ;; helper has two callers with $hlCairo, and Binaryen then
                 ;; stops inlining it into $hlRust.
                 (local.set $kind

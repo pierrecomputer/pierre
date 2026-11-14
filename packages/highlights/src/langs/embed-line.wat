@@ -18,7 +18,7 @@
   ;; a new body. With $close, the body ends at its outer `}`, left at $ptr.
   ;; Returns 1 while the body goes on: a `}` still due, or without $close an
   ;; open bracket, comment, string, or template.
-  ;; WARNING: an open body lives in the host's checkpointed locals, not a
+  ;; An open body lives in the host's checkpointed locals, not a
   ;; stream region: closing a region clears every lexer's saved locals.
   (func $embedJsLine (param $to i32) (param $reset i32) (param $close i32) (result i32)
     (local $save i32)

@@ -119,31 +119,13 @@ supports the forms that the built-in Highlights lexers use: `enum`, `enum-map`,
 `keyword-pool`, `byte-switch`, `func-variant`, `language-table`, and string
 operands such as `(i32.const "ab")`. They also work in `buildHighlightsLexer`.
 
-## Raw lexer interface
+## Streams
 
-Generated modules export `memory`, `inputPtr`, `lex()`, and `lexStream(reset)`.
-Highlights calls these exports for you.
-
-Input is UTF-8 at `inputPtr`. The control header stores input byte length at
-offset `2`, output pointer at `6`, and output byte length at `10`, all as
-little-endian `u32`. Output records are pairs of `u32` values: the exclusive
-byte offset from input start, then the token type. Adjacent tokens of the same
-type are merged.
-
-Grow memory before you write large inputs. Write a `0` byte after the input and
-leave 48 bytes after it. Read the memory buffer again after each call because
-output can grow memory.
-
-Token type `255` marks an initial gap. An embedded lexer passes that gap to its
-parent so it inherits the previous parent token. At the document root it becomes
-plain text (`0`).
-
-`lex()` starts a fresh document. `lexStream(1)` starts a stream and
-`lexStream(0)` continues it. Stateful lexers must preserve their own state
-across continuations. Keep that state in globals, and reset them when
-`$streamReset` is `1`. The shared comment and string scanners preserve their
-modes. When an open string or comment covers a whole chunk, `$highlight` does
-not run for that chunk.
+Highlights can run a lexer on a stream of chunks, such as the lines of a quoted
+Markdown fence. A stateful lexer must keep its own state between chunks. Keep
+that state in globals, and reset them when `$streamReset` is `1`. The shared
+comment and string scanners keep their modes. When an open string or comment
+covers a whole chunk, `$highlight` does not run for that chunk.
 
 ## License
 
