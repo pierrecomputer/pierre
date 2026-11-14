@@ -9,7 +9,7 @@ import {
 import { arch, cpus, platform, release, totalmem } from 'node:os';
 import { join } from 'node:path';
 
-import type { BundleSize } from './bundle';
+import type { BundleSizes } from './bundle';
 import { type CheckResult, evaluateChecks, type RecordSummary } from './checks';
 import type { Attribution, Sample } from './measure';
 import type { MemorySnapshot } from './memory';
@@ -103,8 +103,12 @@ export interface Report {
   /** The repeat scenario at each parameter set. */
   repeats?: RepeatRecord[];
   checks: CheckResult[];
-  /** Bytes of each entry point: minified, then gzip, brotli, and Zstandard. */
-  bundle: Record<string, BundleSize>;
+  /**
+   * Bytes of each entry point and each consumer in each build mode: minified,
+   * then gzip, brotli, and Zstandard. A report before the app mode has
+   * `bundle` in its place, with the library-mode sizes.
+   */
+  bundles: BundleSizes;
 }
 
 function median(values: number[]): number {
@@ -139,7 +143,7 @@ export function writeReport(options: {
   viewport: { width: number; height: number };
   runs: number;
   warmupRuns: number;
-  bundle: Record<string, BundleSize>;
+  bundles: BundleSizes;
   variant: string;
 }): { path: string; report: Report } | null {
   const raw = findFiles<RawRecord>(
@@ -209,7 +213,7 @@ export function writeReport(options: {
     records,
     repeats: repeats.length === 0 ? undefined : repeats,
     checks: evaluateChecks(summaries, repeats),
-    bundle: options.bundle,
+    bundles: options.bundles,
   };
 
   mkdirSync(options.resultsDirectory, { recursive: true });

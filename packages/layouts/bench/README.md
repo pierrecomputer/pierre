@@ -231,11 +231,34 @@ field, this test fails.
 
 ## Bundle size
 
-Each run bundles each entry point on its own, with its imports and with React as
-an external, through Vite (Rolldown and the Oxc minifier, Lightning CSS for the
-stylesheet). The report's `bundle` section holds, for each entry point, the
-minified bytes and the wire bytes after gzip (level 9, for reference), brotli
-(quality 11), and Zstandard (level 19).
+Each run measures the code that an app loads. It builds each bundle with its
+imports and with React as an external, through Vite (Rolldown and the Oxc
+minifier, Lightning CSS for the stylesheets). There are two kinds of bundle:
+
+- An entry point on its own, as an app that imports only that entry gets it.
+- A consumer: a module that imports what an app uses, from one or more entry
+  points. `consumer: Layout + LayoutStore` imports `Layout` and `LayoutStore`,
+  which an app that renders a layout loads. The React entry imports
+  `LayoutStore` only as a type, so the entry alone leaves out the store. To add
+  a consumer, add its imports to `CONSUMERS` in `lib/bundle.ts`.
+
+The run builds each bundle in two modes:
+
+| Mode      | Build                                                                                                                                                                                                 |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app`     | Library mode with `rolldownOptions.output = { minify: true, comments: false }`. The minifier removes whitespace and comments, as an app build ships the code. Use these values.                       |
+| `library` | Vite library mode with the `es` format. Vite runs the minifier without its code generator, so whitespace and region comments stay. Reports before the `app` mode have only these values, in `bundle`. |
+
+The report's `bundles` section holds, for each mode, the minified bytes of each
+bundle and the wire bytes after gzip (level 9, for reference), brotli (quality
+11), and Zstandard (level 19). A stylesheet has the same size in both modes. An
+app that renders a layout also loads `@pierre/layouts/styles.css`, which the
+report gives as an entry point.
+
+To compare the bundle sizes of two reports, run
+`moon run layouts:bench-compare -- <before.json> <after.json>`. With a report
+before the `app` mode, it compares the `library` values and prints the `app`
+values alone.
 
 ## Checks
 
@@ -269,7 +292,9 @@ no budget check, because its fixture runs 200 ms of script on purpose.
   `memory` of the extra run.
 - `repeats`: the repeat scenario at each parameter set.
 - `checks`: the result of each check.
-- `bundle`: the size of each entry point.
+- `bundles`: the size of each entry point and each consumer, in `app` mode and
+  in `library` mode. A report before the `app` mode has `bundle` in its place,
+  with the `library` sizes of each entry point.
 
 To compare two revisions, run the benchmark on each revision on the same
 machine, and compare the medians of the two reports. Results from different
