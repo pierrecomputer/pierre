@@ -84,6 +84,11 @@ and UTF-16 conversion cannot overwrite records that it has not read. It clamps
 each record end to the input and emits uncovered bytes as plain text, so a
 custom lexer with wrong ends cannot drop text or read past the input.
 
+No lexing runs between two tokens in this pass, so the address of the next
+output byte is its critical path. The HTML loop of `emit` and `$recLinesPost`
+keep that address in a local: a global costs a store and a load for each update.
+For line records, `emit` checks the lexer records and converts them in place.
+
 [`lib/core.ts`](./lib/core.ts) is the `/core` entry. It loads no Wasm at import,
 so the shared functions and tokenizers need `init(module)` first.
 `createHighlighter()` loads the emitter on its first call.
@@ -245,10 +250,16 @@ adjacent ranges with the same token ID. Gaps extend the previous record or use
 
 Standalone lexers call the host to resolve embedded languages from the
 registered `langs`. The host copies each bounded body into a child lexer
-instance. It then copies the child's raw records to the parent's `reserve`
-address, and the parent's `append` export merges them in one call. Each open
+instance. The `embed` import also receives the parent's record address and
+capacity. The host copies the child's raw records to that address and writes
+their byte length to control word 10; the parent merges them when the import
+returns. The host calls `reserve` only when the records do not fit. Each open
 embedded stream has its own child instance, so nested templates and multiline
 fences preserve independent state.
+
+`embed` runs once for each embedded body, and most bodies are under 32 bytes.
+The host copies short bodies and records four bytes at a time through the
+`DataView`, because a typed array view costs more than the copy.
 
 Wasm instantiation is expensive, so each lexer keeps its finished child lexers
 for reuse. Whole-body lexers and stream lexers wait in separate pools, because a
@@ -294,7 +305,9 @@ ASCII record needs one subtraction. ID `0xffffffff` marks a line terminator.
 That record ends after the terminator.
 
 `lineRecordsToTokens` splits the source string into one `ThemedToken` array per
-line. The arrays exclude line terminators. Offsets for complete input and
+line. It reads the line marker as `-1` through an `Int32Array`: JSC compiles a
+`Uint32Array` read as int32, and `0xffffffff` made its optimized code exit on
+every call. The arrays exclude line terminators. Offsets for complete input and
 streams are UTF-16 indices from the start of the input. Live document offsets
 are relative to each line. Comment, string, and regex IDs also provide standard
 token types for bracket matching.
@@ -346,8 +359,10 @@ compares packed styles for hex themes, token IDs for variable output, and all
 theme styles for theme sets. Token calls keep the HTML caches.
 
 [`themes/index.ts`](./themes/index.ts) exports bundled themes, `cssVariables`,
-and `toCSS`, which produces CSS custom-property declarations. The build also
-emits individual theme modules and a lazy loader.
+and `toCSS`, which produces CSS custom-property declarations. In the bundle,
+each theme holds its `style` as a JSON string and parses it on first use,
+because the object literals of all themes cost about 4 ms at import. The build
+also emits individual theme modules and a lazy loader.
 
 ## ANSI input
 
@@ -468,8 +483,8 @@ all-language lexer `langs.js`, one lexer module per language in `dist/langs/`,
 the theme modules and their loader, and the tracked
 [`lib/languages.ts`](./lib/languages.ts) and
 [`lib/token-types.ts`](./lib/token-types.ts) tables. The build also writes the
-size of the combined module to `meta` in `package.json`. tsdown emits the host
-and declarations.
+sizes of `emitter.wasm` and `langs.wasm`, raw and with gzip, to `meta` in
+`package.json`. tsdown emits the host and declarations.
 
 The build makes each lexer module from [`src/lexer.wat`](./src/lexer.wat). It
 replaces the emitter, token, and memory files with the record-only files in
@@ -485,8 +500,9 @@ function. The build fails when a branch or pattern that it must drop is not in
 the source. Worker threads compile the lexer modules and the all-language lexer
 while the main thread compiles the combined module and the emitter.
 
-The `pad*` exports in [`src/highlights.wat`](./src/highlights.wat) keep V8's
-Wasm inlining budget. They are not dead code.
+V8 and JSC give a module a larger Wasm inlining budget when more of its function
+bodies are under 50 bytes. The build appends empty functions to each module
+until half of its functions are that small. They are not dead code.
 
 `buildHighlightsLexer` in `@pierre/wat-tools` compiles a custom lexer with
 `wat-tools/wat/lexer.wat` as its driver. The host gives its names IDs from 256,

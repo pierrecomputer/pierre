@@ -103,24 +103,4 @@
     (call $hlEnd)
     (global.set $streaming (i32.const 0))
     (global.set $streamDepth (i32.const 0)))
-
-  ;; WARNING: V8 scales its Wasm inlining budget by the module's share of
-  ;; functions under 50 bytes. These functions hold that share at 33%. At 32%
-  ;; every lexer was slower in V8 (3.6% in the geometric mean). Each body
-  ;; differs, or the optimizer merges them. When lexers gain functions, check
-  ;; the share and add to this list.
-  (func (export "pad0") (result i32) (i32.const 0))
-  (func (export "pad1") (result i32) (i32.const 1))
-  (func (export "pad2") (result i32) (i32.const 2))
-  (func (export "pad3") (result i32) (i32.const 3))
-  (func (export "pad4") (result i32) (i32.const 4))
-  (func (export "pad5") (result i32) (i32.const 5))
-  (func (export "pad6") (result i32) (i32.const 6))
-  (func (export "pad7") (result i32) (i32.const 7))
-  (func (export "pad8") (result i32) (i32.const 8))
-  (func (export "pad9") (result i32) (i32.const 9))
-  (func (export "pad10") (result i32) (i32.const 10))
-  (func (export "pad11") (result i32) (i32.const 11))
-  (func (export "pad12") (result i32) (i32.const 12))
-  (func (export "pad13") (result i32) (i32.const 13))
 )

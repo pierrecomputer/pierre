@@ -1,4 +1,4 @@
-import type { Theme, ThemedToken } from '../lib/core';
+import type { Theme, ThemedToken, ThemeStyle } from '../lib/core';
 import {
   ansiNames,
   defaultCssVariablePrefix,
@@ -148,303 +148,300 @@ export function getFontStyle(token: ThemedToken): string | undefined {
   return undefined;
 }
 
-export const andromeeda: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'andromeeda' },
+// WARNING: The build stores each bundled `style` as a JSON string (see
+// tsdown.config.ts): 75 object literals cost about 4 ms at import. Parse a
+// style on first use. Without the build, `style` is the object.
+function lazyTheme(id: string, { style, ...rest }: Theme): Theme {
+  let value: unknown = style;
+  return {
+    id,
+    ...rest,
+    get style() {
+      if (typeof value === 'string') value = JSON.parse(value);
+      return value as ThemeStyle;
+    },
+    set style(next) {
+      value = next;
+    },
+  };
+}
+
+export const andromeeda: Theme = /* @__PURE__ */ lazyTheme(
+  'andromeeda',
   andromeedaJson
 );
-export const auroraX: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'aurora-x' },
+export const auroraX: Theme = /* @__PURE__ */ lazyTheme(
+  'aurora-x',
   auroraXJson
 );
-export const ayuDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'ayu-dark' },
+export const ayuDark: Theme = /* @__PURE__ */ lazyTheme(
+  'ayu-dark',
   ayuDarkJson
 );
-export const ayuLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'ayu-light' },
+export const ayuLight: Theme = /* @__PURE__ */ lazyTheme(
+  'ayu-light',
   ayuLightJson
 );
-export const ayuMirage: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'ayu-mirage' },
+export const ayuMirage: Theme = /* @__PURE__ */ lazyTheme(
+  'ayu-mirage',
   ayuMirageJson
 );
-export const catppuccinFrappe: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'catppuccin-frappe' },
+export const catppuccinFrappe: Theme = /* @__PURE__ */ lazyTheme(
+  'catppuccin-frappe',
   catppuccinFrappeJson
 );
-export const catppuccinLatte: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'catppuccin-latte' },
+export const catppuccinLatte: Theme = /* @__PURE__ */ lazyTheme(
+  'catppuccin-latte',
   catppuccinLatteJson
 );
-export const catppuccinMacchiato: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'catppuccin-macchiato' },
+export const catppuccinMacchiato: Theme = /* @__PURE__ */ lazyTheme(
+  'catppuccin-macchiato',
   catppuccinMacchiatoJson
 );
-export const catppuccinMocha: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'catppuccin-mocha' },
+export const catppuccinMocha: Theme = /* @__PURE__ */ lazyTheme(
+  'catppuccin-mocha',
   catppuccinMochaJson
 );
-export const darkPlus: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'dark-plus' },
+export const darkPlus: Theme = /* @__PURE__ */ lazyTheme(
+  'dark-plus',
   darkPlusJson
 );
-export const dracula: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'dracula' },
-  draculaJson
-);
-export const draculaSoft: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'dracula-soft' },
+export const dracula: Theme = /* @__PURE__ */ lazyTheme('dracula', draculaJson);
+export const draculaSoft: Theme = /* @__PURE__ */ lazyTheme(
+  'dracula-soft',
   draculaSoftJson
 );
-export const everforestDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'everforest-dark' },
+export const everforestDark: Theme = /* @__PURE__ */ lazyTheme(
+  'everforest-dark',
   everforestDarkJson
 );
-export const everforestLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'everforest-light' },
+export const everforestLight: Theme = /* @__PURE__ */ lazyTheme(
+  'everforest-light',
   everforestLightJson
 );
-export const githubDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-dark' },
+export const githubDark: Theme = /* @__PURE__ */ lazyTheme(
+  'github-dark',
   githubDarkJson
 );
-export const githubDarkDefault: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-dark-default' },
+export const githubDarkDefault: Theme = /* @__PURE__ */ lazyTheme(
+  'github-dark-default',
   githubDarkDefaultJson
 );
-export const githubDarkDimmed: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-dark-dimmed' },
+export const githubDarkDimmed: Theme = /* @__PURE__ */ lazyTheme(
+  'github-dark-dimmed',
   githubDarkDimmedJson
 );
-export const githubDarkHighContrast: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-dark-high-contrast' },
+export const githubDarkHighContrast: Theme = /* @__PURE__ */ lazyTheme(
+  'github-dark-high-contrast',
   githubDarkHighContrastJson
 );
-export const githubLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-light' },
+export const githubLight: Theme = /* @__PURE__ */ lazyTheme(
+  'github-light',
   githubLightJson
 );
-export const githubLightDefault: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-light-default' },
+export const githubLightDefault: Theme = /* @__PURE__ */ lazyTheme(
+  'github-light-default',
   githubLightDefaultJson
 );
-export const githubLightHighContrast: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'github-light-high-contrast' },
+export const githubLightHighContrast: Theme = /* @__PURE__ */ lazyTheme(
+  'github-light-high-contrast',
   githubLightHighContrastJson
 );
-export const gruvboxDarkHard: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'gruvbox-dark-hard' },
+export const gruvboxDarkHard: Theme = /* @__PURE__ */ lazyTheme(
+  'gruvbox-dark-hard',
   gruvboxDarkHardJson
 );
-export const gruvboxDarkMedium: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'gruvbox-dark-medium' },
+export const gruvboxDarkMedium: Theme = /* @__PURE__ */ lazyTheme(
+  'gruvbox-dark-medium',
   gruvboxDarkMediumJson
 );
-export const gruvboxDarkSoft: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'gruvbox-dark-soft' },
+export const gruvboxDarkSoft: Theme = /* @__PURE__ */ lazyTheme(
+  'gruvbox-dark-soft',
   gruvboxDarkSoftJson
 );
-export const gruvboxLightHard: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'gruvbox-light-hard' },
+export const gruvboxLightHard: Theme = /* @__PURE__ */ lazyTheme(
+  'gruvbox-light-hard',
   gruvboxLightHardJson
 );
-export const gruvboxLightMedium: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'gruvbox-light-medium' },
+export const gruvboxLightMedium: Theme = /* @__PURE__ */ lazyTheme(
+  'gruvbox-light-medium',
   gruvboxLightMediumJson
 );
-export const gruvboxLightSoft: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'gruvbox-light-soft' },
+export const gruvboxLightSoft: Theme = /* @__PURE__ */ lazyTheme(
+  'gruvbox-light-soft',
   gruvboxLightSoftJson
 );
-export const horizon: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'horizon' },
-  horizonJson
-);
-export const horizonBright: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'horizon-bright' },
+export const horizon: Theme = /* @__PURE__ */ lazyTheme('horizon', horizonJson);
+export const horizonBright: Theme = /* @__PURE__ */ lazyTheme(
+  'horizon-bright',
   horizonBrightJson
 );
-export const houston: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'houston' },
-  houstonJson
-);
-export const kanagawaDragon: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'kanagawa-dragon' },
+export const houston: Theme = /* @__PURE__ */ lazyTheme('houston', houstonJson);
+export const kanagawaDragon: Theme = /* @__PURE__ */ lazyTheme(
+  'kanagawa-dragon',
   kanagawaDragonJson
 );
-export const kanagawaLotus: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'kanagawa-lotus' },
+export const kanagawaLotus: Theme = /* @__PURE__ */ lazyTheme(
+  'kanagawa-lotus',
   kanagawaLotusJson
 );
-export const kanagawaWave: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'kanagawa-wave' },
+export const kanagawaWave: Theme = /* @__PURE__ */ lazyTheme(
+  'kanagawa-wave',
   kanagawaWaveJson
 );
-export const laserwave: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'laserwave' },
+export const laserwave: Theme = /* @__PURE__ */ lazyTheme(
+  'laserwave',
   laserwaveJson
 );
-export const lightPlus: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'light-plus' },
+export const lightPlus: Theme = /* @__PURE__ */ lazyTheme(
+  'light-plus',
   lightPlusJson
 );
-export const materialTheme: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'material-theme' },
+export const materialTheme: Theme = /* @__PURE__ */ lazyTheme(
+  'material-theme',
   materialThemeJson
 );
-export const materialThemeDarker: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'material-theme-darker' },
+export const materialThemeDarker: Theme = /* @__PURE__ */ lazyTheme(
+  'material-theme-darker',
   materialThemeDarkerJson
 );
-export const materialThemeLighter: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'material-theme-lighter' },
+export const materialThemeLighter: Theme = /* @__PURE__ */ lazyTheme(
+  'material-theme-lighter',
   materialThemeLighterJson
 );
-export const materialThemeOcean: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'material-theme-ocean' },
+export const materialThemeOcean: Theme = /* @__PURE__ */ lazyTheme(
+  'material-theme-ocean',
   materialThemeOceanJson
 );
-export const materialThemePalenight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'material-theme-palenight' },
+export const materialThemePalenight: Theme = /* @__PURE__ */ lazyTheme(
+  'material-theme-palenight',
   materialThemePalenightJson
 );
-export const minDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'min-dark' },
+export const minDark: Theme = /* @__PURE__ */ lazyTheme(
+  'min-dark',
   minDarkJson
 );
-export const minLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'min-light' },
+export const minLight: Theme = /* @__PURE__ */ lazyTheme(
+  'min-light',
   minLightJson
 );
-export const monokai: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'monokai' },
-  monokaiJson
-);
-export const nightOwl: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'night-owl' },
+export const monokai: Theme = /* @__PURE__ */ lazyTheme('monokai', monokaiJson);
+export const nightOwl: Theme = /* @__PURE__ */ lazyTheme(
+  'night-owl',
   nightOwlJson
 );
-export const nightOwlLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'night-owl-light' },
+export const nightOwlLight: Theme = /* @__PURE__ */ lazyTheme(
+  'night-owl-light',
   nightOwlLightJson
 );
-export const nord: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'nord' },
-  nordJson
-);
-export const oneDarkPro: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'one-dark-pro' },
+export const nord: Theme = /* @__PURE__ */ lazyTheme('nord', nordJson);
+export const oneDarkPro: Theme = /* @__PURE__ */ lazyTheme(
+  'one-dark-pro',
   oneDarkProJson
 );
-export const oneLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'one-light' },
+export const oneLight: Theme = /* @__PURE__ */ lazyTheme(
+  'one-light',
   oneLightJson
 );
-export const plastic: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'plastic' },
-  plasticJson
-);
-export const poimandres: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'poimandres' },
+export const plastic: Theme = /* @__PURE__ */ lazyTheme('plastic', plasticJson);
+export const poimandres: Theme = /* @__PURE__ */ lazyTheme(
+  'poimandres',
   poimandresJson
 );
-export const red: Theme = /* @__PURE__ */ Object.assign({ id: 'red' }, redJson);
-export const rosePine: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'rose-pine' },
+export const red: Theme = /* @__PURE__ */ lazyTheme('red', redJson);
+export const rosePine: Theme = /* @__PURE__ */ lazyTheme(
+  'rose-pine',
   rosePineJson
 );
-export const rosePineDawn: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'rose-pine-dawn' },
+export const rosePineDawn: Theme = /* @__PURE__ */ lazyTheme(
+  'rose-pine-dawn',
   rosePineDawnJson
 );
-export const rosePineMoon: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'rose-pine-moon' },
+export const rosePineMoon: Theme = /* @__PURE__ */ lazyTheme(
+  'rose-pine-moon',
   rosePineMoonJson
 );
-export const slackDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'slack-dark' },
+export const slackDark: Theme = /* @__PURE__ */ lazyTheme(
+  'slack-dark',
   slackDarkJson
 );
-export const slackOchin: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'slack-ochin' },
+export const slackOchin: Theme = /* @__PURE__ */ lazyTheme(
+  'slack-ochin',
   slackOchinJson
 );
-export const snazzyLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'snazzy-light' },
+export const snazzyLight: Theme = /* @__PURE__ */ lazyTheme(
+  'snazzy-light',
   snazzyLightJson
 );
-export const solarizedDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'solarized-dark' },
+export const solarizedDark: Theme = /* @__PURE__ */ lazyTheme(
+  'solarized-dark',
   solarizedDarkJson
 );
-export const solarizedLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'solarized-light' },
+export const solarizedLight: Theme = /* @__PURE__ */ lazyTheme(
+  'solarized-light',
   solarizedLightJson
 );
-export const synthwave84: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'synthwave-84' },
+export const synthwave84: Theme = /* @__PURE__ */ lazyTheme(
+  'synthwave-84',
   synthwave84Json
 );
-export const tokyoNight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'tokyo-night' },
+export const tokyoNight: Theme = /* @__PURE__ */ lazyTheme(
+  'tokyo-night',
   tokyoNightJson
 );
-export const vesper: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'vesper' },
-  vesperJson
-);
-export const vitesseBlack: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'vitesse-black' },
+export const vesper: Theme = /* @__PURE__ */ lazyTheme('vesper', vesperJson);
+export const vitesseBlack: Theme = /* @__PURE__ */ lazyTheme(
+  'vitesse-black',
   vitesseBlackJson
 );
-export const vitesseDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'vitesse-dark' },
+export const vitesseDark: Theme = /* @__PURE__ */ lazyTheme(
+  'vitesse-dark',
   vitesseDarkJson
 );
-export const vitesseLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'vitesse-light' },
+export const vitesseLight: Theme = /* @__PURE__ */ lazyTheme(
+  'vitesse-light',
   vitesseLightJson
 );
-export const pierreDark: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-dark' },
+export const pierreDark: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-dark',
   pierreDarkJson
 );
 export const pierreDarkProtanopiaDeuteranopia: Theme =
-  /* @__PURE__ */ Object.assign(
-    { id: 'pierre-dark-protanopia-deuteranopia' },
+  /* @__PURE__ */ lazyTheme(
+    'pierre-dark-protanopia-deuteranopia',
     pierreDarkProtanopiaDeuteranopiaJson
   );
-export const pierreDarkSoft: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-dark-soft' },
+export const pierreDarkSoft: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-dark-soft',
   pierreDarkSoftJson
 );
-export const pierreDarkTritanopia: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-dark-tritanopia' },
+export const pierreDarkTritanopia: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-dark-tritanopia',
   pierreDarkTritanopiaJson
 );
-export const pierreDarkVibrant: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-dark-vibrant' },
+export const pierreDarkVibrant: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-dark-vibrant',
   pierreDarkVibrantJson
 );
-export const pierreLight: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-light' },
+export const pierreLight: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-light',
   pierreLightJson
 );
 export const pierreLightProtanopiaDeuteranopia: Theme =
-  /* @__PURE__ */ Object.assign(
-    { id: 'pierre-light-protanopia-deuteranopia' },
+  /* @__PURE__ */ lazyTheme(
+    'pierre-light-protanopia-deuteranopia',
     pierreLightProtanopiaDeuteranopiaJson
   );
-export const pierreLightSoft: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-light-soft' },
+export const pierreLightSoft: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-light-soft',
   pierreLightSoftJson
 );
-export const pierreLightTritanopia: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-light-tritanopia' },
+export const pierreLightTritanopia: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-light-tritanopia',
   pierreLightTritanopiaJson
 );
-export const pierreLightVibrant: Theme = /* @__PURE__ */ Object.assign(
-  { id: 'pierre-light-vibrant' },
+export const pierreLightVibrant: Theme = /* @__PURE__ */ lazyTheme(
+  'pierre-light-vibrant',
   pierreLightVibrantJson
 );
 

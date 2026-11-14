@@ -256,6 +256,22 @@ test('themes contains every bundled JSON theme', () => {
   ).toBe(true);
 });
 
+test('a bundled theme keeps its JSON style and accepts a new one', () => {
+  const theme = themes.find(({ id }) => id === 'vesper')!;
+  const json = JSON.parse(
+    readFileSync(new URL('../themes/vesper.json', import.meta.url), 'utf-8')
+  ) as typeof theme;
+  expect(Object.keys(theme)).toEqual(['id', 'name', 'appearance', 'style']);
+  const { style } = theme;
+  expect(style).toEqual(json.style);
+  expect(theme.style).toBe(style);
+  expect({ ...theme }.style).toBe(style);
+  theme.style = {};
+  expect(theme.style).toEqual({});
+  theme.style = style;
+  expect(theme.style).toBe(style);
+});
+
 test('themes resolve by canonical ID, including accented display names', async () => {
   const highlighter = await combinedPromise;
   for (const theme of themes) {

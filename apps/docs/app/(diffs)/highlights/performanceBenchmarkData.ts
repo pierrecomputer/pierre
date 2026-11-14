@@ -5,22 +5,22 @@ export const HIGHLIGHTS_LARGE_FILE_RESULTS = [
   {
     language: 'TypeScript',
     size: '517 KiB',
-    speedup: 282,
+    speedup: 310,
   },
   {
     language: 'HTML',
     size: '474 KiB',
-    speedup: 255,
+    speedup: 210,
   },
   {
     language: 'CSS',
     size: '379 KiB',
-    speedup: 227,
+    speedup: 231,
   },
   {
     language: 'JSONC',
     size: '292 KiB',
-    speedup: 142,
+    speedup: 139,
   },
 ] as const;
 

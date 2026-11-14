@@ -59,7 +59,9 @@
     "typescript": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 394508,
-    "highlights.wasm.gz": 185029
+    "emitter.wasm": 6068,
+    "emitter.wasm.gz": 3289,
+    "langs.wasm": 355055,
+    "langs.wasm.gz": 168256
   }
 }

@@ -483,8 +483,25 @@ export function initEmitter(wasm: WebAssembly.Module): void {
   emitterModule = Promise.resolve(wasm);
 }
 
-/** Decode a base64 lexer. */
-function lexerBytes(wasm: string): Uint8Array<ArrayBuffer> {
+/** Decode base64 Wasm. */
+export function wasmBytes(wasm: string): Uint8Array<ArrayBuffer> {
+  // WARNING: This runs at import, before the JIT. For the combined module,
+  // the loop took 0.7 ms (Bun) and 0.9 ms (Node) longer than a native
+  // decoder. Node has `fromBase64` from version 25.
+  const native = globalThis as unknown as {
+    Uint8Array: { fromBase64?: (text: string) => Uint8Array<ArrayBuffer> };
+    Buffer?: { from: (text: string, encoding: 'base64') => Uint8Array };
+  };
+  if (native.Uint8Array.fromBase64 !== undefined)
+    return native.Uint8Array.fromBase64(wasm);
+  if (native.Buffer !== undefined) {
+    const buffer = native.Buffer.from(wasm, 'base64');
+    return new Uint8Array(
+      buffer.buffer as ArrayBuffer,
+      buffer.byteOffset,
+      buffer.length
+    );
+  }
   const binary = atob(wasm);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -495,7 +512,7 @@ export async function createHighlighter(
   options: HighlighterOptions
 ): Promise<RegisteredHighlighter> {
   emitterModule ??= import('./emitter.wasm.mjs')
-    .then(({ default: bytes }) => WebAssembly.compile(bytes))
+    .then(({ default: wasm }) => WebAssembly.compile(wasmBytes(wasm)))
     .catch((error: unknown) => {
       emitterModule = undefined;
       throw error;
@@ -508,12 +525,10 @@ export async function createHighlighter(
       if (typeof wasm !== 'string') return Promise.resolve(wasm);
       let compiledModule = lexerModules.get(language);
       if (compiledModule === undefined) {
-        compiledModule = WebAssembly.compile(lexerBytes(wasm)).then(
-          (module) => {
-            lexerModules.set(language, module);
-            return module;
-          }
-        );
+        compiledModule = WebAssembly.compile(wasmBytes(wasm)).then((module) => {
+          lexerModules.set(language, module);
+          return module;
+        });
         lexerModules.set(language, compiledModule);
       }
       return Promise.resolve(compiledModule);
@@ -629,12 +644,18 @@ function buildHighlighter(
             languageIds.get(name) ?? (combined ? LANGS[name] : undefined);
           return id !== undefined && id > 0 ? id : 0;
         },
+        // WARNING: This runs once for each embedded body, and most bodies
+        // are under 32 bytes. Short copies use loops because a typed array
+        // view costs about 30 ns. The lexer appends the records itself: it
+        // reads their byte length from control word 10.
         embed: (
           id: number,
           from: number,
           to: number,
           reset: number,
-          context: number
+          context: number,
+          out: number,
+          cap: number
         ) => {
           if (reset === 2) {
             const child = streams.get(context);
@@ -652,15 +673,13 @@ function buildHighlighter(
             registration = { module: emitter, id };
             registrations.set(id, registration);
           }
-          if (registration === undefined || depth >= 64) {
-            append(0, from, to);
-            return context;
-          }
+          if (registration === undefined || depth >= 64) return context;
           const { module } = registration;
           let child: HighlightsHighlighter;
+          let free: HighlightsHighlighter[] | undefined;
           if (reset < 0) {
-            child =
-              idle[0].get(module)?.pop() ?? createLexer(module, depth + 1);
+            free = idle[0].get(module);
+            child = free?.pop() ?? createLexer(module, depth + 1);
           } else {
             if (context === 0) {
               do context++;
@@ -678,24 +697,46 @@ function buildHighlighter(
             }
           }
           lexer.bindMemory();
-          const records = child.lexRecords(
+          let length = to - from;
+          let at = child.inputPtr;
+          // WARNING: The four-byte steps can pass the end by three bytes.
+          // Both buffers keep 96 spare bytes there.
+          if (length <= 96 && at + 192 <= child.buffer.length) {
+            for (let i = 0; i < length; i += 4)
+              child.dv.setUint32(
+                at + i,
+                lexer.dv.getUint32(from + i, true),
+                true
+              );
+          } else length = child.writeInput(lexer.buffer.subarray(from, to));
+          at = child.lexRecords(
             registration.id,
-            child.writeInput(lexer.buffer.subarray(from, to)),
+            length,
             reset < 0 ? undefined : reset !== 0,
             5
           );
-          const bytes = child.dv.getUint32(10, true);
-          if (bytes > 0) {
+          length = child.dv.getUint32(10, true);
+          if (length > 0) {
             // WARNING: `reserve` can grow the memory and detach the buffer.
-            const target = reserve(bytes);
-            lexer.bindMemory();
-            lexer.buffer.set(
-              child.buffer.subarray(records, records + bytes),
-              target
-            );
+            if (out + length + 16 > cap) {
+              out = reserve(length);
+              lexer.bindMemory();
+            }
+            if (length <= 96) {
+              for (let i = 0; i < length; i += 4)
+                lexer.dv.setUint32(
+                  out + i,
+                  child.dv.getUint32(at + i, true),
+                  true
+                );
+            } else
+              lexer.buffer.set(child.buffer.subarray(at, at + length), out);
+            lexer.dv.setUint32(10, length, true);
           }
-          append(bytes, from, to);
-          if (reset < 0) release(0, module, child);
+          if (reset < 0 && child.pageN <= 16) {
+            if (free === undefined) idle[0].set(module, [child]);
+            else free.push(child);
+          }
           return context;
         },
       }
@@ -704,11 +745,6 @@ function buildHighlighter(
     // at 8 levels, as the combined lexer does.
     lexer.buffer[14] = depth;
     const reserve = lexer.instance.exports.reserve as (bytes: number) => number;
-    const append = lexer.instance.exports.append as (
-      bytes: number,
-      from: number,
-      to: number
-    ) => void;
     return lexer;
   }
   const themes = new Map<string, Theme>();
@@ -875,7 +911,7 @@ export function registerLanguages(langs: readonly Language[]): void {
     if (typeof wasm !== 'string') return wasm;
     let compiledModule = lexerModules.get(language);
     if (!(compiledModule instanceof WebAssembly.Module)) {
-      compiledModule = new WebAssembly.Module(lexerBytes(wasm));
+      compiledModule = new WebAssembly.Module(wasmBytes(wasm));
       lexerModules.set(language, compiledModule);
     }
     return compiledModule;

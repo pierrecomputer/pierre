@@ -439,10 +439,14 @@ export function lineRecordsToTokens(
   const { styles, fg, role } = themes[0];
   const htmlStyles =
     role === 'single' ? undefined : themeHtmlStyles(themes, cssVariablePrefix);
+  // WARNING: Read the line marker as -1. JSC compiles a `Uint32Array` read as
+  // int32, and 0xffffffff made the optimized code exit on every call: small
+  // inputs took twice as long in Bun.
+  const types = new Int32Array(recs.buffer, recs.byteOffset, recs.length);
   let start = 0;
   for (let rec = 0; ; rec += 2) {
     const first = rec;
-    while (rec < recs.length && recs[rec + 1] !== 0xffffffff) rec += 2;
+    while (rec < recs.length && types[rec + 1] !== -1) rec += 2;
     const end = rec === first ? start : recs[rec - 2];
     let line: ThemedToken[];
     if (max > 0 && end - start >= max) {
