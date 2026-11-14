@@ -51,6 +51,7 @@
     --diffs-widget-shadow:
       inset 0 0 0 1px var(--diffs-search-panel-bg),
       0 4px 8px rgb(0 0 0 / 0.075), 0 6px 18px rgb(0 0 0 / 0.075);
+    --diffs-search-panel-padding: 4px;
     position: relative;
     z-index: 100;
     width: fit-content;
@@ -58,7 +59,7 @@
     flex-shrink: 0;
     align-items: stretch;
     gap: 8px;
-    padding: 4px;
+    padding: var(--diffs-search-panel-padding);
     max-width: 100%;
     min-width: 260px;
     margin-inline: auto var(--diffs-search-panel-inset-right, 16px);
@@ -92,14 +93,25 @@
   }
 
   [data-search-grid] {
+    --diffs-search-panel-column-gap: 6px;
     display: grid;
+    grid-template-columns: auto auto auto;
+    grid-template-areas: 'find matches nav';
+    align-items: center;
+    gap: 4px var(--diffs-search-panel-column-gap);
+    width: 100%;
+  }
+
+  /* A panel that can replace has a leading column for the replace toggle. */
+  [data-search-grid][data-can-replace] {
     grid-template-columns: auto auto auto auto;
+    grid-template-areas: 'toggle find matches nav';
+  }
+
+  [data-search-grid][data-mode='replace'] {
     grid-template-areas:
       'toggle find    matches nav'
       '.      replace actions .';
-    align-items: center;
-    gap: 4px 6px;
-    width: 100%;
   }
 
   [data-input-box][data-find] {
@@ -118,32 +130,34 @@
     grid-area: actions;
   }
 
-  [data-search-grid][data-mode='find'] {
-    grid-template-areas: 'toggle find matches nav';
-  }
-
   [data-search-grid][data-mode='find'] [data-replace-cell] {
     display: none;
   }
 
   @container search-panel (width < 400px) {
     [data-editor-widget] {
-      padding: 10px;
+      --diffs-search-panel-padding: 10px;
     }
 
-    [data-search-grid][data-mode='replace'] {
-      grid-template-columns: auto auto 1fr auto;
+    [data-search-grid] {
+      grid-template-columns: auto 1fr auto;
       grid-template-areas:
-        'toggle find    find    find'
-        '.      replace replace replace'
-        '.      nav     matches actions';
+        'find find    find'
+        'nav  matches matches';
     }
 
-    [data-search-grid][data-mode='find'] {
+    [data-search-grid][data-can-replace] {
       grid-template-columns: auto auto 1fr auto;
       grid-template-areas:
         'toggle find find    find'
         '.      nav  matches matches';
+    }
+
+    [data-search-grid][data-mode='replace'] {
+      grid-template-areas:
+        'toggle find    find    find'
+        '.      replace replace replace'
+        '.      nav     matches actions';
     }
 
     [data-replace-actions] {
@@ -291,6 +305,9 @@
     grid-area: toggle;
     align-self: stretch;
     height: auto;
+    margin-inline-end: calc(
+      var(--diffs-search-panel-padding) - var(--diffs-search-panel-column-gap)
+    );
 
     &[aria-expanded='false'] svg {
       transform: rotate(-90deg);

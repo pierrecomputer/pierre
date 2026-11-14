@@ -488,10 +488,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         }
       },
     });
-    replaceToggleElement.hidden = replaceHandlers == null;
-    replaceToggleElement.ariaExpanded = String(
-      normalizeMode(mode) === 'replace'
-    );
 
     // Cells are positioned by CSS grid-template-areas (see SearchPanelWidget.css), so DOM
     // order here only drives tab/reading order, not layout. Keep the replace
@@ -511,14 +507,22 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       ],
     });
 
+    // Puts the panel's mode, and whether it can replace at all, on the grid
+    // and the replace toggle. The stylesheet lays the grid out from these.
+    const syncReplaceControls = () => {
+      const canReplace = replaceHandlers != null;
+      const currentMode = normalizeMode(requestedMode);
+      gridElement.dataset.mode = currentMode;
+      gridElement.toggleAttribute('data-can-replace', canReplace);
+      replaceToggleElement.hidden = !canReplace;
+      replaceToggleElement.ariaExpanded = String(currentMode === 'replace');
+    };
+    syncReplaceControls();
+
     this.#hasReplaceHandlers = () => replaceHandlers != null;
     this.#setReplaceHandlers = (handlers) => {
       replaceHandlers = handlers;
-      gridElement.dataset.mode = normalizeMode(requestedMode);
-      replaceToggleElement.hidden = replaceHandlers == null;
-      replaceToggleElement.ariaExpanded = String(
-        gridElement.dataset.mode === 'replace'
-      );
+      syncReplaceControls();
       emitState();
     };
 
@@ -526,11 +530,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // hiding the replace cells, then returns focus to the find input.
     const applyMode = (next: SearchPanelMode) => {
       requestedMode = next;
-      gridElement.dataset.mode = normalizeMode(requestedMode);
-      replaceToggleElement.hidden = replaceHandlers == null;
-      replaceToggleElement.ariaExpanded = String(
-        gridElement.dataset.mode === 'replace'
-      );
+      syncReplaceControls();
       this.#inputElement.focus();
       this.#inputElement.select();
       emitState();
