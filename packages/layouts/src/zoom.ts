@@ -1,6 +1,35 @@
-// Zoom: the edge past which each pane leaves when another pane fills the
-// layout.
+// Zoom: one pane fills the layout, and the others wait under it. The store
+// command, and the edge past which each pane leaves when another pane zooms.
+import { activatePane, stackOf } from './model';
+import type { StoreFeature } from './store';
 import type { Edge, Rect } from './types';
+
+export interface ZoomCommands {
+  /**
+   * Zoom a pane, the focused pane by default, or restore it. A pane of a stack
+   * also becomes active.
+   */
+  toggleZoom(id?: string): void;
+}
+
+/** The zoom command of a store. */
+export const zoom: StoreFeature<ZoomCommands> = {
+  commands: ({ get, commit, requirePane }) => ({
+    toggleZoom(id = get().focusedPane) {
+      requirePane(id);
+      const state = get();
+      const restore = state.zoomedPane === id;
+      commit({
+        root:
+          restore || stackOf(state.root, id) === null
+            ? state.root
+            : activatePane(state.root, id),
+        focusedPane: id,
+        zoomedPane: restore ? null : id,
+      });
+    },
+  }),
+};
 
 /** Choose the direction of a zoom exit, preferring an edge the pane already touches. */
 export function getExitEdge(

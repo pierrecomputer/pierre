@@ -7,6 +7,7 @@ export {
 export { type EditCommands, edits } from './edits';
 export { swapPanes } from './edits-model';
 export { computeLayout } from './geometry';
+export { type HiddenPaneCommands, hiddenPanes } from './hidden-panes';
 export { LayoutStore, type LayoutStoreOptions } from './layout-store';
 export {
   getPanes,
@@ -20,7 +21,9 @@ export {
 } from './model';
 export { binaryTree } from './models/binary';
 export { naryTree } from './models/n-ary';
+export { persistence, type PersistenceCommands } from './persistence';
 export { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
+export { type StackCommands, stacks } from './stacks';
 export {
   type CommandsOf,
   type CoreLayoutStore,
@@ -82,4 +85,4 @@ export type {
   CSSSeparator,
   PaneEdges,
 } from './css-layout';
-export { getExitEdge } from './zoom';
+export { getExitEdge, zoom, type ZoomCommands } from './zoom';

@@ -1,6 +1,8 @@
-import { LayoutStore } from './layout-store';
+import { edits } from './edits';
 import { getPanes } from './model';
 import { naryTree } from './models/n-ary';
+import { stacks } from './stacks';
+import { createLayoutStore } from './store';
 import type { LayoutNode, PaneNode, TreeModel } from './types';
 import { groupsOf } from './view';
 
@@ -39,7 +41,7 @@ export function reconcileLayoutTree(
   const missing = wanted.filter((id) => !present.has(id));
   const stale = [...present].filter((id) => !wantedSet.has(id));
   if (missing.length === 0 && stale.length === 0) return root;
-  const store = new LayoutStore(root, { model });
+  const store = createLayoutStore(root, [edits(model), stacks]);
   for (const id of stale) store.close(id);
   for (const id of missing) {
     const first = groupsOf(store.getSnapshot().root)[0];

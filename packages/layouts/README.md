@@ -368,16 +368,34 @@ content does not render again.
 `createLayoutStore(root, features)` creates a store whose other commands come
 from its features. Without features, the store has the core commands only:
 `getSnapshot`, `subscribe`, `setRoot`, `setSizes`, `setCollapsed`, and
-`focusPane`, and it keeps the shape of each tree that it receives.
-`edits(model)` adds `split`, `close`, `move`, and `swap`, and gives the store
-its tree model. A bundler keeps only the features that an app imports, so a
-store with no tree edits loads no tree model.
+`focusPane`, and it keeps the shape of each tree that it receives. Each feature
+adds its commands:
+
+| Feature        | Commands                                                        |
+| -------------- | --------------------------------------------------------------- |
+| `edits(model)` | `split`, `close`, `move`, `swap`; the store gets the tree model |
+| `stacks`       | `activate`, `addTab`, `moveToStack`, `moveTab`                  |
+| `zoom`         | `toggleZoom`                                                    |
+| `hiddenPanes`  | `setHidden`                                                     |
+| `persistence`  | `serialize`, `restore`, `toStoredTree`, `setStoredTree`         |
+
+A bundler keeps only the features that an app imports, so a store with no tree
+edits loads no tree model. A move of a tab into another stack takes the pane out
+of its place with the tree model, so it needs `edits`. `restore` sets the tree,
+the focus, and the zoom in one change.
 
 ```ts
-import { createLayoutStore, edits, naryTree } from '@pierre/layouts';
+import {
+  createLayoutStore,
+  edits,
+  naryTree,
+  stacks,
+  zoom,
+} from '@pierre/layouts';
 
-const store = createLayoutStore(root, [edits(naryTree)]);
+const store = createLayoutStore(root, [edits(naryTree), stacks, zoom]);
 store.split('editor', { type: 'pane', id: 'terminal' }, 'bottom');
+store.toggleZoom('terminal');
 ```
 
 A view calls each command through the store object, so an app wraps a command
@@ -385,7 +403,8 @@ with an object of its own:
 `{ ...store, close(id) { record(id); store.close(id); } }`. A feature is a
 `StoreFeature`: an optional tree model, and a function that builds its commands
 from the `StoreContext` of the store. `LayoutStore` is the store of the `Layout`
-component: a class with every command, over `createLayoutStore`.
+component: a class with every command, over `createLayoutStore` with every
+feature.
 
 Subscribe with `store.subscribe(listener)` and read with `store.getSnapshot()`.
 Snapshots are immutable. Invalid tree updates throw before changing state.

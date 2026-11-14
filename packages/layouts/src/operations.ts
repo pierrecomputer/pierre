@@ -1,6 +1,8 @@
-import { LayoutStore } from './layout-store';
+import { type EditCommands, edits } from './edits';
 import { findNode, getPanes, parentOf, stackOf } from './model';
 import { naryTree } from './models/n-ary';
+import { type StackCommands, stacks } from './stacks';
+import { createLayoutStore, type StoreFeature, type StoreWith } from './store';
 import type {
   ChildSize,
   Edge,
@@ -10,6 +12,11 @@ import type {
   TreeModel,
 } from './types';
 import { groupOf, groupsOf } from './view';
+
+// The store of a batch of operations: tree edits and tabs.
+type OperationStore = StoreWith<
+  [StoreFeature<EditCommands>, StoreFeature<StackCommands>]
+>;
 
 export type TabPlace =
   | { readonly into: string; readonly index?: number }
@@ -61,7 +68,10 @@ export function applyLayoutOperations(
   operations: readonly LayoutTreeOperation[],
   options: ApplyLayoutOperationsOptions = {}
 ): LayoutNode {
-  const store = new LayoutStore(root, { model: options.model ?? naryTree });
+  const store: OperationStore = createLayoutStore(root, [
+    edits(options.model ?? naryTree),
+    stacks,
+  ]);
   const maxGroups = options.maxGroups ?? Infinity;
   for (const operation of operations) {
     const before = groupsOf(store.getSnapshot().root).length;
@@ -77,7 +87,7 @@ export function applyLayoutOperations(
 }
 
 function applyOperation(
-  store: LayoutStore,
+  store: OperationStore,
   operation: LayoutTreeOperation
 ): void {
   switch (operation.op) {
@@ -100,21 +110,21 @@ function applyOperation(
   }
 }
 
-function hasTab(store: LayoutStore, id: string): boolean {
+function hasTab(store: OperationStore, id: string): boolean {
   return getPanes(store.getSnapshot().root).some((pane) => pane.id === id);
 }
 
-function requireTab(store: LayoutStore, id: string): void {
+function requireTab(store: OperationStore, id: string): void {
   if (!hasTab(store, id))
     throw new LayoutOperationError('tab_not_found', `Tab not found: ${id}`);
 }
 
-function selectTab(store: LayoutStore, id: string): void {
+function selectTab(store: OperationStore, id: string): void {
   if (stackOf(store.getSnapshot().root, id) !== null) store.activate(id);
 }
 
 function openTab(
-  store: LayoutStore,
+  store: OperationStore,
   id: string,
   place: TabPlace | undefined,
   select: boolean
@@ -144,7 +154,7 @@ function openTab(
   store.split(place.beside, pane, place.edge);
 }
 
-function closeTab(store: LayoutStore, id: string): void {
+function closeTab(store: OperationStore, id: string): void {
   requireTab(store, id);
   if (getPanes(store.getSnapshot().root).length === 1)
     throw new LayoutOperationError(
@@ -154,7 +164,7 @@ function closeTab(store: LayoutStore, id: string): void {
   store.close(id);
 }
 
-function moveTab(store: LayoutStore, id: string, place: TabPlace): void {
+function moveTab(store: OperationStore, id: string, place: TabPlace): void {
   requireTab(store, id);
   const root = store.getSnapshot().root;
   if ('into' in place) {
@@ -231,7 +241,7 @@ function isChildSize(size: ChildSize): boolean {
 }
 
 function resizeSplit(
-  store: LayoutStore,
+  store: OperationStore,
   tab: string,
   sizes: readonly ChildSize[],
   level: number

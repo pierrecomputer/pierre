@@ -6,10 +6,14 @@ import {
   type Edge,
   edits,
   getPanes,
+  hiddenPanes,
   type LayoutNode,
   LayoutStore,
   naryTree,
+  persistence,
+  stacks,
   type StoreFeature,
+  zoom,
 } from '../src';
 
 const pane = (id: string) => ({ type: 'pane', id }) as const;
@@ -121,6 +125,82 @@ describe('createLayoutStore', () => {
     store.close('a');
     expect(closed).toEqual(['a']);
     expect(ids(store.getSnapshot().root)).toEqual(['b', 'c']);
+  });
+});
+
+describe('store features', () => {
+  const tabs: LayoutNode = {
+    type: 'split',
+    id: 'row',
+    direction: 'horizontal',
+    sizes: [1, 1],
+    children: [
+      {
+        type: 'stack',
+        id: 's',
+        active: 'a',
+        children: [pane('a'), pane('b')],
+      },
+      pane('c'),
+    ],
+  };
+
+  test('zoom zooms the focused pane and restores it', () => {
+    const store = createLayoutStore(row, [zoom]);
+    store.toggleZoom();
+    expect(store.getSnapshot().zoomedPane).toBe('a');
+    store.toggleZoom('a');
+    expect(store.getSnapshot().zoomedPane).toBe(null);
+  });
+
+  test('stacks shows and orders tabs without a tree model', () => {
+    const store = createLayoutStore(tabs, [stacks]);
+    store.activate('b');
+    store.moveTab('b', 0);
+    const { root, focusedPane } = store.getSnapshot();
+    expect(focusedPane).toBe('b');
+    expect(ids(root)).toEqual(['b', 'a', 'c']);
+    // A move into another stack takes the pane out with the tree model.
+    expect(() => store.moveToStack('c', 'a')).toThrow('needs a tree model');
+  });
+
+  test('stacks moves a pane into another stack with the tree model of edits', () => {
+    const store = createLayoutStore(tabs, [edits(naryTree), stacks]);
+    store.moveToStack('c', 'a', 0);
+    const { root, focusedPane } = store.getSnapshot();
+    expect(root.type).toBe('stack');
+    expect(ids(root)).toEqual(['c', 'a', 'b']);
+    expect(focusedPane).toBe('c');
+  });
+
+  test('hiddenPanes hides a pane and keeps the last visible pane', () => {
+    const store = createLayoutStore(row, [hiddenPanes]);
+    store.setHidden('a', true);
+    store.setHidden('b', true);
+    store.setHidden('c', true);
+    const hidden = getPanes(store.getSnapshot().root).map(
+      ({ hidden }) => hidden === true
+    );
+    expect(hidden).toEqual([true, true, false]);
+    expect(store.getSnapshot().focusedPane).toBe('c');
+  });
+
+  test('persistence restores the tree, the focus, and the zoom in one change', () => {
+    const source = createLayoutStore(tabs, [stacks, zoom, persistence]);
+    source.activate('b');
+    source.toggleZoom('c');
+    const saved = source.serialize();
+    const store = createLayoutStore(row, [persistence]);
+    let calls = 0;
+    store.subscribe(() => calls++);
+    store.restore(saved);
+    expect(calls).toBe(1);
+    expect(store.getSnapshot()).toEqual(source.getSnapshot());
+    expect(Object.isFrozen(store.getSnapshot().root)).toBe(true);
+    expect(store.toStoredTree()).toEqual({
+      version: 3,
+      root: source.getSnapshot().root,
+    });
   });
 });
 
