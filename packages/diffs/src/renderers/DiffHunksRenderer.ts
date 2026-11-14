@@ -72,6 +72,7 @@ import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
+import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { createGutterWrapper, createHastElement } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
@@ -165,6 +166,13 @@ export interface HunksRenderResult {
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
+}
+
+// What a collapsed diff shows: its header and the theme's styles.
+export interface CollapsedDiffRenderResult {
+  headerElement: HASTElement | undefined;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 let instanceId = -1;
@@ -768,9 +776,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  public initializeHighlighter(): Promise<DiffsHighlighter> {
+  public initializeHighlighter(
+    langs: SupportedLanguages[] = this.computedLangs
+  ): Promise<DiffsHighlighter> {
     return getSharedHighlighter(
-      getHighlighterOptions(this.computedLangs, {
+      getHighlighterOptions(langs, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter: resolvePreferredHighlighter(
           this.workerManager,
@@ -993,6 +1003,49 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     return getHighlighterIfLoaded({ theme: options.theme }) != null;
+  }
+
+  // Renders what a collapsed diff shows: its header and the theme's styles.
+  // None of the diff's lines are on screen, so no rows are built and nothing
+  // is highlighted. Returns undefined until the theme has loaded, and asks for
+  // another render once it has.
+  public renderCollapsed(
+    diff: FileDiffMetadata
+  ): CollapsedDiffRenderResult | undefined {
+    this.diff = diff;
+    // Two kinds of cached state do not outlast a collapse. Rows of another
+    // diff are only kept while they are on screen, waiting for this diff's
+    // highlight. Hydrated content exists only as prerendered DOM, which
+    // collapsing removes.
+    const { renderCache } = this;
+    if (
+      renderCache != null &&
+      (!areDiffTargetsEqual(renderCache.diff, diff) ||
+        (renderCache.hydrated === true && renderCache.result == null))
+    ) {
+      this.clearRenderCache();
+    }
+    const theme = this.getLocalHighlightTheme();
+    const highlighter = getHighlighterIfLoaded({ theme });
+    if (highlighter == null) {
+      void this.initializeHighlighter(['text'])
+        .then(() => this.onRenderUpdate?.())
+        .catch((error: unknown) => {
+          if (!(error instanceof HighlighterDisposedError)) {
+            this.onHighlightError(error);
+          }
+        });
+      return undefined;
+    }
+    const { disableFileHeader = false } = this.options;
+    return {
+      headerElement: disableFileHeader ? undefined : this.renderHeader(diff),
+      themeStyles: getHighlighterThemeStyles({ theme, highlighter }),
+      baseThemeType:
+        typeof theme === 'string'
+          ? highlighter.getTheme(theme).type
+          : undefined,
+    };
   }
 
   public renderDiff(

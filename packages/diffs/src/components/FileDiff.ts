@@ -7,7 +7,6 @@ import {
   DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
   EMPTY_LINE_ANNOTATIONS,
-  EMPTY_RENDER_RANGE,
   HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
@@ -1645,9 +1644,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
     this.syncInteractionOptions();
 
-    this.prepareRenderData(
-      this.hunksRenderer.getDiffForNextRender(workingDiff)
-    );
+    this.prepareRenderData(this.getDiffForNextRender(workingDiff));
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;
@@ -1673,27 +1670,24 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.clearAuxiliaryNodes();
 
       try {
-        const hunksResult = this.hunksRenderer.renderDiff(
-          workingDiff,
-          EMPTY_RENDER_RANGE
-        );
-        if (hunksResult != null) {
+        const collapsedResult = this.hunksRenderer.renderCollapsed(workingDiff);
+        if (collapsedResult != null) {
           this.applyThemeState(
             fileContainer,
-            hunksResult.themeStyles,
+            collapsedResult.themeStyles,
             themeType,
-            hunksResult.baseThemeType
+            collapsedResult.baseThemeType
           );
         }
-        if (hunksResult?.headerElement != null) {
+        if (collapsedResult?.headerElement != null) {
           this.applyHeaderToDOM(
-            hunksResult.headerElement,
+            collapsedResult.headerElement,
             fileContainer,
-            hunksResult.fileDiff
+            workingDiff
           );
         }
         this.renderSeparators([]);
-        this.adoptRenderData(hunksResult?.fileDiff ?? workingDiff);
+        this.adoptRenderData(workingDiff);
         this.injectUnsafeCSS();
       } catch (error: unknown) {
         if (disableErrorHandling) {
@@ -1862,7 +1856,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       };
     }
     const workingDiff = this.getWorkingDiff(fileDiff) ?? fileDiff;
-    const nextDiff = this.hunksRenderer.getDiffForNextRender(workingDiff);
+    const nextDiff = this.getDiffForNextRender(workingDiff);
     return {
       fileDiff: nextDiff,
       lineAnnotations:
@@ -1870,6 +1864,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           ? lineAnnotations
           : this.getAnnotationsForDiff(nextDiff),
     };
+  }
+
+  // The diff the next render shows. After a diff is replaced, the renderer
+  // keeps the previous diff's rows on screen until the new one is highlighted.
+  // A collapsed item has no rows on screen, so it shows the new diff at once.
+  protected getDiffForNextRender(
+    workingDiff: FileDiffMetadata
+  ): FileDiffMetadata {
+    const { collapsed = false } = this.options;
+    return collapsed
+      ? workingDiff
+      : this.hunksRenderer.getDiffForNextRender(workingDiff);
   }
 
   // Build rows using annotations for the diff the renderer selected.

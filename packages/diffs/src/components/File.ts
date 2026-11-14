@@ -6,7 +6,6 @@ import {
   DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
   EMPTY_LINE_ANNOTATIONS,
-  EMPTY_RENDER_RANGE,
   HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
@@ -432,7 +431,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       };
     }
     const workingFile = this.getWorkingFile(file) ?? file;
-    const nextFile = this.fileRenderer.getFileForNextRender(workingFile);
+    const nextFile = this.getFileForNextRender(workingFile);
     return {
       file: nextFile,
       lineAnnotations:
@@ -440,6 +439,16 @@ export class File<LAnnotation = undefined, Caret = undefined> {
           ? lineAnnotations
           : this.getAnnotationsForFile(nextFile),
     };
+  }
+
+  // The file the next render shows. After a file is replaced, the renderer
+  // keeps the previous file's rows on screen until the new one is highlighted.
+  // A collapsed item has no rows on screen, so it shows the new file at once.
+  protected getFileForNextRender(workingFile: FileContents): FileContents {
+    const { collapsed = false } = this.options;
+    return collapsed
+      ? workingFile
+      : this.fileRenderer.getFileForNextRender(workingFile);
   }
 
   // Return the working file's annotations, including updates that have not
@@ -1473,7 +1482,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (annotationsChanged) {
       this.managersDirty = true;
     }
-    const nextRenderFile = this.fileRenderer.getFileForNextRender(workingFile);
+    const nextRenderFile = this.getFileForNextRender(workingFile);
     this.fileRenderer.setLineAnnotations(
       this.getAnnotationsForFile(nextRenderFile)
     );
@@ -1502,26 +1511,23 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.clearAuxiliaryNodes();
 
       try {
-        const fileResult = this.fileRenderer.renderFile(
-          workingFile,
-          EMPTY_RENDER_RANGE
-        );
-        if (fileResult != null) {
+        const collapsedResult = this.fileRenderer.renderCollapsed(workingFile);
+        if (collapsedResult != null) {
           this.applyThemeState(
             fileContainer,
-            fileResult.themeStyles,
+            collapsedResult.themeStyles,
             themeType,
-            fileResult.baseThemeType
+            collapsedResult.baseThemeType
           );
         }
-        if (fileResult?.headerAST != null) {
+        if (collapsedResult?.headerAST != null) {
           this.applyHeaderToDOM(
-            fileResult.headerAST,
+            collapsedResult.headerAST,
             fileContainer,
-            fileResult.file
+            workingFile
           );
         }
-        this.adoptRenderData(fileResult?.file ?? workingFile);
+        this.adoptRenderData(workingFile);
         this.injectUnsafeCSS();
       } catch (error: unknown) {
         if (disableErrorHandling) {

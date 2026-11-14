@@ -1301,9 +1301,7 @@ export class VirtualizedFileDiff<
     }
     const workingDiff = this.getWorkingDiff();
     const nextRenderDiff =
-      workingDiff == null
-        ? undefined
-        : this.hunksRenderer.getDiffForNextRender(workingDiff);
+      workingDiff == null ? undefined : this.getDiffForNextRender(workingDiff);
     // A completed async highlight can change which diff the next simple
     // virtualizer render will commit. CodeView refreshes this during layout.
     if (this.isSimpleMode()) {
@@ -1659,8 +1657,7 @@ export class VirtualizedFileDiff<
     const previousRenderedDiff = this.getRenderedDiff();
     const { pendingRender } = this;
     const previousLayoutDiff = pendingRender?.diff ?? previousRenderedDiff;
-    const pendingRenderDiff =
-      this.hunksRenderer.getDiffForNextRender(workingDiff);
+    const pendingRenderDiff = this.getDiffForNextRender(workingDiff);
 
     this.pendingRender = { workingDiff, diff: pendingRenderDiff };
 

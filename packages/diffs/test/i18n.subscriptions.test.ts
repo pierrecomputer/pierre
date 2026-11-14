@@ -158,7 +158,7 @@ describe('i18n subscriptions', () => {
     }
   });
 
-  test('a FileDiff listens once it has rendered, not before', async () => {
+  test('a FileDiff listens once it has rendered, not before', () => {
     const dom = installDom();
     const instance = new FileDiff<undefined>({ theme: DEFAULT_THEMES });
     const heard = spyOn(instance, 'onMessagesChange');
