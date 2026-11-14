@@ -1,0 +1,418 @@
+/* The app fills the window. Only pane content scrolls, never the page. */
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #eef1f5;
+}
+
+.app-header {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  /* One row of 48 px; a narrow window wraps the controls to more rows. */
+  min-height: 36px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #dce1e8;
+  background: #fff;
+  font-size: 13px;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-brand span:last-child {
+  color: #8b95a5;
+  font-weight: 400;
+}
+
+.app-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #29313d;
+  color: #fff;
+  font-size: 13px;
+}
+
+.app-toggles {
+  display: flex;
+  gap: 2px;
+  margin: 0 auto;
+  padding: 2px;
+  border-radius: 8px;
+  background: #eef1f5;
+}
+
+.app-toggles button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7586;
+}
+
+.app-toggles button[aria-pressed='true'] {
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(41 49 61 / 15%);
+  color: #29313d;
+}
+
+.app-toggles button:focus-visible,
+.app-sessions button:focus-visible {
+  outline: 2px solid var(--layout-accent, #5489ed);
+  outline-offset: 1px;
+}
+
+.app-action {
+  padding: 5px 12px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #29313d;
+  white-space: nowrap;
+}
+
+.app-action:hover {
+  background: #f6f8fa;
+}
+
+.app-action:focus-visible {
+  outline: 2px solid var(--layout-accent, #5489ed);
+  outline-offset: 1px;
+}
+
+.app-header-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.app-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #6b7586;
+  white-space: nowrap;
+}
+
+.app-check input {
+  margin: 0;
+}
+
+.app-resize {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7586;
+  white-space: nowrap;
+}
+
+.app-resize select {
+  padding: 4px 6px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #29313d;
+}
+
+.app-header-end a {
+  color: #5489ed;
+  text-decoration: none;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* Sessions sidebar */
+
+.app-sessions {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-size: 13px;
+}
+
+.app-sessions-top {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  padding: 10px;
+}
+
+.app-sessions-top input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #f8f9fb;
+}
+
+.app-new-session {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: #29313d;
+  color: #fff;
+}
+
+.app-sessions-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 10px;
+}
+
+.app-sessions h2 {
+  margin: 12px 6px 4px;
+  color: #8b95a5;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-sessions ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-sessions li button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.app-sessions li button:hover {
+  background: #f1f3f7;
+}
+
+.app-sessions li button[aria-current='page'] {
+  background: #e8eefc;
+}
+
+.app-session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-session-time {
+  color: #8b95a5;
+  font-size: 12px;
+}
+
+.app-session-meta {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: #8b95a5;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.app-status-running {
+  background: #5489ed;
+  animation: app-pulse 1.4s ease-in-out infinite;
+}
+
+.app-status-waiting {
+  background: #e5a43a;
+}
+
+.app-status-done {
+  background: #c3cad5;
+}
+
+@keyframes app-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-status-running {
+    animation: none;
+  }
+}
+
+.app-sessions-empty {
+  margin: 12px;
+  color: #8b95a5;
+}
+
+.app-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Overlays */
+
+.app-overlay-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.app-overlay-buttons > button {
+  padding: 5px 10px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #29313d;
+}
+
+.app-overlay-buttons > button[aria-expanded='true'] {
+  background: #e8eefc;
+}
+
+.app-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #dce1e8;
+}
+
+.app-overlay-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.app-overlay-header button {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+}
+
+.app-overlay-buttons button:focus-visible,
+.app-overlay-header button:focus-visible,
+.app-overlay-footer button:focus-visible,
+.app-review-message input:focus-visible {
+  outline: 2px solid var(--layout-accent, #5489ed);
+  outline-offset: 1px;
+}
+
+.app-review {
+  width: 640px;
+  font-size: 13px;
+}
+
+.app-review > p {
+  margin: 12px 16px;
+}
+
+.app-review-files {
+  margin: 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.app-review-files li {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-review-files span {
+  color: #3b8a5a;
+}
+
+.app-review-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 16px;
+  color: #6b7586;
+}
+
+.app-review-message input {
+  padding: 6px 8px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+}
+
+.app-overlay-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #dce1e8;
+}
+
+.app-overlay-footer button {
+  padding: 6px 12px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.app-overlay-footer .app-primary {
+  border-color: #29313d;
+  background: #29313d;
+  color: #fff;
+}
+
+.app-activity {
+  font-size: 13px;
+}
+
+.app-activity-list {
+  margin: 0;
+  padding: 8px 16px;
+  list-style: none;
+}
+
+.app-activity-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.app-activity-list time {
+  color: #8b95a5;
+  font-variant-numeric: tabular-nums;
+}

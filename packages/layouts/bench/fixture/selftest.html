@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Layouts benchmark self-test</title>
+    <style>
+      body {
+        margin: 0;
+      }
+
+      .panes {
+        position: absolute;
+        top: 260px;
+        left: 20px;
+        display: flex;
+        gap: 8px;
+      }
+
+      .box {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        width: 200px;
+        height: 200px;
+        background: #5489ed;
+      }
+
+      .layer {
+        position: absolute;
+        top: 420px;
+        width: 256px;
+        height: 256px;
+        will-change: transform;
+        background: linear-gradient(135deg, #5489ed, #f4b860);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="box" class="box"></div>
+    <!-- Two panes for attribution: a change in pane a, and a change above both. -->
+    <div id="panes" class="panes">
+      <section data-layout-pane="a">
+        <p id="a-text">Pane a</p>
+        <p>More text</p>
+      </section>
+      <section data-layout-pane="b">
+        <p>Pane b</p>
+        <p>More text</p>
+      </section>
+    </div>
+    <!-- Composited panes of known size for the memory self-test. -->
+    <div id="layers"></div>
+    <script type="module" src="/selftest.ts"></script>
+  </body>
+</html>
