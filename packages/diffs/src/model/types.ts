@@ -2,8 +2,8 @@ import type {
   ChangeContent,
   ChangeTypes,
   ContextContent,
+  ExpandedHunksMap,
   Hunk,
-  HunkExpansionRegion,
 } from '../types';
 
 export type DiffSide = 'deletions' | 'additions';
@@ -90,5 +90,5 @@ export interface DiffModelChange {
    */
   readonly hunksChanged: boolean;
   /** The expansion to use from now on: remapped when a region moved. */
-  readonly expandedHunks: Map<number, HunkExpansionRegion>;
+  readonly expandedHunks: ExpandedHunksMap;
 }

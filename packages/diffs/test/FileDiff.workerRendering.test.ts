@@ -445,23 +445,29 @@ test('FileDiff keeps a hunk action with its hunk until the resolved diff renders
   }
 });
 
-// Collapsing drops the highlighted rows, so expanding before the replacement
-// is highlighted shows no code and no annotations until it is ready.
+// A collapsed diff asks for no highlight, so its replacement is requested when
+// it opens. It opens on the new diff's plain rows and annotations, never the
+// previous diff's.
 test('FileDiff shows no stale annotations when expanded during a replacement', async () => {
   const fixture = await createHighlightedDiffFixture();
-  const { instance, render, diffB, annotationsB, annotationAt } = fixture;
+  const { instance, fileContainer, render, diffB, annotationsB, annotationAt } =
+    fixture;
   const setCollapsed = (collapsed: boolean) =>
     instance.setOptions({ ...instance.options, collapsed });
   try {
     setCollapsed(true);
     render(diffB, annotationsB);
-    const requestB = await fixture.getRequest(2);
     setCollapsed(false);
-    render(diffB, annotationsB);
+    instance.render({
+      fileContainer,
+      fileDiff: diffB,
+      lineAnnotations: annotationsB,
+      forceRender: true,
+    });
     expect(annotationAt(1)).toEqual({ text: undefined, row: false });
-    expect(annotationAt(2)).toEqual({ text: undefined, row: false });
+    expect(annotationAt(2)).toEqual({ text: 'annotation:B', row: true });
 
-    fixture.respond(requestB, diffB);
+    fixture.respond(await fixture.getRequest(2), diffB);
     await waitFor(() => instance.getRenderedDiffForTest() === diffB);
     expect(annotationAt(1)).toEqual({ text: undefined, row: false });
     expect(annotationAt(2)).toEqual({ text: 'annotation:B', row: true });

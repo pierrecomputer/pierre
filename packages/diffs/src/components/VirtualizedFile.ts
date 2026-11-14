@@ -873,9 +873,7 @@ export class VirtualizedFile<
     }
     const workingFile = this.getWorkingFile();
     const nextRenderFile =
-      workingFile == null
-        ? undefined
-        : this.fileRenderer.getFileForNextRender(workingFile);
+      workingFile == null ? undefined : this.getFileForNextRender(workingFile);
     // A completed async highlight can change which file the next simple
     // virtualizer render will commit. CodeView refreshes this during layout.
     if (this.isSimpleMode()) {
@@ -1066,8 +1064,7 @@ export class VirtualizedFile<
     const workingFile = this.getWorkingFile(nextFile) ?? nextFile;
     const previousRenderedFile = this.getRenderedFile();
     const previousLayoutFile = this.pendingRender?.file ?? previousRenderedFile;
-    const pendingRenderFile =
-      this.fileRenderer.getFileForNextRender(workingFile);
+    const pendingRenderFile = this.getFileForNextRender(workingFile);
 
     this.pendingRender = { workingFile, file: pendingRenderFile };
 

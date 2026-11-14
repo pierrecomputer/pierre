@@ -19,10 +19,10 @@ import type {
   DiffsHighlighter,
   DiffsTheme,
   DiffsThemeNames,
+  ExpandedHunksMap,
   FileContents,
   FileDiffMetadata,
   HighlighterTypes,
-  HunkExpansionRegion,
   RenderDiffOptions,
   RenderDiffResult,
   RenderFileOptions,
@@ -1004,7 +1004,7 @@ export class WorkerPoolManager {
     diff: FileDiffMetadata,
     startingLine: number,
     totalLines: number,
-    expandedHunks?: Map<number, HunkExpansionRegion> | true,
+    expandedHunks?: ExpandedHunksMap | true,
     collapsedContextThreshold?: number
   ): ThemedDiffResult | undefined {
     const highlighter = getHighlighterIfLoaded({

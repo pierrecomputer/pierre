@@ -29,10 +29,12 @@ function readArgument(name: string, values: MessageValues | undefined) {
 }
 
 // Turns one message template into a formatter. Template problems throw here so
-// a bad message fails when it is set, never while rendering.
+// a bad message fails when it is set, never while rendering. Numbers are
+// written the way the locale groups digits, both for `#` and for arguments.
 export function compileMessage(
   template: string,
-  pluralRules: Intl.PluralRules
+  pluralRules: Intl.PluralRules,
+  numberFormat: Intl.NumberFormat
 ): CompiledMessage {
   const plural = PLURAL_BLOCK.exec(template);
   const before = plural == null ? template : template.slice(0, plural.index);
@@ -45,7 +47,7 @@ export function compileMessage(
     throw new Error(`i18n: unsupported syntax in "${template}"`);
   }
   if (plural == null) {
-    return (values) => formatArguments(template, values);
+    return (values) => formatArguments(template, values, numberFormat);
   }
 
   const [, name, branchSource] = plural;
@@ -76,16 +78,19 @@ export function compileMessage(
       throw new Error(`i18n: plural argument "${name}" must be a number`);
     }
     const branch = branches.get(pluralRules.select(count)) ?? other;
-    const text = before + branch.replaceAll('#', String(count)) + after;
-    return formatArguments(text, values);
+    const text =
+      before + branch.replaceAll('#', numberFormat.format(count)) + after;
+    return formatArguments(text, values, numberFormat);
   };
 }
 
 function formatArguments(
   text: string,
-  values: MessageValues | undefined
+  values: MessageValues | undefined,
+  numberFormat: Intl.NumberFormat
 ): string {
-  return text.replace(ARGUMENT, (_match, name: string) =>
-    String(readArgument(name, values))
-  );
+  return text.replace(ARGUMENT, (_match, name: string) => {
+    const value = readArgument(name, values);
+    return typeof value === 'number' ? numberFormat.format(value) : value;
+  });
 }

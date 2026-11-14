@@ -60,6 +60,7 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
 
 export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
+  #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #initializeMatches: () => void;
   #mount?: () => void;
@@ -269,9 +270,11 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       updateMatches();
     };
 
+    // The host hears about the close while the panel is still in the page, so
+    // it can tell whether the panel held focus.
     const close = () => {
-      this.cleanup();
       onClose();
+      this.cleanup();
     };
     this.#close = close;
 
@@ -485,10 +488,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         }
       },
     });
-    replaceToggleElement.hidden = replaceHandlers == null;
-    replaceToggleElement.ariaExpanded = String(
-      normalizeMode(mode) === 'replace'
-    );
 
     // Cells are positioned by CSS grid-template-areas (see SearchPanelWidget.css), so DOM
     // order here only drives tab/reading order, not layout. Keep the replace
@@ -508,14 +507,22 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       ],
     });
 
+    // Puts the panel's mode, and whether it can replace at all, on the grid
+    // and the replace toggle. The stylesheet lays the grid out from these.
+    const syncReplaceControls = () => {
+      const canReplace = replaceHandlers != null;
+      const currentMode = normalizeMode(requestedMode);
+      gridElement.dataset.mode = currentMode;
+      gridElement.toggleAttribute('data-can-replace', canReplace);
+      replaceToggleElement.hidden = !canReplace;
+      replaceToggleElement.ariaExpanded = String(currentMode === 'replace');
+    };
+    syncReplaceControls();
+
     this.#hasReplaceHandlers = () => replaceHandlers != null;
     this.#setReplaceHandlers = (handlers) => {
       replaceHandlers = handlers;
-      gridElement.dataset.mode = normalizeMode(requestedMode);
-      replaceToggleElement.hidden = replaceHandlers == null;
-      replaceToggleElement.ariaExpanded = String(
-        gridElement.dataset.mode === 'replace'
-      );
+      syncReplaceControls();
       emitState();
     };
 
@@ -523,11 +530,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // hiding the replace cells, then returns focus to the find input.
     const applyMode = (next: SearchPanelMode) => {
       requestedMode = next;
-      gridElement.dataset.mode = normalizeMode(requestedMode);
-      replaceToggleElement.hidden = replaceHandlers == null;
-      replaceToggleElement.ariaExpanded = String(
-        gridElement.dataset.mode === 'replace'
-      );
+      syncReplaceControls();
       this.#inputElement.focus();
       this.#inputElement.select();
       emitState();
@@ -553,16 +556,15 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       ).setAttribute(UNSAFE_CSS_ATTRIBUTE, '');
     }
 
+    this.#widgetElement = h('div', {
+      dataset: 'editorWidget',
+      children: [gridElement],
+    });
     h(
       'div',
       {
         dataset: 'searchPanel',
-        children: [
-          h('div', {
-            dataset: 'editorWidget',
-            children: [gridElement],
-          }),
-        ],
+        children: [this.#widgetElement],
       },
       shadowRoot
     );
@@ -595,6 +597,10 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
   getHostElement(): HTMLDivElement {
     return this.#host;
+  }
+
+  getBounds(): DOMRect {
+    return this.#widgetElement.getBoundingClientRect();
   }
 
   hasQuery(): boolean {
@@ -632,8 +638,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     this.#setReplaceHandlers?.(handlers);
   }
 
-  // Tears the panel down the way the close button and Escape-in-input do:
-  // removes the DOM and runs onClose so the editor clears its match highlights.
+  // Tears the panel down the way the close button and Escape-in-input do: runs
+  // onClose so the editor clears its match highlights, then removes the DOM.
   // Prefer this over cleanup() for any user-initiated dismissal.
   close(): void {
     this.#close?.();

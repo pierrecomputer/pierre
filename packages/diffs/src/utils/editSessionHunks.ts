@@ -1,6 +1,7 @@
 import type {
   ChangeContent,
   ContextContent,
+  ExpandedHunksMap,
   FileDiffMetadata,
   Hunk,
   HunkExpansionRegion,
@@ -265,9 +266,9 @@ function isPureChange(
 
 /** Preserve expansion at the surviving outer edges of rebuilt old-side gaps. */
 export function remapExpandedHunksForRegionChange(
-  expandedHunks: Map<number, HunkExpansionRegion>,
+  expandedHunks: ExpandedHunksMap,
   change: SessionRegionChange
-): Map<number, HunkExpansionRegion> {
+): ExpandedHunksMap {
   const remapped = new Map<number, HunkExpansionRegion>();
   const { regions } = change;
   for (let key = 0; key <= regions.length; key++) {
@@ -301,7 +302,7 @@ export type ExpansionAnchorRange = [start: number, end: number];
 /** Snapshot the expanded gap-edge slices before the exit recompute. */
 export function captureExpansionAnchors(
   diff: FileDiffMetadata,
-  expandedHunks: Map<number, HunkExpansionRegion>,
+  expandedHunks: ExpandedHunksMap,
   collapsedContextThreshold: number
 ): ExpansionAnchorRange[] {
   const anchors: ExpansionAnchorRange[] = [];
@@ -358,7 +359,7 @@ export function captureExpansionAnchors(
 export function rebuildExpansionFromAnchors(
   diff: FileDiffMetadata,
   anchors: ExpansionAnchorRange[]
-): Map<number, HunkExpansionRegion> {
+): ExpandedHunksMap {
   const rebuilt = new Map<number, HunkExpansionRegion>();
   if (anchors.length === 0) {
     return rebuilt;
