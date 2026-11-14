@@ -35,6 +35,27 @@ CLASS lcl_inventory IMPLEMENTATION.
 ENDCLASS.`,
   ],
   [
+    'actionscript-3',
+    'ActionScript',
+    `package com.example {
+    import flash.display.Sprite;
+    /** Demo */
+    public class Main extends Sprite implements IThing {
+        private static const MAX:int = 0xFF;
+        public var name:String = "x\\n";
+        protected var list:Vector.<Number> = new Vector.<Number>();
+        public function Main(a:int = 1, ...rest) {
+            super();
+            for each (var n:Number in list) { trace(n as String); }
+            var re:RegExp = /ab+c/gi;
+            if (a is int && a !== null) { addEventListener(Event.ADDED, onAdd); }
+        }
+        override public function get value():uint { return 1; }
+        internal function onAdd(e:Event):void {}
+    }
+}`,
+  ],
+  [
     'ada',
     'Ada',
     `--  Bounded stacks
@@ -53,6 +74,41 @@ package body Stacks is
       S.Ready := True and not S.Full;
    end Push;
 end Stacks;`,
+  ],
+  [
+    'ahk',
+    'AutoHotkey',
+    `#Requires AutoHotkey v2.0
+#SingleInstance Force
+
+; Win+N opens Notepad, or focuses it when it is already running
+#n:: {
+    if WinExist("ahk_exe notepad.exe")
+        WinActivate
+    else
+        Run "notepad.exe"
+}
+
+; Type the date with Ctrl+Alt+D
+^!d::Send FormatTime(, "yyyy-MM-dd")
+
+::btw::by the way
+
+class Counter {
+    count := 0
+
+    Increment(step := 1) {
+        this.count += step
+        return this.count
+    }
+}
+
+clicks := Counter()
+F1:: {
+    n := clicks.Increment()
+    ToolTip "Clicked " n " times\`nScript: " A_ScriptName
+    SetTimer () => ToolTip(), -1500
+}`,
   ],
   [
     'angular-html',
@@ -181,6 +237,34 @@ public with sharing class AccountService {
 }`,
   ],
   [
+    'apl',
+    'APL',
+    `⍝ Basic statistics on a numeric vector
+:Namespace Stats
+    ⎕IO←1
+
+    Mean←{(+/⍵)÷≢⍵}
+    Median←{
+        s←⍵[⍋⍵] ⋄ n←≢s
+        0=2|n:Mean s[n÷2+0 1]
+        s[⌈n÷2]
+    }
+    StdDev←{(Mean (⍵-Mean ⍵)*2)*0.5}
+
+    ∇ r←Summary data
+      :If 0=≢data
+          r←'empty'
+      :Else
+          r←(Mean data)(Median data)(StdDev data)
+      :EndIf
+    ∇
+
+    Histogram←{⍺{⍺,≢⍵}⌸⍵}
+:EndNamespace
+
+Stats.Summary 3 1 4 1 5 9 2 6 ¯5.5`,
+  ],
+  [
     'applescript',
     'AppleScript',
     `-- Greet the user
@@ -198,6 +282,25 @@ on run argv
 	display dialog greeting & ", \\"" & theName & "\\"" buttons {"OK"}
 	return missing value
 end run`,
+  ],
+  [
+    'ara',
+    'Ara',
+    `namespace App\\Models;
+use Psl\\Str;
+// A user
+final readonly class User implements Jsonable {
+    public function __construct(
+        private string $name,
+        private vec<int> $scores = vec[],
+    ) {}
+    public function greet<T as Stringable>(T $x): string {
+        $s = Str\\format("Hello %s", $this->name);
+        return $s . 'x' . (string) 1_000;
+    }
+}
+type Id = int | string;
+async function main(): void { await foo() as int; }`,
   ],
   [
     'asciidoc',
@@ -286,7 +389,38 @@ line"
 }`,
   ],
   [
-    'bash',
+    'ballerina',
+    'Ballerina',
+    `import ballerina/http;
+import ballerina/log;
+
+# A greeting returned by the service.
+type Greeting record {|
+    string message;
+    int count;
+|};
+
+configurable int port = 9090;
+
+service /greeter on new http:Listener(port) {
+    private int calls = 0;
+
+    # Returns a greeting for the given name.
+    resource function get hello(string name) returns Greeting|error {
+        if name.trim() == "" {
+            return error("name must not be empty");
+        }
+        lock {
+            self.calls += 1;
+        }
+        string message = string \`Hello, \${name}!\`;
+        log:printInfo("greeted", name = name);
+        return {message, count: self.calls};
+    }
+}`,
+  ],
+  [
+    'shellscript',
     'Bash',
     `#!/usr/bin/env bash
 set -euo pipefail
@@ -301,7 +435,7 @@ for name in Ada Linus; do
 done`,
   ],
   [
-    'batch',
+    'bat',
     'Windows Batch',
     `@echo off
 REM Build selected files
@@ -315,6 +449,66 @@ echo first ^
   second ^& third
 if not exist "%ROOT%out" mkdir "%ROOT%out"
 exit /b 0`,
+  ],
+  [
+    'beancount',
+    'Beancount',
+    `option "title" "Personal Ledger"
+option "operating_currency" "USD"
+plugin "beancount.plugins.check_commodity"
+
+* Accounts
+2024-01-01 open Assets:Bank:Checking USD
+2024-01-01 open Assets:Investments:Brokerage
+2024-01-01 open Expenses:Food:Groceries
+2024-01-01 open Income:Salary
+
+2024-01-05 * "Employer Inc." "Monthly salary" #payroll
+  Assets:Bank:Checking     4,200.00 USD
+  Income:Salary
+
+2024-01-12 * "Green Market" "Weekly groceries" ^receipt-1042
+  receipt: "scans/2024-01-12.pdf"
+  Expenses:Food:Groceries    86.40 USD
+  Assets:Bank:Checking
+
+2024-01-20 * "Broker" "Buy index fund"
+  Assets:Investments:Brokerage   10 VTI {220.50 USD}
+  Assets:Bank:Checking       -2,205.00 USD
+
+2024-01-31 balance Assets:Bank:Checking 1,908.60 USD ; reconciled
+2024-02-01 price VTI 224.10 USD`,
+  ],
+  [
+    'berry',
+    'Berry',
+    `# A Tasmota driver that reports a temperature sensor
+import json
+
+class TempSensor
+  var name, celsius
+  static interval = 2000
+
+  def init(name)
+    self.name = name
+    self.celsius = 0.0
+    tasmota.add_driver(self)
+  end
+
+  def every_second()
+    self.celsius = self.read_raw() * 0.0625
+    if self.celsius > 30.0
+      print(f"{self.name}: {self.celsius:.1f} C is too hot")
+    end
+  end
+
+  def json_append()
+    var data = {"Name": self.name, "Temp": self.celsius}
+    tasmota.response_append("," + json.dump(data))
+  end
+end
+
+sensor = TempSensor("Kitchen")`,
   ],
   [
     'bibtex',
@@ -389,6 +583,38 @@ output id string = stg.id`,
 @endsection`,
   ],
   [
+    'bsl',
+    '1C (BSL)',
+    `#Область ПрограммныйИнтерфейс
+
+// Возвращает остатки товаров на складе.
+&НаСервере
+Функция ОстаткиТоваров(Знач Склад, Знач Дата = Неопределено) Экспорт
+	Запрос = Новый Запрос;
+	Запрос.Текст =
+	"ВЫБРАТЬ
+	|	Остатки.Номенклатура КАК Товар,
+	|	Остатки.КоличествоОстаток КАК Количество
+	|ИЗ
+	|	РегистрНакопления.ТоварыНаСкладах.Остатки(&Дата, Склад = &Склад) КАК Остатки
+	|ГДЕ
+	|	Остатки.КоличествоОстаток > 0";
+	Запрос.УстановитьПараметр("Склад", Склад);
+	Запрос.УстановитьПараметр("Дата", ?(Дата = Неопределено, ТекущаяДатаСеанса(), Дата));
+
+	Результат = Новый Соответствие;
+	Выборка = Запрос.Выполнить().Выбрать();
+	Пока Выборка.Следующий() Цикл
+		Если Выборка.Количество >= 1 Тогда
+			Результат.Вставить(Выборка.Товар, Выборка.Количество);
+		КонецЕсли;
+	КонецЦикла;
+	Возврат Результат;
+КонецФункции
+
+#КонецОбласти`,
+  ],
+  [
     'c',
     'C',
     `#include <stdio.h>
@@ -435,6 +661,117 @@ fn void main() {
     }
     io::printfn("%s=%d", next.label, next.count);
 }`,
+  ],
+  [
+    'cadence',
+    'Cadence',
+    `import FungibleToken from 0xf233dcee88fe0abe
+
+/// A minimal fungible token.
+access(all) contract ExampleToken {
+    access(all) var totalSupply: UFix64
+
+    access(all) event TokensDeposited(amount: UFix64, to: Address?)
+
+    access(all) resource Vault {
+        access(all) var balance: UFix64
+
+        init(balance: UFix64) {
+            self.balance = balance
+        }
+
+        access(all) fun deposit(from: @Vault) {
+            pre {
+                from.balance > 0.0: "Cannot deposit an empty vault"
+            }
+            self.balance = self.balance + from.balance
+            emit TokensDeposited(amount: from.balance, to: self.owner?.address)
+            destroy from
+        }
+    }
+
+    init() {
+        self.totalSupply = 1000.0
+        self.account.storage.save(<- create Vault(balance: self.totalSupply), to: /storage/exampleVault)
+    }
+}`,
+  ],
+  [
+    'cairo',
+    'Cairo',
+    `#[starknet::interface]
+trait ICounter<TContractState> {
+    fn get(self: @TContractState) -> u128;
+    fn increase(ref self: TContractState, amount: u128);
+}
+
+#[starknet::contract]
+mod Counter {
+    use starknet::{ContractAddress, get_caller_address};
+
+    #[storage]
+    struct Storage {
+        value: u128,
+        owner: ContractAddress,
+    }
+
+    #[abi(embed_v0)]
+    impl CounterImpl of super::ICounter<ContractState> {
+        fn get(self: @ContractState) -> u128 {
+            self.value.read()
+        }
+
+        fn increase(ref self: ContractState, amount: u128) {
+            assert(amount > 0, 'amount must be positive');
+            assert(get_caller_address() == self.owner.read(), 'not the owner');
+            self.value.write(self.value.read() + amount);
+        }
+    }
+}`,
+  ],
+  [
+    'chapel',
+    'Chapel',
+    `/* Approximate pi with a parallel reduction. */
+module Pi {
+  use Time;
+
+  config const n = 10_000_000;
+
+  record Sample {
+    var x, y: real;
+  }
+
+  proc Sample.inside(): bool {
+    return x * x + y * y <= 1.0;
+  }
+
+  iter points(count: int) {
+    for i in 1..count do
+      yield new Sample((i % 97) / 97.0, (i % 89) / 89.0);
+  }
+
+  proc main() {
+    var timer: stopwatch;
+    timer.start();
+    const hits = + reduce [p in points(n)] p.inside():int;
+    writeln("pi is about ", 4.0 * hits / n);
+    writeln("took ", timer.elapsed(), " seconds on ", numLocales, " locales");
+  }
+}`,
+  ],
+  [
+    'clarity',
+    'Clarity',
+    `;; transfer tokens
+(define-constant err-owner (err u100))
+(define-data-var total uint u0)
+(define-public (transfer (amount uint) (to principal))
+  (begin
+    (asserts! (> amount u0) (err u1))
+    (ok (var-set total (+ (var-get total) amount)))))
+(define-map balances { owner: principal } { amount: uint })
+'SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7.token`,
   ],
   [
     'clojure',
@@ -645,6 +982,33 @@ int main() {
 }`,
   ],
   [
+    'crystal',
+    'Crystal',
+    `require "http/client"
+# A point
+abstract struct Shape
+  abstract def area : Float64
+end
+class Point < Shape
+  property x : Int32, y : Int32
+  getter name : String?
+  def initialize(@x : Int32, @y : Int32); end
+  def area : Float64
+    (@x * @y).to_f64
+  end
+  macro define(name)
+    def {{name.id}}; {{ name }}; end
+  end
+end
+enum Color; Red; Green; end
+lib LibC
+  fun puts(s : UInt8*) : Int32
+end
+x = uninitialized Int32
+puts "sum: #{[1, 2].sum}" if x.is_a?(Int32)
+alias Num = Int32 | Float64`,
+  ],
+  [
     'csharp',
     'C#',
     `using System.Collections.Generic;
@@ -721,6 +1085,42 @@ __global__ void scale(float *values, int count) {
 void run(float *values) {
   scale<<<1, 256>>>(values, 256);
 }`,
+  ],
+  [
+    'cue',
+    'CUE',
+    `package deploy
+
+import "strings"
+
+#Port: int & >=1 & <=65535
+
+#Service: {
+	name!:     string & =~"^[a-z][a-z0-9-]*$"
+	image:     string
+	port:      #Port | *8080
+	replicas?: uint8 | *1
+	env: [string]: string
+	limits: memory: *"512Mi" | string
+}
+
+services: [Name=string]: #Service & {name: Name}
+
+services: {
+	api: {
+		image:    "registry.example.com/api:\\(version)"
+		port:     443
+		replicas: 3
+		env: LOG_LEVEL: "info"
+	}
+	worker: image: "registry.example.com/worker:\\(version)"
+}
+
+version: "1.8.2"
+
+hosts: [for k, s in services if s.port != 8080 {
+	strings.ToUpper(k) + ".internal"
+}]`,
   ],
   [
     'cypher',
@@ -818,7 +1218,7 @@ index 1a2b3c4..5d6e7f8 100644
  };`,
   ],
   [
-    'dockerfile',
+    'docker',
     'Dockerfile',
     `# syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
@@ -855,6 +1255,34 @@ abc123
 -----END KEY-----"
 EMPTY=
 RATIO=0.75`,
+  ],
+  [
+    'dream-maker',
+    'DreamMaker',
+    `// A simple melee weapon
+#define BASE_DAMAGE 10
+
+/obj/item/weapon/sword
+	name = "iron sword"
+	desc = "A sharp blade."
+	icon = 'icons/obj/weapons.dmi'
+	icon_state = "sword"
+	var/damage = BASE_DAMAGE
+	var/list/hit_sounds = list('sound/hit1.ogg', 'sound/hit2.ogg')
+
+/obj/item/weapon/sword/proc/attack(mob/living/target as mob, mob/user)
+	if(!target || target.stat == DEAD)
+		return FALSE
+	var/total = damage * (user.strength / 10)
+	target.health -= total
+	playsound(src, pick(hit_sounds), 50, 1)
+	user.visible_message("[user] hits [target] with \\the [src]!")
+	return TRUE
+
+/obj/item/weapon/sword/examine(mob/user)
+	..()
+	to_chat(user, {"It deals [damage] damage.
+	It looks well kept."})`,
   ],
   [
     'elixir',
@@ -942,6 +1370,21 @@ handle_call(_Msg, _From, State) ->
 handle_cast(_Msg, State) -> {noreply, State}.`,
   ],
   [
+    'fennel',
+    'Fennel',
+    `;; greeting
+(local M {})
+(fn M.greet [name ?opts]
+  "Doc string"
+  (let [msg (.. "Hello, " name "!")]
+    (when (not= name nil)
+      (print msg :done 42 0xff))
+    (each [k v (pairs opts)] (tset M k v))
+    #(+ $1 $2)))
+(lambda add [a b] (+ a b))
+M`,
+  ],
+  [
     'fish',
     'Fish',
     `# Greet users
@@ -960,7 +1403,38 @@ set -gx PATH "/usr/local/bin
 $PATH"`,
   ],
   [
-    'fortran',
+    'fluent',
+    'Fluent',
+    `### Localization for the account settings page.
+
+## Greetings
+
+# $userName (String) - the display name of the user
+welcome = Welcome back, { $userName }!
+
+-brand-name = Nimbus
+    .gender = feminine
+
+about = About { -brand-name }
+
+## Notifications
+
+unread-emails =
+    { $count ->
+        [one] You have one unread email.
+       *[other] You have { $count } unread emails.
+    }
+
+last-login = Last login: { DATETIME($date, month: "long", day: "numeric") }
+
+storage-used = { NUMBER($ratio, style: "percent") } of your storage is used.
+
+login-input = Email address
+    .placeholder = name@example.com
+    .aria-label = Login email`,
+  ],
+  [
+    'fortran-free-form',
     'Fortran',
     `program demo
   use iso_fortran_env, only: real64
@@ -1161,6 +1635,69 @@ pub fn main() {
 }`,
   ],
   [
+    'glimmer-js',
+    'Glimmer JS',
+    `import Component from '@glimmer/component';
+import { tracked } from '@glimmer/tracking';
+import { on } from '@ember/modifier';
+
+const Greeting = <template>
+  <p class="greeting">Hello, {{@name}}!</p>
+</template>;
+
+export default class Counter extends Component {
+  @tracked count = 0;
+
+  increment = () => {
+    this.count += 1;
+  };
+
+  <template>
+    <Greeting @name={{@user.name}} />
+    {{#if this.count}}
+      <p>Clicked {{this.count}} times</p>
+    {{else}}
+      {{! nothing yet }}
+      <p>Not clicked</p>
+    {{/if}}
+    <button type="button" {{on "click" this.increment}}>Click</button>
+  </template>
+}`,
+  ],
+  [
+    'glimmer-ts',
+    'Glimmer TS',
+    `import Component from '@glimmer/component';
+import { tracked } from '@glimmer/tracking';
+import { on } from '@ember/modifier';
+
+interface TodoListSignature {
+  Args: { title: string; items: readonly string[] };
+  Blocks: { empty: [] };
+}
+
+export default class TodoList extends Component<TodoListSignature> {
+  @tracked selected: string | null = null;
+
+  select = (item: string): void => {
+    this.selected = item;
+  };
+
+  <template>
+    <h2>{{@title}}</h2>
+    <ul>
+      {{#each @items as |item index|}}
+        <li class={{if (eq item this.selected) "active"}}>
+          {{index}}: <button {{on "click" (fn this.select item)}}>{{item}}</button>
+        </li>
+      {{else}}
+        {{yield to="empty"}}
+      {{/each}}
+    </ul>
+  </template>
+}`,
+  ],
+  [
     'glsl',
     'GLSL',
     `#version 450
@@ -1175,6 +1712,27 @@ void main() {
   vec3 light = normalize(vec3(0.4, 0.8, 0.2));
   float diffuse = max(dot(normal, light), 0.0);
   outColor = texture(albedo, uv) * vec4(vec3(diffuse), 1.0);
+}`,
+  ],
+  [
+    'gn',
+    'GN',
+    `# Build config
+import("//build/config.gni")
+declare_args() {
+  enable_foo = false
+}
+executable("hello") {
+  sources = [ "hello.cc", "$target_gen_dir/a.cc" ]
+  deps = [ ":lib", "//base" ]
+  if (is_win && !enable_foo) {
+    defines = [ "WIN=\${version}" ]
+  } else {
+    cflags += [ "-Wall" ]
+  }
+}
+template("my_template") {
+  foreach(i, invoker.items) { print(i) }
 }`,
   ],
   [
@@ -1444,6 +2002,38 @@ typedef Point = { x:Float, y:Float, ok:Bool };
 var done = true;`,
   ],
   [
+    'hjson',
+    'Hjson',
+    `# Server configuration
+{
+  name: Nimbus API
+  version: 2.4.1
+  port: 8080
+  debug: false
+
+  // comma-free lists and quoteless strings
+  hosts: [
+    api.example.com
+    "backup.example.com"
+  ]
+
+  database: {
+    url: postgres://db.internal:5432/app
+    pool: 20
+    timeout: 1.5
+  }
+
+  motd:
+    '''
+    Welcome to Nimbus.
+    Maintenance runs every Sunday.
+    '''
+
+  /* feature flags */
+  features: { search: true, uploads: null }
+}`,
+  ],
+  [
     'hlsl',
     'HLSL',
     `cbuffer Params : register(b0) {
@@ -1533,6 +2123,95 @@ Content-Length: 4
 done`,
   ],
   [
+    'hurl',
+    'Hurl',
+    `# Log in and keep the session token
+POST https://api.example.com/login
+Content-Type: application/json
+{
+  "username": "{{user}}",
+  "password": "{{password}}"
+}
+HTTP 200
+[Captures]
+token: jsonpath "$.token"
+[Asserts]
+header "Content-Type" contains "json"
+jsonpath "$.token" isString
+
+# Read the profile with the token
+GET https://api.example.com/me
+Authorization: Bearer {{token}}
+[Options]
+retry: 3
+HTTP 200
+[Asserts]
+status == 200
+jsonpath "$.email" matches /^[^@]+@example\\.com$/
+jsonpath "$.roles" count >= 1
+duration < 500`,
+  ],
+  [
+    'hxml',
+    'HXML',
+    `# build
+-cp src
+-main Main
+-lib heaps:1.9.0
+-D analyzer-optimize
+--js out/app.js
+--macro include('pkg')
+--next
+-cmd echo "done"`,
+  ],
+  [
+    'hy',
+    'Hy',
+    `; hy sample
+(import os [path])
+(defn greet [name #* args #** kw]
+  "Doc"
+  (setv msg f"Hello {name}!")
+  (when (is-not name None)
+    (print msg :sep "" 42 True))
+  (lfor x (range 10) :if (even? x) (* x 2)))
+(defclass Foo [object]
+  (defn __init__ [self] (setv self.x 1)))`,
+  ],
+  [
+    'imba',
+    'Imba',
+    `# A small todo app
+import {fetchTodos} from './api'
+
+class Todo
+	prop title = ''
+	prop done = no
+
+	def toggle
+		done = !done
+
+tag todo-app
+	prop items = []
+	prop filter = 'all'
+
+	css .item d:flex ja:center p:2 c:gray7
+		@hover bg:gray1
+	css .done td:line-through o:0.5
+
+	def mount
+		items = await fetchTodos!
+
+	def add title
+		items.push new Todo(title: title) if title
+
+	<self>
+		<h1> "Todos ({items.length})"
+		<input placeholder="What next?" @keydown.enter=add(e.target.value)>
+		<ul> for todo in items
+			<li.item .done=todo.done @click=todo.toggle!> todo.title`,
+  ],
+  [
     'ini',
     'INI',
     `; Service unit
@@ -1593,7 +2272,7 @@ public record Counter(String label, int count) {
 {% endblock %}`,
   ],
   [
-    'js',
+    'javascript',
     'JavaScript',
     `/**
  * Memoizes a function.
@@ -1808,6 +2487,31 @@ fun main() {
 }`,
   ],
   [
+    'kusto',
+    'Kusto',
+    `// Daily storm damage by state over the last month
+let lookback = 30d;
+let minDamage = 10000;
+StormEvents
+| where StartTime > ago(lookback)
+| where EventType has_any ("Flood", "Tornado") and State !in ("GUAM", "AMERICAN SAMOA")
+| extend Damage = DamageProperty + DamageCrops, Duration = EndTime - StartTime
+| where Damage >= minDamage
+| summarize
+    Events = count(),
+    TotalDamage = sum(Damage),
+    LongestEvent = max(Duration)
+    by State, Day = bin(StartTime, 1d)
+| join kind=leftouter (
+    States
+    | project State = toupper(Name), Region
+  ) on State
+| extend Label = strcat(State, " (", Region, ")")
+| order by TotalDamage desc nulls last
+| take 20
+| render timechart`,
+  ],
+  [
     'latex',
     'LaTeX',
     `\\documentclass[11pt]{article}
@@ -1907,7 +2611,7 @@ end Demo`,
 %}`,
   ],
   [
-    'lisp',
+    'common-lisp',
     'Lisp',
     `;;; A labelled counter.
 (defpackage :demo (:use :cl))
@@ -2032,7 +2736,7 @@ local label = \`Total: {total({})} items\\n\`
 print(label, "tab\\there", nil, true, MAX_ITEMS)`,
   ],
   [
-    'makefile',
+    'make',
     'Makefile',
     `# Build config
 CC := gcc
@@ -2086,6 +2790,41 @@ fn main() {
     println!("hello");
 }
 \`\`\``,
+  ],
+  [
+    'marko',
+    'Marko',
+    `import { formatPrice } from "./format";
+
+class {
+  onCreate() {
+    this.state = { count: 0 };
+  }
+  increment() {
+    this.state.count++;
+  }
+}
+
+style {
+  .cart { padding: 1rem; }
+}
+
+<div.cart#main>
+  <h2>\${input.title}</h2>
+  <if(input.items.length)>
+    <ul>
+      <for|item, i| of=input.items>
+        <li key=item.id class=["row", i % 2 && "odd"]>
+          \${item.name}: \${formatPrice(item.price)}
+        </li>
+      </for>
+    </ul>
+  </if>
+  <else>
+    <p>Your cart is empty.</p>
+  </else>
+  <button on-click("increment")>Added \${state.count}</button>
+</div>`,
   ],
   [
     'matlab',
@@ -2169,6 +2908,25 @@ flowchart LR
     classDef warn fill:#f96,stroke-width:2px`,
   ],
   [
+    'mojo',
+    'Mojo',
+    `from python import Python
+struct Point:
+    var x: Int
+    var y: Int
+    fn __init__(inout self, x: Int, y: Int):
+        self.x = x
+    fn dist(self, other: borrowed Point) -> Float64:
+        let dx = self.x - other.x
+        return sqrt(dx * dx)
+trait Shape:
+    fn area(self) -> Float64: ...
+fn main() raises:
+    alias n = 10
+    for i in range(n):
+        print(f"i={i}")  # comment`,
+  ],
+  [
     'moonbit',
     'MoonBit',
     `///| A point on a grid.
@@ -2206,6 +2964,41 @@ test "dist" {
   let p = Point::{ x: 3, y: 4 }
   assert_eq(p.dist(other=Point::{ x: 0, y: 0 }), 5.0)
   inspect(true, content="true")
+}`,
+  ],
+  [
+    'move',
+    'Move',
+    `/// A simple coin with mint and transfer.
+module 0x42::simple_coin {
+    use std::signer;
+
+    const ENOT_ENOUGH: u64 = 1;
+
+    struct Coin has key, store {
+        value: u64,
+    }
+
+    public entry fun mint(account: &signer, value: u64) {
+        move_to(account, Coin { value });
+    }
+
+    public fun balance(owner: address): u64 acquires Coin {
+        borrow_global<Coin>(owner).value
+    }
+
+    public entry fun burn(account: &signer, amount: u64) acquires Coin {
+        let addr = signer::address_of(account);
+        let coin = borrow_global_mut<Coin>(addr);
+        assert!(coin.value >= amount, ENOT_ENOUGH);
+        coin.value = coin.value - amount;
+    }
+
+    #[test(account = @0x42)]
+    fun test_mint(account: &signer) acquires Coin {
+        mint(account, 100);
+        assert!(balance(@0x42) == 100, 0);
+    }
 }`,
   ],
   [
@@ -2288,7 +3081,70 @@ in rec {
 }`,
   ],
   [
-    'objc',
+    'nsis',
+    'NSIS',
+    `; Simple installer for a desktop app
+!include "MUI2.nsh"
+!define APP_NAME "Notepad Plus"
+!define VERSION "2.4.1"
+
+Name "\${APP_NAME} \${VERSION}"
+OutFile "setup-\${VERSION}.exe"
+InstallDir "$PROGRAMFILES64\\\${APP_NAME}"
+RequestExecutionLevel admin
+
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "English"
+
+Section "Install" SecMain
+  SetOutPath $INSTDIR
+  File /r "dist\\*.*"
+  WriteRegStr HKLM "Software\\\${APP_NAME}" "InstallDir" "$INSTDIR"
+  WriteUninstaller "$INSTDIR\\uninstall.exe"
+  CreateShortcut "$DESKTOP\\\${APP_NAME}.lnk" "$INSTDIR\\app.exe"
+SectionEnd
+
+Function .onInit
+  ReadRegStr $0 HKLM "Software\\\${APP_NAME}" "InstallDir"
+  \${If} $0 != ""
+    MessageBox MB_YESNO|MB_ICONQUESTION "Already installed. Reinstall?" IDYES +2
+    Abort
+  \${EndIf}
+FunctionEnd`,
+  ],
+  [
+    'nushell',
+    'Nushell',
+    `# Summarize the largest files in a directory
+def largest-files [
+  dir: path = .,        # where to look
+  --count (-n): int = 5 # how many to show
+]: nothing -> table {
+  ls $dir
+  | where type == file
+  | sort-by size --reverse
+  | first $count
+  | select name size modified
+}
+
+def main [] {
+  let files = largest-files ./src --count 3
+  let total = $files | get size | math sum
+
+  for file in $files {
+    print $"($file.name): ($file.size)"
+  }
+
+  if $total > 10mb {
+    print -e $"warning: total is ($total)"
+  }
+
+  $files | to json | save --force report.json
+}`,
+  ],
+  [
+    'objective-c',
     'Objective-C',
     `#import <Foundation/Foundation.h>
 
@@ -2407,6 +3263,40 @@ for (i = [0:2:10]) echo(i, PI);
 if (!is_undef(size) && len(size) == 3) *box(size[0]); else !box(undef);`,
   ],
   [
+    'org',
+    'Org',
+    `#+TITLE: Project Plan
+#+AUTHOR: Ada Lovelace
+#+OPTIONS: toc:nil num:nil
+
+* TODO [#A] Ship the parser release :work:
+  DEADLINE: <2024-03-01 Fri>
+  :PROPERTIES:
+  :EFFORT:   4:00
+  :END:
+  - [X] Write the /lexer/ and *tests*
+  - [ ] Update [[https://example.com/docs][the docs]]
+  - [ ] Benchmark with =bun bench=
+
+* DONE Review the design
+  CLOSED: [2024-02-12 Mon 16:30]
+  Inline math like $e^{i\\pi} + 1 = 0$ renders too.[fn:1]
+
+| Step  | Owner | Hours |
+|-------+-------+-------|
+| Lexer | Ada   |     6 |
+| Docs  | Alan  |     2 |
+
+#+BEGIN_SRC python :results output
+def fib(n):
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+print([fib(i) for i in range(10)])
+#+END_SRC
+
+[fn:1] Rendered with MathJax.`,
+  ],
+  [
     'pascal',
     'Delphi / Object Pascal',
     `unit Shapes;
@@ -2506,6 +3396,39 @@ $names = ["Ada", "Linus"];
   <li><?= greet($name) ?></li>
 <?php endforeach ?>
 </ul>`,
+  ],
+  [
+    'pkl',
+    'Pkl',
+    `/// Configuration for a web service.
+module example.Service
+
+import "pkl:semver"
+
+typealias Port = UInt16(isBetween(1024, 65535))
+
+class Endpoint {
+  host: String = "localhost"
+  port: Port = 8080
+  tls: Boolean = false
+
+  function url(path: String): String =
+    "\\(if (tls) "https" else "http")://\\(host):\\(port)/\\(path)"
+}
+
+name: String = "orders"
+version = semver.Version("1.4.0")
+timeout: Duration = 30.s
+maxBody: DataSize = 10.mb
+
+endpoints: Listing<Endpoint> = new {
+  new { host = "api.example.com"; port = 8443; tls = true }
+  when (name.startsWith("order")) {
+    new { port = 9090 }
+  }
+}
+
+replicas = endpoints.length * 2`,
   ],
   [
     'plsql',
@@ -2748,6 +3671,31 @@ class nginx (
    comment */`,
   ],
   [
+    'purescript',
+    'PureScript',
+    `module Main where
+
+import Prelude
+import Effect (Effect)
+import Data.Maybe (Maybe(..))
+
+-- | Doc
+data Shape = Circle Number | Rect { w :: Number, h :: Number }
+
+foreign import now :: Effect Number
+
+derive instance eqShape :: Eq Shape
+
+area :: forall r. { w :: Number | r } -> Number
+area s = case s of
+  _ -> 3.14 * 2.0
+
+main :: Effect Unit
+main = do
+  let x = "hi" <> show 42
+  log x`,
+  ],
+  [
     'python',
     'Python',
     `from dataclasses import dataclass
@@ -2824,6 +3772,36 @@ raw <- r"(C:\\data\\input.csv)"
 stats::median(data$y, na.rm = TRUE)`,
   ],
   [
+    'raku',
+    'Raku',
+    `use v6.d;
+
+#| A simple key-value parser
+grammar KeyValue {
+    token TOP   { <pair>* %% \\n }
+    token pair  { <key> \\h* '=' \\h* <value> }
+    token key   { \\w+ }
+    token value { \\N* }
+}
+
+class Config {
+    has %.values;
+
+    method from-text(Str $text --> Config) {
+        my $match = KeyValue.parse($text) or die "Invalid config";
+        self.new(values => $match<pair>.map({ ~.<key> => ~.<value> }).Hash);
+    }
+
+    method get(Str $key, :$default = Nil) {
+        %!values{$key} // $default;
+    }
+}
+
+my $config = Config.from-text("name = Raku\\nversion = 6.d");
+say "Hello from {$config.get('name')}!";
+say $config.values.keys.sort.join(', ');`,
+  ],
+  [
     'razor',
     'Razor',
     `@page "/orders/{id:int}"
@@ -2859,6 +3837,27 @@ else
 }`,
   ],
   [
+    'rbs',
+    'RBS',
+    `# User model
+module App
+  class User < Base
+    include Comparable
+    attr_reader name: String
+    attr_accessor age: Integer?
+    VERSION: String
+    type id = Integer | String
+    def initialize: (name: String, ?age: Integer) -> void
+    def find: [T] (id) { (User) -> T } -> T?
+            | (String) -> nil
+    def self.all: () -> Array[User]
+  end
+  interface _Each[A]
+    def each: () { (A) -> void } -> void
+  end
+end`,
+  ],
+  [
     'reg',
     'Windows Registry',
     `Windows Registry Editor Version 5.00
@@ -2876,6 +3875,40 @@ else
 "Old"=-
 
 [-HKEY_CURRENT_USER\\Software\\Obsolete]`,
+  ],
+  [
+    'regexp',
+    'Regular Expression',
+    `(?#ISO 8601 date and time)
+^(?<year>\\d{4})-(?<month>0[1-9]|1[0-2])-(?<day>0[1-9]|[12]\\d|3[01])
+(?:T(?<hour>[01]\\d|2[0-3]):(?<minute>[0-5]\\d)(?::(?<second>[0-5]\\d))?)?
+(?<zone>Z|[+-]\\d{2}:\\d{2})?$
+/^[\\w.+-]+@[a-z\\d-]+(?:\\.[a-z\\d-]+)*\\.[a-z]{2,}$/i
+(?i)\\b(?:https?|ftp):\\/\\/[^\\s/$.?#][^\\s]*\\b
+"(?:[^"\\\\]|\\\\.)*"
+(?<=\\$)\\d+(?:\\.\\d{2})?(?!\\d)
+\\b(\\w+)\\s+\\1\\b
+[[:alpha:]_][[:alnum:]_]*
+\\p{Lu}\\p{Ll}+
+^\\s*#.*$
+\\A(?>\\d+)\\z
+^(?:\\d{1,3}\\.){3}\\d{1,3}$
+<(?<tag>[a-z][\\w-]*)\\b[^>]*>.*?</\\k<tag>>
+^[A-Z][a-z]+(?: [A-Z][a-z]+)*$`,
+  ],
+  [
+    'ron',
+    'RON',
+    `#![enable(implicit_some)]
+// scene
+Scene(
+    name: "Level 1", /* block */
+    entities: [
+        (id: 1, pos: (1.0, -2.5), tags: ["a", "b"], kind: Player),
+        Enemy(hp: 100, boss: true, drop: Some('x')),
+    ],
+    map: { "key": 0xff, 'c': r#"raw"# },
+)`,
   ],
   [
     'rosmsg',
@@ -3101,6 +4134,40 @@ $sizes: (sm: 4px, md: 8px);
 }`,
   ],
   [
+    'sdbl',
+    '1C Query',
+    `// Продажи по товарам за период
+ВЫБРАТЬ РАЗЛИЧНЫЕ
+	Продажи.Номенклатура КАК Товар,
+	СУММА(Продажи.Количество) КАК Количество,
+	СУММА(Продажи.Сумма) КАК Сумма,
+	ВЫБОР
+		КОГДА СУММА(Продажи.Сумма) > 100000 ТОГДА "Крупный"
+		ИНАЧЕ "Обычный"
+	КОНЕЦ КАК Категория
+ПОМЕСТИТЬ ВТ_Продажи
+ИЗ
+	РегистрНакопления.Продажи.Обороты(&НачалоПериода, &КонецПериода, , ) КАК Продажи
+		ЛЕВОЕ СОЕДИНЕНИЕ Справочник.Номенклатура КАК Номенклатура
+		ПО Продажи.Номенклатура = Номенклатура.Ссылка
+ГДЕ
+	НЕ Номенклатура.ПометкаУдаления
+	И Номенклатура.Вид В (&Виды)
+СГРУППИРОВАТЬ ПО
+	Продажи.Номенклатура
+ИМЕЮЩИЕ
+	СУММА(Продажи.Количество) > 0
+;
+
+ВЫБРАТЬ ПЕРВЫЕ 10
+	ВТ_Продажи.Товар,
+	ВТ_Продажи.Сумма
+ИЗ
+	ВТ_Продажи КАК ВТ_Продажи
+УПОРЯДОЧИТЬ ПО
+	ВТ_Продажи.Сумма УБЫВ`,
+  ],
+  [
     'shaderlab',
     'ShaderLab',
     `// Unlit shader
@@ -3127,6 +4194,88 @@ Shader "Custom/Unlit" {
         }
     }
     Fallback "Diffuse"
+}`,
+  ],
+  [
+    'smalltalk',
+    'Smalltalk',
+    `"A bank account with a running balance"
+Object subclass: #Account
+    instanceVariableNames: 'owner balance'
+    classVariableNames: ''
+    package: 'Banking'.
+
+Account >> initialize [
+    balance := 0
+]
+
+Account >> deposit: anAmount [
+    anAmount <= 0 ifTrue: [^self error: 'Amount must be positive'].
+    balance := balance + anAmount
+]
+
+Account >> withdraw: anAmount [
+    | remaining |
+    remaining := balance - anAmount.
+    remaining < 0 ifTrue: [^self error: 'Insufficient funds'].
+    balance := remaining
+]
+
+Account >> printOn: aStream [
+    aStream nextPutAll: 'Account('; print: balance; nextPut: $)
+]
+
+| acct |
+acct := Account new.
+acct deposit: 100; withdraw: 30.
+#(10 20 30) do: [:each | acct deposit: each].
+Transcript showCr: acct printString.`,
+  ],
+  [
+    'smithy',
+    'Smithy',
+    `$version: "2"
+
+namespace example.weather
+
+use aws.protocols#restJson1
+
+/// Provides weather forecasts.
+@restJson1
+service Weather {
+    version: "2006-03-01"
+    resources: [City]
+}
+
+resource City {
+    identifiers: { cityId: CityId }
+    read: GetCity
+}
+
+@pattern("^[A-Za-z0-9 ]+$")
+string CityId
+
+@readonly
+@http(method: "GET", uri: "/cities/{cityId}")
+operation GetCity {
+    input := {
+        @required
+        @httpLabel
+        cityId: CityId
+    }
+    output := {
+        @required
+        name: String
+        coordinates: CityCoordinates
+    }
+    errors: [NoSuchResource]
+}
+
+structure CityCoordinates {
+    @required
+    latitude: Float
+    @required
+    longitude: Float
 }`,
   ],
   [
@@ -3167,6 +4316,27 @@ second"""@en .
 ORDER BY DESC(?tags) LIMIT 10`,
   ],
   [
+    'splunk',
+    'Splunk',
+    `\`\`\` Failed SSH logins per host over the last day \`\`\`
+index=security sourcetype=linux_secure "Failed password" earliest=-24h@h latest=now
+| rex field=_raw "from (?<src_ip>[0-9.]+) port (?<port>\\d+)"
+| eval user = coalesce(user, "unknown"),
+       hour = strftime(_time, "%H"),
+       severity = case(port < 1024, "high", true(), "low")
+| where isnotnull(src_ip) AND NOT src_ip IN ("10.0.0.1", "10.0.0.2")
+| stats count AS attempts
+        dc(user) AS users
+        values(user) AS user_list
+        BY host, src_ip, severity
+| where attempts > 5
+| lookup geoip ip AS src_ip OUTPUT country, city
+| search NOT [ search index=allowlist | fields src_ip ]
+| \`notify_soc(attempts)\`
+| sort - attempts
+| table host src_ip country severity attempts users user_list`,
+  ],
+  [
     'sql',
     'SQL',
     `WITH active_users AS (
@@ -3185,6 +4355,23 @@ LEFT JOIN project_totals AS p ON p.owner_id = u.id
 WHERE COALESCE(p.projects, 0) > 3
 ORDER BY projects DESC, u.name ASC
 LIMIT 10;`,
+  ],
+  [
+    'ssh-config',
+    'SSH Config',
+    `# Global options
+Host *
+    ServerAliveInterval 60
+    AddKeysToAgent yes
+
+Host github.com gh
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    Port 22
+Match host *.internal exec "test -f ~/.vpn"
+    ProxyJump bastion
+Include config.d/*`,
   ],
   [
     'stata',
@@ -3230,6 +4417,35 @@ body
    comment */`,
   ],
   [
+    'surrealql',
+    'SurrealQL',
+    `-- Schema
+DEFINE TABLE user SCHEMAFULL
+  PERMISSIONS FOR select, update WHERE id = $auth.id;
+DEFINE FIELD email ON TABLE user TYPE string ASSERT string::is::email($value);
+DEFINE FIELD created ON TABLE user TYPE datetime DEFAULT time::now();
+DEFINE INDEX unique_email ON TABLE user FIELDS email UNIQUE;
+
+-- Data
+CREATE user:tobie CONTENT {
+  name: "Tobie",
+  email: "tobie@surrealdb.com",
+  tags: ["admin", "author"],
+};
+CREATE article:hello SET title = "Hello", published = d"2024-05-01T10:00:00Z";
+RELATE user:tobie->wrote->article:hello SET time.written = time::now();
+
+-- Queries
+LET $since = time::now() - 30d;
+SELECT name, ->wrote->article.title AS articles, count(->wrote) AS total
+  FROM user
+  WHERE created > $since AND tags CONTAINS "author"
+  ORDER BY total DESC
+  LIMIT 10
+  FETCH articles;
+SELECT * FROM <array<string>> ["a", "b"];`,
+  ],
+  [
     'svelte',
     'Svelte',
     `<script lang="ts">
@@ -3263,6 +4479,37 @@ let origin = Point(x: 0, y: 0)
 print("distance² = \\(origin.distanceSquared(to: Point(x: 3, y: 4)))")`,
   ],
   [
+    'talonscript',
+    'TalonScript',
+    `# Commands for VS Code on macOS
+app: vscode
+os: mac
+and not mode: sleep
+-
+settings():
+    speech.timeout = 0.4
+    key_wait = 1.5
+
+tag(): user.tabs
+
+save [file]: key(cmd-s)
+go to line <number>:
+    edit.jump_line(number)
+    sleep(100ms)
+    edit.line_end()
+
+(open | show) file {user.file_type}:
+    user.vscode("workbench.action.quickOpen")
+    insert(".{file_type}")
+
+insert date: insert(user.time_format("%Y-%m-%d"))
+comment block:
+    insert("""/*
+ * {user.text}
+ */""")
+face(smile): mouse_click(0)`,
+  ],
+  [
     'tcl',
     'Tcl',
     `#!/usr/bin/env tclsh
@@ -3282,6 +4529,37 @@ second line $name"
 }
 greet \\
     world`,
+  ],
+  [
+    'templ',
+    'templ',
+    `package views
+
+import "fmt"
+
+type Item struct {
+	Name  string
+	Price int
+}
+
+templ ItemList(items []Item) {
+	<ul class="items">
+		for _, item := range items {
+			<li class={ itemClass(item) }>
+				{ item.Name }: { fmt.Sprintf("$%d", item.Price) }
+			</li>
+		}
+	</ul>
+	if len(items) == 0 {
+		<p>No items yet.</p>
+	} else {
+		@Total(len(items))
+	}
+}
+
+templ Total(n int) {
+	<p>Total items: { fmt.Sprint(n) }</p>
+}`,
   ],
   [
     'terraform',
@@ -3341,7 +4619,7 @@ simd128 = true
 bulk_memory = true`,
   ],
   [
-    'ts',
+    'typescript',
     'TypeScript',
     `/**
  * An interface for a point in 2D space.
@@ -3498,6 +4776,30 @@ _:b1 ex:rating 4.5e0 .`,
 {% endblock %}`,
   ],
   [
+    'typespec',
+    'TypeSpec',
+    `import "@typespec/http";
+using TypeSpec.Http;
+/** Pet store */
+@service(#{ title: "Pet Store" })
+namespace PetStore;
+model Pet {
+  @minLength(1) name: string;
+  age?: int32 = 0;
+  kind: "dog" | "cat";
+  tags: string[];
+}
+enum Color { Red, Green: "green" }
+scalar uuid extends string;
+union Shape { circle: Circle, sq: Square }
+alias Pets = Pet[];
+@route("/pets")
+interface Pets {
+  @get list(@query skip?: int32): Pet[] | Error;
+  op read(@path id: string): Pet;
+}`,
+  ],
+  [
     'typst',
     'Typst',
     `// Report setup
@@ -3511,6 +4813,96 @@ $ sum_(i=1)^n x_i = 1/2 $
 /* multi-line
    block comment */
 #figure(image("a.png"), caption: [A *bold* caption])`,
+  ],
+  [
+    'v',
+    'V',
+    `module main
+
+import os
+
+struct User {
+    name string
+mut:
+    visits int
+}
+
+fn (mut u User) visit() {
+    u.visits++
+}
+
+fn (u User) greeting() string {
+    return 'Hello, \${u.name}! You visited \${u.visits} times.'
+}
+
+fn main() {
+    name := if os.args.len > 1 { os.args[1] } else { 'world' }
+    mut user := User{
+        name: name
+    }
+    for _ in 0 .. 3 {
+        user.visit()
+    }
+    println(user.greeting())
+}`,
+  ],
+  [
+    'vala',
+    'Vala',
+    `using GLib;
+namespace Demo {
+    /** A greeter */
+    public class Greeter : Object {
+        public string name { get; set; default = "x"; }
+        public signal void greeted (string who);
+        private unowned List<string>? items = null;
+        construct { stdout.printf ("hi %s\\n", name); }
+        public async int run (owned string s) throws IOError {
+            var n = 42; // answer
+            foreach (var i in items) { yield; }
+            string t = @"$name is $(n + 1)";
+            return n;
+        }
+    }
+    [CCode (cname = "foo")]
+    extern void foo ();
+}`,
+  ],
+  [
+    'vb',
+    'Visual Basic',
+    `Option Strict On
+Imports System.Collections.Generic
+
+Namespace Shop
+    ''' <summary>A shopping cart with line items.</summary>
+    <Serializable()>
+    Public Class Cart
+        Private ReadOnly _items As New Dictionary(Of String, Decimal)
+
+        Public ReadOnly Property Count As Integer
+            Get
+                Return _items.Count
+            End Get
+        End Property
+
+        Public Sub Add(ByVal name As String, ByVal price As Decimal)
+            If String.IsNullOrEmpty(name) Then
+                Throw New ArgumentException("Name is required")
+            End If
+            _items(name) = price
+        End Sub
+
+        Public Function Total(Optional discount As Double = 0.1) As Decimal
+            Dim sum As Decimal = 0D
+            For Each item In _items.Values
+                sum += item
+            Next
+            Console.WriteLine($"Total: {sum:C2} ({Count} items)")
+            Return sum * CDec(1 - discount)
+        End Function
+    End Class
+End Namespace`,
   ],
   [
     'verilog',
@@ -3611,7 +5003,42 @@ const label = computed(() => "Clicks: " + count.value);
 </style>`,
   ],
   [
-    'wat',
+    'vue-vine',
+    'Vue Vine',
+    `import { ref } from 'vue'
+export function Counter(props: { step: number }) {
+  const count = ref(0)
+  vineStyle.scoped(\`.btn { color: red; }\`)
+  return vine\`
+    <button class="btn" @click="count += props.step">{{ count }}</button>
+  \`
+}`,
+  ],
+  [
+    'vyper',
+    'Vyper',
+    `# @version ^0.3.7
+from vyper.interfaces import ERC20
+interface Token:
+    def transfer(to: address, amount: uint256) -> bool: nonpayable
+event Transfer:
+    sender: indexed(address)
+    value: uint256
+struct Order:
+    id: uint256
+owner: public(address)
+balances: HashMap[address, uint256]
+MAX: constant(uint256) = 10 ** 18
+@external
+@payable
+def deposit(amount: uint256) -> bool:
+    assert amount > 0, "zero"
+    self.balances[msg.sender] += amount
+    log Transfer(msg.sender, amount)
+    return True`,
+  ],
+  [
+    'wasm',
     'WebAssembly Text',
     `(module
   (memory (export "memory") 1)
@@ -3657,6 +5084,74 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let c = textureSample(tex, samp, in.uv);
   if (c.a < 0.5) { discard; }
   return c;
+}`,
+  ],
+  [
+    'wikitext',
+    'Wikitext',
+    `{{Infobox software
+| name         = Pierre
+| developer    = The Pierre Team
+| released     = {{Start date|2024|01|31}}
+| website      = {{URL|https://example.org}}
+}}
+'''Pierre''' is a ''fast'' syntax highlighter written in [[WebAssembly]].
+
+== Features ==
+* Highlights more than [[List of languages|150 languages]]
+* Streams tokens line by line
+* Works in browsers and on [https://workers.cloudflare.com Cloudflare Workers]
+
+== Example ==
+<syntaxhighlight lang="javascript">
+const html = codeToHtml('let a = 1', { lang: 'js' });
+</syntaxhighlight>
+
+{| class="wikitable"
+|+ Benchmark
+|-
+! Engine !! Time
+|-
+| Pierre || 1.2 ms
+|}
+
+<!-- TODO: add more benchmarks -->
+== References ==
+<references />
+[[Category:Software]]`,
+  ],
+  [
+    'wit',
+    'WIT',
+    `package example:kv@0.1.0;
+
+/// A simple key-value store.
+interface store {
+  use wasi:io/streams@0.2.0.{input-stream};
+
+  variant error {
+    not-found,
+    access-denied(string),
+    other(string),
+  }
+
+  record entry {
+    key: string,
+    value: list<u8>,
+    ttl: option<u64>,
+  }
+
+  resource bucket {
+    open: static func(name: string) -> result<bucket, error>;
+    get: func(key: string) -> result<option<entry>, error>;
+    set: func(entry: entry) -> result<_, error>;
+    keys: func() -> list<string>;
+  }
+}
+
+world kv-service {
+  import store;
+  export run: func() -> result;
 }`,
   ],
   [
@@ -3715,6 +5210,36 @@ service:
 metadata:
   owner: wat-labs
   stable: false`,
+  ],
+  [
+    'zenscript',
+    'ZenScript',
+    `#priority 10
+import crafttweaker.item.IItemStack;
+import crafttweaker.oredict.IOreDictEntry;
+
+// Cheaper torches and a few shapeless recipes.
+val stick = <minecraft:stick>;
+val coal = <ore:coal>;
+static outputs as IItemStack[] = [<minecraft:torch> * 8, <minecraft:lantern>];
+
+recipes.remove(<minecraft:torch>);
+recipes.addShaped("cheap_torch", <minecraft:torch> * 8, [
+    [coal],
+    [stick]
+]);
+
+function dyeAll(items as IItemStack[], dye as IOreDictEntry) as void {
+    for i, item in items {
+        recipes.addShapeless("dyed_" ~ i, item, [item, dye]);
+    }
+}
+
+dyeAll(outputs, <ore:dyeRed>);
+
+if (loadedMods has "jei") {
+    mods.jei.JEI.hide(<minecraft:barrier>);
+}`,
   ],
   [
     'zig',

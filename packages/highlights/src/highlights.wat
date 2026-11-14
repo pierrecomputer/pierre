@@ -1,6 +1,6 @@
 (module
   (import "./languages.wat")
-  (import "./emit.wat")
+  (import "./emitter.wat")
   (import "./memory.wat")
   (import "./live.wat")
   (import "./token.wat")
@@ -94,7 +94,10 @@
     (if (local.get $reset)
       (then (call $streamResetGlobals)))
     (call $hlBegin)
-    (call $recStreamBegin (local.get $reset))
+    ;; Byte records go to a parent lexer, which owns the token before
+    ;; a chunk. A carried record would take a leading gap from it.
+    (if (i32.ne (global.get $tokens) (i32.const 2))
+      (then (call $recStreamBegin (local.get $reset))))
     (call $streamChunk (i32.load8_u (i32.const 0)) (local.get $reset))
     (call $recStreamEnd)
     (call $hlEnd)

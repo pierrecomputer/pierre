@@ -162,8 +162,8 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 
 | Download, gzip KB                   | @pierre/words | streamdown |
 | ----------------------------------- | ------------: | ---------: |
-| Base React renderer · initial load  |          50.7 |      165.3 |
-| 148 shared languages · loaded total |         247.0 |     1057.8 |
+| Base React renderer · initial load  |          50.8 |      165.3 |
+| 186 shared languages · loaded total |         302.0 |     1179.0 |
 | CSS                                 |           1.2 |        0.4 |
 
 Download size uses minified `Bun.build` output with React external, with each JS
@@ -171,11 +171,11 @@ file gzipped at level 9. Each loaded chunk is counted once, including its static
 dependencies. Unrequested dynamic imports are excluded. The base row counts
 static imports only.
 
-The shared-language row requests the 148 canonical languages supported by both
+The shared-language row requests the 186 canonical languages supported by both
 libraries, resolving aliases without counting them as extra languages. Both use
-GitHub light/dark. Words still includes all 152 built-in languages; CUDA, GROQ,
+GitHub light/dark. Words still includes all 190 built-in languages; CUDA, GROQ,
 PromQL, and TSRX have no matching Shiki language. Streamdown also loads the
-required embedded grammar dependencies of those 148 requests. Its remaining
+required embedded grammar dependencies of those 186 requests. Its remaining
 languages, optional embedded languages, and unused themes are excluded.
 
 The shared-language row measures cumulative transfer after the specified

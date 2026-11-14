@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.zigWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $zigByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -140,7 +144,7 @@
   ;; `continue`, so the two words can never share a table and `comptime` is
   ;; matched directly. The one-byte names `c` and `_` are below the table's
   ;; minimum length and are matched directly too.
-  (keyword-table $zigWords $mem.zigWords $mem.odinWords
+  (keyword-table $zigWords $mem.zigWords $mem.zigWords+288
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword.declaration+512 "const" "var") ;; 2: declaration, next name is a variable
     (group $Token.keyword.declaration+768 "struct" "enum" "union" "opaque") ;; 3: declaration
@@ -181,7 +185,19 @@
               (i32.or
                 (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "c"))
                 (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "_")))
-              (then (return (enum.get $Token.variable.special))))
+              (then
+                ;; a member `std.c` is a plain name; `0..c` is a range
+                (if
+                  (i32.and
+                    (i32.gt_u (local.get $lhs) (global.get $srcBase))
+                    (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const ".")))
+                  (then
+                    (if
+                      (i32.or
+                        (i32.eq (i32.sub (local.get $lhs) (i32.const 1)) (global.get $srcBase))
+                        (i32.ne (i32.load8_u (i32.sub (local.get $lhs) (i32.const 2))) (i32.const ".")))
+                      (then (return (i32.const -1))))))
+                (return (enum.get $Token.variable.special))))
             (return (i32.const -1))))
         ;; the one word the table cannot hold; the wide load stays inside the
         ;; input slack, as in the table's own compare

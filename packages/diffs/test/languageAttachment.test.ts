@@ -3,12 +3,18 @@ import { bundledLanguages } from 'shiki';
 
 import {
   areLanguagesAttached,
+  attachResolvedLanguages,
+  createHighlighter,
   type DiffsHighlighter,
   disposeHighlighter,
   getSharedHighlighter,
   registerCustomLanguage,
 } from '../src';
-import { RegisteredCustomLanguages } from '../src/highlighter/languages/constants';
+import {
+  RegisteredCustomLanguages,
+  RegisteredHighlightsLanguages,
+} from '../src/highlighter/languages/constants';
+import { resolveHighlightsLanguages } from '../src/highlighter/languages/resolveHighlightsLanguages';
 
 beforeEach(async () => {
   await disposeHighlighter();
@@ -23,6 +29,73 @@ afterEach(async () => {
   for (const name of ['tf', 'hcl', 'custom-hcl']) {
     RegisteredCustomLanguages.delete(name);
   }
+  for (const name of ['my-json', 'bad-json']) {
+    RegisteredHighlightsLanguages.delete(name);
+  }
+});
+
+test('Highlights attaches lexers registered with the highlights type', async () => {
+  for (const name of ['my-json', 'bad-json']) {
+    registerCustomLanguage(
+      name,
+      async () => {
+        const { default: json } = await import('@pierre/highlights/langs/json');
+        return {
+          default: {
+            ...json,
+            aliases: { ...json.aliases, 'my-json': json.aliases.json },
+          },
+        };
+      },
+      [],
+      'highlights'
+    );
+  }
+  await disposeHighlighter();
+  const highlighter = await getSharedHighlighter({
+    preferredHighlighter: 'highlights',
+    themes: ['pierre-dark'],
+    langs: [],
+  });
+  expect(highlighter.hasLoadedLanguages(['json', 'my-json'])).toBe(false);
+  await highlighter.loadLanguages(['my-json']);
+  expect(highlighter.hasLoadedLanguages(['json', 'my-json'])).toBe(true);
+  const code = '{"a": [1, true]}';
+  const tokens = (lang: string) =>
+    highlighter.codeToTokens(code, { lang, theme: 'pierre-dark' }).tokens;
+  expect(tokens('my-json')).toEqual(tokens('json'));
+  expect(tokens('my-json')).not.toEqual(tokens('text'));
+  // The stream and editor tokenizers use the attached lexer too.
+  const streamed = async (lang: string) => {
+    const stream = highlighter.createStreamTokenizer({
+      lang,
+      theme: 'pierre-dark',
+    });
+    const { stable, unstable } = await stream.enqueue(code);
+    stream.dispose();
+    return [...stable, ...unstable];
+  };
+  expect(await streamed('my-json')).toEqual(await streamed('json'));
+  expect(await streamed('my-json')).not.toEqual(await streamed('text'));
+  // Workers receive a structured clone of the resolved lexer.
+  const worker = await createHighlighter('highlights');
+  attachResolvedLanguages(
+    structuredClone(await resolveHighlightsLanguages(['my-json'])),
+    worker
+  );
+  expect(
+    worker.codeToTokens(code, { lang: 'my-json', theme: 'pierre-dark' }).tokens
+  ).toEqual(tokens('json'));
+  worker.dispose();
+  const error = await highlighter
+    .loadLanguages(['bad-json'])
+    .catch((error: unknown) => error);
+  expect(error).toEqual(
+    new Error(
+      'attachResolvedLanguages: The Highlights lexer "json" does not declare "bad-json" as an alias.'
+    )
+  );
+  expect(highlighter.hasLoadedLanguages(['bad-json'])).toBe(false);
 });
 
 describe('language attachment', () => {

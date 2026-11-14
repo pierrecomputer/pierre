@@ -143,3 +143,23 @@ test('coffee: multi-line literals stream like the whole buffer', () => {
     assertLineFedParity('coffee', code);
   }
 });
+
+test('coffee: a reserved word before `:` is an object key', () => {
+  expect(tokenKinds('coffee', "opts =\n  class: 'btn'\n  new: -> 1\n")).toEqual(
+    [
+      ['opts', 'variable'],
+      ['=', 'operator'],
+      ['class', 'property'],
+      [':', 'punctuation.delimiter'],
+      ["'btn'", 'string'],
+      ['new', 'function.definition'],
+      [':', 'punctuation.delimiter'],
+      ['->', 'keyword.declaration'],
+      ['1', 'number'],
+    ]
+  );
+  expect(tokenKinds('coffee', 'this::x')[0]).toEqual([
+    'this',
+    'variable.special',
+  ]);
+});

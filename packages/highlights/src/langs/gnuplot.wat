@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gnuplotWords 512)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./dockerfile.wat")
 
   ;; Group order is the dispatch order in $hlGnuplot. Axis-prefixed `set` options
   ;; (`xlabel`, `y2range`) hold the bare option.
-  (keyword-table $gnuplotWords $mem.gnuplotWords $mem.prismaWords
+  (keyword-table $gnuplotWords $mem.gnuplotWords $mem.gnuplotWords+512
     (group "set" "unset" "show") ;; 1: an option follows
     (group "plot" "splot" "replot" "fit") ;; 2: plot modifiers follow
     (group ;; 3: other commands
@@ -25,11 +29,39 @@
     (group ;; 7: plot styles
       "lines" "points" "linespoints" "lp" "dots" "impulses" "boxes" "histograms" "steps"
       "errorbars" "yerrorbars" "xerrorbars" "filledcurves" "vectors" "labels" "candlesticks")
-    (group "pi" "NaN")) ;; 8: constants
+    (group "pi" "NaN") ;; 8: constants
+    (group "se") ;; 9 and 10: abbreviations of groups 1 and 2, commands only
+    (group "sp" "rep")) ;; as a statement's first word; `p` and `stats` (11) are matched apart
+
+  ;; Returns 4 when the input ends right after a `\` join, so the comment goes
+  ;; on in the next stream chunk.
+  (func $gnuplotComment (result i32)
+    (local $lhs i32)
+    (block $done
+      (loop $line
+        (local.set $lhs (global.get $ptr))
+        (call $scanToLineEnd)
+        (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+        (br_if $done
+          (i32.or
+            (i32.ge_u (global.get $ptr) (global.get $end))
+            (i32.le_u (global.get $ptr) (local.get $lhs))))
+        (br_if $done (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 92)))
+        (local.set $lhs (global.get $ptr))
+        (global.set $ptr
+          (i32.add
+            (i32.add (local.get $lhs) (i32.const 1))
+            (i32.and
+              (i32.eq (i32.load8_u (local.get $lhs)) (i32.const 13))
+              (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 1))) (i32.const 10)))))
+        (call $emitGap (local.get $lhs) (global.get $ptr))
+        (br_if $line (i32.lt_u (global.get $ptr) (global.get $end)))
+        (return (i32.const 4))))
+    (i32.const 0))
 
   ;; $stmt: 1 at a statement start. $cmd: 1 after `set`, `unset`, or `show`, 2 in
   ;; a plot or fit command (one-letter modifiers count), 3 in a function's
-  ;; parameters.
+  ;; parameters, 4 at a chunk end inside a joined comment.
   (func $hlGnuplot
     (local $c i32)
     (local $c2 i32)
@@ -45,6 +77,8 @@
     (local $cmd i32)
     (local.set $stmt (i32.const 1))
     (call $lexEmitLeadingContinuation)
+    (if (i32.eq (local.get $cmd) (i32.const 4))
+      (then (local.set $cmd (call $gnuplotComment))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -63,7 +97,7 @@
 
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
-            (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
+            (local.set $cmd (call $gnuplotComment))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
@@ -146,6 +180,23 @@
             (local.set $hl (enum.get $Token.variable))
             (if (local.get $atStmt)
               (then
+                (if (i32.eqz (local.get $g))
+                  (then
+                    (if (i32.and (i32.eq (local.get $c) (i32.const "p")) (i32.eq (local.get $rhs) (i32.add (local.get $lhs) (i32.const 1))))
+                      (then (local.set $g (i32.const 10))))
+                    (if (i32.and
+                          (i32.eq (local.get $rhs) (i32.add (local.get $lhs) (i32.const 5)))
+                          (i32.and
+                            (i32.eq (i32.load (local.get $lhs)) (i32.const "stat"))
+                            (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "s"))))
+                      (then (local.set $g (i32.const 11))))))
+                (if (i32.ge_u (local.get $g) (i32.const 9))
+                  (then
+                    (local.set $g
+                      (select
+                        (i32.sub (local.get $g) (i32.const 8))
+                        (i32.const 0)
+                        (i32.and (i32.ne (local.get $pc) (i32.const "=")) (i32.ne (local.get $pc) (i32.const "(")))))))
                 (if (i32.and (i32.ne (local.get $g) (i32.const 0)) (i32.le_u (local.get $g) (i32.const 3)))
                   (then
                     (local.set $hl (enum.get $Token.keyword))
@@ -180,7 +231,7 @@
                                   (i32.or
                                     (byteset.get "!%&*+-/<=>?^|~" (local.get $pc))
                                     (i32.or
-                                      (i32.eq (local.get $pc) (i32.const ")"))
+                                      (i32.or (i32.eq (local.get $pc) (i32.const ")")) (i32.eq (local.get $pc) (i32.const "(")))
                                       (i32.or
                                         (i32.eq (local.get $pc) (i32.const "]"))
                                         (i32.eq (local.get $pc) (i32.const ":"))))))

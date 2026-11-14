@@ -1,10 +1,14 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.luauWords 64)
+
   (import "./lua.wat")
 
   ;; Luau words that Lua lacks. +512: a keyword only before a name on the
   ;; same line (`type Name`, `export type`), so `type(x)` stays a call; +1024:
   ;; a builtin only inside a type, so `string.format` stays a library.
-  (keyword-table $luauWords $mem.luauWords $mem.hackWords
+  (keyword-table $luauWords $mem.luauWords $mem.luauWords+64
     (group $Token.keyword.control "continue")
     (group $Token.keyword+512 "export")
     (group $Token.keyword.declaration+512 "type")
@@ -15,12 +19,12 @@
   ;; unemitted byte) to the closing backtick or a `{` that opens an
   ;; expression. Like a Lua string it stops at the line end. Returns 1 after
   ;; a `{`.
-  (func $luauTemplate (param $seg i32) (result i32)
+  (func $luauTemplate (param $seg i32) (param $eol i32) (result i32)
     (local $c i32)
     (local $open i32)
     (local $saveEnd i32)
     (local.set $saveEnd (global.get $end))
-    (global.set $end (call $lexFindEither (global.get $ptr) (i32.const 10) (i32.const 13)))
+    (global.set $end (local.get $eol))
     (block $done
       (loop $scan
         (global.set $ptr
@@ -64,7 +68,15 @@
     (local $p i32)
     (local $type i32)
     (local $interp i32)
+    (local $zq i32) ;; quote of a string left open after `\z` at a chunk end
+    (local $eol i32) ;; the line end that $luauTemplate scans to, found once per line
     (call $lexEmitLeadingContinuation)
+    (local.set $eol (i32.const 0))
+    (if (local.get $zq)
+      (then (local.set $zq (call $luaStringTail
+          (i32.and (local.get $zq) (i32.const 255))
+          (i32.sub (i32.const 2) (i32.shr_u (local.get $zq) (i32.const 8)))
+          (global.get $ptr)))))
     (block $done
       (loop $token
         (local.set $lhs (global.get $ptr))
@@ -112,6 +124,8 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (if (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (local.get $c))
+              (then (local.set $zq (call $luaStringTail (local.get $c) (i32.const 0) (local.get $lhs)))))
             ;; a string singleton type completes an operand
             (if (local.get $type)
               (then (local.set $type (i32.or (local.get $type) (i32.const 2)))))
@@ -332,7 +346,11 @@
                           (local.get $lhs)
                           (global.get $ptr))
                         (local.set $interp (i32.shr_u (local.get $interp) (i32.const 4)))
-                        (if (call $luauTemplate (global.get $ptr))
+                        (if (i32.gt_u (global.get $ptr) (local.get $eol))
+                          (then
+                            (local.set $eol
+                              (call $lexFindEither (global.get $ptr) (i32.const 10) (i32.const 13)))))
+                        (if (call $luauTemplate (global.get $ptr) (local.get $eol))
                           (then
                             (local.set $interp
                               (i32.or (i32.shl (local.get $interp) (i32.const 4)) (i32.const 1)))))
@@ -364,7 +382,11 @@
         (local.set $hl (enum.get $Token.operator))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then
-            (if (call $luauTemplate (local.get $lhs))
+            (if (i32.gt_u (global.get $ptr) (local.get $eol))
+              (then
+                (local.set $eol
+                  (call $lexFindEither (global.get $ptr) (i32.const 10) (i32.const 13)))))
+            (if (call $luauTemplate (local.get $lhs) (local.get $eol))
               (then
                 (local.set $interp
                   (i32.or (i32.shl (local.get $interp) (i32.const 4)) (i32.const 1)))))

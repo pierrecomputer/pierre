@@ -133,6 +133,24 @@ void t.test(
 );
 
 void t.test(
+  'xml: comments and processing instructions in an internal subset are opaque',
+  () => {
+    const code =
+      '<!DOCTYPE r [\n<!-- don\'t > ] do\nthis -->\n<?pi "x ?>\n<!-->\nx -->\n]>\n<r a="1"/>\n';
+    assert.deepEqual(tokenKinds('xml', code).slice(-7), [
+      [']>', 'tag.doctype'],
+      ['<', 'punctuation.bracket.html'],
+      ['r', 'tag'],
+      ['a', 'attribute'],
+      ['=', 'punctuation.delimiter.html'],
+      ['"1"', 'string'],
+      ['/>', 'punctuation.bracket.html'],
+    ]);
+    assertLineFedParity('xml', code);
+  }
+);
+
+void t.test(
   'xml: character references, while bare ampersands stay text',
   () => {
     assert.deepEqual(

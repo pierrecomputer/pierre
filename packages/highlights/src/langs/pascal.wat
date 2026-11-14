@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.pascalWords 576)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Pascal is case-insensitive, so the table holds lowercase words and
   ;; $pasWordHl probes it with a lowercased copy of the input word. Group
@@ -7,12 +11,13 @@
   ;; declaration value names the pending capture: 1 a routine name, 2 a
   ;; module name, 3 the unit names of a `uses` clause. Group 12 holds the
   ;; property directives, which are ordinary names outside a property
-  ;; declaration and carry bit 12. `result` shares its hash features with
+  ;; declaration and carry bit 12. Bit 13 marks the words that open or
+  ;; close a block, for the case-label state. `result` shares its hash features with
   ;; `repeat` and is matched directly.
-  (keyword-table $pascalWords $mem.pascalWords $mem.perlWords
+  (keyword-table $pascalWords $mem.pascalWords $mem.pascalWords+576
     (group $Token.keyword.control ;; 1: control flow
-      "if" "then" "else" "case" "of" "for" "to" "downto" "while" "do" "repeat" "until" "with"
-      "goto" "break" "continue" "exit" "try" "except" "finally" "raise" "on")
+      "if" "then" "else" "of" "for" "to" "downto" "while" "do" "repeat" "until" "with"
+      "goto" "break" "continue" "exit" "except" "finally" "raise" "on")
     (group $Token.keyword.declaration+256 ;; 2: next name is a routine
       "procedure" "function" "constructor" "destructor" "operator")
     (group $Token.keyword.declaration+512 ;; 3: next name is a module
@@ -26,7 +31,7 @@
       "stdcall" "safecall" "register" "pascal" "external" "forward" "deprecated" "platform"
       "static" "sealed" "final" "helper" "reference" "out" "absolute" "exports" "dispinterface"
       "generic" "specialize" "experimental" "assembler" "asm")
-    (group $Token.keyword "begin" "end")            ;; 6: blocks
+    (group $Token.keyword+8192 "begin" "end")       ;; 6: blocks
     (group $Token.keyword.operator ;; 7: word operators
       "and" "or" "not" "xor" "div" "mod" "shl" "shr" "in" "is" "as")
     (group $Token.boolean "true" "false")           ;; 8
@@ -40,7 +45,8 @@
       "pansichar" "pwidechar" "nativeint" "nativeuint")
     (group $Token.keyword+4096 ;; 12: property directives
       "read" "write" "stored" "default" "nodefault" "implements" "index" "dispid" "readonly"
-      "writeonly"))
+      "writeonly")
+    (group $Token.keyword.control+8192 "case" "try")) ;; 13
 
   ;; Token in the low byte and the capture in the high byte of the word
   ;; [lhs,rhs) compared case-insensitively, or -1 for an ordinary name.
@@ -150,6 +156,18 @@
         (br $l)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
 
+  ;; Emits a case label `:` at $ptr and returns 1; a declaration `:` returns 0.
+  (func $pasLabelColon (result i32)
+    (if
+      (i32.and
+        (i32.eq (call $templateByte (global.get $ptr)) (i32.const ":"))
+        (i32.ne (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "=")))
+      (then
+        (call $emitTok (enum.get $Token.punctuation.delimiter) (global.get $ptr) (i32.add (global.get $ptr) (i32.const 1)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (return (i32.const 1))))
+    (i32.const 0))
+
   (func $pasIsOp (param $c i32) (result i32)
     (byteset.get "*+-/<=>@^" (local.get $c)))
 
@@ -160,7 +178,9 @@
   ;; $paramDepth is the depth of a parameter list, where bare names are
   ;; parameters. $typeCtx is 1 after `:` or `of`, where names are types;
   ;; $propCtx is 1 inside a property declaration, with $propName over its
-  ;; name; $member is 1 after `.`. All are checkpointed.
+  ;; name; $member is 1 after `.`. $caseCtx is 1 after `case`, then 2 plus
+  ;; the open `begin`/`try` depth in its body, where a `:` ends a label.
+  ;; All are checkpointed.
   (func $hlPascal
     (local $c i32)
     (local $c2 i32)
@@ -179,6 +199,7 @@
     (local $propCtx i32)
     (local $propName i32)
     (local $member i32)
+    (local $caseCtx i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -205,6 +226,7 @@
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (call $pasString)
+            (if (call $pasLabelColon) (then (local.set $typeCtx (i32.const 0))))
             (local.set $member (i32.const 0))
             (br $next)))
         ;; `#13`, `#$0A` character codes
@@ -230,6 +252,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $scanIdentRun (i32.const "_"))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
+            (if (call $pasLabelColon) (then (local.set $typeCtx (i32.const 0))))
             (local.set $member (i32.const 0))
             (br $next)))
 
@@ -266,6 +289,25 @@
                   (i32.and
                     (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2))
                     (i32.eq (i32.load16_u (i32.const $mem.lexLowerScratch)) (i32.const "of"))))
+                (if (i32.and (local.get $typeCtx) (i32.eq (local.get $caseCtx) (i32.const 1)))
+                  (then
+                    (local.set $typeCtx (i32.const 0))
+                    (local.set $caseCtx (i32.const 2))))
+                (if (i32.and (local.get $kind) (i32.const 8192))
+                  (then
+                    (if (i32.eq (local.get $hl) (enum.get $Token.keyword.control))
+                      (then
+                        (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
+                          (then (local.set $caseCtx (i32.const 1)))
+                          (else
+                            (local.set $caseCtx
+                              (i32.add (local.get $caseCtx) (i32.ge_u (local.get $caseCtx) (i32.const 2)))))))
+                      (else
+                        (local.set $caseCtx
+                          (select
+                            (i32.add (local.get $caseCtx) (i32.ge_u (local.get $caseCtx) (i32.const 2)))
+                            (select (i32.sub (local.get $caseCtx) (i32.const 1)) (i32.const 0) (i32.gt_u (local.get $caseCtx) (i32.const 2)))
+                            (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))))))))
                 (if
                   (i32.and
                     (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
@@ -346,6 +388,7 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
+            (if (call $pasLabelColon) (then (local.set $typeCtx (i32.const 0))))
             (local.set $member (i32.const 0))
             (br $next)))
 
@@ -415,7 +458,8 @@
                   (enum.get $Token.punctuation.delimiter)
                   (local.get $lhs)
                   (global.get $ptr))
-                (local.set $typeCtx (i32.const 1))
+                (local.set $typeCtx
+                  (i32.or (i32.ne (local.get $caseCtx) (i32.const 2)) (i32.ne (local.get $paren) (i32.const 0))))
                 (local.set $fnHead (i32.const 0))))
             (local.set $member (i32.const 0))
             (br $next)))

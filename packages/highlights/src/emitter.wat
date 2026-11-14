@@ -1,7 +1,8 @@
 (module
   (import "./memory.wat")
   (import "./token.wat")
-  (import "./scan.wat")
+  (import "@pierre/wat-tools/input.wat")
+  (import "@pierre/wat-tools/output.wat")
 
   ;; Emitter HTML fragments, packed into the reserved static region.
   (data (i32.const $mem.emitterHtml)
@@ -17,8 +18,6 @@
     "light-dark("                           ;; 11
   )
 
-  (global $out (mut i32) (i32.const 0))     ;; write cursor
-  (global $cap (mut i32) (i32.const 0))     ;; highest safe write position (16 bytes of slack below memory end)
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
@@ -30,33 +29,7 @@
   (global $spanCacheMode (mut i32) (i32.const -1))
   (global $spanReserve (mut i32) (i32.const 96))
   (global $tokens (mut i32) (i32.const 0))
-  (global $recCarryHl (mut i32) (i32.const -1))
-  (global $streaming (mut i32) (i32.const 0))
-  (global $streamReset (mut i32) (i32.const 0))
-  (global $streamDepth (mut i32) (i32.const 0))
-  (global $streamMode (mut i32) (i32.const 0))
-  (global $streamA (mut i32) (i32.const 0))
-  (global $streamB (mut i32) (i32.const 0))
-  (global $streamC (mut i32) (i32.const 0))
-  (global $streamHl (mut i32) (i32.const 0))
-  (global $streamRegionKind (mut i32) (i32.const 0))
-  (global $streamRegionStarted (mut i32) (i32.const 0))
-  (global $streamWindow (mut i32) (i32.const 0))
-  ;; The saved range [Lo, Hi) of $mem.streamState; every byte outside it is
-  ;; zero. Lo is $streamStateUsed and Hi 0 when nothing is saved.
-  (global $streamStateLo (mut i32) (i32.const $streamStateUsed))
-  (global $streamStateHi (mut i32) (i32.const 0))
-
-  (func $streamClearCheckpoints
-    (if (i32.lt_u (global.get $streamStateLo) (global.get $streamStateHi))
-      (then
-        (memory.fill
-          (i32.add (i32.const $mem.streamState) (global.get $streamStateLo))
-          (i32.const 0)
-          (i32.sub (global.get $streamStateHi) (global.get $streamStateLo)))))
-    (global.set $streamStateLo (i32.const $streamStateUsed))
-    (global.set $streamStateHi (i32.const 0)))
-  (global $liveStackBytes (mut i32) (i32.const 0))
+  (global $recordInputEnd (mut i32) (i32.const 0))
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
@@ -118,27 +91,6 @@
         (i32.store8 (global.get $out) (i32.add (i32.const "0") (local.get $w)))
         (i32.store16 offset=1 (global.get $out) (i32.const 0x3030)) ;; `00`
         (global.set $out (i32.add (global.get $out) (i32.const 3))))))
-
-  ;; make room for $n more output bytes, growing memory when needed.
-  ;; every store to $out is gated by this, so wide stores never trap.
-  (func $ensureCap (param $n i32)
-    (if (i32.le_u (i32.add (global.get $out) (local.get $n)) (global.get $cap))
-      (then (return)))
-    ;; a failed grow (output would pass the wasm32 4 GB ceiling) traps here on
-    ;; purpose: the host sees a RuntimeError and the instance stays reusable
-    (if
-      (i32.eq
-        (memory.grow
-          (i32.add
-            (i32.shr_u
-              (i32.sub
-                (i32.add (i32.add (global.get $out) (local.get $n)) (i32.const 65551))
-                (i32.mul (memory.size) (i32.const 65536)))
-              (i32.const 16))
-            (i32.const 4)))
-        (i32.const -1))
-      (then (unreachable)))
-    (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16))))
 
   ;; close the open span, if any
   (func $closeSpan
@@ -336,43 +288,6 @@
         (br $outer)))
     (global.set $out (local.get $dst)))
 
-  ;; Append an (end:u32, hl:u32) record through input offset $rhs.
-  ;; If $hl matches the previous record, extend that record instead.
-  ;; Records cover the input without gaps. Each starts at the previous
-  ;; record's end, or 0 for the first record.
-  (func $recTok (param $hl i32) (param $rhs i32)
-    (if
-      (i32.and
-        (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-        (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
-      (then
-        (i32.store
-          (i32.sub (global.get $out) (i32.const 8))
-          (i32.sub (local.get $rhs) (global.get $srcBase)))
-        (return)))
-    (call $ensureCap (i32.const 16))
-    (i32.store (global.get $out) (i32.sub (local.get $rhs) (global.get $srcBase)))
-    (i32.store offset=4 (global.get $out) (local.get $hl))
-    (global.set $out (i32.add (global.get $out) (i32.const 8))))
-
-  ;; Preserve the open token-record style between incremental lexer calls so
-  ;; leading whitespace in the next chunk keeps the same span.
-  (func $recStreamBegin (param $reset i32)
-    (if (local.get $reset)
-      (then
-        (global.set $recCarryHl (i32.const -1))
-        (return)))
-    (if (i32.ge_s (global.get $recCarryHl) (i32.const 0))
-      (then
-        (call $ensureCap (i32.const 16))
-        (i32.store (global.get $out) (i32.const 0))
-        (i32.store offset=4 (global.get $out) (global.get $recCarryHl))
-        (global.set $out (i32.add (global.get $out) (i32.const 8))))))
-
-  (func $recStreamEnd
-    (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-      (then (global.set $recCarryHl (i32.load (i32.sub (global.get $out) (i32.const 4)))))))
-
   ;; The next LF or non-ASCII byte at or after $p, or $eof - 16 bytes per
   ;; step. Wide loads may pass $eof into the buffer slack; matches there are
   ;; clamped away. The bitmask reads non-ASCII high bits directly.
@@ -422,11 +337,13 @@
     (local $w v128)
     (local $lastEnd i32) ;; the UTF-16 end of the last output record
     (local $lastHl i32)  ;; its token id, -1 after a terminator or at the start
+    (local $o i32)       ;; $out, see the warning above
     (local.set $rec (i32.load (i32.const 6)))
     (local.set $oldEnd (global.get $out))
     (global.set $out (i32.and (i32.add (local.get $oldEnd) (i32.const 15)) (i32.const -16)))
     (i32.store (i32.const 6) (global.get $out))
     (call $ensureCap (i32.add (i32.sub (local.get $oldEnd) (local.get $rec)) (i32.const 16)))
+    (local.set $o (global.get $out))
     (local.set $lastHl (i32.const -1))
     ;; $next starts at 0, so the first record takes the slow path, which
     ;; converts any byte correctly. $recFindSpecial then has one caller.
@@ -464,13 +381,13 @@
                         ;; previous record, or drop a record that held only it
                         (if (i32.gt_u (local.get $lastEnd) (local.get $cut))
                           (then
-                            (local.set $last (i32.sub (global.get $out) (i32.const 8)))
+                            (local.set $last (i32.sub (local.get $o) (i32.const 8)))
                             (local.set $prev (i32.const 0))
                             (if (i32.gt_u (local.get $last) (i32.load (i32.const 6)))
                               (then (local.set $prev (i32.load (i32.sub (local.get $last) (i32.const 8))))))
                             (if (i32.le_u (local.get $cut) (local.get $prev))
                               (then
-                                (global.set $out (local.get $last))
+                                (local.set $o (local.get $last))
                                 (local.set $lastEnd (local.get $prev))
                                 (local.set $lastHl (i32.const -1))
                                 (if (i32.gt_u (local.get $last) (i32.load (i32.const 6)))
@@ -480,21 +397,22 @@
                                 (i32.store (local.get $last) (local.get $cut))
                                 (local.set $lastEnd (local.get $cut))))))))
                     ;; the content before the terminator, then the terminator
+                    (global.set $out (local.get $o))
                     (call $ensureCap
                       (i32.add (i32.sub (local.get $oldEnd) (local.get $rec)) (i32.const 32)))
                     (if (i32.gt_u (local.get $cut) (local.get $lastEnd))
                       (then
                         (if (i32.eq (local.get $hl) (local.get $lastHl))
-                          (then (i32.store (i32.sub (global.get $out) (i32.const 8)) (local.get $cut)))
+                          (then (i32.store (i32.sub (local.get $o) (i32.const 8)) (local.get $cut)))
                           (else
-                            (i32.store (global.get $out) (local.get $cut))
-                            (i32.store offset=4 (global.get $out) (local.get $hl))
-                            (global.set $out (i32.add (global.get $out) (i32.const 8)))))))
+                            (i32.store (local.get $o) (local.get $cut))
+                            (i32.store offset=4 (local.get $o) (local.get $hl))
+                            (local.set $o (i32.add (local.get $o) (i32.const 8)))))))
                     (local.set $char (i32.add (local.get $char) (i32.const 1)))
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                    (i32.store (global.get $out) (local.get $char))
-                    (i32.store offset=4 (global.get $out) (i32.const -1))
-                    (global.set $out (i32.add (global.get $out) (i32.const 8)))
+                    (i32.store (local.get $o) (local.get $char))
+                    (i32.store offset=4 (local.get $o) (i32.const -1))
+                    (local.set $o (i32.add (local.get $o) (i32.const 8)))
                     (local.set $lastEnd (local.get $char))
                     (local.set $lastHl (i32.const -1)))
                   (else
@@ -537,14 +455,15 @@
         (if (i32.gt_u (local.get $e) (local.get $lastEnd))
           (then
             (if (i32.eq (local.get $hl) (local.get $lastHl))
-              (then (i32.store (i32.sub (global.get $out) (i32.const 8)) (local.get $e)))
+              (then (i32.store (i32.sub (local.get $o) (i32.const 8)) (local.get $e)))
               (else
-                (i32.store (global.get $out) (local.get $e))
-                (i32.store offset=4 (global.get $out) (local.get $hl))
-                (global.set $out (i32.add (global.get $out) (i32.const 8)))
+                (i32.store (local.get $o) (local.get $e))
+                (i32.store offset=4 (local.get $o) (local.get $hl))
+                (local.set $o (i32.add (local.get $o) (i32.const 8)))
                 (local.set $lastHl (local.get $hl))))
             (local.set $lastEnd (local.get $e))))
-        (br $records))))
+        (br $records)))
+    (global.set $out (local.get $o)))
 
   ;; emit the token bytes [$lhs,$rhs) styled as $hl
   (func $emitTok (param $hl i32) (param $lhs i32) (param $rhs i32)
@@ -581,7 +500,13 @@
             (i32.store
               (i32.sub (global.get $out) (i32.const 8))
               (i32.sub (local.get $rhs) (global.get $srcBase))))
-          (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
+          (else
+            (call $recTok
+              (select
+                (i32.const 255)
+                (enum.get $Token.none)
+                (i32.eq (global.get $tokens) (i32.const 2)))
+              (local.get $rhs))))
         (return)))
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
     (call $ensureCap (i32.add (local.get $len) (i32.const 16)))
@@ -590,15 +515,6 @@
       (then (v128.store (global.get $out) (v128.load (local.get $lhs))))
       (else (memory.copy (global.get $out) (local.get $lhs) (local.get $len))))
     (global.set $out (i32.add (global.get $out) (local.get $len))))
-
-  ;; Keep a span open when a bounded range resumes inside a UTF-8 code point.
-  ;; Lives here rather than in common.wat so the lexers that import only
-  ;; token/scan/emit can reach it too.
-  (func $lexEmitLeadingContinuation
-    (local $lhs i32)
-    (local.set $lhs (global.get $ptr))
-    (global.set $ptr (call $utf8SpanEnd (global.get $ptr) (global.get $end)))
-    (call $emitGap (local.get $lhs) (global.get $ptr)))
 
   ;; ---- multi-theme HTML ----
   ;; The host packs a theme set into a blob that sits where output would
@@ -989,15 +905,22 @@
     (memory.copy (global.get $out) (i32.const $mem.emitterHtml+126) (i32.const 13))
     (global.set $out (i32.add (global.get $out) (i32.const 13))))
 
-  ;; Initialize output for highlights.wat and per-language test harnesses.
+  ;; Initialize output for highlights.wat, `emit`, and per-language test
+  ;; harnesses.
   ;; Read the control block and write the wrapper. Output mode in [1]:
   ;; 0 inline colors, 1 CSS variables, 2 multiple themes, 3 UTF-16 line
-  ;; records, 4 prepared HTML openers.
+  ;; records, 4 prepared HTML openers, 5 byte records.
+  ;; Mode 5 ($tokens 2) is the output of a lexer module: byte ends
+  ;; and a leading gap of type 255. The host uses it when this module lexes
+  ;; an embedded body for a registered lexer.
   (func $hlBegin
     (local $offset i32)
     (local $changed v128)
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
-    (global.set $tokens (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
+    (global.set $tokens
+      (i32.or
+        (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3))
+        (i32.shl (i32.eq (i32.load8_u (i32.const 1)) (i32.const 5)) (i32.const 1))))
     (global.set $htmlOpeners
       (select (i32.load (i32.const 14)) (i32.const 0)
         (i32.eq (i32.load8_u (i32.const 1)) (i32.const 4))))
@@ -1012,6 +935,8 @@
     (if (i32.or (global.get $cssVariables) (global.get $themeBlob))
       (then
         (global.set $out (i32.add (global.get $out) (i32.load (i32.const 18))))))
+    (if (i32.gt_u (global.get $recordInputEnd) (global.get $out))
+      (then (global.set $out (global.get $recordInputEnd))))
     (i32.store (i32.const 6) (global.get $out))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
     (global.set $spanHl (i32.const -1))
@@ -1101,7 +1026,197 @@
   (func $hlEnd
     (if (i32.eqz (global.get $tokens))
       (then (call $epilogue)))
-    (if (global.get $tokens)
+    (if (i32.eq (global.get $tokens) (i32.const 1))
       (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
+
+  ;; Write the output for the lexer records at control word 22 (byte length
+  ;; in word 26): [end:u32, type:u32], with ends relative to the input.
+  ;; A custom lexer can report ends that go backward, pass the
+  ;; input, or stop before it, and types that do not exist. Emit each input
+  ;; byte exactly once.
+  ;; Lexing no longer runs between two tokens here, so the address
+  ;; of the next output byte is the critical path. The HTML loop keeps it and
+  ;; the open span in locals: a global costs a store and a load for each
+  ;; update. Inline colors (mode 0) switch to a cached span opener here; the
+  ;; other modes call $setSpan. $emitTok takes a token above 4096 bytes and
+  ;; the first use of an opener.
+  (func (export "emit")
+    (local $record i32)
+    (local $recordsEnd i32)
+    (local $lhs i32)
+    (local $rhs i32)
+    (local $type i32)
+    (local $len i32)
+    (local $length i32)
+    (local $dst i32)
+    (local $hl i32)
+    (local $slot i32)
+    (local $mask i32)
+    (local $general i32)
+    (local $limit i32)
+    (local $val i64)
+    (local $open i64)
+    (local $w v128)
+    (local.set $record (i32.load (i32.const 22)))
+    (local.set $recordsEnd
+      (i32.add (local.get $record) (i32.and (i32.load (i32.const 26)) (i32.const -8))))
+    (global.set $recordInputEnd (local.get $recordsEnd))
+    (global.set $srcBase (i32.const $mem.input))
+    (call $hlBegin)
+    (local.set $length (i32.load (i32.const 2)))
+    (if (i32.eq (global.get $tokens) (i32.const 1))
+      (then
+        ;; Line records: $recLinesPost reads the lexer records in place and
+        ;; merges equal neighbors. It needs ends that do not go backward: a
+        ;; record that ends where the last one did adds nothing. One more
+        ;; record covers the input after the last end; the host keeps room
+        ;; for it.
+        (local.set $dst (local.get $record))
+        (block $checked
+          (loop $check
+            (br_if $checked (i32.ge_u (local.get $dst) (local.get $recordsEnd)))
+            (local.set $rhs (i32.load (local.get $dst)))
+            (if (i32.gt_u (local.get $rhs) (local.get $length))
+              (then (local.set $rhs (local.get $length))))
+            (if (i32.lt_u (local.get $rhs) (local.get $lhs))
+              (then (local.set $rhs (local.get $lhs))))
+            (local.set $lhs (local.get $rhs))
+            (i32.store (local.get $dst) (local.get $rhs))
+            (if (i32.gt_u (i32.load offset=4 (local.get $dst)) (enum.get $Token.foreground))
+              (then (i32.store offset=4 (local.get $dst) (enum.get $Token.none))))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 8)))
+            (br $check)))
+        (i32.store (local.get $recordsEnd) (local.get $length))
+        (i32.store offset=4 (local.get $recordsEnd) (enum.get $Token.none))
+        (i32.store (i32.const 6) (local.get $record))
+        (global.set $out (i32.add (local.get $recordsEnd) (i32.const 8)))
+        (call $hlEnd)
+        (return)))
+    (local.set $general (i32.or (global.get $themeBlob) (global.get $cssVariables)))
+    ;; Byte records (mode 5) are not HTML: every token goes to $emitTok.
+    (local.set $limit (select (i32.const 0) (i32.const 4096) (global.get $tokens)))
+    (local.set $lhs (i32.const $mem.input))
+    (local.set $dst (global.get $out))
+    (local.set $hl (i32.const -1))
+    (block $done
+      (loop $records
+        (br_if $done (i32.ge_u (local.get $record) (local.get $recordsEnd)))
+        (local.set $rhs (i32.load (local.get $record)))
+        (if (i32.gt_u (local.get $rhs) (local.get $length))
+          (then (local.set $rhs (local.get $length))))
+        (local.set $rhs (i32.add (i32.const $mem.input) (local.get $rhs)))
+        (if (i32.gt_u (local.get $rhs) (local.get $lhs))
+          (then
+            (local.set $type (i32.load offset=4 (local.get $record)))
+            (local.set $type
+              (select
+                (local.get $type)
+                (enum.get $Token.none)
+                (i32.le_u (local.get $type) (enum.get $Token.foreground))))
+            (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
+            (block $emitted
+              (block $slow
+                (br_if $slow (i32.gt_u (local.get $len) (local.get $limit)))
+                (local.set $len
+                  (i32.add (i32.mul (local.get $len) (i32.const 5)) (global.get $spanReserve)))
+                (if (i32.gt_u (i32.add (local.get $dst) (local.get $len)) (global.get $cap))
+                  (then
+                    (global.set $out (local.get $dst))
+                    (call $ensureCap (local.get $len))))
+                (if (i32.ne (local.get $type) (local.get $hl))
+                  (then
+                    (if (local.get $general)
+                      (then
+                        (global.set $out (local.get $dst))
+                        (call $setSpan (local.get $type))
+                        (local.set $dst (global.get $out))
+                        (local.set $open (global.get $spanVal)))
+                      (else
+                        (local.set $val
+                          (i64.and
+                            (i64.load (call $themeRec (local.get $type)))
+                            (i64.const 0xFFFFFFFFFF)))
+                        (if (i64.ne (local.get $val) (local.get $open))
+                          (then
+                            (local.set $slot
+                              (i32.add
+                                (i32.const $mem.emitterSpanCache)
+                                (i32.mul (local.get $type) (i32.const 66))))
+                            ;; $setSpan renders an opener on its first use
+                            (br_if $slow
+                              (i32.and
+                                (i64.ne (local.get $val) (i64.const 0))
+                                (i32.eqz (i32.load8_u (local.get $slot)))))
+                            (if (i64.ne (local.get $open) (i64.const 0))
+                              (then
+                                (i64.store (local.get $dst) (i64.const "</span>"))
+                                (local.set $dst (i32.add (local.get $dst) (i32.const 7)))))
+                            (local.set $open (local.get $val))
+                            (if (i64.ne (local.get $val) (i64.const 0))
+                              (then
+                                (v128.store (local.get $dst) (v128.load offset=1 (local.get $slot)))
+                                (v128.store offset=16 (local.get $dst) (v128.load offset=17 (local.get $slot)))
+                                (v128.store offset=32 (local.get $dst) (v128.load offset=33 (local.get $slot)))
+                                (v128.store offset=48 (local.get $dst) (v128.load offset=49 (local.get $slot)))
+                                (local.set $dst
+                                  (i32.add (local.get $dst) (i32.load8_u (local.get $slot))))))))))
+                    (local.set $hl (local.get $type))))
+                ;; $escCopy for one chunk, with the output address in a local
+                (loop $wide
+                  (local.set $w (v128.load (local.get $lhs)))
+                  (v128.store (local.get $dst) (local.get $w))
+                  (local.set $mask
+                    (i8x16.bitmask
+                      (v128.or
+                        (i8x16.eq
+                          (v128.and (local.get $w) (i8x16.splat (i32.const 0xfd)))
+                          (i8x16.splat (i32.const "<")))
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
+                  (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
+                  (if (local.get $mask)
+                    (then
+                      (local.set $mask (i32.ctz (local.get $mask)))
+                      (if (i32.lt_u (local.get $mask) (local.get $len))
+                        (then
+                          (local.set $dst (i32.add (local.get $dst) (local.get $mask)))
+                          (local.set $lhs (i32.add (local.get $lhs) (local.get $mask)))
+                          (local.set $mask (i32.load8_u (local.get $lhs)))
+                          (if (i32.eq (local.get $mask) (i32.const "&"))
+                            (then
+                              (i64.store (local.get $dst) (i64.const "&amp;"))
+                              (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
+                            (else
+                              (i32.store
+                                (local.get $dst)
+                                (select
+                                  (i32.const "&lt;")
+                                  (i32.const "&gt;")
+                                  (i32.eq (local.get $mask) (i32.const "<"))))
+                              (local.set $dst (i32.add (local.get $dst) (i32.const 4)))))
+                          (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
+                          (br_if $wide (i32.lt_u (local.get $lhs) (local.get $rhs)))
+                          (br $emitted)))))
+                  (if (i32.le_u (local.get $len) (i32.const 16))
+                    (then
+                      (local.set $dst (i32.add (local.get $dst) (local.get $len)))
+                      (br $emitted)))
+                  (local.set $dst (i32.add (local.get $dst) (i32.const 16)))
+                  (local.set $lhs (i32.add (local.get $lhs) (i32.const 16)))
+                  (br $wide)))
+              (global.set $out (local.get $dst))
+              (global.set $spanHl (local.get $hl))
+              (global.set $spanVal (local.get $open))
+              (call $emitTok (local.get $type) (local.get $lhs) (local.get $rhs))
+              (local.set $dst (global.get $out))
+              (local.set $hl (global.get $spanHl))
+              (local.set $open (global.get $spanVal)))
+            (local.set $lhs (local.get $rhs))))
+        (local.set $record (i32.add (local.get $record) (i32.const 8)))
+        (br $records)))
+    (global.set $out (local.get $dst))
+    (global.set $spanHl (local.get $hl))
+    (global.set $spanVal (local.get $open))
+    (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $eof))
+    (call $hlEnd))
 )

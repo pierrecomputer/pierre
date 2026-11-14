@@ -110,3 +110,23 @@ test('twig: verbatim blocks and `~` whitespace control', () => {
     assertLineFedParity('twig', code);
   }
 });
+
+test('twig: `#{ }` holes in double-quoted strings', () => {
+  expect(tokenKinds('twig', '{{ "Hi #{name}!" ~ "\\#{x}" }}\n')).toEqual([
+    ['{{', 'punctuation.special'],
+    ['"Hi', 'string'],
+    ['#{', 'punctuation.special'],
+    ['name', 'variable'],
+    ['}', 'punctuation.special'],
+    ['!"', 'string'],
+    ['~', 'operator'],
+    ['"', 'string'],
+    ['\\#', 'string.escape'],
+    ['{x}"', 'string'],
+    ['}}', 'punctuation.special'],
+  ]);
+  assertLineFedParity(
+    'twig',
+    '{% set x = "a #{\nb ~ {c: "#{d}"}.c } e" %}{{ "}}" }}\n'
+  );
+});

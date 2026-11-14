@@ -289,3 +289,28 @@ void t.test('vue: interpolations close at their own `}}` in one pass', () => {
     assertLineFedParity('vue', code);
   }
 });
+
+void t.test('vue: lang="ts" scripts are TypeScript', () => {
+  const code =
+    '<script setup lang="ts">\ntype ID = string;\nlet n: number = 1;\n</script>\n<template><p>{{ n }}</p></template>\n';
+  const kinds = tokenKinds('vue', code);
+  assert.ok(
+    kinds.some(
+      ([text, kind]) => text === 'type' && kind === 'keyword.declaration'
+    )
+  );
+  assert.ok(
+    kinds.some(([text, kind]) => text === 'number' && kind === 'type.builtin')
+  );
+  assertLineFedParity('vue', code);
+});
+
+void t.test('vue: an unclosed declaration runs to its > in every path', () => {
+  for (const code of [
+    '<!DOCTYPE html\n<!-- c -->\n<p>x</p>\n',
+    '<?xml version="1.0"\n<p>{{ a }}</p>\n',
+    '<!x\n<script>\nlet a\n</script>\n<p>x</p>\n',
+  ]) {
+    assertLineFedParity('vue', code);
+  }
+});

@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.llvmWords 712)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Instructions are keywords and terminators control keywords. Linkage,
   ;; flags, and the function and parameter attributes are attributes, as
   ;; LLVM names them. Integer types `iN`, the vector `x`, and the `c"..."`
-  ;; prefix are matched by shape in $hlLlvm, and `fptoui` and `norecurse`,
-  ;; which share hash features with `fptosi` and `nocapture`, in $llvmWordHl.
-  (keyword-table $llvmWords $mem.llvmWords $mem.openscadWords
+  ;; prefix are matched by shape in $hlLlvm; the hash twins `fptoui`, `norecurse`,
+  ;; `optsize`, `contract`, and `disjoint` in $llvmWordHl.
+  (keyword-table $llvmWords $mem.llvmWords $mem.llvmWords+712
     (group $Token.keyword.declaration
       "asm" "type" "alias" "define" "global" "module" "target" "triple" "declare" "constant"
       "attributes" "datalayout" "source_filename")
@@ -35,12 +39,19 @@
       "readnone" "optnone" "distinct" "nounwind" "noreturn" "addrspace" "dso_local" "nocapture"
       "writeonly" "monotonic" "readwrite" "weak_odr" "willreturn" "convergent"
       "sspstrong" "personality" "linkonce_odr" "alwaysinline" "mustprogress" "thread_local"
-      "unnamed_addr" "speculatable" "dereferenceable" "inaccessiblemem" "local_unnamed_addr")
+      "unnamed_addr" "speculatable" "dereferenceable" "inaccessiblemem" "local_unnamed_addr"
+      "nsz" "afn" "arcp" "nneg" "immarg" "minsize" "reassoc"
+      "inlinehint" "nocallback")
     (group $Token.boolean "true" "false")
     (group $Token.constant.builtin "none" "null" "undef" "poison" "zeroinitializer"))
 
   (func $llvmWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
+    (local $v i32)
+    ;; check the hash twins only after a table miss
+    (local.set $v (keyword-table.value $llvmWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.ge_s (local.get $v) (i32.const 0))
+      (then (return (local.get $v))))
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
     ;; the wide loads stay inside the input slack
     (if
@@ -49,13 +60,23 @@
         (i64.eq (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffff)) (i64.const "fptoui")))
       (then (return (enum.get $Token.keyword))))
     (if
-      (i32.and
-        (i32.eq (local.get $n) (i32.const 9))
+      (i32.or
         (i32.and
-          (i64.eq (i64.load (local.get $lhs)) (i64.const "norecurs"))
-          (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "e"))))
+          (i32.eq (local.get $n) (i32.const 9))
+          (i32.and
+            (i64.eq (i64.load (local.get $lhs)) (i64.const "norecurs"))
+            (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "e"))))
+        (i32.or
+          (i32.and
+            (i32.eq (local.get $n) (i32.const 7))
+            (i64.eq (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffffff)) (i64.const "optsize")))
+          (i32.and
+            (i32.eq (local.get $n) (i32.const 8))
+            (i32.or
+              (i64.eq (i64.load (local.get $lhs)) (i64.const "contract"))
+              (i64.eq (i64.load (local.get $lhs)) (i64.const "disjoint"))))))
       (then (return (enum.get $Token.attribute))))
-    (keyword-table.value $llvmWords (local.get $lhs) (local.get $rhs)))
+    (i32.const -1))
 
   ;; Advance $ptr over a name: [-$._A-Za-z0-9] and UTF-8 bytes.
   (func $llvmName
@@ -241,12 +262,13 @@
                       (local.set $c2 (i32.add (local.get $c2) (i32.const 1)))
                       (br $digit)))
                   (br $classified)))
-              ;; DWARF enumerators: `DW_TAG_variable`, `DIFlagPrototyped`
               (local.set $hl (enum.get $Token.none))
               (if
                 (i32.or
                   (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "DW_"))
-                  (i32.eq (i32.load (local.get $lhs)) (i32.const "DIFl")))
+                  (i32.or
+                    (i32.eq (i32.load (local.get $lhs)) (i32.const "DIFl"))
+                    (i32.eq (i32.load (local.get $lhs)) (i32.const "DISP"))))
                 (then (local.set $hl (enum.get $Token.constant.builtin)))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (br $next)))

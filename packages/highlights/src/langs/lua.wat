@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.luaWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $luaLong (param $prefix i32) (param $hl i32) (result i32)
     (local $bracket i32)
@@ -79,10 +83,75 @@
           (local.get $hl))))
     (i32.const 1))
 
+  ;; $skip 1 resumes inside `\z` blanks, 2 after an escaped line break. Returns
+  ;; the quote while the string runs past $end (plus 256 inside `\z` blanks), else 0.
+  (func $luaStringTail (param $quote i32) (param $skip i32) (param $seg i32) (result i32)
+    (local $c i32)
+    (local $n i32)
+    (local $p i32)
+    (loop $more
+      (if (i32.eqz (local.get $skip))
+        (then
+          (if (i32.ge_u (global.get $ptr) (global.get $end))
+            (then
+              ;; take over the shared escaped-line-break resume so `\z` works after it
+              (if (i32.eq (global.get $streamMode) (i32.const 2))
+                (then
+                  (global.set $streamMode (i32.const 0))
+                  (return (local.get $quote))))
+              (return (i32.const 0))))
+          (local.set $c (i32.load8_u (global.get $ptr)))
+          (if (i32.and (i32.ne (local.get $c) (i32.const 10)) (i32.ne (local.get $c) (i32.const 13)))
+            (then (return (i32.const 0))))
+          (local.set $p (global.get $ptr))
+          (block $blanks
+            (loop $back
+              (br_if $blanks (i32.le_u (local.get $p) (local.get $seg)))
+              (local.set $c (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
+              (br_if $blanks
+                (i32.and
+                  (i32.ne (local.get $c) (i32.const 32))
+                  (i32.gt_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))
+              (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+              (br $back)))
+          (if
+            (i32.or
+              (i32.lt_u (i32.sub (local.get $p) (local.get $seg)) (i32.const 2))
+              (i32.ne (i32.load16_u (i32.sub (local.get $p) (i32.const 2))) (i32.const "\\z")))
+            (then (return (i32.const 0))))
+          (local.set $p (i32.sub (local.get $p) (i32.const 2)))
+          (local.set $n (i32.const 0))
+          (block $run
+            (loop $slash
+              (br_if $run (i32.le_u (local.get $p) (local.get $seg)))
+              (br_if $run (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 92)))
+              (local.set $n (i32.xor (local.get $n) (i32.const 1)))
+              (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+              (br $slash)))
+          (if (local.get $n)
+            (then (return (i32.const 0))))))
+      (if (i32.lt_u (local.get $skip) (i32.const 2))
+        (then
+          (local.set $p (global.get $ptr))
+          (call $scanWhitespace)
+          (call $emitTok (enum.get $Token.string) (local.get $p) (global.get $ptr))
+          (if (i32.ge_u (global.get $ptr) (global.get $end))
+            (then (return (i32.or (local.get $quote) (i32.const 256)))))))
+      (local.set $seg (global.get $ptr))
+      (local.set $c
+        (call $lexStringBody (local.get $quote) (i32.const 0) (enum.get $Token.string) (global.get $ptr)))
+      (if (i32.eq (local.get $c) (i32.const 1))
+        (then (return (i32.const 0))))
+      (if (i32.eq (local.get $c) (i32.const 2))
+        (then (return (local.get $quote))))
+      (local.set $skip (i32.const 0))
+      (br $more))
+    (i32.const 0))
+
   ;; Each value is the word's token; `function` adds 256 to mark that the
   ;; next name is a function definition. A miss is an ordinary name, which
   ;; $hlLua may still promote to a call or a property.
-  (keyword-table $luaWords $mem.luaWords $mem.makefileWords
+  (keyword-table $luaWords $mem.luaWords $mem.luaWords+96
     (group $Token.boolean "true" "false")
     (group $Token.constant.builtin "nil")
     (group $Token.keyword.operator "and" "not" "in" "or")
@@ -101,7 +170,13 @@
     (local $member i32)
     (local $next i32)
     (local $p i32)
+    (local $zq i32) ;; quote of a string left open after `\z` at a chunk end
     (call $lexEmitLeadingContinuation)
+    (if (local.get $zq)
+      (then (local.set $zq (call $luaStringTail
+          (i32.and (local.get $zq) (i32.const 255))
+          (i32.sub (i32.const 2) (i32.shr_u (local.get $zq) (i32.const 8)))
+          (global.get $ptr)))))
     (block $done
       (loop $token
         (local.set $lhs (global.get $ptr))
@@ -144,6 +219,8 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (if (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (local.get $c))
+              (then (local.set $zq (call $luaStringTail (local.get $c) (i32.const 0) (local.get $lhs)))))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))
             (br $token)))

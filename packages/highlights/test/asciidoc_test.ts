@@ -119,3 +119,39 @@ test('asciidoc: an indented paragraph after a blank line is literal', () => {
   ]);
   assertLineFedParity('asciidoc', code);
 });
+
+test('asciidoc: a ```lang fence and an indented list item', () => {
+  const code =
+    '```ruby\nputs "hi"\n```\n\n== Next\n\n* a\n\n  * b *c*\n  more\n\n  literal\n';
+  expect(tokenKinds('asciidoc', code)).toEqual([
+    ['```', 'punctuation.markup'],
+    ['ruby', 'label'],
+    ['puts "hi"', 'text.literal'],
+    ['```', 'punctuation.markup'],
+    ['== Next', 'title'],
+    ['*', 'punctuation.list_marker'],
+    ['a', null],
+    ['*', 'punctuation.list_marker'],
+    ['b', null],
+    ['*c*', 'emphasis.strong'],
+    ['more', null],
+    ['literal', 'text.literal'],
+  ]);
+  assertLineFedParity('asciidoc', code);
+});
+
+test('asciidoc: an unclosed marker or macro name on one line does not hide the next line', () => {
+  const code = '*a x: y #b <<c\n*d* #e# <<f>> g:h[i]\n';
+  expect(tokenKinds('asciidoc', code)).toEqual([
+    ['*a x: y #b <<c', null],
+    ['*d*', 'emphasis.strong'],
+    ['#e#', 'string.special'],
+    ['<<f>>', 'link_text'],
+    ['g:', 'function'],
+    ['h', 'link_uri'],
+    ['[', 'punctuation.bracket'],
+    ['i', 'string'],
+    [']', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('asciidoc', code);
+});

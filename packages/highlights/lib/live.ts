@@ -1,10 +1,17 @@
 import { isAnsi } from './ansi';
+import type {
+  CodeToTokensOptions,
+  Lang,
+  Theme,
+  ThemedToken,
+  ThemeFamily,
+} from './core';
 import {
   assertWasmModule,
   HighlightsHighlighter,
   langIdOf,
+  registeredLexer,
 } from './highlighter';
-import type { CodeToTokensOptions, ThemedToken } from './index';
 import { defaultCssVariablePrefix, escapeAttribute } from './theme';
 import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';
@@ -61,7 +68,10 @@ export interface LiveUpdateOptions {
 }
 
 /** Constructor options: tokenization options plus the initial document. */
-export type LiveTokenizerOptions = CodeToTokensOptions & {
+export type LiveTokenizerOptions = CodeToTokensOptions<
+  Theme | ThemeFamily,
+  Lang | (string & {})
+> & {
   /** The initial document; defaults to the empty document. */
   code?: string;
   /**
@@ -266,6 +276,7 @@ function eol(flags: number): string {
 export class LiveTokenizer {
   #hl: HighlightsHighlighter | undefined;
   #langId: number;
+  #lexer: ReturnType<typeof registeredLexer>;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
   #maxLineLength: number;
@@ -299,21 +310,85 @@ export class LiveTokenizer {
   constructor(options: LiveTokenizerOptions) {
     // Warning: an editor needs tokens that cover the raw text, so `ansi`
     // keeps its escape sequences and uses the plain lexer.
-    this.#langId = isAnsi(options.lang) ? 0 : langIdOf(options.lang);
+    this.#lexer = registeredLexer(options.lang);
+    // IDs from 256 tell the Wasm driver to call the host for each line.
+    this.#langId =
+      this.#lexer !== undefined
+        ? this.#lexer.module === undefined
+          ? this.#lexer.id
+          : 256
+        : isAnsi(options.lang)
+          ? 0
+          : langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
     this.#maxLineLength = options.tokenizeMaxLineLength ?? 0;
     this.#onDeferTokenize = options.onDeferTokenize;
     const renderRange = checkRenderRange(options.renderRange);
-    this.#hl = LiveTokenizer.#createStaged(options.code ?? '', this.#langId);
+    this.#hl = LiveTokenizer.#createStaged(
+      options.code ?? '',
+      this.#langId,
+      this.#lexer
+    );
     this.#runSlice(this.#hl, this.#ex, renderRange);
   }
 
   /** Instantiate an isolated Wasm instance and stage `code` into its line
    *  table; the caller drives tokenization. */
-  static #createStaged(code: string, langId: number): HighlightsHighlighter {
-    const hl = new HighlightsHighlighter(assertWasmModule());
+  static #createStaged(
+    code: string,
+    langId: number,
+    custom: ReturnType<typeof registeredLexer>
+  ): HighlightsHighlighter {
+    let imports: Record<string, (...args: number[]) => number> | undefined;
+    if (custom?.module !== undefined) {
+      const lexer = new HighlightsHighlighter(custom.module);
+      const { saveState, loadState } = lexer.instance.exports as unknown as {
+        saveState(): number;
+        loadState(): void;
+      };
+      // WARNING: This runs for each line, inside `liveRun`. The lexer writes
+      // its state after its records, so one copy moves both to the document
+      // instance, at the address that the Wasm driver reads.
+      imports = {
+        lex_line: (ptr, length, reset, state, stateLength) => {
+          hl.bindMemory();
+          if (stateLength > 0) {
+            lexer.writeInput(hl.buffer.subarray(state, state + stateLength));
+            loadState();
+          }
+          const at = lexer.lexRecords(
+            custom.id,
+            lexer.writeInput(hl.buffer.subarray(ptr, ptr + length)),
+            reset !== 0
+          );
+          const bytes = lexer.dv.getUint32(10, true);
+          // A leading gap (255) has no previous token at the document root.
+          if (bytes > 0 && lexer.dv.getUint32(at + 4, true) === 255)
+            lexer.dv.setUint32(at + 4, 0, true);
+          const stateBytes = saveState();
+          lexer.bindMemory();
+          const out = (ptr + length + 47) & ~15;
+          const end = out + bytes + stateBytes + 16;
+          if (end > hl.buffer.length) {
+            hl.memory.grow(Math.ceil((end - hl.buffer.length) / 65536));
+            hl.bindMemory();
+          }
+          hl.buffer.set(
+            lexer.buffer.subarray(at, at + bytes + stateBytes),
+            out
+          );
+          hl.dv.setUint32(10, stateBytes, true);
+          return bytes;
+        },
+      };
+    }
+    const hl = new HighlightsHighlighter(
+      assertWasmModule(),
+      undefined,
+      imports
+    );
     const ex = hl.instance.exports as unknown as LiveWasmExports;
     const bytes = encodeLiveText(code);
     const ptr = ex.liveStage(bytes.length);
@@ -666,7 +741,7 @@ export class LiveTokenizer {
     this.#paused = false;
     const previousLineCount = this.#ex.liveLineCount();
     this.#materializing = undefined;
-    const hl = LiveTokenizer.#createStaged(code, this.#langId);
+    const hl = LiveTokenizer.#createStaged(code, this.#langId, this.#lexer);
     this.#hl = hl;
     const ex = this.#ex;
     this.#revision += 1;

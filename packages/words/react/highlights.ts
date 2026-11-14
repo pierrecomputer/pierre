@@ -1,9 +1,14 @@
+import type {
+  CodeToHtmlBaseOptions,
+  Lang,
+  ThemeOptions,
+} from '@pierre/highlights';
 import {
   codeToHtml,
+  isRegisteredLanguage,
   isSupportedLanguage,
   LiveTokenizer,
 } from '@pierre/highlights';
-import type { CodeToHtmlBaseOptions, ThemeOptions } from '@pierre/highlights';
 
 import type {
   CodeHighlighterPlugin,
@@ -18,7 +23,8 @@ export function createHighlightsPlugin(
   options: Omit<CodeToHtmlBaseOptions, 'lang'> & ThemeOptions
 ): CodeHighlighterPlugin {
   const highlight = ({ code, language }: CodeOptions): string | null => {
-    if (!isSupportedLanguage(language)) return null;
+    if (!isSupportedLanguage(language) && !isRegisteredLanguage(language))
+      return null;
     const html = decoder.decode(
       codeToHtml(code, { ...options, lang: language })
     );
@@ -50,7 +56,8 @@ export function createHighlightsPlugin(
         language: nextLanguage,
         isIncomplete,
       }: CodeOptions): CodeHighlightUpdate | null => {
-        if (!isSupportedLanguage(nextLanguage)) {
+        const registered = isRegisteredLanguage(nextLanguage);
+        if (!registered && !isSupportedLanguage(nextLanguage)) {
           dispose();
           return null;
         }
@@ -79,11 +86,13 @@ export function createHighlightsPlugin(
         }
         // The prefix checks below compare slices: V8 uses memcmp for them, but
         // its startsWith reads each character.
-        let ansiLines: string[] | undefined;
-        if (nextLanguage.toLowerCase() === 'ansi') {
-          // Warning: LiveTokenizer keeps escape sequences as text, so ANSI
-          // renders the whole fence. Appends can change only the last line.
-          ansiLines = highlight({
+        let fenceLines: string[] | undefined;
+        if (registered || nextLanguage.toLowerCase() === 'ansi') {
+          // Warning: LiveTokenizer keeps escape sequences as text and does not
+          // use a registered built-in module, so ANSI and registered languages
+          // render the whole fence. ANSI appends can change only the last line; a
+          // registered lexer can change any line.
+          fenceLines = highlight({
             code,
             language: nextLanguage,
             isIncomplete,
@@ -91,11 +100,12 @@ export function createHighlightsPlugin(
           const head = previous.endsWith('\n')
             ? previous.slice(0, -1)
             : previous;
-          if (code.slice(0, head.length) === head) first = previousContentLine;
+          if (!registered && code.slice(0, head.length) === head)
+            first = previousContentLine;
         } else if (tokenizer === undefined) {
           tokenizer = new LiveTokenizer({
             ...options,
-            lang: nextLanguage,
+            lang: nextLanguage as Lang,
             code,
           });
         } else if (code.slice(0, previous.length) === previous) {
@@ -130,7 +140,7 @@ export function createHighlightsPlugin(
           );
         } else tokenizer.reset(code);
 
-        const lineCount = ansiLines?.length ?? tokenizer!.lineCount;
+        const lineCount = fenceLines?.length ?? tokenizer!.lineCount;
         const lastContentLine = Math.max(
           0,
           lineCount - (code.endsWith('\n') ? 2 : 1)
@@ -149,7 +159,7 @@ export function createHighlightsPlugin(
         let html = '';
         let lastLineOffset = 0;
         for (let line = first; line < lineCount; line++) {
-          const value = ansiLines?.[line] ?? tokenizer!.getLineHtml(line);
+          const value = fenceLines?.[line] ?? tokenizer!.getLineHtml(line);
           lines.push(value);
           if (line > first) html += '\n';
           if (line === lastContentLine) lastLineOffset = html.length;

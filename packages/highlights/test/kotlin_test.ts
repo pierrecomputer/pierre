@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -95,9 +95,31 @@ void t.test(
     assert.equal(colorOf(html, '${'), themeColor('punctuation.special'));
     assert.equal(colorOf(html, String.raw`\n`), themeColor('string.escape'));
     assert.equal(colorOf(html, '"""raw '), themeColor('string'));
-    assert.equal(colorOf(html, String.raw`\u`), themeColor('string.escape'));
+    assert.equal(
+      colorOf(html, String.raw`\u263a`),
+      themeColor('string.escape')
+    );
   }
 );
+
+void t.test('kotlin: unicode escapes keep their hex digits', () => {
+  const code =
+    String.raw`val s = "a\u00e9b \\u12"; val c = '\u263a'; val d = '\uZ'` +
+    '\n';
+  assertLineFedParity('kotlin', code);
+  const kinds = tokenKinds('kotlin', code);
+  for (const esc of [String.raw`\u00e9`, String.raw`\\`, String.raw`\u263a`]) {
+    assert.ok(
+      kinds.some(([text, kind]) => text === esc && kind === 'string.escape'),
+      esc
+    );
+  }
+  assert.ok(
+    kinds.some(
+      ([text, kind]) => text === String.raw`\u` && kind === 'string.escape'
+    )
+  );
+});
 
 void t.test(
   'kotlin: annotations, members, constants, safe access, and operators',
@@ -472,7 +494,7 @@ void t.test('kotlin: functions, control flow, when, and type checks', () => {
       word
     );
   }
-  assert.equal(exactColor(html, '@scale'), distinctColor('attribute'));
+  assert.equal(exactColor(html, '@scale'), distinctColor('label'));
   assert.equal(exactColor(html, 'it'), distinctColor('variable'));
   assert.equal(exactColor(html, 'withIndex'), distinctColor('function.method'));
   assert.equal(exactColor(html, '..'), distinctColor('operator'));
@@ -616,4 +638,43 @@ void t.test('kotlin: a `$name` template ends before the next `$`', () => {
       ([text, kind]) => text === '${' && kind === 'punctuation.special'
     )
   );
+});
+
+void t.test('kotlin: labels, backtick names, and class references', () => {
+  const code =
+    'loop@ for (x in xs) { continue@loop }\nxs.forEach { return@forEach }\nfun `returns empty list when class is missing`() {}\nval tag = Foo::class.java.simpleName\n';
+  assertLineFedParity('kotlin', code);
+  assert.deepEqual(tokenKinds('kotlin', code), [
+    ['loop', 'variable'],
+    ['@', 'label'],
+    ['for', 'keyword.control'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['in', 'keyword.operator'],
+    ['xs', 'variable'],
+    [') {', 'punctuation.bracket'],
+    ['continue', 'keyword.control'],
+    ['@loop', 'label'],
+    ['}', 'punctuation.bracket'],
+    ['xs', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['forEach', 'function.method'],
+    ['{', 'punctuation.bracket'],
+    ['return', 'keyword.control'],
+    ['@forEach', 'label'],
+    ['}', 'punctuation.bracket'],
+    ['fun', 'keyword.declaration'],
+    ['`returns empty list when class is missing`', 'function.definition'],
+    ['() {}', 'punctuation.bracket'],
+    ['val', 'keyword.declaration'],
+    ['tag', 'variable'],
+    ['=', 'operator'],
+    ['Foo', 'type'],
+    ['::', 'operator'],
+    ['class', 'keyword.declaration'],
+    ['.', 'punctuation.delimiter'],
+    ['java', 'property'],
+    ['.', 'punctuation.delimiter'],
+    ['simpleName', 'property'],
+  ]);
 });

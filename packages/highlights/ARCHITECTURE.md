@@ -1,11 +1,22 @@
 # Architecture
 
-Highlights uses WAT lexers to scan UTF-8 bytes in WebAssembly memory. The lexers
-classify code from nearby tokens and saved state. They emit HTML or token
-records without a syntax tree. The TypeScript host converts text, applies
-themes, creates token objects, and schedules work after edits.
+Highlights separates lexical analysis from output. The selected lexer Wasm scans
+UTF-8 source and returns token records. The emitter Wasm receives that source
+and those records, then produces HTML or UTF-16 records for themed tokens.
 
-The same lexers and emitter process complete input, input streams, and edits:
+```text
+code → lexer.wasm → code + tokens (Uint8Array) → emitter.wasm → HTML / tokens
+```
+
+Each module under `@pierre/highlights/langs/*` contains a standalone lexer Wasm
+as base64 in JavaScript. The TypeScript module includes the TypeScript,
+JavaScript, TSX, and JSX dialects, and `langs/ts`, `langs/tsx`, `langs/js`,
+`langs/jsx`, and `langs/javascript` re-export it. The `langs` export from
+`@pierre/highlights/langs` contains one lexer Wasm for all languages. The
+`/core` entry imports neither that bundle nor the themes.
+
+The `@pierre/highlights` entry uses a combined lexer/emitter module for shared
+calls, streams, and editable documents:
 
 ```text
 Whole input ───── highlight ─────────┬─ HTML bytes
@@ -16,35 +27,91 @@ Document edits ── liveRun ───────────── per-line s
 
 ## Source map
 
-| Source                                                                                                | Responsibility                                                    |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [`lib/index.ts`](./lib/index.ts), [`lib/highlighter.ts`](./lib/highlighter.ts)                        | Public API, Wasm instances, input/output, and streaming           |
-| [`lib/live.ts`](./lib/live.ts)                                                                        | Edit validation, document reads, and deferred work                |
-| [`lib/theme.ts`](./lib/theme.ts), [`lib/tokens.ts`](./lib/tokens.ts)                                  | Theme preparation and conversion of records to token objects      |
-| [`src/highlights.wat`](./src/highlights.wat), [`src/memory.wat`](./src/memory.wat)                    | Drivers and memory layout                                         |
-| [`src/languages.wat`](./src/languages.wat)                                                            | Language table, name lookup, and dispatch by language ID          |
-| [`src/scan.wat`](./src/scan.wat), [`src/common.wat`](./src/common.wat)                                | Bounded scans, shared lexical rules, and multiline continuation   |
-| [`src/token.wat`](./src/token.wat), [`src/emit.wat`](./src/emit.wat)                                  | Token IDs, HTML emission, and binary records                      |
-| [`src/langs/*.wat`](./src/langs/), [`src/sig.wat`](./src/sig.wat), [`src/embed.wat`](./src/embed.wat) | Language lexers, parameter classification, and embedded languages |
-| [`src/live.wat`](./src/live.wat)                                                                      | Document storage, edit splicing, and incremental tokenization     |
-| [`scripts/build.ts`](./scripts/build.ts)                                                              | WAT preprocessing, compilation, and generated assets              |
-| [`themes/`](./themes/)                                                                                | Zed-compatible themes, CSS-variable theme, and `toCSS`            |
+| Source                                                                                                                     | Responsibility                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`lib/core.ts`](./lib/core.ts), [`lib/index.ts`](./lib/index.ts), [`lib/highlighter.ts`](./lib/highlighter.ts)             | Public API, language registration, Wasm instances, and streaming  |
+| [`lib/workerd.ts`](./lib/workerd.ts), [`lib/core-workerd.ts`](./lib/core-workerd.ts)                                       | Entries that import compiled `.wasm` files for Cloudflare Workers |
+| [`lib/live.ts`](./lib/live.ts)                                                                                             | Edit validation, document reads, and deferred work                |
+| [`lib/theme.ts`](./lib/theme.ts), [`lib/tokens.ts`](./lib/tokens.ts), [`lib/ansi.ts`](./lib/ansi.ts)                       | Theme preparation, conversion of records to tokens, and ANSI      |
+| [`src/lexer.wat`](./src/lexer.wat), [`src/emitter.wat`](./src/emitter.wat)                                                 | Separate lexer and emitter entry points                           |
+| [`src/highlights.wat`](./src/highlights.wat), [`src/memory.wat`](./src/memory.wat)                                         | Combined driver and emitter memory regions                        |
+| [`src/languages.wat`](./src/languages.wat)                                                                                 | Language table, name lookup, and dispatch by language ID          |
+| [`wat-tools/wat/scan.wat`](../wat-tools/wat/scan.wat), [`common.wat`](../wat-tools/wat/common.wat)                         | Bounded scans, shared lexical rules, and multiline continuation   |
+| [`src/token.wat`](./src/token.wat), [`src/emitter.wat`](./src/emitter.wat)                                                 | Theme tables, HTML emission, and UTF-16 line records              |
+| [`src/langs/*.wat`](./src/langs/), [`wat-tools/wat/sig.wat`](../wat-tools/wat/sig.wat), [`src/embed.wat`](./src/embed.wat) | Language lexers, parameter classification, and embedded languages |
+| [`wat-tools/wat/memory.wat`](../wat-tools/wat/memory.wat), [`records.wat`](../wat-tools/wat/records.wat)                   | Memory exports and raw lexer records                              |
+| [`wat-tools/wat/input.wat`](../wat-tools/wat/input.wat), [`output.wat`](../wat-tools/wat/output.wat)                       | Scan cursor, scan boundaries, and the output buffer               |
+| [`wat-tools/wat/lexer-state.wat`](../wat-tools/wat/lexer-state.wat), [`token.wat`](../wat-tools/wat/token.wat)             | Stream state and the `$Token` enum                                |
+| [`wat-tools/wat/lexer.wat`](../wat-tools/wat/lexer.wat)                                                                    | Driver for custom lexers                                          |
+| [`src/live.wat`](./src/live.wat)                                                                                           | Document storage, edit splicing, and incremental tokenization     |
+| [`scripts/build.ts`](./scripts/build.ts)                                                                                   | Lexer module pruning, build workers, and generated assets         |
+| [`wat-tools/highlights.ts`](../wat-tools/highlights.ts), [`wat-tools/core.ts`](../wat-tools/core.ts)                       | WAT preprocessor, compiler, optimizer, and `buildHighlightsLexer` |
+| [`themes/`](./themes/)                                                                                                     | Zed-compatible themes, CSS-variable theme, and `toCSS`            |
 
 ## Runtime and memory
 
-Package export conditions select a synchronous loader for each runtime. Node
-reads the Wasm file. Browsers compile embedded bytes. workerd imports a Wasm
-module. Each loader calls `init` and exports the public API.
+A `createHighlighter()` highlighter owns separate lexer and emitter instances.
+Each lexer returns packed `(endByte: u32, tokenId: u32)` pairs as a
+`Uint8Array`. A lexer module writes whitespace at the start of its input as a
+record of type 255. A parent lexer extends its previous record with it, and the
+host changes it to `none` at the document root. Plain text has no lexer module:
+the host writes one record. The host transfers the source and these records to
+the emitter instance.
+
+The emitter reads the record address at control byte 22 and the record byte
+length at byte 26. It places its output after these records so HTML expansion
+and UTF-16 conversion cannot overwrite records that it has not read. It clamps
+each record end to the input and emits uncovered bytes as plain text, so a
+custom lexer with wrong ends cannot drop text or read past the input. For line
+records, `emit` checks the lexer records and converts them in place.
+
+[`lib/core.ts`](./lib/core.ts) is the `/core` entry. It loads no Wasm at import,
+so the shared functions and tokenizers need `init(module)` first.
+`createHighlighter()` loads the emitter on its first call.
+[`lib/index.ts`](./lib/index.ts) is the main entry. It initializes the combined
+module at import and re-exports all themes. A lexer or emitter instance above 8
+MiB is replaced when small inputs resume.
+
+Cloudflare Workers cannot compile WebAssembly from bytes. The `workerd` export
+condition selects modules that import compiled `.wasm` files: the combined
+module and the emitter for the main entry, the emitter for `/core`, and the
+lexer for each `langs` module. `Language.wasm` accepts a `WebAssembly.Module`.
 
 `init(module)` creates the shared instance used by `codeToHtml` and
-`codeToTokens`. `createHighlighter(module)` creates an independent instance.
-Each active stream or live document owns its instance and lexer state. A
-completed stream can return its instance to a pool with one slot. A new stream
-can reuse that instance. Live documents do not share a pool.
+`codeToTokens`. `createHighlighter({ langs, themes })` always uses the separate
+lexer/emitter modules and returns a promise. `registerLanguages(langs)` builds
+the same registered pipeline synchronously, but its emitter is the combined
+module, which also exports `emit`. The shared functions send registered names to
+it. When a registered lexer embeds a built-in language that has no registered
+lexer, the host runs the combined module in mode 5 as the child lexer.
 
-The first 64 KiB memory page holds controls, static tables, caches, and
-temporary lexer data. The shared keyword pool takes the next 16 KiB. Input
-starts at byte 81920. A NUL byte and space for lookahead follow the input.
+`StreamTokenizer` and `LiveTokenizer` use the combined module. Each active
+stream or live document owns its instance and lexer state. For a custom lexer
+from `registerLanguages`, each one also owns an instance of that lexer. A stream
+sends each chunk to the lexer, and the combined module converts the records with
+`emit`. A live document calls the host import `lex_line` for each line. The host
+runs the line in the lexer and copies back the records and the lexer state. The
+lexer exports `saveState` and `loadState` for this: `buildHighlightsLexer` adds
+them, and they copy every mutable global and memory region that a run does not
+set again. The document stores this state for each line, as it does for a
+built-in lexer, and loads it to start from a line. A registered built-in
+language module has no such exports, because its child lexers hold a part of the
+state. For its names, both classes use the built-in lexer with the same ID. A
+completed stream can return its instance to a pool with one slot, if its memory
+is at most 1 MiB. A new stream can reuse that instance. Live documents do not
+share a pool.
+
+Each module reserves its own static memory with
+`(memory-region $mem.name bytes)`. The compiler aligns these regions after the
+64-byte control block and places input after the last region. The exported
+`inputPtr` gives the input address; the host reads it from each instance. A NUL
+byte and space for lookahead follow the input.
+
+Language files own their keyword tables, stacks, and lookup tables. Shared lexer
+helpers own byte sets, the keyword pool, and streaming state. The emitter
+reserves only theme tables, HTML fragments, and span caches. It exports
+`themePtr` for the host and starts with one 64 KiB page. Adding a lexer cannot
+increase the emitter's static memory.
 
 `$ptr` is the read cursor. `$eof` is the end of the input. `$end` is the current
 scan boundary, which can be earlier for an embedded lexer. NUL bytes inside the
@@ -53,20 +120,39 @@ input are data. The lexer uses the boundary to find the end.
 The host writes a language ID, input length, and output mode into the control
 block. Wasm writes back the output address and length:
 
-| Mode | Output                        |
-| ---- | ----------------------------- |
-| 0    | HTML with inline colors       |
-| 1    | HTML with CSS-variable colors |
-| 2    | HTML for a packed theme set   |
-| 3    | UTF-16 line records           |
+| Byte | Size | Value                                                                          |
+| ---- | ---- | ------------------------------------------------------------------------------ |
+| 0    | 1    | Language ID                                                                    |
+| 1    | 1    | Output mode. Lexer modules ignore it                                           |
+| 2    | 4    | Input byte length                                                              |
+| 6    | 4    | Output address                                                                 |
+| 10   | 4    | Output byte length                                                             |
+| 14   | 4    | Emitter: prefix or theme data address. Lexer module: nesting depth in one byte |
+| 18   | 4    | Prefix or theme data byte length                                               |
+| 22   | 4    | Emitter: record address                                                        |
+| 26   | 4    | Emitter: record byte length                                                    |
 
-Output starts after the input at a 16-byte-aligned address. Modes 1 and 2 place
-the variable prefix or theme set before the output. `$ensureCap` increases
-memory capacity before writes. The host creates new typed array views after
-memory growth. SIMD scans can read reserved lookahead space, but they must
-discard matches outside the scan range.
+The output modes are:
 
-[`src/memory.wat`](./src/memory.wat) defines the addresses and region sizes.
+| Mode | Output                                      |
+| ---- | ------------------------------------------- |
+| 0    | HTML with inline colors                     |
+| 1    | HTML with CSS-variable colors               |
+| 2    | HTML for a packed theme set                 |
+| 3    | UTF-16 line records                         |
+| 4    | HTML with prepared span tags                |
+| 5    | Byte records, as a lexer module writes them |
+
+Output starts after the input at a 16-byte-aligned address. Modes 1, 2, and 4
+place the variable prefix, theme set, or prepared span tags before the output.
+`$ensureCap` increases memory capacity before writes. The host creates new typed
+array views after memory growth. SIMD scans can read reserved lookahead space,
+but they must discard matches outside the scan range.
+
+[`src/memory.wat`](./src/memory.wat) declares emitter regions.
+[`wat-tools/wat/memory.wat`](../wat-tools/wat/memory.wat) exports linear memory
+and the computed input address. The compiler checks static data against the
+reserved region sizes.
 
 `codeToHtml` normally returns a `Uint8Array` view of Wasm memory. Later calls
 can overwrite that memory. Memory growth can detach the view.
@@ -79,6 +165,11 @@ The `language-table` in [`src/languages.wat`](./src/languages.wat) defines each
 language's canonical name, aliases, and lexer function. The build generates Wasm
 IDs, JavaScript lookups, and language names for Markdown fences from this table.
 The host ignores case in language names and rejects unknown names.
+
+A canonical name is the Shiki ID of the language when Shiki has it, such as
+`javascript`, `typescript`, and `shellscript`. Short names such as `js`, `ts`,
+and `bash` are aliases. A lexer file and its function can have another name:
+`bash.wat` and `$hlBash` are the lexer of `shellscript`.
 
 Keep `plain` first so it and its aliases (`plaintext`, `text`, `txt`) have ID 0.
 Sort the other canonical names alphabetically. Use the generated JavaScript and
@@ -93,12 +184,24 @@ each line. CSV and TSV share `csv.wat` through the delimiter and quoting
 parameters of `$hlCsvImpl`; only CSV has quoted fields. GDScript and Godot
 resources share the type lookup in `gdscript.wat` and scan strings with the
 Python string scanner. SQL and PL/SQL share `sql.wat`, Java and Apex share
-`java.wat`, and PHP and Hack share `php.wat`, through a dialect global that each
-entry point sets. SPARQL and Turtle share `rdf.wat` through a dialect parameter.
-Luau has its own loop in `luau.wat` and reuses the Lua helpers, so Lua does not
-pay for Luau checks. Jinja, Twig, Liquid, and Handlebars share `jinja.wat`
-through a dialect parameter of `$hlJinjaImpl`. Blade and Razor share the markup
-lexer in `template.wat`, and AsciiDoc reuses the inline scans of `rst.wat`.
+`java.wat`, through a dialect global that each entry point sets. PHP and Hack
+share `php.wat`: Hack sets `$phpHack` and clears it at its end. SPARQL and
+Turtle share `rdf.wat` through a dialect parameter. Luau has its own loop in
+`luau.wat` and reuses the Lua helpers, so Lua does not pay for Luau checks.
+Jinja, Twig, Liquid, and Handlebars share `jinja.wat` through a dialect
+parameter of `$hlJinjaImpl`. Blade and Razor share the markup lexer in
+`template.wat`, and AsciiDoc reuses the inline scans of `rst.wat`.
+
+Move, Cadence, V, Chapel, and Ballerina share `curly.wat`, and WIT, Smithy, Pkl,
+CUE, and ZenScript share `schema.wat`. Each file has one loop with a dialect
+parameter and one keyword table per language. Kusto and Splunk share
+`kusto.wat`. 1C (BSL) and its query language share `bsl.wat`, which folds each
+Cyrillic letter to one ASCII byte before the keyword lookup. Cairo is a
+`func-variant` of the Rust lexer, so Rust does not pay for Cairo checks. Hurl
+reuses the HTTP body code the same way. templ uses a `func-variant` of the
+`template.wat` markup lexer. Glimmer runs the ECMAScript lexer and hands each
+`<template>` body to the Handlebars lexer. `embed-line.wat` holds the JavaScript
+and CSS body helpers of Marko and templ.
 
 The ECMAScript family uses `js.wat` to scan code and `ts.wat` to classify
 tokens. `jsx.wat` handles markup, and `tsx.wat` is the driver. Feature flags
@@ -131,10 +234,39 @@ adjacent ranges with the same token ID. Gaps extend the previous record or use
 
 ### Embedded languages
 
-A parent lexer sets `$end` to the end of an embedded body. It calls the child
-lexer, then restores the outer boundary. The child lexer must stop at that
-boundary, even inside an unfinished construct. For example, a script comment
-must not consume the script's closing tag.
+Standalone lexers call the host to resolve embedded languages from the
+registered `langs`. The host copies each bounded body into a child lexer
+instance. The `embed` import also receives the parent's record address and
+capacity. The host copies the child's raw records to that address and writes
+their byte length to control word 10; the parent merges them when the import
+returns. The host calls `reserve` only when the records do not fit. Each open
+embedded stream has its own child instance, so nested templates and multiline
+fences preserve independent state.
+
+Each lexer keeps its finished child lexers for reuse. Whole-body lexers and
+stream lexers wait in separate pools, because a whole-body run does not clear
+the state of an unfinished stream. A template ends its stream context with
+`$embedEnd` when it closes. A child above 1 MiB does not go back to its pool. At
+64 levels of child lexers, the host emits the body as plain text.
+
+With `langs: [ts, html]`, script bodies use the registered JavaScript lexer.
+Style bodies remain plain text because CSS is absent. Markdown fences resolve
+registered custom names and aliases through the same host lookup.
+
+Some framework grammars need the TSX lexer to find a closing brace or tag, so
+their modules contain it. Vue, Svelte, Astro, MDX, and QML keep its tokens for
+those expressions and do not call the host. The TypeScript module also contains
+the markup lexer for `html` tagged templates, which reads JavaScript escapes.
+The Glimmer modules contain the ECMAScript and Handlebars lexers. PHP lexes each
+HTML segment between islands as a new body, as the combined lexer does. Markdown
+reads its nesting depth from control byte 14, which the host writes, and stops
+at eight levels.
+
+The combined runtime of the main entry calls child functions in the same Wasm
+instance. A parent sets `$end` to the end of a body, then restores the outer
+boundary. The child must stop at that boundary, even inside an unfinished
+construct. For example, a script comment must not consume the script's closing
+tag.
 
 `embed.wat` resumes script/style bodies, front matter, and framework
 expressions. Markup lexers resume their own unfinished start tags. Markdown and
@@ -192,7 +324,8 @@ output mode:
 | Single hex theme                                               | Mode 0 reads the packed theme table                                           |
 | `cssVariables: true`                                           | Mode 1 emits `var(<prefix><token-name>)`, with `--hls-` as the default prefix |
 | Multiple hex themes                                            | Mode 2 renders the packed set in one lex                                      |
-| Display P3, or a set containing Display P3/CSS-variable themes | Mode 1 emits placeholder tags that the host replaces with prepared styles     |
+| Display P3, or a set containing Display P3/CSS-variable themes | Mode 4 copies HTML tags prepared by the host                                  |
+| `cssVariables: { prefix, defaults }`                           | Mode 4 copies HTML tags prepared by the host                                  |
 
 With `themes`, `defaultColor` selects the inline theme and defaults to `light`.
 Other themes become custom properties such as `--hls-dark`. `false` uses custom
@@ -205,8 +338,9 @@ compares packed styles for hex themes, token IDs for variable output, and all
 theme styles for theme sets. Token calls keep the HTML caches.
 
 [`themes/index.ts`](./themes/index.ts) exports bundled themes, `cssVariables`,
-and `toCSS`, which produces CSS custom-property declarations. The build also
-emits individual theme modules and a lazy loader.
+and `toCSS`, which produces CSS custom-property declarations. In the bundle,
+each theme holds its `style` as a JSON string and parses it on first use. The
+build also emits individual theme modules and a lazy loader.
 
 ## ANSI input
 
@@ -310,22 +444,59 @@ Copy the view before any operation that can invalidate it.
 ## Build and verification
 
 `moon run highlights:build` runs [`scripts/build.ts`](./scripts/build.ts) before
-tsdown compiles the host. The WAT preprocessor combines local imports into one
-namespace. It expands enums, language registrations, named addresses, byte sets,
-dispatch tables, and keyword tables. Keyword tables share a word pool. They use
-a perfect hash to find a candidate, then compare its bytes.
+tsdown compiles the host. The WAT preprocessor and compiler are in
+[`@pierre/wat-tools`](../wat-tools/README.md). The build reads the shared WAT
+files from the build output of that package, so build `wat-tools` after you
+change `packages/wat-tools/wat/`. moon does this for `highlights:build`. The WAT
+preprocessor combines local imports into one namespace. It expands enums,
+language registrations, named addresses, byte sets, dispatch tables, and keyword
+tables. Keyword tables share a word pool. They use a perfect hash to find a
+candidate, then compare its bytes.
 
 WABT compiles with SIMD and bulk memory enabled. Binaryen optimizes the module,
 then the build reapplies JavaScriptCore workarounds for SIMD calling conventions
-and compound negations. Outputs include Wasm, the browser byte module, themes,
-and the tracked [`lib/languages.ts`](./lib/languages.ts) and
-[`lib/token-types.ts`](./lib/token-types.ts) tables. tsdown emits the host and
-declarations.
+and compound negations. Outputs include the combined module `highlights.wasm`,
+the emitter `emitter.wasm`, a base64 `.wasm.mjs` module for each, the
+all-language lexer `langs.js`, one lexer module per language in `dist/langs/`,
+the theme modules and their loader, and the tracked
+[`lib/languages.ts`](./lib/languages.ts) and
+[`lib/token-types.ts`](./lib/token-types.ts) tables. The build also writes the
+sizes of `emitter.wasm` and `langs.wasm`, raw and with gzip, to `meta` in
+`package.json`. tsdown emits the host and declarations.
 
-To add a language, update its import and registration. Enable stream checkpoints
-if the lexer needs them. Add a language test and a sample in
-[`test/_samples.ts`](./test/_samples.ts). Markdown fences use the new names
-automatically.
+The build makes each lexer module from [`src/lexer.wat`](./src/lexer.wat). It
+replaces the emitter, token, and memory files with the record-only files in
+`wat-tools/wat/`. It keeps the complete language table, but the languages that
+are not selected use the plain lexer, so language IDs are the same in every
+module. Calls to embedded lexers become the host imports `embed` and `language`.
+Then the build removes the code that the exports cannot reach.
+
+For each standalone lexer, the build drops stream resume branches that the
+selected languages cannot reach. It keeps the embedded-region branch when the
+lexer can still call `$streamSetRegion`. Open every stream region through that
+function. The build fails when a branch or pattern that it must drop is not in
+the source. Worker threads compile the lexer modules and the all-language lexer
+while the main thread compiles the combined module and the emitter.
+
+V8 and JSC give a module a larger Wasm inlining budget when more of its function
+bodies are under 50 bytes. The build appends empty functions to each module
+until half of its functions are that small. They are not dead code.
+
+`buildHighlightsLexer` in `@pierre/wat-tools` compiles a custom lexer with
+`wat-tools/wat/lexer.wat` as its driver. The host gives its names IDs from 256,
+so a custom lexer cannot take a built-in ID.
+
+To add a language, add its import and its `language-table` entry in
+`languages.wat`. The build then makes its module in `dist/langs/` too. Add the
+import at the end of the list: import order sets the memory addresses and
+byte-set numbers of every lexer, so an import in the middle changes the code of
+the lexers after it. If the new lexer calls a helper of another lexer, give it a
+copy with `(func-variant $copy $helper)`. Binaryen inlines a larger helper only
+while it has one caller. If the lexer must keep its locals between stream
+chunks, add its function to the `lexers` set in
+[`wat-tools/highlights.ts`](../wat-tools/highlights.ts). Add a language test and
+a sample in [`test/_samples.ts`](./test/_samples.ts). Markdown fences use the
+new names automatically.
 
 For changes to saved state, update the live capture, reset, and restore code.
 Before you add entries to `$Token`, check the fixed capacities for themes and
@@ -334,11 +505,15 @@ the emitter.
 Token IDs define the theme ABI. The enum lists names alphabetically and places
 rare tokens last. This keeps a one-byte constant for each common token.
 
-Tests compile WAT directly and import `lib/`. They do not need a package build.
-Language tests cover token classification and scan boundaries. Conformance tests
-compare HTML, complete input, and stream output. Wasm tests cover the
-preprocessor and optimizer changes. Stream and live tests cover saved state,
-edits, and deferred work.
+Most tests compile WAT directly and import `lib/`. The modular, custom-lexer,
+and workerd tests import the built package, so `moon run highlights:test` builds
+it first. Language tests cover token classification and scan boundaries.
+Conformance tests compare HTML, complete input, and stream output. Modular tests
+cover the lexer modules, `createHighlighter`, and the workerd entries.
+Custom-lexer tests cover `buildHighlightsLexer` and `registerLanguages`. Wasm
+tests cover the preprocessor and optimizer changes. Stream and live tests cover
+saved state, edits, and deferred work. `wat-tools` has its own tests; run
+`moon run wat-tools:test` after you change it.
 
 For code changes, run `moon run highlights:test` and
 `moon run highlights:typecheck`. Run `moon run root:format root:lint` for all

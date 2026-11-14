@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.codeqlWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bits 8 and up: the name a declaration keyword expects next, 1 a module,
   ;; 2 a type, 3 a predicate definition.
-  (keyword-table $codeqlWords $mem.codeqlWords $mem.sasWords
+  (keyword-table $codeqlWords $mem.codeqlWords $mem.codeqlWords+416
     (group $Token.keyword.import+256 "import")
     (group $Token.keyword.declaration+256 "module")
     (group $Token.keyword.declaration+512 "class" "newtype")
@@ -137,7 +141,11 @@
                   (enum.get $Token.variable)
                   (i32.and
                     (i32.gt_u (local.get $lhs) (global.get $srcBase))
-                    (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "."))))))
+                    (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const ".")))))
+              (if (i32.and (i32.eq (local.get $hl) (enum.get $Token.property)) (i32.eq (local.get $c2) (i32.const "(")))
+                (then
+                  (if (i32.or (i32.eq (local.get $p) (i32.const "+")) (i32.eq (local.get $p) (i32.const "*")))
+                    (then (local.set $hl (enum.get $Token.function)))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (global.set $ptr (local.get $rhs))
             (br $next)))

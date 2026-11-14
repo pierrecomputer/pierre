@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.qmlWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./tsx.wat")
 
   ;; Groups 1-7 double as $decl values. Value types (group 11) count only where
   ;; a type is expected, so `color: "red"` stays a binding.
-  (keyword-table $qmlWords $mem.qmlWords $mem.prologWords
+  (keyword-table $qmlWords $mem.qmlWords $mem.qmlWords+96
     (group "property")                      ;; 1: a type and a name follow
     (group "readonly" "required" "default") ;; 2: modifiers, a name may follow
     (group "signal")                        ;; 3: next name is a signal

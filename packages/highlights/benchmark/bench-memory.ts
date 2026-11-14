@@ -80,7 +80,7 @@ try {
   );
   const build = await Bun.build({
     entrypoints: [
-      fileURLToPath(new URL('../lib/index.ts', import.meta.url)),
+      fileURLToPath(new URL('../lib/core.ts', import.meta.url)),
       fileURLToPath(new URL('./memory-worker.ts', import.meta.url)),
     ],
     outdir: directory,
@@ -107,7 +107,7 @@ try {
         const request: MemoryRequest = {
           engine,
           scenario,
-          highlights: pathToFileURL(join(directory, 'index.mjs')).href,
+          highlights: pathToFileURL(join(directory, 'core.mjs')).href,
           shiki: import.meta.resolve('shiki'),
           wasm: join(directory, 'highlights.wasm'),
           theme: fileURLToPath(

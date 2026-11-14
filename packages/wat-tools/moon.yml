@@ -2,8 +2,29 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 
 language: 'typescript'
 layer: 'library'
+tags: ['tsdown', 'publishable']
 
-workspace:
-  inheritedTasks:
-    # The packages that build with these tools test them through their output.
-    exclude: ['test']
+tasks:
+  build:
+    script: 'tsdown --clean && cp -R wat dist/wat'
+    inputs:
+      - '*.ts'
+      - 'wat/**/*.wat'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+    options:
+      merge: 'replace'
+
+  test:
+    deps:
+      - 'build'
+
+  typecheck:
+    deps:
+      - 'build'
+
+  prepublish:
+    deps:
+      - 'test'
+      - 'typecheck'

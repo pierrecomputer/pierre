@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -275,5 +275,25 @@ void t.test(
       'less',
       '/* a\n b */\n.x {\n  color: red;\n  .m(\n    1;\n    2\n  );\n}\n'
     );
+  }
+);
+
+void t.test(
+  'less: `;` separates mixin parameters without ending the head',
+  () => {
+    const src = '.m(@w; @s) when (@w > 1px) { a: b }\n';
+    assert.deepEqual(tokenKinds('less', src).slice(0, 10), [
+      ['.m', 'selector.class'],
+      ['(', 'punctuation.bracket'],
+      ['@w', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['@s', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['when', 'keyword.operator'],
+      ['(', 'punctuation.bracket'],
+      ['@w', 'variable'],
+      ['>', 'operator'],
+    ]);
+    assertLineFedParity('less', src);
   }
 );

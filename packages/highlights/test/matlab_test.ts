@@ -214,3 +214,42 @@ void t.test('matlab: multi-line constructs stream line-fed', () => {
     assertLineFedParity('matlab', code);
   }
 });
+
+void t.test('matlab: Octave comments and block ends, and shell escapes', () => {
+  const code =
+    "# it's a comment\nif x > 1 # tail\n  y = 2;\nendif\n#{\nblock 'q\n#}\n!echo it's ok\nz = !x;\nfunction r = f(a)\nendfunction\n";
+  assert.deepEqual(tokenKinds('matlab', code), [
+    ["# it's a comment", 'comment'],
+    ['if', 'keyword.control'],
+    ['x', 'variable'],
+    ['>', 'operator'],
+    ['1', 'number'],
+    ['# tail', 'comment'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['endif', 'keyword.control'],
+    ['#{', 'comment'],
+    ["block 'q", 'comment'],
+    ['#}', 'comment'],
+    ['!', 'punctuation.special'],
+    ["echo it's ok", 'string.special'],
+    ['z', 'variable'],
+    ['= !', 'operator'],
+    ['x', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['function', 'keyword.declaration'],
+    ['r', 'variable'],
+    ['=', 'operator'],
+    ['f', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['a', 'variable.parameter'],
+    [')', 'punctuation.bracket'],
+    ['endfunction', 'keyword.control'],
+  ]);
+  assertLineFedParity('matlab', code);
+  assertLineFedParity('matlab', code.replaceAll('\n', '\r\n'));
+  // a resumed block comment ends its line, so the next line can open one
+  assertLineFedParity('matlab', '%{\na\n%}\n%{\nb\n%}\n!ls\n');
+});

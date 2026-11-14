@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.dartWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $dartWordHl below. `get` and `set`
   ;; are contextual: $hlDart keeps them in group 3 only when a name follows,
   ;; so `Set<int>` stays a type and `set(x)` a call.
-  (keyword-table $dartWords $mem.dartWords $mem.dockerfileWords
+  (keyword-table $dartWords $mem.dartWords $mem.dartWords+288
     (group ;; 1: control
       "if" "do" "for" "try" "case" "else" "await" "break" "catch" "throw" "while" "yield"
       "assert" "return" "switch" "default" "finally" "rethrow" "continue")
@@ -22,7 +26,7 @@
     (group "this" "super")    ;; 9: special variables
     (group "in" "is" "as" "new" "sync") ;; 10: word operators
     (group "hide" "part" "show")        ;; 11: import combinators and `part`, contextual
-    (group "on"))                       ;; 12: `on` clauses, contextual
+    (group "on" "when"))                ;; 12: `on` clauses and `when` guards, contextual
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=type, 2=function. -1 means an ordinary identifier; groups 3, 11, and
@@ -309,7 +313,7 @@
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             (local.set $g (keyword-table.get $dartWords (local.get $lhs) (local.get $rhs)))
-            ;; `get`/`set`, `on`, and `show`/`hide`/`part` are keywords only
+            ;; `get`/`set`, `on`/`when`, and `show`/`hide`/`part` are keywords only
             ;; before a name - or, for `part`, its quoted path - so `var show
             ;; = true` and `hide(show)` keep them as names
             (if

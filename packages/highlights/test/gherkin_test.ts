@@ -86,3 +86,14 @@ test('gherkin: doc strings run to their closing line', () => {
   assertLineFedParity('gherkin', code);
   assertLineFedParity('gherkin', 'Given x\n  """\n  open\n  Then not a step\n');
 });
+
+test('gherkin: many unclosed `<name` on a line stay linear', () => {
+  const code = `Given ${'<a '.repeat(300_000)}\nThen <b>\n`;
+  const start = performance.now();
+  const kinds = tokenKinds('gherkin', code);
+  expect(performance.now() - start).toBeLessThan(2000);
+  expect(kinds.slice(-2)).toEqual([
+    ['Then', 'keyword'],
+    ['<b>', 'variable'],
+  ]);
+});

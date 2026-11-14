@@ -1,14 +1,20 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gdTypes 160)
+  (memory-region $mem.gdPackedWords 64)
+  (memory-region $mem.gdscriptWords 192)
+
   (import "./python.wat")
 
-  (keyword-table $gdTypes $mem.gdTypes $mem.gdPackedWords
+  (keyword-table $gdTypes $mem.gdTypes $mem.gdTypes+160
     (group $Token.type.builtin
       "void" "bool" "int" "float" "String" "StringName" "NodePath" "Vector2"
       "Vector3" "Vector4" "Rect2" "Rect2i" "Transform2D"
       "Plane" "Quaternion" "AABB" "Basis" "Projection" "Color" "RID" "Object" "Callable"
       "Signal" "Dictionary" "Array" "Variant"))
 
-  (keyword-table $gdPackedWords $mem.gdPackedWords $mem.gdscriptWords
+  (keyword-table $gdPackedWords $mem.gdPackedWords $mem.gdPackedWords+64
     (group $Token.type.builtin
       "Byte" "Int32" "Int64" "Float32" "Float64" "String" "Vector2" "Vector3" "Vector4" "Color"))
 
@@ -38,7 +44,7 @@
           (i32.add (local.get $lhs) (i32.const 6)) (i32.sub (local.get $rhs) (i32.const 5))))))
     (keyword-table.value $gdTypes (local.get $lhs) (local.get $rhs)))
 
-  (keyword-table $gdWords $mem.gdscriptWords $mem.gdshaderWords
+  (keyword-table $gdWords $mem.gdscriptWords $mem.gdscriptWords+192
     (group $Token.boolean "true" "false")
     (group $Token.constant.builtin "null" "PI" "TAU" "INF" "NAN")
     (group $Token.variable.special "self" "super")

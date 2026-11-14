@@ -290,3 +290,32 @@ test('luau: malformed and random input remains total, balanced and lossless', ()
     checkInvariants(lexer.hl, code);
   }
 });
+
+test('luau: a \\z escape skips the line break after it', () => {
+  const code = 'local s = "a \\z\n  b" .. `t{x}`\n';
+  expect(tokenKinds('luau', code)).toEqual([
+    ['local', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['\\z', 'string.escape'],
+    ['b"', 'string'],
+    ['..', 'operator'],
+    ['`t', 'string'],
+    ['{', 'punctuation.special'],
+    ['x', 'variable'],
+    ['}', 'punctuation.special'],
+    ['`', 'string'],
+  ]);
+  assertLineFedParity('luau', code);
+});
+
+test('luau: many template strings on one line stay linear', () => {
+  // Each template string once searched the rest of the line for its end.
+  const lexer = loadLang('luau', '$hlLuau');
+  const src = '``'.repeat(100_000);
+  const started = performance.now();
+  lexer.hl(src);
+  const elapsed = performance.now() - started;
+  expect(elapsed).toBeLessThan(300);
+});

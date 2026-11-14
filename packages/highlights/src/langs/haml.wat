@@ -1,5 +1,8 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./ruby.wat")
   (import "./coffee.wat")
   (import "./css.wat")
@@ -45,7 +48,7 @@
     (local $n i32)
     (local $w i64)
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 10))
+    (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 11))
       (then (return (i32.const 0))))
     ;; the wide loads stay inside the input slack; the mask drops bytes past $rhs
     (local.set $w
@@ -77,9 +80,13 @@
     (if
       (i32.or
         (i64.eq (local.get $w) (i64.const "coffee"))
-        (i32.and
-          (i32.eq (local.get $n) (i32.const 12))
-          (i64.eq (local.get $w) (i64.const "coffeesc"))))
+        (i32.or
+          (i32.and
+            (i32.eq (local.get $n) (i32.const 12))
+            (i64.eq (local.get $w) (i64.const "coffeesc")))
+          (i32.and
+            (i32.eq (local.get $n) (i32.const 13))
+            (i64.eq (local.get $w) (i64.const "coffee-s")))))
       (then (return (i32.const 7))))
     (i32.const 0))
 
@@ -94,6 +101,35 @@
     (local.set $to (call $indentBlockEnd (global.get $ptr) (local.get $indent)))
     (local.set $open (i32.and (global.get $streaming) (i32.eq (local.get $to) (global.get $eof))))
     (local.set $root (i32.and (global.get $streaming) (i32.or (local.get $open) (local.get $resume))))
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (select
+              (enum.get $Language.javascript)
+              (select
+                (enum.get $Language.ruby)
+                (select
+                  (enum.get $Language.coffee)
+                  (select
+                    (enum.get $Language.less)
+                    (select
+                      (enum.get $Language.scss)
+                      (select (enum.get $Language.sass) (enum.get $Language.css) (i32.eq (local.get $kind) (i32.const 5)))
+                      (i32.eq (local.get $kind) (i32.const 4)))
+                    (i32.eq (local.get $kind) (i32.const 3)))
+                  (i32.eq (local.get $kind) (i32.const 7)))
+                (i32.eq (local.get $kind) (i32.const 6)))
+              (i32.eq (local.get $kind) (i32.const 1)))
+            (global.get $ptr) (local.get $to)
+            (select (i32.eqz (local.get $resume)) (i32.const -1) (local.get $root))
+            (i32.const -3)))
+        (global.set $ptr (local.get $to))
+        (if (local.get $open)
+          (then
+            (call $streamSetRegion (i32.const 28))
+            (global.set $streamC (i32.or (local.get $indent) (i32.shl (local.get $kind) (i32.const 16))))))
+        (return (local.get $open))))
     (local.set $save (global.get $end))
     (local.set $saveDepth (global.get $streamDepth))
     (local.set $saveReset (global.get $streamReset))
@@ -150,6 +186,14 @@
 
   (func $hamlRuby (param $stop i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.ruby) (global.get $ptr) (local.get $stop)
+            (i32.const -1) (i32.const -3)))
+        (global.set $ptr (local.get $stop))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $stop))
     (call $hlRuby)

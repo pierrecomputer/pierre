@@ -32,7 +32,9 @@ before you select another backend. `getHighlighterType()` returns the active
 backend.
 
 Built-in theme names work across all three backends. Custom TextMate themes and
-grammars require Shiki; Highlights uses Zed themes and bundled lexers. See
+grammars require Shiki; Highlights uses Zed themes, its built-in lexers, and
+lexers registered with
+[`registerCustomLanguage`](#utilities-registercustomlanguage). See
 [Themes](#themes) for configuration and [Highlights](#highlights) for its APIs
 and supported languages.
 

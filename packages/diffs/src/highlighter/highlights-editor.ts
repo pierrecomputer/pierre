@@ -1,6 +1,6 @@
 import {
-  type CodeToTokensOptions as HighlightsOptions,
   LiveTokenizer,
+  type LiveTokenizerOptions,
   type LiveTokenizerUpdate,
 } from '@pierre/highlights';
 
@@ -36,7 +36,7 @@ export class HighlightsEditorTokenizer {
     private readonly options: DiffsEditorTokenizerOptions,
     private readonly resolveOptions: (
       options: CodeToTokensOptions
-    ) => HighlightsOptions
+    ) => LiveTokenizerOptions
   ) {
     this.#version = options.textDocument.version;
     this.#tokenizer = this.#createTokenizer();

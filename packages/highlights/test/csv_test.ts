@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { codeToTokens, LiveTokenizer, type ThemedToken } from '../lib/index';
+import { codeToTokens, LiveTokenizer, type ThemedToken } from '../lib/core';
 import {
   assertLineFedParity,
   checkInvariants,

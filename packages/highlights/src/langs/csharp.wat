@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.csharpWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $csByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -11,7 +15,7 @@
   ;; the rare `on` and `scoped` share their slot bits with `out` in every
   ;; geometry that fits the range. Groups 11-15 are contextual words that
   ;; are ordinary names outside their syntax; see $csContextual.
-  (keyword-table $csWords $mem.csharpWords $mem.cudaWords
+  (keyword-table $csWords $mem.csharpWords $mem.csharpWords+416
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "lock" "when" "break" "catch" "throw" "while"
       "yield" "return" "switch" "checked" "default" "finally" "foreach" "continue" "unchecked")
@@ -37,12 +41,13 @@
     (group $Token.keyword.declaration+2048 "from")   ;; 13: opens a query expression
     (group $Token.keyword.declaration+1024 ;; 14: query clauses
       "by" "let" "join" "into" "group" "select" "equals" "orderby" "ascending" "descending")
-    (group $Token.keyword.declaration+4096 "add" "get" "set" "init" "remove")) ;; 15: accessors
+    (group $Token.keyword.declaration+4096 "add" "get" "set" "init" "remove") ;; 15: accessors
+    (group $Token.keyword.operator+16384 "or" "and" "not")) ;; 16: pattern combinators
 
   ;; Token in the low byte; bits 8-9 select the next-name capture: 1=type,
   ;; 2=namespace - also after `using`. Bits 10-13 flag a contextual word:
   ;; 1024 a query clause, 2048 `from`, 4096 an accessor, 8192 a declaration
-  ;; head. -1 means an ordinary identifier.
+  ;; head, 16384 a pattern combinator. -1 means an ordinary identifier.
   (func $csWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $hl i32)
     (local.set $hl (keyword-table.value $csWords (local.get $lhs) (local.get $rhs)))
@@ -80,6 +85,21 @@
     (param $head i32)
     (result i32)
     (local $w i32)
+    (if (i32.and (local.get $kind) (i32.const 16384))
+      (then
+        (return
+          (select
+            (local.get $kind)
+            (i32.const -1)
+            (i32.or
+              (i32.or (call $lexIsIdentStart (local.get $c)) (call $lexIsDigit (local.get $c)))
+              (i32.or
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const 34))
+                  (i32.or (i32.eq (local.get $c) (i32.const 39)) (i32.eq (local.get $c) (i32.const "("))))
+                (i32.or
+                  (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "[")))
+                  (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const ">"))))))))))
     (if (i32.and (local.get $kind) (i32.const 1024))
       (then (return (select (local.get $kind) (i32.const -1) (local.get $query)))))
     (if (i32.and (local.get $kind) (i32.const 4096))
@@ -119,22 +139,26 @@
 
   ;; Scan a string from $ptr. Bytes from $seg are not yet emitted.
   ;; $kind: 1 regular, 2 verbatim, 3 raw, 4-6 their format text ending at `}`.
-  ;; $interp enables `{` interpolation and literal `{{`/`}}` pairs.
-  ;; Inside an interpolation, $nested keeps nested strings' braces literal.
+  ;; $flags: the `$` count in bits 0-7, a raw literal's quote count in bits 8+.
+  ;; $nested keeps braces literal in a hole of a literal that is itself in a hole.
   ;; Return 1 after the closing quote, 2 after an interpolation opener,
   ;; 3 after an escaped line break at $end, or 0 at $end or a regular
   ;; string's raw line break. Emit openers as punctuation.special.
   (func $csStringBody
     (param $kind i32)
-    (param $interp i32)
+    (param $flags i32)
     (param $nested i32)
     (param $seg i32)
     (result i32)
     (local $c i32)
     (local $e i32)
+    (local $n i32)
+    (local $d i32)
+    (local $interp i32)
     (local $stop i32)
     (local $status i32)
-    (local.set $interp (i32.and (local.get $interp) (i32.eqz (local.get $nested))))
+    (local.set $d (i32.and (local.get $flags) (i32.const 255)))
+    (local.set $interp (i32.and (i32.ne (local.get $d) (i32.const 0)) (i32.eqz (local.get $nested))))
     (block $done
       (loop $scan
         ;; every byte before the next quote, backslash, line break, or - in
@@ -162,11 +186,18 @@
             (i32.or (i32.eq (local.get $kind) (i32.const 1)) (i32.eq (local.get $kind) (i32.const 4)))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        ;; a format text's `}` returns 1 and a lone `{` 2, past the brace
+        ;; a format text's `}` returns 1 and an opener 2, past its $n braces
         (block $special
         (local.set $e (i32.const 1))
-        (br_if $special
-          (i32.and (i32.ge_u (local.get $kind) (i32.const 4)) (i32.eq (local.get $c) (i32.const "}"))))
+        (local.set $n (i32.const 1))
+        (if (i32.and (i32.ge_u (local.get $kind) (i32.const 4)) (i32.eq (local.get $c) (i32.const "}")))
+          (then
+            (if (i32.gt_u (local.get $d) (i32.const 1))
+              (then
+                (local.set $n (call $csRun (global.get $ptr) (i32.const "}")))
+                (if (i32.gt_u (local.get $n) (local.get $d))
+                  (then (local.set $n (local.get $d))))))
+            (br $special)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (if (i32.eq (local.get $kind) (i32.const 2))
@@ -178,24 +209,12 @@
                     (br $scan)))))
             (if (i32.eq (local.get $kind) (i32.const 3))
               (then
-                (if
-                  (i32.eqz
-                    (i32.and
-                      (i32.eq
-                        (call $csByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const 34))
-                      (i32.eq
-                        (call $csByte (i32.add (global.get $ptr) (i32.const 2)))
-                        (i32.const 34))))
-                  (then
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                    (br $scan)))))
-            ;; the trailing quotes of a raw literal read below $end, so this
-            ;; cannot overshoot
-            (global.set $ptr
-              (i32.add
-                (global.get $ptr)
-                (select (i32.const 3) (i32.const 1) (i32.eq (local.get $kind) (i32.const 3)))))
+                (local.set $n (call $csRun (global.get $ptr) (i32.const 34)))
+                (global.set $ptr (i32.add (global.get $ptr) (local.get $n)))
+                (br_if $scan (i32.lt_u (local.get $n) (i32.shr_u (local.get $flags) (i32.const 8))))
+                (local.set $status (i32.const 1))
+                (br $done)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (local.set $status (i32.const 1))
             (br $done)))
         ;; a raw line break ends a regular literal, unconsumed
@@ -203,10 +222,40 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (if (call $stringEscapeAt (local.get $seg))
-              (then (local.set $status (i32.const 3))))
+            (local.set $n (call $csByte (i32.add (global.get $ptr) (i32.const 1))))
+            (if
+              (i32.or
+                (i32.eq (i32.or (local.get $n) (i32.const 32)) (i32.const "u"))
+                (i32.eq (local.get $n) (i32.const "x")))
+              (then
+                (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+                (local.set $seg (global.get $ptr))
+                (global.set $ptr
+                  (call $scanHexRun
+                    (i32.add (global.get $ptr) (i32.const 2))
+                    (select (i32.const 8) (i32.const 4) (i32.eq (local.get $n) (i32.const "U")))))
+                (call $emitTok (enum.get $Token.string.escape) (local.get $seg) (global.get $ptr)))
+              (else
+                (if (i32.or (i32.eq (local.get $n) (i32.const 10)) (i32.eq (local.get $n) (i32.const 13)))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (br $scan)))
+                (if (call $stringEscapeAt (local.get $seg))
+                  (then (local.set $status (i32.const 3))))))
             (local.set $seg (global.get $ptr))
             (br $scan)))
+        (if (i32.gt_u (local.get $d) (i32.const 1))
+          (then
+            (local.set $n (call $csRun (global.get $ptr) (local.get $c)))
+            (if
+              (i32.or (i32.eq (local.get $c) (i32.const "}")) (i32.lt_u (local.get $n) (local.get $d)))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (local.get $n)))
+                (br $scan)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.sub (local.get $n) (local.get $d))))
+            (local.set $n (local.get $d))
+            (local.set $e (i32.const 2))
+            (br $special)))
         ;; a brace: doubled ones are literal, a lone `{` opens an
         ;; interpolation, and a stray `}` is left as body
         (if (i32.eq (call $csByte (i32.add (global.get $ptr) (i32.const 1))) (local.get $c))
@@ -218,17 +267,42 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan))
         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (global.set $ptr (i32.add (global.get $ptr) (local.get $n)))
         (call $emitTok
           (enum.get $Token.punctuation.special)
-          (i32.sub (global.get $ptr) (i32.const 1))
+          (i32.sub (global.get $ptr) (local.get $n))
           (global.get $ptr))
         (return (local.get $e))))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
+  ;; A backslash before a line break is alone: a char literal never continues.
+  (func $csEscapeEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local.set $c (call $csByte (i32.add (local.get $p) (i32.const 1))))
+    (if (i32.or (i32.eq (local.get $c) (i32.const "u")) (i32.eq (local.get $c) (i32.const "x")))
+      (then (return (call $scanHexRun (i32.add (local.get $p) (i32.const 2)) (i32.const 4)))))
+    (if (i32.eq (local.get $c) (i32.const "U"))
+      (then (return (call $scanHexRun (i32.add (local.get $p) (i32.const 2)) (i32.const 8)))))
+    (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+      (then (return (i32.add (local.get $p) (i32.const 1)))))
+    (call $lexEscapeEnd (local.get $p)))
+
+  (func-variant $csCharBody $lexStringBody (call $lexEscapeEnd $csEscapeEnd))
+  (func-variant $csChar $lexString (call $lexStringBody $csCharBody))
+
+  (func $csRun (param $p i32) (param $c i32) (result i32)
+    (local $q i32)
+    (local.set $q (local.get $p))
+    (loop $run
+      (if (i32.eq (call $csByte (local.get $q)) (local.get $c))
+        (then
+          (local.set $q (i32.add (local.get $q) (i32.const 1)))
+          (br $run))))
+    (i32.sub (local.get $q) (local.get $p)))
+
   ;; The string literal prefix of the bytes $c $c2 $c3 (0 past $end): bit 0
-  ;; for `$`, bit 1 for `@`, in either order, the prefix length in bits 4-5,
+  ;; for `$`, bit 1 for `@`, in either order, the prefix length in bits 4-7,
   ;; and bit 8 set for any literal; zero when no quote follows.
   (func $csStringPrefix (param $c i32) (param $c2 i32) (param $c3 i32) (result i32)
     (local $flags i32)
@@ -251,6 +325,14 @@
           (i32.or
             (i32.or (local.get $flags) (i32.const 288))
             (select (i32.const 1) (i32.const 2) (i32.eq (local.get $c2) (i32.const "$")))))))
+    (if (i32.and (i32.eq (local.get $flags) (i32.const 1)) (i32.eq (local.get $c3) (i32.const "$")))
+      (then
+        (local.set $flags (call $csRun (global.get $ptr) (i32.const "$")))
+        (if
+          (i32.and
+            (i32.lt_u (local.get $flags) (i32.const 16))
+            (i32.eq (call $csByte (i32.add (global.get $ptr) (local.get $flags))) (i32.const 34)))
+          (then (return (i32.or (i32.shl (local.get $flags) (i32.const 4)) (i32.const 257)))))))
     (i32.const 0))
 
   (func $csIsOp (param $c i32) (result i32)
@@ -261,6 +343,7 @@
   ;; Bit 8 marks interpolation. $seg starts bytes not yet emitted.
   ;; $interpDepth counts parentheses and brackets. $interp counts braces.
   ;; $interpKind stores the string body to resume.
+  ;; $outerKind and $outerDepth (parens in bits 16+) keep an outer hole, one level deep.
   ;; $expect marks the next name's capture. $afterType persists through
   ;; generic, nullable, array, and qualified type punctuation. A following
   ;; name before `(` is a definition. $member follows `.`, `?.`, `->`, or `::`.
@@ -291,6 +374,8 @@
     (local $atHead i32)
     (local $ctx i32)
     (local $wasHead i32)
+    (local $outerKind i32)
+    (local $outerDepth i32)
     (local.set $lineHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -309,24 +394,35 @@
               (call $csStringBody
                 (i32.and (local.get $strKind) (i32.const 255))
                 (i32.shr_u (local.get $strKind) (i32.const 8))
-                (local.get $interp)
+                (local.get $outerKind)
                 (local.get $seg)))
             (local.set $seg (global.get $ptr))
-            (if (i32.and (i32.ge_u (local.get $strKind) (i32.const 4)) (i32.lt_u (local.get $strKind) (i32.const 256)))
+            (if (i32.ge_u (i32.and (local.get $strKind) (i32.const 255)) (i32.const 4))
               (then
                 (if (i32.eq (local.get $status) (i32.const 1))
                   (then
                     (local.set $strKind (local.get $interpKind))
-                    (local.set $interp (i32.const 0))
-                    (local.set $interpKind (i32.const 0))))
-                (if (i32.and (i32.eq (local.get $strKind) (i32.const 4)) (i32.eqz (local.get $status)))
+                    (local.set $status (i32.const -1))))
+                (if (i32.and (i32.eq (i32.and (local.get $strKind) (i32.const 255)) (i32.const 4)) (i32.eqz (local.get $status)))
                   (then
                     (local.set $strKind (i32.const 0))
-                    (local.set $interp (i32.const 0))))
+                    (local.set $status (i32.const -1))))
+                (if (i32.eq (local.get $status) (i32.const -1))
+                  (then
+                    (local.set $interpKind (local.get $outerKind))
+                    (local.set $interp (i32.and (local.get $outerDepth) (i32.const 0xffff)))
+                    (local.set $interpDepth (i32.shr_u (local.get $outerDepth) (i32.const 16)))
+                    (local.set $outerKind (i32.const 0))
+                    (local.set $outerDepth (i32.const 0))))
                 (br $next)))
             (if (i32.eq (local.get $status) (i32.const 2))
               (then
                 ;; `{` opened an interpolation: code until the matching `}`
+                (if (local.get $interp)
+                  (then
+                    (local.set $outerKind (local.get $interpKind))
+                    (local.set $outerDepth
+                      (i32.or (local.get $interp) (i32.shl (local.get $interpDepth) (i32.const 16))))))
                 (local.set $interpKind (local.get $strKind))
                 (local.set $interp (i32.const 1))
                 (local.set $interpDepth (i32.const 0))
@@ -404,25 +500,34 @@
         (local.set $kind (call $csStringPrefix (local.get $c) (local.get $c2) (local.get $c3)))
         (if (local.get $kind)
           (then
-            (global.set $ptr
-              (i32.add
-                (global.get $ptr)
-                (i32.and (i32.shr_u (local.get $kind) (i32.const 4)) (i32.const 3))))
+            (local.set $p (i32.and (i32.shr_u (local.get $kind) (i32.const 4)) (i32.const 15)))
+            (global.set $ptr (i32.add (global.get $ptr) (local.get $p)))
             (if
               (i32.and
-                (i32.eq (call $csByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
-                (i32.eq (call $csByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34)))
+                (i32.eqz (i32.and (local.get $kind) (i32.const 2)))
+                (i32.and
+                  (i32.eq (call $csByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+                  (i32.eq (call $csByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
               (then
-                (local.set $strKind (i32.const 3))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 3))))
+                ;; a raw literal keeps its quote count in bits 16 and up
+                (local.set $c3 (call $csRun (global.get $ptr) (i32.const 34)))
+                (local.set $strKind (i32.or (i32.shl (local.get $c3) (i32.const 16)) (i32.const 3)))
+                (global.set $ptr (i32.add (global.get $ptr) (local.get $c3))))
               (else
                 (local.set $strKind
                   (select (i32.const 2) (i32.const 1) (i32.and (local.get $kind) (i32.const 2))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+            ;; bits 8-15: the `$` count, which is the brace count of a hole
             (local.set $strKind
               (i32.or
                 (local.get $strKind)
-                (i32.shl (i32.and (local.get $kind) (i32.const 1)) (i32.const 8))))
+                (i32.shl
+                  (i32.mul
+                    (i32.and (local.get $kind) (i32.const 1))
+                    (i32.sub
+                      (local.get $p)
+                      (i32.and (i32.shr_u (local.get $kind) (i32.const 1)) (i32.const 1))))
+                  (i32.const 8))))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (local.set $seg (global.get $ptr))
             (local.set $member (i32.const 0))
@@ -430,7 +535,7 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
-            (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
+            (call $csChar (i32.const 39) (i32.const 0) (enum.get $Token.string))
             (local.set $member (i32.const 0))
             (local.set $afterType (i32.const 0))
             (br $next)))
@@ -589,7 +694,28 @@
           (then
             ;; a bracket opening a line starts an attribute list
             (if (i32.eq (local.get $c) (i32.const "["))
-              (then (local.set $lineHead (i32.shl (local.get $atHead) (i32.const 1)))))
+              (then
+                (local.set $lineHead (i32.shl (local.get $atHead) (i32.const 1)))
+                (if (local.get $atHead)
+                  (then
+                    (local.set $p (global.get $ptr))
+                    (loop $close
+                      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                      (local.set $c3 (call $csByte (local.get $p)))
+                      (br_if $close
+                        (i32.and
+                          (i32.ne (local.get $c3) (i32.const "]"))
+                          (i32.and
+                            (i32.ne (local.get $c3) (i32.const 0))
+                            (i32.and (i32.ne (local.get $c3) (i32.const 10)) (i32.ne (local.get $c3) (i32.const 13)))))))
+                    (local.set $p (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 1))))
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $c3) (i32.const "]"))
+                        (i32.and
+                          (i32.eq (call $csByte (local.get $p)) (i32.const "="))
+                          (i32.ne (call $csByte (i32.add (local.get $p) (i32.const 1))) (i32.const "="))))
+                      (then (local.set $lineHead (i32.const 0))))))))
             (if (i32.eq (local.get $c) (i32.const "]"))
               (then (local.set $lineHead (i32.const 0))))
             ;; `{`, `}`, and an attribute's `]` start a member position; a
@@ -623,12 +749,27 @@
                     (if (i32.eqz (local.get $interp))
                       (then
                         ;; the brace matching `{` returns to the string body
+                        (local.set $p (i32.and (i32.shr_u (local.get $interpKind) (i32.const 8)) (i32.const 255)))
+                        (if (i32.gt_u (local.get $p) (i32.const 1))
+                          (then
+                            (local.set $c3 (call $csRun (global.get $ptr) (i32.const "}")))
+                            (global.set $ptr
+                              (i32.add
+                                (global.get $ptr)
+                                (select
+                                  (local.get $c3)
+                                  (i32.sub (local.get $p) (i32.const 1))
+                                  (i32.lt_u (local.get $c3) (local.get $p)))))))
                         (call $emitTok
                           (enum.get $Token.punctuation.special)
                           (local.get $lhs)
                           (global.get $ptr))
                         (local.set $strKind (local.get $interpKind))
-                        (local.set $interpKind (i32.const 0))
+                        (local.set $interpKind (local.get $outerKind))
+                        (local.set $interp (i32.and (local.get $outerDepth) (i32.const 0xffff)))
+                        (local.set $interpDepth (i32.shr_u (local.get $outerDepth) (i32.const 16)))
+                        (local.set $outerKind (i32.const 0))
+                        (local.set $outerDepth (i32.const 0))
                         (local.set $seg (global.get $ptr))
                         (local.set $member (i32.const 0))
                         (local.set $expect (i32.const 0))
@@ -667,7 +808,10 @@
                   (i32.and (i32.eq (local.get $interp) (i32.const 1)) (i32.eqz (local.get $interpDepth)))
                   (i32.ne (local.get $c2) (i32.const ":")))
               (then
-                (local.set $strKind (i32.add (i32.and (local.get $interpKind) (i32.const 255)) (i32.const 3)))
+                (local.set $strKind
+                  (i32.add
+                    (i32.and (local.get $interpKind) (i32.const 0xffff))
+                    (i32.const 3)))
                 (local.set $seg (i32.add (global.get $ptr) (i32.const 1)))))
             (global.set $ptr
               (i32.add
@@ -761,7 +905,7 @@
             ;; Save()`, `Count > Limit()`
             (if (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr))
               (then
-                (if (i32.ne (local.get $gap) (local.get $lhs))
+                (if (i32.or (i32.ne (local.get $gap) (local.get $lhs)) (local.get $atHead))
                   (then (local.set $afterType (i32.const 0)))))
               (else (local.set $afterType (i32.const 0))))
             (br $next)))

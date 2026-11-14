@@ -104,3 +104,17 @@ test('llvm: strings, hex escapes, and comments', () => {
   assertLineFedParity('llvm', samples.llvm.code);
   assertLineFedParity('llvm', samples.llvm.code.replaceAll('\n', '\r\n'));
 });
+
+test('llvm: clang attributes, fast-math flags, and DISPFlag enumerators', () => {
+  const words =
+    'optsize optnone minsize inlinehint nocallback immarg nsz arcp contract constant afn reassoc nneg disjoint distinct';
+  expect(tokenKinds('llvm', words).map(([, kind]) => kind)).toEqual([
+    'attribute',
+    'keyword.declaration',
+    'attribute',
+  ]);
+  expect(tokenKinds('llvm', 'spFlags: DISPFlagDefinition').at(-1)).toEqual([
+    'DISPFlagDefinition',
+    'constant.builtin',
+  ]);
+});

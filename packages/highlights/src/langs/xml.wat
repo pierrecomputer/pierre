@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   (func $xmlNameStart (param $c i32) (result i32)
     (i32.or
@@ -125,16 +127,35 @@
     (local $p i32)
     (local $nextQuote i32)
     (local $nextStop i32)
+    (local $open i32)
     (local.set $p (global.get $ptr))
+    (local.set $open (local.get $p))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (if (local.get $quote)
           (then
-            (local.set $p (call $lexFindByte (local.get $p) (local.get $quote)))
+            ;; $quote `-` is a comment, `?` a processing instruction: each
+            ;; ends at the first `-->` or `?>` past its opener ($open)
+            (local.set $p
+              (call $lexFindByte
+                (local.get $p)
+                (select (local.get $quote) (i32.const ">") (i32.lt_u (local.get $quote) (i32.const 40)))))
             (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-            (local.set $quote (i32.const 0))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br_if $l
+              (i32.and
+                (i32.ge_u (local.get $quote) (i32.const 40))
+                (i32.or
+                  (i32.lt_u
+                    (local.get $p)
+                    (i32.add (local.get $open) (select (i32.const 3) (i32.const 2) (i32.eq (local.get $quote) (i32.const "-")))))
+                  (i32.or
+                    (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 2))) (local.get $quote))
+                    (i32.and
+                      (i32.eq (local.get $quote) (i32.const "-"))
+                      (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 3))) (i32.const "-")))))))
+            (local.set $quote (i32.const 0))
             (br $l)))
         (if (i32.lt_u (local.get $nextStop) (local.get $p))
           (then
@@ -142,7 +163,7 @@
               (call $scanFind3 (local.get $p) (i32.const "[") (i32.const "]") (i32.const ">")))))
         (if (i32.lt_u (local.get $nextQuote) (local.get $p))
           (then
-            (local.set $nextQuote (call $lexFindEither (local.get $p) (i32.const 34) (i32.const 39)))))
+            (local.set $nextQuote (call $scanFind3 (local.get $p) (i32.const 34) (i32.const 39) (i32.const "<")))))
         (local.set $p
           (select
             (local.get $nextStop)
@@ -154,6 +175,23 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (local.set $quote (local.get $c))
+            (br $l)))
+        (if (i32.eq (local.get $c) (i32.const "<"))
+          (then
+            (local.set $c (call $templateByte (local.get $p)))
+            (if (i32.eq (local.get $c) (i32.const "?"))
+              (then
+                (local.set $quote (local.get $c))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (local.set $open (local.get $p))))
+            (if
+              (i32.and
+                (i32.le_u (i32.add (local.get $p) (i32.const 3)) (global.get $end))
+                (i32.eq (i32.load (i32.sub (local.get $p) (i32.const 1))) (i32.const "<!--")))
+              (then
+                (local.set $quote (i32.const "-"))
+                (local.set $p (i32.add (local.get $p) (i32.const 3)))
+                (local.set $open (local.get $p))))
             (br $l)))
         (if (i32.eq (local.get $c) (i32.const "["))
           (then

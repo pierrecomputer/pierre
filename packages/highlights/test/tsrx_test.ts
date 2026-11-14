@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { codeToTokens, init } from '../lib/index';
+import { codeToTokens, init } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { samples } from './_samples';
 import {
@@ -374,5 +374,11 @@ void t.test('tsrx: malformed input stays lossless and balanced', () => {
   ]) {
     checkInvariants(tsrx.hl, input);
     checkInvariants(tsrx.hl, input + '\n');
+  }
+});
+
+void t.test('tsrx: a declaration word never reads the next line', () => {
+  for (const code of ['fragment\nt\n', 'module\nm\n']) {
+    assertLineFedParity('tsrx', code);
   }
 });

@@ -1,3 +1,4 @@
+import type { Language as HighlightsLanguage } from '@pierre/highlights';
 import type { DynamicImportLanguageRegistration } from 'shiki';
 
 import type { SupportedLanguages } from '../../types';
@@ -15,5 +16,13 @@ export const RegisteredCustomLanguages: Map<
   string,
   DynamicImportLanguageRegistration
 > = new Map();
+
+export const RegisteredHighlightsLanguages: Map<
+  string,
+  () => Promise<{ default: HighlightsLanguage }>
+> = new Map();
+
+export const ResolvedHighlightsLanguages: Map<string, ResolvedLanguage> =
+  new Map();
 
 export const AttachedLanguages: Set<string> = new Set();

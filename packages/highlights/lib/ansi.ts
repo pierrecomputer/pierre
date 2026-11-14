@@ -1,4 +1,4 @@
-import type { ThemedToken } from './index';
+import type { ThemedToken } from './core';
 import { rangeToToken, type ResolvedTheme } from './tokens';
 
 const BOLD = 1;

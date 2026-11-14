@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -539,3 +539,75 @@ void t.test(
     }
   }
 );
+
+void t.test('mdx: `{` and `<` inside an inline code span are text', () => {
+  assert.deepEqual(tokenKinds('mdx', 'Use `{a}` and `Array<T>` *em* {b}\n'), [
+    ['Use', null],
+    ['`{a}`', 'text.literal'],
+    ['and', null],
+    ['`Array<T>`', 'text.literal'],
+    ['*em*', 'emphasis'],
+    ['{', 'punctuation.bracket'],
+    ['b', 'variable'],
+    ['}', 'punctuation.bracket'],
+  ]);
+  for (const code of [
+    'Use `{a}` and `<div>` x\n',
+    'a \\`{b}\\` c\n',
+    '```x``` {y}\n\n# h\n',
+  ]) {
+    assertLineFedParity('mdx', code);
+  }
+});
+
+void t.test('mdx: a `<word` tag decides on its own line', () => {
+  // prose without tag evidence never joins a later `>`
+  assert.deepEqual(tokenKinds('mdx', 'If x <y then\nfoo\n\n- 3 > 2 *em*\n'), [
+    ['If x <y then', null],
+    ['foo', null],
+    ['-', 'punctuation.list_marker'],
+    ['3 > 2', null],
+    ['*em*', 'emphasis'],
+  ]);
+  // an unclosed tag with evidence ends at the next blank line
+  assert.deepEqual(tokenKinds('mdx', '<Foo bar\n\nSome *text*\n# Head\n'), [
+    ['<', 'punctuation.bracket.jsx'],
+    ['Foo', 'tag.component.jsx'],
+    ['bar', 'attribute.jsx'],
+    ['Some', null],
+    ['*text*', 'emphasis'],
+    ['# Head', 'title'],
+  ]);
+  for (const code of [
+    'If x <y then\nfoo\n\n- 3 > 2 *em*\n',
+    '<Foo bar\n\nSome *text* here\n# Head\n',
+    '<Foo bar\n  baz\n',
+    '<Foo a={\n\n}>\nrest *x*\n',
+    'x <Foo\n`a` {b}\n\n',
+    '<Card\n  title="x"\n>\nchild {y}\n</Card>\n\nafter\n',
+    '```mdx\n<Foo bar\n\n# H {x}\n```\nafter {y}\n',
+  ]) {
+    assertLineFedParity('mdx', code);
+  }
+});
+
+void t.test('mdx: open comments and mid-line chunks keep stream parity', () => {
+  assert.deepEqual(tokenKinds('mdx', '# <!--\n{x}\n'), [
+    ['# <!--', 'title'],
+    ['{', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['}', 'punctuation.bracket'],
+  ]);
+  for (const code of [
+    '# <!--\n{',
+    '</<!--\n{',
+    '*<!--*\n{',
+    'a <!--\n{\n-->{x}\n',
+    '<!--\n{\n--> {y}\n',
+    '```{`\no',
+    '> \\<!--- "<!--export {a}\n*/}\\# \\x=<a> {/*```\n',
+    '{\n```js\n`}export {a}\n',
+  ]) {
+    assertLineFedParity('mdx', code);
+  }
+});

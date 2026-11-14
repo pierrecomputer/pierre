@@ -106,3 +106,26 @@ test('handlebars: comments, subexpressions, inverse sections, and partials', () 
     assertLineFedParity('handlebars', code);
   }
 });
+
+test('handlebars: subexpressions, raw blocks, and escaped mustaches', () => {
+  const code =
+    '{{#if (eq user.role (lookup roles 0))}}x{{/if}}\n{{{{raw}}}} {{x}} {{{{/raw}}}}\n\\{{escaped}}\n';
+  assertLineFedParity('handlebars', code);
+  expect(tokenKinds('handlebars', code).slice(4, 9)).toEqual([
+    ['user', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['role', 'property'],
+    ['(', 'punctuation.bracket'],
+    ['lookup', 'function'],
+  ]);
+  expect(tokenKinds('handlebars', code).slice(17)).toEqual([
+    ['{{{{', 'punctuation.special'],
+    ['raw', 'keyword.control'],
+    ['}}}}', 'punctuation.special'],
+    ['{{x}}', 'text.literal'],
+    ['{{{{', 'punctuation.special'],
+    ['/raw', 'keyword.control'],
+    ['}}}}', 'punctuation.special'],
+    ['\\{{escaped}}', null],
+  ]);
+});

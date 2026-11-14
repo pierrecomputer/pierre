@@ -109,7 +109,7 @@ test('fortran-fixed-form: strings continue across column-six markers', () => {
       ['v', 'variable'],
       ['=', 'operator'],
       ["'zero", 'string'],
-      ['0', 'number'],
+      ['0', null],
       ['x', 'variable'],
       ['=', 'operator'],
       ['1', 'number'],
@@ -263,4 +263,85 @@ test('fortran: quotes and comment markers inside strings remain literal', () => 
   expect(tokenKinds('fortran', '!$omp parallel do')).toEqual([
     ['!$omp parallel do', 'preproc'],
   ]);
+});
+
+test('fortran: a bare end statement captures no later name', () => {
+  const code =
+    'interface\n  subroutine cb(x)\n  end subroutine\nend interface\nreal :: total\nend module\ninteger :: count = 0\n';
+  const tokens = tokenKinds('fortran', code);
+  expect(tokens).toContainEqual(['total', 'variable']);
+  expect(tokens).toContainEqual(['count', 'variable']);
+  assertLineFedParity('fortran', code);
+});
+
+test('fortran: case default and module procedure names', () => {
+  expect(tokenKinds('fortran', 'case default')).toEqual([
+    ['case default', 'keyword.control'],
+  ]);
+  expect(tokenKinds('fortran', 'module procedure cross_product')).toEqual([
+    ['module procedure', 'keyword.declaration'],
+    ['cross_product', 'function.definition'],
+  ]);
+  expect(tokenKinds('fortran', 'procedure :: step')).toEqual([
+    ['procedure', 'keyword.declaration'],
+    ['::', 'punctuation.delimiter'],
+    ['step', 'variable'],
+  ]);
+});
+
+test('fortran-fixed-form: columns 73 and up and column-six markers', () => {
+  const code = [
+    '      COUNT = COUNT + 1'.padEnd(72) + 'SEQ00010',
+    "      X = 'AB".padEnd(72) + 'SEQ00020',
+    "     1CD'",
+    '      Y = 2.5D0 +',
+    '     1    X ** 2',
+    '',
+  ].join('\n');
+  expect(tokenKinds('fortran-fixed-form', code)).toEqual([
+    ['COUNT', 'variable'],
+    ['=', 'operator'],
+    ['COUNT', 'variable'],
+    ['+', 'operator'],
+    ['1', 'number'],
+    ['SEQ00010', 'comment'],
+    ['X', 'variable'],
+    ['=', 'operator'],
+    ["'AB", 'string'],
+    ['SEQ00020', 'comment'],
+    ['1', 'operator'],
+    ["CD'", 'string'],
+    ['Y', 'variable'],
+    ['=', 'operator'],
+    ['2.5D0', 'number'],
+    ['+', 'operator'],
+    ['1', 'operator'],
+    ['X', 'variable'],
+    ['**', 'operator'],
+    ['2', 'number'],
+  ]);
+  assertLineFedParity('fortran-fixed-form', code);
+  // free form has no column limit and no column-six marker
+  expect(tokenKinds('fortran', '     1    X').slice(0, 1)).toEqual([
+    ['1', 'number'],
+  ]);
+});
+
+test('fortran-fixed-form: a definition name may sit on a continuation line', () => {
+  const code =
+    '      SUBROUTINE\nC note\n     1FOO(A)\n      FUNCTION\n      X = 1\n';
+  expect(tokenKinds('fortran-fixed-form', code)).toEqual([
+    ['SUBROUTINE', 'keyword.declaration'],
+    ['C note', 'comment'],
+    ['1', 'operator'],
+    ['FOO', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['A', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['FUNCTION', 'keyword.declaration'],
+    ['X', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('fortran-fixed-form', code);
 });

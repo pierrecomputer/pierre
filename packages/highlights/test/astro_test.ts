@@ -349,3 +349,46 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'astro: a {...} attribute on a script or style tag is an expression',
+  () => {
+    const code =
+      '<script define:vars={{ ok: n > 1 }}>\nconsole.log(ok);\n</script>\n<style define:vars={{\n  c: "red" }} lang="scss">\n$a: 1;\n</style>\n';
+    assert.deepEqual(tokenKinds('astro', code).slice(0, 13), [
+      ['<', 'punctuation.bracket.html'],
+      ['script', 'tag'],
+      ['define:vars', 'attribute'],
+      ['=', 'punctuation.delimiter.html'],
+      ['{{', 'punctuation.bracket'],
+      ['ok', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['n', 'variable'],
+      ['>', 'operator'],
+      ['1', 'number'],
+      ['}}', 'punctuation.bracket'],
+      ['>', 'punctuation.bracket.html'],
+      ['console', 'variable'],
+    ]);
+    assertLineFedParity('astro', code);
+  }
+);
+
+void t.test(
+  'astro: scripts are TypeScript, and declarations stream whole',
+  () => {
+    const code = '<script>\nlet n: number = 1;\n</script>\n';
+    assert.ok(
+      tokenKinds('astro', code).some(
+        ([text, kind]) => text === 'number' && kind === 'type.builtin'
+      )
+    );
+    for (const source of [
+      code,
+      '<?xml version="1.0"\n<p>{a}</p>\n',
+      '<!x\n<script>\nlet a\n</script>\n',
+    ]) {
+      assertLineFedParity('astro', source);
+    }
+  }
+);

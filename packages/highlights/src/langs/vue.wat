@@ -1,5 +1,8 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
   (func $vueHtmlRange (param $from i32) (param $to i32)
@@ -15,6 +18,14 @@
 
   (func $vueTsxRange (param $from i32) (param $to i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.tsx) (local.get $from) (local.get $to)
+            (i32.const -1) (i32.const -3)))
+        (global.set $ptr (local.get $to))
+        (return)))
     (if (i32.ge_u (local.get $from) (local.get $to))
       (then (return)))
     (local.set $save (global.get $end))
@@ -30,6 +41,14 @@
   ;; across chunks so the pieces classify like the whole.
   (func $vueTsxStream (param $from i32) (param $to i32) (param $reset i32)
     (local $save i32)
+    (if (global.get $externalEmbedding)
+      (then
+        (drop
+          (call $embedLanguage
+            (enum.get $Language.tsx) (local.get $from) (local.get $to)
+            (local.get $reset) (i32.const -3)))
+        (global.set $ptr (local.get $to))
+        (return)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
@@ -269,18 +288,16 @@
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then
-            (if
-              (i32.and
-                (i32.le_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
-                (i32.eq (i32.load (local.get $p)) (i32.const "<!--")))
+            ;; `<!` and `<?` run to their own close, whatever cut lies inside
+            (local.set $q (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+            (if (i32.or (i32.eq (local.get $q) (i32.const "!")) (i32.eq (local.get $q) (i32.const "?")))
               (then
                 (call $vueHtmlRange (local.get $from) (local.get $p))
                 (global.set $ptr (local.get $p))
-                (call $htmlComment (local.get $p))
+                (call $htmlBang (local.get $q))
                 (br $resync)))
             ;; Tags are Vue's own: directive values are expressions, and a
-            ;; script/style body is scanned once here. Declarations remain
-            ;; the HTML lexer's job.
+            ;; script/style body is scanned once here.
             ;; $q: the name start, past the `/` of a close tag
             (local.set $q
               (i32.add

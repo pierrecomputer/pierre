@@ -152,3 +152,18 @@ test('applescript: nested comments, strings, and `¬` joins span lines', () => {
     assertLineFedParity('applescript', code);
   }
 });
+
+test('applescript: use statements', () => {
+  expect(
+    tokenKinds(
+      'applescript',
+      'use scripting additions\nuse framework "Foundation"'
+    )
+  ).toEqual([
+    ['use', 'keyword.import'],
+    ['scripting additions', null],
+    ['use', 'keyword.import'],
+    ['framework', null],
+    ['"Foundation"', 'string'],
+  ]);
+});

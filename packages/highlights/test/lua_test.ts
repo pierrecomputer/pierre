@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -421,4 +421,29 @@ void t.test('lua: a shebang line is a comment', () => {
     [')', 'punctuation.bracket'],
   ]);
   assertLineFedParity('lua', code);
+});
+
+void t.test('lua: a \\z escape skips the line break after it', () => {
+  const code =
+    'local s = "a \\z\n      b" .. \'c\'\nlocal v = "m\\\nn \\z\n  o"\nlocal t = "x\\\\z\n" .. y\n';
+  assert.deepEqual(tokenKinds('lua', code).slice(0, 8), [
+    ['local', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['\\z', 'string.escape'],
+    ['b"', 'string'],
+    ['..', 'operator'],
+    ["'c'", 'string'],
+  ]);
+  // an escaped backslash before `z` is no `\z`: the string ends at the line
+  assert.deepEqual(tokenKinds('lua', code).slice(-4), [
+    ['"x', 'string'],
+    ['\\\\', 'string.escape'],
+    ['z', 'string'],
+    ['" .. y', 'string'],
+  ]);
+  assertLineFedParity('lua', code);
+  // an escaped line break continues one line only
+  for (const tail of ['\n*', '\r']) assertLineFedParity('lua', `'\\\n${tail}`);
 });

@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -827,3 +827,148 @@ void t.test(
     ]);
   }
 );
+
+void t.test('csharp: raw literals keep their quote and dollar counts', () => {
+  const code =
+    'var r = """" has """ inside """";\nint z = 2;\nvar s = $$"""{ "n": {{n}}, "m": {{{m}}} }""";\nvar t = $$"""\n  { {{a:F2}} }\n  """;\nvar u = $$$"""{{ {{{v}}} }}}""";\nint y = 1;\n';
+  assertLineFedParity('csharp', code);
+  assert.deepEqual(tokenKinds('csharp', code), [
+    ['var', 'keyword.declaration'],
+    ['r', 'variable'],
+    ['=', 'operator'],
+    ['"""" has """ inside """"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['int', 'type.builtin'],
+    ['z', 'variable'],
+    ['=', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['$$"""{ "n":', 'string'],
+    ['{{', 'punctuation.special'],
+    ['n', 'variable'],
+    ['}}', 'punctuation.special'],
+    [', "m": {', 'string'],
+    ['{{', 'punctuation.special'],
+    ['m', 'variable'],
+    ['}}', 'punctuation.special'],
+    ['} }"""', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ['$$"""', 'string'],
+    ['{', 'string'],
+    ['{{', 'punctuation.special'],
+    ['a', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['F2', 'string'],
+    ['}}', 'punctuation.special'],
+    ['}', 'string'],
+    ['"""', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['u', 'variable'],
+    ['=', 'operator'],
+    ['$$$"""{{', 'string'],
+    ['{{{', 'punctuation.special'],
+    ['v', 'variable'],
+    ['}}}', 'punctuation.special'],
+    ['}}}"""', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['int', 'type.builtin'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('csharp: escapes take their hex digits', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'csharp',
+      'var a = "\\u0041 \\x41g \\U0001F600 \\0123"; char c = \'\\u0041\';'
+    ).filter(([, kind]) => kind === 'string.escape'),
+    [
+      ['\\u0041', 'string.escape'],
+      ['\\x41', 'string.escape'],
+      ['\\U0001F600', 'string.escape'],
+      ['\\0', 'string.escape'],
+      ['\\u0041', 'string.escape'],
+    ]
+  );
+  // escaped line breaks agree line-fed, in strings and in chars
+  assertLineFedParity(
+    'csharp',
+    "var a = \"x\\\nint b = 1;\nchar c = '\\\n\\u0041';\n"
+  );
+});
+
+void t.test('csharp: pattern combinators and nested holes', () => {
+  const code =
+    'if (o is not null) {}\nvar r = x is > 0 and < 10 or 42;\nvar and = 1; f(not, or);\nvar a = $"outer {$"inner {x}"} {y}";\n';
+  assertLineFedParity('csharp', code);
+  const kinds = tokenKinds('csharp', code);
+  assert.deepEqual(kinds[3], ['is not', 'keyword.operator']);
+  assert.deepEqual(
+    kinds.filter(([text]) => ['not', 'and', 'or'].includes(text)),
+    [
+      ['and', 'keyword.operator'],
+      ['or', 'keyword.operator'],
+      ['and', 'variable'],
+      ['not', 'variable'],
+      ['or', 'variable'],
+    ]
+  );
+  assert.deepEqual(kinds.slice(-13), [
+    ['$"outer', 'string'],
+    ['{', 'punctuation.special'],
+    ['$"inner', 'string'],
+    ['{', 'punctuation.special'],
+    ['x', 'variable'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    ['}', 'punctuation.special'],
+    ['{', 'punctuation.special'],
+    ['y', 'variable'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('csharp: index initializers and line-start operators', () => {
+  const code =
+    'var d = new Dictionary<string, int>\n{\n    [Key] = 2,\n};\n[Obsolete]\nFoo //c\n> bar(x);\n';
+  assertLineFedParity('csharp', code);
+  const kinds = tokenKinds('csharp', code);
+  assert.deepEqual(
+    kinds.filter(([text]) => ['Key', 'Obsolete', 'bar'].includes(text)),
+    [
+      ['Key', 'type'],
+      ['Obsolete', 'attribute'],
+      ['bar', 'function'],
+    ]
+  );
+});
+
+void t.test('csharp: verbatim quotes and no line continuation', () => {
+  const code = 'var a = @"""x"" y";\nvar d = "line \\\nnext";\n';
+  assertLineFedParity('csharp', code);
+  assert.deepEqual(tokenKinds('csharp', code), [
+    ['var', 'keyword.declaration'],
+    ['a', 'variable'],
+    ['=', 'operator'],
+    ['@"""x"" y"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['d', 'variable'],
+    ['=', 'operator'],
+    ['"line \\', 'string'],
+    ['next', 'variable'],
+    ['";', 'string'],
+  ]);
+});

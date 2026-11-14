@@ -34,15 +34,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const FEATURED_LANGUAGES = [
-  'ts',
-  'js',
+  'typescript',
+  'javascript',
   'python',
   'go',
   'html',
 ] as const satisfies readonly PlaygroundLanguage[];
 const FEATURED_LANGUAGE_ICONS = {
-  ts: { icon: typescriptIcon, color: '#3178c6' },
-  js: { icon: javascriptIcon, color: '#f7df1e' },
+  typescript: { icon: typescriptIcon, color: '#3178c6' },
+  javascript: { icon: javascriptIcon, color: '#f7df1e' },
   python: { icon: pythonIcon, color: '#3776ab' },
   go: { icon: goIcon, color: '#00add8' },
   html: { icon: htmlIcon, color: '#e34f26' },
@@ -71,7 +71,7 @@ export function HighlightsPlayground({
   variant?: 'hero' | 'languages';
 }) {
   const [defaultLanguage, , defaultCode] = PLAYGROUND_LANGUAGES.find(
-    ([lang]) => lang === (variant === 'hero' ? 'tsx' : 'ts')
+    ([lang]) => lang === (variant === 'hero' ? 'tsx' : 'typescript')
   )!;
   const [selectedThemes, setSelectedThemes] = useState({
     light: 'pierre-light',
@@ -213,7 +213,7 @@ export function HighlightsPlayground({
         <>
           <div className="mb-6 max-w-3xl space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight">
-              Supports 152 languages
+              Supports 190 languages
             </h2>
             <p className="text-muted-foreground text-pretty">
               Highlights ships its language lexers in one small WebAssembly

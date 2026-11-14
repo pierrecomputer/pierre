@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 
+import type { CodeToHtmlOptions } from '../lib/core';
+import { codeToHtml, codeToTokens, init } from '../lib/core';
 import { HighlightsHighlighter } from '../lib/highlighter';
-import type { CodeToHtmlOptions } from '../lib/index';
-import { codeToHtml, codeToTokens, init } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { cssVariables } from '../themes/index';
 import pierreDarkVibrant from '../themes/pierre-dark-vibrant.json' with { type: 'json' };

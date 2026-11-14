@@ -1,14 +1,35 @@
 {
   "name": "@pierre/wat-tools",
   "version": "0.1.0",
-  "private": true,
+  "description": "WebAssembly Text tools and a lexer compiler for Pierre Highlights",
   "license": "apache-2.0",
+  "files": [
+    "dist/"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*.wat": "./dist/wat/*.wat",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run wat-tools:prepublish"
   },
   "dependencies": {
     "binaryen": "catalog:",
     "wabt": "catalog:"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
   }
 }

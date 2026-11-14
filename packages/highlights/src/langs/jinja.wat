@@ -1,11 +1,18 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.twigWords 256)
+  (memory-region $mem.jinjaWords 256)
+  (memory-region $mem.liquidWords 224)
+  (memory-region $mem.handlebarsWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
 
   ;; Token in the low byte; 256 a tag name that is a plain word elsewhere
   ;; (Liquid's `section`); 512 * the raw block its tag opens; 2048 * the context
   ;; it gives the next word (9 starts Liquid line mode).
-  (keyword-table $twigWords $mem.twigWords $mem.jinjaWords
+  (keyword-table $twigWords $mem.twigWords $mem.twigWords+256
     (group $Token.keyword.control "if" "elseif" "else" "endif" "for" "endfor")
     (group $Token.keyword.import "extends" "include" "import" "from" "use" "embed")
     (group $Token.keyword.operator "and" "or" "not" "in" "matches" "starts" "ends")
@@ -17,7 +24,7 @@
     (group $Token.keyword+10496 "macro")
     (group $Token.keyword+1280 "verbatim"))
 
-  (keyword-table $jinjaWords $mem.jinjaWords $mem.liquidWords
+  (keyword-table $jinjaWords $mem.jinjaWords $mem.jinjaWords+256
     (group $Token.keyword.control "if" "elif" "else" "endif" "for" "endfor" "break" "continue")
     (group $Token.keyword.import "extends" "include" "import" "from")
     (group $Token.keyword.operator "and" "or" "not" "in")
@@ -29,7 +36,7 @@
     (group $Token.keyword+10496 "macro")
     (group $Token.keyword+768 "raw"))
 
-  (keyword-table $liquidWords $mem.liquidWords $mem.handlebarsWords
+  (keyword-table $liquidWords $mem.liquidWords $mem.liquidWords+224
     (group $Token.keyword.control
       "if" "elsif" "else" "endif" "unless" "endunless" "case" "when" "endcase" "for" "endfor"
       "break" "continue" "tablerow" "endtablerow")
@@ -43,7 +50,7 @@
     (group $Token.keyword+1792 "comment")
     (group $Token.keyword+18688 "liquid"))
 
-  (keyword-table $handlebarsWords $mem.handlebarsWords $mem.pugWords
+  (keyword-table $handlebarsWords $mem.handlebarsWords $mem.handlebarsWords+96
     (group $Token.keyword.control "else" "if" "unless")
     (group $Token.keyword "as")
     (group $Token.boolean "true" "false")
@@ -84,6 +91,13 @@
 
   (func $jinjaOpens (param $p i32) (param $dialect i32) (result i32)
     (local $c i32)
+    (if (i32.eq (local.get $dialect) (i32.const 3))
+      (then
+        (if
+          (i32.and
+            (i32.gt_u (local.get $p) (global.get $srcBase))
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 92)))
+          (then (return (i32.const 0))))))
     (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
     (i32.and
       (i32.eq (call $templateByte (local.get $p)) (i32.const "{"))
@@ -124,6 +138,32 @@
         (br $scan)))
     (local.get $p))
 
+  ;; Returns 2 for a raw block open tag `{{{{name}}}}`, 1 for a close tag, else 0.
+  (func $jinjaRawTag (param $lhs i32) (result i32)
+    (local $p i32)
+    (local $q i32)
+    (local $save i32)
+    (local.set $save (global.get $ptr))
+    (local.set $p (i32.add (local.get $lhs) (i32.const 4)))
+    (local.set $q (i32.add (local.get $p) (i32.eq (call $templateByte (local.get $p)) (i32.const "/"))))
+    (global.set $ptr (local.get $q))
+    (call $scanIdentRun (i32.const "-"))
+    (if
+      (i32.or
+        (i32.le_u (global.get $ptr) (local.get $q))
+        (i32.or
+          (i32.gt_u (i32.add (global.get $ptr) (i32.const 4)) (global.get $end))
+          (i32.ne (i32.load (global.get $ptr)) (i32.const "}}}}"))))
+      (then
+        (global.set $ptr (local.get $save))
+        (return (i32.const 0))))
+    (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (local.get $p))
+    (call $emitTok (enum.get $Token.keyword.control) (local.get $p) (global.get $ptr))
+    (local.set $p (global.get $ptr))
+    (global.set $ptr (i32.add (local.get $p) (i32.const 4)))
+    (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
+    (i32.add (i32.const 1) (i32.eq (local.get $q) (i32.add (local.get $lhs) (i32.const 4)))))
+
   ;; Returns the tag's state (see $hlJinjaImpl).
   (func $jinjaOpen (param $dialect i32) (result i32)
     (local $c i32)
@@ -158,6 +198,15 @@
             (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
             (return (local.get $kind))))
         (local.set $kind (i32.const 0x61))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "{"))
+            (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "{")))
+          (then
+            (local.set $c (call $jinjaRawTag (local.get $lhs)))
+            (if (local.get $c)
+              (then (return (select (i32.const 0x1000000) (i32.const 0) (i32.eq (local.get $c) (i32.const 2))))))
+            (local.set $c (i32.const "{"))))
         (if (i32.eq (local.get $c) (i32.const "{"))
           (then
             (local.set $kind (i32.const 0x63))
@@ -186,6 +235,65 @@
         (return (local.get $kind))))
     (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
     (select (i32.const 0x12) (i32.const 1) (i32.eq (local.get $kind) (i32.const 2))))
+
+  ;; Bits 26-31 of $state: the `{` count of an open `#{` hole; a string in a hole
+  ;; has none. Returns the new state.
+  (func $jinjaTwigString (param $state i32) (param $lhs i32) (param $p i32) (result i32)
+    (local $c i32)
+    (local $n i32)
+    (local $save i32)
+    (local $status i32)
+    (global.set $ptr (local.get $p))
+    (loop $quote
+      (global.set $ptr
+        (call $scanFindSpecial (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 1)))
+      (local.set $n (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+      (if
+        (i32.and
+          (i32.eq (call $templateByte (global.get $ptr)) (i32.const 92))
+          (i32.and (i32.ne (local.get $n) (i32.const 10)) (i32.ne (local.get $n) (i32.const 13))))
+        (then
+          (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+          (br $quote))))
+    (local.set $n (global.get $ptr))
+    (local.set $save (global.get $end))
+    (global.set $end (local.get $n))
+    (local.set $c (select (local.get $n) (local.get $p) (i32.ge_u (local.get $state) (i32.const 0x4000000))))
+    (block $hole
+      (loop $find
+        (local.set $c (call $lexFindByte (local.get $c) (i32.const "#")))
+        (br_if $hole (i32.ge_u (local.get $c) (local.get $n)))
+        (br_if $hole
+          (i32.and
+            (i32.eq (call $templateByte (i32.add (local.get $c) (i32.const 1))) (i32.const "{"))
+            (i32.ne (i32.load8_u (i32.sub (local.get $c) (i32.const 1))) (i32.const 92))))
+        (local.set $c (i32.add (local.get $c) (i32.const 1)))
+        (br $find)))
+    (global.set $end (select (local.get $c) (local.get $save) (i32.lt_u (local.get $c) (local.get $n))))
+    (global.set $ptr (local.get $p))
+    (local.set $status (call $lexStringBody (i32.const 34) (i32.const 0) (enum.get $Token.string) (local.get $lhs)))
+    (global.set $end (local.get $save))
+    (if (i32.lt_u (local.get $c) (local.get $n))
+      (then
+        (global.set $ptr (i32.add (local.get $c) (i32.const 2)))
+        (call $emitTok (enum.get $Token.punctuation.special) (local.get $c) (global.get $ptr))
+        (local.set $c (i32.add (i32.and (i32.shr_u (local.get $state) (i32.const 8)) (i32.const 255)) (i32.const 1)))
+        (if (i32.lt_u (local.get $c) (i32.const 64))
+          (then
+            (local.set $state
+              (i32.or (i32.add (local.get $state) (i32.const 0x100)) (i32.shl (local.get $c) (i32.const 26))))))
+        (return (local.get $state))))
+    ;; as $lexString leaves an escaped line break at a chunk end
+    (if
+      (i32.and
+        (i32.and (global.get $streaming) (i32.eq (local.get $status) (i32.const 2)))
+        (i32.eq (global.get $ptr) (global.get $eof)))
+      (then
+        (global.set $streamMode (i32.const 2))
+        (global.set $streamA (i32.const 34))
+        (global.set $streamB (i32.const 0))
+        (global.set $streamHl (enum.get $Token.string))))
+    (local.get $state))
 
   ;; Returns the state to resume with. Context, what the next word is: 1 a tag
   ;; name, 2 a member, 3 a filter or partial, 4 a test, 5 a macro name, 6 a
@@ -340,7 +448,7 @@
                     (select
                       (enum.get $Token.function.method)
                       (enum.get $Token.property)
-                      (i32.eq (local.get $n) (i32.const "("))))
+                      (i32.and (i32.eq (local.get $n) (i32.const "(")) (i32.ne (local.get $dialect) (i32.const 3)))))
                   (local.set $ctx (i32.const 7))
                   (br $emit)))
               (if (i32.eq (local.get $ctx) (i32.const 4))
@@ -370,8 +478,10 @@
               (local.set $hl (enum.get $Token.function))
               (br_if $emit
                 (i32.and
-                  (i32.lt_u (local.get $dialect) (i32.const 2))
-                  (i32.eq (local.get $n) (i32.const "("))))
+                  (i32.and
+                    (i32.lt_u (local.get $dialect) (i32.const 2))
+                    (i32.eq (local.get $n) (i32.const "(")))
+                  (i32.ne (i32.and (local.get $v) (i32.const 255)) (enum.get $Token.keyword.operator))))
               (local.set $hl (enum.get $Token.variable.parameter))
               (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
               (br_if $emit
@@ -421,6 +531,11 @@
               (br $emit)))
           (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
             (then
+              (if (i32.and (i32.eq (local.get $dialect) (i32.const 1)) (i32.eq (local.get $c) (i32.const 34)))
+                (then
+                  (local.set $state (call $jinjaTwigString (local.get $state) (local.get $lhs) (i32.add (local.get $lhs) (i32.const 1))))
+                  (local.set $ctx (i32.const 0))
+                  (br $next)))
               (if (i32.eq (local.get $dialect) (i32.const 2))
                 (then (call $lexRawString (local.get $c) (i32.const 0) (enum.get $Token.string)))
                 (else (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))))
@@ -495,6 +610,18 @@
                 (else
                   (if (i32.eq (local.get $c) (i32.const "}"))
                     (then
+                      (if
+                        (i32.and
+                          (i32.ne (i32.shr_u (local.get $state) (i32.const 26)) (i32.const 0))
+                          (i32.eq
+                            (i32.shr_u (local.get $state) (i32.const 26))
+                            (i32.and (i32.shr_u (local.get $state) (i32.const 8)) (i32.const 255))))
+                        (then
+                          (local.set $state (i32.sub (i32.and (local.get $state) (i32.const 0x3ffffff)) (i32.const 0x100)))
+                          (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
+                          (local.set $state (call $jinjaTwigString (local.get $state) (global.get $ptr) (global.get $ptr)))
+                          (local.set $ctx (i32.const 0))
+                          (br $next)))
                       (if (i32.and (local.get $state) (i32.const 0xff00))
                         (then (local.set $state (i32.sub (local.get $state) (i32.const 0x100))))))
                     (else
@@ -588,6 +715,21 @@
       (loop $find
         (local.set $p (call $lexFindByte (local.get $p) (i32.const "{")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (if (i32.eq (local.get $dialect) (i32.const 3))
+          (then
+            (if
+              (i32.and
+                (i32.lt_u (i32.add (local.get $p) (i32.const 4)) (global.get $end))
+                (i32.and
+                  (i32.eq (i32.load (local.get $p)) (i32.const "{{{{"))
+                  (i32.eq (i32.load8_u offset=4 (local.get $p)) (i32.const "/"))))
+              (then
+                (call $emitTok (local.get $hl) (local.get $lhs) (local.get $p))
+                (local.set $lhs (local.get $p))
+                (if (call $jinjaRawTag (local.get $p))
+                  (then (return (i32.const 0))))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $find)))
         (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "%"))
           (then
             (local.set $q (i32.add (local.get $p) (i32.const 2)))

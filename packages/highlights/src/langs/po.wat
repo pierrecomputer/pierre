@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Whether $c is a set bit of $mask, counted from $base.
   (func $poInMask (param $c i32) (param $base i32) (param $mask i64) (result i32)

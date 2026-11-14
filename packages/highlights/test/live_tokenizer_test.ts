@@ -1,21 +1,21 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { LANGS } from '../lib/highlighter';
 import type {
   HighlightedToken,
   Lang,
   LiveLineChange,
   LiveTextEdit,
   ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import {
   codeToTokens,
   init,
   LiveTokenizer,
   StreamTokenizer,
   tokenNames,
-} from '../lib/index';
+} from '../lib/core';
+import { LANGS } from '../lib/highlighter';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
@@ -1466,7 +1466,11 @@ void t.test(
       liveLineFlags(line: number): number;
       liveStats(key: number): number;
     }
-    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const env = {
+      is_id_start: () => 1,
+      is_id_continue: () => 1,
+      lex_line: () => 0,
+    };
     for (const [lang, source] of tokenizerSamples) {
       const bytes = new TextEncoder().encode(source);
       const runs: RawLive[] = [];
@@ -1965,7 +1969,11 @@ void t.test(
       liveLineTokPtr(i: number): number;
       liveLineTokCount(i: number): number;
     }
-    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const env = {
+      is_id_start: () => 1,
+      is_id_continue: () => 1,
+      lex_line: () => 0,
+    };
     const raw = new WebAssembly.Instance(wasmModule, { env })
       .exports as unknown as RawLive;
     const enc = new TextEncoder();
@@ -2081,7 +2089,11 @@ void t.test('live wasm: compaction keeps the document intact', () => {
     liveLineTextPtr(i: number): number;
     liveStats(k: number): number;
   }
-  const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+  const env = {
+    is_id_start: () => 1,
+    is_id_continue: () => 1,
+    lex_line: () => 0,
+  };
   const raw = new WebAssembly.Instance(wasmModule, { env })
     .exports as unknown as RawLive;
   const enc = new TextEncoder();
@@ -2191,7 +2203,11 @@ void t.test(
       liveInitDoc(ptr: number, len: number, lang: number): void;
       liveRun(budget: number): number;
     }
-    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const env = {
+      is_id_start: () => 1,
+      is_id_continue: () => 1,
+      lex_line: () => 0,
+    };
     const raw = new WebAssembly.Instance(wasmModule, { env })
       .exports as unknown as RawLive;
     // mirror of $lvRoundSize: 8-byte steps to 64, quarter-power-of-two above
@@ -2244,7 +2260,11 @@ void t.test(
       liveRun(budget: number): number;
       liveStats(k: number): number;
     }
-    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const env = {
+      is_id_start: () => 1,
+      is_id_continue: () => 1,
+      lex_line: () => 0,
+    };
     const raw = new WebAssembly.Instance(wasmModule, { env })
       .exports as unknown as RawLive;
     const doc = Array.from(
@@ -2279,7 +2299,11 @@ void t.test(
       liveRun(budget: number): number;
       liveStats(k: number): number;
     }
-    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const env = {
+      is_id_start: () => 1,
+      is_id_continue: () => 1,
+      lex_line: () => 0,
+    };
     const raw = new WebAssembly.Instance(wasmModule, { env })
       .exports as unknown as RawLive;
     const bytes = new TextEncoder().encode(samples.toml.code.repeat(20));

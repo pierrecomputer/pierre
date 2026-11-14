@@ -243,3 +243,20 @@ void t.test('cmake: escapes in unquoted arguments do not open strings', () => {
     [')', 'punctuation.bracket'],
   ]);
 });
+
+void t.test('cmake: `ENV{name}` and `CACHE{name}` without `$`', () => {
+  assert.deepEqual(
+    tokenKinds('cmake', 'if(DEFINED ENV{CI} OR DEFINED CACHE{X})\nendif()\n'),
+    [
+      ['if', 'keyword.control'],
+      ['(', 'punctuation.bracket'],
+      ['DEFINED', 'keyword.operator'],
+      ['ENV{CI}', 'variable'],
+      ['OR DEFINED', 'keyword.operator'],
+      ['CACHE{X}', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['endif', 'keyword.control'],
+      ['()', 'punctuation.bracket'],
+    ]
+  );
+});

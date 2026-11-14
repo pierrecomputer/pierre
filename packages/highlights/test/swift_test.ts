@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -123,7 +123,11 @@ text"""##`;
     themeColor('punctuation.special')
   );
   assert.equal(colorOf(html, String.raw`\n`), themeColor('string.escape'));
-  assert.equal(colorOf(html, '#"raw \\#(name)"#'), themeColor('string'));
+  assert.equal(colorOf(html, '#"raw '), themeColor('string'));
+  assert.equal(
+    colorOf(html, String.raw`\#(`),
+    themeColor('punctuation.special')
+  );
   assert.equal(colorOf(html, '"""multi\nline"""'), themeColor('string'));
 });
 
@@ -750,3 +754,205 @@ void t.test(
     ]);
   }
 );
+
+void t.test('swift: declaration and control keywords', () => {
+  const code =
+    'protocol P {\n  associatedtype Item\n  required init()\n  convenience init(x: Int) {}\n  nonisolated func f() {}\n}\nindirect enum E {}\ncase 1: fallthrough\nvar required = true\n';
+  assert.deepEqual(tokenKinds('swift', code), [
+    ['protocol', 'keyword.declaration'],
+    ['P', 'type'],
+    ['{', 'punctuation.bracket'],
+    ['associatedtype', 'keyword.declaration'],
+    ['Item', 'type'],
+    ['required', 'keyword'],
+    ['init', 'function'],
+    ['()', 'punctuation.bracket'],
+    ['convenience', 'keyword'],
+    ['init', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable.parameter'],
+    [':', 'punctuation.delimiter'],
+    ['Int', 'type.builtin'],
+    [') {}', 'punctuation.bracket'],
+    ['nonisolated', 'keyword'],
+    ['func', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['() {}', 'punctuation.bracket'],
+    ['}', 'punctuation.bracket'],
+    ['indirect', 'keyword'],
+    ['enum', 'keyword.declaration'],
+    ['E', 'type'],
+    ['{}', 'punctuation.bracket'],
+    ['case', 'keyword.control'],
+    ['1', 'number'],
+    [':', 'punctuation.delimiter'],
+    ['fallthrough', 'keyword.control'],
+    ['var', 'keyword.declaration'],
+    ['required', 'variable'],
+    ['=', 'operator'],
+    ['true', 'boolean'],
+  ]);
+});
+
+void t.test('swift: a tuple index after `.` is no fraction', () => {
+  assert.deepEqual(tokenKinds('swift', 'let t = pair.0.1 + 1.5'), [
+    ['let', 'keyword.declaration'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ['pair', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['0', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['1', 'number'],
+    ['+', 'operator'],
+    ['1.5', 'number'],
+  ]);
+});
+
+void t.test('swift: backticked names are never keywords', () => {
+  const code = 'case `default`\nlet `class` = foo\nfunc `init`() {}\n';
+  assert.deepEqual(tokenKinds('swift', code), [
+    ['case', 'keyword.control'],
+    ['`default`', 'variable'],
+    ['let', 'keyword.declaration'],
+    ['`class`', 'variable'],
+    ['=', 'operator'],
+    ['foo', 'variable'],
+    ['func', 'keyword.declaration'],
+    ['`init`', 'function.definition'],
+    ['() {}', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('swift: interpolation in multiline and raw strings', () => {
+  const code =
+    'let s = """\n  Hi \\(name.map {\n    $0 })\n  """\nlet t = #"Hi \\#(name) \\(raw)"#\n';
+  assertLineFedParity('swift', code);
+  assert.deepEqual(tokenKinds('swift', code), [
+    ['let', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"""', 'string'],
+    ['Hi', 'string'],
+    ['\\(', 'punctuation.special'],
+    ['name', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['map', 'function.method'],
+    ['{', 'punctuation.bracket'],
+    ['$0', 'variable'],
+    ['}', 'punctuation.bracket'],
+    [')', 'punctuation.special'],
+    ['"""', 'string'],
+    ['let', 'keyword.declaration'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ['#"Hi', 'string'],
+    ['\\#(', 'punctuation.special'],
+    ['name', 'variable'],
+    [')', 'punctuation.special'],
+    ['\\(raw)"#', 'string'],
+  ]);
+});
+
+void t.test(
+  'swift: interpolation nests inside a string in an interpolation',
+  () => {
+    assert.deepEqual(
+      tokenKinds('swift', 'let s = "\\(items.map { "\\($0)" })"'),
+      [
+        ['let', 'keyword.declaration'],
+        ['s', 'variable'],
+        ['=', 'operator'],
+        ['"', 'string'],
+        ['\\(', 'punctuation.special'],
+        ['items', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['map', 'function.method'],
+        ['{', 'punctuation.bracket'],
+        ['"', 'string'],
+        ['\\(', 'punctuation.special'],
+        ['$0', 'variable'],
+        [')', 'punctuation.special'],
+        ['"', 'string'],
+        ['}', 'punctuation.bracket'],
+        [')', 'punctuation.special'],
+        ['"', 'string'],
+      ]
+    );
+  }
+);
+
+void t.test('swift: regex literals and division', () => {
+  const code =
+    'let r = #/[a-z]+"/#; let x = a / b / c\nlet y = s.split(/\\d+\\//)\nlet z = (/ x /)\n';
+  assertLineFedParity('swift', code);
+  assert.deepEqual(tokenKinds('swift', code), [
+    ['let', 'keyword.declaration'],
+    ['r', 'variable'],
+    ['=', 'operator'],
+    ['#/[a-z]+"/#', 'string.regex'],
+    [';', 'punctuation.delimiter'],
+    ['let', 'keyword.declaration'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['a', 'variable'],
+    ['/', 'operator'],
+    ['b', 'variable'],
+    ['/', 'operator'],
+    ['c', 'variable'],
+    ['let', 'keyword.declaration'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['s', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['split', 'function.method'],
+    ['(', 'punctuation.bracket'],
+    ['/\\d+\\//', 'string.regex'],
+    [')', 'punctuation.bracket'],
+    ['let', 'keyword.declaration'],
+    ['z', 'variable'],
+    ['=', 'operator'],
+    ['(', 'punctuation.bracket'],
+    ['/', 'operator'],
+    ['x', 'variable'],
+    ['/', 'operator'],
+    [')', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test(
+  'swift: a regex after a keyword and a multi-line extended regex',
+  () => {
+    const code =
+      'return /a+/\ncase /b/: x = c/d\nlet r = ##/\n  a /# b\n/##\nn\n';
+    assertLineFedParity('swift', code);
+    assert.deepEqual(tokenKinds('swift', code), [
+      ['return', 'keyword.control'],
+      ['/a+/', 'string.regex'],
+      ['case', 'keyword.control'],
+      ['/b/', 'string.regex'],
+      [':', 'punctuation.delimiter'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['c', 'variable'],
+      ['/', 'operator'],
+      ['d', 'variable'],
+      ['let', 'keyword.declaration'],
+      ['r', 'variable'],
+      ['=', 'operator'],
+      ['##/', 'string.regex'],
+      ['a /# b', 'string.regex'],
+      ['/##', 'string.regex'],
+      ['n', 'variable'],
+    ]);
+  }
+);
+
+void t.test('swift: a long `#` run is one token, scanned once', () => {
+  const code = '#'.repeat(1 << 17) + ' x';
+  const start = performance.now();
+  const kinds = tokenKinds('swift', code);
+  assert.ok(performance.now() - start < 1000);
+  assert.deepEqual(kinds.at(-1), ['x', 'variable']);
+  assert.equal(kinds.length, 2);
+});

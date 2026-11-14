@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { isSupportedLanguage } from '../lib/index';
+import { isSupportedLanguage } from '../lib/core';
 import languages from '../lib/languages';
 import { zonSample } from './_samples';
 import {
@@ -875,4 +875,24 @@ void t.test('zig: a slice sentinel is not a field or label', () => {
   assert.equal(kinds.get('N'), 'type');
   assert.equal(kinds.get('x'), 'property');
   assertLineFedParity('zig', code);
+});
+
+void t.test('zig: a member named c is a field', () => {
+  assert.deepEqual(tokenKinds('zig', 'std.c.malloc(16); _ = c;'), [
+    ['std', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['c', 'property'],
+    ['.', 'punctuation.delimiter'],
+    ['malloc', 'function.method'],
+    ['(', 'punctuation.bracket'],
+    ['16', 'number'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['_', 'variable.special'],
+    ['=', 'operator'],
+    ['c', 'variable.special'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assert.deepEqual(tokenKinds('zon', '.{ .c = 1 }')[3], ['c', 'property']);
+  assert.deepEqual(tokenKinds('zig', 'a[0..c]')[4], ['c', 'variable.special']);
 });

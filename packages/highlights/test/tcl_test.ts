@@ -105,3 +105,36 @@ test('tcl: multi-line strings and continued commands stream by line', () => {
   ]);
   assertLineFedParity('tcl', code);
 });
+
+test('tcl: a braced word that starts with `#` is data, not a comment', () => {
+  const code = 'set color {#ff0000}\nif {$x} {\n  # note\n}\n';
+  expect(tokenKinds('tcl', code)).toEqual([
+    ['set', 'keyword.declaration'],
+    ['color', 'variable'],
+    ['{', 'punctuation.bracket'],
+    ['#ff0000', null],
+    ['}', 'punctuation.bracket'],
+    ['if', 'keyword.control'],
+    ['{', 'punctuation.bracket'],
+    ['$x', 'variable'],
+    ['} {', 'punctuation.bracket'],
+    ['# note', 'comment'],
+    ['}', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('tcl', code);
+});
+
+test('tcl: a body brace glued to `# ` opens a comment', () => {
+  const code = 'proc f {} {# note\n  set x 1\n}\n';
+  expect(tokenKinds('tcl', code)).toEqual([
+    ['proc', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['{} {', 'punctuation.bracket'],
+    ['# note', 'comment'],
+    ['set', 'keyword.declaration'],
+    ['x', 'variable'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('tcl', code);
+});

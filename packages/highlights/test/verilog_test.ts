@@ -135,3 +135,41 @@ test('verilog: block comments and continued strings stream by line', () => {
   ]);
   assertLineFedParity('verilog', code);
 });
+
+test('verilog: gate primitives, UDP, and specify words', () => {
+  expect(
+    tokenKinds('verilog', 'nand g1(y, a, b);\nprimitive udp(o, a);').slice(0, 2)
+  ).toEqual([
+    ['nand', 'keyword'],
+    ['g1', 'function'],
+  ]);
+  expect(
+    tokenKinds(
+      'verilog',
+      'bufif0 notif1 xnor\ntable endtable specify endspecify endprimitive endinterface'
+    )
+  ).toEqual([
+    ['bufif0 notif1 xnor', 'keyword'],
+    [
+      'table endtable specify endspecify endprimitive endinterface',
+      'keyword.declaration',
+    ],
+  ]);
+});
+
+test('verilog: attribute instances', () => {
+  expect(
+    tokenKinds('verilog', '(* keep = "true", mark_debug *) wire w;').slice(0, 2)
+  ).toEqual([
+    ['(* keep = "true", mark_debug *)', 'attribute'],
+    ['wire', 'type.builtin'],
+  ]);
+  // `@(*)` is a sensitivity list
+  expect(tokenKinds('verilog', '@(*)')).toEqual([
+    ['@', 'operator'],
+    ['(', 'punctuation.bracket'],
+    ['*', 'operator'],
+    [')', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('verilog', '(* a *) (* b\n*) wire w; (* c *)\n');
+});

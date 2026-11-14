@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -498,3 +498,27 @@ void t.test(
     );
   }
 );
+
+void t.test('graphql: definition words are fields inside braces', () => {
+  const src = '{ node { id type name ... on User { input(a: 1) } } }\n';
+  assert.deepEqual(tokenKinds('graphql', src), [
+    ['{', 'punctuation.bracket'],
+    ['node', 'property'],
+    ['{', 'punctuation.bracket'],
+    ['id type name', 'property'],
+    ['...', 'punctuation.special'],
+    ['on', 'keyword'],
+    ['User', 'type'],
+    ['{', 'punctuation.bracket'],
+    ['input', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['a', 'variable.parameter'],
+    [':', 'punctuation.delimiter'],
+    ['1', 'number'],
+    [') } } }', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity(
+    'graphql',
+    '{\n  node {\n    type name\n  }\n}\ntype T { a: Int }\n'
+  );
+});

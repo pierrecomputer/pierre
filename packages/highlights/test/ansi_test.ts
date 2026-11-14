@@ -11,7 +11,7 @@ import {
   StreamTokenizer,
   type Theme,
   type ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import { ansiNames, isThemeColor } from '../lib/theme';
 import * as themes from '../themes/index';
 import { initFullModule, makeRand, textOf } from './_util';
@@ -208,8 +208,8 @@ void t.test('ansi: CSS-variable themes use the terminal ansi variables', () => {
   assert.ok(css.includes(`--hls-terminal-ansi-bright-white: ${palette[15]};`));
 });
 
-for (const [name, theme] of Object.entries(themes)) {
-  if (typeof theme !== 'object' || theme === cssVariables) continue;
+for (const theme of themes.themes) {
+  const { name } = theme;
   void t.test(`ansi: ${name} uses all 16 theme colors`, () => {
     const colors = ansiNames.map((name) => {
       const value = theme.style[`terminal.ansi.${name}`];

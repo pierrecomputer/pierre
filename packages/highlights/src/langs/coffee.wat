@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.coffeeWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./tsx.wat")
 
   ;; Token in the low seven bits. Bits 7-8: a `/` after the word is 0 a regex, 1 a
   ;; division, 2 a regex only when spaced. Bit 9: the next name is a class, bit 10
   ;; a type.
-  (keyword-table $coffeeWords $mem.coffeeWords $mem.nginxWords
+  (keyword-table $coffeeWords $mem.coffeeWords $mem.coffeeWords+224
     (group $Token.keyword.control
       "if" "do" "in" "of" "by" "for" "own" "try" "else" "then" "when" "loop" "while" "until"
       "break" "catch" "throw" "yield" "await" "switch" "unless" "return" "finally" "continue")
@@ -188,8 +192,15 @@
           (then
             (local.set $save (global.get $end))
             (global.set $end (local.get $p))
-            (call $hlJs)
-            (call $ecmaReset)
+            (if (global.get $externalEmbedding)
+              (then
+                (drop
+                  (call $embedLanguage
+                    (enum.get $Language.javascript) (global.get $ptr) (local.get $p)
+                    (i32.const -1) (i32.const -3))))
+              (else
+                (call $hlJs)
+                (call $ecmaReset)))
             (global.set $end (local.get $save))
             (global.set $ptr (local.get $p))))
         (br_if $done (i32.const 0) (i32.ge_u (local.get $p) (global.get $end)))
@@ -377,13 +388,18 @@
               (then (local.set $v (keyword-table.value $coffeeWords (local.get $lhs) (global.get $ptr)))))
             (if (i32.ne (local.get $v) (i32.const -1))
               (then
-                (local.set $hl (i32.and (local.get $v) (i32.const 127)))
-                (local.set $prev (i32.and (i32.shr_u (local.get $v) (i32.const 7)) (i32.const 3)))
-                (local.set $p (i32.shr_u (local.get $v) (i32.const 9)))
-                (local.set $member (i32.const 0))
-                (local.set $param (i32.const 0))
-                (local.set $decl (local.get $p))
-                (br $tok)))
+                (if
+                  (i32.or
+                    (i32.ne (call $templateByte (global.get $ptr)) (i32.const ":"))
+                    (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ":")))
+                  (then
+                    (local.set $hl (i32.and (local.get $v) (i32.const 127)))
+                    (local.set $prev (i32.and (i32.shr_u (local.get $v) (i32.const 7)) (i32.const 3)))
+                    (local.set $p (i32.shr_u (local.get $v) (i32.const 9)))
+                    (local.set $member (i32.const 0))
+                    (local.set $param (i32.const 0))
+                    (local.set $decl (local.get $p))
+                    (br $tok)))))
             (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
             (local.set $c2 (call $templateByte (local.get $p)))
             (local.set $hl

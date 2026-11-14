@@ -4,8 +4,10 @@ import type { LRUMap } from 'lru_map';
 import { DEFAULT_THEMES } from '../constants';
 import { resolveHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
+import { RegisteredHighlightsLanguages } from '../highlighter/languages/constants';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
+import { resolveHighlightsLanguages } from '../highlighter/languages/resolveHighlightsLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
 import {
   getHighlighterIfLoaded,
@@ -517,8 +519,10 @@ export class WorkerPoolManager {
               return;
             }
 
-            let resolvedLanguages: ResolvedLanguage[] = [];
-            if (this.preferredHighlighter !== 'highlights') {
+            let resolvedLanguages: ResolvedLanguage[];
+            if (this.preferredHighlighter === 'highlights') {
+              resolvedLanguages = await resolveHighlightsLanguages(languages);
+            } else {
               resolvedLanguages = hasResolvedLanguages(languages)
                 ? getResolvedLanguages(languages)
                 : await resolveLanguages(languages);
@@ -1241,13 +1245,19 @@ export class WorkerPoolManager {
         });
       }
       // Add resolved languages if required
-      const workerMissingLangs =
-        this.preferredHighlighter === 'highlights'
-          ? []
-          : langs.filter((lang) => !availableWorker.langs.has(lang));
+      // Highlights workers need only the lexers registered for Highlights.
+      const workerMissingLangs = langs.filter(
+        (lang) =>
+          !availableWorker.langs.has(lang) &&
+          (this.preferredHighlighter !== 'highlights' ||
+            RegisteredHighlightsLanguages.has(lang))
+      );
 
       if (workerMissingLangs.length > 0) {
-        if (hasResolvedLanguages(workerMissingLangs)) {
+        if (this.preferredHighlighter === 'highlights') {
+          task.request.resolvedLanguages =
+            await resolveHighlightsLanguages(workerMissingLangs);
+        } else if (hasResolvedLanguages(workerMissingLangs)) {
           task.request.resolvedLanguages =
             getResolvedLanguages(workerMissingLangs);
         } else {

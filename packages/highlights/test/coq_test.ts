@@ -220,3 +220,18 @@ test('coq: malformed and random input remains total, balanced and lossless', () 
     assertLineFedParity('coq', src);
   }
 });
+
+test('coq: strings inside comments do not end them', () => {
+  expect(tokenKinds('coq', '(* say "*)" *)\nDefinition x := 1.\n')).toEqual([
+    ['(* say "*)" *)', 'comment'],
+    ['Definition', 'keyword.declaration'],
+    ['x', 'function.definition'],
+    [':=', 'operator'],
+    ['1', 'number'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity(
+    'coq',
+    '(** a "open""\n*) still" (* n\n*) *)\nLemma l : True.\n'
+  );
+});

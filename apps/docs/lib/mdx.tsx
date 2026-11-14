@@ -35,6 +35,7 @@ import {
 import { OverviewFileTree } from '../app/(trees)/docs/Overview/OverviewFileTree';
 import { BetaBadge } from '../components/BetaBadge';
 import { DocsCodeExample } from '../components/docs/DocsCodeExample';
+import { SearchableTable } from '../components/docs/SearchableTable';
 import { preloadCodeExample } from './preloadCodeExample';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
@@ -88,6 +89,7 @@ const defaultComponents = {
   IconBulbFill,
   IconFlagFill,
   DocsCodeExample,
+  SearchableTable,
   CodeViewExampleTabs,
   EditComponentTabs,
   EditWorkerPoolTabs,

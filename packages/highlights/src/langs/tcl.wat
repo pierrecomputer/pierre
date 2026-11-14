@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.tclWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bit 8: `proc`, whose next words are a definition and its parameters. Bit 9:
   ;; the next word names a variable. Bit 10: a keyword in any position.
-  (keyword-table $tclWords $mem.tclWords $mem.vimlWords
+  (keyword-table $tclWords $mem.tclWords $mem.tclWords+320
     (group $Token.keyword.control
       "if" "while" "for" "foreach" "switch" "return" "break" "continue" "catch" "try" "throw"
       "error" "exit" "default")
@@ -143,7 +147,7 @@
         (local.set $c (i32.load8_u (local.get $lhs)))
         (local.set $e (local.get $expect))
         (local.set $expect (i32.const 0))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (i32.ne (local.get $pos) (i32.const 1)))
+        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (i32.eqz (local.get $pos)))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
             (br $next)))
@@ -244,7 +248,11 @@
                       (select
                         (i32.const 0)
                         (i32.const 2)
-                        (i32.or (i32.eqz (local.get $v)) (call $lexIsSpace (local.get $v)))))))))
+                        (i32.or
+                          (i32.or (i32.eqz (local.get $v)) (call $lexIsSpace (local.get $v)))
+                          (i32.and
+                            (i32.eq (local.get $v) (i32.const "#"))
+                            (i32.le_u (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 32))))))))))
             (if (i32.and (i32.eq (local.get $c) (i32.const "}")) (i32.ne (local.get $param) (i32.const 0)))
               (then (local.set $param (i32.sub (local.get $param) (i32.const 1)))))
             (br $next)))

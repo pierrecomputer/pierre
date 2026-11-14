@@ -294,3 +294,28 @@ test('sas: data lines run to the line that holds a semicolon', () => {
   assertLineFedParity('sas', code);
   assertLineFedParity('sas', code.replaceAll('\n', '\r\n'));
 });
+
+test('sas: `delete` is a statement keyword', () => {
+  expect(tokenKinds('sas', 'if x = 1 then delete;')).toEqual([
+    ['if', 'keyword.control'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['then', 'keyword.control'],
+    ['delete', 'keyword'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+test('sas: a long run of `&` lexes in linear time', () => {
+  // each `&` used to rescan the rest of the run for a macro name: 128k took ~2s
+  const start = performance.now();
+  tokenKinds('sas', '&'.repeat(128000) + ' x');
+  expect(performance.now() - start).toBeLessThan(250);
+  expect(tokenKinds('sas', '&&& &&n. x &a')).toEqual([
+    ['&&&', 'operator'],
+    ['&&n.', 'variable.special'],
+    ['x', 'variable'],
+    ['&a', 'variable.special'],
+  ]);
+});

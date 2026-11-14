@@ -344,3 +344,28 @@ void t.test(
     }
   }
 );
+
+void t.test('svelte: lang="ts" scripts are TypeScript', () => {
+  const code =
+    '<script lang="ts">\nlet n: number = 1;\n</script>\n<p>{n}</p>\n';
+  assert.ok(
+    tokenKinds('svelte', code).some(
+      ([text, kind]) => text === 'number' && kind === 'type.builtin'
+    )
+  );
+  assertLineFedParity('svelte', code);
+});
+
+void t.test(
+  'svelte: an unclosed declaration runs to its > in every path',
+  () => {
+    for (const code of [
+      '<!x\n<script>\nlet a\n</script>\n<p>{a}</p>\n',
+      '<!DOCTYPE html\n<!-- c -->\n<p>{x}</p>\n',
+      '<svg><![CDATA[ {x} > y ]]></svg>{a}\n',
+      '<script ">\n{x}</script>\n<script a="{\n}" b={c}\n e={f}>\nlet a\n</script>\n',
+    ]) {
+      assertLineFedParity('svelte', code);
+    }
+  }
+);

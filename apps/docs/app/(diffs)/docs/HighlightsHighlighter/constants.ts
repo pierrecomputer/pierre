@@ -39,15 +39,52 @@ export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
     },
     options,
   },
+  highlightsQuickStart: {
+    file: {
+      name: 'quick-start.ts',
+      contents: `import { codeToHtml, pierreDark } from '@pierre/highlights';
+
+const html = new TextDecoder().decode(
+  codeToHtml('const a = 1', { lang: 'ts', theme: pierreDark })
+);`,
+    },
+    options,
+  },
+  highlightsAllLanguages: {
+    file: {
+      name: 'all-languages.ts',
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import { langs } from '@pierre/highlights/langs';
+import { themes } from '@pierre/highlights/themes';
+
+const highlighter = await createHighlighter({ langs, themes });`,
+    },
+    options,
+  },
+  highlightsInit: {
+    file: {
+      name: 'init.ts',
+      contents: `import { init } from '@pierre/highlights/core';
+
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/highlights/highlights.wasm', import.meta.url))
+  )
+);`,
+    },
+    options,
+  },
   highlightsHtml: {
     file: {
       name: 'html.ts',
-      contents: `import { codeToHtml } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
-const html = codeToHtml("console.log('Hello world!')", {
+const highlighter = await createHighlighter({ langs: [ts], themes: [pierreDark] });
+const html = highlighter.codeToHtml("console.log('Hello world!')", {
   lang: 'js',
-  theme: pierreDark,
+  theme: 'pierre-dark',
 });
 
 const markup = new TextDecoder().decode(html);
@@ -58,14 +95,16 @@ console.log(markup); // <pre class="highlights" ...><code>...</code></pre>`,
   highlightsTokens: {
     file: {
       name: 'tokens.ts',
-      contents: `import { codeToTokens } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const source = 'const answer = 42;';
 
-const { tokens, fg, bg } = codeToTokens(source, {
+const highlighter = await createHighlighter({ langs: [ts], themes: [pierreDark] });
+const { tokens, fg, bg } = highlighter.codeToTokens(source, {
   lang: 'ts',
-  theme: pierreDark,
+  theme: 'pierre-dark',
 });
 
 console.log(tokens[0]); // ThemedToken[] for the first line
@@ -185,11 +224,13 @@ try {
   highlightsThemes: {
     file: {
       name: 'themes.ts',
-      contents: `import { codeToHtml } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
 const source = 'const answer = 42;';
-const html = codeToHtml(source, { lang: 'ts', theme: vitesseDark });
+const highlighter = await createHighlighter({ langs: [ts], themes: [vitesseDark] });
+const html = highlighter.codeToHtml(source, { lang: 'ts', theme: 'vitesse-dark' });
 const markup = new TextDecoder().decode(html);`,
     },
     options,
@@ -197,11 +238,13 @@ const markup = new TextDecoder().decode(html);`,
   highlightsCssVariables: {
     file: {
       name: 'css-variables.ts',
-      contents: `import { codeToHtml } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { cssVariables, toCSS } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
-const html = codeToHtml('const answer = 42;', {
+const highlighter = await createHighlighter({ langs: [ts], themes: [cssVariables] });
+const html = highlighter.codeToHtml('const answer = 42;', {
   lang: 'ts',
   theme: cssVariables,
 });
@@ -216,22 +259,27 @@ const page = '<style>' + stylesheet + '</style>' + markup;`,
   highlightsDualThemes: {
     file: {
       name: 'dual-themes.ts',
-      contents: `import { codeToHtml, codeToTokens } from '@pierre/highlights';
+      contents: `import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreLight } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [vitesseDark, pierreLight],
+});
 const options = {
   lang: 'ts',
-  themes: { dark: vitesseDark, light: pierreLight },
+  themes: { dark: 'vitesse-dark', light: 'pierre-light' },
   cssVariablePrefix: '--code-',
   defaultColor: false,
 } as const;
 
-const html = new TextDecoder().decode(codeToHtml('const answer = 42;', options));
+const html = new TextDecoder().decode(highlighter.codeToHtml('const answer = 42;', options));
 // <pre class="highlights" style="--code-dark:...;--code-light:...;--code-dark-bg:...;...">
 //   <code><span style="--code-dark:...;--code-light:...">const</span> ...
 
-const { tokens, rootStyle } = codeToTokens('const answer = 42;', options);
+const { tokens, rootStyle } = highlighter.codeToTokens('const answer = 42;', options);
 console.log(rootStyle); // --code-dark:...;--code-light:...;--code-dark-bg:...;...
 console.log(tokens[0][0].htmlStyle); // { '--code-dark': '...', '--code-light': '...' }`,
     },
@@ -278,15 +326,19 @@ const { default: theme } = await themes['pierre-dark']();`,
   highlightsApiRuntime: {
     file: {
       name: 'runtime-api.ts',
-      contents: `import {
+      contents: `// All lexers, initialized at import, and all themes.
+// '@pierre/highlights/core' exports the same functions without them.
+import {
   codeToHtml,
   codeToTokens,
   createHighlighter,
   init,
+  isRegisteredLanguage,
   isSupportedLanguage,
   LiveTokenizer,
-  tokenNames,
+  registerLanguages,
   StreamTokenizer,
+  tokenNames,
 } from '@pierre/highlights';`,
     },
     options,
@@ -300,6 +352,9 @@ const { default: theme } = await themes['pierre-dark']();`,
   CodeToTokensBaseOptions,
   CodeToTokensOptions,
   Highlighter,
+  HighlighterOptions,
+  RegisteredHighlighter,
+  Language,
   Lang,
   ThemedToken,
   TokensResult,
@@ -329,6 +384,7 @@ const { default: theme } = await themes['pierre-dark']();`,
 >;
 
 export const {
+  highlightsAllLanguages: HIGHLIGHTS_ALL_LANGUAGES,
   highlightsApiRuntime: HIGHLIGHTS_API_RUNTIME,
   highlightsApiTypes: HIGHLIGHTS_API_TYPES,
   highlightsCssVariables: HIGHLIGHTS_CSS_VARIABLES,
@@ -336,8 +392,10 @@ export const {
   highlightsDualThemes: HIGHLIGHTS_DUAL_THEMES,
   highlightsDualThemesCss: HIGHLIGHTS_DUAL_THEMES_CSS,
   highlightsHtml: HIGHLIGHTS_HTML,
+  highlightsInit: HIGHLIGHTS_INIT,
   highlightsInstall: HIGHLIGHTS_INSTALL,
   highlightsLive: HIGHLIGHTS_LIVE,
+  highlightsQuickStart: HIGHLIGHTS_QUICK_START,
   highlightsSkill: HIGHLIGHTS_SKILL,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsStreamPipe: HIGHLIGHTS_STREAM_PIPE,

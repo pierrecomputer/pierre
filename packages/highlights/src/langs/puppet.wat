@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.puppetWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
   ;; heredoc end lines compare with $bashRangeEq
   (import "./bash.wat")
 
   ;; The high byte of a value is what the keyword awaits: 1 a class or
   ;; defined type name, 2 a function name, both then parameters; 3 a class
   ;; name; 4 a node name, where a regex may stand.
-  (keyword-table $puppetWords $mem.puppetWords $mem.applescriptWords
+  (keyword-table $puppetWords $mem.puppetWords $mem.puppetWords+160
     (group $Token.keyword.declaration+256 "class" "define")
     (group $Token.keyword.declaration+512 "function" "plan")
     (group $Token.keyword.declaration+1024 "node")
@@ -344,9 +348,11 @@
                 (local.set $hl (i32.eq (call $templateByte (local.get $p)) (i32.const 34)))
                 (local.set $p (i32.add (local.get $p) (local.get $hl)))
                 (local.set $rhs (local.get $p))
+                ;; both scans are bounded, so a line of `@(@(@(` stays linear
                 (block $tagDone
                   (loop $tag
                     (br_if $tagDone (i32.ge_u (local.get $p) (global.get $end)))
+                    (br_if $tagDone (i32.gt_u (i32.sub (local.get $p) (local.get $rhs)) (i32.const 32)))
                     (local.set $v (i32.load8_u (local.get $p)))
                     (br_if $tagDone
                       (i32.or
@@ -357,7 +363,15 @@
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
                     (br $tag)))
                 (local.set $v (i32.sub (local.get $p) (local.get $rhs)))
-                (local.set $p (call $scanFind3 (local.get $p) (i32.const ")") (i32.const 10) (i32.const 13)))
+                (local.set $e (i32.add (local.get $p) (i32.const 64)))
+                (block $closeDone
+                  (loop $close
+                    (br_if $closeDone (i32.ge_u (local.get $p) (global.get $end)))
+                    (local.set $gap (i32.load8_u (local.get $p)))
+                    (br_if $closeDone (i32.eq (local.get $gap) (i32.const ")")))
+                    (br_if $closeDone (byteset.get "\n\r" (local.get $gap)))
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (br_if $close (i32.lt_u (local.get $p) (local.get $e)))))
                 (if
                   (i32.and
                     (i32.eq (call $templateByte (local.get $p)) (i32.const ")"))

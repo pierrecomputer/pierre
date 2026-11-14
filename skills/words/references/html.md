@@ -104,6 +104,11 @@ options. The plugin accepts Highlights HTML options except `lang`, which comes
 from the fence. Unknown languages use plain text. An active open fence uses a
 live tokenizer that the renderer releases when no longer needed.
 
+The plugin uses the main `@pierre/highlights` entry, which loads all built-in
+lexers. To add a language, call `registerLanguages([lexer])` from
+`@pierre/highlights` with a lexer from `@pierre/wat-tools`. An open fence in
+such a language renders again in full on each update.
+
 Use [Highlights themes](https://diffs.com/docs#highlights-themes) for theme
 objects, multiple themes, and CSS variable colors. These themes use the
 Highlights format, not `@pierre/theme` objects.

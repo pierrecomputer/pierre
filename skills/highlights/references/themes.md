@@ -14,16 +14,22 @@ import { themes } from '@pierre/highlights/themes/loader';
 const { default: lazyTheme } = await themes['pierre-dark']();
 ```
 
-| Entry                              | Exports                                                  |
-| ---------------------------------- | -------------------------------------------------------- |
-| `@pierre/highlights/themes`        | Camel-case named themes, `cssVariables`, and `toCSS()`   |
-| `@pierre/highlights/themes/<id>`   | One theme as the default export, e.g. `pierre-dark`      |
-| `@pierre/highlights/themes/loader` | `themes`, a map from bundled IDs to async module loaders |
+| Entry                              | Exports                                                                            |
+| ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `@pierre/highlights/themes`        | Named themes, full `themes` array, `cssVariables`, `toCSS()`, and `getFontStyle()` |
+| `@pierre/highlights/themes/<id>`   | One theme as the default export, e.g. `pierre-dark`                                |
+| `@pierre/highlights/themes/loader` | `themes`, a map from bundled IDs to async module loaders                           |
 
-Pass the resolved object as `theme`; a string ID is not accepted. A
-`ThemeFamily` resolves to its first member. Pass `family.themes[index]` to
-select another. Theme preparation is cached by object identity; create new
-objects when changing values.
+Pass theme objects to `createHighlighter({ themes })`. Output methods accept
+these objects or their registered IDs. A custom theme can supply `id` for a
+stable name. The shared functions and tokenizer constructors from
+`@pierre/highlights` require theme objects.
+
+`createHighlighter({ themes })` registers each member of a `ThemeFamily`, and
+the family name selects the first member. As an output option, a `ThemeFamily`
+resolves to its first member. Pass `family.themes[index]` to select another.
+Highlights caches prepared themes by object identity. Create a new object when
+its values change.
 
 For `@pierre/diffs` components, load these objects through
 `registerCustomTheme(name, loader, 'zed')` and select
@@ -37,6 +43,7 @@ for registration and backend selection.
 import type { Theme } from '@pierre/highlights';
 
 const theme = {
+  id: 'app-dark',
   name: 'App Dark',
   appearance: 'dark',
   style: {
@@ -59,7 +66,7 @@ Theme types come from `@pierre/highlights`:
 
 | Type                  | Shape                                                                |
 | --------------------- | -------------------------------------------------------------------- |
-| `Theme`               | `name`, `appearance`, `style`, and optional `cssVariables: true`     |
+| `Theme`               | `name`, `appearance`, `style`, optional `id`, and `cssVariables`     |
 | `ThemeFamily`         | `themes: readonly Theme[]`, optional `name` and `author`             |
 | `ThemeStyle`          | Editor colors and `syntax`, plus additional Zed style keys           |
 | `ThemeSyntaxSettings` | Optional `color`, `font_style`, and `font_weight`                    |
@@ -71,12 +78,17 @@ Each `style.syntax` value can be a color string or `ThemeSyntaxSettings`.
 ## Switch colors with CSS variables
 
 ```ts
-import { codeToHtml } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { cssVariables, pierreDark, toCSS } from '@pierre/highlights/themes';
 
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [cssVariables],
+});
 const cssVariablePrefix = '--code-';
 const html = new TextDecoder().decode(
-  codeToHtml('const answer = 42;', {
+  highlighter.codeToHtml('const answer = 42;', {
     lang: 'ts',
     theme: cssVariables,
     cssVariablePrefix,
@@ -89,7 +101,12 @@ Include the stylesheet with the markup. `toCSS(theme, options?)` accepts a
 `Theme` and returns declarations without a selector. Apply them to the code
 block or an ancestor. Keep its prefix and the highlighting prefix equal; both
 default to `--hls-`. Changing declarations updates colors without tokenization.
-This mode controls colors only and ignores theme font style and weight.
+HTML output in this mode contains colors only, without theme font style and
+weight. For italics in a custom token renderer, pass `{ fontStyle: true }` to
+`toCSS()` to add a `-font-style` variable (`italic` or `normal`) for each syntax
+scope, and set `font-style` to `getFontStyle(token)` from
+`@pierre/highlights/themes`, such as `var(--hls-comment-font-style)`. Font
+weight has no variable.
 
 ## Multiple themes
 
@@ -103,13 +120,18 @@ selects how it renders:
 | `'light-dark()'` | Requires `light` and `dark`; merges colors into CSS `light-dark()` values following the page's `color-scheme`                |
 
 ```ts
-import { codeToHtml } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { pierreDark, pierreLight } from '@pierre/highlights/themes';
 
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [pierreDark, pierreLight],
+});
 const html = new TextDecoder().decode(
-  codeToHtml('const answer = 42;', {
+  highlighter.codeToHtml('const answer = 42;', {
     lang: 'ts',
-    themes: { light: pierreLight, dark: pierreDark },
+    themes: { light: 'pierre-light', dark: 'pierre-dark' },
     defaultColor: false,
   })
 );

@@ -2,8 +2,7 @@ import { findSimdCallersWithoutSimd } from '@pierre/wat-tools';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { HighlightsHighlighter, inputPtr, langIdOf } from '../lib/highlighter';
-import type { Lang } from '../lib/index';
+import { HighlightsHighlighter, langIdOf } from '../lib/highlighter';
 import {
   generateLanguages,
   listTokenTypes,
@@ -22,8 +21,10 @@ const commonUrl = new URL('./common.wat', import.meta.url);
 const common = transformWat(
   commonUrl,
   `(module
-    (import "../src/common.wat")
-    (keyword-table $Test $mem.laterWordsFree $mem.languageNames
+    (import "@pierre/wat-tools/common.wat")
+    (import "@pierre/wat-tools/records.wat")
+    (memory-region $mem.testWords 2048)
+    (keyword-table $Test $mem.testWords $mem.testWords+2048
       ${words.map((word) => `(group ${word.length} "${word}")`).join('\n')})
     (func (export "lookup") (param $n i32) (result i32)
       (keyword-table.value $Test (i32.const $mem.input)
@@ -35,9 +36,10 @@ const common = transformWat(
     (global (export "scratch") i32 (i32.const $mem.lexLowerScratch))
     (global (export "input") i32 (i32.const $mem.input)))`
 );
-const instance = new WebAssembly.Instance(
-  new WebAssembly.Module(wat2wasm(commonUrl.pathname, common.code))
+const commonModule = new WebAssembly.Module(
+  wat2wasm(commonUrl.pathname, common.code)
 );
+const instance = new WebAssembly.Instance(commonModule);
 const {
   memory,
   lookup,
@@ -52,10 +54,11 @@ const {
   input: WebAssembly.Global;
 };
 const bytes = new Uint8Array(memory.buffer);
+const inputPtr = Number(inputAt.value);
 const enc = new TextEncoder();
 
 void test('lib/highlighter.ts writes input at $mem.input', () => {
-  assert.equal(inputPtr, Number(inputAt.value));
+  assert.equal(new HighlightsHighlighter(commonModule).inputPtr, inputPtr);
 });
 
 void test('keyword SIMD compares every byte at lengths 2 through 31', () => {
@@ -111,7 +114,7 @@ void test(
     for (const [lang, { code }] of Object.entries(samples)) {
       for (const theme of [pierreDark, cssVariables]) {
         const output = highlighters.map((hl) =>
-          hl.codeToHtml(code, { lang: lang as Lang, theme }).slice()
+          hl.codeToHtml(code, { lang, theme }).slice()
         );
         assert.deepEqual(output[1], output[0], `${lang}: HTML`);
       }
@@ -135,7 +138,11 @@ void test('live state hashing and comparison ignore bytes beyond the state', () 
   const wasm = wat2wasm(url.pathname, code);
   for (const binary of [wasm, optimizeWasm(wasm)]) {
     const instance = new WebAssembly.Instance(new WebAssembly.Module(binary), {
-      env: { is_id_start: assert.fail, is_id_continue: assert.fail },
+      env: {
+        is_id_start: assert.fail,
+        is_id_continue: assert.fail,
+        lex_line: assert.fail,
+      },
     });
     const { memory, hash, equal } = instance.exports as {
       memory: WebAssembly.Memory;

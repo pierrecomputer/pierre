@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.hlslWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each group's value is its token, with the next-name capture of the
   ;; declaration groups in the high byte (see $hlslWordHl). The scalar
@@ -7,7 +11,7 @@
   ;; `sampler2D`, `int16_t` - are prefix checks in $hlslTypeHl: their members
   ;; share hash features the table cannot separate. The capitalized resource
   ;; types such as `Texture2D` fall to the capitalization rule.
-  (keyword-table $hlslWords $mem.hlslWords $mem.javaWords
+  (keyword-table $hlslWords $mem.hlslWords $mem.hlslWords+256
     (group $Token.boolean "true" "false") ;; 1: booleans
     (group $Token.keyword.control ;; 2: control
       "if" "do" "for" "case" "else" "break" "while" "return" "switch" "default" "discard"
@@ -281,19 +285,12 @@
                                 (if (i32.eq (call $templateByte (local.get $p)) (i32.const "("))
                                   (then
                                     ;; after a type, `name(` declares a function;
-                                    ;; elsewhere it calls one or constructs a type
-                                    (if (local.get $afterType)
-                                      (then (local.set $hl (enum.get $Token.function.definition)))
-                                      (else
-                                        (local.set $hl
-                                          (select
-                                            (enum.get $Token.type)
-                                            (enum.get $Token.function)
-                                            (i32.le_u
-                                              (i32.sub
-                                                (i32.load8_u (local.get $lhs))
-                                                (i32.const "A"))
-                                              (i32.const 25))))))
+                                    ;; elsewhere it calls one
+                                    (local.set $hl
+                                      (select
+                                        (enum.get $Token.function.definition)
+                                        (enum.get $Token.function)
+                                        (local.get $afterType)))
                                     (local.set $afterType (i32.const 0)))
                                   (else
                                     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
@@ -337,6 +334,22 @@
             (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $lexScanNumber)
+            (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
+              (then
+                (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                (if
+                  (i32.or
+                    (i32.eqz (call $lexIsIdentContinue (local.get $c)))
+                    (i32.or
+                      (i32.le_u
+                        (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "e"))
+                        (i32.const 1))
+                      (i32.or
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "h"))
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "l")))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $lexScanNumberBody (i32.const 0))))))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (local.set $afterType (i32.const 0))

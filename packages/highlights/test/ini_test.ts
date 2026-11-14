@@ -124,3 +124,26 @@ test('ini: a blank line ends a continued value', () => {
   assertLineFedParity('ini', code);
   assertLineFedParity('ini', 'a=first \\\r\n  \r\nPort = 8080\r\n');
 });
+
+test('ini: a header string continued by a backslash resumes the header', () => {
+  const code = '["\\\n\\\n" s] x\nk=v\n["a\\\r\nb"]\n';
+  expect(tokenKinds('ini', code)).toEqual([
+    ['[', 'punctuation.bracket'],
+    ['"', 'string'],
+    ['\\', 'string.escape'],
+    ['\\', 'string.escape'],
+    ['"', 'string'],
+    ['s', 'type'],
+    [']', 'punctuation.bracket'],
+    ['x', null],
+    ['k', 'property'],
+    ['=', 'operator'],
+    ['v', null],
+    ['[', 'punctuation.bracket'],
+    ['"a', 'string'],
+    ['\\', 'string.escape'],
+    ['b"', 'string'],
+    [']', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('ini', code);
+});

@@ -1,27 +1,31 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type UserConfig } from 'tsdown';
 
 const tokenTypesPath = fileURLToPath(
   new URL('./lib/token-types.ts', import.meta.url)
 );
+const themesDir = fileURLToPath(new URL('./themes/', import.meta.url));
+const themesPath = `${themesDir}index.ts`;
 
 // The two configs share dist/, so neither may clean the other's output.
-// `scripts/build.ts` emits highlights.wasm and highlights.wasm.mjs
-// before tsdown runs (see moon.yml); keep ./highlights.wasm* imports as-is for
-// runtime resolution next to the glue. tsdown builds the two configs
+// `scripts/build.ts` emits the highlights and emitter Wasm modules before
+// tsdown runs (see moon.yml); keep their ./*.wasm* imports as-is for runtime
+// resolution next to the glue. tsdown builds the two configs
 // concurrently, which is why the wasm phase cannot live in a build hook: it
 // rewrites the token and language tables, which the first config compiles.
 const config: UserConfig[] = defineConfig([
   {
     entry: [
       'lib/index.ts',
+      'lib/core.ts',
+      'lib/core-workerd.ts',
       'lib/highlighter.ts',
       'lib/live.ts',
       'lib/tokens.ts',
       'lib/theme.ts',
       'lib/token-types.ts',
       'lib/languages.ts',
-      'lib/default.ts',
       'lib/workerd.ts',
     ],
     tsconfig: './tsconfig.json',
@@ -33,8 +37,10 @@ const config: UserConfig[] = defineConfig([
     unbundle: true,
     platform: 'neutral',
     deps: {
-      neverBundle: [/^\.\/highlights\.wasm/, /^node:/],
+      neverBundle: [/^\.\/(?:highlights|emitter)\.wasm/, /^node:/, themesPath],
     },
+    // The main entry re-exports the separately bundled themes module.
+    outputOptions: { paths: { [themesPath]: './themes.js' } },
   },
   // Bundle named theme exports into one module. scripts/build.ts writes the
   // separate loader so lazy imports do not pull in every theme's data.
@@ -48,7 +54,24 @@ const config: UserConfig[] = defineConfig([
       tsgo: true,
     },
     platform: 'neutral',
-    deps: { neverBundle: [tokenTypesPath] },
+    // The type bundle follows `import type` into lib/highlighter.ts,
+    // which imports the emitter.
+    deps: { neverBundle: [tokenTypesPath, /^\.\/emitter\.wasm/] },
+    plugins: [
+      {
+        name: 'theme-style-json',
+        // `lazyTheme` in themes/index.ts parses this string on first
+        // use. The object literals of all themes cost about 4 ms at import.
+        load(id: string) {
+          if (!id.startsWith(themesDir) || !id.endsWith('.json')) return;
+          const theme = JSON.parse(readFileSync(id, 'utf-8'));
+          return {
+            code: `export default ${JSON.stringify({ ...theme, style: JSON.stringify(theme.style) })};`,
+            moduleType: 'js',
+          };
+        },
+      },
+    ],
     outputOptions: { paths: { [tokenTypesPath]: './token-types.js' } },
   },
 ]);

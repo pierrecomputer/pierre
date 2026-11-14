@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.leanWords 544)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $leanByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -49,7 +53,7 @@
                 (i32.eq (local.get $c) (i32.const 0x2c7c)))))))))
 
   ;; The high byte primes a declaration name: 1=value, 2=type, 3=namespace.
-  (keyword-table $leanWords $mem.leanWords $mem.bladeWords
+  (keyword-table $leanWords $mem.leanWords $mem.leanWords+544
     (group $Token.keyword.declaration+256 "def" "theorem" "lemma" "abbrev" "opaque" "axiom" "constant")
     (group $Token.keyword.declaration+512 "structure" "class" "inductive")
     (group $Token.keyword.import+768 "import" "namespace" "section" "open" "export" "end")
@@ -144,7 +148,7 @@
     (local $lhs i32) (local $rhs i32) (local $gap i32)
     (local $kind i32) (local $hl i32) (local $expect i32)
     (local $rawOpen i32) (local $quoted i32) (local $quotedKind i32)
-    (local $attribute i32)
+    (local $attribute i32) (local $interp i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -158,6 +162,33 @@
         (if (local.get $quoted)
           (then
             (local.set $lhs (global.get $ptr))
+            ;; $quoted 2: the body of an `s!"..."` string, whose `{` opens a term
+            (if (i32.eq (local.get $quoted) (i32.const 2))
+              (then
+                (block $istrDone
+                  (loop $istr
+                    (local.set $rhs (call $scanFind3 (global.get $ptr) (i32.const 34) (i32.const 92) (i32.const "{")))
+                    (if (i32.ge_u (local.get $rhs) (global.get $end))
+                      (then (global.set $ptr (global.get $end)) (br $istrDone)))
+                    (local.set $c (i32.load8_u (local.get $rhs)))
+                    (if (i32.eq (local.get $c) (i32.const 92))
+                      (then
+                        (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $rhs))
+                        (local.set $lhs (call $lexEscapeEnd (local.get $rhs)))
+                        (call $emitTok (enum.get $Token.string.escape) (local.get $rhs) (local.get $lhs))
+                        (global.set $ptr (local.get $lhs))
+                        (br $istr)))
+                    (global.set $ptr (i32.add (local.get $rhs) (i32.const 1)))
+                    (local.set $quoted (i32.const 0))
+                    (if (i32.eq (local.get $c) (i32.const "{"))
+                      (then
+                        (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $rhs))
+                        (call $emitTok (enum.get $Token.punctuation.special) (local.get $rhs) (global.get $ptr))
+                        (local.set $lhs (global.get $ptr))
+                        (local.set $interp (i32.or (i32.shl (local.get $interp) (i32.const 8)) (i32.const 1)))))))
+                (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+                (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+                (br $next)))
             (block $quotedDone
               (loop $quotedBody
                 (br_if $quotedDone (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -191,6 +222,27 @@
           (then
             (local.set $rawOpen (call $leanRawOpen (i32.const 1)))
             (br_if $next (local.get $rawOpen))))
+        ;; `s!"`, `m!"`, and `f!"` open an interpolated string; $interp holds a
+        ;; brace count per open term, a byte each, innermost lowest, four deep
+        (if (i32.eq (local.get $c) (i32.const 34))
+          (then
+            (if
+              (i32.and
+                (i32.lt_u (local.get $interp) (i32.const 0x1000000))
+                (i32.and
+                  (i32.ge_u (i32.sub (local.get $lhs) (global.get $srcBase)) (i32.const 2))
+                  (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "!"))))
+              (then
+                (local.set $c2 (i32.load8_u (i32.sub (local.get $lhs) (i32.const 2))))
+                (if
+                  (i32.or
+                    (i32.eq (local.get $c2) (i32.const "s"))
+                    (i32.or (i32.eq (local.get $c2) (i32.const "m")) (i32.eq (local.get $c2) (i32.const "f"))))
+                  (then
+                    (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+                    (local.set $quoted (i32.const 2))
+                    (br $next)))))))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then (call $lexString (local.get $c) (i32.eq (local.get $c) (i32.const 34)) (enum.get $Token.string)) (br $next)))
         (if (i32.eq (local.get $cp) (i32.const 0xab))
@@ -241,7 +293,21 @@
             (br $next)))
         (global.set $ptr (call $utf8SpanEnd (i32.add (local.get $lhs) (i32.const 1)) (global.get $end)))
         (local.set $hl (enum.get $Token.operator))
-        (if (byteset.get "()[]{}" (local.get $c)) (then (local.set $hl (enum.get $Token.punctuation.bracket))))
+        (if (byteset.get "()[]{}" (local.get $c))
+          (then
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (if (local.get $interp)
+              (then
+                (if (i32.eq (local.get $c) (i32.const "{"))
+                  (then (local.set $interp (i32.add (local.get $interp) (i32.const 1)))))
+                (if (i32.eq (local.get $c) (i32.const "}"))
+                  (then
+                    (local.set $interp (i32.sub (local.get $interp) (i32.const 1)))
+                    (if (i32.eqz (i32.and (local.get $interp) (i32.const 255)))
+                      (then
+                        (local.set $interp (i32.shr_u (local.get $interp) (i32.const 8)))
+                        (local.set $hl (enum.get $Token.punctuation.special))
+                        (local.set $quoted (i32.const 2))))))))))
         (if (byteset.get ".,:;" (local.get $c)) (then (local.set $hl (enum.get $Token.punctuation.delimiter))))
         (if (i32.or (i32.eq (local.get $cp) (i32.const 0x27e8)) (i32.or (i32.eq (local.get $cp) (i32.const 0x27e9))
               (i32.or (i32.eq (local.get $cp) (i32.const 0x2983)) (i32.eq (local.get $cp) (i32.const 0x2984)))))

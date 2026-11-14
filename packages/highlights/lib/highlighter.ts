@@ -3,15 +3,21 @@ import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
   Highlighter,
+  HighlighterOptions,
   Lang,
+  Language,
+  RegisteredHighlighter,
+  Theme,
   ThemedToken,
+  ThemeFamily,
   TokensResult,
-} from './index';
+} from './core';
 import languages from './languages';
 import {
   defaultCssVariablePrefix,
   escapeAttribute,
   prepareTheme,
+  resolveTheme,
   themeTableBytes,
 } from './theme';
 import type { ResolvedTheme } from './tokens';
@@ -26,8 +32,6 @@ import {
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
-const themePtr = 64; // $mem.themeTable in src/memory.wat
-export const inputPtr = 81920; // $mem.input in src/memory.wat; wasm_test checks it
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -46,18 +50,40 @@ export function langIdOf(lang: string): number {
 
 /**
  * Check whether a name or alias has a built-in lexer, including `plain`/`text`,
- * or is `ansi`.
+ * or is `ansi`. Names from `registerLanguages` are not built in; use
+ * `isRegisteredLanguage` for them.
  */
 export function isSupportedLanguage(lang: string): lang is Lang {
   return typeof LANGS[String(lang).toLowerCase()] === 'number' || isAnsi(lang);
 }
 
-export class HighlightsHighlighter implements Highlighter {
+/**
+ * Check whether `registerLanguages` added a name or alias. The shared
+ * `codeToHtml` and `codeToTokens` use its lexer. `StreamTokenizer` and
+ * `LiveTokenizer` use it too, unless it is a built-in language module.
+ */
+export function isRegisteredLanguage(lang: string): boolean {
+  return registeredLexers.has(String(lang).toLowerCase());
+}
+
+export class HighlightsHighlighter implements Highlighter<
+  Theme | ThemeFamily,
+  string
+> {
   #highlight: () => void;
   #highlightStream: (reset: number | boolean) => void;
   #themeWritten: Uint8Array | undefined;
   #htmlPrefix: string | undefined;
   #htmlPrefixBytes = new Uint8Array(0);
+  #beforeRun?: (
+    langId: number,
+    mode: number,
+    inputLength: number,
+    reset?: boolean
+  ) => void;
+  #languageIds?: ReadonlyMap<string, number>;
+  inputPtr: number;
+  themePtr: number;
   wasmModule: WebAssembly.Module;
   instance: WebAssembly.Instance;
   memory: WebAssembly.Memory;
@@ -65,19 +91,44 @@ export class HighlightsHighlighter implements Highlighter {
   dv: DataView;
   pageN: number;
 
-  constructor(wasmModule: WebAssembly.Module) {
+  constructor(
+    wasmModule: WebAssembly.Module,
+    beforeRun?: (
+      langId: number,
+      mode: number,
+      inputLength: number,
+      reset?: boolean
+    ) => void,
+    imports: Record<string, (...args: number[]) => number> = {},
+    languageIds?: ReadonlyMap<string, number>
+  ) {
+    this.#beforeRun = beforeRun;
+    this.#languageIds = languageIds;
     this.wasmModule = wasmModule;
     const env = {
+      // The combined module imports it for the documents of registered lexers.
+      lex_line: () => 0,
+      ...imports,
       is_id_start: (ptr: number, len: number) => this.#idClass(ptr, len, 0),
       is_id_continue: (ptr: number, len: number) => this.#idClass(ptr, len, 2),
     };
     const instance = new WebAssembly.Instance(wasmModule, { env });
     this.instance = instance;
     this.memory = instance.exports.memory as WebAssembly.Memory;
-    this.#highlight = instance.exports.highlight as () => void;
-    this.#highlightStream = instance.exports.highlightStream as (
-      reset: number | boolean
-    ) => void;
+    this.inputPtr = Number(
+      (instance.exports.inputPtr as WebAssembly.Global).value
+    );
+    this.themePtr = Number(
+      (instance.exports.themePtr as WebAssembly.Global | undefined)?.value ?? 0
+    );
+    // Only an emitter gets `languageIds`; the combined module has `emit` too.
+    const emit = languageIds === undefined ? undefined : instance.exports.emit;
+    this.#highlight = (emit ??
+      instance.exports.highlight ??
+      instance.exports.lex) as () => void;
+    this.#highlightStream = (emit ??
+      instance.exports.highlightStream ??
+      instance.exports.lexStream) as (reset: number | boolean) => void;
     this.pageN = this.memory.buffer.byteLength / pageSize;
     this.buffer = new Uint8Array(this.memory.buffer);
     this.dv = new DataView(this.memory.buffer);
@@ -90,7 +141,7 @@ export class HighlightsHighlighter implements Highlighter {
       this.#growMemoryIfNeeded(offset + input.length + 96);
       let { read, written } = enc.encodeInto(
         input,
-        this.buffer.subarray(inputPtr + offset, this.buffer.length - 96)
+        this.buffer.subarray(this.inputPtr + offset, this.buffer.length - 96)
       );
       if (read < input.length) {
         const rest = input.slice(read);
@@ -98,7 +149,7 @@ export class HighlightsHighlighter implements Highlighter {
         written += enc.encodeInto(
           rest,
           this.buffer.subarray(
-            inputPtr + offset + written,
+            this.inputPtr + offset + written,
             this.buffer.length - 96
           )
         ).written;
@@ -112,7 +163,7 @@ export class HighlightsHighlighter implements Highlighter {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
     this.#growMemoryIfNeeded(offset + input.length + 96);
-    this.buffer.set(input, inputPtr + offset);
+    this.buffer.set(input, this.inputPtr + offset);
     return input.length;
   }
 
@@ -127,10 +178,11 @@ export class HighlightsHighlighter implements Highlighter {
     inputLength: number,
     reset?: boolean
   ): void {
+    this.#beforeRun?.(langId, mode, inputLength, reset);
     this.dv.setUint8(0, langId);
     this.dv.setUint8(1, mode);
     this.dv.setUint32(2, inputLength, true);
-    this.buffer[inputPtr + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
+    this.buffer[this.inputPtr + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
     try {
       if (reset === undefined) this.#highlight();
       else this.#highlightStream(reset);
@@ -145,7 +197,7 @@ export class HighlightsHighlighter implements Highlighter {
    */
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
-    options: CodeToHtmlOptions
+    options: CodeToHtmlOptions<Theme | ThemeFamily, string>
   ): Uint8Array {
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
@@ -184,7 +236,9 @@ export class HighlightsHighlighter implements Highlighter {
       }
       return enc.encode(`${html}</code></pre>`);
     }
-    const langId = langIdOf(options.lang);
+    const langId =
+      this.#languageIds?.get(String(options.lang).toLowerCase()) ??
+      langIdOf(options.lang);
     let table: Uint8Array | undefined;
     let blob: Uint8Array | undefined;
     let mode = 0;
@@ -205,7 +259,7 @@ export class HighlightsHighlighter implements Highlighter {
     const inputLength = this.writeInput(input);
     if (blob !== undefined) {
       this.#growMemoryIfNeeded(inputLength + blob.length + 96);
-      const blobPtr = (inputPtr + inputLength + 47) & ~15;
+      const blobPtr = (this.inputPtr + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
       this.dv.setUint32(14, blobPtr, true);
       this.dv.setUint32(18, blob.length, true);
@@ -216,18 +270,18 @@ export class HighlightsHighlighter implements Highlighter {
       }
       const bytes = this.#htmlPrefixBytes;
       this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
-      const prefixPtr = (inputPtr + inputLength + 47) & ~15;
+      const prefixPtr = (this.inputPtr + inputLength + 47) & ~15;
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
       this.dv.setUint32(18, bytes.length, true);
       mode = 1;
     } else {
       if (this.#themeWritten !== table) {
-        this.buffer.set(table, themePtr);
+        this.buffer.set(table, this.themePtr);
         this.buffer.fill(
           0,
-          themePtr + table.length,
-          themePtr + themeTableBytes
+          this.themePtr + table.length,
+          this.themePtr + themeTableBytes
         );
         this.#themeWritten = table;
       }
@@ -239,16 +293,59 @@ export class HighlightsHighlighter implements Highlighter {
     return this.buffer.subarray(outStart, outStart + outLength);
   }
 
+  /**
+   * Run record output and return the address of the records. Control word 10
+   * holds their byte length. `reset` starts or continues a stream. Mode 5
+   * makes the combined module return byte records, as a lexer module does.
+   */
+  lexRecords(
+    langId: number,
+    inputLength: number,
+    reset?: boolean,
+    mode = 3
+  ): number {
+    this.#run(langId, mode, inputLength, reset);
+    return this.dv.getUint32(6, true);
+  }
+
+  /**
+   * Copy lexer records to this emitter, after the input and the theme data.
+   * Only the first record can be a leading gap (255), and the emitter has no
+   * gap type.
+   */
+  writeRecords(mode: number, length: number, records: Uint32Array): void {
+    if (records.length > 0 && records[1] === 255) records[1] = 0;
+    const blobEnd =
+      mode === 0 || mode === 3
+        ? 0
+        : this.dv.getUint32(14, true) + this.dv.getUint32(18, true);
+    const recordsPtr =
+      Math.ceil(Math.max(this.inputPtr + length + 96, blobEnd) / 16) * 16;
+    const pages = Math.ceil((recordsPtr + records.byteLength + 96) / pageSize);
+    if (pages > this.pageN) {
+      this.memory.grow(pages - this.pageN);
+      this.bindMemory();
+    }
+    this.buffer.set(
+      new Uint8Array(records.buffer, records.byteOffset, records.byteLength),
+      recordsPtr
+    );
+    this.dv.setUint32(22, recordsPtr, true);
+    this.dv.setUint32(26, records.byteLength, true);
+  }
+
   /** Return UTF-16 token records; `reset` starts or continues a stream. */
   tokenizeLineRecords(
     langId: number,
     inputLength: number,
     reset?: boolean
   ): Uint32Array {
-    this.#run(langId, 3, inputLength, reset);
-    const outStart = this.dv.getUint32(6, true);
-    const outLength = this.dv.getUint32(10, true);
-    return new Uint32Array(this.buffer.buffer, outStart, outLength >> 2);
+    const outStart = this.lexRecords(langId, inputLength, reset);
+    return new Uint32Array(
+      this.buffer.buffer,
+      outStart,
+      this.dv.getUint32(10, true) >> 2
+    );
   }
 
   /**
@@ -256,7 +353,7 @@ export class HighlightsHighlighter implements Highlighter {
    */
   codeToTokens(
     input: string | Uint8Array | ArrayBuffer,
-    options: CodeToTokensOptions
+    options: CodeToTokensOptions<Theme | ThemeFamily, string>
   ): TokensResult {
     const code = toCode(input);
     // Normalize malformed UTF-8 and avoid detaching borrowed input on memory growth.
@@ -281,7 +378,8 @@ export class HighlightsHighlighter implements Highlighter {
       : lineRecordsToTokens(
           code,
           this.tokenizeLineRecords(
-            langIdOf(options.lang),
+            this.#languageIds?.get(String(options.lang).toLowerCase()) ??
+              langIdOf(options.lang),
             this.writeInput(input)
           ),
           themes,
@@ -293,7 +391,7 @@ export class HighlightsHighlighter implements Highlighter {
 
   /** Grow the wasm linear memory if needed. */
   #growMemoryIfNeeded(len: number): void {
-    const neededPages = Math.ceil((inputPtr + len) / pageSize);
+    const neededPages = Math.ceil((this.inputPtr + len) / pageSize);
     if (neededPages > this.pageN) {
       this.memory.grow(neededPages - this.pageN);
       this.bindMemory();
@@ -339,7 +437,9 @@ export class HighlightsHighlighter implements Highlighter {
 
   /** Rebind views after growing wasm memory. */
   bindMemory(): void {
-    if (this.buffer.buffer === this.memory.buffer) return;
+    // Growth detaches the old buffer, so its view has length 0.
+    // This check avoids the slow `memory.buffer` getter on every call.
+    if (this.buffer.length !== 0) return;
     this.pageN = this.memory.buffer.byteLength / pageSize;
     this.buffer = new Uint8Array(this.memory.buffer);
     this.dv = new DataView(this.memory.buffer);
@@ -396,14 +496,449 @@ export function init(wasm: WebAssembly.Module): Highlighter {
   return (shared = new HighlightsHighlighter(wasm));
 }
 
+const lexerModules = new WeakMap<
+  Language,
+  WebAssembly.Module | Promise<WebAssembly.Module>
+>();
+let emitterModule: Promise<WebAssembly.Module> | undefined;
+
 /**
- * Create a highlighter with its own WebAssembly instance.
- * The shared highlighter is unchanged.
+ * Supply a compiled emitter module. Use it where the runtime cannot compile
+ * WebAssembly from bytes, such as Cloudflare Workers.
  */
-export function createHighlighter(
-  wasmModule: WebAssembly.Module = assertWasmModule()
-): Highlighter {
-  return new HighlightsHighlighter(wasmModule);
+export function initEmitter(wasm: WebAssembly.Module): void {
+  emitterModule = Promise.resolve(wasm);
+}
+
+/** Decode base64 Wasm. */
+export function wasmBytes(wasm: string): Uint8Array<ArrayBuffer> {
+  // This runs at import, before the JIT: the `atob` loop is about 1 ms slower
+  // than a native decoder for the combined module.
+  const native = globalThis as unknown as {
+    Uint8Array: { fromBase64?: (text: string) => Uint8Array<ArrayBuffer> };
+    Buffer?: { from: (text: string, encoding: 'base64') => Uint8Array };
+  };
+  if (native.Uint8Array.fromBase64 !== undefined)
+    return native.Uint8Array.fromBase64(wasm);
+  if (native.Buffer !== undefined) {
+    const buffer = native.Buffer.from(wasm, 'base64');
+    return new Uint8Array(
+      buffer.buffer as ArrayBuffer,
+      buffer.byteOffset,
+      buffer.length
+    );
+  }
+  const binary = atob(wasm);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+export async function createHighlighter(
+  options: HighlighterOptions
+): Promise<RegisteredHighlighter> {
+  emitterModule ??= import('./emitter.wasm.mjs')
+    .then(({ default: wasm }) => WebAssembly.compile(wasmBytes(wasm)))
+    .catch((error: unknown) => {
+      emitterModule = undefined;
+      throw error;
+    });
+  const languages = [...new Set(options.langs)];
+  const [emitter, ...compiled] = await Promise.all([
+    emitterModule,
+    ...languages.map((language) => {
+      const { wasm } = language;
+      if (typeof wasm !== 'string') return Promise.resolve(wasm);
+      let compiledModule = lexerModules.get(language);
+      if (compiledModule === undefined) {
+        compiledModule = WebAssembly.compile(wasmBytes(wasm)).then((module) => {
+          lexerModules.set(language, module);
+          return module;
+        });
+        lexerModules.set(language, compiledModule);
+      }
+      return Promise.resolve(compiledModule);
+    }),
+  ]);
+  return buildHighlighter(emitter, languages, compiled, options.themes, false);
+}
+
+/**
+ * Register compiled lexers and themes with an emitter. Shared by
+ * `createHighlighter` and `registerLanguages`. With `combined`, the emitter
+ * is the combined module, and it lexes the embedded built-in languages that
+ * have no registered lexer.
+ */
+function buildHighlighter(
+  emitter: WebAssembly.Module,
+  languages: readonly Language[],
+  compiled: readonly WebAssembly.Module[],
+  themeOptions: HighlighterOptions['themes'],
+  combined: boolean
+): RegisteredHighlighter {
+  const registrations = new Map<
+    number,
+    { module: WebAssembly.Module; id: number }
+  >();
+  const languageIds = new Map<string, number>([
+    ['plain', 0],
+    ['plaintext', 0],
+    ['text', 0],
+    ['txt', 0],
+    ['ansi', -1],
+  ]);
+  let nextLanguageId = 256;
+  for (let i = 0; i < languages.length; i++) {
+    const localIds = new Map<number, number>();
+    for (const [alias, id] of Object.entries(languages[i].aliases)) {
+      const name = alias.toLowerCase();
+      if (!Number.isInteger(id) || id < 0 || id > 255) {
+        throw new RangeError(`invalid lexer entry: ${alias}`);
+      }
+      if (name === 'ansi') throw new RangeError('reserved language name: ansi');
+      // A built-in ID also routes embedded languages. Only a built-in module
+      // keeps it; any other lexer gets a new ID, so its alias cannot reroute
+      // embedded code.
+      let externalId: number | undefined;
+      if (id > 0 && id === LANGS[name]) {
+        registrations.set(id, { module: compiled[i], id });
+        externalId = id;
+      } else {
+        externalId = localIds.get(id);
+        if (externalId === undefined) {
+          externalId = nextLanguageId++;
+          if (externalId > 0x7fff)
+            throw new RangeError('too many registered languages');
+          localIds.set(id, externalId);
+          registrations.set(externalId, { module: compiled[i], id });
+        }
+      }
+      languageIds.set(name, externalId);
+    }
+  }
+  const roots = new Map<WebAssembly.Module, HighlightsHighlighter>();
+  function createLexer(
+    compiledModule: WebAssembly.Module,
+    depth: number
+  ): HighlightsHighlighter {
+    const streams = new Map<
+      number,
+      { module: WebAssembly.Module; lexer: HighlightsHighlighter }
+    >();
+    // Finished child lexers wait here for reuse. Whole-body lexers [0] and
+    // stream lexers [1] stay separate: a whole-body run does not clear an
+    // unfinished stream's state.
+    const idle = [
+      new Map<WebAssembly.Module, HighlightsHighlighter[]>(),
+      new Map<WebAssembly.Module, HighlightsHighlighter[]>(),
+    ];
+    const release = (
+      module: WebAssembly.Module,
+      child: HighlightsHighlighter
+    ): void => {
+      if (child.pageN > 16) return;
+      const free = idle[1].get(module);
+      if (free === undefined) idle[1].set(module, [child]);
+      else free.push(child);
+    };
+    const lexer = new HighlightsHighlighter(
+      compiledModule,
+      (_id, _mode, _length, reset) => {
+        if (reset !== false && streams.size > 0) {
+          for (const child of streams.values()) {
+            release(child.module, child.lexer);
+          }
+          streams.clear();
+        }
+      },
+      {
+        language: (ptr: number, length: number) => {
+          lexer.bindMemory();
+          const bytes = lexer.buffer;
+          let name = '';
+          for (let i = ptr; i < ptr + length; i++) {
+            if (bytes[i] > 127) {
+              name = dec.decode(bytes.subarray(ptr, ptr + length));
+              break;
+            }
+            name += String.fromCharCode(bytes[i]);
+          }
+          name = name.toLowerCase();
+          const id =
+            languageIds.get(name) ?? (combined ? LANGS[name] : undefined);
+          return id !== undefined && id > 0 ? id : 0;
+        },
+        // Most embedded bodies are under 32 bytes. Short copies use loops: a
+        // typed array view costs about 30 ns.
+        embed: (
+          id: number,
+          from: number,
+          to: number,
+          reset: number,
+          context: number,
+          out: number,
+          cap: number
+        ) => {
+          if (reset === 2) {
+            const child = streams.get(context);
+            if (child !== undefined) {
+              streams.delete(context);
+              release(child.module, child.lexer);
+            }
+            return 0;
+          }
+          // An empty body can still start a stream. Its reset must
+          // reach the child, or a reused lexer continues its last stream.
+          if (to <= from && reset !== 1) return context;
+          let registration = registrations.get(id);
+          if (registration === undefined && combined && id > 0 && id < 256) {
+            registration = { module: emitter, id };
+            registrations.set(id, registration);
+          }
+          if (registration === undefined || depth >= 64) return context;
+          const { module } = registration;
+          let child: HighlightsHighlighter;
+          let free: HighlightsHighlighter[] | undefined;
+          if (reset < 0) {
+            free = idle[0].get(module);
+            child = free?.pop() ?? createLexer(module, depth + 1);
+          } else {
+            if (context === 0) {
+              do context++;
+              while (streams.has(context));
+            }
+            const open = streams.get(context);
+            if (open?.module === module) child = open.lexer;
+            else {
+              if (open !== undefined) release(open.module, open.lexer);
+              child =
+                idle[1].get(module)?.pop() ?? createLexer(module, depth + 1);
+              streams.set(context, { module, lexer: child });
+              // A reused lexer must not continue the state of its last stream.
+              if (reset === 0) child.lexRecords(registration.id, 0, true, 5);
+            }
+          }
+          lexer.bindMemory();
+          let length = to - from;
+          let at = child.inputPtr;
+          // The four-byte steps can pass the end by three bytes.
+          // Both buffers keep 96 spare bytes there.
+          if (length <= 96 && at + 192 <= child.buffer.length) {
+            for (let i = 0; i < length; i += 4)
+              child.dv.setUint32(
+                at + i,
+                lexer.dv.getUint32(from + i, true),
+                true
+              );
+          } else length = child.writeInput(lexer.buffer.subarray(from, to));
+          at = child.lexRecords(
+            registration.id,
+            length,
+            reset < 0 ? undefined : reset !== 0,
+            5
+          );
+          length = child.dv.getUint32(10, true);
+          if (length > 0) {
+            if (out + length + 16 > cap) {
+              out = reserve(length);
+              lexer.bindMemory();
+            }
+            if (length <= 96) {
+              for (let i = 0; i < length; i += 4)
+                lexer.dv.setUint32(
+                  out + i,
+                  child.dv.getUint32(at + i, true),
+                  true
+                );
+            } else
+              lexer.buffer.set(child.buffer.subarray(at, at + length), out);
+            lexer.dv.setUint32(10, length, true);
+          }
+          if (reset < 0 && child.pageN <= 16) {
+            if (free === undefined) idle[0].set(module, [child]);
+            else free.push(child);
+          }
+          return context;
+        },
+      }
+    );
+    // Markdown reads its nesting depth from control byte 14.
+    lexer.buffer[14] = depth;
+    const reserve = lexer.instance.exports.reserve as (bytes: number) => number;
+    return lexer;
+  }
+  const themes = new Map<string, Theme>();
+  for (const value of themeOptions) {
+    const first = resolveTheme(value);
+    let names = first === value || !value.name ? [] : [value.name];
+    for (const member of first === value
+      ? [first]
+      : (value as ThemeFamily).themes) {
+      const theme = resolveTheme(member);
+      if (theme.id !== undefined) themes.set(theme.id, theme);
+      names.push(theme.name);
+      for (const name of names) {
+        themes.set(name, theme);
+        themes.set(
+          name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, ''),
+          theme
+        );
+      }
+      names = [];
+    }
+  }
+  const plainRecord = new Uint32Array(2);
+  const beforeEmit = (id: number, mode: number, length: number): void => {
+    let records: Uint32Array;
+    if (id === 0) {
+      plainRecord[0] = length;
+      records = length === 0 ? plainRecord.subarray(0, 0) : plainRecord;
+    } else {
+      const registration = registrations.get(id)!;
+      let lexer = roots.get(registration.module);
+      // Wasm memory cannot shrink. Replace a lexer above 8 MiB when small
+      // inputs resume.
+      if (lexer === undefined || (lexer.pageN > 128 && length <= pageSize)) {
+        lexer = createLexer(registration.module, 0);
+        roots.set(registration.module, lexer);
+      }
+      records = lexer.tokenizeLineRecords(
+        registration.id,
+        lexer.writeInput(
+          highlighter.buffer.subarray(
+            highlighter.inputPtr,
+            highlighter.inputPtr + length
+          )
+        )
+      );
+    }
+    highlighter.writeRecords(mode, length, records);
+  };
+  let highlighter = new HighlightsHighlighter(
+    emitter,
+    beforeEmit,
+    {},
+    languageIds
+  );
+  const resolveOptions = (
+    input: string | Uint8Array | ArrayBuffer,
+    value: CodeToTokensOptions<Theme | ThemeFamily | string, string>
+  ): CodeToTokensOptions<Theme | ThemeFamily, string> => {
+    const lang = String(value.lang).toLowerCase();
+    if (!languageIds.has(lang))
+      throw new RangeError(`language is not loaded: ${value.lang}`);
+    const resolved: Record<string, Theme | ThemeFamily> = {};
+    const entries =
+      value.themes === undefined
+        ? [['theme', value.theme] as const]
+        : Object.entries(value.themes);
+    for (const [key, reference] of entries) {
+      if (typeof reference !== 'string') {
+        resolved[key] = reference;
+        continue;
+      }
+      const theme = themes.get(reference);
+      if (theme === undefined)
+        throw new RangeError(`theme is not loaded: ${reference}`);
+      resolved[key] = theme;
+    }
+    if (
+      highlighter.pageN > 128 &&
+      (typeof input === 'string' ? input.length : input.byteLength) <= pageSize
+    ) {
+      highlighter = new HighlightsHighlighter(
+        emitter,
+        beforeEmit,
+        {},
+        languageIds
+      );
+    }
+    return value.themes === undefined
+      ? { ...value, theme: resolved.theme, themes: undefined }
+      : { ...value, theme: undefined, themes: resolved };
+  };
+  return {
+    // `resolveOptions` can replace `highlighter`. Call it first.
+    codeToHtml: (input, value) => {
+      const resolved = resolveOptions(input, value);
+      return highlighter.codeToHtml(input, resolved);
+    },
+    codeToTokens: (input, value) => {
+      const resolved = resolveOptions(input, value);
+      return highlighter.codeToTokens(input, resolved);
+    },
+    getLoadedLanguages: () => [...languageIds.keys()],
+  };
+}
+
+let registered: RegisteredHighlighter | undefined;
+let registeredLangs: Language[] = [];
+let registeredLexers = new Map<
+  string,
+  { module?: WebAssembly.Module; id: number }
+>();
+
+/**
+ * The lexer that `StreamTokenizer` and `LiveTokenizer` use for a name from
+ * `registerLanguages`. A lexer from `@pierre/wat-tools` has `module`. A
+ * built-in language module has none, and `id` selects the built-in lexer:
+ * its own lexer calls the host for embedded code and cannot save its state.
+ */
+export function registeredLexer(
+  lang: string
+): { module?: WebAssembly.Module; id: number } | undefined {
+  return registeredLexers.get(String(lang).toLowerCase());
+}
+
+/**
+ * Add lexers to `codeToHtml` and `codeToTokens`. Their names and aliases
+ * override built-in names there. Call `init` first; the combined module emits
+ * their HTML, so no other Wasm loads.
+ */
+export function registerLanguages(langs: readonly Language[]): void {
+  const list = registeredLangs.slice();
+  for (const language of langs) {
+    // A loader can return a new object for the same lexer on each call, so
+    // compare the content.
+    if (
+      !list.some(
+        (old) =>
+          old === language ||
+          (old.name === language.name &&
+            old.wasm === language.wasm &&
+            JSON.stringify(old.aliases) === JSON.stringify(language.aliases))
+      )
+    )
+      list.push(language);
+  }
+  if (registered !== undefined && list.length === registeredLangs.length) {
+    return;
+  }
+  const compiled = list.map((language) => {
+    const { wasm } = language;
+    if (typeof wasm !== 'string') return wasm;
+    let compiledModule = lexerModules.get(language);
+    if (!(compiledModule instanceof WebAssembly.Module)) {
+      compiledModule = new WebAssembly.Module(wasmBytes(wasm));
+      lexerModules.set(language, compiledModule);
+    }
+    return compiledModule;
+  });
+  registered = buildHighlighter(assertWasmModule(), list, compiled, [], true);
+  registeredLangs = list;
+  registeredLexers = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const custom = WebAssembly.Module.exports(compiled[i]).some(
+      ({ name }) => name === 'saveState'
+    )
+      ? compiled[i]
+      : undefined;
+    for (const [alias, id] of Object.entries(list[i].aliases))
+      registeredLexers.set(alias.toLowerCase(), { module: custom, id });
+  }
 }
 
 /**
@@ -413,8 +948,14 @@ export function createHighlighter(
  */
 export function codeToHtml(
   input: string | Uint8Array | ArrayBuffer,
-  options: CodeToHtmlOptions
+  options: CodeToHtmlOptions<Theme | ThemeFamily, Lang | (string & {})>
 ): Uint8Array {
+  if (
+    registered !== undefined &&
+    registeredLexers.has(String(options.lang).toLowerCase())
+  ) {
+    return registered.codeToHtml(input, options);
+  }
   return assertShared(input).codeToHtml(input, options);
 }
 
@@ -425,8 +966,14 @@ export function codeToHtml(
  */
 export function codeToTokens(
   input: string | Uint8Array | ArrayBuffer,
-  options: CodeToTokensOptions
+  options: CodeToTokensOptions<Theme | ThemeFamily, Lang | (string & {})>
 ): TokensResult {
+  if (
+    registered !== undefined &&
+    registeredLexers.has(String(options.lang).toLowerCase())
+  ) {
+    return registered.codeToTokens(input, options);
+  }
   return assertShared(input).codeToTokens(input, options);
 }
 
@@ -452,8 +999,11 @@ export class StreamTokenizer extends TransformStream<
   #tail = '';
   #streamChar = 0;
   #streamStarted = false;
+  #pooled = true;
 
-  constructor(options: CodeToTokensOptions) {
+  constructor(
+    options: CodeToTokensOptions<Theme | ThemeFamily, Lang | (string & {})>
+  ) {
     const transformer = {
       transform: (
         chunk: Uint8Array,
@@ -475,15 +1025,45 @@ export class StreamTokenizer extends TransformStream<
 
     // validate the options before taking the pooled instance so a rejected
     // language or theme leaves the pool intact
+    const registered = registeredLexer(options.lang);
     this.#ansi = isAnsi(options.lang) ? new AnsiState() : undefined;
-    this.#langId = this.#ansi === undefined ? langIdOf(options.lang) : 0;
+    this.#langId =
+      registered?.id ?? (this.#ansi === undefined ? langIdOf(options.lang) : 0);
     this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
-    this.#hl =
-      pooledStreamHighlighter?.wasmModule === compiledWasm
-        ? pooledStreamHighlighter
-        : new HighlightsHighlighter(compiledWasm);
-    pooledStreamHighlighter = undefined;
+    if (registered?.module === undefined) {
+      this.#hl =
+        pooledStreamHighlighter?.wasmModule === compiledWasm
+          ? pooledStreamHighlighter
+          : new HighlightsHighlighter(compiledWasm);
+      pooledStreamHighlighter = undefined;
+    } else {
+      // The custom lexer keeps the stream state. The combined module only
+      // converts its records to line records, so it cannot go to the pool.
+      this.#pooled = false;
+      const lexer = new HighlightsHighlighter(registered.module);
+      const emitter = new HighlightsHighlighter(
+        compiledWasm,
+        (id, mode, length, reset) =>
+          emitter.writeRecords(
+            mode,
+            length,
+            lexer.tokenizeLineRecords(
+              id,
+              lexer.writeInput(
+                emitter.buffer.subarray(
+                  emitter.inputPtr,
+                  emitter.inputPtr + length
+                )
+              ),
+              reset
+            )
+          ),
+        {},
+        new Map()
+      );
+      this.#hl = emitter;
+    }
     this.#cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
     this.#maxLineLength = options.tokenizeMaxLineLength;
@@ -577,6 +1157,7 @@ export class StreamTokenizer extends TransformStream<
     if (hl == null) return;
     // Do not retain unusually large stream buffers in the single pool slot.
     if (
+      this.#pooled &&
       pooledStreamHighlighter == null &&
       hl.wasmModule === wasmModule &&
       hl.pageN <= 16

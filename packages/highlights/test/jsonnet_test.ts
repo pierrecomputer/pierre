@@ -166,9 +166,22 @@ test('jsonnet: strings, verbatim strings, text blocks, and comments', () => {
     '{\r\n  s: |||\r\n    one\r\n  |||,\r\n  t: 1,\r\n}\r\n',
     '{ a: \'one\ntwo\', b: @"x\n""y", /* c\nd */ e: 1 }\n',
     '{\n  f(a,\n    b):: a,\n  g: 1,\n}\n',
+    "{ p: @'a\nit''s\n''', q: 1 }\n",
   ]) {
     assertLineFedParity('jsonnet', code);
   }
+  // a doubled quote does not end a verbatim string, and backslash is literal
+  expect(tokenKinds('jsonnet', "{ p: @'it''s C:\\', q: 1 }")).toEqual([
+    ['{', 'punctuation.bracket'],
+    ['p', 'property'],
+    [':', 'punctuation.delimiter'],
+    ["@'it''s C:\\'", 'string'],
+    [',', 'punctuation.delimiter'],
+    ['q', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+  ]);
 });
 
 test('jsonnet: malformed and random input remains total, balanced and lossless', () => {

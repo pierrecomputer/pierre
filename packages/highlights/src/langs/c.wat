@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $cWordHl below; the C11 and C23
   ;; spellings sit alongside the classic keywords. `continue` is absent on
   ;; purpose: it shares every hash feature the table can use - first two
   ;; bytes, last byte, and length - with `alignof`, so $cWordHl matches it
   ;; with one exact eight-byte compare instead.
-  (keyword-table $cWords $mem.cWords $mem.c3Words
+  (keyword-table $cWords $mem.cWords $mem.cWords+192
     (group $Token.keyword.control ;; 1: control
       "do" "if" "for" "case" "else" "goto" "break" "while" "return" "switch" "default")
     (group $Token.keyword.declaration ;; 2: declaration
@@ -55,6 +59,117 @@
   (func $cIsOp (param $c i32) (result i32)
     (byteset.get "!#%&*+-/<=>?^|~" (local.get $c)))
 
+  ;; Return 1 with $ptr at a `/*` that the directive bytes [p,$ptr) leave open, 2 at a `//`.
+  (func $cDirectiveComment (param $p i32) (result i32)
+    (local $rhs i32)
+    (local $end i32)
+    (local $c i32)
+    (local $r i32)
+    (local.set $rhs (global.get $ptr))
+    (local.set $end (global.get $end))
+    (global.set $end (local.get $rhs))
+    (block $done
+      (loop $l
+        (local.set $p (call $lexFindEither (local.get $p) (i32.const "/") (i32.const 34)))
+        (br_if $done (i32.ge_u (local.get $p) (local.get $rhs)))
+        (local.set $c
+          (select
+            (i32.load8_u offset=1 (local.get $p))
+            (i32.const 0)
+            (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $rhs))))
+        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 34))
+          (then
+            (local.set $p
+              (i32.add
+                (call $lexFindByte (i32.add (local.get $p) (i32.const 1)) (i32.const 34))
+                (i32.const 1)))
+            (br $l)))
+        (local.set $r (i32.shl (i32.eq (local.get $c) (i32.const "/")) (i32.const 1)))
+        (br_if $done (local.get $r))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $l (i32.ne (local.get $c) (i32.const "*")))
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (call $scanBlockCommentEnd)
+        (if
+          (i32.or
+            (i32.lt_u (global.get $ptr) (i32.add (local.get $p) (i32.const 3)))
+            (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a)))
+          (then
+            (global.set $end (local.get $end))
+            (global.set $ptr (i32.sub (local.get $p) (i32.const 1)))
+            (return (i32.const 1))))
+        (local.set $p (global.get $ptr))
+        (br $l)))
+    (global.set $end (local.get $end))
+    (global.set $ptr (local.get $rhs))
+    (local.get $r))
+
+  ;; $skip is 0 at a chunk start that resumes a splice. Returns $hl+256 when the chunk ends in a splice.
+  (func $cLineComment (param $lhs i32) (param $hl i32) (param $skip i32) (result i32)
+    (loop $l
+      (if (local.get $skip)
+        (then
+          (if (i32.lt_u (global.get $ptr) (global.get $end))
+            (then
+              (global.set $ptr
+                (i32.add (global.get $ptr) (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 13))))
+              (global.set $ptr
+                (i32.add
+                  (global.get $ptr)
+                  (i32.and
+                    (i32.lt_u (global.get $ptr) (global.get $end))
+                    (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10)))))))
+          (if (i32.ge_u (global.get $ptr) (global.get $end))
+            (then
+              (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+              (return (i32.or (local.get $hl) (i32.const 256)))))))
+      (local.set $skip (i32.const 1))
+      (call $scanToLineEnd)
+      (br_if $l
+        (i32.and
+          (i32.gt_u (global.get $ptr) (local.get $lhs))
+          (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 92)))))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (i32.const 0))
+
+  (func $cLineCommentFrom (param $hl i32) (result i32)
+    (call $lexLineComment (i32.const 2) (local.get $hl))
+    (if (result i32)
+      (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 92))
+      (then (call $cLineComment (global.get $ptr) (local.get $hl) (i32.const 1)))
+      (else (i32.const 0))))
+
+  (func $cDirective (param $lhs i32)
+    (local $open i32)
+    (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+    (call $scanToLineEnd)
+    (local.set $open (call $cDirectiveComment (local.get $lhs)))
+    (if (i32.eqz (call $lexEmitIncludeDirective (local.get $lhs) (global.get $ptr)))
+      (then (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))))
+    (if (i32.eq (local.get $open) (i32.const 1))
+      (then (call $lexBlockComment (i32.const 2) (enum.get $Token.comment)))))
+
+  (func $cNumber
+    (local $c i32)
+    (call $lexScanHexNumber (i32.const 0))
+    (block $num
+      (loop $more
+        (br_if $num (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (i32.const 39))
+          (then
+            (br_if $num
+              (i32.eqz
+                (call $lexIsIdentContinue
+                  (select
+                    (i32.load8_u offset=1 (global.get $ptr))
+                    (i32.const 0)
+                    (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))))))
+          (else (br_if $num (i32.ne (local.get $c) (i32.const ".")))))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (call $lexScanNumberBody (i32.const 0))
+        (br $more))))
+
   (func $hlC
     (local $c i32)
     (local $c2 i32)
@@ -67,7 +182,15 @@
     ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
     (local $strCont i32)
     (call $lexEmitLeadingContinuation)
-    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
+    ;; 256 + token: a `//` comment spliced onto this line
+    (local.set $strCont
+      (if (result i32) (i32.ge_u (local.get $strCont) (i32.const 256))
+        (then
+          (call $cLineComment
+            (global.get $ptr)
+            (i32.and (local.get $strCont) (i32.const 255))
+            (i32.const 0)))
+        (else (call $lexCStringResume (local.get $strCont)))))
     (block $done
       (loop $next
         ;; whitespace gaps
@@ -92,14 +215,14 @@
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
           (then
-            (call $lexLineComment
-              (i32.const 2)
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.or
-                  (i32.eq (local.get $c3) (i32.const "/"))
-                  (i32.eq (local.get $c3) (i32.const "!")))))
+            (local.set $strCont
+              (call $cLineCommentFrom
+                (select
+                  (enum.get $Token.comment.doc)
+                  (enum.get $Token.comment)
+                  (i32.or
+                    (i32.eq (local.get $c3) (i32.const "/"))
+                    (i32.eq (local.get $c3) (i32.const "!"))))))
             (br $next)))
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
@@ -121,11 +244,7 @@
           (then
             (if (i32.eqz (call $lexLineByteBefore (local.get $lhs)))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $scanToLineEnd)
-                (if (i32.eqz (call $lexEmitIncludeDirective (local.get $lhs) (global.get $ptr)))
-                  (then
-                    (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))))
+                (call $cDirective (local.get $lhs))
                 (br $next)))))
 
         ;; strings and character literals
@@ -173,7 +292,7 @@
             (call $lexIsDigit (local.get $c))
             (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
-            (call $lexScanHexNumber (i32.const 0))
+            (call $cNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
 

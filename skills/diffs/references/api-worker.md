@@ -50,7 +50,7 @@ This reference lists every export from `@pierre/diffs/worker`, every public
 | `WorkerRenderingOptions`            | Defines the complete worker render settings.                      |
 | `WorkerStats`                       | Describes pool state, work counts, subscribers, and cache sizes.  |
 | `WorkerRequestId`                   | Identifies one worker request.                                    |
-| `ResolvedLanguage`                  | Holds a resolved language registration.                           |
+| `ResolvedLanguage`                  | Holds a resolved Shiki grammar or Highlights lexer.               |
 | `FileRendererInstance`              | Defines callbacks for a file render consumer.                     |
 | `DiffRendererInstance`              | Defines callbacks for a diff render consumer.                     |
 
@@ -96,8 +96,9 @@ Code webviews, without another bundling step. All backends are included in the
 download; only the selected backend is initialized. For lazy backend loading,
 use the regular worker entry with your bundler.
 
-The pool resolves themes and Shiki grammars on the main thread and sends them to
-the worker. Their catalogs are excluded from the portable script.
+The pool resolves themes, Shiki grammars, and Highlights lexers from
+`registerCustomLanguage` on the main thread and sends them to the worker. The
+theme and grammar catalogs are excluded from the portable script.
 
 A pool is optional. When one is supplied, highlighting goes through its workers
 for every backend. Highlights is often fast enough on the main thread to skip

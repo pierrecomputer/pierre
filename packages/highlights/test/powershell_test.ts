@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -646,5 +646,53 @@ void t.test(
       kinds.find(([text]) => text === 'NodeName'),
       ['NodeName', 'property']
     );
+  }
+);
+
+void t.test(
+  'powershell: nested subexpression strings, `a#b`, and enum members',
+  () => {
+    const code = '$n = "a $("b $(1) c") d"\n$x = 1\n';
+    assertLineFedParity('powershell', code);
+    assert.deepEqual(tokenKinds('powershell', code), [
+      ['$n', 'variable'],
+      ['=', 'operator'],
+      ['"a', 'string'],
+      ['$(', 'punctuation.special'],
+      ['"b', 'string'],
+      ['$(', 'punctuation.special'],
+      ['1', 'number'],
+      [')', 'punctuation.special'],
+      ['c"', 'string'],
+      [')', 'punctuation.special'],
+      ['d"', 'string'],
+      ['$x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+    ]);
+    assertLineFedParity(
+      'powershell',
+      '$a = "x $("y $((1) + "z $(2)")\n w") u"\n$b = 2\n'
+    );
+    assert.deepEqual(tokenKinds('powershell', 'Write-Host a#b # c\n'), [
+      ['Write-Host', 'function'],
+      ['a#b', null],
+      ['# c', 'comment'],
+    ]);
+    const members = 'enum Color { Red = 1; Green\n  Blue }\nGet-Item\n';
+    assertLineFedParity('powershell', members);
+    assert.deepEqual(tokenKinds('powershell', members), [
+      ['enum', 'keyword.declaration'],
+      ['Color', 'type'],
+      ['{', 'punctuation.bracket'],
+      ['Red', 'property'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+      ['Green', 'property'],
+      ['Blue', 'property'],
+      ['}', 'punctuation.bracket'],
+      ['Get-Item', 'function'],
+    ]);
   }
 );

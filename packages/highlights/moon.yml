@@ -23,8 +23,7 @@ tasks:
       - '!lib/languages.ts'
       - 'themes/index.ts'
       - 'themes/*.json'
-      - 'scripts/build.ts'
-      - '/packages/wat-tools/index.ts'
+      - 'scripts/**/*.ts'
       - 'tsdown.config.ts'
       - 'tsconfig.json'
     outputs:
@@ -43,15 +42,18 @@ tasks:
       persistent: true
       runInCI: 'skip'
 
-  # The suite compiles the wasm from the WAT sources itself and imports the
-  # glue straight from lib/, so it replaces the inherited deps and needs no
-  # build.
   # WARNING: most files compile the whole module in a setup hook, which can
   # pass Bun's 5 s default on a loaded CI runner.
   test:
     command: 'bun test --timeout 30000'
+    deps:
+      - 'build'
     options:
       merge: 'replace'
+
+  typecheck:
+    deps:
+      - 'build'
 
   prepublish:
     deps:
@@ -86,9 +88,11 @@ tasks:
 
   # Incremental LiveTokenizer benchmarks: eager indexing, cached reads, edit
   # latency versus the full-rebuild baseline, and retained-memory footprints.
-  # Compiles the WAT in-process, so it needs no build.
+  # Compiles the WAT in-process, so it needs only the wat-tools build.
   bench-live:
     command: 'bun ./benchmark/bench-live.ts'
+    deps:
+      - '^:build'
     options:
       cache: false
       runInCI: 'always'
@@ -96,6 +100,8 @@ tasks:
   # Compile in the parent; measure startup and highlighting in fresh processes.
   bench-memory:
     command: 'bun ./benchmark/bench-memory.ts'
+    deps:
+      - '^:build'
     options:
       cache: false
       runInCI: 'always'

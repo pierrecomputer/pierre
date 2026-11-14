@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cmakeWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $cmakeByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -9,7 +13,7 @@
   ;; Groups 4 and 5 are uppercase argument words matched exactly: the
   ;; operators of a condition and the boolean constants. Group order is the
   ;; dispatch order in $hlCmake.
-  (keyword-table $cmakeWords $mem.cmakeWords $mem.cppWords
+  (keyword-table $cmakeWords $mem.cmakeWords $mem.cmakeWords+256
     (group ;; 1: flow control
       "if" "elseif" "else" "endif" "foreach" "endforeach" "while" "endwhile" "break" "continue"
       "return" "function" "endfunction" "macro" "endmacro" "block" "endblock")
@@ -355,6 +359,25 @@
                       (i32.eq (local.get $g) (i32.const 2)))
                     (i32.eq (local.get $g) (i32.const 1)))))
               (else
+                (if
+                  (i32.and
+                    (i32.eq (call $cmakeByte (local.get $rhs)) (i32.const "{"))
+                    (i32.or
+                      (i32.and
+                        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))
+                        (i32.eq
+                          (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
+                          (i32.const "ENV")))
+                      (i32.and
+                        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+                        (i32.and
+                          (i32.eq (i32.load (local.get $lhs)) (i32.const "CACH"))
+                          (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "E"))))))
+                  (then
+                    (global.set $ptr (local.get $lhs))
+                    (call $cmakeReference)
+                    (local.set $setVar (i32.const 0))
+                    (br $next)))
                 (local.set $g (keyword-table.get $cmakeWords (local.get $lhs) (local.get $rhs)))
                 (local.set $hl
                   (select

@@ -1,5 +1,10 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.stylusWords 288)
+  (memory-region $mem.cssPseudo 128)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The preprocessor dialect the shared lexer runs as: 0 css, 1 less, 2
   ;; scss, 3 the indented sass syntax, 4 stylus, which is also indented. Set
@@ -209,6 +214,7 @@
     (local $colon i32) ;; first `:` seen: 1 before a blank or $end, 2 otherwise
     (local $stop i32)  ;; the current line end, also used by streamed calls
     (local $interp i32) ;; `#{` / `@{` interpolations still open
+    (local $from i32)   ;; less: 0 unknown, -1 no mixin head, else where to find its `)`
     (local $w v128)
     (local.set $p (global.get $ptr))
     ;; Live documents expose one line at a time. Whole-input decisions must
@@ -308,7 +314,38 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $scan)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "}")) (i32.eq (local.get $c) (i32.const ";")))
-          (then (return (i32.const 0))))
+          (then
+            ;; less `.m(@a; @b)`: $from is where the `)` search resumes, so each byte is searched once
+            (if
+              (i32.and
+                (i32.eq (global.get $cssDialect) (i32.const 1))
+                (i32.eq (local.get $c) (i32.const ";")))
+              (then
+                (if
+                  (i32.and
+                    (i32.eqz (local.get $from))
+                    (i32.or
+                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "."))
+                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "#"))))
+                  (then
+                    (local.set $from
+                      (call $scanFindSpecial (global.get $ptr) (local.get $p) (i32.const "(") (i32.const 0) (i32.const 0)))
+                    (if (i32.ge_u (local.get $from) (local.get $p))
+                      (then (local.set $from (i32.const -1))))))
+                (if
+                  (i32.and
+                    (i32.ne (local.get $from) (i32.const -1))
+                    (i32.ne (local.get $from) (i32.const 0)))
+                  (then
+                    (if
+                      (i32.ge_u
+                        (call $scanFindSpecial (local.get $from) (local.get $p) (i32.const ")") (i32.const 0) (i32.const 0))
+                        (local.get $p))
+                      (then
+                        (local.set $from (local.get $p))
+                        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                        (br $scan)))))))
+            (return (i32.const 0))))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
             ;; only the first colon shapes the chunk-end guess: `: ` opens a
@@ -408,13 +445,20 @@
         (br $scan)))
     (call $cssDecideAtEnd (local.get $depth) (local.get $colon) (local.get $stop)))
 
-  ;; Decide unfinished statements from this line's shape. A bare name with
-  ;; a colon inside a block is a declaration even without a following space;
-  ;; selector prefixes and comma lists keep their selector role. Without a
-  ;; colon, leave the selector open for a brace on a later line.
+  (keyword-table $cssPseudo $mem.cssPseudo $mem.cssPseudo+128
+    (group "hover" "focus" "focus-visible" "focus-within" "active" "visited" "link"
+      "first-child" "last-child" "only-child" "nth-child" "nth-of-type" "nth-last-child"
+      "first-of-type" "last-of-type" "not" "is" "where" "has" "checked" "disabled" "enabled"
+      "empty" "root" "target" "before" "after" "placeholder" "selection"
+      "host" "read-only" "required" "invalid" "indeterminate"))
+
+  ;; Decide unfinished statements from this line's shape. Inside a block, `name:x`
+  ;; is a selector only when `x` is in $cssPseudo or `::` follows, else a declaration.
+  ;; Without a colon, leave the selector open for a brace on a later line.
   (func $cssDecideAtEnd (param $depth i32) (param $colon i32) (param $stop i32) (result i32)
     (local $p i32)
     (local $c i32)
+    (local $q i32)
     (if (i32.eqz (local.get $colon))
       (then (return (i32.const 1))))
     (if (i32.eq (local.get $colon) (i32.const 1))
@@ -445,14 +489,26 @@
         (br $space)))
     (if (i32.ne (i32.load8_u (local.get $p)) (i32.const ":"))
       (then (return (i32.const 1))))
-    ;; A comma before any function argument list continues a selector list.
-    (i32.lt_u
-      (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const ",") (i32.const 0) (i32.const 0))
-      (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const "(") (i32.const 0) (i32.const 0))))
+    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+    (if (i32.eq (i32.load8_u (local.get $p)) (i32.const ":"))
+      (then (return (i32.const 1))))
+    (local.set $q (local.get $p))
+    (block $name
+      (loop $pseudo
+        (br_if $name (i32.ge_u (local.get $q) (local.get $stop)))
+        (local.set $c (i32.load8_u (local.get $q)))
+        (br_if $name
+          (i32.eqz
+            (i32.or
+              (i32.le_u (i32.sub (local.get $c) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "-")))))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (br $pseudo)))
+    (i32.ne (keyword-table.get $cssPseudo (local.get $p) (local.get $q)) (i32.const 0)))
 
   ;; Stylus words. +256 marks property names without a `-`, which may drop
   ;; their colon (`margin 0 auto`); dashed names need no entry.
-  (keyword-table $stylusWords $mem.stylusWords $mem.luauWords
+  (keyword-table $stylusWords $mem.stylusWords $mem.stylusWords+288
     (group $Token.keyword.control "if" "else" "unless" "for" "return")
     (group $Token.keyword.operator "in" "and" "or" "not" "is" "isnt")
     (group $Token.boolean "true" "false")
@@ -580,7 +636,7 @@
     (local $depth i32)  ;; `{` blocks still open, for the chunk-end decider
     (local $interp i32) ;; braces open inside a `#{}` or `@{}` interpolation
     (local $interpMode i32) ;; the mode to restore when it closes
-    (local $fnPrelude i32) ;; the prelude names a mixin or function next
+    (local $fnPrelude i32) ;; the prelude names a mixin or function next; in selector mode, the open `(` count
     (local $sassDepth i32) ;; the indented syntax: 1 when the statement is indented
     (local $urlMask i32)
     (local $urlRem i32)
@@ -770,7 +826,16 @@
                         (i64.eq
                           (i64.and (i64.load (local.get $lhs)) (i64.const 0x00ffffffffffffff))
                           (i64.const "@extend")))
-                      (then (local.set $mode (i32.const 0))))))
+                      (then (local.set $mode (i32.const 0))))
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $mid) (i32.const 8))
+                        (i64.eq (i64.load (local.get $lhs)) (i64.const "@at-root")))
+                      (then
+                        (local.set $mode
+                          (i32.and
+                            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                            (i32.eq (i32.load16_u (global.get $ptr)) (i32.const " ("))))))))
                 (call $emitTok (enum.get $Token.keyword) (local.get $lhs) (global.get $ptr))
                 (br $next))
               ;; the look-ahead runs at every statement start, nested or not, so
@@ -919,7 +984,8 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const ";"))
           (then
-            (local.set $decide (i32.const 1))
+            (local.set $decide
+              (select (i32.eqz (local.get $fnPrelude)) (i32.const 1) (i32.eqz (local.get $mode))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
               (enum.get $Token.punctuation.delimiter)
@@ -931,6 +997,19 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (local.set $p (call $cssString (local.get $c) (i32.const 1)))
+            (if (i32.eq (local.get $attr) (i32.const 2))
+              (then
+                (local.set $mid (call $lexSkipSpaceAt (global.get $ptr)))
+                (if
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $mid) (i32.const 1)) (global.get $end))
+                    (i32.or
+                      (i32.eq (i32.or (i32.load16_u (local.get $mid)) (i32.const 0x20)) (i32.const "i]"))
+                      (i32.eq (i32.or (i32.load16_u (local.get $mid)) (i32.const 0x20)) (i32.const "s]"))))
+                  (then
+                    (call $emitGap (global.get $ptr) (local.get $mid))
+                    (global.set $ptr (i32.add (local.get $mid) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.keyword) (local.get $mid) (global.get $ptr))))))
             (if (i32.and (i32.ne (local.get $state) (i32.const 0)) (local.get $p))
               (then
                 (local.set $span
@@ -975,6 +1054,7 @@
                         (enum.get $Token.keyword.operator)
                         (local.get $lhs)
                         (global.get $ptr))
+                      (local.set $mode (i32.const 3))
                       (br $next)))
                   (call $emitTok
                     (select
@@ -1069,6 +1149,12 @@
                   (i32.eq (local.get $c) (i32.const "("))
                   (i32.eq (local.get $c) (i32.const ")")))
                 (then
+                  ;; a less `.m(@a; @b)` parameter `;` must end no statement
+                  (local.set $fnPrelude
+                    (select
+                      (i32.add (local.get $fnPrelude) (i32.const 1))
+                      (i32.sub (local.get $fnPrelude) (i32.ne (local.get $fnPrelude) (i32.const 0)))
+                      (i32.eq (local.get $c) (i32.const "("))))
                   (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                   (call $emitTok
                     (enum.get $Token.punctuation.bracket)

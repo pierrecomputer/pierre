@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.scalaWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $scalaWordHl below.
-  (keyword-table $scalaWords $mem.scalaWords $mem.solidityWords
+  (keyword-table $scalaWords $mem.scalaWords $mem.scalaWords+224
     (group $Token.keyword.control ;; 1: control
       "if" "else" "then" "match" "case" "do" "while" "for" "yield" "return" "throw" "try" "catch"
       "finally" "end")
@@ -239,13 +243,28 @@
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (if (i32.eq (local.get $c2) (i32.const 92))
-              (then (local.set $e (call $lexEscapeEnd (i32.add (global.get $ptr) (i32.const 1)))))
+              (then
+                (local.set $e (call $lexEscapeEnd (i32.add (global.get $ptr) (i32.const 1))))
+                (if (i32.eq (local.get $c3) (i32.const "u"))
+                  (then
+                    (block $hexDone
+                      (loop $hex
+                        (local.set $c3 (call $templateByte (local.get $e)))
+                        (br_if $hexDone
+                          (i32.eqz
+                            (i32.or
+                              (i32.eq (local.get $c3) (i32.const "u"))
+                              (call $lexIsHex (local.get $c3)))))
+                        (local.set $e (i32.add (local.get $e) (i32.const 1)))
+                        (br $hex))))))
               (else
                 (local.set $e
                   (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))))
             (if
               (i32.and
-                (i32.gt_u (local.get $c2) (i32.const 0))
+                (i32.and
+                  (i32.gt_u (local.get $c2) (i32.const 0))
+                  (i32.and (i32.ne (local.get $c2) (i32.const 10)) (i32.ne (local.get $c2) (i32.const 13))))
                 (i32.eq (call $templateByte (local.get $e)) (i32.const 39)))
               (then
                 (global.set $ptr (i32.add (local.get $e) (i32.const 1)))

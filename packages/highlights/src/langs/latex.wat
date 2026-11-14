@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.latexWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each group value is a token plus a kind in bits 8 and up. Kinds 0-3 are
   ;; commands highlighted as function, keyword, keyword.import, or
@@ -7,7 +11,7 @@
   ;; `{...}` argument. Kind 4 is `\begin`/`\end`, 5 is `\verb`. Kinds 6 and up
   ;; name environments: 6 math, 7-11 verbatim-like, whose token highlights
   ;; the body.
-  (keyword-table $latexWords $mem.latexWords $mem.lispWords
+  (keyword-table $latexWords $mem.latexWords $mem.latexWords+288
     (group $Token.title+256
       "part" "chapter" "section" "subsection" "subsubsection" "paragraph" "subparagraph"
       "title" "author")
@@ -204,8 +208,8 @@
                   (local.set $outerDepth (i32.const 0))))
               (if (local.get $depth)
                 (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
-              (local.set $pend (i32.const 0))
-              (local.set $pendOpt (i32.const 0))
+              ;; a group inside a pending command's `[...]` keeps it pending
+              (local.set $pend (i32.mul (local.get $pend) (local.get $pendOpt)))
               (br $bracket))
             (case "["
               (local.set $pendOpt (i32.ne (local.get $pend) (i32.const 0)))

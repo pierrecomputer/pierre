@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.graphqlWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each value is the token in the low byte and, above it, the $expect
   ;; capture the word primes for the next name. The keyword groups are
   ;; contextual: `type`, `on`, or `input` is also an ordinary field name,
   ;; so they count as keywords only when a name, brace, directive, paren,
   ;; or `&` follows on the same line.
-  (keyword-table $graphqlWords $mem.graphqlWords $mem.groqWords
+  (keyword-table $graphqlWords $mem.graphqlWords $mem.graphqlWords+96
     (group $Token.keyword+256 ;; definitions, next name is a type
       "type" "interface" "union" "enum" "input" "scalar" "on" "implements")
     (group $Token.keyword+512 ;; operations, next name is an operation or fragment
@@ -54,7 +58,8 @@
 
   ;; $expect names the capture of the next name: 1 type, 2 operation or
   ;; fragment definition, 3 fragment spread. $paren counts open parens, where
-  ;; `name:` is an argument rather than a field. Both are checkpointed.
+  ;; `name:` is an argument rather than a field, in its low 16 bits and open
+  ;; braces above them. Both are checkpointed.
   (func $hlGraphql
     (local $c i32)
     (local $c2 i32)
@@ -148,6 +153,11 @@
                           (i32.eq (local.get $c3) (i32.const "@"))
                           (i32.eq (local.get $c3) (i32.const "(")))
                         (i32.eq (local.get $c3) (i32.const "&")))))
+                  (then (local.set $g (i32.const -1))))
+                (if
+                  (i32.and
+                    (i32.gt_u (local.get $paren) (i32.const 0xffff))
+                    (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2)))
                   (then (local.set $g (i32.const -1))))))
             (if (i32.ge_s (local.get $g) (i32.const 0))
               (then
@@ -181,7 +191,7 @@
                         (local.set $hl (enum.get $Token.property))
                         (if (i32.eq (local.get $c3) (i32.const ":"))
                           (then
-                            (if (local.get $paren)
+                            (if (i32.and (local.get $paren) (i32.const 0xffff))
                               (then (local.set $hl (enum.get $Token.variable.parameter)))))
                           (else
                             (if (i32.eq (local.get $c3) (i32.const "("))
@@ -204,13 +214,23 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (if (i32.eq (local.get $c) (i32.const "("))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "("))
+                (i32.ne (i32.and (local.get $paren) (i32.const 0xffff)) (i32.const 0xffff)))
               (then (local.set $paren (i32.add (local.get $paren) (i32.const 1)))))
             (if
               (i32.and
                 (i32.eq (local.get $c) (i32.const ")"))
-                (i32.gt_u (local.get $paren) (i32.const 0)))
+                (i32.and (local.get $paren) (i32.const 0xffff)))
               (then (local.set $paren (i32.sub (local.get $paren) (i32.const 1)))))
+            (if (i32.eq (local.get $c) (i32.const "{"))
+              (then (local.set $paren (i32.add (local.get $paren) (i32.const 0x10000)))))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "}"))
+                (i32.gt_u (local.get $paren) (i32.const 0xffff)))
+              (then (local.set $paren (i32.sub (local.get $paren) (i32.const 0x10000)))))
             (local.set $expect (i32.const 0))
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ":")))

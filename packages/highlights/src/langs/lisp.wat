@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.lispWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $lispByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -9,7 +13,7 @@
   ;; `set!`. `declare` shares its hash features with `deftype` and stays out,
   ;; as do `defconst` and `defrecord`, which share slot bits with `defsubst`
   ;; and `defmethod` in every geometry that fits the range.
-  (keyword-table $lispWords $mem.lispWords $mem.luaWords
+  (keyword-table $lispWords $mem.lispWords $mem.lispWords+320
     (group $Token.keyword.declaration+256 ;; definitions, next name is a function
       "defun" "defmacro" "defmethod" "defgeneric" "define" "define-syntax" "define-macro"
       "defsubst")
@@ -78,6 +82,83 @@
         (br_if $done (call $lispIsDelim (i32.load8_u (global.get $ptr))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
+
+  ;; $dc: bit 0 while active, bit 1 inside a string, list depth from bit 2;
+  ;; 1 waits for the datum. Returns the state at $end, or 0 once the datum ends.
+  (func $lispDatumComment (param $lhs i32) (param $dc i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.and (local.get $dc) (i32.const 2))
+          (then
+            (global.set $ptr
+              (call $scanFindSpecial (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 0)))
+            (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+            (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 92))
+              (then
+                (global.set $ptr
+                  (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
+                (br $l)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $dc (i32.and (local.get $dc) (i32.const -3)))
+            (br_if $l (i32.ne (local.get $dc) (i32.const 1)))
+            (local.set $dc (i32.const 0))
+            (br $done)))
+        (if (i32.le_u (local.get $c) (i32.const 32))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br $l)))
+        (if (i32.eq (local.get $c) (i32.const ";"))
+          (then
+            (call $scanToLineEnd)
+            (br $l)))
+        (if (i32.eq (local.get $c) (i32.const 34))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $dc (i32.or (local.get $dc) (i32.const 2)))
+            (br $l)))
+        (if (byteset.get "()[]{}" (local.get $c))
+          (then
+            (if
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "("))
+                (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "{"))))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $dc (i32.add (local.get $dc) (i32.const 4)))
+                (br $l)))
+            (if (i32.ne (local.get $dc) (i32.const 1))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $dc (i32.sub (local.get $dc) (i32.const 4)))
+                (br_if $l (i32.ne (local.get $dc) (i32.const 1)))))
+            (local.set $dc (i32.const 0))
+            (br $done)))
+        (if
+          (i32.or
+            (i32.or
+              (i32.eq (local.get $c) (i32.const 39))
+              (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const ","))))
+            (i32.and
+              (i32.eq (local.get $c) (i32.const "#"))
+              (i32.eq (call $lispByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "("))))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br $l)))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "#"))
+            (i32.eq (call $lispByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 92)))
+          (then
+            (global.set $ptr
+              (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 3)) (global.get $end)))))
+        (call $lispScanSymbol)
+        (br_if $l (i32.ne (local.get $dc) (i32.const 1)))
+        (local.set $dc (i32.const 0))))
+    (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
+    (local.get $dc))
 
   ;; whether $c is an exponent marker: `e`, or Common Lisp's `s`, `f`, `d`,
   ;; and `l` precision markers (`1.5d0`), in either case
@@ -255,7 +336,8 @@
   ;; $expect is the pending next-name capture from a definition form (bit 2
   ;; marks a `defun`-style definer, whose name is followed by a parameter
   ;; list), and $bl is the binding-list state described above, including
-  ;; the form-head bit. Both are checkpointed.
+  ;; the form-head bit; $dc is the $lispDatumComment state of a `#;` datum
+  ;; still open at a chunk end. All are checkpointed.
   (func $hlLisp
     (local $c i32)
     (local $c2 i32)
@@ -267,7 +349,10 @@
     (local $expect i32)
     (local $bl i32)
     (local $arm i32)
+    (local $dc i32)
     (call $lexEmitLeadingContinuation)
+    (if (local.get $dc)
+      (then (local.set $dc (call $lispDatumComment (global.get $ptr) (local.get $dc)))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -348,6 +433,11 @@
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (if (i32.eq (local.get $c2) (i32.const ";"))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
+                (local.set $dc (call $lispDatumComment (local.get $lhs) (i32.const 1)))
+                (br $next)))
             (if (i32.eq (local.get $c2) (i32.const 92))
               (then
                 ;; `#\a`, `#\Space`, `#\(`: one character or a name. A line
@@ -468,6 +558,19 @@
 
         ;; a symbol: keyword, number, definition name, operator, or plain
         (local.set $arm (i32.const 0))
+        (if (i32.eq (local.get $c) (i32.const "|"))
+          (then
+            (local.set $rhs
+              (call $scanFindSpecial
+                (i32.add (local.get $lhs) (i32.const 1))
+                (global.get $end)
+                (i32.const "|")
+                (i32.const 0)
+                (i32.const 1)))
+            (if (i32.eq (call $lispByte (local.get $rhs)) (i32.const "|"))
+              (then
+                (global.set $ptr (i32.add (local.get $rhs) (i32.const 1)))
+                (local.set $c (i32.const "a"))))))
         (call $lispScanSymbol)
         (if (i32.eq (global.get $ptr) (local.get $lhs))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -491,11 +594,14 @@
                               (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3)))
                             ;; `defun`-style definers, unlike Scheme's
                             ;; `define`, take a parameter list after the name
-                            (if
-                              (i32.and
-                                (i32.eq (local.get $expect) (i32.const 1))
-                                (i32.ne (i32.load8_u offset=3 (local.get $lhs)) (i32.const "i")))
-                              (then (local.set $expect (i32.const 5))))
+                            (if (i32.eq (local.get $expect) (i32.const 1))
+                              (then
+                                (if (i32.ne (i32.load8_u offset=3 (local.get $lhs)) (i32.const "i"))
+                                  (then (local.set $expect (i32.const 5)))
+                                  (else
+                                    ;; bit 3: a bare name after `define` is a variable
+                                    (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 6))
+                                      (then (local.set $expect (i32.const 9))))))))
                             (local.set $arm (i32.shr_u (local.get $kind) (i32.const 10))))))
                       (else
                         ;; a name a binding list introduces comes first
@@ -514,6 +620,11 @@
                                       (enum.get $Token.type)
                                       (i32.eq (i32.and (local.get $expect) (i32.const 3)) (i32.const 2)))
                                     (i32.eq (i32.and (local.get $expect) (i32.const 3)) (i32.const 1))))
+                                (if
+                                  (i32.and
+                                    (i32.ne (i32.and (local.get $expect) (i32.const 8)) (i32.const 0))
+                                    (i32.eqz (i32.and (local.get $bl) (i32.const 128))))
+                                  (then (local.set $hl (enum.get $Token.variable))))
                                 (if
                                   (i32.and
                                     (i32.ne (i32.and (local.get $expect) (i32.const 4)) (i32.const 0))
