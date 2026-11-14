@@ -9,6 +9,10 @@ import { isUserScrollInput } from '../utils/isUserScrollInput';
 
 interface SubscribedInstance {
   onRender(dirty: boolean): boolean;
+  flushManagers(): void;
+  measureSemanticConnectors?(): void;
+  drawSemanticConnectors?(): void;
+  __emitPostRender(): void;
   reconcileHeights(): boolean;
   setVisibility(visible: boolean): void;
 }
@@ -453,11 +457,23 @@ export class Virtualizer {
       }
     }
 
+    // The renders above only wrote rows. Set up every instance's managers,
+    // then measure every diff's connectors before any of them is drawn.
+    for (const instance of updatedInstances) {
+      instance.flushManagers();
+    }
+    for (const instance of updatedInstances) {
+      instance.measureSemanticConnectors?.();
+    }
+
     this.scrollFix(anchor);
 
     for (const instance of updatedInstances) {
       this.reconcileQueue.delete(instance);
       instance.reconcileHeights();
+    }
+    for (const instance of updatedInstances) {
+      instance.drawSemanticConnectors?.();
     }
     // Reconcile externally-rendered instances that may have new heights
     for (const instance of this.reconcileQueue) {
@@ -480,8 +496,13 @@ export class Virtualizer {
     if (instancesHaveChanged || wrapperDirty) {
       queueRender(this.computeRenderRangeAndEmit);
     }
-    updatedInstances.clear();
     this.instancesChanged.clear();
+    // Last, so onPostRender sees the finished DOM, and an instance a callback
+    // changes is kept for the next pass.
+    for (const instance of updatedInstances) {
+      instance.__emitPostRender();
+    }
+    updatedInstances.clear();
   };
 
   private scrollFix(anchor: ScrollAnchor | undefined) {

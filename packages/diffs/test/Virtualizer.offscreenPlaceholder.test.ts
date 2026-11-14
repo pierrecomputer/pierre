@@ -99,6 +99,7 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
   });
 
   const virtualizer = new Virtualizer();
+  const postRenderPhases: string[] = [];
   const options = {
     disableFileHeader: true,
     useTokenTransformer: true,
@@ -107,27 +108,8 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
       node.textContent = annotation.metadata;
       return node;
     },
-    // jsdom cannot measure rows or slotted annotations. Supply their geometry
-    // after each content render using the current line height and 12px notes.
-    onPostRender: (node: HTMLElement) => {
-      for (const row of node.shadowRoot?.querySelectorAll<HTMLElement>(
-        '[data-line], [data-line-annotation]'
-      ) ?? []) {
-        const height = row.hasAttribute('data-line') ? metrics.lineHeight : 12;
-        row.getBoundingClientRect = () => ({
-          top: 0,
-          bottom: height,
-          left: 0,
-          right: 1_000,
-          width: 1_000,
-          height,
-          x: 0,
-          y: 0,
-          toJSON() {
-            return {};
-          },
-        });
-      }
+    onPostRender: (_node: HTMLElement, _instance: unknown, phase: string) => {
+      postRenderPhases.push(phase);
     },
   };
   let metrics = {
@@ -135,6 +117,29 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
     lineHeight: 20,
     paddingTop: 0,
     paddingBottom: 0,
+  };
+  // jsdom cannot measure rows or slotted annotations. Supply their geometry
+  // using the current line height and 12px notes.
+  const { getBoundingClientRect } = Element.prototype;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    const isLine = this.hasAttribute('data-line');
+    if (!isLine && !this.hasAttribute('data-line-annotation')) {
+      return getBoundingClientRect.call(this);
+    }
+    const height = isLine ? metrics.lineHeight : 12;
+    return {
+      top: 0,
+      bottom: height,
+      left: 0,
+      right: 1_000,
+      width: 1_000,
+      height,
+      x: 0,
+      y: 0,
+      toJSON() {
+        return {};
+      },
+    };
   };
   let layoutOptions: { collapsed?: boolean; diffStyle?: 'split' | 'unified' } =
     {};
@@ -197,6 +202,7 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
     },
     consoleError,
     placeholderHeight,
+    postRenderPhases,
     render,
     expectHidden,
     mount() {
@@ -347,6 +353,20 @@ describe.each(['file', 'diff'] as const)(
       fixture.expectHidden(60);
       await fixture.show('third');
       expect(fixture.instance.height).toBe(60);
+    });
+
+    test('reports a placeholder as unmounted', async () => {
+      fixture.expectHidden(60);
+      fixture.setLineHeight(30);
+      fixture.expectHidden(90);
+      expect(fixture.postRenderPhases).toEqual([]);
+      await fixture.show('first');
+      expect(fixture.postRenderPhases).toEqual(['mount']);
+      fixture.hide();
+      fixture.expectHidden(90);
+      expect(fixture.postRenderPhases).toEqual(['mount', 'unmount']);
+      await fixture.show('first');
+      expect(fixture.postRenderPhases).toEqual(['mount', 'unmount', 'mount']);
     });
 
     test('accepts replacement content while hidden and displays it on entry', async () => {

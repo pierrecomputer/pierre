@@ -441,7 +441,7 @@ export class VirtualizedFile<
     if (dirty) {
       this.top = this.getVirtualizedTop();
     }
-    return this.render({ file });
+    return this.render({ file, deferManagers: true });
   };
 
   // CodeView positions every item before updating the DOM. Recalculate this
