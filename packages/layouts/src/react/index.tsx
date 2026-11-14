@@ -59,9 +59,9 @@ import {
 } from '../dom/tab-drag';
 import { dropTarget, paneAt, type TabDropTarget, tabDropTarget } from '../drop';
 import { dragSizes, keySizes } from '../gestures';
+import type { LayoutStore } from '../layout-store';
 import { findNode, getPanes, shownPanes, stackOf } from '../model';
 import { tabBoundaryAt, tabInsertIndex, tabMoveIndex } from '../stacks-model';
-import type { LayoutStore } from '../store';
 import type {
   ChildSize,
   Edge,

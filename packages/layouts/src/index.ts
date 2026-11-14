@@ -4,8 +4,10 @@ export {
   cssCorners,
   pixelCorners,
 } from './corners';
+export { type EditCommands, edits } from './edits';
 export { swapPanes } from './edits-model';
 export { computeLayout } from './geometry';
+export { LayoutStore, type LayoutStoreOptions } from './layout-store';
 export {
   getPanes,
   hasVisiblePane,
@@ -19,7 +21,14 @@ export {
 export { binaryTree } from './models/binary';
 export { naryTree } from './models/n-ary';
 export { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
-export { LayoutStore, type LayoutStoreOptions } from './store';
+export {
+  type CommandsOf,
+  type CoreLayoutStore,
+  createLayoutStore,
+  type StoreContext,
+  type StoreFeature,
+  type StoreWith,
+} from './store';
 export type {
   ChildExtent,
   ChildSize,

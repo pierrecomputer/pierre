@@ -363,6 +363,30 @@ model joins a split into a parent of the same direction, and the binary model
 nests the children after the first in new splits. A pane keeps its node, so its
 content does not render again.
 
+### Stores with features
+
+`createLayoutStore(root, features)` creates a store whose other commands come
+from its features. Without features, the store has the core commands only:
+`getSnapshot`, `subscribe`, `setRoot`, `setSizes`, `setCollapsed`, and
+`focusPane`, and it keeps the shape of each tree that it receives.
+`edits(model)` adds `split`, `close`, `move`, and `swap`, and gives the store
+its tree model. A bundler keeps only the features that an app imports, so a
+store with no tree edits loads no tree model.
+
+```ts
+import { createLayoutStore, edits, naryTree } from '@pierre/layouts';
+
+const store = createLayoutStore(root, [edits(naryTree)]);
+store.split('editor', { type: 'pane', id: 'terminal' }, 'bottom');
+```
+
+A view calls each command through the store object, so an app wraps a command
+with an object of its own:
+`{ ...store, close(id) { record(id); store.close(id); } }`. A feature is a
+`StoreFeature`: an optional tree model, and a function that builds its commands
+from the `StoreContext` of the store. `LayoutStore` is the store of the `Layout`
+component: a class with every command, over `createLayoutStore`.
+
 Subscribe with `store.subscribe(listener)` and read with `store.getSnapshot()`.
 Snapshots are immutable. Invalid tree updates throw before changing state.
 Closing the final pane does nothing; closing a focused or zoomed pane repairs

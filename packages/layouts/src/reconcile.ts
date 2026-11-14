@@ -1,6 +1,6 @@
+import { LayoutStore } from './layout-store';
 import { getPanes } from './model';
 import { naryTree } from './models/n-ary';
-import { LayoutStore } from './store';
 import type { LayoutNode, PaneNode, TreeModel } from './types';
 import { groupsOf } from './view';
 

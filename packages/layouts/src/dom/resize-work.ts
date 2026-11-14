@@ -1,6 +1,6 @@
 import { separatorOffset } from '../gestures';
 import { getPanes } from '../model';
-import type { LayoutStore } from '../store';
+import type { CoreLayoutStore } from '../store';
 import type { ChildSize, SeparatorGeometry } from '../types';
 import { paneHosts } from './panes';
 
@@ -38,7 +38,7 @@ export interface ResizeWork {
  * strategy of the gesture. The state lives in this closure, so that a
  * minifier can shorten its names.
  */
-export function createResizeWork(store: LayoutStore): ResizeWork {
+export function createResizeWork(store: CoreLayoutStore): ResizeWork {
   let strategy: ResizeStrategy = 'live';
   let root: HTMLElement | null = null;
   let frame: number | null = null;

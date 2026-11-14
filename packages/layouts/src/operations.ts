@@ -1,6 +1,6 @@
+import { LayoutStore } from './layout-store';
 import { findNode, getPanes, parentOf, stackOf } from './model';
 import { naryTree } from './models/n-ary';
-import { LayoutStore } from './store';
 import type {
   ChildSize,
   Edge,
