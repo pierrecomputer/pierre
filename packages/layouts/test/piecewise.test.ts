@@ -15,6 +15,7 @@ import {
   toCSS,
 } from '../src/piecewise';
 import type { LayoutNode, PaneNode } from '../src/types';
+import { evaluateCSS } from './evaluate-css';
 
 // A small seeded generator, so that a failure repeats.
 function random(seed: number): () => number {
@@ -83,9 +84,12 @@ function richTree(
     };
   };
   if (panes === 1) {
+    // Some collapsed panes keep the default collapsed size of 0 px.
     const collapse =
       next() < 0.15
-        ? { collapsed: true, collapsedSize: Math.round(next() * 60) }
+        ? next() < 0.4
+          ? { collapsed: true }
+          : { collapsed: true, collapsedSize: Math.round(next() * 60) }
         : {};
     if (next() < 0.25) {
       const tabs = Array.from({ length: 2 + Math.floor(next() * 2) }, leaf);
@@ -116,29 +120,6 @@ function richTree(
     ),
     children: counts.map((childPanes) => richTree(next, childPanes, ids)),
   };
-}
-
-/** Evaluate a value that `toCSS` wrote, for a container size in pixels. */
-function evaluateCSS(value: string, containerSize: number): number {
-  const terms = (value.startsWith('calc(') ? value.slice(5, -1) : value).split(
-    ' + '
-  );
-  let total = 0;
-  for (const term of terms) {
-    const hinge =
-      /^(?:(-?[\d.e-]+) \* )?max\(0px, 100cq[wh] - (-?[\d.e-]+)px\)$/.exec(
-        term
-      );
-    const linear = /^(-?[\d.e-]+) \* 100cq[wh]$/.exec(term);
-    if (hinge !== null)
-      total +=
-        Number(hinge[1] ?? 1) * Math.max(0, containerSize - Number(hinge[2]));
-    else if (linear !== null) total += Number(linear[1]) * containerSize;
-    else if (/^100cq[wh]$/.test(term)) total += containerSize;
-    else if (term.endsWith('px')) total += Number(term.slice(0, -2));
-    else throw new Error(`Unknown term: ${term}`);
-  }
-  return total;
 }
 
 describe('piecewise', () => {

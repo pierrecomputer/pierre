@@ -42,8 +42,9 @@ export interface ChildSpec {
  *    no empty space.
  *
  * When no child shares the space, the children with `px` share it by their
- * sizes. Each result is a continuous piecewise-linear function of A, so that
- * the CSS compiler can write it for every container size.
+ * sizes, or in equal parts when every size is 0. Each result is a continuous
+ * piecewise-linear function of A, so that the CSS compiler can write it for
+ * every container size.
  */
 export function divide(specs: readonly ChildSpec[]): Piecewise[] {
   const space = size();
@@ -107,6 +108,10 @@ const clampPx = (spec: ChildSpec): number =>
  * in proportion to its minimum. Above the sum of the maximums, each child
  * grows by its share. The result is piecewise linear in T, with a knot where
  * a child reaches its minimum or its maximum.
+ *
+ * When every weight is 0, the children get equal shares. A collapsed child of
+ * 0 px is a child with `px: 0`, so the children with `px` of a split can have
+ * no weight at all; a share of 0 / 0 would make every size NaN.
  */
 function waterFill(
   weights: readonly number[],
@@ -114,7 +119,9 @@ function waterFill(
   maxs: readonly number[]
 ): Piecewise[] {
   const total = weights.reduce((sum, weight) => sum + weight, 0);
-  const shares = weights.map((weight) => weight / total);
+  const shares = weights.map((weight) =>
+    total > 0 ? weight / total : 1 / weights.length
+  );
   const upper = maxs.map((value, index) => Math.max(value, mins[index]));
   const minimum = mins.reduce((sum, value) => sum + value, 0);
   const sizesAt = (lambda: number): number[] =>

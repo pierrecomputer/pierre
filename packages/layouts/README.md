@@ -226,10 +226,12 @@ zooms its stack, and a change of tab keeps the zoom.
 split, 0 px by default, for example the 38 px of its header and borders. Its
 content keeps its DOM, its state, and its scroll position, but is inert and has
 `content-visibility: hidden`, so it does not render. The pane keeps its size in
-the split, and `store.setCollapsed(id, false)` gives it back. A pane of a stack
-collapses its stack. The pane at the root fills the layout, so it does not
-collapse. The collapsed state is part of the node, so `serialize()` keeps it. A
-collapsed pane host has `data-collapsed="true"` and receives
+the split, and `store.setCollapsed(id, false)` gives it back. The other children
+of the split share the rest of its space, whatever the place of the collapsed
+pane; when every child of a split is collapsed, they share it in equal parts. A
+pane of a stack collapses its stack. The pane at the root fills the layout, so
+it does not collapse. The collapsed state is part of the node, so `serialize()`
+keeps it. A collapsed pane host has `data-collapsed="true"` and receives
 `PANE_VISIBILITY_EVENT`. The `collapse` pane action adds a collapse button to
 the header; it is not in the default actions.
 

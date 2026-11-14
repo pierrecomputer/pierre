@@ -5,6 +5,7 @@ import {
   type ChildSize,
   computeCSSLayout,
   computeLayout,
+  type Direction,
   fromBinaryLayout,
   getExitEdge,
   getPanes,
@@ -14,11 +15,13 @@ import {
   type PaneNode,
   setPaneHidden,
   type SplitNode,
+  type StackNode,
   swapPanes,
   validateLayout,
   visibleTree,
 } from '../src';
 import { shareSpace } from '../src/geometry';
+import { evaluateCSS } from './evaluate-css';
 
 const root: LayoutNode = {
   type: 'split',
@@ -1069,6 +1072,242 @@ describe('collapsed panes', () => {
     const other = new LayoutStore(root);
     other.restore(store.serialize());
     expect(other.getSnapshot().root).toEqual(store.getSnapshot().root);
+  });
+});
+
+describe('a collapsed child in any position', () => {
+  interface Limits {
+    readonly min?: number;
+    readonly max?: number;
+  }
+
+  // A pane with the same limits in both directions, and no minimum size by
+  // default, so that a row and a column give the same lengths.
+  const box = (id: string, { min = 0, max }: Limits = {}): PaneNode => ({
+    type: 'pane',
+    id,
+    minWidth: min,
+    minHeight: min,
+    ...(max === undefined ? {} : { maxWidth: max, maxHeight: max }),
+  });
+
+  const collapse = (node: PaneNode, collapsedSize?: number): PaneNode => ({
+    ...node,
+    collapsed: true,
+    ...(collapsedSize === undefined ? {} : { collapsedSize }),
+  });
+
+  const split = (
+    direction: Direction,
+    sizes: ChildSize[],
+    children: LayoutNode[]
+  ): SplitNode => ({ type: 'split', id: 's', direction, sizes, children });
+
+  /**
+   * Expect computeCSSLayout to give the boxes of computeLayout, with finite
+   * values, at a container size and at smaller and larger sizes.
+   */
+  function expectSameBoxes(tree: LayoutNode, width: number, height: number) {
+    const css = computeCSSLayout(tree, 8);
+    const rects = new Map(
+      css.panes
+        .filter(({ hidden }) => !hidden)
+        .map(({ pane, rect }) => [pane.id, rect])
+    );
+    for (const scale of [1, 0, 0.04, 0.5, 3]) {
+      const w = width * scale;
+      const h = height * scale;
+      for (const { pane, rect } of computeLayout(tree, w, h, 8).panes) {
+        const value = rects.get(pane.id);
+        if (value === undefined) throw new Error(`missing box: ${pane.id}`);
+        for (const n of [rect.x, rect.y, rect.width, rect.height])
+          expect(Number.isFinite(n)).toBe(true);
+        expect(evaluateCSS(value.left, w)).toBeCloseTo(rect.x, 2);
+        expect(evaluateCSS(value.width, w)).toBeCloseTo(rect.width, 2);
+        expect(evaluateCSS(value.top, h)).toBeCloseTo(rect.y, 2);
+        expect(evaluateCSS(value.height, h)).toBeCloseTo(rect.height, 2);
+      }
+    }
+  }
+
+  /**
+   * The length of each pane along a split that is 1016 px long, so that its
+   * panes share 1000 px between two gaps of 8 px. Each pane must start 8 px
+   * after the one before it and fill the split across its axis.
+   */
+  function lengths(tree: SplitNode): number[] {
+    const horizontal = tree.direction === 'horizontal';
+    const [width, height] = horizontal ? [1016, 500] : [500, 1016];
+    expectSameBoxes(tree, width, height);
+    let start = 0;
+    return computeLayout(tree, width, height, 8).panes.map(({ rect }) => {
+      const [at, length, crossAt, cross] = horizontal
+        ? [rect.x, rect.width, rect.y, rect.height]
+        : [rect.y, rect.height, rect.x, rect.width];
+      expect(at).toBeCloseTo(start, 9);
+      expect([crossAt, cross]).toEqual([0, 500]);
+      start = at + length + 8;
+      return length;
+    });
+  }
+
+  test('the first pane of a row takes no space, and the second fills the row', () => {
+    const spans = (first: PaneNode, second: PaneNode) =>
+      computeLayout(
+        row('s', [60, 40], [first, second]),
+        1000,
+        600,
+        0
+      ).panes.map(({ rect }) => [rect.x, rect.width]);
+    const a = { ...pane('a'), minWidth: 240 };
+    const b = { ...pane('b'), minWidth: 240 };
+    expect(spans(collapse(a), b)).toEqual([
+      [0, 0],
+      [0, 1000],
+    ]);
+    expect(spans(a, collapse(b))).toEqual([
+      [0, 1000],
+      [1000, 0],
+    ]);
+  });
+
+  // Three panes with weights 1, 2, and 1, or a size in pixels for the first.
+  // `expected` gives the lengths of the panes when the first, the middle, and
+  // the last pane collapse.
+  const cases: {
+    name: string;
+    limits: readonly Limits[];
+    sizes?: ChildSize[];
+    collapsedSize?: number;
+    expected: readonly (readonly number[])[];
+  }[] = [
+    {
+      name: 'without minimum or maximum sizes',
+      limits: [{}, {}, {}],
+      expected: [
+        [0, 2000 / 3, 1000 / 3],
+        [500, 0, 500],
+        [1000 / 3, 2000 / 3, 0],
+      ],
+    },
+    {
+      name: 'with minimum sizes',
+      limits: [{ min: 550 }, {}, { min: 400 }],
+      expected: [
+        [0, 600, 400],
+        [550, 0, 450],
+        [550, 450, 0],
+      ],
+    },
+    {
+      // When the first pane collapses, the last pane stops at its maximum.
+      // When the middle pane collapses, both others have their maximum, so
+      // they grow past it to fill the split.
+      name: 'with maximum sizes',
+      limits: [{ max: 300 }, {}, { max: 300 }],
+      expected: [
+        [0, 700, 300],
+        [500, 0, 500],
+        [300, 700, 0],
+      ],
+    },
+    {
+      name: 'with a collapsed size',
+      limits: [{}, {}, {}],
+      collapsedSize: 38,
+      expected: [
+        [38, 1924 / 3, 962 / 3],
+        [481, 38, 481],
+        [962 / 3, 1924 / 3, 38],
+      ],
+    },
+    {
+      name: 'with a size in pixels',
+      limits: [{}, {}, {}],
+      sizes: [{ px: 300 }, 1, 1],
+      expected: [
+        [0, 500, 500],
+        [300, 0, 700],
+        [300, 700, 0],
+      ],
+    },
+  ];
+
+  for (const {
+    name,
+    limits,
+    sizes = [1, 2, 1],
+    collapsedSize,
+    expected,
+  } of cases)
+    for (const direction of ['horizontal', 'vertical'] as const)
+      test(`${name}, in a ${direction === 'horizontal' ? 'row' : 'column'}`, () => {
+        expected.forEach((lengthsWhenCollapsed, position) => {
+          const children = ['a', 'b', 'c'].map((id, index) => {
+            const node = box(id, limits[index]);
+            return index === position ? collapse(node, collapsedSize) : node;
+          });
+          near(
+            lengths(split(direction, sizes, children)),
+            lengthsWhenCollapsed
+          );
+        });
+      });
+
+  test('in a nested split, and as a stack', () => {
+    const rects = (tree: LayoutNode, width: number, height: number) => {
+      expectSameBoxes(tree, width, height);
+      return computeLayout(tree, width, height, 8).panes.map(
+        ({ pane, rect }) => [pane.id, rect.x, rect.y, rect.width, rect.height]
+      );
+    };
+    // A column that holds a row whose first pane is collapsed.
+    expect(
+      rects(
+        column(
+          'outer',
+          [1, 1],
+          [row('inner', [60, 40], [collapse(box('a')), box('b')]), box('c')]
+        ),
+        1000,
+        608
+      )
+    ).toEqual([
+      ['a', 0, 0, 0, 300],
+      ['b', 8, 0, 992, 300],
+      ['c', 0, 308, 1000, 300],
+    ]);
+    // A row whose first child is a collapsed stack, before a column.
+    const stack: StackNode = {
+      type: 'stack',
+      id: 'tabs',
+      active: 'd',
+      collapsed: true,
+      children: [box('d'), box('e')],
+    };
+    expect(
+      rects(
+        row(
+          'outer',
+          [1, 2],
+          [stack, column('inner', [1, 1], [box('f'), box('g')])]
+        ),
+        1008,
+        608
+      )
+    ).toEqual([
+      ['d', 0, 0, 0, 608],
+      ['f', 8, 0, 1000, 300],
+      ['g', 8, 308, 1000, 300],
+    ]);
+  });
+
+  test('the children of a split that are all collapsed share it in equal parts', () => {
+    const tree = row('s', [60, 40], [collapse(box('a')), collapse(box('b'))]);
+    expectSameBoxes(tree, 1008, 500);
+    expect(
+      computeLayout(tree, 1008, 500, 8).panes.map(({ rect }) => rect.width)
+    ).toEqual([500, 500]);
   });
 });
 
