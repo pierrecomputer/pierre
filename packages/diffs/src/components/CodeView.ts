@@ -3979,6 +3979,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     let prevElement: HTMLElement | undefined;
     const updatedItems = new Set<CodeViewContextItem<LAnnotation, Caret>>();
+    const editedItems: CodeViewContextItem<LAnnotation, Caret>[] = [];
     const startingIndex = this.findFirstVisibleIndex(top);
     const lastRenderedIndex = this.findLastVisibleIndex(bottom);
 
@@ -4015,11 +4016,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         }
         prevElement = item.element;
       }
-      // Bind editors after the item render kicked off; attachItemEditor
-      // no-ops unless the item is in edit mode and not already attached.
       if (item.item.edit === true) {
-        this.attachItemEditor(item);
-        this.returnParkedFocus(item);
+        editedItems.push(item);
       }
     }
 
@@ -4030,6 +4028,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.search.flushPendingTheme();
     this.flushSlotCoordinator();
     this.flushManagers(updatedItems);
+    // Bind editors after the flush, which synced the ones already attached.
+    // attachItemEditor no-ops for an item that already has its editor.
+    for (const item of editedItems) {
+      this.attachItemEditor(item);
+      this.returnParkedFocus(item);
+    }
     // Read phase: every diff measures its semantic connectors before any of
     // them is drawn, so the reads share one reflow with the reads below.
     this.measureSemanticConnectors(updatedItems);
@@ -4143,6 +4147,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // request with no target left pending has reached its line.
     if (this.pendingScrollTarget == null) {
       this.finishPendingScroll('settled');
+    }
+
+    // Last, so onPostRender sees the finished DOM.
+    for (const item of updatedItems) {
+      item.instance.__emitPostRender();
     }
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another

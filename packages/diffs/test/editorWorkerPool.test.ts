@@ -2581,9 +2581,14 @@ describe('rendering when an editor attaches', () => {
         getRoot: () => root,
         getWindowSpecs: () => ({ top: 0, bottom: 800 }),
         getOffsetInScrollContainer: () => 0,
-        instanceChanged(target: { onRender(dirty: boolean): boolean }) {
+        instanceChanged(target: {
+          onRender(dirty: boolean): boolean;
+          flushManagers(): void;
+        }) {
           instanceChangedCalls++;
-          target.onRender(true);
+          if (target.onRender(true)) {
+            target.flushManagers();
+          }
         },
         isInstanceVisible: () => true,
         markDOMDirty() {},

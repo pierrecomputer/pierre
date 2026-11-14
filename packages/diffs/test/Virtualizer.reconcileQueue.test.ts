@@ -25,6 +25,8 @@ test('requestHeightReconcile reconciles instances the pass did not repaint', asy
         reconciles += 1;
         return true;
       },
+      flushManagers: () => {},
+      __emitPostRender: () => {},
       setVisibility: () => {},
     };
 

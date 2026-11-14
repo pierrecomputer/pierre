@@ -1,12 +1,12 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import type { EditorCaret } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
-import { installDom, wait } from './domHarness';
+import type { FileContents, LineAnnotation } from '../src/types';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -36,7 +36,8 @@ async function waitForEditableContent(
 
 async function createEditorFixture(
   contents: string,
-  options: EditorOptions<'file', undefined, CaretMetadata>
+  options: EditorOptions<'file', undefined, CaretMetadata>,
+  lineAnnotations?: LineAnnotation<undefined>[]
 ): Promise<{
   cleanup(): void;
   content: HTMLElement;
@@ -58,7 +59,12 @@ async function createEditorFixture(
     contents,
   };
 
-  file.render({ file: initialFile, fileContainer, forceRender: true });
+  file.render({
+    file: initialFile,
+    fileContainer,
+    forceRender: true,
+    lineAnnotations,
+  });
   editor.edit(file);
   const content = await waitForEditableContent(fileContainer);
 
@@ -427,6 +433,149 @@ describe('Editor carets', () => {
 
       const after = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
       expect(after.x - before.x).toBe(40);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('repositions carets after an annotation changes height', async () => {
+    const { cleanup, content, editor, fileContainer, triggerResizeObserver } =
+      await createEditorFixture(
+        'alpha\nbeta',
+        { renderCaret: (caret) => caretElement(caret.metadata.id) },
+        [{ lineNumber: 1, metadata: undefined }]
+      );
+    // The test DOM has no layout, so give line 2 a top that follows the
+    // height of the annotation above it.
+    let annotationHeight = 20;
+    const secondLine = content.querySelector('[data-line="2"]');
+    if (secondLine == null) {
+      throw new Error('line 2 was not rendered');
+    }
+    Object.defineProperty(secondLine, 'offsetTop', {
+      configurable: true,
+      get: () => 20 + annotationHeight,
+    });
+    Object.defineProperty(content, 'offsetHeight', {
+      configurable: true,
+      get: () => 40 + annotationHeight,
+    });
+
+    try {
+      // A browser reports the size once when observing starts.
+      triggerResizeObserver(content);
+      editor.setCarets([
+        {
+          anchor: { line: 1, character: 0 },
+          focus: { line: 1, character: 0 },
+          metadata: { id: 'ada', color: '#7c3aed' },
+        },
+      ]);
+      const before = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
+      annotationHeight = 80;
+
+      triggerResizeObserver(content);
+
+      const after = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
+      expect(after.y - before.y).toBe(60);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps an open marker popover when an annotation changes height', async () => {
+    const { cleanup, content, editor, fileContainer, triggerResizeObserver } =
+      await createEditorFixture('alpha\nbeta', {}, [
+        { lineNumber: 2, metadata: undefined },
+      ]);
+    // The test DOM has no layout, so the content height is set by hand.
+    let contentHeight = 60;
+    Object.defineProperty(content, 'offsetHeight', {
+      configurable: true,
+      get: () => contentHeight,
+    });
+    const input = document.createElement('input');
+
+    try {
+      // A browser reports the size once when observing starts.
+      triggerResizeObserver(content);
+      editor.setMarkers([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+          severity: 'error',
+          message: input,
+        },
+      ]);
+      content
+        .querySelector('[data-line="1"] [data-char]')
+        ?.dispatchEvent(
+          new window.MouseEvent('mouseover', { bubbles: true, composed: true })
+        );
+      const { shadowRoot } = fileContainer;
+      await waitFor(
+        () => shadowRoot?.querySelector('[data-marker-popover]') != null
+      );
+      const popover = shadowRoot?.querySelector('[data-marker-popover]');
+      popover?.dispatchEvent(new window.MouseEvent('mouseenter'));
+      input.focus();
+      await wait(50);
+      contentHeight = 120;
+
+      triggerResizeObserver(content);
+      await wait(50);
+
+      expect(popover?.isConnected).toBe(true);
+      expect(shadowRoot?.activeElement).toBe(input);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('leaves the native selection alone when an annotation changes height', async () => {
+    const { cleanup, content, editor, triggerResizeObserver } =
+      await createEditorFixture('alpha\nbeta', {}, [
+        { lineNumber: 2, metadata: undefined },
+      ]);
+    // The test DOM has no layout, so the content height is set by hand.
+    let contentHeight = 60;
+    Object.defineProperty(content, 'offsetHeight', {
+      configurable: true,
+      get: () => contentHeight,
+    });
+    const selection = window.getSelection();
+    if (selection == null) {
+      throw new Error('the test DOM has no selection');
+    }
+
+    try {
+      // A browser reports the size once when observing starts.
+      triggerResizeObserver(content);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 3 },
+          end: { line: 0, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      editor.focus();
+      await wait(50);
+      // The browser owns the selection while text is being composed.
+      content.dispatchEvent(
+        new window.CompositionEvent('compositionstart', {
+          bubbles: true,
+          composed: true,
+        })
+      );
+      const setBaseAndExtent = spyOn(selection, 'setBaseAndExtent');
+      contentHeight = 120;
+
+      triggerResizeObserver(content);
+      await wait(50);
+
+      const selectionWrites = setBaseAndExtent.mock.calls.length;
+      setBaseAndExtent.mockRestore();
+      expect(selectionWrites).toBe(0);
     } finally {
       cleanup();
     }

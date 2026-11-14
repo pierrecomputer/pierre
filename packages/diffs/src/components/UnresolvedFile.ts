@@ -245,7 +245,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
   }
 
   override cleanUp(): void {
-    this.emitPostRender(true);
+    this.__emitPostRender(true);
     this.clearMergeConflictActionCache();
     this.computedCache = {
       file: undefined,
@@ -425,7 +425,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
       }
     }
     if (!preventEmit) {
-      this.emitPostRender();
+      this.__emitPostRender();
     }
   }
 
@@ -465,7 +465,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     if (didRender) {
       this.renderMergeConflictActionSlots();
       if (!preventEmit) {
-        this.emitPostRender();
+        this.__emitPostRender();
       }
     }
     return didRender;

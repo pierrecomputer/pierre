@@ -83,6 +83,8 @@ test('waits for the corrected pass an instance change queues', async () => {
         return true;
       },
       reconcileHeights: () => false,
+      flushManagers: () => {},
+      __emitPostRender: () => {},
       setVisibility: () => {},
     };
     const container = document.createElement('diffs-container');
