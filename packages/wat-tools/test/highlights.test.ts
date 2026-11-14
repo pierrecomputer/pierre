@@ -39,6 +39,8 @@ interface LexerExports {
   scratchPtr: WebAssembly.Global;
   lex: () => void;
   lexStream: (reset: number) => void;
+  saveState: () => number;
+  loadState: () => void;
 }
 
 describe('buildHighlightsLexer', () => {
@@ -67,7 +69,15 @@ describe('buildHighlightsLexer', () => {
       WebAssembly.Module.exports(compiledModule)
         .map(({ name }) => name)
         .sort()
-    ).toEqual(['inputPtr', 'lex', 'lexStream', 'memory', 'scratchPtr']);
+    ).toEqual([
+      'inputPtr',
+      'lex',
+      'lexStream',
+      'loadState',
+      'memory',
+      'saveState',
+      'scratchPtr',
+    ]);
     expect(Number(lexer.scratchPtr.value) % 256).toBe(0);
     expect(Number(lexer.inputPtr.value)).toBeGreaterThan(
       Number(lexer.scratchPtr.value) + 31
@@ -133,10 +143,62 @@ describe('buildHighlightsLexer', () => {
     lexer.lex();
     const view = new DataView(lexer.memory.buffer);
     const out = view.getUint32(6, true);
-    expect(view.getUint32(10, true)).toBe(16);
-    expect([...new Uint32Array(lexer.memory.buffer, out, 4)]).toEqual([
-      1, 255, 4, 17,
+    // The byte after the last token is plain text.
+    expect(view.getUint32(10, true)).toBe(24);
+    expect([...new Uint32Array(lexer.memory.buffer, out, 6)]).toEqual([
+      1, 255, 4, 17, 5, 0,
     ]);
+  });
+
+  test('saveState and loadState restore the globals and memory regions of a lexer', () => {
+    // The token type is the sum of a global and a memory word, which each
+    // chunk increases.
+    const language = buildHighlightsLexer({
+      name: 'state',
+      wat: `(module
+        (memory-region $mem.stateWord 16)
+        (global $stateCount (mut i32) (i32.const 0))
+        (func $highlight
+          (if (global.get $streamReset)
+            (then
+              (global.set $stateCount (i32.const 0))
+              (i32.store (i32.const $mem.stateWord) (i32.const 0))))
+          (global.set $stateCount (i32.add (global.get $stateCount) (i32.const 1)))
+          (i32.store
+            (i32.const $mem.stateWord)
+            (i32.add (i32.load (i32.const $mem.stateWord)) (i32.const 2)))
+          (call $emitTok
+            (i32.add (global.get $stateCount) (i32.load (i32.const $mem.stateWord)))
+            (global.get $ptr)
+            (global.get $end))))`,
+    });
+    const lexer = new WebAssembly.Instance(
+      new WebAssembly.Module(Buffer.from(language.wasm, 'base64'))
+    ).exports as unknown as LexerExports;
+    const input = Number(lexer.inputPtr.value);
+    const run = (reset: number): number => {
+      const view = new DataView(lexer.memory.buffer);
+      view.setUint8(input, 120);
+      view.setUint32(2, 1, true);
+      lexer.lexStream(reset);
+      // The last record: a continued chunk starts with the carried type.
+      return view.getUint32(
+        view.getUint32(6, true) + view.getUint32(10, true) - 4,
+        true
+      );
+    };
+    expect(run(1)).toBe(3);
+    const length = lexer.saveState();
+    const view = new DataView(lexer.memory.buffer);
+    const state = new Uint8Array(lexer.memory.buffer).slice(
+      view.getUint32(6, true) + view.getUint32(10, true),
+      view.getUint32(6, true) + view.getUint32(10, true) + length
+    );
+    expect(run(0)).toBe(6);
+    expect(run(0)).toBe(9);
+    new Uint8Array(lexer.memory.buffer).set(state, input);
+    lexer.loadState();
+    expect(run(0)).toBe(6);
   });
 
   test('rejects descriptors that cannot be selected safely', () => {

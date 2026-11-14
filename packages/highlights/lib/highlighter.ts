@@ -59,11 +59,11 @@ export function isSupportedLanguage(lang: string): lang is Lang {
 
 /**
  * Check whether `registerLanguages` added a name or alias. The shared
- * `codeToHtml` and `codeToTokens` use its lexer; `StreamTokenizer` and
- * `LiveTokenizer` do not.
+ * `codeToHtml` and `codeToTokens` use its lexer. `StreamTokenizer` and
+ * `LiveTokenizer` use it too, unless it is a built-in language module.
  */
 export function isRegisteredLanguage(lang: string): boolean {
-  return registeredNames.has(String(lang).toLowerCase());
+  return registeredLexers.has(String(lang).toLowerCase());
 }
 
 export class HighlightsHighlighter implements Highlighter<
@@ -106,6 +106,8 @@ export class HighlightsHighlighter implements Highlighter<
     this.#languageIds = languageIds;
     this.wasmModule = wasmModule;
     const env = {
+      // The combined module imports it for the documents of registered lexers.
+      lex_line: () => 0,
       ...imports,
       is_id_start: (ptr: number, len: number) => this.#idClass(ptr, len, 0),
       is_id_continue: (ptr: number, len: number) => this.#idClass(ptr, len, 2),
@@ -120,12 +122,12 @@ export class HighlightsHighlighter implements Highlighter<
       (instance.exports.themePtr as WebAssembly.Global | undefined)?.value ?? 0
     );
     // Only an emitter gets `languageIds`; the combined module has `emit` too.
-    this.#highlight = (
-      languageIds === undefined
-        ? (instance.exports.highlight ?? instance.exports.lex)
-        : instance.exports.emit
-    ) as () => void;
-    this.#highlightStream = (instance.exports.highlightStream ??
+    const emit = languageIds === undefined ? undefined : instance.exports.emit;
+    this.#highlight = (emit ??
+      instance.exports.highlight ??
+      instance.exports.lex) as () => void;
+    this.#highlightStream = (emit ??
+      instance.exports.highlightStream ??
       instance.exports.lexStream) as (reset: number | boolean) => void;
     this.pageN = this.memory.buffer.byteLength / pageSize;
     this.buffer = new Uint8Array(this.memory.buffer);
@@ -304,6 +306,32 @@ export class HighlightsHighlighter implements Highlighter<
   ): number {
     this.#run(langId, mode, inputLength, reset);
     return this.dv.getUint32(6, true);
+  }
+
+  /**
+   * Copy lexer records to this emitter, after the input and the theme data.
+   * Only the first record can be a leading gap (255), and the emitter has no
+   * gap type.
+   */
+  writeRecords(mode: number, length: number, records: Uint32Array): void {
+    if (records.length > 0 && records[1] === 255) records[1] = 0;
+    const blobEnd =
+      mode === 0 || mode === 3
+        ? 0
+        : this.dv.getUint32(14, true) + this.dv.getUint32(18, true);
+    const recordsPtr =
+      Math.ceil(Math.max(this.inputPtr + length + 96, blobEnd) / 16) * 16;
+    const pages = Math.ceil((recordsPtr + records.byteLength + 96) / pageSize);
+    if (pages > this.pageN) {
+      this.memory.grow(pages - this.pageN);
+      this.bindMemory();
+    }
+    this.buffer.set(
+      new Uint8Array(records.buffer, records.byteOffset, records.byteLength),
+      recordsPtr
+    );
+    this.dv.setUint32(22, recordsPtr, true);
+    this.dv.setUint32(26, records.byteLength, true);
   }
 
   /** Return UTF-16 token records; `reset` starts or continues a stream. */
@@ -786,29 +814,8 @@ function buildHighlighter(
           )
         )
       );
-      // Only the first record can be a gap (255): later gaps extend
-      // the previous record. The emitter has no gap type.
-      if (records.length > 0 && records[1] === 255) records[1] = 0;
     }
-    const blobEnd =
-      mode === 0 || mode === 3
-        ? 0
-        : highlighter.dv.getUint32(14, true) +
-          highlighter.dv.getUint32(18, true);
-    const recordsPtr =
-      Math.ceil(Math.max(highlighter.inputPtr + length + 96, blobEnd) / 16) *
-      16;
-    const pages = Math.ceil((recordsPtr + records.byteLength + 96) / pageSize);
-    if (pages > highlighter.pageN) {
-      highlighter.memory.grow(pages - highlighter.pageN);
-      highlighter.bindMemory();
-    }
-    highlighter.buffer.set(
-      new Uint8Array(records.buffer, records.byteOffset, records.byteLength),
-      recordsPtr
-    );
-    highlighter.dv.setUint32(22, recordsPtr, true);
-    highlighter.dv.setUint32(26, records.byteLength, true);
+    highlighter.writeRecords(mode, length, records);
   };
   let highlighter = new HighlightsHighlighter(
     emitter,
@@ -869,7 +876,22 @@ function buildHighlighter(
 
 let registered: RegisteredHighlighter | undefined;
 let registeredLangs: Language[] = [];
-let registeredNames = new Set<string>();
+let registeredLexers = new Map<
+  string,
+  { module?: WebAssembly.Module; id: number }
+>();
+
+/**
+ * The lexer that `StreamTokenizer` and `LiveTokenizer` use for a name from
+ * `registerLanguages`. A lexer from `@pierre/wat-tools` has `module`. A
+ * built-in language module has none, and `id` selects the built-in lexer:
+ * its own lexer calls the host for embedded code and cannot save its state.
+ */
+export function registeredLexer(
+  lang: string
+): { module?: WebAssembly.Module; id: number } | undefined {
+  return registeredLexers.get(String(lang).toLowerCase());
+}
 
 /**
  * Add lexers to `codeToHtml` and `codeToTokens`. Their names and aliases
@@ -907,11 +929,16 @@ export function registerLanguages(langs: readonly Language[]): void {
   });
   registered = buildHighlighter(assertWasmModule(), list, compiled, [], true);
   registeredLangs = list;
-  registeredNames = new Set(
-    list.flatMap((language) =>
-      Object.keys(language.aliases).map((name) => name.toLowerCase())
+  registeredLexers = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const custom = WebAssembly.Module.exports(compiled[i]).some(
+      ({ name }) => name === 'saveState'
     )
-  );
+      ? compiled[i]
+      : undefined;
+    for (const [alias, id] of Object.entries(list[i].aliases))
+      registeredLexers.set(alias.toLowerCase(), { module: custom, id });
+  }
 }
 
 /**
@@ -925,7 +952,7 @@ export function codeToHtml(
 ): Uint8Array {
   if (
     registered !== undefined &&
-    registeredNames.has(String(options.lang).toLowerCase())
+    registeredLexers.has(String(options.lang).toLowerCase())
   ) {
     return registered.codeToHtml(input, options);
   }
@@ -943,7 +970,7 @@ export function codeToTokens(
 ): TokensResult {
   if (
     registered !== undefined &&
-    registeredNames.has(String(options.lang).toLowerCase())
+    registeredLexers.has(String(options.lang).toLowerCase())
   ) {
     return registered.codeToTokens(input, options);
   }
@@ -972,8 +999,11 @@ export class StreamTokenizer extends TransformStream<
   #tail = '';
   #streamChar = 0;
   #streamStarted = false;
+  #pooled = true;
 
-  constructor(options: CodeToTokensOptions) {
+  constructor(
+    options: CodeToTokensOptions<Theme | ThemeFamily, Lang | (string & {})>
+  ) {
     const transformer = {
       transform: (
         chunk: Uint8Array,
@@ -995,15 +1025,45 @@ export class StreamTokenizer extends TransformStream<
 
     // validate the options before taking the pooled instance so a rejected
     // language or theme leaves the pool intact
+    const registered = registeredLexer(options.lang);
     this.#ansi = isAnsi(options.lang) ? new AnsiState() : undefined;
-    this.#langId = this.#ansi === undefined ? langIdOf(options.lang) : 0;
+    this.#langId =
+      registered?.id ?? (this.#ansi === undefined ? langIdOf(options.lang) : 0);
     this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
-    this.#hl =
-      pooledStreamHighlighter?.wasmModule === compiledWasm
-        ? pooledStreamHighlighter
-        : new HighlightsHighlighter(compiledWasm);
-    pooledStreamHighlighter = undefined;
+    if (registered?.module === undefined) {
+      this.#hl =
+        pooledStreamHighlighter?.wasmModule === compiledWasm
+          ? pooledStreamHighlighter
+          : new HighlightsHighlighter(compiledWasm);
+      pooledStreamHighlighter = undefined;
+    } else {
+      // The custom lexer keeps the stream state. The combined module only
+      // converts its records to line records, so it cannot go to the pool.
+      this.#pooled = false;
+      const lexer = new HighlightsHighlighter(registered.module);
+      const emitter = new HighlightsHighlighter(
+        compiledWasm,
+        (id, mode, length, reset) =>
+          emitter.writeRecords(
+            mode,
+            length,
+            lexer.tokenizeLineRecords(
+              id,
+              lexer.writeInput(
+                emitter.buffer.subarray(
+                  emitter.inputPtr,
+                  emitter.inputPtr + length
+                )
+              ),
+              reset
+            )
+          ),
+        {},
+        new Map()
+      );
+      this.#hl = emitter;
+    }
     this.#cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
     this.#maxLineLength = options.tokenizeMaxLineLength;
@@ -1097,6 +1157,7 @@ export class StreamTokenizer extends TransformStream<
     if (hl == null) return;
     // Do not retain unusually large stream buffers in the single pool slot.
     if (
+      this.#pooled &&
       pooledStreamHighlighter == null &&
       hl.wasmModule === wasmModule &&
       hl.pageN <= 16

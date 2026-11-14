@@ -138,7 +138,11 @@ void test('live state hashing and comparison ignore bytes beyond the state', () 
   const wasm = wat2wasm(url.pathname, code);
   for (const binary of [wasm, optimizeWasm(wasm)]) {
     const instance = new WebAssembly.Instance(new WebAssembly.Module(binary), {
-      env: { is_id_start: assert.fail, is_id_continue: assert.fail },
+      env: {
+        is_id_start: assert.fail,
+        is_id_continue: assert.fail,
+        lex_line: assert.fail,
+      },
     });
     const { memory, hash, equal } = instance.exports as {
       memory: WebAssembly.Memory;
