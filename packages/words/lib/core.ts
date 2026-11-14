@@ -175,10 +175,14 @@ class Renderer {
           format.idPrefix,
           this.buffer.subarray(idPrefixAt, idPrefixAt + idPrefixRoom)
         );
-        if (read < format.idPrefix.length)
+        if (read < format.idPrefix.length) {
+          // the buffer now holds a part of the rejected prefix
+          this.idPrefix = '';
+          this.idPrefixLength = 0;
           throw new RangeError(
             `idPrefix exceeds ${idPrefixRoom} bytes of UTF-8`
           );
+        }
         this.idPrefix = format.idPrefix;
         this.idPrefixLength = written;
       }

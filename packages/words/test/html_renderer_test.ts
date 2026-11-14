@@ -181,4 +181,9 @@ void test('an id prefix that does not fit Wasm memory throws', () => {
     fits.render('x[^1]\n\n[^1]: y', false).html,
     / id="p{4096}fn-1"/
   );
+  // a failed prefix must not leak into a later render with the previous one
+  const good = createHtmlRenderer({ idPrefix: 'good-' });
+  assert.match(good.render('x[^1]\n\n[^1]: y', false).html, / id="good-fn-1"/);
+  assert.throws(() => renderer.render('x[^1]\n\n[^1]: y', false), RangeError);
+  assert.match(good.render('x[^1]\n\n[^1]: z', false).html, / id="good-fn-1"/);
 });
