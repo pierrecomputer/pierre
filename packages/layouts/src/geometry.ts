@@ -206,8 +206,7 @@ export function computeLayout(
       'Layout dimensions and gap must be finite and non-negative'
     );
   }
-  if (!hasVisiblePane(layout))
-    return { panes: [], separators: [], corners: [] };
+  if (!hasVisiblePane(layout)) return { panes: [], separators: [] };
   const panes: LayoutGeometry['panes'][number][] = [];
   const separators: SeparatorGeometry[] = [];
   function visit(node: LayoutNode, rect: Rect): void {
@@ -269,43 +268,5 @@ export function computeLayout(
     );
   }
   visit(layout, { x: 0, y: 0, width, height });
-  const corners: LayoutGeometry['corners'][number][] = [];
-  for (const horizontal of separators.filter(
-    ({ split }) => split.direction === 'horizontal'
-  )) {
-    for (const vertical of separators.filter(
-      ({ split }) => split.direction === 'vertical'
-    )) {
-      const x = horizontal.rect.x + horizontal.rect.width / 2;
-      const y = vertical.rect.y + vertical.rect.height / 2;
-      if (
-        x >= vertical.rect.x - gap / 2 &&
-        x <= vertical.rect.x + vertical.rect.width + gap / 2 &&
-        y >= horizontal.rect.y - gap / 2 &&
-        y <= horizontal.rect.y + horizontal.rect.height + gap / 2
-      ) {
-        const existing = corners.find(
-          (corner) =>
-            Math.abs(corner.x - x) < 0.01 && Math.abs(corner.y - y) < 0.01
-        );
-        if (existing === undefined) {
-          corners.push({
-            id: `${horizontal.id}:${vertical.id}`,
-            x,
-            y,
-            separators: [horizontal, vertical],
-          });
-        } else {
-          const index = corners.indexOf(existing);
-          const touching = new Map(
-            existing.separators.map((separator) => [separator.id, separator])
-          );
-          touching.set(horizontal.id, horizontal);
-          touching.set(vertical.id, vertical);
-          corners[index] = { ...existing, separators: [...touching.values()] };
-        }
-      }
-    }
-  }
-  return { panes, separators, corners };
+  return { panes, separators };
 }

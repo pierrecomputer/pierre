@@ -162,15 +162,7 @@ export interface SeparatorGeometry {
   readonly children: readonly ChildExtent[];
 }
 
-export interface CornerGeometry {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-  readonly separators: readonly SeparatorGeometry[];
-}
-
 export interface LayoutGeometry {
   readonly panes: readonly PaneGeometry[];
   readonly separators: readonly SeparatorGeometry[];
-  readonly corners: readonly CornerGeometry[];
 }

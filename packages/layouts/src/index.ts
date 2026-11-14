@@ -1,3 +1,9 @@
+export {
+  type CornerGeometry,
+  type CSSCorner,
+  cssCorners,
+  pixelCorners,
+} from './corners';
 export { swapPanes } from './edits-model';
 export { computeLayout } from './geometry';
 export {
@@ -17,7 +23,6 @@ export { LayoutStore, type LayoutStoreOptions } from './store';
 export type {
   ChildExtent,
   ChildSize,
-  CornerGeometry,
   Direction,
   Edge,
   LayoutGeometry,
@@ -62,7 +67,6 @@ export {
 } from './view';
 export { computeCSSLayout } from './css-layout';
 export type {
-  CSSCorner,
   CSSLayout,
   CSSPane,
   CSSRect,

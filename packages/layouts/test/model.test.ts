@@ -5,6 +5,7 @@ import {
   type ChildSize,
   computeCSSLayout,
   computeLayout,
+  cssCorners,
   type Direction,
   fromBinaryLayout,
   getExitEdge,
@@ -13,6 +14,7 @@ import {
   LayoutStore,
   naryTree,
   type PaneNode,
+  pixelCorners,
   setPaneHidden,
   type SplitNode,
   type StackNode,
@@ -272,7 +274,7 @@ describe('geometry', () => {
     expect(
       layout.panes.find(({ pane }) => pane.id === 'files')?.rect.width
     ).toBeGreaterThanOrEqual(160);
-    expect(layout.corners.length).toBe(1);
+    expect(pixelCorners(layout).length).toBe(1);
   });
 
   test('tiny viewports never produce negative sizes or overflow', () => {
@@ -333,7 +335,7 @@ describe('css layout', () => {
         rect.width,
         rect.height,
       ]),
-      ...layout.corners.flatMap(({ left, top }) => [left, top]),
+      ...cssCorners(layout).flatMap(({ left, top }) => [left, top]),
     ];
     expect(values.length).toBeGreaterThan(0);
     for (const value of values) {
@@ -374,6 +376,28 @@ describe('css layout', () => {
     ]);
   });
 
+  test('corners at the same point become one corner of a pixel geometry', () => {
+    const grid = column(
+      'c',
+      [1, 1],
+      [
+        row('top', [1, 1], [pane('a'), pane('b')]),
+        row('bottom', [1, 1], [pane('d'), pane('e')]),
+      ]
+    );
+    const geometry = computeLayout(grid, 808, 608);
+    const corners = pixelCorners(geometry);
+    expect(corners).toHaveLength(1);
+    expect(corners[0]).toMatchObject({ x: 404, y: 304 });
+    expect(corners[0].separators.map(({ id }) => id).sort()).toEqual(
+      geometry.separators.map(({ id }) => id).sort()
+    );
+    expect(cssCorners(computeCSSLayout(grid)).map(({ id }) => id)).toEqual([
+      'top:1:c:1',
+      'bottom:1:c:1',
+    ]);
+  });
+
   test('a row in a column meets each separator of the row at a corner', () => {
     const layout = computeCSSLayout(
       column(
@@ -382,7 +406,7 @@ describe('css layout', () => {
         [row('r', [1, 1, 1], [pane('a'), pane('b'), pane('c2')]), pane('d')]
       )
     );
-    expect(layout.corners.map(({ separatorIds }) => separatorIds)).toEqual([
+    expect(cssCorners(layout).map(({ separatorIds }) => separatorIds)).toEqual([
       ['r:1', 'c:1'],
       ['r:2', 'c:1'],
     ]);

@@ -80,51 +80,20 @@ export interface CSSSeparator {
    */
   value: number;
   rect: CSSRect;
-}
-
-export interface CSSCorner {
-  id: string;
-  separatorIds: readonly string[];
-  left: string;
-  top: string;
+  /**
+   * The box of the separator as piecewise-linear functions of the container
+   * size: the values that `rect` writes as CSS. `cssCorners` reads it.
+   */
+  box: Box;
 }
 
 export interface CSSLayout {
   panes: CSSPane[];
   separators: CSSSeparator[];
-  corners: CSSCorner[];
 }
 
-/**
- * The IDs of the separators that meet one edge of a subtree at a right angle,
- * independently of the container size.
- */
-function boundarySeparators(
-  node: LayoutNode,
-  edge: 'left' | 'right' | 'top' | 'bottom'
-): string[] {
-  if (node.type !== 'split') return [];
-  const visible = visibleChildren(node);
-  if (visible.length === 1)
-    return boundarySeparators(node.children[visible[0]], edge);
-  const start = edge === 'left' || edge === 'top';
-  if (
-    (node.direction === 'horizontal') ===
-    (edge === 'left' || edge === 'right')
-  )
-    return boundarySeparators(
-      node.children[start ? visible[0] : visible[visible.length - 1]],
-      edge
-    );
-  return [
-    ...visible.slice(1).map((index) => separatorId(node, index)),
-    ...visible.flatMap((index) =>
-      boundarySeparators(node.children[index], edge)
-    ),
-  ];
-}
-
-interface Box {
+/** The box of an element: each edge as a function of the container size. */
+export interface Box {
   left: Piecewise;
   top: Piecewise;
   width: Piecewise;
@@ -170,7 +139,7 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   if (!Number.isFinite(gap) || gap < 0)
     throw new Error('Layout gap must be finite and non-negative');
   const panes: CSSPane[] = [];
-  const separators: (Omit<CSSSeparator, 'rect'> & { box: Box })[] = [];
+  const separators: Omit<CSSSeparator, 'rect'>[] = [];
   function visit(
     node: LayoutNode,
     box: Box,
@@ -302,46 +271,11 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     false,
     ALL_EDGES
   );
-  const byId = new Map(
-    separators.map((separator) => [separator.id, separator])
-  );
-  const corners: CSSCorner[] = [];
-  for (const separator of separators) {
-    const horizontal = separator.split.direction === 'horizontal';
-    const adjacent = [
-      ...boundarySeparators(separator.before, horizontal ? 'right' : 'bottom'),
-      ...boundarySeparators(
-        separator.split.children[separator.index],
-        horizontal ? 'left' : 'top'
-      ),
-    ];
-    for (const otherId of adjacent) {
-      const other = byId.get(otherId);
-      if (other === undefined) continue;
-      const h = horizontal ? separator : other;
-      const v = horizontal ? other : separator;
-      const id = `${h.id}:${v.id}`;
-      if (corners.some((corner) => corner.id === id)) continue;
-      corners.push({
-        id,
-        separatorIds: [h.id, v.id],
-        left: toCSS(
-          add(add(h.box.left, scale(h.box.width, 0.5)), constant(-7)),
-          '100cqw'
-        ),
-        top: toCSS(
-          add(add(v.box.top, scale(v.box.height, 0.5)), constant(-7)),
-          '100cqh'
-        ),
-      });
-    }
-  }
   return {
     panes,
-    separators: separators.map(({ box, ...separator }) => ({
+    separators: separators.map((separator) => ({
       ...separator,
-      rect: toRect(box),
+      rect: toRect(separator.box),
     })),
-    corners,
   };
 }

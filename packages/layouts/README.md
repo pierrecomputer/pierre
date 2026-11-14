@@ -143,8 +143,8 @@ its content. JavaScript computes pixel geometry only for pointer/keyboard
 interactions and zoom exit directions. A ResizeObserver finishes an in-progress
 discrete animation when the container changes size; it does not calculate panel
 bounds. `computeCSSLayout(root, gap)` exposes these expressions for other CSS
-adapters. This requires browser support for container query units and CSS size
-containment.
+adapters, and `cssCorners(layout)` adds the corners of its result. This requires
+browser support for container query units and CSS size containment.
 
 ## Hidden panes
 
@@ -369,11 +369,12 @@ Closing the final pane does nothing; closing a focused or zoomed pane repairs
 the selection. Serialization stores layout geometry and selection, not pane
 content. Persistence is caller-owned; the playground uses local storage.
 
-`computeLayout(root, width, height, gap)` returns pane rectangles, separators,
-and corner intersections for other rendering adapters. Pane minimums default to
-120 × 80 pixels. When minimums cannot fit, the engine shares the shortage
-proportionally without creating negative dimensions or overflow. Preferred sizes
-survive temporary viewport constraints.
+`computeLayout(root, width, height, gap)` returns pane rectangles and separators
+for other rendering adapters, and `pixelCorners(geometry, gap)` adds the corner
+intersections. Corners are a separate pass, so an adapter without corners does
+not compute them. Pane minimums default to 120 × 80 pixels. When minimums cannot
+fit, the engine shares the shortage proportionally without creating negative
+dimensions or overflow. Preferred sizes survive temporary viewport constraints.
 
 A drag of a separator changes the two children of its split beside it. When one
 of them reaches its minimum size, the next child on that side gives the space,

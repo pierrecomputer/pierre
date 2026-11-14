@@ -18,6 +18,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import { type CSSCorner, cssCorners } from '../corners';
 import {
   ALL_EDGES,
   computeCSSLayout,
@@ -307,6 +308,19 @@ function cssLayoutOf(root: LayoutNode, gap: number): CSSLayout {
   return layout;
 }
 
+// The corners of each compiled CSS layout. The view computes them once for
+// each layout, as it computes the layout once for each tree.
+const cssCornerLists = new WeakMap<CSSLayout, CSSCorner[]>();
+
+function cornersOf(layout: CSSLayout): CSSCorner[] {
+  let corners = cssCornerLists.get(layout);
+  if (corners === undefined) {
+    corners = cssCorners(layout);
+    cssCornerLists.set(layout, corners);
+  }
+  return corners;
+}
+
 /**
  * Whether a tree change moves or resizes an element that shows in both
  * trees. A change of tab, or a change inside a hidden pane, moves nothing,
@@ -327,7 +341,7 @@ function boxesMove(before: CSSLayout, after: CSSLayout): boolean {
   const key = (layout: CSSLayout): string =>
     JSON.stringify([
       layout.separators.map(({ id, rect }) => [id, rect]),
-      layout.corners.map(({ id, left, top }) => [id, left, top]),
+      cornersOf(layout).map(({ id, left, top }) => [id, left, top]),
     ]);
   return key(before) !== key(after);
 }
@@ -599,6 +613,7 @@ export function Layout({
     () => cssLayoutOf(state.root, gap),
     [state.root, gap]
   );
+  const corners = cornersOf(geometry);
   // Style objects keep their identity while the tree does, so a focus or zoom
   // change gives React the same objects to compare.
   const styles = useMemo(
@@ -616,10 +631,9 @@ export function Layout({
         ])
       ),
       corners: new Map(
-        geometry.corners.map(({ id, left, top }): [string, CSSProperties] => [
-          id,
-          { left, top },
-        ])
+        cornersOf(geometry).map(
+          ({ id, left, top }): [string, CSSProperties] => [id, { left, top }]
+        )
       ),
     }),
     [geometry]
@@ -747,7 +761,7 @@ export function Layout({
   // Pixel geometry is needed only when a user starts resizing or points at a drop target.
   function readGeometry(): LayoutGeometry {
     const element = rootRef.current;
-    if (element === null) return { panes: [], separators: [], corners: [] };
+    if (element === null) return { panes: [], separators: [] };
     return readPixelGeometry(element, store.getSnapshot().root, gap);
   }
 
@@ -757,7 +771,7 @@ export function Layout({
   ): SeparatorGeometry[] {
     const element = rootRef.current;
     if (element === null) return [];
-    const touching = separatorIdsAt(element, target, ids, geometry.corners);
+    const touching = separatorIdsAt(element, target, ids, corners);
     return readGeometry().separators.filter(({ id }) => touching.has(id));
   }
 
@@ -1079,7 +1093,7 @@ export function Layout({
         experimentalResize,
         active.separators,
         active.session?.update?.(proposed, event) ?? proposed,
-        geometry.corners
+        corners
       );
     } else {
       if (Math.hypot(event.clientX - active.x, event.clientY - active.y) < 4)
@@ -1495,7 +1509,7 @@ export function Layout({
           );
         })}
       {state.zoomedPane === null &&
-        geometry.corners.map((corner) => (
+        corners.map((corner) => (
           <button
             key={corner.id}
             type="button"
