@@ -37,12 +37,16 @@ function resolveMessages(
 
 function compileMessages(
   messages: DiffsMessages,
-  locale: string
+  locale: string,
+  numberFormat: Intl.NumberFormat
 ): Map<string, CompiledMessage> {
   const pluralRules = new Intl.PluralRules(locale);
   const compiledMessages = new Map<string, CompiledMessage>();
   for (const [key, template] of Object.entries(messages)) {
-    compiledMessages.set(key, compileMessage(template, pluralRules));
+    compiledMessages.set(
+      key,
+      compileMessage(template, pluralRules, numberFormat)
+    );
   }
   return compiledMessages;
 }
@@ -53,7 +57,12 @@ function compileMessages(
 class I18n {
   #locale: string = DEFAULT_LOCALE;
   #messages: DiffsMessages = DEFAULT_MESSAGES;
-  #compiledMessages = compileMessages(DEFAULT_MESSAGES, DEFAULT_LOCALE);
+  #numberFormat = new Intl.NumberFormat(DEFAULT_LOCALE);
+  #compiledMessages = compileMessages(
+    DEFAULT_MESSAGES,
+    DEFAULT_LOCALE,
+    this.#numberFormat
+  );
   #subscribers = new Set<MessagesSubscriber>();
   #version = 0;
 
@@ -72,7 +81,9 @@ class I18n {
     if (locale === this.#locale && areObjectsEqual(resolved, this.#messages)) {
       return;
     }
-    this.#compiledMessages = compileMessages(resolved, locale);
+    const numberFormat = new Intl.NumberFormat(locale);
+    this.#compiledMessages = compileMessages(resolved, locale, numberFormat);
+    this.#numberFormat = numberFormat;
     this.#locale = locale;
     this.#messages = resolved;
     this.#version++;
@@ -87,6 +98,10 @@ class I18n {
       throw new Error(`i18n: unknown message "${key}"`);
     }
     return message(values);
+  }
+
+  formatNumber(value: number): string {
+    return this.#numberFormat.format(value);
   }
 
   subscribe(subscriber: MessagesSubscriber): () => void {

@@ -1610,6 +1610,49 @@ describe('Editor.setSelections', () => {
       cleanup();
     }
   });
+
+  test('an empty list clears the selection while markers are shown, without scrolling or focusing', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+    const focus = spyOn(content, 'focus');
+    try {
+      editor.setMarkers([
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 3 },
+          severity: 'error',
+          message: 'boom',
+        },
+      ]);
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+      await waitFor(() => focus.mock.calls.length > 0);
+      const outside = document.createElement('input');
+      document.body.append(outside);
+      outside.focus();
+      scroll.mockClear();
+      focus.mockClear();
+
+      editor.setSelections([]);
+      await wait(50);
+
+      expect(scroll).not.toHaveBeenCalled();
+      expect(focus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(outside);
+      expect(editor.getViewState().selections).toBeUndefined();
+    } finally {
+      scroll.mockRestore();
+      focus.mockRestore();
+      cleanup();
+    }
+  });
 });
 
 describe('Editor.setOptions', () => {

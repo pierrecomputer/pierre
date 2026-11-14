@@ -597,6 +597,40 @@ describe('editor active-line highlight on a diff', () => {
     }
   });
 
+  test('unified: selecting a deleted line clears the editor selection while markers are shown', async () => {
+    const fixture = await createDiffEditorFixture('unified', OLD, NEW);
+    try {
+      const deletedLine = fixture.container.shadowRoot?.querySelector(
+        "[data-content] > [data-line][data-line-type='change-deletion']"
+      );
+      expect(deletedLine).not.toBeNull();
+      fixture.editor.setMarkers([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+          severity: 'error',
+          message: 'boom',
+        },
+      ]);
+      fixture.editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      expect(fixture.editor.getViewState().selections).toHaveLength(1);
+
+      deletedLine?.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, composed: true })
+      );
+
+      expect(fixture.editor.getViewState().selections).toBeUndefined();
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('unified: clicking a deleted line number selects the line and clears the editor selection', async () => {
     const fixture = await createDiffEditorFixture('unified', OLD, NEW);
     try {

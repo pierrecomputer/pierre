@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
+import { i18n } from '../src/i18n/I18n';
 import { createFileHeaderElement } from '../src/utils/createFileHeaderElement';
 import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -7,6 +8,41 @@ import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { assertDefined, collectAllElements } from './testUtils';
 
 describe('createFileHeaderElement', () => {
+  afterEach(() => {
+    i18n.set();
+  });
+
+  test.each([
+    ['en', ['-1,200', '+1,234']],
+    ['de', ['-1.200', '+1.234']],
+  ] as const)('groups the digits of large counts in %s', (locale, expected) => {
+    i18n.set({ locale });
+    const fileDiff = parseDiffFromFile(
+      {
+        name: 'large.txt',
+        contents: Array.from({ length: 1200 }, (_, i) => `old ${i}\n`).join(''),
+      },
+      {
+        name: 'large.txt',
+        contents: Array.from({ length: 1234 }, (_, i) => `new ${i}\n`).join(''),
+      }
+    );
+    const header = createFileHeaderElement({
+      fileOrDiff: fileDiff,
+      mode: 'default',
+      stickyHeader: false,
+    });
+    const counts = collectAllElements([header]).filter(
+      (element) =>
+        element.properties['data-additions-count'] != null ||
+        element.properties['data-deletions-count'] != null
+    );
+
+    expect(counts.map((element) => element.children[0])).toEqual(
+      expected.map((value) => ({ type: 'text', value }))
+    );
+  });
+
   test.each([
     [
       'unified addition parsed as a change',

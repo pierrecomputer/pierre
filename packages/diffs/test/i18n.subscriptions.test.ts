@@ -11,6 +11,7 @@ import {
 import { CodeView } from '../src/components/CodeView';
 import { FileDiff } from '../src/components/FileDiff';
 import { UnresolvedFile } from '../src/components/UnresolvedFile';
+import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import {
   disposeHighlighter,
@@ -23,7 +24,14 @@ import type {
   FileDiffMetadata,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { createRoot, installDom, renderItems, waitFor } from './domHarness';
+import {
+  createRoot,
+  dispatchScroll,
+  installDom,
+  renderItems,
+  wait,
+  waitFor,
+} from './domHarness';
 
 const FRENCH = {
   locale: 'fr',
@@ -117,6 +125,58 @@ describe('i18n subscriptions', () => {
     }
   });
 
+  test('a mounted FileDiff header regroups its counts when the locale changes', async () => {
+    const dom = installDom();
+    const instance = new FileDiff<undefined>({
+      collapsed: true,
+      theme: DEFAULT_THEMES,
+    });
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    try {
+      const name = 'large.txt';
+      const fileDiff = parseDiffFromFile(
+        { name, contents: '' },
+        {
+          name,
+          contents: Array.from({ length: 1234 }, (_, i) => `line ${i}\n`).join(
+            ''
+          ),
+        }
+      );
+      instance.render({ fileDiff, fileContainer });
+      await waitFor(() => shadowText(fileContainer).includes('+1,234'));
+      expect(shadowText(fileContainer)).toContain('+1,234');
+
+      i18n.set({ locale: 'de' });
+      await waitFor(() => shadowText(fileContainer).includes('+1.234'));
+      expect(shadowText(fileContainer)).toContain('+1.234');
+      expect(shadowText(fileContainer)).not.toContain('+1,234');
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a FileDiff listens once it has rendered, not before', () => {
+    const dom = installDom();
+    const instance = new FileDiff<undefined>({ theme: DEFAULT_THEMES });
+    const heard = spyOn(instance, 'onMessagesChange');
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    try {
+      i18n.set({ locale: 'de' });
+      expect(heard).not.toHaveBeenCalled();
+
+      instance.render({ fileDiff: parseFixture(), fileContainer });
+      i18n.set({ locale: 'fr' });
+      expect(heard).toHaveBeenCalledTimes(1);
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('a mounted UnresolvedFile re-renders its conflict actions', async () => {
     const dom = installDom();
     const instance = new UnresolvedFile<undefined>({
@@ -164,6 +224,105 @@ describe('i18n subscriptions', () => {
       i18n.set(FRENCH);
       expect(rerender).not.toHaveBeenCalled();
     } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('a CodeView header scrolled away regroups its counts once it is back', async () => {
+    const dom = installDom();
+    const viewer = new CodeView<undefined, undefined>({
+      theme: DEFAULT_THEMES,
+    });
+    const root = createRoot();
+    const items: CodeViewItem<undefined>[] = [
+      {
+        id: 'large',
+        type: 'diff',
+        collapsed: true,
+        version: 1,
+        fileDiff: parseDiffFromFile(
+          { name: 'large.txt', contents: '' },
+          {
+            name: 'large.txt',
+            contents: Array.from(
+              { length: 1234 },
+              (_, i) => `line ${i}\n`
+            ).join(''),
+          }
+        ),
+      },
+      ...Array.from({ length: 400 }, (_, i) => ({
+        id: `small:${i}`,
+        type: 'diff' as const,
+        collapsed: true,
+        version: 1,
+        fileDiff: parseFixture(`small-${i}.txt`),
+      })),
+    ];
+    const renderedIds = () =>
+      viewer.getRenderedItems().map((rendered) => rendered.item.id);
+    const largeHeaderText = () =>
+      shadowText(
+        viewer
+          .getRenderedItems()
+          .find((rendered) => rendered.item.id === 'large')?.element
+      );
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      await waitFor(() => largeHeaderText().includes('+1,234'));
+      expect(largeHeaderText()).toContain('+1,234');
+
+      root.scrollTop = viewer.getTopForItem('small:399') ?? 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+      expect(renderedIds().length).toBeGreaterThan(0);
+      expect(renderedIds()).not.toContain('large');
+
+      i18n.set({ locale: 'de' });
+
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await waitFor(() => largeHeaderText().includes('+1.234'));
+      expect(largeHeaderText()).toContain('+1.234');
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('only mounted CodeView items hear a message change', async () => {
+    const dom = installDom();
+    const viewer = new CodeView<undefined, undefined>({
+      theme: DEFAULT_THEMES,
+    });
+    const root = createRoot();
+    const makeItems = (prefix: string): CodeViewItem<undefined>[] =>
+      Array.from({ length: 300 }, (_, i) => ({
+        id: `${prefix}:${i}`,
+        type: 'diff',
+        version: 1,
+        fileDiff: parseFixture(`${prefix}-${i}.txt`),
+      }));
+    const heard = spyOn(VirtualizedFileDiff.prototype, 'onMessagesChange');
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, makeItems('first'));
+      // A whole new list goes through the full reconcile, not the append path.
+      await renderItems(viewer, makeItems('second'));
+      const mounted = viewer.getRenderedItems().length;
+      expect(mounted).toBeGreaterThan(0);
+      expect(mounted).toBeLessThan(300);
+      heard.mockClear();
+
+      i18n.set({ locale: 'de' });
+
+      expect(heard).toHaveBeenCalledTimes(mounted);
+    } finally {
+      heard.mockRestore();
+      viewer.cleanUp();
       dom.cleanup();
     }
   });

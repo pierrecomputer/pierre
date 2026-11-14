@@ -835,12 +835,15 @@ export interface HunkExpansionRegion {
   fromEnd: number;
 }
 
+/** How far each collapsed region is expanded, keyed by hunk index. */
+export type ExpandedHunksMap = Map<number, HunkExpansionRegion>;
+
 export interface ForceDiffPlainTextOptions {
   forcePlainText: boolean;
   lazyLineAST?: boolean;
   startingLine?: number;
   totalLines?: number;
-  expandedHunks?: Map<number, HunkExpansionRegion> | true;
+  expandedHunks?: ExpandedHunksMap | true;
   collapsedContextThreshold?: number;
 }
 

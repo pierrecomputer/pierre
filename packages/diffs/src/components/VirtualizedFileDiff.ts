@@ -8,11 +8,11 @@ import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
+  ExpandedHunksMap,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
   Hunk,
-  HunkExpansionRegion,
   HunkSeparators,
   NumericScrollLineAnchor,
   PendingCodeViewLayoutReset,
@@ -55,7 +55,7 @@ import {
   getLeadingHunkSeparatorLayout,
   getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
-  isAdditionLineRenderable,
+  growExpandedRegion,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeView } from './CodeView';
@@ -115,12 +115,6 @@ interface PendingLoadedDiff {
   files: LoadedPartialDiffContents;
 }
 
-interface PendingExpansion {
-  hunkIndex: number;
-  direction: ExpansionDirections;
-  expansionLineCountOverride: number | undefined;
-}
-
 interface PendingRender {
   // Diff requested for the next render, including editor changes.
   workingDiff: FileDiffMetadata;
@@ -166,7 +160,9 @@ export class VirtualizedFileDiff<
   private layoutDirty = true;
   private currentCollapsed: boolean | undefined;
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
-  private pendingExpansions: PendingExpansion[] | undefined;
+  // CodeView applies expansions at its next layout pass. Until then this is
+  // the expansion state as it will be once they are applied.
+  private pendingExpandedHunks: ExpandedHunksMap | undefined;
   // Remember which diff the layout was calculated from, even when only a
   // placeholder is rendered. Async highlighting clears this through rerender()
   // so layout can use the newly available content. CodeView updates it during
@@ -654,7 +650,7 @@ export class VirtualizedFileDiff<
     let dropMeasurements = false;
     let resetEstimatedHeights = false;
     const {
-      pendingExpansions,
+      pendingExpandedHunks,
       pendingHydratedDiff,
       options: { collapsed = false },
     } = this;
@@ -662,9 +658,9 @@ export class VirtualizedFileDiff<
     // Hydrate the `isPartial: true` diff if we have a pending hydration
     if (pendingHydratedDiff != null) {
       this.pendingHydratedDiff = undefined;
-      if (pendingHydratedDiff.expectedDiff === fileDiff) {
-        // We intentionally keep diff equality referential,
-        // and treat it as a mutation
+      if (areDiffTargetsEqual(pendingHydratedDiff.expectedDiff, fileDiff)) {
+        // The loaded contents are written into the diff object the host
+        // passes now, which may be a new object for the same diff.
         Object.assign(fileDiff, pendingHydratedDiff.nextDiff);
         this.setHydratedState(pendingHydratedDiff.files);
         this.installHydratedDiff(fileDiff);
@@ -674,22 +670,12 @@ export class VirtualizedFileDiff<
       }
     }
 
-    // Go ahead and apply any queued expansion changes
-    if (pendingExpansions != null) {
-      this.pendingExpansions = undefined;
-      for (const {
-        hunkIndex,
-        direction,
-        expansionLineCountOverride,
-      } of pendingExpansions) {
-        this.hunksRenderer.expandHunk(
-          hunkIndex,
-          direction,
-          expansionLineCountOverride
-        );
-        this.forceRenderOverride = true;
-        resetEstimatedHeights = true;
-      }
+    // Go ahead and apply any pending expansion changes
+    if (pendingExpandedHunks != null) {
+      this.pendingExpandedHunks = undefined;
+      this.hunksRenderer.setExpandedHunksMap(pendingExpandedHunks);
+      this.forceRenderOverride = true;
+      resetEstimatedHeights = true;
     }
 
     const diffChanged = this.updateInputDiff(fileDiff, lineAnnotations);
@@ -787,7 +773,8 @@ export class VirtualizedFileDiff<
       startingLine: checkpoint?.renderedLineIndex ?? 0,
       expandedHunks: expandUnchanged
         ? true
-        : this.hunksRenderer.getExpandedHunksMap(),
+        : (this.pendingExpandedHunks ??
+          this.hunksRenderer.getExpandedHunksMap()),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
@@ -889,7 +876,7 @@ export class VirtualizedFileDiff<
     // a staged expansion opens gets its row on the host's next layout, and
     // the request resolves against it then.
     const { virtualizer } = this;
-    if (!this.isLineRenderable(lineNumber)) {
+    if (this.isLineInCollapsedContext(lineNumber)) {
       // Still the newest request, so it replaces any scroll in flight.
       virtualizer.cancelScroll();
       onDone('cancelled');
@@ -1121,7 +1108,7 @@ export class VirtualizedFileDiff<
     if (!recycle) {
       this.resetMeasurements();
       this.invalidateLayout({ includeEstimatedHeights: true });
-      this.pendingExpansions = undefined;
+      this.pendingExpandedHunks = undefined;
       this.pendingHydratedDiff = undefined;
     }
     this.pendingRender = undefined;
@@ -1142,12 +1129,18 @@ export class VirtualizedFileDiff<
     }
     this.loadFilesIfNecessary();
     if (this.isAdvancedMode()) {
-      this.pendingExpansions ??= [];
-      this.pendingExpansions.push({
+      const { expansionLineCount = 100 } = this.options;
+      const pending = (this.pendingExpandedHunks ??= new Map(
+        this.hunksRenderer.getExpandedHunksMap()
+      ));
+      pending.set(
         hunkIndex,
-        direction,
-        expansionLineCountOverride,
-      });
+        growExpandedRegion(
+          pending.get(hunkIndex),
+          direction,
+          expansionLineCountOverride ?? expansionLineCount
+        )
+      );
     } else {
       this.hunksRenderer.expandHunk(
         hunkIndex,
@@ -1222,47 +1215,16 @@ export class VirtualizedFileDiff<
     super.loadFilesIfNecessary();
   }
 
-  // In advanced (CodeView) mode, expansions are staged in pendingExpansions
-  // until the next layout consume, so the renderer's expansion map lags a
-  // just-requested reveal. Account for the staged expansions so callers (the
-  // editor's caret-scroll retry) see the post-consume visibility.
-  override isLineRenderable(lineNumber: number): boolean {
-    if (super.isLineRenderable(lineNumber)) {
-      return true;
-    }
-    const { pendingExpansions } = this;
-    const fileDiff = this.getRenderedDiff();
-    if (
-      pendingExpansions == null ||
-      pendingExpansions.length === 0 ||
-      fileDiff == null
-    ) {
-      return false;
-    }
-    const {
-      expansionLineCount = 100,
-      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-    } = this.options;
-    const staged = new Map(this.hunksRenderer.getExpandedHunksMap());
-    for (const expansion of pendingExpansions) {
-      const region = {
-        ...(staged.get(expansion.hunkIndex) ?? { fromStart: 0, fromEnd: 0 }),
-      };
-      const count = expansion.expansionLineCountOverride ?? expansionLineCount;
-      if (expansion.direction === 'up' || expansion.direction === 'both') {
-        region.fromStart += count;
-      }
-      if (expansion.direction === 'down' || expansion.direction === 'both') {
-        region.fromEnd += count;
-      }
-      staged.set(expansion.hunkIndex, region);
-    }
-    return isAdditionLineRenderable({
-      fileDiff,
-      lineNumber,
-      expandedHunks: staged,
-      collapsedContextThreshold,
-    });
+  // In advanced (CodeView) mode, expansions stay pending until the next
+  // layout/render pass, so we need to use pendingExpandedHunks instead of the
+  // expandedHunks.
+  override isLineInCollapsedContext(
+    lineNumber: number,
+    side: SelectionSide = 'additions',
+    expandedHunks: ExpandedHunksMap = this.pendingExpandedHunks ??
+      this.hunksRenderer.getExpandedHunksMap()
+  ): boolean {
+    return super.isLineInCollapsedContext(lineNumber, side, expandedHunks);
   }
 
   // Invalidate layout after an edit session changed the rendered row set
@@ -1308,10 +1270,6 @@ export class VirtualizedFileDiff<
     return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
   }
 
-  public getExpandedHunksForSearch(): Map<number, HunkExpansionRegion> {
-    return this.hunksRenderer.getExpandedHunksMap();
-  }
-
   // Search maps live editor lines against the session's hunks, including while
   // the item is offscreen and its rendered diff may be out of date.
   public getDiffForSearch(): FileDiffMetadata | undefined {
@@ -1343,9 +1301,7 @@ export class VirtualizedFileDiff<
     }
     const workingDiff = this.getWorkingDiff();
     const nextRenderDiff =
-      workingDiff == null
-        ? undefined
-        : this.hunksRenderer.getDiffForNextRender(workingDiff);
+      workingDiff == null ? undefined : this.getDiffForNextRender(workingDiff);
     // A completed async highlight can change which diff the next simple
     // virtualizer render will commit. CodeView refreshes this during layout.
     if (this.isSimpleMode()) {
@@ -1701,8 +1657,7 @@ export class VirtualizedFileDiff<
     const previousRenderedDiff = this.getRenderedDiff();
     const { pendingRender } = this;
     const previousLayoutDiff = pendingRender?.diff ?? previousRenderedDiff;
-    const pendingRenderDiff =
-      this.hunksRenderer.getDiffForNextRender(workingDiff);
+    const pendingRenderDiff = this.getDiffForNextRender(workingDiff);
 
     this.pendingRender = { workingDiff, diff: pendingRenderDiff };
 

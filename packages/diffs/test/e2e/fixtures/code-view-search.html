@@ -21,8 +21,15 @@
       const params = new URLSearchParams(location.search);
       const diffStyle =
         params.get('diffStyle') === 'unified' ? 'unified' : 'split';
+      const codeViewHeader = document.createElement('div');
+      codeViewHeader.style.height = '200px';
+      codeViewHeader.textContent = 'CodeView header';
       const view = new CodeView({
         diffStyle,
+        ...(params.has('header')
+          ? { renderCodeViewHeader: () => codeViewHeader }
+          : {}),
+        ...(params.has('wrap') ? { overflow: 'wrap' } : {}),
         ...(params.has('unsafe')
           ? { unsafeCSS: 'input[data-search] { color: rgb(1, 2, 3); }' }
           : {}),

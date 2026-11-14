@@ -60,6 +60,7 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
 
 export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
+  #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #initializeMatches: () => void;
   #mount?: () => void;
@@ -269,9 +270,11 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       updateMatches();
     };
 
+    // The host hears about the close while the panel is still in the page, so
+    // it can tell whether the panel held focus.
     const close = () => {
-      this.cleanup();
       onClose();
+      this.cleanup();
     };
     this.#close = close;
 
@@ -553,16 +556,15 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       ).setAttribute(UNSAFE_CSS_ATTRIBUTE, '');
     }
 
+    this.#widgetElement = h('div', {
+      dataset: 'editorWidget',
+      children: [gridElement],
+    });
     h(
       'div',
       {
         dataset: 'searchPanel',
-        children: [
-          h('div', {
-            dataset: 'editorWidget',
-            children: [gridElement],
-          }),
-        ],
+        children: [this.#widgetElement],
       },
       shadowRoot
     );
@@ -595,6 +597,10 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
   getHostElement(): HTMLDivElement {
     return this.#host;
+  }
+
+  getBounds(): DOMRect {
+    return this.#widgetElement.getBoundingClientRect();
   }
 
   hasQuery(): boolean {
@@ -632,8 +638,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     this.#setReplaceHandlers?.(handlers);
   }
 
-  // Tears the panel down the way the close button and Escape-in-input do:
-  // removes the DOM and runs onClose so the editor clears its match highlights.
+  // Tears the panel down the way the close button and Escape-in-input do: runs
+  // onClose so the editor clears its match highlights, then removes the DOM.
   // Prefer this over cleanup() for any user-initiated dismissal.
   close(): void {
     this.#close?.();

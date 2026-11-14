@@ -1957,12 +1957,13 @@ export class Editor<
       : undefined;
   }
 
-  // Whether a zero-based document line has (or will have on scroll) a
-  // rendered row. False only for lines hidden inside a collapsed unchanged
-  // region of a diff host; hosts without collapsible regions treat every
-  // line as renderable.
-  #isLineRenderable(line: number): boolean {
-    return this.#fileDiffInstance?.isLineRenderable?.(line + 1) ?? true;
+  // Whether a zero-based document line is hidden inside a collapsed
+  // unchanged region of a diff host, so it has no row. Hosts without
+  // collapsible regions hide no lines.
+  #isLineInCollapsedContext(line: number): boolean {
+    return (
+      this.#fileDiffInstance?.isLineInCollapsedContext?.(line + 1) ?? false
+    );
   }
 
   // Fold-skip resolver for vertical caret motion (zero-based lines), or
@@ -1986,7 +1987,7 @@ export class Editor<
   // moves) may land inside a collapsed region; expand it minimally so the
   // caret's row can render before the scroll below retries toward it.
   #revealLineIfCollapsed(line: number): void {
-    if (!this.#isLineRenderable(line)) {
+    if (this.#isLineInCollapsedContext(line)) {
       this.#fileDiffInstance?.revealLine?.(line + 1);
     }
   }
@@ -2569,7 +2570,6 @@ export class Editor<
               startScrollLeft: contentEl.parentElement?.scrollLeft ?? 0,
             };
             this.#reservedSelections = undefined;
-            this.#selections = undefined;
             this.#updateSelections([]);
             selectEventDisposes.push(
               addEventListener(
@@ -4434,7 +4434,7 @@ export class Editor<
     if (
       (this.#scrollingToLine === line &&
         (yFix === 0 || this.#scrollingToLineFixed)) ||
-      !this.#isLineRenderable(line)
+      this.#isLineInCollapsedContext(line)
     ) {
       this.#scrollingToLine = undefined;
       this.#scrollingToLineChar = undefined;
@@ -4831,7 +4831,7 @@ export class Editor<
     const selections: EditorSelection[] = [];
     const step = goal.line < anchor.line ? -1 : 1;
     for (let line = anchor.line; ; line += step) {
-      if (this.#isLineRenderable(line)) {
+      if (!this.#isLineInCollapsedContext(line)) {
         // Projected UTF-16 offsets must not split a grapheme on this line.
         const lineText = textDocument.getLineText(line);
         const anchorOffset = Math.min(anchor.character, lineText.length);
@@ -5332,7 +5332,8 @@ export class Editor<
       }
 
       const isLineEditable = (line: number): boolean =>
-        this.#isLineInRenderRange(line) && this.#isLineRenderable(line);
+        this.#isLineInRenderRange(line) &&
+        !this.#isLineInCollapsedContext(line);
       if (!isLineEditable(getCaretPosition(currentSelection).line)) {
         this.#retryEditPredictionOnRender = true;
         return;
@@ -5737,12 +5738,17 @@ export class Editor<
     this.#primaryCaretElement = undefined;
     this.#setEditorActiveLineSafe(null);
 
+    // An empty list always clears the selection, even while search matches or
+    // markers keep the overlay drawn.
+    if (selections.length === 0) {
+      this.#selections = undefined;
+    }
+
     if (
       selections.length === 0 &&
       this.#matches === undefined &&
       this.#markerRenderer === undefined
     ) {
-      this.#selections = undefined;
       this.#searchHighlighter?.clear();
       this.#overlayElements?.forEach((el) => el.remove());
       this.#overlayElements?.clear();

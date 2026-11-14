@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
+import type {
+  FileDiffMetadata,
+  HunkExpansionRegion,
+  SelectionSide,
+} from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   getNearestRenderableAdditionLine,
-  isAdditionLineRenderable,
+  isDiffLineInCollapsedContext,
 } from '../src/utils/virtualDiffLayout';
 
 const COLLAPSED_CONTEXT_THRESHOLD = 1;
@@ -23,10 +27,25 @@ function makeDiff(): FileDiffMetadata {
   );
 }
 
-// Collects the one-based new-file line numbers iterateOverDiff emits rows for
-// under the given expansion state — the ground truth the oracle must match.
-function collectRenderedAdditionLines(
+// Lines are added near the top and removed further down, so the two sides
+// number the same unchanged row differently.
+function makeShiftedDiff(): FileDiffMetadata {
+  const oldLines = Array.from({ length: 60 }, (_, index) => `line ${index}`);
+  const newLines = [...oldLines];
+  newLines.splice(40, 3);
+  newLines.splice(10, 0, 'added a', 'added b');
+  return parseDiffFromFile(
+    { name: 'a.ts', contents: oldLines.join('\n') + '\n' },
+    { name: 'a.ts', contents: newLines.join('\n') + '\n' }
+  );
+}
+
+// Collects the one-based line numbers of one side that iterateOverDiff emits
+// rows for under the given expansion state — the ground truth the oracle must
+// match.
+function collectRenderedLines(
   diff: FileDiffMetadata,
+  side: SelectionSide,
   expandedHunks: Map<number, HunkExpansionRegion> | true | undefined
 ): Set<number> {
   const rendered = new Set<number>();
@@ -35,9 +54,10 @@ function collectRenderedAdditionLines(
     diffStyle: 'split',
     expandedHunks,
     collapsedContextThreshold: COLLAPSED_CONTEXT_THRESHOLD,
-    callback: ({ additionLine }) => {
-      if (additionLine != null) {
-        rendered.add(additionLine.lineNumber);
+    callback: ({ additionLine, deletionLine }) => {
+      const line = side === 'additions' ? additionLine : deletionLine;
+      if (line != null) {
+        rendered.add(line.lineNumber);
       }
     },
   });
@@ -46,23 +66,47 @@ function collectRenderedAdditionLines(
 
 function assertOracleMatches(
   diff: FileDiffMetadata,
-  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined
+  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined,
+  side: SelectionSide = 'additions'
 ): void {
-  const rendered = collectRenderedAdditionLines(diff, expandedHunks);
-  for (let lineNumber = 1; lineNumber <= 40; lineNumber++) {
+  const rendered = collectRenderedLines(diff, side, expandedHunks);
+  const lineCount =
+    side === 'additions'
+      ? diff.additionLines.length
+      : diff.deletionLines.length;
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber++) {
     expect({
       lineNumber,
-      renderable: isAdditionLineRenderable({
+      collapsed: isDiffLineInCollapsedContext({
         fileDiff: diff,
         lineNumber,
+        side,
         expandedHunks,
         collapsedContextThreshold: COLLAPSED_CONTEXT_THRESHOLD,
       }),
-    }).toEqual({ lineNumber, renderable: rendered.has(lineNumber) });
+    }).toEqual({ lineNumber, collapsed: !rendered.has(lineNumber) });
   }
 }
 
-describe('isAdditionLineRenderable', () => {
+describe('isDiffLineInCollapsedContext', () => {
+  test.each(['additions', 'deletions'] as const)(
+    'matches iterateOverDiff on the %s side when the sides number rows differently',
+    (side) => {
+      const diff = makeShiftedDiff();
+      assertOracleMatches(diff, new Map(), side);
+      assertOracleMatches(
+        diff,
+        new Map<number, HunkExpansionRegion>([
+          [0, { fromStart: 3, fromEnd: 0 }],
+          [1, { fromStart: 2, fromEnd: 4 }],
+          [2, { fromStart: 3, fromEnd: 0 }],
+        ]),
+        side
+      );
+      assertOracleMatches(diff, true, side);
+    }
+  );
+
   test('matches iterateOverDiff with everything collapsed', () => {
     assertOracleMatches(makeDiff(), new Map());
   });
@@ -88,21 +132,22 @@ describe('isAdditionLineRenderable', () => {
     );
   });
 
-  test('reports every line renderable when everything is expanded', () => {
+  test('reports no line collapsed when everything is expanded', () => {
     assertOracleMatches(makeDiff(), true);
   });
 
-  test('reports lines beyond the modeled range as renderable', () => {
+  test('reports lines beyond the modeled range as not collapsed', () => {
     const diff = makeDiff();
     // The editor document exposes one phantom line past the file end.
     expect(
-      isAdditionLineRenderable({
+      isDiffLineInCollapsedContext({
         fileDiff: diff,
         lineNumber: 41,
+        side: 'additions',
         expandedHunks: new Map(),
         collapsedContextThreshold: COLLAPSED_CONTEXT_THRESHOLD,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

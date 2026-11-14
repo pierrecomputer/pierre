@@ -46,6 +46,7 @@ import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
+import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { createGutterWrapper, createHastElement } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
@@ -113,6 +114,13 @@ export interface FileRenderResult {
   rowCount: number;
   bufferBefore: number;
   bufferAfter: number;
+}
+
+// What a collapsed file shows: its header and the theme's styles.
+export interface CollapsedFileRenderResult {
+  headerAST: HASTElement | undefined;
+  themeStyles: string;
+  baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface FileRendererOptions extends BaseCodeOptions {
@@ -662,6 +670,49 @@ export class FileRenderer<LAnnotation = undefined> {
     return (this.model = FileModel.fromFile(file));
   }
 
+  // Renders what a collapsed file shows: its header and the theme's styles.
+  // None of the file's lines are on screen, so no rows are built and nothing
+  // is highlighted. Returns undefined until the theme has loaded, and asks for
+  // another render once it has.
+  public renderCollapsed(
+    file: FileContents
+  ): CollapsedFileRenderResult | undefined {
+    this.file = file;
+    // Two kinds of cached state do not outlast a collapse. Rows of another
+    // file are only kept while they are on screen, waiting for this file's
+    // highlight. Hydrated content exists only as prerendered DOM, which
+    // collapsing removes.
+    const { renderCache } = this;
+    if (
+      renderCache != null &&
+      (!areFileTargetsEqual(renderCache.file, file) ||
+        (renderCache.hydrated === true && renderCache.result == null))
+    ) {
+      this.clearRenderCache();
+    }
+    const theme = this.getLocalHighlightTheme();
+    const highlighter = getHighlighterIfLoaded({ theme });
+    if (highlighter == null) {
+      void this.initializeHighlighter('text')
+        .then(() => this.onRenderUpdate?.())
+        .catch((error: unknown) => {
+          if (!(error instanceof HighlighterDisposedError)) {
+            this.onHighlightError(error);
+          }
+        });
+      return undefined;
+    }
+    const { disableFileHeader = false } = this.options;
+    return {
+      headerAST: disableFileHeader ? undefined : this.renderHeader(file),
+      themeStyles: getHighlighterThemeStyles({ theme, highlighter }),
+      baseThemeType:
+        typeof theme === 'string'
+          ? highlighter.getTheme(theme).type
+          : undefined,
+    };
+  }
+
   public renderFile(
     file: FileContents | undefined = this.file,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
@@ -1029,9 +1080,11 @@ export class FileRenderer<LAnnotation = undefined> {
     return [gutter, contentColumn];
   }
 
-  public initializeHighlighter(): Promise<DiffsHighlighter> {
+  public initializeHighlighter(
+    lang: SupportedLanguages = this.computedLang
+  ): Promise<DiffsHighlighter> {
     return getSharedHighlighter(
-      getHighlighterOptions(this.computedLang, {
+      getHighlighterOptions(lang, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter: resolvePreferredHighlighter(
           this.workerManager,

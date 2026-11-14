@@ -9,7 +9,12 @@ const LAYER_ORDER = '@layer base,theme,rendered,unsafe;';
 
 const config: UserConfig[] = defineConfig([
   {
-    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/worker/worker.ts'],
+    entry: [
+      'src/**/*.ts',
+      'src/**/*.tsx',
+      '!src/worker/worker.ts',
+      '!src/worker/workerHandlers.ts',
+    ],
     loader: {
       '.css': 'text',
     },
@@ -73,7 +78,13 @@ const config: UserConfig[] = defineConfig([
     ],
   },
   {
-    entry: ['src/worker/worker.ts'],
+    // The handlers are their own entry so the code they share with the lazily
+    // loaded highlighter chunks is kept out of worker.js. With one entry it
+    // lands in worker.js, and those chunks import the worker entry itself.
+    entry: {
+      worker: 'src/worker/worker.ts',
+      'worker-handlers': 'src/worker/workerHandlers.ts',
+    },
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,

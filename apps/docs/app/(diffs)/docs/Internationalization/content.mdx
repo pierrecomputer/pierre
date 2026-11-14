@@ -17,8 +17,11 @@ client. Messages you leave out fall back to their English defaults, and calling
 <DocsCodeExample {...i18nSetup} />
 
 `locale` accepts a BCP 47 locale string, including `en`, `en-US`, and `en-GB`,
-and defaults to `en`. It selects the plural rules; your application supplies the
-strings in `messages`. Changing `locale` does not load messages for that locale.
+and defaults to `en`. It selects the plural rules and how numbers are written,
+so a count of 12345 reads `12,345` in `en` and `12.345` in `de`. That covers
+numbers in messages and the `+N` and `-N` counts in a diff header. Your
+application supplies the strings in `messages`. Changing `locale` does not load
+messages for that locale.
 
 Components that are already on screen re-render their text when `i18n.set()` is
 called again, so switching languages at runtime needs nothing beyond another

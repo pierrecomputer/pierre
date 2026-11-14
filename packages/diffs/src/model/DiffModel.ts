@@ -1,8 +1,8 @@
 import type {
+  ExpandedHunksMap,
   FileContents,
   FileDiffMetadata,
   Hunk,
-  HunkExpansionRegion,
   ParseDiffOptions,
 } from '../types';
 import { cloneHunks } from '../utils/cloneFileDiffMetadata';
@@ -40,7 +40,7 @@ export interface ModelSessionState {
   /** Options for recomputing hunks. */
   parseDiffOptions?: ParseDiffOptions;
   /** How far each hunk's collapsed context is expanded, by hunk index. */
-  expandedHunks?: Map<number, HunkExpansionRegion>;
+  expandedHunks?: ExpandedHunksMap;
 }
 
 export interface StartSessionOptions {
@@ -481,7 +481,7 @@ export class DiffModel {
   finish(
     collapsedContextThreshold: number,
     session: ModelSessionState = {}
-  ): { changed: boolean; expandedHunks: Map<number, HunkExpansionRegion> } {
+  ): { changed: boolean; expandedHunks: ExpandedHunksMap } {
     const { diff } = this;
     const { parseDiffOptions } = session;
     const expandedHunks = session.expandedHunks ?? new Map();
@@ -567,9 +567,9 @@ function isEmptyDocument(diff: FileDiffMetadata): boolean {
 // The expansion after a change that moved or replaced regions; unchanged when
 // the regions stayed.
 function remapExpansion(
-  expandedHunks: Map<number, HunkExpansionRegion>,
+  expandedHunks: ExpandedHunksMap,
   change: SessionRegionChange | undefined
-): Map<number, HunkExpansionRegion> {
+): ExpandedHunksMap {
   return change == null
     ? expandedHunks
     : remapExpandedHunksForRegionChange(expandedHunks, change);

@@ -1,8 +1,11 @@
 import type {
+  ExpandedHunksMap,
+  ExpansionDirections,
   FileDiffMetadata,
   Hunk,
   HunkExpansionRegion,
   HunkSeparators,
+  SelectionSide,
   VirtualFileMetrics,
 } from '../types';
 import { getDefaultHunkSeparatorHeight } from './computeVirtualFileMetrics';
@@ -22,7 +25,7 @@ export interface ExpandedRegionResult {
 export interface GetExpandedRegionProps {
   isPartial: boolean;
   rangeSize: number;
-  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
+  expandedHunks: ExpandedHunksMap | true | undefined;
   hunkIndex: number;
   collapsedContextThreshold: number;
 }
@@ -46,6 +49,24 @@ export function getHunkAdditionLineRange(hunk: Hunk): [number, number] {
   ];
 }
 
+/** One-based old-file line range covered by a hunk, as `[start, end)`. */
+export function getHunkDeletionLineRange(hunk: Hunk): [number, number] {
+  return [
+    getHunkSideStartBoundary(hunk.deletionStart, hunk.deletionCount) + 1,
+    getHunkSideEndBoundary(hunk.deletionStart, hunk.deletionCount) + 1,
+  ];
+}
+
+/** One-based line range a hunk covers on one side, as `[start, end)`. */
+export function getHunkLineRange(
+  hunk: Hunk,
+  side: SelectionSide
+): [number, number] {
+  return side === 'additions'
+    ? getHunkAdditionLineRange(hunk)
+    : getHunkDeletionLineRange(hunk);
+}
+
 export interface HunkSeparatorLayout {
   height: number;
   gapBefore: number;
@@ -61,6 +82,26 @@ interface HunkSeparatorBaseProps {
 interface LeadingHunkSeparatorLayoutProps extends HunkSeparatorBaseProps {
   hunkIndex: number;
   hunkSpecs: string | undefined;
+}
+
+// The expansion of one collapsed region after it opens `lineCount` more lines
+// in a direction: `'up'` from its start, `'down'` from its end.
+export function growExpandedRegion(
+  region: HunkExpansionRegion | undefined,
+  direction: ExpansionDirections,
+  lineCount: number
+): HunkExpansionRegion {
+  const grown = {
+    fromStart: region?.fromStart ?? 0,
+    fromEnd: region?.fromEnd ?? 0,
+  };
+  if (direction === 'up' || direction === 'both') {
+    grown.fromStart += lineCount;
+  }
+  if (direction === 'down' || direction === 'both') {
+    grown.fromEnd += lineCount;
+  }
+  return grown;
 }
 
 // Converts a collapsed unchanged range into the slices that should render near
@@ -248,37 +289,39 @@ export function getTrailingExpandedRegion({
   };
 }
 
-export interface IsAdditionLineRenderableProps {
+export interface IsDiffLineInCollapsedContextProps {
   fileDiff: FileDiffMetadata;
-  /** One-based line number in the new file. */
+  /** One-based line number in the file `side` names. */
   lineNumber: number;
-  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
+  /** `'additions'` for the new file, `'deletions'` for the old one. */
+  side: SelectionSide;
+  expandedHunks: ExpandedHunksMap | true | undefined;
   collapsedContextThreshold: number;
 }
 
 /**
- * Whether a one-based new-file line currently has (or will have on scroll) a
- * rendered row under the given expansion state — the editor-facing
- * visibility oracle. False only for lines hidden inside a collapsed
- * unchanged region; lines outside the diff's modeled range report true so
- * callers keep their existing missing-row handling. Computed from the same
- * inputs as `iterateOverDiff` so layout math and the oracle cannot diverge.
+ * Whether a one-based line of one side is hidden inside collapsed unchanged
+ * context under the given expansion state, so it has no row. False for every
+ * other line, including lines outside the diff's modeled range, which leaves
+ * callers their existing missing-row handling. Computed from the same inputs
+ * as `iterateOverDiff` so layout math and this check cannot diverge.
  */
-export function isAdditionLineRenderable({
+export function isDiffLineInCollapsedContext({
   fileDiff,
   lineNumber,
+  side,
   expandedHunks,
   collapsedContextThreshold,
-}: IsAdditionLineRenderableProps): boolean {
+}: IsDiffLineInCollapsedContextProps): boolean {
   if (expandedHunks === true || fileDiff.isPartial) {
-    return true;
+    return false;
   }
 
   for (const [hunkIndex, hunk] of fileDiff.hunks.entries()) {
-    const [hunkStart, hunkEnd] = getHunkAdditionLineRange(hunk);
+    const [hunkStart, hunkEnd] = getHunkLineRange(hunk, side);
     if (lineNumber < hunkStart) {
-      // Inside the collapsed gap before this hunk: renderable only within
-      // the expanded slices at the gap's edges.
+      // Inside the gap before this hunk: collapsed unless it falls in the
+      // expanded slices at the gap's edges.
       const region = getExpandedRegion({
         isPartial: fileDiff.isPartial,
         rangeSize: hunk.collapsedBefore,
@@ -288,13 +331,13 @@ export function isAdditionLineRenderable({
       });
       const gapStart = hunkStart - region.rangeSize;
       return (
-        region.renderAll ||
-        lineNumber < gapStart + region.fromStart ||
-        lineNumber >= hunkStart - region.fromEnd
+        !region.renderAll &&
+        lineNumber >= gapStart + region.fromStart &&
+        lineNumber < hunkStart - region.fromEnd
       );
     }
     if (lineNumber < hunkEnd) {
-      return true;
+      return false;
     }
   }
 
@@ -303,20 +346,23 @@ export function isAdditionLineRenderable({
     hunkIndex: fileDiff.hunks.length - 1,
     expandedHunks,
     collapsedContextThreshold,
-    errorPrefix: 'isAdditionLineRenderable',
+    errorPrefix: 'isDiffLineInCollapsedContext',
   });
   if (trailingRegion == null || trailingRegion.renderAll) {
-    return true;
+    return false;
   }
   const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
-  const [, trailingStart] = getHunkAdditionLineRange(lastHunk);
+  const [, trailingStart] = getHunkLineRange(lastHunk, side);
   return (
-    lineNumber < trailingStart + trailingRegion.fromStart ||
-    lineNumber >= trailingStart + trailingRegion.rangeSize
+    lineNumber >= trailingStart + trailingRegion.fromStart &&
+    lineNumber < trailingStart + trailingRegion.rangeSize
   );
 }
 
-export interface GetNearestRenderableAdditionLineProps extends IsAdditionLineRenderableProps {
+export interface GetNearestRenderableAdditionLineProps extends Omit<
+  IsDiffLineInCollapsedContextProps,
+  'side'
+> {
   direction: 'up' | 'down';
 }
 
