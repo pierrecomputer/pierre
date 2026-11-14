@@ -8,6 +8,9 @@ const config: UserConfig = defineConfig({
     'src/react/overlays.tsx',
   ],
   platform: 'neutral',
+  // A module imports its sheet as a string with `?inline`; Lightning CSS
+  // minifies the string, as an app build minifies a stylesheet.
+  css: { minify: true },
   dts: { tsgo: true, sourcemap: true },
   deps: { neverBundle: ['react', 'react/jsx-runtime'] },
 });

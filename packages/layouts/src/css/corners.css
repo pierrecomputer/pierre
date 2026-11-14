@@ -1,0 +1,22 @@
+@layer pierre-layouts {
+  .pierre-layout-corner {
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 4;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--layout-border);
+    cursor: move;
+    touch-action: none;
+  }
+
+  .pierre-layout-corner:hover,
+  .pierre-layout-corner:focus-visible {
+    background: var(--layout-accent);
+    outline: 2px solid var(--layout-accent);
+    outline-offset: 2px;
+  }
+}

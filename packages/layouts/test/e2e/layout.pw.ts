@@ -390,3 +390,24 @@ test('a pane that changes size keeps the shape of its text during the animation'
   for (const ratio of ratios)
     expect(Math.abs(ratio / end - 1)).toBeLessThan(0.02);
 });
+
+test('an app rule without a layer wins over a layout rule of higher specificity', async ({
+  page,
+}) => {
+  // `.pierre-layout-separator:hover` sets the background in the layout's
+  // layer. The app's rule has a lower specificity and no layer.
+  await page.addStyleTag({
+    content: '.pierre-layout-separator { background: rgb(1, 2, 3); }',
+  });
+  const separator = page.locator('.pierre-layout-separator').first();
+  await separator.hover();
+  await expect(separator).toHaveCSS('background-color', 'rgb(1, 2, 3)');
+  const layers = await page.evaluate(() =>
+    [...document.styleSheets].flatMap((sheet) =>
+      [...sheet.cssRules].flatMap((rule) =>
+        rule instanceof CSSLayerBlockRule ? [rule.name] : []
+      )
+    )
+  );
+  expect(layers).toContain('pierre-layouts');
+});

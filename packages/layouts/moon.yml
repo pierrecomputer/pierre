@@ -43,6 +43,12 @@ tasks:
       runInCI: 'always'
       envFile: '/.env.worktree'
 
+  generate-styles:
+    command: 'bun scripts/generate-styles.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
   bench-compare:
     command: 'node bench/compare.ts'
     options:

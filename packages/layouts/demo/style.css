@@ -8,18 +8,22 @@
 body {
   margin: 0;
 }
-button,
-select,
-input {
-  font: inherit;
-}
-button,
-select {
-  cursor: pointer;
-}
-button:disabled {
-  cursor: default;
-  opacity: 0.4;
+/* Element defaults, in a layer before the layout's (see index.html), so that
+   the layout's own controls keep their cursors and states. */
+@layer demo-base {
+  button,
+  select,
+  input {
+    font: inherit;
+  }
+  button,
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
 }
 main {
   max-width: 1600px;

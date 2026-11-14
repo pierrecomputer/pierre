@@ -8,6 +8,7 @@
     "test/**/*.ts",
     "bench/**/*.ts",
     "bench/**/*.tsx",
+    "scripts/**/*.ts",
     "tsdown.config.ts"
   ],
   "exclude": ["node_modules", "dist", "demo/dist", "bench/dist"],

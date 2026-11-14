@@ -1,0 +1,10 @@
+@layer pierre-layouts {
+  .pierre-layout-focus {
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 2;
+    border: 2px solid var(--layout-accent);
+    border-radius: 10px;
+    pointer-events: none;
+  }
+}

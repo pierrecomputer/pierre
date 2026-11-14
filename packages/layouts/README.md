@@ -452,6 +452,18 @@ implementation, not a claim of matching native CoreAnimation's per-frame
 performance. Cross-window dragging, overlay sidebars, and drag and drop of tabs
 are future work.
 
+Every rule of the layout is in the cascade layer `pierre-layouts`, so the CSS of
+an app without a layer wins over it at any specificity. Element defaults of an
+app, such as `button { cursor: pointer; }`, then also apply to the layout's own
+controls. Put them in a layer that comes before the layout's, and declare the
+order once, before any stylesheet: `@layer reset, pierre-layouts;`. An app that
+puts its own CSS in layers declares `@layer pierre-layouts, app;`.
+
+`styles.css` holds the sheets of `src/css`, one for each feature or part of the
+view. Do not change `styles.css`: change a sheet, then run
+`moon run layouts:generate-styles`. A unit test checks that `styles.css` is
+current. A module can import a sheet as a string with `?inline`.
+
 ## References
 
 The interaction direction comes from Mitchell Hashimoto's split-layout demos:

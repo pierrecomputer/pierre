@@ -1,0 +1,50 @@
+@layer pierre-layouts {
+  .pierre-layout-header,
+  .pierre-layout-header * {
+    box-sizing: border-box;
+  }
+
+  .pierre-layout-header {
+    display: flex;
+    align-items: center;
+    flex: 0 0 36px;
+    gap: 6px;
+    min-width: 0;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--layout-border);
+    font-size: 12px;
+  }
+
+  .pierre-layout-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pierre-layout-header button {
+    padding: 2px 5px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .pierre-layout-header button:hover,
+  .pierre-layout-header button:focus-visible {
+    background: var(--layout-border);
+  }
+
+  .pierre-layout-header button:disabled,
+  .pierre-layout-header button[aria-disabled='true'] {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .pierre-layout-header .pierre-layout-grip {
+    touch-action: none;
+    cursor: grab;
+  }
+}

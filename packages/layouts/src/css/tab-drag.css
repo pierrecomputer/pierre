@@ -1,0 +1,23 @@
+@layer pierre-layouts {
+  /* Where a tab that the pointer drags goes. The view moves it with a
+     transform from the left edge of the tab list. */
+  :where(.pierre-layout [data-layout-tablist]) {
+    position: relative;
+  }
+
+  .pierre-layout-tab-drop {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: 2px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--layout-accent);
+    pointer-events: none;
+  }
+
+  .pierre-layout-tab[data-dragging='true'] {
+    opacity: 0.6;
+  }
+}
