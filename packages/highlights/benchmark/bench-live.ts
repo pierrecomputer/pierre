@@ -372,7 +372,11 @@ interface RawLive {
   liveRun(budget: number): number;
   liveStats(k: number): number;
 }
-const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+const env = {
+  is_id_start: () => 1,
+  is_id_continue: () => 1,
+  lex_line: () => 0,
+};
 const raw = new WebAssembly.Instance(wasmModule, { env })
   .exports as unknown as RawLive;
 const bytes = new TextEncoder().encode(hundredK);

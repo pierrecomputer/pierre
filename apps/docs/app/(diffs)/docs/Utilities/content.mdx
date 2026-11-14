@@ -209,10 +209,11 @@ throws. To use a built-in lexer under a new name, copy a
 
 Highlights ignores TextMate grammars, and Shiki ignores Highlights lexers.
 Register one loader per name and type; a TextMate loader and a Highlights loader
-can share a name. Highlights uses registered lexers for rendered code; its
-stream and editor tokenizers use built-in lexers only. Highlights registers
-lexers for the whole page. Every name in `aliases` replaces a built-in lexer
-with the same name, and disposing the highlighter does not remove it.
+can share a name. Highlights uses registered lexers for rendered code and in its
+stream and editor tokenizers. For a `@pierre/highlights/langs/*` module, the
+tokenizers use the built-in lexer of that language. Highlights registers lexers
+for the whole page. Every name in `aliases` replaces a built-in lexer with the
+same name, and disposing the highlighter does not remove it.
 
 The grammar file or object returned by your loader has a `name` field and can
 have an `aliases` array. An alias is an additional language ID that uses the
