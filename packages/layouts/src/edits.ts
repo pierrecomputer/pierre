@@ -3,7 +3,7 @@
 // loads only the model that it uses.
 import { swapPanes } from './edits-model';
 import { randomIds } from './ids';
-import { TreeOperationError } from './layout-operation';
+import { LayoutOperationError } from './layout-operation';
 import { canClose, paneIn, requireNewPane, slotOf } from './model';
 import { focusAfterLeaving, type StoreFeature } from './store';
 import type { Edge, PaneNode, TreeModel } from './types';
@@ -51,7 +51,7 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
       close(root, { pane }) {
         paneIn(root, pane);
         if (!canClose(root, pane))
-          throw new TreeOperationError('last_pane', pane);
+          throw new LayoutOperationError('last_pane', pane);
         return model.remove(root, pane) ?? root;
       },
       move(root, { pane, target, edge, id }, { newId }) {

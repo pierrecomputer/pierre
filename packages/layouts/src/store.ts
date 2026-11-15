@@ -1,7 +1,7 @@
 import type {
   LayoutChange,
   LayoutOperation,
-  TreeOperation,
+  LayoutTreeOperation,
 } from './layout-operation';
 import {
   findNode,
@@ -73,10 +73,10 @@ export interface FoldContext {
 
 /**
  * The change that one operation makes to a tree: the same change for the
- * command of a store and for a server. It throws `TreeOperationError` for an
+ * command of a store and for a server. It throws `LayoutOperationError` for an
  * operation that the tree refuses.
  */
-export type Fold<T extends TreeOperation = TreeOperation> = (
+export type Fold<T extends LayoutTreeOperation = LayoutTreeOperation> = (
   root: LayoutNode,
   operation: T,
   context: FoldContext
@@ -84,8 +84,8 @@ export type Fold<T extends TreeOperation = TreeOperation> = (
 
 /** The folds of a feature, one for each type of operation that it makes. */
 export type Folds = {
-  readonly [T in TreeOperation['type']]?: Fold<
-    Extract<TreeOperation, { type: T }>
+  readonly [T in LayoutTreeOperation['type']]?: Fold<
+    Extract<LayoutTreeOperation, { type: T }>
   >;
 };
 
@@ -102,7 +102,7 @@ export interface StoreContext {
    * current tree or on `root`. It throws as the fold does. The store must
    * have the fold of the operation.
    */
-  fold(operation: TreeOperation, root?: LayoutNode): LayoutNode;
+  fold(operation: LayoutTreeOperation, root?: LayoutNode): LayoutNode;
   /**
    * Make a state the current state with the operations that made it, and
    * notify the listeners. The tree of `next` holds only nodes that the store
@@ -285,7 +285,7 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   // A command runs the fold of its own operation; `applyOperations` checks an
   // operation from elsewhere first.
   const fold = (
-    operation: TreeOperation,
+    operation: LayoutTreeOperation,
     root: LayoutNode = state.root
   ): LayoutNode =>
     (folds[operation.type] as Fold)(root, operation, foldContext);
@@ -363,15 +363,18 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       };
     },
     setRoot(root) {
-      const operation: TreeOperation = { type: 'setRoot', root: own(root) };
+      const operation: LayoutTreeOperation = {
+        type: 'setRoot',
+        root: own(root),
+      };
       commit({ ...state, root: operation.root }, [operation]);
     },
     setSizes(sizes) {
-      const operation: TreeOperation = { type: 'resize', sizes };
+      const operation: LayoutTreeOperation = { type: 'resize', sizes };
       commit({ ...state, root: fold(operation) }, [operation]);
     },
     setCollapsed(id, collapsed) {
-      const operation: TreeOperation = {
+      const operation: LayoutTreeOperation = {
         type: 'collapse',
         pane: id,
         collapsed,

@@ -1,13 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 
-import { applyOperations, applyTreeOperations } from '../src/apply-operations';
+import {
+  applyLayoutOperations,
+  applyOperations,
+} from '../src/apply-operations';
 import { edits } from '../src/edits';
 import { hiddenPanes } from '../src/hidden-panes';
 import {
   isTreeOperation,
   type LayoutChange,
   type LayoutOperation,
-  type TreeOperation,
+  type LayoutTreeOperation,
 } from '../src/layout-operation';
 import { LayoutStore } from '../src/layout-store';
 import { canClose, getPanes } from '../src/model';
@@ -208,7 +211,7 @@ describe('the operations of each command', () => {
       // The operations go over the wire as JSON, and the server checks them.
       const sent = parseLayoutOperations(JSON.parse(JSON.stringify(tree)));
       expect(sent).toEqual(tree);
-      expect(applyTreeOperations(before, sent)).toEqual(
+      expect(applyLayoutOperations(before, sent)).toEqual(
         store.getSnapshot().root
       );
     }
@@ -223,7 +226,7 @@ describe('the operations of each command', () => {
     const operations = changes.flatMap((change) => change.operations);
     const ids = (root: LayoutNode): string[] =>
       root.type === 'pane' ? [] : [root.id, ...root.children.flatMap(ids)];
-    const after = applyTreeOperations(
+    const after = applyLayoutOperations(
       before,
       operations.filter(isTreeOperation)
     );
@@ -256,13 +259,13 @@ describe('the operations of each command', () => {
       applyOperations(store, [{ type: 'resize', sizes: { nothing: [1, 1] } }])
     ).toThrow(expect.objectContaining({ code: 'node_not_found' }));
     expect(() =>
-      applyTreeOperations(start, [{ type: 'resize', sizes: { row: [1, 1] } }])
+      applyLayoutOperations(start, [{ type: 'resize', sizes: { row: [1, 1] } }])
     ).toThrow(expect.objectContaining({ code: 'invalid_sizes' }));
     expect(() => store.split('a', pane('b'))).toThrow(
       expect.objectContaining({ code: 'id_in_use' })
     );
     expect(() =>
-      applyTreeOperations(start, [
+      applyLayoutOperations(start, [
         {
           type: 'split',
           target: 'a',
@@ -273,7 +276,7 @@ describe('the operations of each command', () => {
       ])
     ).toThrow(expect.objectContaining({ code: 'id_in_use' }));
     expect(() =>
-      applyTreeOperations(start, [{ type: 'close', pane: 'a' }], {
+      applyLayoutOperations(start, [{ type: 'close', pane: 'a' }], {
         features: [],
       })
     ).toThrow(expect.objectContaining({ code: 'unknown_operation' }));
@@ -292,7 +295,7 @@ describe('remote operations', () => {
   test('a remote change gives the store the operations in one change, and keeps the focus', () => {
     const store = storeOf();
     const changes = record(store);
-    const operations: TreeOperation[] = [
+    const operations: LayoutTreeOperation[] = [
       { type: 'split', target: 'b', pane: pane('e'), edge: 'right' },
       { type: 'close', pane: 'a' },
     ];
@@ -408,7 +411,7 @@ describe('one close rule', () => {
       expect.objectContaining({ code: 'last_pane' })
     );
     expect(() =>
-      applyTreeOperations(lastVisible, [{ type: 'close', pane: 'a' }])
+      applyLayoutOperations(lastVisible, [{ type: 'close', pane: 'a' }])
     ).toThrow(expect.objectContaining({ code: 'last_pane' }));
     const view = {
       store,
@@ -419,7 +422,7 @@ describe('one close rule', () => {
     // The close of the hidden pane is allowed everywhere.
     store.close('b');
     expect(
-      applyTreeOperations(lastVisible, [{ type: 'close', pane: 'b' }])
+      applyLayoutOperations(lastVisible, [{ type: 'close', pane: 'b' }])
     ).toEqual(store.getSnapshot().root);
   });
 });

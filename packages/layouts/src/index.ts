@@ -1,7 +1,7 @@
 export {
   applyOperations,
-  applyTreeOperations,
-  type ApplyTreeOperationsOptions,
+  applyLayoutOperations,
+  type ApplyLayoutOperationsOptions,
 } from './apply-operations';
 export {
   type CornerGeometry,
@@ -18,9 +18,9 @@ export {
   type LayoutChange,
   type LayoutOperation,
   type LayoutWindowOperation,
-  type TreeOperation,
-  TreeOperationError,
-  type TreeOperationErrorCode,
+  type LayoutTreeOperation,
+  LayoutOperationError,
+  type LayoutOperationErrorCode,
 } from './layout-operation';
 export { LayoutStore, type LayoutStoreOptions } from './layout-store';
 export {

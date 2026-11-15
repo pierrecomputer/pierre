@@ -1,4 +1,4 @@
-import type { TreeOperation } from './layout-operation';
+import type { LayoutTreeOperation } from './layout-operation';
 import { naryTree } from './models/n-ary';
 import type {
   ChildSize,
@@ -223,7 +223,7 @@ export function parseStoredLayoutTree(
 }
 
 // The fields of each tree operation, besides `type`.
-const OPERATION_KEYS: Readonly<Record<TreeOperation['type'], string>> = {
+const OPERATION_KEYS: Readonly<Record<LayoutTreeOperation['type'], string>> = {
   setRoot: 'root',
   resize: 'sizes',
   collapse: 'pane collapsed',
@@ -303,14 +303,14 @@ function parseSizes(
   );
 }
 
-function parseOperation(value: unknown, path: string): TreeOperation {
+function parseOperation(value: unknown, path: string): LayoutTreeOperation {
   const type = (value as Fields | null)?.type;
   if (typeof type !== 'string' || !Object.hasOwn(OPERATION_KEYS, type))
     throw new InvalidLayoutTreeError(
       `${path}.type`,
       'must be the type of a tree operation'
     );
-  const name = type as TreeOperation['type'];
+  const name = type as LayoutTreeOperation['type'];
   const fields = fieldsOf(
     value,
     path,
@@ -397,11 +397,11 @@ function parseOperation(value: unknown, path: string): TreeOperation {
 
 /**
  * Validate tree operations from a client, for a server, before
- * `applyTreeOperations`. An error names the path of the field, for example
+ * `applyLayoutOperations`. An error names the path of the field, for example
  * `operations[2].edge`. The parser checks the form only; the fold checks the
  * operations against the tree.
  */
-export function parseLayoutOperations(value: unknown): TreeOperation[] {
+export function parseLayoutOperations(value: unknown): LayoutTreeOperation[] {
   if (!Array.isArray(value))
     throw new InvalidLayoutTreeError('operations', 'must be an array');
   return value.map((operation, index) =>

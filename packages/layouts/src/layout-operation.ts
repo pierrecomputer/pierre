@@ -8,11 +8,8 @@ import type { ChildSize, Edge, LayoutNode, PaneNode } from './types';
  * way. `id` is the ID of the split or the stack that the operation makes, when
  * it makes one: the store that runs the command makes it, so the server's tree
  * gets the same ID.
- *
- * This is the final type of `LayoutTreeOperation`, under a temporary name
- * until the old server operations go.
  */
-export type TreeOperation =
+export type LayoutTreeOperation =
   | { readonly type: 'setRoot'; readonly root: LayoutNode }
   | {
       readonly type: 'resize';
@@ -67,12 +64,12 @@ export type LayoutWindowOperation =
   | { readonly type: 'focus'; readonly pane: string }
   | { readonly type: 'zoom'; readonly pane: string | null };
 
-export type LayoutOperation = TreeOperation | LayoutWindowOperation;
+export type LayoutOperation = LayoutTreeOperation | LayoutWindowOperation;
 
 /** True for an operation of the saved tree, which a server folds. */
 export const isTreeOperation = (
   operation: LayoutOperation
-): operation is TreeOperation =>
+): operation is LayoutTreeOperation =>
   operation.type !== 'focus' && operation.type !== 'zoom';
 
 /** One change of a store, for its listeners. */
@@ -86,12 +83,8 @@ export interface LayoutChange {
   readonly origin: 'local' | 'remote';
 }
 
-/**
- * The codes of `TreeOperationError`. This is the final type of
- * `LayoutOperationErrorCode`, under a temporary name until the old server
- * operations go.
- */
-export type TreeOperationErrorCode =
+/** The codes of `LayoutOperationError`. */
+export type LayoutOperationErrorCode =
   | 'pane_not_found'
   | 'node_not_found'
   | 'last_pane'
@@ -102,15 +95,14 @@ export type TreeOperationErrorCode =
 /**
  * An operation that a tree refuses. The tree stays as it was. The message is
  * the code and a detail, such as the ID of the pane: `pane_not_found: editor`.
- * This is the final class of `LayoutOperationError`, under a temporary name
- * until the old server operations go.
  */
-export class TreeOperationError extends Error {
-  readonly code: TreeOperationErrorCode;
+export class LayoutOperationError extends Error {
+  // The constructor sets the field, so the class declares no empty field.
+  declare readonly code: LayoutOperationErrorCode;
 
-  constructor(code: TreeOperationErrorCode, detail: string) {
+  constructor(code: LayoutOperationErrorCode, detail: string) {
     super(`${code}: ${detail}`);
-    this.name = 'TreeOperationError';
+    this.name = 'LayoutOperationError';
     this.code = code;
   }
 }

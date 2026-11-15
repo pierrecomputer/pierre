@@ -6,9 +6,9 @@ import { hiddenPanes } from './hidden-panes';
 import type {
   LayoutChange,
   LayoutOperation,
-  TreeOperation,
+  LayoutTreeOperation,
 } from './layout-operation';
-import { TreeOperationError } from './layout-operation';
+import { LayoutOperationError } from './layout-operation';
 import { findNode, paneIn } from './model';
 import { naryTree } from './models/n-ary';
 import { stacks } from './stacks';
@@ -45,17 +45,17 @@ export function applyOperations(
         operation.pane === null ? null : paneIn(root, operation.pane).id;
     else {
       if (context.folds[operation.type] === undefined)
-        throw new TreeOperationError('unknown_operation', operation.type);
+        throw new LayoutOperationError('unknown_operation', operation.type);
       const id = (operation as { id?: string }).id;
       if (id !== undefined && findNode(root, id) !== null)
-        throw new TreeOperationError('id_in_use', id);
+        throw new LayoutOperationError('id_in_use', id);
       if (operation.type === 'resize')
         for (const [split, sizes] of Object.entries(operation.sizes)) {
           const node = findNode(root, split);
           if (node?.type !== 'split')
-            throw new TreeOperationError('node_not_found', split);
+            throw new LayoutOperationError('node_not_found', split);
           if (sizes.length !== node.children.length)
-            throw new TreeOperationError('invalid_sizes', split);
+            throw new LayoutOperationError('invalid_sizes', split);
         }
       root = context.fold(operation, root);
     }
@@ -63,11 +63,8 @@ export function applyOperations(
   context.commit({ root, focusedPane, zoomedPane }, operations, origin);
 }
 
-/**
- * The options of `applyTreeOperations`, which takes the name
- * `ApplyLayoutOperationsOptions` when the old server operations go.
- */
-export interface ApplyTreeOperationsOptions {
+/** The options of `applyLayoutOperations`. */
+export interface ApplyLayoutOperationsOptions {
   /**
    * The store features whose operations the tree takes. By default
    * `edits(naryTree)`, `stacks`, and `hiddenPanes`.
@@ -80,14 +77,13 @@ export interface ApplyTreeOperationsOptions {
 /**
  * Fold tree operations on a tree, as the store of a client folded them: the
  * same operations on the same tree give the same tree, with the same IDs. A
- * refused operation throws `TreeOperationError`, and the caller keeps its
- * tree. This function takes the name `applyLayoutOperations` when the old
- * server operations go.
+ * refused operation throws `LayoutOperationError`, and the caller keeps its
+ * tree.
  */
-export function applyTreeOperations(
+export function applyLayoutOperations(
   root: LayoutNode,
-  operations: readonly TreeOperation[],
-  options: ApplyTreeOperationsOptions = {}
+  operations: readonly LayoutTreeOperation[],
+  options: ApplyLayoutOperationsOptions = {}
 ): LayoutNode {
   const store = createLayoutStore(
     root,
