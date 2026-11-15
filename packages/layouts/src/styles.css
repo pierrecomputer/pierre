@@ -19,7 +19,6 @@
   /* Style the layout's own elements only; pane content belongs to the app. */
   .pierre-layout-pane,
   .pierre-layout-pane-inner,
-  .pierre-layout-content,
   .pierre-layout-separator {
     box-sizing: border-box;
   }
@@ -87,12 +86,9 @@
     pointer-events: none;
   }
 
-  /* A collapsed pane (store.setCollapsed) shows its header only. Its content
-     keeps its DOM, its state, and its scroll position, and skips its style,
-     layout, and paint. */
-  .pierre-layout-pane[data-collapsed='true']
-    > .pierre-layout-pane-inner
-    > .pierre-layout-content {
+  /* A pane that collapses to 0 pixels shows nothing. `Root` makes it inert,
+     and its content skips its style, layout, and paint. */
+  .pierre-layout-pane[data-collapsed='true'][inert] {
     content-visibility: hidden;
   }
 
@@ -101,26 +97,10 @@
     outline-offset: -3px;
   }
 
-  .pierre-layout-content {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow: auto;
-  }
-
   .pierre-layout-separator {
     position: absolute;
     z-index: 3;
     border-radius: 4px;
-    touch-action: none;
-  }
-
-  .pierre-layout-separator[data-direction='horizontal'] {
-    cursor: col-resize;
-  }
-
-  .pierre-layout-separator[data-direction='vertical'] {
-    cursor: row-resize;
   }
 
   .pierre-layout-separator:hover,
@@ -137,6 +117,29 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+}
+
+@layer pierre-layouts {
+  /* The scroll area of a pane (`Layout.Content`). The host clips at its
+     rounded border and never scrolls. */
+  .pierre-layout-content {
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  /* A collapsed pane (`setCollapsed`) shows its header only. Its content
+     keeps its DOM, its state, and its scroll position, and skips its style,
+     layout, and paint. `Layout.Content` marks itself; the `Layout`
+     component marks the pane host. */
+  .pierre-layout-content[data-collapsed='true'],
+  .pierre-layout-pane[data-collapsed='true']
+    > .pierre-layout-pane-inner
+    > .pierre-layout-content {
+    content-visibility: hidden;
   }
 }
 
@@ -231,11 +234,6 @@
   .pierre-layout-header button[aria-disabled='true'] {
     opacity: 0.35;
     cursor: default;
-  }
-
-  .pierre-layout-header .pierre-layout-grip {
-    touch-action: none;
-    cursor: grab;
   }
 }
 
@@ -353,8 +351,6 @@
     border: 0;
     border-radius: 50%;
     background: var(--layout-border);
-    cursor: move;
-    touch-action: none;
   }
 
   .pierre-layout-corner:hover,

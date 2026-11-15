@@ -4,7 +4,7 @@ import { computeLayout, LayoutStore } from '../../src';
 import {
   PANE_VISIBILITY_EVENT,
   type PaneVisibilityEvent,
-} from '../../src/react';
+} from '../../src/dom/panes';
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

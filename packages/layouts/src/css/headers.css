@@ -42,9 +42,4 @@
     opacity: 0.35;
     cursor: default;
   }
-
-  .pierre-layout-header .pierre-layout-grip {
-    touch-action: none;
-    cursor: grab;
-  }
 }

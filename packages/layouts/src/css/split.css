@@ -16,7 +16,6 @@
   /* Style the layout's own elements only; pane content belongs to the app. */
   .pierre-layout-pane,
   .pierre-layout-pane-inner,
-  .pierre-layout-content,
   .pierre-layout-separator {
     box-sizing: border-box;
   }
@@ -84,12 +83,9 @@
     pointer-events: none;
   }
 
-  /* A collapsed pane (store.setCollapsed) shows its header only. Its content
-     keeps its DOM, its state, and its scroll position, and skips its style,
-     layout, and paint. */
-  .pierre-layout-pane[data-collapsed='true']
-    > .pierre-layout-pane-inner
-    > .pierre-layout-content {
+  /* A pane that collapses to 0 pixels shows nothing. `Root` makes it inert,
+     and its content skips its style, layout, and paint. */
+  .pierre-layout-pane[data-collapsed='true'][inert] {
     content-visibility: hidden;
   }
 
@@ -98,26 +94,10 @@
     outline-offset: -3px;
   }
 
-  .pierre-layout-content {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow: auto;
-  }
-
   .pierre-layout-separator {
     position: absolute;
     z-index: 3;
     border-radius: 4px;
-    touch-action: none;
-  }
-
-  .pierre-layout-separator[data-direction='horizontal'] {
-    cursor: col-resize;
-  }
-
-  .pierre-layout-separator[data-direction='vertical'] {
-    cursor: row-resize;
   }
 
   .pierre-layout-separator:hover,

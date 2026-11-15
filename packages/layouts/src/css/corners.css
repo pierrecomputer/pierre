@@ -9,8 +9,6 @@
     border: 0;
     border-radius: 50%;
     background: var(--layout-border);
-    cursor: move;
-    touch-action: none;
   }
 
   .pierre-layout-corner:hover,

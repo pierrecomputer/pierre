@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 /** The sheets of `styles.css`, in their order in the file. */
 export const STYLE_SHEETS: readonly string[] = [
   'split',
+  'content',
   'flip',
   'focus-ring',
   'zoom',

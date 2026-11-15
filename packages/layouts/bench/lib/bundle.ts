@@ -58,12 +58,15 @@ const CONSUMERS: Record<string, string> = {
 // the examples of the modular entry points proposal, so that the sizes before
 // and after the change compare: A is a fixed two-pane split with collapse, B a
 // tiled grid with move and zoom, C the full set of features, and D the side
-// panel of an agent app.
+// panel of an agent app. The apps with the prefix `modular` use the API of
+// feature modules (`Layout.Root`, `createLayout`, features, and parts), which
+// holds its sheets inside the JavaScript.
 const APPS: Record<string, string> = {
   'app A: two-pane split': 'bench/apps/two-pane.tsx',
   'app B: tiled grid': 'bench/apps/tiled.tsx',
   'app C: full set': 'bench/apps/full.tsx',
   'app D: side panel': 'bench/apps/side-panel.tsx',
+  'modular app A: two-pane split': 'bench/apps/modular/two-pane.tsx',
 };
 
 const MODES: readonly BundleMode[] = ['app', 'library'];
@@ -74,7 +77,7 @@ const VIRTUAL_ENTRY = 'virtual:bench-entry';
 /**
  * One bundle: an entry file of the package, or the source of an entry module
  * that the step writes. `output` names the files of the build that count: the
- * JavaScript, the CSS, or both.
+ * JavaScript, the CSS, or both (the CSS when the build has a CSS file).
  */
 interface BundleInput {
   entry: { file: string } | { source: string };
@@ -184,16 +187,19 @@ async function bundle(
 }
 
 // Build one bundle and return the size of the files that count. Each file is
-// compressed alone, as a server sends it.
+// compressed alone, as a server sends it. An app counts its CSS file when it
+// has one: an app of feature modules holds its sheets in the JavaScript.
 async function measure(
   input: BundleInput,
   mode: BundleMode
 ): Promise<BundleSize> {
   const { js, css } = await bundle(input, mode);
-  const wanted = [
-    ...(input.output === 'css' ? [] : [js]),
-    ...(input.output === 'js' ? [] : [css]),
-  ];
+  const wanted =
+    input.output === 'js'
+      ? [js]
+      : input.output === 'css'
+        ? [css]
+        : [js, ...(css === '' ? [] : [css])];
   if (wanted.some((code) => code === '')) {
     throw new Error(`No ${input.output} output for ${JSON.stringify(input)}`);
   }
