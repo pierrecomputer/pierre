@@ -3,7 +3,7 @@
      `createDrawer`, `Modal`, and `Drawer` in this folder). The script sets the
      insets of each overlay from the workspace's box, and the custom
      properties `--layout-workspace-width` and `--layout-workspace-height` on
-     the overlay. */
+     the overlay. The split sheet of the layout hides the covered panes. */
 
   .pierre-overlay {
     box-sizing: border-box;
@@ -68,12 +68,6 @@
       var(--layout-drawer-size, 320px),
       var(--layout-workspace-height, 100vh)
     );
-  }
-
-  /* A pane that an overlay covers completely skips the style, layout, and paint
-     of its content, as a pane under a zoomed pane does. */
-  .pierre-layout-pane[data-overlay-covered='true'] {
-    content-visibility: hidden;
   }
 
   .pierre-overlay:focus-visible {

@@ -10,7 +10,6 @@ import {
   useRef,
 } from 'react';
 
-import './overlays.css';
 import type { OverlayCover } from '../../src';
 import {
   createDrawer,
@@ -19,6 +18,21 @@ import {
   type OverlayEdge,
   type OverlayHandle,
 } from './overlays';
+import overlaysCss from './overlays.css?inline';
+
+/**
+ * The sheet of the overlays, rendered with the sheets of the layout: a React
+ * `<style>` with `href` and `precedence`, which React puts in the head once
+ * for each document. In the bench, the same rules in the app's linked
+ * stylesheet made an open over 16 panes of real content about 5 ms slower.
+ */
+function OverlaySheet(): JSX.Element {
+  return (
+    <style href="pierre-layouts-reference-overlays" precedence="pierre-layouts">
+      {overlaysCss}
+    </style>
+  );
+}
 
 interface OverlayProps {
   /** Whether the overlay shows. Escape and `onClose` ask the app to set it to false. */
@@ -113,8 +127,7 @@ function useOverlay(
 /**
  * A modal over the workspace: a `manual` popover with `role="dialog"` and
  * `aria-modal`, which keeps the focus and hides the rest of the page from
- * assistive technology. It covers the panes in its box with `coverLayout`,
- *.
+ * assistive technology. It covers the panes in its box with `coverLayout`.
  */
 export function Modal(props: ModalProps): JSX.Element {
   const {
@@ -143,6 +156,7 @@ export function Modal(props: ModalProps): JSX.Element {
   // The strategy decides the element, so a change of strategy mounts a new one.
   return strategy === 'popover' ? (
     <>
+      <OverlaySheet />
       <div
         key="popover"
         ref={ref as RefObject<HTMLDivElement | null>}
@@ -156,6 +170,7 @@ export function Modal(props: ModalProps): JSX.Element {
     </>
   ) : (
     <>
+      <OverlaySheet />
       <dialog
         key="dialog"
         ref={ref as RefObject<HTMLDialogElement | null>}
@@ -187,6 +202,7 @@ export function Drawer(props: DrawerProps): JSX.Element {
   );
   return (
     <>
+      <OverlaySheet />
       <div
         ref={ref as RefObject<HTMLDivElement | null>}
         role="dialog"
