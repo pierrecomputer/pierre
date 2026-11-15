@@ -39,14 +39,23 @@ const aliases = (): Record<string, string> => ({
   '@pierre/layouts': join(dist, 'index.js'),
 });
 
-async function rolldown(entry: string): Promise<string> {
+/** The entries of the source, for the reference build of app A. */
+const sourceAliases = (): Record<string, string> => ({
+  '@pierre/layouts/react': join(PACKAGE, 'src/react/index.tsx'),
+  '@pierre/layouts': join(PACKAGE, 'src/index.ts'),
+});
+
+async function rolldown(
+  entry: string,
+  alias: Record<string, string> = aliases()
+): Promise<string> {
   const { build } = await import('vite');
   const result = await build({
     configFile: false,
     logLevel: 'silent',
     root: PACKAGE,
     define: { 'process.env.NODE_ENV': '"production"' },
-    resolve: { alias: aliases() },
+    resolve: { alias },
     build: {
       write: false,
       minify: true,
@@ -83,28 +92,48 @@ async function esbuild(entry: string): Promise<string> {
   return result.outputFiles.map((file) => file.text).join('');
 }
 
+const measure = (code: string): Output => ({
+  code,
+  minified: code.length,
+  brotli: brotli(code),
+});
+
 beforeAll(async () => {
-  dist = mkdtempSync(join(tmpdir(), 'pierre-layouts-proof-'));
-  const { build } = await import('tsdown');
-  await build({
-    cwd: PACKAGE,
-    config: join(PACKAGE, 'tsdown.config.ts'),
-    outDir: dist,
-    dts: false,
-    logLevel: 'silent',
-  });
-  for (const app of ['two-pane', 'tiled'])
-    for (const [bundler, bundle] of [
-      ['rolldown', rolldown],
-      ['esbuild', esbuild],
-    ] as const) {
-      const code = await bundle(join(PACKAGE, `test/proof/${app}.tsx`));
-      outputs.set(`${app} ${bundler}`, {
-        code,
-        minified: code.length,
-        brotli: brotli(code),
-      });
-    }
+  // The test runner sets `NODE_ENV` to `test`, and Vite then compiles the JSX
+  // of an app for development. The builds are production builds.
+  const nodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    dist = mkdtempSync(join(tmpdir(), 'pierre-layouts-proof-'));
+    const { build } = await import('tsdown');
+    await build({
+      cwd: PACKAGE,
+      config: join(PACKAGE, 'tsdown.config.ts'),
+      outDir: dist,
+      dts: false,
+      logLevel: 'silent',
+    });
+    for (const app of ['two-pane', 'tiled'])
+      for (const [bundler, bundle] of [
+        ['rolldown', rolldown],
+        ['esbuild', esbuild],
+      ] as const)
+        outputs.set(
+          `${app} ${bundler}`,
+          measure(await bundle(join(PACKAGE, `test/proof/${app}.tsx`)))
+        );
+    outputs.set(
+      'two-pane source',
+      measure(
+        await rolldown(
+          join(PACKAGE, 'test/proof/two-pane.tsx'),
+          sourceAliases()
+        )
+      )
+    );
+  } finally {
+    process.env.NODE_ENV = nodeEnv;
+  }
 }, 120_000);
 
 afterAll(() => {
@@ -193,7 +222,19 @@ test('the sizes of the apps', () => {
     ])
   );
   console.log(JSON.stringify(sizes, null, 1));
-  expect(Object.keys(sizes)).toHaveLength(4);
+  expect(Object.keys(sizes)).toHaveLength(5);
+});
+
+// The dist joins modules into a few files, so a bundler can drop only the
+// top-level code of a file that it can prove pure. A top-level call without a
+// pure mark (for example a `memo` of a component that the app does not use)
+// stays in every app. A few bytes of slack absorb the other order of modules.
+test('app A from the dist costs no more than app A from the source', () => {
+  const fromDist = outputs.get('two-pane rolldown');
+  const fromSource = outputs.get('two-pane source');
+  if (fromDist === undefined || fromSource === undefined)
+    throw new Error('Missing output');
+  expect(fromDist.minified).toBeLessThanOrEqual(fromSource.minified + 32);
 });
 
 // App A is over its budget since step 12 of `refactor-entries-feature-modules`

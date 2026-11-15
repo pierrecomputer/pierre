@@ -382,7 +382,7 @@ function shownAgain(before: LayoutNode, after: LayoutNode): Set<string> {
  * node, because the store keeps the identity of unchanged nodes, and a hide,
  * a show, a collapse, or an expand changes only `LAYOUT_ONLY_KEYS`.
  */
-const PaneBody = memo(function PaneBody({
+const PaneBody = /* @__PURE__ */ memo(function PaneBody({
   pane,
   renderPane,
 }: PaneBodyProps): JSX.Element {
