@@ -1,6 +1,5 @@
 import { separatorOffset } from '../gestures';
 import { getPanes } from '../model';
-import type { CoreLayoutStore } from '../store';
 import type { ChildSize, SeparatorGeometry } from '../types';
 import { paneHosts } from './panes';
 
@@ -36,9 +35,13 @@ export interface ResizeWork {
  * pointer move, because a render of the view for each move would cost the
  * frame that the strategy saves. Each call names the layout root and the
  * strategy of the gesture. The state lives in this closure, so that a
- * minifier can shorten its names.
+ * minifier can shorten its names. `setSizes` applies the sizes of a frame: the
+ * new view applies them in a transient change, and the end of its gesture
+ * gives one operation.
  */
-export function createResizeWork(store: CoreLayoutStore): ResizeWork {
+export function createResizeWork(
+  setSizes: (sizes: Record<string, ChildSize[]>) => void
+): ResizeWork {
   let strategy: ResizeStrategy = 'live';
   let root: HTMLElement | null = null;
   let frame: number | null = null;
@@ -158,7 +161,7 @@ export function createResizeWork(store: CoreLayoutStore): ResizeWork {
         pending = sizes;
         frame ??= requestAnimationFrame(() => {
           frame = null;
-          if (pending !== null) store.setSizes(pending);
+          if (pending !== null) setSizes(pending);
           pending = null;
         });
         return;
@@ -173,12 +176,12 @@ export function createResizeWork(store: CoreLayoutStore): ResizeWork {
         if (pause !== null) clearTimeout(pause);
         pause = setTimeout(thaw, FREEZE_PAUSE_MS);
       }
-      store.setSizes(sizes);
+      setSizes(sizes);
     },
     end(cancel) {
       if (frame !== null && strategy === 'frame') cancelAnimationFrame(frame);
       if (pause !== null) clearTimeout(pause);
-      if (!cancel && pending !== null) store.setSizes(pending);
+      if (!cancel && pending !== null) setSizes(pending);
       for (const element of moved) {
         element.style.transform = '';
         delete element.dataset.preview;

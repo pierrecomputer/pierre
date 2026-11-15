@@ -40,8 +40,11 @@ import {
   STATE_REASONS,
 } from '../dom/visibility';
 import { dragSizes, keySizes } from '../gestures';
-import { collapsedSizeOf, findNode, shownPanes } from '../model';
+import type { LayoutChange, LayoutOperation } from '../layout-operation';
+import { collapsedSizeOf, shownPanes } from '../model';
 import { presentation } from '../presentation';
+import { startResizeGesture } from '../resize-gesture';
+import { treeIndex } from '../tree-index';
 import type {
   ChildSize,
   Direction,
@@ -52,6 +55,7 @@ import type {
   SeparatorGeometry,
 } from '../types';
 import {
+  type AnnounceContext,
   type Feature,
   type FeatureHooks,
   type Gesture,
@@ -108,7 +112,11 @@ export interface RootProps {
    */
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
-  /** Report changed split sizes at pointer release or after a keyboard resize. Cancellation reports nothing. */
+  /**
+   * Report the sizes of each local `resize` operation: a pointer release, a
+   * key press on a separator, or a call of `layout.setSizes`. A cancelled
+   * drag reports nothing.
+   */
   onResize?: (sizes: Readonly<Record<string, readonly ChildSize[]>>) => void;
   /**
    * Called by `Layout.CloseButton` and by Delete on a tab, in place of
@@ -159,6 +167,46 @@ const separatorValue = (percent: number): string =>
   `${percent}% preferred position`;
 
 const paneCount = (count: number): string => `${count} panes`;
+
+const collapsedText = (title: string): string => `${title} collapsed`;
+const expandedText = (title: string): string => `${title} expanded`;
+
+/**
+ * The announcement of a local change: the text of its last operation that has
+ * one. `Root` gives the collapse and the expand; each feature gives the text
+ * of its own operations.
+ */
+function announcementOf(
+  change: LayoutChange,
+  previous: LayoutState,
+  next: LayoutState,
+  features: readonly Feature[],
+  latest: LatestProps
+): string | null {
+  const messages = latest.messages ?? NO_MESSAGES;
+  const context: AnnounceContext = {
+    previous,
+    next,
+    messages,
+    title(id) {
+      const pane =
+        treeIndex(next.root).panes.get(id)?.pane ??
+        treeIndex(previous.root).panes.get(id)?.pane;
+      return pane === undefined ? id : latest.getPaneTitle(pane);
+    },
+  };
+  const textOf = (operation: LayoutOperation): string | null | undefined =>
+    operation.type === 'collapse'
+      ? (operation.collapsed
+          ? (messages.collapsed ?? collapsedText)
+          : (messages.expanded ?? expandedText))(context.title(operation.pane))
+      : features
+          .map((feature) => feature.announce?.(operation, context))
+          .find((text) => text != null);
+  let text: string | null = null;
+  for (const operation of change.operations) text = textOf(operation) ?? text;
+  return text;
+}
 
 /** The reasons from the layout state that a pane does not show all its content. */
 function stateReasons(
@@ -343,8 +391,15 @@ interface ViewInternals {
   setLatest(latest: LatestProps): void;
   /** Take the hooks of a committed render, for parts and store changes. */
   setHooks(hooks: readonly FeatureHooks[]): void;
-  /** Run the hooks of a store change, before React renders it. */
-  beforeChange(previous: LayoutState, next: LayoutState): void;
+  /**
+   * Take a store change, before React renders it: run the hooks, report the
+   * resizes and announce a local change, and end a gesture at a remote one.
+   */
+  beforeChange(
+    previous: LayoutState,
+    next: LayoutState,
+    change: LayoutChange
+  ): void;
   /** The pointer move of the current gesture. */
   move(event: PointerEvent<HTMLElement>): void;
   /** End the current gesture, or the gesture of a pointer. */
@@ -375,14 +430,15 @@ function createViewInternals(
   prefix: string,
   features: readonly Feature[],
   initial: LatestProps,
-  setResizing: (resizing: boolean) => void
+  setResizing: (resizing: boolean) => void,
+  announce: (text: string) => void
 ): ViewInternals {
   let element: HTMLDivElement | null = null;
   let latest = initial;
   let hooks: readonly FeatureHooks[] = [];
   let gesture: Gesture | null = null;
   let resizing = false;
-  let change = 0;
+  let changes = 0;
   const paneContexts = new Map<string, PaneContextValue>();
   const readGeometry = (): LayoutGeometry =>
     element === null
@@ -390,21 +446,17 @@ function createViewInternals(
       : readPixelGeometry(element, store.getSnapshot().root, latest.gap);
   const separatorsOf = (ids: readonly string[]): SeparatorGeometry[] =>
     readGeometry().separators.filter(({ id }) => ids.includes(id));
-  // Report the sizes of the splits that a resize changed.
-  const reportChanged = (
-    before: LayoutNode,
-    sizes: Readonly<Record<string, readonly ChildSize[]>>
-  ): void => {
-    const changed = Object.fromEntries(
-      Object.entries(sizes).filter(([id, next]) => {
-        const split = findNode(before, id);
-        return (
-          split?.type !== 'split' ||
-          JSON.stringify(split.sizes) !== JSON.stringify(next)
-        );
-      })
-    );
-    if (Object.keys(changed).length > 0) latest.onResize?.(changed);
+  const finish = (cancel: boolean, pointerId?: number): void => {
+    const active = gesture;
+    if (
+      active === null ||
+      (pointerId !== undefined && active.pointerId !== pointerId)
+    )
+      return;
+    // Before the end, so that the `lostpointercapture` of a release finds
+    // no gesture to cancel.
+    gesture = null;
+    active.end(cancel);
   };
   const names = new Set(features.map((feature) => feature.name));
   const context: ViewContext = {
@@ -415,7 +467,7 @@ function createViewInternals(
     element: () => element,
     cssLayoutOf: (root) => cssLayoutOf(root, latest.gap),
     readGeometry,
-    change: () => change,
+    change: () => changes,
     startGesture(next) {
       gesture = next;
     },
@@ -430,9 +482,10 @@ function createViewInternals(
       target.setPointerCapture(pointerId);
       const x = event.clientX;
       const y = event.clientY;
-      const before = store.getSnapshot().root;
-      const originalSizes = Object.fromEntries(
-        separators.map(({ split }) => [split.id, split.sizes])
+      // The sizes of each move are transient; the end gives one operation.
+      const sizes = startResizeGesture(
+        store,
+        separators.map(({ split }) => split.id)
       );
       // A feature can apply the sizes of each move in place of the store.
       const strategy = hooks.findLast((hook) => hook.applySizes !== undefined);
@@ -448,45 +501,29 @@ function createViewInternals(
           );
           if (strategy?.applySizes !== undefined)
             strategy.applySizes(element, separators, proposed);
-          else store.setSizes(proposed);
+          else sizes.move(proposed);
         },
         end(cancel) {
           // A strategy that defers its sizes applies them while the resize
           // still holds, so that they do not animate.
           strategy?.endResize?.(cancel);
-          resizing = false;
           if (target.hasPointerCapture?.(pointerId))
             target.releasePointerCapture(pointerId);
-          if (cancel) store.setSizes(originalSizes);
-          else {
-            const root = store.getSnapshot().root;
-            reportChanged(
-              before,
-              Object.fromEntries(
-                separators.flatMap(({ split }) => {
-                  const node = findNode(root, split.id);
-                  return node?.type === 'split' ? [[split.id, node.sizes]] : [];
-                })
-              )
-            );
-          }
+          sizes.end(cancel);
+          resizing = false;
           setResizing(false);
         },
       };
       setResizing(true);
     },
-    // A key press that resizes is a whole resize: it applies the sizes and
-    // reports them. The key does not reach the app's own key handlers above
-    // the layout.
+    // A key press that resizes is a whole resize: one `resize` operation.
+    // The key does not reach the app's own key handlers above the layout.
     resizeKey(event, ids) {
-      const separators = separatorsOf(ids);
-      const proposed = keySizes(separators, event.key, event.shiftKey);
+      const proposed = keySizes(separatorsOf(ids), event.key, event.shiftKey);
       if (proposed === null) return;
       event.preventDefault();
       event.stopPropagation();
-      const before = store.getSnapshot().root;
       store.setSizes(proposed);
-      reportChanged(before, proposed);
     },
     title: (pane) => latest.getPaneTitle(pane),
     onPaneClose: () => latest.onPaneClose,
@@ -511,27 +548,26 @@ function createViewInternals(
     setHooks(next) {
       hooks = next;
     },
-    beforeChange(previous, next) {
-      change += 1;
-      if (element === null) return;
-      for (const hook of hooks) hook.beforeChange?.(previous, next, element);
+    beforeChange(previous, next, change) {
+      changes += 1;
+      if (element !== null)
+        for (const hook of hooks)
+          hook.beforeChange?.(previous, next, element, change);
+      // A remote change ends a gesture with no operation: the store applied
+      // it to the state from before the gesture.
+      if (change.origin === 'remote') finish(true);
+      else {
+        for (const operation of change.operations)
+          if (operation.type === 'resize') latest.onResize?.(operation.sizes);
+        const text = announcementOf(change, previous, next, features, latest);
+        if (text !== null) announce(text);
+      }
     },
     move(event) {
       if (gesture !== null && gesture.pointerId === event.pointerId)
         gesture.move(event);
     },
-    finish(cancel, pointerId) {
-      const active = gesture;
-      if (
-        active === null ||
-        (pointerId !== undefined && active.pointerId !== pointerId)
-      )
-        return;
-      // Before the end, so that the `lostpointercapture` of a release finds
-      // no gesture to cancel.
-      gesture = null;
-      active.end(cancel);
-    },
+    finish,
     gesturing: () => gesture !== null,
     paneContext(id) {
       let value = paneContexts.get(id);
@@ -574,6 +610,11 @@ export function Root(props: RootProps): JSX.Element {
     )
   );
   const [resizing, setResizing] = useState(false);
+  // The announcement of the last local change. A new key gives the live
+  // region a new element, so that it speaks the same text again.
+  const [message, setMessage] = useState<{ text: string; key: number } | null>(
+    null
+  );
   const prefix = useId();
   // The props that the context reads, from the last committed render. The
   // first render reads its own props.
@@ -587,7 +628,14 @@ export function Root(props: RootProps): JSX.Element {
   };
   const internals = useMemo(
     () =>
-      createViewInternals(store, prefix, features, latestProps, setResizing),
+      createViewInternals(
+        store,
+        prefix,
+        features,
+        latestProps,
+        setResizing,
+        (text) => setMessage((last) => ({ text, key: (last?.key ?? 0) + 1 }))
+      ),
     // The latest props reach the context through `setLatest`.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [store, prefix, features]
@@ -603,9 +651,9 @@ export function Root(props: RootProps): JSX.Element {
     () =>
       (listener: () => void): (() => void) => {
         let previous = store.getSnapshot();
-        return store.subscribe(() => {
+        return store.subscribe((change) => {
           const next = store.getSnapshot();
-          internals.beforeChange(previous, next);
+          internals.beforeChange(previous, next, change);
           previous = next;
           listener();
         });
@@ -735,8 +783,9 @@ export function Root(props: RootProps): JSX.Element {
   const layers = paneLayers();
   const layered =
     typeof layers === 'boolean' ? layers : visibleCount >= layers.minPanes;
-  const announce =
-    hooks.find((hook) => hook.announce != null)?.announce ??
+  const status =
+    hooks.find((hook) => hook.status != null)?.status ??
+    message?.text ??
     (messages?.paneCount ?? paneCount)(visibleCount);
   const sheets = new Map<string, string>([['split', splitCss]]);
   for (const feature of features)
@@ -877,7 +926,7 @@ export function Root(props: RootProps): JSX.Element {
         hook.layers === undefined ? null : <Layers key={index} hook={hook} />
       )}
       <span className="pierre-layout-sr" role="status" aria-live="polite">
-        {announce}
+        <span key={message?.key}>{status}</span>
       </span>
     </div>
   );

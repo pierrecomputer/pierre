@@ -487,7 +487,10 @@ export function Layout({
       ? animateOptions.zoom !== false
       : animateOptions !== false;
   // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
-  const resizeWork = useMemo(() => createResizeWork(store), [store]);
+  const resizeWork = useMemo(
+    () => createResizeWork((sizes) => store.setSizes(sizes)),
+    [store]
+  );
 
   // A window that loses the focus during a pointer resize, for example to
   // another app, may never send the pointer release. The resize then applies

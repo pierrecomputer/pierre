@@ -384,15 +384,15 @@ so its content does not render again.
 
 `createLayoutStore(root, features)` creates a store whose other commands come
 from its features. Without features, the store has the core commands only:
-`getSnapshot`, `subscribe`, `setRoot`, `setSizes`, `setCollapsed`, and
-`focusPane`, and it keeps the shape of each tree that it receives. Each feature
-adds its commands:
+`getSnapshot`, `subscribe`, `setRoot`, `setSizes`, `setCollapsed`, `focusPane`,
+`transient`, and `revert`, and it keeps the shape of each tree that it receives.
+Each feature adds its commands:
 
 | Feature        | Commands                                                        |
 | -------------- | --------------------------------------------------------------- |
 | `edits(model)` | `split`, `close`, `move`, `swap`; the store gets the tree model |
 | `stacks`       | `activate`, `addTab`, `moveToStack`, `moveTab`                  |
-| `zoom`         | `toggleZoom`                                                    |
+| `zoom`         | `toggleZoom`, `setZoom`                                         |
 | `hiddenPanes`  | `setHidden`                                                     |
 | `persistence`  | `serialize`, `restore`, `toStoredTree`, `setStoredTree`         |
 
@@ -415,19 +415,64 @@ store.split('editor', { type: 'pane', id: 'terminal' }, 'bottom');
 store.toggleZoom('terminal');
 ```
 
-A view calls each command through the store object, so an app wraps a command
-with an object of its own:
-`{ ...store, close(id) { record(id); store.close(id); } }`. A feature is a
-`StoreFeature`: an optional tree model, and a function that builds its commands
-from the `StoreContext` of the store. `LayoutStore` is the store of the `Layout`
-component: a class with every command, over `createLayoutStore` with every
-feature.
+A feature is a `StoreFeature`: an optional tree model, a function that builds
+its commands from the `StoreContext` of the store, and the folds of its
+operations. `LayoutStore` is the store of the `Layout` component: a class with
+every command, over `createLayoutStore` with every feature.
 
-Subscribe with `store.subscribe(listener)` and read with `store.getSnapshot()`.
-Snapshots are immutable. Invalid tree updates throw before changing state.
-Closing the final pane does nothing; closing a focused or zoomed pane repairs
-the selection. Serialization stores layout geometry and selection, not pane
-content. Persistence is caller-owned; the playground uses local storage.
+Read with `store.getSnapshot()`. Snapshots are immutable. Invalid tree updates
+throw before changing state. A close or a hide of the last pane that is not
+hidden throws `last_pane`: `canClose(root, id)` gives the rule. Closing a
+focused or zoomed pane repairs the selection. Serialization stores layout
+geometry and selection, not pane content. Persistence is caller-owned; the
+playground uses local storage.
+
+### Operations
+
+Each change reaches `store.subscribe` with its operations and its origin. An
+operation is plain JSON: a tree operation (`setRoot`, `resize`, `collapse`,
+`split`, `close`, `move`, `swap`, `activate`, `addTab`, `moveToStack`,
+`moveTab`, `hide`) changes the saved tree, and a window operation (`focus`,
+`zoom`) changes the state of one window. A command that changes nothing gives no
+change.
+
+```ts
+import { applyOperations, isTreeOperation } from '@pierre/layouts';
+
+store.subscribe(({ operations, origin }) => {
+  // No echo of a change from the server, and no frame of a gesture.
+  if (origin !== 'local') return;
+  const tree = operations.filter(isTreeOperation);
+  if (tree.length > 0) send(tree);
+});
+
+// The server's tree, as a remote change: it keeps this window's focus.
+applyOperations(store, [{ type: 'setRoot', root: response.tree.root }]);
+```
+
+- A gesture, such as a resize drag, changes the layout in each frame with
+  `store.transient(run)`: the listeners get those changes with no operations. It
+  ends with one operation, or with `store.revert()`, which restores the settled
+  state. One key press on a separator is one `resize`.
+- A new split or stack gets an ID `<kind>-<random prefix of the store>-<count>`,
+  which its operation carries, so a server that folds the operation makes the
+  same node. `createLayoutStore(root, features, { newId })` takes another maker,
+  for a test.
+- `applyOperations(store, operations)` applies operations from elsewhere in one
+  change, `remote` by default. A tree operation does not move the focus, and a
+  remote change ends the zoom only when the zoomed pane stops showing. A local
+  structural edit ends the zoom.
+- On a server, `parseLayoutOperations(value)` checks operations from a client,
+  with the path of each wrong field, and `applyTreeOperations(root, operations)`
+  folds them on the stored tree, with the same IDs as the client. A refused
+  operation throws `LayoutOperationError` with a code: `pane_not_found`,
+  `node_not_found`, `last_pane`, `invalid_sizes`, `id_in_use`, or
+  `unknown_operation`. `applyTreeOperations` takes the name
+  `applyLayoutOperations` when the old server operations of the consumer guide
+  go.
+- Undo keeps the settled states: a listener that skips transient and remote
+  changes pushes the state before each local change, and an undo sets that tree
+  again with `setRoot`.
 
 `computeLayout(root, width, height, gap)` returns pane rectangles and separators
 for other rendering adapters, and `pixelCorners(geometry, gap)` adds the corner

@@ -75,7 +75,10 @@ test('a move handle drags a pane to an edge of another pane', async ({
   const next = await box(page, '[data-layout-pane="b"]');
   expect(alpha.x).toBeGreaterThan(next.x);
   expect(Math.abs(alpha.y - next.y)).toBeLessThan(2);
-  await expect(page.getByRole('status')).toHaveText('4 panes');
+  // The move operation announces its result with the titles of the panes.
+  await expect(page.getByRole('status')).toHaveText(
+    'Alpha moved to the right of Beta'
+  );
 });
 
 test('Escape ends a drag with no move', async ({ page }) => {

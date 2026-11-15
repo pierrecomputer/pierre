@@ -15,6 +15,7 @@ import {
 
 import type { CSSLayout, CSSPane } from '../css-layout';
 import type { PaneVisibility } from '../dom/visibility';
+import type { LayoutChange, LayoutOperation } from '../layout-operation';
 import type { CoreLayoutStore, StoreFeature } from '../store';
 import type {
   ChildSize,
@@ -119,8 +120,35 @@ export interface LayoutMessages {
    * Default: "Zoom Editor", or "Restore Editor" while it is zoomed.
    */
   readonly zoom?: (title: string, zoomed: boolean) => string;
-  /** The status message while a pane is zoomed. Default: "Editor zoomed". */
+  /** The announcement of a zoom. Default: "Editor zoomed". */
   readonly zoomed?: (title: string) => string;
+  /** The announcement of the end of a zoom. Default: "Editor restored". */
+  readonly restored?: (title: string) => string;
+  /** The announcement of a close. Default: "Editor closed". */
+  readonly closed?: (title: string) => string;
+  /**
+   * The announcement of a new pane at an edge of another. Default: "Terminal
+   * opened to the bottom of Editor".
+   */
+  readonly opened?: (title: string, target: string, edge: Edge) => string;
+  /**
+   * The announcement of a move to an edge of another pane. Default: "Editor
+   * moved to the right of Files".
+   */
+  readonly moved?: (title: string, target: string, edge: Edge) => string;
+  /**
+   * The announcement of a move into another stack. Default: "Editor moved
+   * into the group of Files".
+   */
+  readonly movedToTabs?: (title: string, target: string) => string;
+  /** The announcement of a collapse. Default: "Editor collapsed". */
+  readonly collapsed?: (title: string) => string;
+  /** The announcement of an expand. Default: "Editor expanded". */
+  readonly expanded?: (title: string) => string;
+  /** The announcement of a hide. Default: "Editor hidden". */
+  readonly hidden?: (title: string) => string;
+  /** The announcement of a show. Default: "Editor shown". */
+  readonly shown?: (title: string) => string;
   /** The name of `Layout.MoveHandle`. Default: "Drag Editor". */
   readonly drag?: (title: string) => string;
   /**
@@ -206,12 +234,14 @@ export interface HostPatch {
 export interface FeatureHooks {
   /**
    * Before React renders a store change. The layout's boxes are clean here,
-   * so read the DOM before any write to it.
+   * so read the DOM before any write to it. `change` holds the operations of
+   * the change: none for a transient change.
    */
   beforeChange?(
     previous: LayoutState,
     next: LayoutState,
-    element: HTMLElement
+    element: HTMLElement,
+    change: LayoutChange
   ): void;
   /** After React commits a state, before the browser paints. */
   afterChange?(
@@ -237,8 +267,11 @@ export interface FeatureHooks {
   ): void;
   /** The end of a pointer resize, for the feature that applies its sizes. */
   endResize?(cancel: boolean): void;
-  /** The text of the status message, in place of the count of panes. */
-  announce?: string | null;
+  /**
+   * The text of the status message during a gesture, such as the place of a
+   * drop. It comes before the announcement of the last change.
+   */
+  status?: string | null;
   /** For `MoveHandle`: start a move drag of a pane. */
   startMove?(paneId: string, event: PointerEvent<HTMLElement>): void;
   /**
@@ -259,6 +292,16 @@ export interface FeatureHooks {
   focusTab?(id: string): void;
 }
 
+/** What the announcement of an operation reads. */
+export interface AnnounceContext {
+  /** The state before the change and after it. */
+  readonly previous: LayoutState;
+  readonly next: LayoutState;
+  /** The title of a pane, from the state after the change or before it. */
+  title(id: string): string;
+  readonly messages: LayoutMessages;
+}
+
 /**
  * A feature of a layout: its store part (commands), its view part (a hook
  * that runs on each render of `Root`), and its sheets. `Commands` types the
@@ -272,6 +315,14 @@ export interface Feature<Commands extends object = object> {
    */
   readonly requires?: readonly string[];
   readonly store?: StoreFeature<Commands>;
+  /**
+   * The announcement of an operation of the feature, for a local change, or
+   * null. `Root` speaks the announcement of the last operation that has one.
+   */
+  announce?(
+    operation: LayoutOperation,
+    context: AnnounceContext
+  ): string | null;
   use?(context: ViewContext, render: ViewRender): FeatureHooks;
   /**
    * Sheets inside `@layer pierre-layouts`, by name. `Root` renders each sheet

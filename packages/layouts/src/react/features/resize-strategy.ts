@@ -5,7 +5,7 @@
 import { useState } from 'react';
 
 import { createResizeWork, type ResizeStrategy } from '../../dom/resize-work';
-import type { Feature, FeatureHooks, ViewContext } from '../contract';
+import type { Feature, FeatureHooks, Sizes, ViewContext } from '../contract';
 import { cornersOf } from './corners';
 
 /**
@@ -18,13 +18,18 @@ export function resizeStrategy(
 ): Feature {
   const current = typeof strategy === 'function' ? strategy : () => strategy;
   function useResizeStrategy(context: ViewContext): FeatureHooks {
-    const [work] = useState(() => createResizeWork(context.store));
+    const { store } = context;
+    // The sizes of a frame are transient; the end of the gesture in `Root`
+    // gives one operation.
+    const transient = (sizes: Sizes): void =>
+      store.transient(() => store.setSizes(sizes));
+    const [work] = useState(() => createResizeWork(transient));
     if (strategy === 'live') return {};
     return {
       applySizes(element, separators, sizes) {
         const active = current();
         if (active === 'live') {
-          context.store.setSizes(sizes);
+          transient(sizes);
           return;
         }
         work.apply(

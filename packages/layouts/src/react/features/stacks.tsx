@@ -14,6 +14,9 @@ import type { Feature, FeatureHooks, ViewContext } from '../contract';
 
 let warnedTabList = false;
 
+const movedToTabsText = (title: string, target: string): string =>
+  `${title} moved into the group of ${target}`;
+
 function useStacks(context: ViewContext): FeatureHooks {
   // The tab to focus after the next change, when its host shows.
   const [pending] = useState(() => cell<string | null>(null));
@@ -75,6 +78,18 @@ export function stacks(): Feature<StackCommands> {
     name: 'stacks',
     requires: ['edits'],
     store: stacksStore,
+    // A move into another stack. The tab list shows a move inside one stack.
+    announce(operation, { previous, title, messages }) {
+      if (operation.type !== 'moveToStack') return null;
+      const { panes } = treeIndex(previous.root);
+      const stack = panes.get(operation.pane)?.stack;
+      return stack != null && stack === panes.get(operation.target)?.stack
+        ? null
+        : (messages.movedToTabs ?? movedToTabsText)(
+            title(operation.pane),
+            title(operation.target)
+          );
+    },
     use: useStacks,
   };
 }

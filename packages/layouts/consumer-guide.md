@@ -74,6 +74,10 @@ read form omits size constraints and hidden/collapsed state. Use
 
 ## Apply operations
 
+These tab and group operations go when chat-bb uses the store operations: see
+"Operations" in the README, with `applyTreeOperations` and
+`parseLayoutOperations`.
+
 ```ts
 const next = applyLayoutOperations(
   root,
@@ -94,10 +98,11 @@ activation default; pass `{ activate: false }` to change it.
 
 The batch runs against an isolated store and returns a new tree only if every
 operation succeeds. `LayoutOperationError.code` is `tab_not_found`,
-`invalid_place`, `layout_limit`, `last_tab`, or `invalid_sizes`. `maxGroups` is
-optional; the default has no group limit. The default operation model is
-`naryTree`. Closing the last tab through an operation is an error;
-reconciliation can return `null` for an empty tab list.
+`invalid_place`, `layout_limit`, `last_tab`, or `invalid_sizes`, and `last_pane`
+for a close of the last pane that is not hidden. `maxGroups` is optional; the
+default has no group limit. The default operation model is `naryTree`. Closing
+the last tab through an operation is an error; reconciliation can return `null`
+for an empty tab list.
 
 ## Save resize changes
 

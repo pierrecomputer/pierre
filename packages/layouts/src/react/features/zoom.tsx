@@ -16,7 +16,6 @@ import { focusOwner, focusPane, focusZoomedPane } from '../../dom/panes';
 import { COVERED, ZOOM } from '../../dom/visibility';
 import { stackOf } from '../../model';
 import { presentation } from '../../presentation';
-import { treeIndex } from '../../tree-index';
 import type { Edge, LayoutState } from '../../types';
 import { getExitEdges, type ZoomCommands, zoom as zoomStore } from '../../zoom';
 import { boxesBeforeChange } from '../boxes';
@@ -56,6 +55,7 @@ const exitTransform = (edge: Edge, gap: number): string =>
     : `translateY(calc(${edge === 'top' ? '-' : ''}100cqh ${edge === 'top' ? '-' : '+'} ${gap}px))`;
 
 const zoomedText = (title: string): string => `${title} zoomed`;
+const restoredText = (title: string): string => `${title} restored`;
 
 function useZoom(
   context: ViewContext,
@@ -90,10 +90,6 @@ function useZoom(
     element.addEventListener('focusin', guard);
     return () => element.removeEventListener('focusin', guard);
   }, [context]);
-  const title = (id: string): string => {
-    const pane = treeIndex(state.root).panes.get(id)?.pane;
-    return pane === undefined ? id : context.title(pane);
-  };
   return {
     beforeChange(previous, next, element) {
       if (zoomKey(previous) === zoomKey(next)) return;
@@ -162,10 +158,6 @@ function useZoom(
               (context.store as unknown as ZoomCommands).setZoom(null),
           },
     separators: filled === null,
-    announce:
-      filled === null
-        ? null
-        : (context.messages().zoomed ?? zoomedText)(title(filled)),
   };
 }
 
@@ -177,6 +169,14 @@ export function zoom(): Feature<ZoomCommands> {
   return {
     name: 'zoom',
     store: zoomStore,
+    announce(operation, { previous, title, messages }) {
+      if (operation.type !== 'zoom') return null;
+      if (operation.pane !== null)
+        return (messages.zoomed ?? zoomedText)(title(operation.pane));
+      return previous.zoomedPane === null
+        ? null
+        : (messages.restored ?? restoredText)(title(previous.zoomedPane));
+    },
     use: useZoom,
     stylesheets: [['zoom', zoomCss]],
   };

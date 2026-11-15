@@ -14,9 +14,10 @@ import {
   cancelFlipAnimations,
   finishFlipAnimations,
 } from '../../dom/flip';
-import { getPanes, shownPanes, stackOf } from '../../model';
+import type { LayoutOperation } from '../../layout-operation';
+import { stackOf } from '../../model';
 import { presentation } from '../../presentation';
-import type { LayoutNode, LayoutState, Rect } from '../../types';
+import type { LayoutState, Rect } from '../../types';
 import { boxesBeforeChange } from '../boxes';
 import { cell } from '../cell';
 import type { Feature, FeatureHooks, ViewContext } from '../contract';
@@ -57,20 +58,31 @@ function boxesMove(before: CSSLayout, after: CSSLayout): boolean {
   return separators(before) !== separators(after);
 }
 
+// The operations that move no box that shows: the tabs of a stack share one
+// box.
+const STILL: ReadonlySet<string> = new Set(['focus', 'activate', 'moveTab']);
+
 /**
- * The animation keys of the panes that show in `after` and that were hidden
- * in `before`, so that they grow into their place.
+ * Whether the operations of a change move a box that shows. A `setRoot` does
+ * not say what changes, so its boxes are compared.
  */
-function shownAgain(before: LayoutNode, after: LayoutNode): Set<string> {
-  const hidden = new Set(
-    getPanes(before)
-      .filter((pane) => pane.hidden === true)
-      .map(({ id }) => id)
-  );
-  return new Set(
-    shownPanes(after)
-      .filter(({ id }) => hidden.has(id))
-      .map(({ id }) => `pane:${id}`)
+function operationsMove(
+  context: ViewContext,
+  previous: LayoutState,
+  next: LayoutState,
+  operations: readonly LayoutOperation[]
+): boolean {
+  return operations.some((operation) =>
+    operation.type === 'setRoot'
+      ? boxesMove(
+          context.cssLayoutOf(previous.root),
+          context.cssLayoutOf(next.root)
+        )
+      : !STILL.has(operation.type) &&
+        !(
+          operation.type === 'addTab' &&
+          stackOf(previous.root, operation.target) !== null
+        )
   );
 }
 
@@ -92,45 +104,44 @@ function useFlip(context: ViewContext, options: FlipOptions): FeatureHooks {
     observer.observe(element);
     return () => observer.disconnect();
   }, [context]);
+  // The animation keys of the panes that a change shows again, so that they
+  // grow into their place.
+  const [grown] = useState(() => cell<ReadonlySet<string>>(new Set()));
   return {
-    beforeChange(previous, next, element) {
+    beforeChange(previous, next, element, { operations }) {
       const zoomChanges = zoomKey(previous) !== zoomKey(next);
       const rootChanges = previous.root !== next.root;
-      // A pointer resize follows the pointer with no animation.
+      // A transient change, such as a frame of a pointer resize, follows the
+      // pointer with no animation.
       const animatable =
+        operations.length > 0 &&
         (rootChanges || zoomChanges) &&
         (!rootChanges || options.layout !== false) &&
         (!zoomChanges || options.zoom !== false) &&
         !context.resizing() &&
         !matchMedia('(prefers-reduced-motion: reduce)').matches;
-      // A tree change animates when a box that shows before and after it
-      // moves. The check compares the compiled CSS of both trees, which the
-      // render needs anyway.
       if (
         animatable &&
-        (zoomChanges ||
-          boxesMove(
-            context.cssLayoutOf(previous.root),
-            context.cssLayoutOf(next.root)
-          ))
+        (zoomChanges || operationsMove(context, previous, next, operations))
       ) {
         before.set(boxesBeforeChange(context, element));
+        grown.set(
+          new Set(
+            operations.flatMap((operation) =>
+              operation.type === 'hide' && !operation.hidden
+                ? [`pane:${operation.pane}`]
+                : []
+            )
+          )
+        );
         // The new animation starts from the current boxes.
         cancelFlipAnimations(element);
       }
     },
-    afterChange(previous, next, element) {
+    afterChange(_previous, _next, element) {
       const boxes = before.get();
       before.set(null);
-      if (boxes !== null)
-        animateFromBoxes(
-          element,
-          boxes,
-          true,
-          previous === null || previous.root === next.root
-            ? new Set()
-            : shownAgain(previous.root, next.root)
-        );
+      if (boxes !== null) animateFromBoxes(element, boxes, true, grown.get());
     },
   };
 }

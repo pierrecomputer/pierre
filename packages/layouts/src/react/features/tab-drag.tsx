@@ -116,7 +116,7 @@ function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
               ? { attributes: { 'data-moving': true } }
               : undefined,
     layers: () => <DropPreview context={context} kind={TAB} />,
-    announce:
+    status:
       drag === null || target === null
         ? null
         : target.place === 'center'

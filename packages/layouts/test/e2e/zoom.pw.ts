@@ -142,9 +142,12 @@ test('a zoomed stack follows its shown tab, and a split ends the zoom', async ({
   await page.goto('/zoom.html');
   await command(page, 'setZoom', 'notes');
   await expect(host(page, 'notes')).toHaveAttribute('data-zoomed', 'true');
+  await expect(page.getByRole('status')).toHaveText('notes zoomed');
+  // The zoom follows the tab with no zoom operation, so nothing new is
+  // announced: the focus moves to the tab.
   await command(page, 'activate', 'logs');
   await expect(host(page, 'logs')).toHaveAttribute('data-zoomed', 'true');
-  await expect(page.getByRole('status')).toHaveText('logs zoomed');
+  await expect(page.getByRole('status')).toHaveText('notes zoomed');
   await command(page, 'split', 'files', { type: 'pane', id: 'new' }, 'right');
   await expect(host(page, 'logs')).not.toHaveAttribute('data-zoomed');
   await expect(page.getByRole('separator')).toHaveCount(4);

@@ -56,7 +56,7 @@ function usePaneDrag(
               ? { attributes: { 'data-moving': true } }
               : undefined,
     layers: () => <DropPreview context={context} kind={PANE} />,
-    announce:
+    status:
       drag === null || target === null
         ? null
         : (context.messages().move ?? moveText)(

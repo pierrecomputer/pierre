@@ -30,10 +30,10 @@ export type LayoutObject<F extends readonly Feature[] = readonly Feature[]> =
 
 /**
  * Create a layout with features, for example
- * `createLayout(root, [edits(naryTree), zoom(), moveDrag()])`, and render it
- * with `<Layout.Root layout={layout} />`. `Root` calls each command through the
- * layout object, so an app wraps a command with an object of its own:
- * `{ ...layout, activate(id) { record(id); layout.activate(id); } }`.
+ * `createLayout(root, [edits(naryTree), zoom(), paneDrag()])`, and render it
+ * with `<Layout.Root layout={layout} />`. Each change reaches
+ * `layout.subscribe` with its operations, so an app syncs or keeps an undo
+ * history without a wrapper of the commands.
  */
 export function createLayout<const F extends readonly Feature[] = []>(
   root: LayoutNode,
