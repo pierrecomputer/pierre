@@ -21,6 +21,7 @@ export type {
   FeatureHooks,
   Gesture,
   HostPatch,
+  LayoutMessages,
   LayoutResizeContext,
   LayoutResizeSession,
   PaneContextValue,
@@ -45,9 +46,22 @@ export {
   type PaneHeaderProps,
 } from './layout';
 export {
+  CloseButton,
+  type CloseButtonState,
+  CollapseButton,
+  type CollapseButtonState,
+  Content,
+  Header,
+  type HeaderState,
+  Title,
+} from './parts/chrome';
+export type { PartProps, RenderProp } from './parts/part';
+export {
+  type LayoutSeparator,
   Root,
   type RootCommonProps,
   type RootControlledProps,
   type RootLayoutProps,
   type RootProps,
 } from './root';
+export { type PaneState, usePane } from './use-pane';

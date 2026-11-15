@@ -24,15 +24,25 @@ import {
 import {
   computeCSSLayout,
   type CSSLayout,
-  type CSSSeparator,
+  type CSSPane,
   type PaneEdges,
 } from '../css-layout';
 import splitCss from '../css/split.css?inline';
-import { notifyHidden, readPixelGeometry } from '../dom/panes';
+import { readPixelGeometry } from '../dom/panes';
+import {
+  COLLAPSED,
+  COLLAPSED_WHOLE,
+  createPaneVisibility,
+  HIDDEN,
+  HOST_HIDDEN,
+  INACTIVE,
+  STATE_REASONS,
+} from '../dom/visibility';
 import { dragSizes, keySizes } from '../gestures';
 import { collapsedSizeOf, findNode, shownPanes } from '../model';
 import type {
   ChildSize,
+  Direction,
   LayoutGeometry,
   LayoutNode,
   LayoutState,
@@ -43,6 +53,7 @@ import {
   type Feature,
   type FeatureHooks,
   type Gesture,
+  type LayoutMessages,
   type LayoutResizeContext,
   type LayoutResizeSession,
   PaneContext,
@@ -58,15 +69,35 @@ import {
 import { createLayout, type LayoutObject } from './create-layout';
 import { separatorGestureStyle } from './gesture-styles';
 
+/** A separator, for `getSeparatorProps`. */
+export interface LayoutSeparator {
+  /** The ID of the separator. */
+  readonly id: string;
+  /** The ID of the split of the separator. */
+  readonly splitId: string;
+  /** The index in the children of the split of the child after the separator. */
+  readonly index: number;
+  readonly direction: Direction;
+  /** The panes that show before the separator, which it resizes first. */
+  readonly before: readonly PaneNode[];
+  /** The panes that show after the separator, which it resizes first. */
+  readonly after: readonly PaneNode[];
+}
+
 /** Props of `Root` in both forms. */
 export interface RootCommonProps {
   /**
    * The content of a pane, with its chrome: parts such as `Layout.Header`
-   * and `Layout.Content` read the pane from context. It renders again when the pane node or this
-   * function changes, except for a change of `hidden`, `collapsed`, or
-   * `collapsedSize` alone: the content of a pane that hides, shows,
-   * collapses, or expands does not render, and receives
-   * `PANE_VISIBILITY_EVENT` instead.
+   * and `Layout.Content`, and app components that call `Layout.usePane`,
+   * read the pane from context.
+   *
+   * Keep the identity of this function, for example with `useCallback`: the
+   * content of every pane renders again when it changes. It also renders
+   * again when its pane node changes, except for a change of `hidden`,
+   * `collapsed`, or `collapsedSize` alone: the content of a pane that hides,
+   * shows, collapses, or expands does not render, and receives
+   * `PANE_VISIBILITY_EVENT` instead. In development, `Root` warns when this
+   * function changes while the tree does not.
    */
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
@@ -84,14 +115,10 @@ export interface RootCommonProps {
    */
   onPaneClose?: (pane: PaneNode) => void;
   /**
-   * Extra props of each pane host: classes, the tab order, a label for a host
-   * without tabs, and `data-*` attributes. The view's own attributes take
-   * precedence. A hidden host is never in the tab order.
+   * Extra props of each pane host: classes and `data-*` attributes. The
+   * view's own attributes take precedence.
    */
-  getPaneProps?: (pane: PaneNode) => Pick<
-    HTMLAttributes<HTMLElement>,
-    'className' | 'tabIndex' | 'aria-label'
-  > & {
+  getPaneProps?: (pane: PaneNode) => { className?: string } & {
     [Attribute in `data-${string}`]?: string | boolean | undefined;
   };
   /**
@@ -99,7 +126,7 @@ export interface RootCommonProps {
    * area, an accessible label, `hidden`, and a double-click handler.
    */
   getSeparatorProps?: (
-    separator: CSSSeparator
+    separator: LayoutSeparator
   ) => Pick<
     HTMLAttributes<HTMLDivElement>,
     'className' | 'children' | 'onDoubleClick' | 'aria-label' | 'hidden'
@@ -117,11 +144,11 @@ export interface RootCommonProps {
    * sheet: the app links `styles.css`.
    */
   stylesheets?: { nonce?: string } | null;
+  /** The strings of the layout, its controls, and its announcements. */
+  messages?: LayoutMessages;
   className?: string;
   style?: CSSProperties;
   gap?: number;
-  /** Accessible name of the workspace. */
-  label?: string;
 }
 
 /** A layout object from `createLayout`, which holds the state. */
@@ -151,6 +178,61 @@ const NO_FEATURES: readonly Feature[] = [];
 const DEFAULT_PANE_LAYERS = { minPanes: 6 };
 
 const defaultTitle = (pane: PaneNode): string => pane.id;
+
+const NO_MESSAGES: LayoutMessages = {};
+
+const separatorName = (
+  before: readonly string[],
+  after: readonly string[]
+): string => `Resize ${before.join(', ')} and ${after.join(', ')}`;
+
+const separatorValue = (percent: number): string =>
+  `${percent}% preferred position`;
+
+const paneCount = (count: number): string => `${count} panes`;
+
+/** The reasons from the layout state that a pane does not show all its content. */
+function stateReasons(
+  { pane, stack, hidden, collapsed }: CSSPane,
+  zoomedPane: string | null
+): number {
+  const inactive = stack !== null && stack.active !== pane.id;
+  // A zoomed pane shows its content, also when it is collapsed.
+  const folded = collapsed && zoomedPane !== pane.id;
+  return (
+    (inactive ? INACTIVE : hidden ? HIDDEN : 0) |
+    (folded
+      ? COLLAPSED | (collapsedSizeOf(stack ?? pane) === 0 ? COLLAPSED_WHOLE : 0)
+      : 0)
+  );
+}
+
+let warnedRenderPane = false;
+
+/**
+ * In development, warn once when `renderPane` changes while the tree does
+ * not: the content of each pane then renders again for no change of its own.
+ */
+function useRenderPaneCheck(
+  renderPane: RootCommonProps['renderPane'],
+  root: LayoutNode
+): void {
+  const last = useRef({ renderPane, root });
+  useEffect(() => {
+    const before = last.current;
+    last.current = { renderPane, root };
+    if (
+      !warnedRenderPane &&
+      before.renderPane !== renderPane &&
+      before.root === root
+    ) {
+      warnedRenderPane = true;
+      console.warn(
+        '@pierre/layouts: renderPane changed while the tree did not, so the content of each pane rendered again. Keep the identity of renderPane, and read the state of a pane with Layout.usePane.'
+      );
+    }
+  });
+}
 
 const EDGE_ORDER = ['top', 'right', 'bottom', 'left'] as const;
 
@@ -290,6 +372,7 @@ interface LatestProps {
   onResizeStart: RootCommonProps['onResizeStart'];
   onPaneClose: RootCommonProps['onPaneClose'];
   stylesheets: StylesheetsSetting;
+  messages: LayoutMessages | undefined;
 }
 
 /** The internal parts of a view: its context, and what `Root` calls. */
@@ -357,6 +440,7 @@ function createViewInternals(
     store,
     prefix,
     view: createViewState(),
+    visibility: createPaneVisibility(),
     element: () => element,
     cssLayoutOf: (root) => cssLayoutOf(root, latest.gap),
     readGeometry,
@@ -452,6 +536,7 @@ function createViewInternals(
     hooks: () => hooks,
     has: (name) => names.has(name),
     stylesheets: () => latest.stylesheets,
+    messages: () => latest.messages ?? NO_MESSAGES,
   };
   return {
     context,
@@ -501,10 +586,10 @@ export function Root(props: RootProps): JSX.Element {
     getSeparatorProps,
     paneLayers = DEFAULT_PANE_LAYERS,
     stylesheets,
+    messages,
     className,
     style,
     gap = 8,
-    label = 'Workspace',
   } = props;
   // The controlled form keeps its own layout object, which follows the tree
   // of each render.
@@ -534,6 +619,7 @@ export function Root(props: RootProps): JSX.Element {
     onResizeStart,
     onPaneClose,
     stylesheets,
+    messages,
   };
   const internals = useMemo(
     () =>
@@ -573,6 +659,10 @@ export function Root(props: RootProps): JSX.Element {
     () => cssLayoutOf(state.root, gap),
     [state.root, gap]
   );
+  // The condition is the same for each render of a build.
+  if (process.env.NODE_ENV !== 'production')
+    // oxlint-disable-next-line react-hooks/rules-of-hooks
+    useRenderPaneCheck(renderPane, props.root ?? state.root);
   const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
   const render: ViewRender = { state, geometry, gap, visibleCount };
   const hooks: FeatureHooks[] = [];
@@ -584,27 +674,29 @@ export function Root(props: RootProps): JSX.Element {
     internals.setHooks(hooks);
   });
 
-  // Tell the content of a pane that stops or starts showing: a hide or a show,
-  // a change of tab, or a collapse. The content stays mounted, so it can pause
-  // its own work. Most tree changes, such as each pointer move of a resize,
-  // hide no pane, so the DOM is read only when the set of hidden panes changes.
-  const hiddenBefore = useRef<ReadonlySet<string> | null>(null);
-  useEffect(() => {
-    const hidden = new Set(
-      geometry.panes
-        .filter(
-          ({ pane, hidden, collapsed }) =>
-            hidden || (collapsed && pane.id !== state.zoomedPane)
-        )
-        .map(({ pane }) => pane.id)
-    );
-    const before = hiddenBefore.current;
-    hiddenBefore.current = hidden;
-    const element = context.element();
-    if (before === null || element === null) return;
-    const changed =
-      before.size !== hidden.size || [...hidden].some((id) => !before.has(id));
-    if (changed) notifyHidden(element, before, hidden);
+  // The visibility of each host in the first render, which a server renders
+  // too. After it, the visibility module writes the visibility: React renders
+  // these same values again, so it does not write them.
+  const [firstReasons] = useState(
+    () =>
+      new Map(
+        geometry.panes.map((host) => [
+          host.pane.id,
+          stateReasons(host, state.zoomedPane),
+        ])
+      )
+  );
+  // Give the visibility module the reasons from the state: a hide or a show,
+  // a change of tab, or a collapse. It writes the hosts whose reasons change,
+  // and tells the content that starts or stops rendering. The content stays
+  // mounted, so it can pause its own work.
+  useLayoutEffect(() => {
+    for (const host of geometry.panes)
+      context.visibility.set(
+        host.pane.id,
+        STATE_REASONS,
+        stateReasons(host, state.zoomedPane)
+      );
   }, [geometry, state.zoomedPane, context]);
 
   // After React commits a state, before the browser paints.
@@ -674,7 +766,7 @@ export function Root(props: RootProps): JSX.Element {
       : visibleCount >= paneLayers.minPanes;
   const announce =
     hooks.find((hook) => hook.announce != null)?.announce ??
-    `${visibleCount} panes`;
+    (messages?.paneCount ?? paneCount)(visibleCount);
   const sheets = new Map<string, string>([['split', splitCss]]);
   for (const feature of features)
     for (const [name, css] of feature.stylesheets ?? []) sheets.set(name, css);
@@ -685,7 +777,7 @@ export function Root(props: RootProps): JSX.Element {
       className={withClasses('pierre-layout', className)}
       style={style}
       role="group"
-      aria-label={label}
+      aria-label={messages?.layout ?? 'Workspace'}
       data-resizing={resizing}
       data-pane-layers={layered}
       onPointerMove={internals.move}
@@ -704,45 +796,37 @@ export function Root(props: RootProps): JSX.Element {
         <Style key={name} name={name} css={css} settings={stylesheets} />
       ))}
       {paneHosts.map((host) => {
-        const { pane, stack, hidden: notShown, collapsed, edges } = host;
+        const { pane, edges } = host;
         const custom = getPaneProps?.(pane);
-        let covered = false;
         let hostStyle: CSSProperties = host.rect;
         const attributes: Record<string, string | boolean | undefined> = {
-          'aria-label': custom?.['aria-label'] ?? getPaneTitle(pane),
+          'aria-label': getPaneTitle(pane),
           'data-layout-edges': edgeList(edges),
         };
         for (const hook of hooks) {
           const patch = hook.host?.(host);
           if (patch === undefined) continue;
-          if (patch.covered === true) covered = true;
           if (patch.attributes !== undefined)
             Object.assign(attributes, patch.attributes);
           if (patch.style !== undefined) hostStyle = patch.style;
         }
-        // A zoomed pane shows its content, also when it is collapsed.
-        const folded = collapsed && state.zoomedPane !== pane.id;
-        // A pane that collapses to 0 pixels shows nothing: it is hidden and
-        // inert, and its content skips its style, layout, and paint.
-        const empty = folded && collapsedSizeOf(stack ?? pane) === 0;
-        const hidden = notShown || covered || empty;
+        const first = firstReasons.get(pane.id) ?? 0;
         return (
           <section
             key={pane.id}
             // First, so that the view's own attributes below take precedence.
             {...custom}
             {...attributes}
+            ref={context.visibility.hostRef(pane.id)}
             id={paneIdOf(prefix, pane.id)}
             data-layout-pane={pane.id}
             data-layout-flip={`pane:${pane.id}`}
             className={withClasses('pierre-layout-pane', custom?.className)}
-            tabIndex={hidden ? -1 : (custom?.tabIndex ?? 0)}
-            aria-hidden={hidden}
-            // A covered pane becomes inert when its content stops rendering,
-            // at the end of the zoom animation.
-            inert={notShown || empty}
-            data-pane-hidden={notShown}
-            data-collapsed={folded}
+            // An inert host, which does not show, is not in the tab order.
+            tabIndex={0}
+            inert={(first & HOST_HIDDEN) !== 0}
+            data-pane-hidden={(first & HOST_HIDDEN) !== 0 || undefined}
+            data-collapsed={(first & COLLAPSED) !== 0 || undefined}
             data-focused={state.focusedPane === pane.id}
             style={hostStyle}
             onFocusCapture={() => store.focusPane(pane.id)}
@@ -761,14 +845,22 @@ export function Root(props: RootProps): JSX.Element {
       })}
       {showSeparators &&
         geometry.separators.map((separator) => {
-          const custom = getSeparatorProps?.(separator);
+          const { id, split, index } = separator;
           // The separator resizes the two children beside it first.
           const before = shownPanes(separator.before);
-          const after = shownPanes(separator.split.children[separator.index]);
+          const after = shownPanes(split.children[index]);
+          const custom = getSeparatorProps?.({
+            id,
+            splitId: split.id,
+            index,
+            direction: split.direction,
+            before,
+            after,
+          });
           const value = Math.round(separator.value * 100);
           return (
             <div
-              key={separator.id}
+              key={id}
               {...custom}
               className={withClasses(
                 'pierre-layout-separator',
@@ -778,27 +870,28 @@ export function Root(props: RootProps): JSX.Element {
               tabIndex={0}
               aria-label={
                 custom?.['aria-label'] ??
-                `Resize ${before.map(getPaneTitle).join(', ')} and ${after.map(getPaneTitle).join(', ')}`
+                (messages?.separator ?? separatorName)(
+                  before.map(getPaneTitle),
+                  after.map(getPaneTitle)
+                )
               }
               aria-orientation={
-                separator.split.direction === 'horizontal'
-                  ? 'vertical'
-                  : 'horizontal'
+                split.direction === 'horizontal' ? 'vertical' : 'horizontal'
               }
               aria-controls={[...before, ...after]
-                .map(({ id }) => paneIdOf(prefix, id))
+                .map((pane) => paneIdOf(prefix, pane.id))
                 .join(' ')}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={value}
-              aria-valuetext={`${value}% preferred position`}
-              data-direction={separator.split.direction}
-              data-layout-flip={`separator:${separator.id}`}
-              style={separatorStyles.get(separator.id)}
-              onPointerDown={(event) =>
-                context.startResize(event, [separator.id])
-              }
-              onKeyDown={(event) => context.resizeKey(event, [separator.id])}
+              aria-valuetext={(messages?.separatorValue ?? separatorValue)(
+                value
+              )}
+              data-direction={split.direction}
+              data-layout-flip={`separator:${id}`}
+              style={separatorStyles.get(id)}
+              onPointerDown={(event) => context.startResize(event, [id])}
+              onKeyDown={(event) => context.resizeKey(event, [id])}
             />
           );
         })}

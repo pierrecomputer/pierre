@@ -14,6 +14,7 @@ import {
 } from 'react';
 
 import type { CSSLayout, CSSPane } from '../css-layout';
+import type { PaneVisibility } from '../dom/visibility';
 import type { CoreLayoutStore, StoreFeature } from '../store';
 import type {
   ChildSize,
@@ -89,6 +90,32 @@ export interface ViewState {
  */
 export type StylesheetsSetting = { readonly nonce?: string } | null | undefined;
 
+/**
+ * The strings that the library owns, for the `messages` prop of `Root`. A
+ * string that names a pane uses its title from `getPaneTitle`. Each missing
+ * string takes its English default.
+ */
+export interface LayoutMessages {
+  /** The name of the layout. Default: "Workspace". */
+  readonly layout?: string;
+  /** The status message with the count of panes that show. Default: "2 panes". */
+  readonly paneCount?: (count: number) => string;
+  /**
+   * The name of a separator, from the titles of the panes that it resizes
+   * first on each side. Default: "Resize Files and Editor".
+   */
+  readonly separator?: (
+    before: readonly string[],
+    after: readonly string[]
+  ) => string;
+  /** The value of a separator: its preferred place in percent. Default: "50% preferred position". */
+  readonly separatorValue?: (percent: number) => string;
+  /** The name of `Layout.CollapseButton`. Default: "Collapse Editor". */
+  readonly collapse?: (title: string) => string;
+  /** The name of `Layout.CloseButton`. Default: "Close Editor". */
+  readonly close?: (title: string) => string;
+}
+
 /** A layout object: the store, with the features of the layout. */
 export type ViewStore = CoreLayoutStore & {
   readonly features: readonly Feature[];
@@ -100,6 +127,8 @@ export interface ViewContext {
   /** The prefix of the element IDs of this layout. */
   readonly prefix: string;
   readonly view: ViewState;
+  /** The visibility of the pane hosts: the only writer of `inert` on them. */
+  readonly visibility: PaneVisibility;
   /** The layout element, or null before it mounts. */
   element(): HTMLElement | null;
   /** The compiled CSS of a tree, cached for each tree and gap. */
@@ -127,6 +156,8 @@ export interface ViewContext {
   has(name: string): boolean;
   /** The `stylesheets` setting of `Root`. */
   stylesheets(): StylesheetsSetting;
+  /** The `messages` of `Root`. */
+  messages(): LayoutMessages;
 }
 
 /** What `Root` renders, for the view part of each feature. */
@@ -137,12 +168,13 @@ export interface ViewRender {
   readonly visibleCount: number;
 }
 
-/** What a feature changes on a pane host. A later feature's style wins. */
+/**
+ * What a feature changes on a pane host. A later feature's style wins. The
+ * visibility of a host is not here: `ViewContext.visibility` owns it.
+ */
 export interface HostPatch {
   readonly attributes?: Readonly<Record<string, string | boolean | undefined>>;
   readonly style?: CSSProperties;
-  /** The pane is under a zoomed pane: it is hidden from assistive technology. */
-  readonly covered?: boolean;
 }
 
 /** The view part of a feature, for one render of `Root`. */

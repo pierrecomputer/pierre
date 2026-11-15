@@ -27,6 +27,8 @@ const stylesheets =
 // An app that renders no sheets links the generated stylesheet.
 if (stylesheets === null) void import('../src/styles.css');
 
+const MESSAGES = { layout: 'Two-pane split' };
+
 const initial: LayoutNode = {
   type: 'split',
   id: 'root',
@@ -75,7 +77,7 @@ function Controlled(): JSX.Element {
     <Layout.Root
       root={root}
       renderPane={renderPane}
-      label="Two-pane split"
+      messages={MESSAGES}
       stylesheets={stylesheets}
       onResize={(sizes) => {
         report(sizes);
@@ -114,7 +116,7 @@ function App(): JSX.Element {
           <Layout.Root
             layout={page.layout}
             renderPane={renderPane}
-            label="Two-pane split"
+            messages={MESSAGES}
             stylesheets={stylesheets}
             onResize={report}
           />

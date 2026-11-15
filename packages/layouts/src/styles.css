@@ -79,17 +79,12 @@
   /* A hidden pane (store.setHidden) and a tab that is not active keep their
      content mounted, with its state and scroll position, but do not show: the
      view gives each the box that it would have, and it does not render or take
-     input. */
+     input. In `Root`, a pane that collapses to 0 pixels is hidden in the
+     same way. */
   .pierre-layout-pane[data-pane-hidden='true'] {
     content-visibility: hidden;
     visibility: hidden;
     pointer-events: none;
-  }
-
-  /* A pane that collapses to 0 pixels shows nothing. `Root` makes it inert,
-     and its content skips its style, layout, and paint. */
-  .pierre-layout-pane[data-collapsed='true'][inert] {
-    content-visibility: hidden;
   }
 
   .pierre-layout-pane:focus-visible {

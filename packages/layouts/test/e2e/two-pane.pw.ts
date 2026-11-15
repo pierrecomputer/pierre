@@ -116,8 +116,7 @@ test('a collapse to 0 pixels hides and inerts the whole pane, with no render of 
   await page.getByRole('button', { name: 'Collapse the sidebar' }).click();
   const host = page.locator('[data-layout-pane="sidebar"]');
   await expect(host).toHaveAttribute('data-collapsed', 'true');
-  await expect(host).toHaveAttribute('aria-hidden', 'true');
-  await expect(host).toHaveAttribute('tabindex', '-1');
+  await expect(host).toHaveAttribute('data-pane-hidden', 'true');
   await expect(host).toHaveCSS('content-visibility', 'hidden');
   expect(await host.evaluate((element: HTMLElement) => element.inert)).toBe(
     true
@@ -130,7 +129,8 @@ test('a collapse to 0 pixels hides and inerts the whole pane, with no render of 
     )
   ).toEqual(rendersBefore);
   await page.getByRole('button', { name: 'Expand the sidebar' }).click();
-  await expect(host).toHaveAttribute('data-collapsed', 'false');
+  await expect(host).not.toHaveAttribute('data-collapsed');
+  await expect(host).not.toHaveAttribute('data-pane-hidden');
   expect(await host.evaluate((element: HTMLElement) => element.inert)).toBe(
     false
   );
