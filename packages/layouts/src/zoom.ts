@@ -1,6 +1,7 @@
 // Zoom: one pane fills the layout, and the others wait under it. The store
 // command, and the edge past which each pane leaves when another pane zooms.
-import { activatePane, stackOf } from './model';
+import type { LayoutOperation } from './layout-operation';
+import { foldActivate } from './model';
 import type { StoreFeature } from './store';
 import type { Edge, Rect } from './types';
 
@@ -18,19 +19,28 @@ export interface ZoomCommands {
   setZoom(id: string | null): void;
 }
 
-/** The zoom commands of a store. */
+/**
+ * The zoom commands of a store. The zoom of a tab that does not show gives
+ * two operations: `activate`, which a server folds, and `zoom`.
+ */
 export const zoom: StoreFeature<ZoomCommands> = {
-  commands: ({ get, commit, requirePane }) => {
+  folds: { activate: foldActivate },
+  commands: ({ get, fold, commit, requirePane }) => {
     const zoomTo = (id: string, restore: boolean): void => {
       const state = get();
-      commit({
-        root:
-          restore || stackOf(state.root, id) === null
-            ? state.root
-            : activatePane(state.root, id),
-        focusedPane: id,
-        zoomedPane: restore ? null : id,
-      });
+      const activate = { type: 'activate', pane: id } as const;
+      const operations: LayoutOperation[] = [
+        { type: 'zoom', pane: restore ? null : id },
+      ];
+      if (!restore) operations.unshift(activate);
+      commit(
+        {
+          root: restore ? state.root : fold(activate),
+          focusedPane: id,
+          zoomedPane: restore ? null : id,
+        },
+        operations
+      );
     };
     return {
       toggleZoom(id = get().focusedPane) {
@@ -40,7 +50,10 @@ export const zoom: StoreFeature<ZoomCommands> = {
       setZoom(id) {
         const state = get();
         if (id === state.zoomedPane) return;
-        if (id === null) commit({ ...state, zoomedPane: null });
+        if (id === null)
+          commit({ ...state, zoomedPane: null }, [
+            { type: 'zoom', pane: null },
+          ]);
         else {
           requirePane(id);
           zoomTo(id, false);

@@ -173,6 +173,8 @@ const ZOOM_STATE_OWNERS = new Set([
   'presentation.ts',
   'zoom.ts',
   'persistence-model.ts',
+  'persistence.ts',
+  'apply-operations.ts',
   'layout-store.ts',
   'dom/panes.ts',
   'react/layout.tsx',

@@ -4,10 +4,17 @@
 // `createLayoutStore` and its features.
 import { type EditCommands, edits } from './edits';
 import { type HiddenPaneCommands, hiddenPanes } from './hidden-panes';
+import type { LayoutChange } from './layout-operation';
 import { naryTree } from './models/n-ary';
 import { persistence, type PersistenceCommands } from './persistence';
 import { type StackCommands, stacks } from './stacks';
-import { createLayoutStore, type StoreFeature, type StoreWith } from './store';
+import {
+  type ContextOfStore,
+  createLayoutStore,
+  STORE_CONTEXT,
+  type StoreFeature,
+  type StoreWith,
+} from './store';
 import type {
   ChildSize,
   Edge,
@@ -39,7 +46,7 @@ type AllFeatures = [
 /** Own immutable layout state and notify adapters without coupling the model to a UI framework. */
 export class LayoutStore {
   readonly getSnapshot: () => LayoutState;
-  readonly subscribe: (listener: () => void) => () => void;
+  readonly subscribe: (listener: (change: LayoutChange) => void) => () => void;
   private readonly store: StoreWith<AllFeatures>;
 
   constructor(root: LayoutNode, options: LayoutStoreOptions = {}) {
@@ -52,6 +59,10 @@ export class LayoutStore {
     ]);
     this.getSnapshot = this.store.getSnapshot;
     this.subscribe = this.store.subscribe;
+    // The context of the store, for `applyOperations`.
+    (this as unknown as Record<symbol, unknown>)[STORE_CONTEXT] = (
+      this.store as unknown as ContextOfStore
+    )[STORE_CONTEXT];
   }
 
   /** Set the tree. A tree of another shape takes the shape of the model. */
@@ -118,15 +129,19 @@ export class LayoutStore {
     this.store.split(targetId, pane, edge);
   }
 
+  /**
+   * Remove a pane. The close of the last pane that is not hidden throws
+   * `last_pane`: check `canClose` first.
+   */
   close(id: string): void {
     this.store.close(id);
   }
 
   /**
    * Hide a pane or show it again. A hidden pane keeps its place in the tree,
-   * its content, and its state, but takes no space. The last visible pane
-   * stays visible. A pane that shows again gets the focus, and becomes the
-   * active pane of its stack.
+   * its content, and its state, but takes no space. The hide of the last pane
+   * that is not hidden throws `last_pane`. A pane that shows again gets the
+   * focus, and becomes the active pane of its stack.
    */
   setHidden(id: string, hidden: boolean): void {
     this.store.setHidden(id, hidden);
@@ -155,6 +170,16 @@ export class LayoutStore {
    */
   setSizes(sizes: Readonly<Record<string, readonly ChildSize[]>>): void {
     this.store.setSizes(sizes);
+  }
+
+  /** Run commands whose changes are transient, as `CoreLayoutStore.transient` does. */
+  transient(run: () => void): void {
+    this.store.transient(run);
+  }
+
+  /** Go back to the settled state, in a transient change. */
+  revert(): void {
+    this.store.revert();
   }
 
   serialize(): string {

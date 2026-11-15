@@ -1,7 +1,9 @@
+import type { TreeOperation } from './layout-operation';
 import { naryTree } from './models/n-ary';
 import type {
   ChildSize,
   Direction,
+  Edge,
   LayoutNode,
   PaneNode,
   SplitNode,
@@ -10,6 +12,10 @@ import type {
   TreeModel,
 } from './types';
 
+/**
+ * A tree or a list of operations from storage or from a client that does not
+ * have a valid form. `path` names the field, for example `tree.root.sizes[1]`.
+ */
 export class InvalidLayoutTreeError extends Error {
   readonly path: string;
 
@@ -214,4 +220,191 @@ export function parseStoredLayoutTree(
     );
   }
   return { version: 3, root };
+}
+
+// The fields of each tree operation, besides `type`.
+const OPERATION_KEYS: Readonly<Record<TreeOperation['type'], string>> = {
+  setRoot: 'root',
+  resize: 'sizes',
+  collapse: 'pane collapsed',
+  split: 'target pane edge id',
+  close: 'pane',
+  move: 'pane target edge id',
+  swap: 'panes',
+  activate: 'pane',
+  addTab: 'target pane index activate id',
+  moveToStack: 'pane target index activate id',
+  moveTab: 'pane index',
+  hide: 'pane hidden',
+};
+
+const EDGES: ReadonlySet<unknown> = new Set(['left', 'right', 'top', 'bottom']);
+
+function booleanAt(fields: Fields, key: string, path: string): boolean {
+  const value = optionalBoolean(fields, key, path);
+  if (value === undefined)
+    throw new InvalidLayoutTreeError(`${path}.${key}`, 'must be a boolean');
+  return value;
+}
+
+function indexAt(
+  fields: Fields,
+  key: string,
+  path: string
+): number | undefined {
+  const value = fields[key];
+  if (
+    value !== undefined &&
+    (!Number.isInteger(value) || (value as number) < 0)
+  )
+    throw new InvalidLayoutTreeError(
+      `${path}.${key}`,
+      'must be an integer of 0 or more'
+    );
+  return value as number | undefined;
+}
+
+function edgeAt(fields: Fields, path: string): Edge {
+  if (!EDGES.has(fields.edge))
+    throw new InvalidLayoutTreeError(
+      `${path}.edge`,
+      'must be "left", "right", "top", or "bottom"'
+    );
+  return fields.edge as Edge;
+}
+
+function paneAt(fields: Fields, path: string): PaneNode {
+  const value = fields.pane;
+  if ((value as Fields | null)?.type !== 'pane')
+    throw new InvalidLayoutTreeError(`${path}.pane.type`, 'must be "pane"');
+  return parsePane(value, `${path}.pane`);
+}
+
+function optionalId(fields: Fields, path: string): string | undefined {
+  return fields.id === undefined ? undefined : stringAt(fields, 'id', path);
+}
+
+function parseSizes(
+  value: unknown,
+  path: string
+): Readonly<Record<string, readonly ChildSize[]>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    throw new InvalidLayoutTreeError(path, 'must be an object');
+  return Object.fromEntries(
+    Object.entries(value).map(([id, sizes]) => {
+      const at = `${path}.${id}`;
+      if (!Array.isArray(sizes))
+        throw new InvalidLayoutTreeError(at, 'must be an array');
+      return [
+        id,
+        sizes.map((size, index) => parseSize(size, `${at}[${index}]`)),
+      ];
+    })
+  );
+}
+
+function parseOperation(value: unknown, path: string): TreeOperation {
+  const type = (value as Fields | null)?.type;
+  if (typeof type !== 'string' || !Object.hasOwn(OPERATION_KEYS, type))
+    throw new InvalidLayoutTreeError(
+      `${path}.type`,
+      'must be the type of a tree operation'
+    );
+  const name = type as TreeOperation['type'];
+  const fields = fieldsOf(
+    value,
+    path,
+    new Set(['type', ...OPERATION_KEYS[name].split(' ')])
+  );
+  const pane = (): string => stringAt(fields, 'pane', path);
+  const target = (): string => stringAt(fields, 'target', path);
+  switch (name) {
+    case 'setRoot':
+      return { type: name, root: parseNode(fields.root, `${path}.root`) };
+    case 'resize':
+      return { type: name, sizes: parseSizes(fields.sizes, `${path}.sizes`) };
+    case 'collapse':
+      return {
+        type: name,
+        pane: pane(),
+        collapsed: booleanAt(fields, 'collapsed', path),
+      };
+    case 'split':
+      return withDefined({
+        type: name,
+        target: target(),
+        pane: paneAt(fields, path),
+        edge: edgeAt(fields, path),
+        id: optionalId(fields, path),
+      });
+    case 'move':
+      return withDefined({
+        type: name,
+        pane: pane(),
+        target: target(),
+        edge: edgeAt(fields, path),
+        id: optionalId(fields, path),
+      });
+    case 'swap': {
+      const panes = arrayAt(fields, 'panes', path);
+      if (
+        panes.length !== 2 ||
+        !panes.every((id) => typeof id === 'string' && id.length > 0)
+      )
+        throw new InvalidLayoutTreeError(
+          `${path}.panes`,
+          'must hold 2 pane IDs'
+        );
+      return { type: name, panes: [panes[0] as string, panes[1] as string] };
+    }
+    case 'addTab':
+      return withDefined({
+        type: name,
+        target: target(),
+        pane: paneAt(fields, path),
+        index: indexAt(fields, 'index', path),
+        activate: booleanAt(fields, 'activate', path),
+        id: optionalId(fields, path),
+      });
+    case 'moveToStack':
+      return withDefined({
+        type: name,
+        pane: pane(),
+        target: target(),
+        index: indexAt(fields, 'index', path),
+        activate: booleanAt(fields, 'activate', path),
+        id: optionalId(fields, path),
+      });
+    case 'moveTab': {
+      const index = indexAt(fields, 'index', path);
+      if (index === undefined)
+        throw new InvalidLayoutTreeError(
+          `${path}.index`,
+          'must be an integer of 0 or more'
+        );
+      return { type: name, pane: pane(), index };
+    }
+    case 'hide':
+      return {
+        type: name,
+        pane: pane(),
+        hidden: booleanAt(fields, 'hidden', path),
+      };
+    default:
+      return { type: name, pane: pane() };
+  }
+}
+
+/**
+ * Validate tree operations from a client, for a server, before
+ * `applyTreeOperations`. An error names the path of the field, for example
+ * `operations[2].edge`. The parser checks the form only; the fold checks the
+ * operations against the tree.
+ */
+export function parseLayoutOperations(value: unknown): TreeOperation[] {
+  if (!Array.isArray(value))
+    throw new InvalidLayoutTreeError('operations', 'must be an array');
+  return value.map((operation, index) =>
+    parseOperation(operation, `operations[${index}]`)
+  );
 }

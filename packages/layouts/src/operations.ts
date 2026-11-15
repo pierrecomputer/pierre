@@ -1,4 +1,8 @@
+// The old server operations, with the tab and group vocabulary. They stay
+// until chat-bb uses the store operations (`TreeOperation` and
+// `applyTreeOperations`).
 import { type EditCommands, edits } from './edits';
+import { LayoutOperationError } from './layout-operation';
 import { findNode, getPanes, parentOf, stackOf } from './model';
 import { naryTree } from './models/n-ary';
 import { type StackCommands, stacks } from './stacks';
@@ -38,23 +42,6 @@ export type LayoutTreeOperation =
       readonly sizes: readonly ChildSize[];
       readonly level?: number;
     };
-
-export type LayoutOperationErrorCode =
-  | 'tab_not_found'
-  | 'invalid_place'
-  | 'layout_limit'
-  | 'last_tab'
-  | 'invalid_sizes';
-
-export class LayoutOperationError extends Error {
-  readonly code: LayoutOperationErrorCode;
-
-  constructor(code: LayoutOperationErrorCode, message: string) {
-    super(message);
-    this.name = 'LayoutOperationError';
-    this.code = code;
-  }
-}
 
 export interface ApplyLayoutOperationsOptions {
   readonly model?: TreeModel;

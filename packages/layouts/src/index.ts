@@ -1,4 +1,9 @@
 export {
+  applyOperations,
+  applyTreeOperations,
+  type ApplyTreeOperationsOptions,
+} from './apply-operations';
+export {
   type CornerGeometry,
   type CSSCorner,
   cssCorners,
@@ -8,8 +13,18 @@ export { type EditCommands, edits } from './edits';
 export { swapPanes } from './edits-model';
 export { computeLayout } from './geometry';
 export { type HiddenPaneCommands, hiddenPanes } from './hidden-panes';
+export {
+  isTreeOperation,
+  type LayoutChange,
+  type LayoutOperation,
+  LayoutOperationError,
+  type LayoutOperationErrorCode,
+  type LayoutWindowOperation,
+  type TreeOperation,
+} from './layout-operation';
 export { LayoutStore, type LayoutStoreOptions } from './layout-store';
 export {
+  canClose,
   getPanes,
   hasVisiblePane,
   replaceNode,
@@ -28,6 +43,10 @@ export {
   type CommandsOf,
   type CoreLayoutStore,
   createLayoutStore,
+  type CreateLayoutStoreOptions,
+  type Fold,
+  type FoldContext,
+  type Folds,
   type StoreContext,
   type StoreFeature,
   type StoreWith,
@@ -53,8 +72,6 @@ export type {
 export {
   applyLayoutOperations,
   type ApplyLayoutOperationsOptions,
-  LayoutOperationError,
-  type LayoutOperationErrorCode,
   type LayoutTreeOperation,
   type SplitAddress,
   splitAddressOf,
@@ -66,7 +83,11 @@ export {
   defaultLayoutTree,
   reconcileLayoutTree,
 } from './reconcile';
-export { InvalidLayoutTreeError, parseStoredLayoutTree } from './stored-tree';
+export {
+  InvalidLayoutTreeError,
+  parseLayoutOperations,
+  parseStoredLayoutTree,
+} from './stored-tree';
 export {
   exceedsGroupLimit,
   fromLayoutNodeView,

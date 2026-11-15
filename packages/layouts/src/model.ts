@@ -1,6 +1,8 @@
 // The core of the layout tree: validation, queries, and the changes that every
 // layout needs (sizes, collapse, hidden panes, the active pane of a stack).
 // Feature modules import from this module. This module imports no feature.
+import { LayoutOperationError } from './layout-operation';
+import type { Fold } from './store';
 import type {
   ChildSize,
   LayoutNode,
@@ -146,6 +148,41 @@ export function setNodeCollapsed(
 export function getPanes(root: LayoutNode): PaneNode[] {
   return root.type === 'pane' ? [root] : root.children.flatMap(getPanes);
 }
+
+/** A pane of a tree, or `LayoutOperationError('pane_not_found')`. */
+export function paneIn(root: LayoutNode, id: string): PaneNode {
+  const pane = getPanes(root).find((each) => each.id === id);
+  if (pane === undefined) throw new LayoutOperationError('pane_not_found', id);
+  return pane;
+}
+
+/**
+ * True when a pane can close or hide: the tree holds another pane that is
+ * not hidden, so a pane still shows after it. The store, the views, and the
+ * server use this one rule; a close or a hide that breaks it throws
+ * `last_pane`.
+ */
+export function canClose(root: LayoutNode, id: string): boolean {
+  return getPanes(root).some((pane) => pane.id !== id && pane.hidden !== true);
+}
+
+/** Throw `id_in_use` when a tree holds a node with the ID of a new pane. */
+export function requireNewPane(root: LayoutNode, pane: PaneNode): void {
+  if (findNode(root, pane.id) !== null)
+    throw new LayoutOperationError('id_in_use', pane.id);
+}
+
+/**
+ * The fold of `activate`: the pane shows in its stack. A pane outside a
+ * stack shows already. `stacks` and `zoom` fold it.
+ */
+export const foldActivate: Fold<{ type: 'activate'; pane: string }> = (
+  root,
+  { pane }
+) => {
+  paneIn(root, pane);
+  return stackOf(root, pane) === null ? root : activatePane(root, pane);
+};
 
 export function hasVisiblePane(node: LayoutNode): boolean {
   return node.type === 'pane'

@@ -1,11 +1,12 @@
-// Stacks of panes with tabs: the store commands that show, add, and move tabs.
-// A move of a tab into another stack takes the pane out of its place with the
-// tree model of the store, so it needs `edits`. The store commit moves the
-// zoom of a stack to the tab that shows.
-import { activatePane, getPanes, stackOf } from './model';
+// Stacks of panes with tabs: the store commands that show, add, and move tabs,
+// and the folds of their operations. A move of a tab into another stack takes
+// the pane out of its place with the tree model of the store, so it needs
+// `edits`. The store commit moves the zoom of a stack to the tab that shows.
+import { LayoutOperationError } from './layout-operation';
+import { foldActivate, paneIn, requireNewPane, stackOf } from './model';
 import { addToStack, moveTabTo } from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
-import type { LayoutNode, PaneNode, TabOptions } from './types';
+import type { PaneNode, TabOptions } from './types';
 
 export interface StackCommands {
   /**
@@ -47,72 +48,95 @@ export interface StackCommands {
 
 /** The tab commands of a store. */
 export const stacks: StoreFeature<StackCommands> = {
-  commands: ({ get, commit, model, requirePane, nextId }) => ({
-    activate(id) {
-      requirePane(id);
-      const state = get();
-      if (stackOf(state.root, id) === null) {
-        if (state.focusedPane !== id) commit({ ...state, focusedPane: id });
-      } else
-        commit({
-          ...state,
-          root: activatePane(state.root, id),
-          focusedPane: id,
-        });
-    },
-    addTab(targetId, pane, index, options = {}) {
-      requirePane(targetId);
-      const state = get();
-      const activate = options.activate ?? true;
-      const root = addToStack(
-        state.root,
-        targetId,
+  folds: {
+    activate: foldActivate,
+    addTab(root, { target, pane, index, activate, id }, { newId }) {
+      paneIn(root, target);
+      requireNewPane(root, pane);
+      return addToStack(
+        root,
+        target,
         { ...pane },
-        nextId(state.root, 'stack'),
+        id ?? newId('stack'),
         index,
         activate
       );
+    },
+    moveToStack(root, { pane, target, index, activate, id }, { model, newId }) {
+      const source = paneIn(root, pane);
+      paneIn(root, target);
+      if (pane === target) return root;
+      const stack = stackOf(root, pane);
+      if (stack !== null && stack === stackOf(root, target)) {
+        // Keep the stack, and put the source at its new place among the tabs.
+        const others = stack.children.filter(({ id }) => id !== pane);
+        return moveTabTo(
+          root,
+          pane,
+          index ?? others.findIndex(({ id }) => id === target) + 1,
+          activate
+        );
+      }
+      if (model === null)
+        throw new LayoutOperationError(
+          'unknown_operation',
+          'A move into another stack needs a tree model'
+        );
+      const remaining = model.remove(root, pane);
+      return remaining === null
+        ? root
+        : addToStack(
+            remaining,
+            target,
+            source,
+            id ?? newId('stack'),
+            index,
+            activate
+          );
+    },
+    moveTab(root, { pane, index }) {
+      paneIn(root, pane);
+      return moveTabTo(root, pane, index);
+    },
+  },
+  commands: ({ get, fold, commit, newId }) => ({
+    activate(id) {
+      const operation = { type: 'activate', pane: id } as const;
+      commit({ ...get(), root: fold(operation), focusedPane: id }, [operation]);
+    },
+    addTab(targetId, pane, index, options = {}) {
+      const state = get();
+      const activate = options.activate ?? true;
+      // The operation holds its own copy of the caller's pane.
+      const operation = {
+        type: 'addTab',
+        target: targetId,
+        pane: { ...pane },
+        index,
+        activate,
+        id: newId('stack'),
+      } as const;
+      const root = fold(operation);
       commit(
         activate
           ? { ...state, root, focusedPane: pane.id }
           : { ...state, root },
-        pane.id
+        [operation]
       );
     },
     moveToStack(sourceId, targetId, index, options = {}) {
-      requirePane(sourceId);
-      requirePane(targetId);
-      if (sourceId === targetId) return;
       const state = get();
       const activate = options.activate ?? true;
-      const current = state.root;
-      const source = getPanes(current).find(({ id }) => id === sourceId)!;
-      const stack = stackOf(current, sourceId);
-      let root: LayoutNode;
-      if (stack !== null && stack === stackOf(current, targetId)) {
-        // Keep the stack, and put the source at its new place among the tabs.
-        const others = stack.children.filter(({ id }) => id !== sourceId);
-        root = moveTabTo(
-          current,
-          sourceId,
-          index ?? others.findIndex(({ id }) => id === targetId) + 1,
-          activate
-        );
-      } else {
-        const tree = model();
-        if (tree === null)
-          throw new Error('A move into another stack needs a tree model');
-        const remaining = tree.remove(current, sourceId);
-        if (remaining === null) return;
-        root = addToStack(
-          remaining,
-          targetId,
-          source,
-          nextId(current, 'stack'),
-          index,
-          activate
-        );
-      }
+      const operation = {
+        type: 'moveToStack',
+        pane: sourceId,
+        target: targetId,
+        index,
+        activate,
+        id: newId('stack'),
+      } as const;
+      const root = fold(operation);
+      if (root === state.root) return;
       commit(
         {
           ...state,
@@ -121,15 +145,15 @@ export const stacks: StoreFeature<StackCommands> = {
             ? sourceId
             : focusAfterLeaving(state, sourceId, root),
         },
-        sourceId
+        [operation]
       );
     },
     moveTab(id, index) {
-      requirePane(id);
       const state = get();
-      const root = moveTabTo(state.root, id, index);
+      const operation = { type: 'moveTab', pane: id, index } as const;
+      const root = fold(operation);
       if (root === state.root) return;
-      commit({ ...state, root, focusedPane: id });
+      commit({ ...state, root, focusedPane: id }, [operation]);
     },
   }),
 };

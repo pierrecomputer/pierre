@@ -394,9 +394,13 @@ describe('hidden panes', () => {
     expect(store.getSnapshot().focusedPane).not.toBe('terminal');
     expect(store.getSnapshot().zoomedPane).toBeNull();
     store.setHidden('files', true);
-    // The last visible pane stays, and cannot be closed either.
-    store.setHidden('editor', true);
-    store.close('editor');
+    // The last visible pane stays: its hide and its close throw last_pane.
+    expect(() => store.setHidden('editor', true)).toThrow(
+      expect.objectContaining({ code: 'last_pane' })
+    );
+    expect(() => store.close('editor')).toThrow(
+      expect.objectContaining({ code: 'last_pane' })
+    );
     expect(
       getPanes(store.getSnapshot().root).filter(({ hidden }) => hidden !== true)
     ).toHaveLength(1);
@@ -485,7 +489,9 @@ describe('store', () => {
     const tree = store.getSnapshot().root;
     store.toggleZoom();
     store.toggleZoom();
-    store.close('only');
+    expect(() => store.close('only')).toThrow(
+      expect.objectContaining({ code: 'last_pane' })
+    );
     expect(store.getSnapshot().root).toEqual(tree);
     expect(store.getSnapshot().zoomedPane).toBeNull();
   });

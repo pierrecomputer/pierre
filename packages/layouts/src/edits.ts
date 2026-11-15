@@ -1,7 +1,9 @@
-// Tree edits: the store commands that split, close, move, and swap panes. The
-// tree model is an argument, so an app loads only the model that it uses.
+// Tree edits: the store commands that split, close, move, and swap panes, and
+// the folds of their operations. The tree model is an argument, so an app
+// loads only the model that it uses.
 import { swapPanes } from './edits-model';
-import { getPanes, slotOf } from './model';
+import { LayoutOperationError } from './layout-operation';
+import { canClose, paneIn, requireNewPane, slotOf } from './model';
 import { focusAfterLeaving, type StoreFeature } from './store';
 import type { Edge, PaneNode, TreeModel } from './types';
 
@@ -12,7 +14,8 @@ export interface EditCommands {
    */
   split(targetId: string, pane: PaneNode, edge?: Edge): void;
   /**
-   * Remove a pane. The last visible pane stays, because a layout needs one.
+   * Remove a pane. A layout needs a pane that is not hidden, so the close of
+   * the last one throws `last_pane`: check `canClose` first.
    */
   close(id: string): void;
   /**
@@ -31,59 +34,85 @@ export interface EditCommands {
 export function edits(model: TreeModel): StoreFeature<EditCommands> {
   return {
     model,
-    commands: ({ get, commit, requirePane, nextId }) => ({
-      split(targetId, pane, edge = 'right') {
-        requirePane(targetId);
-        const { root } = get();
-        // The new pane comes from the caller, so the store keeps its own copy.
-        const next = model.split(
+    folds: {
+      split(root, { target, pane, edge, id }, { newId }) {
+        paneIn(root, target);
+        requireNewPane(root, pane);
+        return model.split(
           root,
-          slotOf(root, targetId),
+          slotOf(root, target),
           { ...pane },
           edge,
-          () => nextId(root)
+          () => id ?? newId('split')
         );
-        commit({ ...get(), root: next, focusedPane: pane.id }, pane.id);
+      },
+      close(root, { pane }) {
+        paneIn(root, pane);
+        if (!canClose(root, pane))
+          throw new LayoutOperationError('last_pane', pane);
+        return model.remove(root, pane) ?? root;
+      },
+      move(root, { pane, target, edge, id }, { newId }) {
+        const source = paneIn(root, pane);
+        paneIn(root, target);
+        const remaining = pane === target ? null : model.remove(root, pane);
+        return remaining === null
+          ? root
+          : model.split(
+              remaining,
+              slotOf(remaining, target),
+              source,
+              edge,
+              () => id ?? newId('split')
+            );
+      },
+      swap(root, { panes: [first, second] }) {
+        paneIn(root, first);
+        paneIn(root, second);
+        return swapPanes(root, first, second);
+      },
+    },
+    commands: ({ get, fold, commit, newId }) => ({
+      split(targetId, pane, edge = 'right') {
+        // The operation holds its own copy of the caller's pane.
+        const operation = {
+          type: 'split',
+          target: targetId,
+          pane: { ...pane },
+          edge,
+          id: newId('split'),
+        } as const;
+        commit({ ...get(), root: fold(operation), focusedPane: pane.id }, [
+          operation,
+        ]);
       },
       close(id) {
-        requirePane(id);
         const state = get();
-        const root = model.remove(state.root, id);
-        if (
-          root !== null &&
-          getPanes(root).some((pane) => pane.hidden !== true)
-        )
-          commit({
-            ...state,
-            root,
-            focusedPane: focusAfterLeaving(state, id, root),
-          });
+        const operation = { type: 'close', pane: id } as const;
+        const root = fold(operation);
+        commit(
+          { ...state, root, focusedPane: focusAfterLeaving(state, id, root) },
+          [operation]
+        );
       },
       move(sourceId, targetId, edge) {
-        const current = get().root;
-        const source = getPanes(current).find(({ id }) => id === sourceId);
-        if (source === undefined)
-          throw new Error(`Pane not found: ${sourceId}`);
-        requirePane(targetId);
-        const remaining =
-          sourceId === targetId ? null : model.remove(current, sourceId);
-        const root =
-          remaining === null
-            ? current
-            : model.split(
-                remaining,
-                slotOf(remaining, targetId),
-                source,
-                edge,
-                () => nextId(current)
-              );
-        commit({ ...get(), root, focusedPane: sourceId }, sourceId);
+        const operation = {
+          type: 'move',
+          pane: sourceId,
+          target: targetId,
+          edge,
+          id: newId('split'),
+        } as const;
+        commit({ ...get(), root: fold(operation), focusedPane: sourceId }, [
+          operation,
+        ]);
       },
       swap(firstId, secondId) {
-        requirePane(firstId);
-        requirePane(secondId);
-        const state = get();
-        commit({ ...state, root: swapPanes(state.root, firstId, secondId) });
+        const operation = {
+          type: 'swap',
+          panes: [firstId, secondId],
+        } as const;
+        commit({ ...get(), root: fold(operation) }, [operation]);
       },
     }),
   };

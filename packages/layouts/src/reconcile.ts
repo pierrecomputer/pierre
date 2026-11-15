@@ -1,5 +1,5 @@
 import { edits } from './edits';
-import { getPanes } from './model';
+import { canClose, getPanes } from './model';
 import { naryTree } from './models/n-ary';
 import { stacks } from './stacks';
 import { createLayoutStore } from './store';
@@ -42,7 +42,9 @@ export function reconcileLayoutTree(
   const stale = [...present].filter((id) => !wantedSet.has(id));
   if (missing.length === 0 && stale.length === 0) return root;
   const store = createLayoutStore(root, [edits(model), stacks]);
-  for (const id of stale) store.close(id);
+  // A stale pane that is the last one not hidden stays, as before.
+  for (const id of stale)
+    if (canClose(store.getSnapshot().root, id)) store.close(id);
   for (const id of missing) {
     const first = groupsOf(store.getSnapshot().root)[0];
     store.addTab(

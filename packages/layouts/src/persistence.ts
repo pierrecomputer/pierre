@@ -1,3 +1,4 @@
+import type { LayoutOperation } from './layout-operation';
 // Persistence: the store commands that save a layout and restore it. The saved
 // form has version 3; `restore` also reads versions 2 and 1.
 import { parseSerializedLayout } from './persistence-model';
@@ -26,11 +27,16 @@ export const persistence: StoreFeature<PersistenceCommands> = {
     serialize: () => JSON.stringify({ version: 3, ...get() }),
     restore(serialized) {
       const state = parseSerializedLayout(serialized);
-      commit({ ...state, root: own(state.root) });
+      const operation = { type: 'setRoot', root: own(state.root) } as const;
+      const operations: LayoutOperation[] = [operation];
+      if (state.zoomedPane !== get().zoomedPane)
+        operations.push({ type: 'zoom', pane: state.zoomedPane });
+      commit({ ...state, root: operation.root }, operations);
     },
     toStoredTree: () => Object.freeze({ version: 3, root: get().root }),
     setStoredTree(tree) {
-      commit({ ...get(), root: own(tree.root) });
+      const operation = { type: 'setRoot', root: own(tree.root) } as const;
+      commit({ ...get(), root: operation.root }, [operation]);
     },
   }),
 };

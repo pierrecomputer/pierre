@@ -1,5 +1,12 @@
 import {
-  getPanes,
+  type LayoutChange,
+  type LayoutOperation,
+  LayoutOperationError,
+  type TreeOperation,
+} from './layout-operation';
+import {
+  findNode,
+  paneIn,
   parentOf,
   replaceNode,
   sameNodes,
@@ -23,7 +30,13 @@ import type {
  */
 export interface CoreLayoutStore {
   getSnapshot(): LayoutState;
-  subscribe(listener: () => void): () => void;
+  /**
+   * Call a listener after each change, with the operations of the change and
+   * its origin. A change with no operations is transient, such as a frame of
+   * a resize drag: a listener that skips them sees one change for each user
+   * action.
+   */
+  subscribe(listener: (change: LayoutChange) => void): () => void;
   /** Set the tree. A store with a tree model gives it the shape of the model. */
   setRoot(root: LayoutNode): void;
   /**
@@ -38,30 +51,82 @@ export interface CoreLayoutStore {
    */
   setCollapsed(id: string, collapsed: boolean): void;
   focusPane(id: string): void;
+  /**
+   * Run commands whose changes are transient: the listeners get them with no
+   * operations, and the store keeps the settled state from before them. A
+   * gesture changes the layout in each frame this way, then ends with one
+   * command, or with `revert`.
+   */
+  transient(run: () => void): void;
+  /** Go back to the settled state, in a transient change. */
+  revert(): void;
 }
+
+/** What a fold uses besides the tree and the operation. */
+export interface FoldContext {
+  /** The tree model of the store, or null when no feature gives one. */
+  readonly model: TreeModel | null;
+  /** A new ID, for an operation that makes a node and carries no ID. */
+  newId(kind: 'split' | 'stack'): string;
+  /** A tree from a caller, with the shape of the model, as nodes that the store owns. */
+  own(root: LayoutNode): LayoutNode;
+}
+
+/**
+ * The change that one operation makes to a tree: the same change for the
+ * command of a store and for a server. It throws `LayoutOperationError` for an
+ * operation that the tree refuses.
+ */
+export type Fold<T extends TreeOperation = TreeOperation> = (
+  root: LayoutNode,
+  operation: T,
+  context: FoldContext
+) => LayoutNode;
+
+/** The folds of a feature, one for each type of operation that it makes. */
+export type Folds = {
+  readonly [T in TreeOperation['type']]?: Fold<
+    Extract<TreeOperation, { type: T }>
+  >;
+};
 
 /** What a store feature uses to build its commands. */
 export interface StoreContext {
   /** The current state. */
   get(): LayoutState;
+  /** The folds of the store: the core's and its features'. */
+  readonly folds: Folds;
+  /** The state after the last change that was not transient. */
+  settled(): LayoutState;
   /**
-   * Make a state the current state, and notify the listeners. The tree of
-   * `next` holds only nodes that the store owns: nodes of the current tree,
-   * and new nodes from a model function or from `own`. The store validates a
-   * new tree, freezes its new nodes, and moves the focus to a pane that
-   * shows.
+   * The tree after a tree operation: the fold of the operation, on the
+   * current tree or on `root`. It throws as the fold does. The store must
+   * have the fold of the operation.
+   */
+  fold(operation: TreeOperation, root?: LayoutNode): LayoutNode;
+  /**
+   * Make a state the current state with the operations that made it, and
+   * notify the listeners. The tree of `next` holds only nodes that the store
+   * owns. The store validates a new tree, freezes its new nodes, and moves the
+   * focus to a pane that shows. A tree operation that changes no tree is left
+   * out, a focus change with no tree change gives a `focus` operation, and a
+   * change that changes nothing notifies no listener.
    *
    * The commit owns the rules of the zoom. A zoom that `next` sets stays on a
    * pane that shows. A zoom that `next` carries from the current state
-   * follows the tab that shows in the stack of the zoomed pane, and a
-   * structural edit ends it: `placed`, the pane that the change puts in a
-   * new place (a new pane, or a pane that moves), is the zoomed pane, or it
-   * shows outside the zoom.
+   * follows the tab that shows in the stack of the zoomed pane. A local
+   * structural edit ends it: the pane that an operation puts in a new place
+   * (a new pane, or a pane that moves) is the zoomed pane, or it shows outside
+   * the zoom. A remote change ends it only when the zoomed pane stops showing.
    */
-  commit(next: LayoutState, placed?: string): void;
+  commit(
+    next: LayoutState,
+    operations: readonly LayoutOperation[],
+    origin?: LayoutChange['origin']
+  ): void;
   /** The tree model of the store, or null when no feature gives one. */
   model(): TreeModel | null;
-  /** Throw unless the current tree holds the pane. */
+  /** Throw `pane_not_found` unless the current tree holds the pane. */
   requirePane(id: string): void;
   /**
    * A tree from a caller, with the shape of the model, as nodes that the
@@ -69,8 +134,8 @@ export interface StoreContext {
    * already.
    */
   own(root: LayoutNode): LayoutNode;
-  /** A split or stack ID that a tree does not use. */
-  nextId(root: LayoutNode, kind?: 'split' | 'stack'): string;
+  /** A new split or stack ID: `<kind>-<random prefix of the store>-<count>`. */
+  newId(kind: 'split' | 'stack'): string;
 }
 
 /**
@@ -82,6 +147,17 @@ export interface StoreFeature<Commands extends object = object> {
   /** A tree model: the shape of the tree, and how a split and a close change it. */
   readonly model?: TreeModel;
   commands(context: StoreContext): Commands;
+  /** The folds of the operations of the commands. */
+  readonly folds?: Folds;
+}
+
+export interface CreateLayoutStoreOptions {
+  /**
+   * The maker of new split and stack IDs, for a test or a server. By
+   * default, `<kind>-<prefix>-<count>`, with 8 random characters of prefix
+   * for each store.
+   */
+  readonly newId?: (kind: 'split' | 'stack') => string;
 }
 
 type UnionToIntersection<U> = (
@@ -105,38 +181,96 @@ export type StoreWith<F extends readonly StoreFeature[]> = CoreLayoutStore &
   CommandsOf<F>;
 
 /**
+ * The key of a store's context, for `applyOperations`, which a bundler keeps
+ * only when an app imports it. A copy of the store with a spread keeps it.
+ */
+export const STORE_CONTEXT: unique symbol = /* @__PURE__ */ Symbol();
+
+/** A store, with the context that `applyOperations` uses. */
+export interface ContextOfStore {
+  readonly [STORE_CONTEXT]: StoreContext;
+}
+
+// The pane that an operation puts in a new place, for the end of a zoom.
+const placedBy = (operation: LayoutOperation): string | undefined =>
+  operation.type === 'split' || operation.type === 'addTab'
+    ? operation.pane.id
+    : operation.type === 'move' || operation.type === 'moveToStack'
+      ? operation.pane
+      : undefined;
+
+// The folds of the core commands.
+const CORE_FOLDS: Folds = {
+  setRoot: (_root, { root }, { own }) => own(root),
+  resize(root, { sizes }) {
+    let next = root;
+    for (const [id, values] of Object.entries(sizes)) {
+      const node = findNode(next, id);
+      if (node?.type !== 'split' || values.length !== node.children.length)
+        throw new LayoutOperationError(
+          node === null ? 'node_not_found' : 'invalid_sizes',
+          id
+        );
+      // Sizes that do not change keep the tree, so the change has no operation.
+      if (JSON.stringify(values) !== JSON.stringify(node.sizes))
+        next = replaceNode(next, id, () => ({ ...node, sizes: [...values] }));
+    }
+    return next;
+  },
+  collapse(root, { pane, collapsed }) {
+    paneIn(root, pane);
+    const slot = slotOf(root, pane);
+    return parentOf(root, slot) === null
+      ? root
+      : setNodeCollapsed(root, slot, collapsed);
+  },
+};
+
+/**
  * Create a store that owns an immutable layout state and notifies views. The
  * features give the store its other commands and its tree model, for example
- * `createLayoutStore(root, [edits(naryTree)])`. A view calls each command
- * through the store object, so an app can wrap a command with its own object:
- * `{ ...store, close(id) { record(id); store.close(id); } }`.
+ * `createLayoutStore(root, [edits(naryTree)])`. Each change reaches the
+ * listeners with its operations, so an app syncs, announces, or keeps an undo
+ * history with `subscribe`.
  */
 export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   initial: LayoutNode,
-  features?: F
+  features?: F,
+  options: CreateLayoutStoreOptions = {}
 ): StoreWith<F> {
   const list: readonly StoreFeature[] = features ?? [];
   const model = list.find((feature) => feature.model !== undefined)?.model;
-  const listeners = new Set<() => void>();
-  let sequence = 0;
+  const folds: Folds = Object.assign(
+    {},
+    CORE_FOLDS,
+    ...list.map((feature) => feature.folds)
+  );
+  const listeners = new Set<(change: LayoutChange) => void>();
+  let prefix: string | null = null;
+  let count = 0;
+  // While above 0, each commit is transient.
+  let transientDepth = 0;
 
-  const nextId = (root: LayoutNode, kind: 'split' | 'stack' = 'split') => {
-    let id: string;
-    do {
-      id = `layout-${kind}-${++sequence}`;
-    } while (hasId(root, id));
-    return id;
-  };
+  const newId =
+    options.newId ??
+    ((kind: 'split' | 'stack'): string => {
+      // 8 random base-36 characters, made at the first new ID.
+      prefix ??= Array.from(crypto.getRandomValues(new Uint8Array(8)), (byte) =>
+        (byte % 36).toString(36)
+      ).join('');
+      return `${kind}-${prefix}-${++count}`;
+    });
   // Give a tree the shape of the model, and validate it. The checks of
   // `validateLayout` come first, so that the model gets a sound tree.
   const shape = (root: LayoutNode): LayoutNode => {
     validateLayout(root);
     if (model === undefined) return root;
-    const shaped = model.normalize(root, () => nextId(root));
+    const shaped = model.normalize(root, () => newId('split'));
     model.validate(shaped);
     return shaped;
   };
   const own = (root: LayoutNode): LayoutNode => copyAndFreeze(shape(root));
+  const foldContext: FoldContext = { model: model ?? null, newId, own };
 
   const initialRoot = own(initial);
   let state: LayoutState = Object.freeze({
@@ -144,8 +278,28 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     focusedPane: shownPanes(initialRoot)[0].id,
     zoomedPane: null,
   });
+  // The state after the last change that was not transient.
+  let settled = state;
   const get = (): LayoutState => state;
-  const commit = (next: LayoutState, placed?: string): void => {
+  const notify = (
+    operations: readonly LayoutOperation[],
+    origin: LayoutChange['origin']
+  ): void => {
+    const change: LayoutChange = { operations, origin };
+    for (const listener of [...listeners]) listener(change);
+  };
+  // A command runs the fold of its own operation; `applyOperations` checks an
+  // operation from elsewhere first.
+  const fold = (
+    operation: TreeOperation,
+    root: LayoutNode = state.root
+  ): LayoutNode =>
+    (folds[operation.type] as Fold)(root, operation, foldContext);
+  const commit = (
+    next: LayoutState,
+    operations: readonly LayoutOperation[],
+    origin: LayoutChange['origin'] = 'local'
+  ): void => {
     const sameTree = next.root === state.root;
     if (!sameTree) (model?.validate ?? validateLayout)(next.root);
     // Focus and zoom belong to panes that show only.
@@ -154,37 +308,61 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       panes.some((pane) => pane.id === id);
     let zoomed = next.zoomedPane;
     if (zoomed !== null && zoomed === state.zoomedPane && !sameTree) {
-      // The zoomed pane moves: a structural edit ends the zoom.
-      if (placed === zoomed) zoomed = null;
-      else {
-        // A zoomed stack follows the tab that shows.
-        zoomed = stackOf(next.root, zoomed)?.active ?? zoomed;
-        // A pane that shows in a new place outside the zoom ends it.
-        if (placed !== undefined && placed !== zoomed && shows(placed))
-          zoomed = null;
-      }
+      // A zoomed stack follows the tab that shows.
+      zoomed = stackOf(next.root, zoomed)?.active ?? zoomed;
+      // A local structural edit that moves the zoomed pane, or that shows a
+      // pane in a new place outside the zoom, ends it.
+      const placed =
+        origin === 'local'
+          ? operations.map(placedBy).findLast((id) => id !== undefined)
+          : undefined;
+      if (
+        placed === state.zoomedPane ||
+        (placed !== undefined && placed !== zoomed && shows(placed))
+      )
+        zoomed = null;
     }
+    const focusedPane = shows(next.focusedPane)
+      ? next.focusedPane
+      : panes[0].id;
+    const zoomedPane = shows(zoomed) ? zoomed : null;
+    if (
+      sameTree &&
+      focusedPane === state.focusedPane &&
+      zoomedPane === state.zoomedPane
+    )
+      return;
+    let list = sameTree
+      ? operations.filter((operation) => operation.type === 'zoom')
+      : operations;
+    if (sameTree && focusedPane !== state.focusedPane)
+      list = [{ type: 'focus', pane: focusedPane }, ...list];
     state = Object.freeze({
       root: sameTree ? next.root : freezeNew(next.root),
-      focusedPane: shows(next.focusedPane) ? next.focusedPane : panes[0].id,
-      zoomedPane: shows(zoomed) ? zoomed : null,
+      focusedPane,
+      zoomedPane,
     });
-    for (const listener of [...listeners]) listener();
+    if (transientDepth > 0) list = [];
+    else settled = state;
+    notify(list, origin);
   };
   const requirePane = (id: string): void => {
-    if (!getPanes(state.root).some((pane) => pane.id === id))
-      throw new Error(`Pane not found: ${id}`);
+    paneIn(state.root, id);
   };
   const context: StoreContext = {
     get,
+    folds,
+    settled: () => settled,
+    fold,
     commit,
     model: () => model ?? null,
     requirePane,
     own,
-    nextId,
+    newId,
   };
 
-  const store: CoreLayoutStore = {
+  const store: CoreLayoutStore & ContextOfStore = {
+    [STORE_CONTEXT]: context,
     getSnapshot: get,
     subscribe(listener) {
       listeners.add(listener);
@@ -193,31 +371,41 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       };
     },
     setRoot(root) {
-      commit({ ...state, root: own(root) });
+      const operation: TreeOperation = { type: 'setRoot', root: own(root) };
+      commit({ ...state, root: operation.root }, [operation]);
     },
     setSizes(sizes) {
-      let root = state.root;
-      for (const [id, values] of Object.entries(sizes)) {
-        root = replaceNode(root, id, (node) =>
-          node.type === 'split' ? { ...node, sizes: [...values] } : node
-        );
-      }
-      commit({ ...state, root });
+      const operation: TreeOperation = { type: 'resize', sizes };
+      commit({ ...state, root: fold(operation) }, [operation]);
     },
     setCollapsed(id, collapsed) {
-      requirePane(id);
-      const slot = slotOf(state.root, id);
-      if (parentOf(state.root, slot) === null) return;
-      const root = setNodeCollapsed(state.root, slot, collapsed);
-      if (root !== state.root) commit({ ...state, root });
+      const operation: TreeOperation = {
+        type: 'collapse',
+        pane: id,
+        collapsed,
+      };
+      commit({ ...state, root: fold(operation) }, [operation]);
     },
     focusPane(id) {
       requirePane(id);
-      if (state.focusedPane !== id) commit({ ...state, focusedPane: id });
+      commit({ ...state, focusedPane: id }, []);
+    },
+    transient(run) {
+      transientDepth += 1;
+      try {
+        run();
+      } finally {
+        transientDepth -= 1;
+      }
+    },
+    revert() {
+      if (state === settled) return;
+      state = settled;
+      notify([], 'local');
     },
   };
   for (const feature of list) Object.assign(store, feature.commands(context));
-  return store as StoreWith<F>;
+  return store as unknown as StoreWith<F>;
 }
 
 /**
@@ -239,13 +427,6 @@ export function focusAfterLeaving(
     ...stack.children.slice(0, at).reverse(),
   ].find((pane) => shown.has(pane.id));
   return nearest?.id ?? focused;
-}
-
-function hasId(node: LayoutNode, id: string): boolean {
-  return (
-    node.id === id ||
-    (node.type !== 'pane' && node.children.some((child) => hasId(child, id)))
-  );
 }
 
 /**

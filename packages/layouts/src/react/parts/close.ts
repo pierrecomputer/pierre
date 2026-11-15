@@ -1,6 +1,7 @@
 // Close a pane or a tab: the app's `onPaneClose`, or `layout.close` from
 // `edits()`.
 import { focusPane, focusTab } from '../../dom/panes';
+import { canClose as treeCanClose } from '../../model';
 import { treeIndex } from '../../tree-index';
 import type { LayoutState } from '../../types';
 import type { ViewContext } from '../contract';
@@ -13,24 +14,14 @@ export const closes = (context: ViewContext): boolean =>
   (context.store as Closing).close !== undefined;
 
 /**
- * True when a pane can close: the layout closes panes, and another pane, or
- * another visible tab of its stack, would still show.
+ * True when a pane can close: the layout closes panes, and the one rule of
+ * the core holds (another pane that is not hidden stays).
  */
-export function canClose(
+export const canClose = (
   context: ViewContext,
   state: LayoutState,
   id: string
-): boolean {
-  const index = treeIndex(state.root);
-  return (
-    closes(context) &&
-    (index.shown > 1 ||
-      (index.panes
-        .get(id)
-        ?.stack?.children.some((tab) => tab.id !== id && tab.hidden !== true) ??
-        false))
-  );
-}
+): boolean => closes(context) && treeCanClose(state.root, id);
 
 /**
  * Close a pane. A tab that closes from its tab list gives the focus to the tab

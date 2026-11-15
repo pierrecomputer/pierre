@@ -33,10 +33,12 @@ describe('createLayoutStore', () => {
     expect(Object.keys(store).sort()).toEqual([
       'focusPane',
       'getSnapshot',
+      'revert',
       'setCollapsed',
       'setRoot',
       'setSizes',
       'subscribe',
+      'transient',
     ]);
     // @ts-expect-error: `split` comes with `edits`.
     expect(store.split).toBeUndefined();
@@ -82,13 +84,24 @@ describe('createLayoutStore', () => {
     expect(ids(store.getSnapshot().root)).toEqual(['d', 'c', 'a']);
   });
 
-  test('each store numbers its new splits from 1', () => {
+  test('each store makes its new IDs from a random prefix of its own and a count', () => {
     const first = createLayoutStore(pane('a'), [edits(naryTree)]);
     const second = createLayoutStore(pane('a'), [edits(naryTree)]);
     first.split('a', pane('b'));
     second.split('a', pane('b'));
-    expect(first.getSnapshot().root.id).toBe('layout-split-1');
-    expect(second.getSnapshot().root.id).toBe('layout-split-1');
+    const id = first.getSnapshot().root.id;
+    expect(id).toMatch(/^split-[0-9a-z]{8}-1$/);
+    expect(second.getSnapshot().root.id).toMatch(/^split-[0-9a-z]{8}-1$/);
+    expect(second.getSnapshot().root.id).not.toBe(id);
+  });
+
+  test('a store takes the maker of its new IDs from its options', () => {
+    let count = 0;
+    const store = createLayoutStore(pane('a'), [edits(naryTree)], {
+      newId: (kind) => `${kind}-test-${++count}`,
+    });
+    store.split('a', pane('b'));
+    expect(store.getSnapshot().root.id).toBe('split-test-1');
   });
 
   test('a feature gets the context of the store for its commands', () => {
@@ -99,7 +112,7 @@ describe('createLayoutStore', () => {
           const panes = ids(state.root);
           const next =
             panes[(panes.indexOf(state.focusedPane) + 1) % panes.length];
-          commit({ ...state, focusedPane: next });
+          commit({ ...state, focusedPane: next }, []);
         },
       }),
     };
@@ -171,11 +184,13 @@ describe('store features', () => {
     expect(focusedPane).toBe('c');
   });
 
-  test('hiddenPanes hides a pane and keeps the last visible pane', () => {
+  test('hiddenPanes hides a pane, and the hide of the last visible pane throws last_pane', () => {
     const store = createLayoutStore(row, [hiddenPanes]);
     store.setHidden('a', true);
     store.setHidden('b', true);
-    store.setHidden('c', true);
+    expect(() => store.setHidden('c', true)).toThrow(
+      expect.objectContaining({ code: 'last_pane' })
+    );
     const hidden = getPanes(store.getSnapshot().root).map(
       ({ hidden }) => hidden === true
     );

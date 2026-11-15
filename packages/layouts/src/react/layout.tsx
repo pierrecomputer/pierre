@@ -60,7 +60,7 @@ import {
 import { dropTarget, paneAt, type TabDropTarget, tabDropTarget } from '../drop';
 import { dragSizes, keySizes } from '../gestures';
 import type { LayoutStore } from '../layout-store';
-import { findNode, getPanes, shownPanes, stackOf } from '../model';
+import { canClose, findNode, getPanes, shownPanes, stackOf } from '../model';
 import { tabBoundaryAt, tabInsertIndex, tabMoveIndex } from '../stacks-model';
 import type {
   ChildSize,
@@ -622,12 +622,9 @@ export function Layout({
     ({ pane }) => pane.id === (state.zoomedPane ?? state.focusedPane)
   );
   const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
-  // A pane can close while another pane would still show: another visible
-  // pane, or another visible tab of its stack.
-  const closable = (pane: PaneNode, stack: StackNode | null): boolean =>
-    visibleCount > 1 ||
-    (stack?.children.some((tab) => tab.id !== pane.id && tab.hidden !== true) ??
-      false);
+  // The one close rule of the core: another pane that is not hidden stays.
+  const closable = (pane: PaneNode, _stack?: StackNode | null): boolean =>
+    canClose(state.root, pane.id);
   const layered =
     typeof paneLayers === 'boolean'
       ? paneLayers
