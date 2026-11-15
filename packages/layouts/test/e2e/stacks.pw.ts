@@ -212,3 +212,155 @@ test('a tab list without stacks(), and stacks() without a tab list in a pane, wa
     )
     .toBe(1);
 });
+
+// The box of a tab in the tab list of the host of a pane.
+const tabBox = async (page: Page, host: string, name: string) => {
+  const value = await tabsOf(page, host)
+    .getByRole('tab', { name })
+    .boundingBox();
+  if (value === null) throw new Error(`No tab: ${name}`);
+  return value;
+};
+
+const paneBox = async (page: Page, id: string) => {
+  const value = await host(page, id).boundingBox();
+  if (value === null) throw new Error(`No pane: ${id}`);
+  return value;
+};
+
+// Press a tab and move the pointer to a point.
+async function dragTab(
+  page: Page,
+  hostId: string,
+  name: string,
+  to: { x: number; y: number }
+) {
+  const from = await tabBox(page, hostId, name);
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+}
+
+const names = (page: Page, hostId: string) =>
+  tabsOf(page, hostId).getByRole('tab').allTextContents();
+
+test('a tab drag inside its tab list changes the order of the tabs, and the tab keeps the focus', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  const target = await tabBox(page, 'main', 'test.ts');
+  await dragTab(page, 'main', 'main.ts', {
+    x: target.x + target.width - 4,
+    y: target.y + target.height / 2,
+  });
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveText('3 panes');
+  await page.mouse.up();
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+  await expect
+    .poll(() => names(page, 'main'))
+    .toEqual(['util.ts', 'test.ts', 'main.ts', 'types.ts', 'README.md']);
+  await expect(
+    tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' })
+  ).toBeFocused();
+});
+
+test('a tab drag into another tab list moves the tab into that stack at the place of the drop', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  const terminal = await tabBox(page, 'terminal', 'Terminal');
+  await dragTab(page, 'main', 'util.ts', {
+    x: terminal.x + terminal.width - 4,
+    y: terminal.y + terminal.height / 2,
+  });
+  await expect(page.getByRole('status')).toHaveText(
+    'Move util.ts into the group of Terminal'
+  );
+  await page.mouse.up();
+  await expect
+    .poll(() => names(page, 'util'))
+    .toEqual(['Terminal', 'util.ts', 'Output']);
+  await expect(
+    tabsOf(page, 'util').getByRole('tab', { name: 'util.ts' })
+  ).toBeFocused();
+  await expect.poll(() => names(page, 'main')).toHaveLength(4);
+});
+
+test('a tab drag to an edge of a pane takes the tab out of its stack', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  const files = await paneBox(page, 'files');
+  await dragTab(page, 'main', 'util.ts', {
+    x: files.x + files.width - 8,
+    y: files.y + files.height / 2,
+  });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(1);
+  await expect(host(page, 'main')).not.toHaveAttribute('data-moving');
+  await expect(host(page, 'util')).toHaveAttribute('data-moving', 'true');
+  await expect(page.getByRole('status')).toHaveText(
+    'Move util.ts to the right of Files'
+  );
+  await page.mouse.up();
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(1);
+  const util = await paneBox(page, 'util');
+  expect(util.x).toBeGreaterThan(files.x);
+});
+
+test('the center of its own stack takes no drop', async ({ page }) => {
+  await page.goto('/stacks.html');
+  const main = await paneBox(page, 'main');
+  await dragTab(page, 'main', 'main.ts', {
+    x: main.x + main.width / 2,
+    y: main.y + main.height / 2,
+  });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await page.mouse.up();
+  await expect
+    .poll(() => names(page, 'main'))
+    .toEqual(['main.ts', 'util.ts', 'test.ts', 'types.ts', 'README.md']);
+});
+
+test('a drag that ends where it started is not a click', async ({ page }) => {
+  await page.goto('/stacks.html');
+  const util = await tabBox(page, 'main', 'util.ts');
+  await dragTab(page, 'main', 'util.ts', {
+    x: util.x + util.width / 2 + 8,
+    y: util.y + util.height / 2,
+  });
+  await page.mouse.up();
+  await expect(
+    tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' })
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(host(page, 'util')).toHaveAttribute('data-pane-hidden', 'true');
+});
+
+test('while a pane is zoomed, a tab moves only inside its own tab list', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  await command(page, 'setZoom', 'main');
+  await expect(host(page, 'main')).toHaveAttribute('data-zoomed', 'true');
+  const box = await paneBox(page, 'main');
+  await dragTab(page, 'main', 'util.ts', {
+    x: box.x + box.width - 8,
+    y: box.y + box.height / 2,
+  });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await page.mouse.up();
+  await expect.poll(() => names(page, 'main')).toHaveLength(5);
+  const test = await tabBox(page, 'main', 'test.ts');
+  await dragTab(page, 'main', 'util.ts', {
+    x: test.x + test.width - 4,
+    y: test.y + test.height / 2,
+  });
+  await page.mouse.up();
+  // The moved tab shows, so its host holds the full tab list.
+  await expect
+    .poll(() => names(page, 'util'))
+    .toEqual(['main.ts', 'test.ts', 'util.ts', 'types.ts', 'README.md']);
+  await expect(host(page, 'util')).toHaveAttribute('data-zoomed', 'true');
+});

@@ -132,6 +132,11 @@ export interface LayoutMessages {
   readonly corner?: string;
   /** The name of `Layout.TabList`. Default: "Tabs of Editor". */
   readonly tabs?: (title: string) => string;
+  /**
+   * The status message during a tab drag into a stack: the tab and a pane of
+   * the target stack. Default: "Move Editor into the group of Files".
+   */
+  readonly moveInto?: (title: string, target: string) => string;
 }
 
 /** A layout object: the store, with the features of the layout. */
@@ -236,15 +241,22 @@ export interface FeatureHooks {
   announce?: string | null;
   /** For `MoveHandle`: start a move drag of a pane. */
   startMove?(paneId: string, event: PointerEvent<HTMLElement>): void;
-  /** For `Tab`: props that extend a tab, such as the start of a tab drag. */
-  tabProps?(
+  /**
+   * For `Tab`: start a drag of a tab from a pointer press. `tabs` holds the
+   * tabs of its tab list. Parts call the hooks in their events, after `Root`
+   * commits, so a slot is never read during a render.
+   */
+  startTabDrag?(
     tab: PaneNode,
-    tabs: readonly PaneNode[]
-  ): Readonly<Record<string, unknown>>;
+    tabs: readonly PaneNode[],
+    event: PointerEvent<HTMLElement>
+  ): void;
   /** For `Tab`: show a tab, and give it the focus after the change. */
   selectTab?(id: string): void;
   /** For `Tab`: move a tab to an index among the tabs of its stack, and keep the focus on it. */
   moveTab?(id: string, index: number): void;
+  /** Focus the tab of a pane after the next change, in the host that shows it. */
+  focusTab?(id: string): void;
 }
 
 /**

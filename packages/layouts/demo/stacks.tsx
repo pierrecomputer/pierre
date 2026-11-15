@@ -16,6 +16,8 @@ import {
   hiddenPanes,
   naryTree,
   stacks,
+  tabDrag,
+  zoom,
 } from '../src/react';
 
 const params = new URLSearchParams(location.search);
@@ -35,8 +37,9 @@ const TITLES: Record<string, string> = {
 
 const features: Feature[] = [
   edits(naryTree),
-  ...(withoutStacks ? [] : [stacks()]),
+  ...(withoutStacks ? [] : [stacks(), tabDrag()]),
   hiddenPanes(),
+  zoom(),
 ];
 
 const page = {

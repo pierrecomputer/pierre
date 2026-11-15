@@ -11,10 +11,10 @@ import { presentation } from '../../presentation';
 import type { Feature } from '../contract';
 import { CORNER_GESTURE_STYLE } from '../gesture-styles';
 
-// The corners of each compiled tree, computed once for each tree.
 const cornerLists = new WeakMap<CSSLayout, CSSCorner[]>();
 
-function cornersOf(layout: CSSLayout): CSSCorner[] {
+/** The corners of a compiled tree, computed once for each tree. */
+export function cornersOf(layout: CSSLayout): CSSCorner[] {
   let list = cornerLists.get(layout);
   if (list === undefined) {
     list = cssCorners(layout);

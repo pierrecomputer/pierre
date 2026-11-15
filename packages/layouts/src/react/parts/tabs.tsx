@@ -6,6 +6,7 @@
 import {
   type JSX,
   type KeyboardEvent,
+  type PointerEvent,
   type ReactNode,
   useContext,
 } from 'react';
@@ -111,7 +112,8 @@ export interface TabState {
 
 /**
  * One tab of `Layout.TabList`: `role=tab`, the selection, the link to the
- * host of its pane, and a roving tab stop. The arrows, Home, and End move the
+ * host of its pane, a roving tab stop, and the start of a drag with
+ * `tabDrag()`. The arrows, Home, and End move the
  * focus to another tab, which shows. Delete closes the tab. Ctrl+Shift with
  * PageUp or PageDown moves the tab before the previous tab or after the next.
  */
@@ -179,13 +181,10 @@ export function Tab({
       closePane(context, tab.id);
     }
   };
-  const extra: Record<string, unknown> = {};
-  for (const hooks of context.hooks())
-    Object.assign(extra, hooks.tabProps?.(tab, tabs));
   return renderPart(
     'button',
     render,
-    mergeProps(mergeProps(props, extra), {
+    mergeProps(props, {
       type: 'button',
       id: tabIdOf(context.prefix, host, tab.id),
       role: 'tab',
@@ -199,6 +198,11 @@ export function Tab({
       onClick: () => {
         if (!active) select(tab.id);
       },
+      onPointerDown: (event: PointerEvent<HTMLElement>) =>
+        context
+          .hooks()
+          .find((hooks) => hooks.startTabDrag !== undefined)
+          ?.startTabDrag?.(tab, tabs, event),
       onKeyDown,
       children: children ?? context.title(tab),
     }),

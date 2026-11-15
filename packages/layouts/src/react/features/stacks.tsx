@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 
 import { focusTab, paneHosts } from '../../dom/panes';
 import { type StackCommands, stacks as stacksStore } from '../../stacks';
+import { cell } from '../cell';
 import {
   type Feature,
   type FeatureHooks,
@@ -19,7 +20,7 @@ let warnedTabList = false;
 
 function useStacks(context: ViewContext): FeatureHooks {
   // The tab to focus after the next change, when its host shows.
-  const [pending] = useState<{ tab: string | null }>(() => ({ tab: null }));
+  const [pending] = useState(() => cell<string | null>(null));
   const store = context.store as unknown as StackCommands;
   if (process.env.NODE_ENV !== 'production')
     // The condition is the same for each render of a build.
@@ -49,20 +50,24 @@ function useStacks(context: ViewContext): FeatureHooks {
     }),
     selectTab(id) {
       const before = context.store.getSnapshot();
-      pending.tab = id;
+      pending.set(id);
       store.activate(id);
-      if (context.store.getSnapshot() === before) pending.tab = null;
+      if (context.store.getSnapshot() === before) pending.set(null);
     },
     moveTab(id, index) {
       const before = context.store.getSnapshot();
-      pending.tab = id;
+      pending.set(id);
       store.moveTab(id, index);
-      if (context.store.getSnapshot() === before) pending.tab = null;
+      if (context.store.getSnapshot() === before) pending.set(null);
+    },
+    focusTab(id) {
+      pending.set(id);
     },
     afterChange(_previous, _next, element) {
-      if (pending.tab === null) return;
-      focusTab(element, pending.tab);
-      pending.tab = null;
+      const tab = pending.get();
+      if (tab === null) return;
+      focusTab(element, tab);
+      pending.set(null);
     },
   };
 }

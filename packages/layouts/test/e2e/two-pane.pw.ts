@@ -175,3 +175,23 @@ test('stylesheets null renders no sheet, and the linked stylesheet styles the la
   );
   expect(await sheets(page)).toEqual([]);
 });
+
+test('the internal preview strategy moves the separator, and applies the sizes at the release', async ({
+  page,
+}) => {
+  await page.goto('/two-pane.html?resize=preview');
+  const before = await sidebarWidth(page);
+  const separator = page.getByRole('separator');
+  const box = await separator.boundingBox();
+  if (box === null) throw new Error('Missing separator');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2, {
+    steps: 4,
+  });
+  await expect(separator).toHaveAttribute('data-preview', 'true');
+  expect(await sidebarWidth(page)).toBe(before);
+  await page.mouse.up();
+  await expect(separator).not.toHaveAttribute('data-preview');
+  expect(await sidebarWidth(page)).toBeGreaterThan(before + 60);
+});

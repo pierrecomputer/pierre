@@ -2,7 +2,8 @@
 // that collapses to 0 pixels, with `Layout.Root` only. The e2e tests use it.
 // Query parameters select a variant: `form=controlled` for the controlled
 // form, `stylesheets=nonce` for sheets with a nonce, and `stylesheets=none`
-// for no sheets and the linked `styles.css`.
+// for no sheets and the linked `styles.css`, and `resize=preview` for the
+// internal resize strategy that moves only the separator until the release.
 import { type JSX, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -14,6 +15,7 @@ import {
 } from '../src';
 import * as Layout from '../src/react';
 import { createLayout, useControlledLayout } from '../src/react';
+import { resizeStrategy } from '../src/react/features/resize-strategy';
 
 const params = new URLSearchParams(location.search);
 const controlledForm = params.get('form') === 'controlled';
@@ -43,7 +45,11 @@ const initial: LayoutNode = {
 // What the tests read: the layout object, the sizes that `onResize`
 // reported, and the renders of each pane's content.
 const page = {
-  layout: createLayout(initial),
+  layout: createLayout(
+    initial,
+    // The bench's resize strategies are internal features.
+    params.get('resize') === 'preview' ? [resizeStrategy('preview')] : []
+  ),
   resizes: [] as Readonly<Record<string, readonly ChildSize[]>>[],
   renders: {} as Record<string, number>,
 };

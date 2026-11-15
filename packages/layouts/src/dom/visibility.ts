@@ -18,6 +18,14 @@ export const COLLAPSED_WHOLE = 8;
 export const ZOOM = 16;
 /** An overlay covers the pane. */
 export const OVERLAY = 32;
+/**
+ * A zoom covers the pane, and its animation still runs. The pane leaves the
+ * accessibility tree and the tab order at once (`aria-hidden`, no tab stop),
+ * and its content still renders: it changes no style, so it costs no layout
+ * of the content. The content stops rendering with `ZOOM`, at the end of the
+ * animation.
+ */
+export const COVERED = 64;
 
 /** The reasons that hide the whole host of a pane. */
 export const HOST_HIDDEN: number =
@@ -30,9 +38,10 @@ export const STATE_REASONS: number =
 /**
  * The owner of the visibility of the pane hosts of a view. It keeps the
  * reasons of each pane, and it alone writes `inert` and the visibility
- * attributes: `data-pane-hidden` and `data-collapsed` on the host, and
- * `data-collapsed` on the content. A host receives `PANE_VISIBILITY_EVENT`
- * only when its content starts or stops rendering.
+ * attributes: `data-pane-hidden`, `data-collapsed`, `aria-hidden`, and the
+ * tab stop of a covered host, and `data-collapsed` on the content. A host
+ * receives `PANE_VISIBILITY_EVENT` only when its content starts or stops
+ * rendering: `COVERED` alone does not stop it.
  */
 export interface PaneVisibility {
   /** The callback ref of the host of a pane. It keeps its identity. */
@@ -95,9 +104,14 @@ export function createPaneVisibility(): PaneVisibility {
     const host = hosts.get(id);
     if (host !== undefined) {
       const hidden = (bits & HOST_HIDDEN) !== 0;
+      const covered = (bits & COVERED) !== 0;
       if (host.inert !== hidden) host.inert = hidden;
       mark(host, 'data-pane-hidden', hidden);
       mark(host, 'data-collapsed', collapsed);
+      mark(host, 'aria-hidden', covered);
+      // `Root` renders each host as a tab stop.
+      if (host.tabIndex !== (covered ? -1 : 0))
+        host.tabIndex = covered ? -1 : 0;
     }
     const content = contents.get(id);
     if (content !== undefined) {
@@ -140,10 +154,12 @@ export function createPaneVisibility(): PaneVisibility {
       if (next === before) return;
       reasons.set(id, next);
       write(id);
-      if (before !== undefined && (before === 0) !== (next === 0))
+      const rendered = (before ?? 0) & ~COVERED;
+      const rendering = next & ~COVERED;
+      if (before !== undefined && (rendered === 0) !== (rendering === 0))
         hosts.get(id)?.dispatchEvent(
           new CustomEvent(PANE_VISIBILITY_EVENT, {
-            detail: { hidden: next !== 0 },
+            detail: { hidden: rendering !== 0 },
           })
         );
       for (const listener of [...listeners]) listener();

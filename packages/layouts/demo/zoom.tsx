@@ -7,7 +7,8 @@
 // - `?requires=missing`: one more feature that needs a feature that the
 //   layout lacks.
 // - `?slots=conflict`: two more features that both give the style of a host.
-import { type JSX, useContext, useState } from 'react';
+// - `?flip=on`: `flip()` animates the zoom; `&duration=<ms>` sets its length.
+import { type CSSProperties, type JSX, useContext, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -17,6 +18,7 @@ import {
   createLayout,
   edits,
   type Feature,
+  flip,
   focusRing,
   hiddenPanes,
   naryTree,
@@ -41,7 +43,9 @@ let features: Feature[] = [
   hiddenPanes(),
   ...(featuresParam === 'nozoom' ? [] : [zoom()]),
   focusRing(),
+  ...(params.get('flip') === 'on' ? [flip()] : []),
 ];
+const duration = params.get('duration');
 if (featuresParam === 'reversed') features = features.toReversed();
 if (params.get('requires') === 'missing')
   features.push({ name: 'needs-drag', requires: ['pane-drag'] });
@@ -149,7 +153,15 @@ function App(): JSX.Element {
   const [stable] = useState(() => renderPane);
   return (
     <div style={{ height: '100vh' }}>
-      <Layout.Root layout={page.layout} renderPane={stable} />
+      <Layout.Root
+        layout={page.layout}
+        renderPane={stable}
+        style={
+          duration === null
+            ? undefined
+            : ({ '--layout-duration': `${duration}ms` } as CSSProperties)
+        }
+      />
     </div>
   );
 }

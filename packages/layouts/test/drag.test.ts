@@ -40,19 +40,31 @@ describe('dropTargetAt', () => {
     });
   });
 
-  test('the source itself and the excluded panes give no target', () => {
+  test('the source itself gives no target', () => {
     expect(
       dropTargetAt(geometry, 250, 200, {
         source: { kind: 'pane', id: 'a' },
         drop,
       })
     ).toBeNull();
+  });
+
+  test('on its own stack, a source drops at an edge beside the stack, not at its center', () => {
+    const options = {
+      source: { kind: 'tab', id: 'a' },
+      center: true,
+      group: ['a', 'b'],
+      drop,
+    };
+    expect(dropTargetAt(geometry, 250, 200, options)).toBeNull();
+    // At an edge of its own tab, the target is the other tab of the stack.
+    expect(dropTargetAt(geometry, 20, 200, options)).toEqual({
+      paneId: 'b',
+      place: 'left',
+      rect: { x: 0, y: 0, width: 250, height: 400 },
+    });
     expect(
-      dropTargetAt(geometry, 750, 200, {
-        source: { kind: 'pane', id: 'a' },
-        exclude: ['b'],
-        drop,
-      })
+      dropTargetAt(geometry, 20, 200, { ...options, group: ['a'] })
     ).toBeNull();
   });
 });

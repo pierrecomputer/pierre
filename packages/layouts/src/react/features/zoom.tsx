@@ -5,18 +5,22 @@
 // box of the layout, moves each covered pane past the nearest edge of the
 // layout, hides the covered panes when the zoom animation ends, moves the
 // focus into the zoomed pane, hides the separators, restores on Escape, and
-// announces the zoom. The store commit owns the rules of the zoom.
+// announces the zoom. The covered panes leave the accessibility tree and the
+// tab order at the start of the zoom, and stop rendering at the end of its
+// animation. The store commit owns the rules of the zoom.
 import { type CSSProperties, useEffect, useState } from 'react';
 
 import zoomCss from '../../css/zoom.css?inline';
-import { flipAnimations, readBoxes } from '../../dom/flip';
-import { focusOwner, focusZoomedPane } from '../../dom/panes';
-import { ZOOM } from '../../dom/visibility';
+import { flipAnimations } from '../../dom/flip';
+import { focusOwner, focusPane, focusZoomedPane } from '../../dom/panes';
+import { COVERED, ZOOM } from '../../dom/visibility';
 import { stackOf } from '../../model';
 import { presentation } from '../../presentation';
 import { treeIndex } from '../../tree-index';
 import type { Edge, LayoutState } from '../../types';
 import { getExitEdges, type ZoomCommands, zoom as zoomStore } from '../../zoom';
+import { boxesBeforeChange } from '../boxes';
+import { cell } from '../cell';
 import type {
   Feature,
   FeatureHooks,
@@ -53,56 +57,39 @@ const exitTransform = (edge: Edge, gap: number): string =>
 
 const zoomedText = (title: string): string => `${title} zoomed`;
 
-/** What the zoom of one view keeps between its renders and its callbacks. */
-interface ZoomMemory {
-  /** The edge past which each covered pane leaves, from the boxes before the zoom. */
-  edges: Readonly<Record<string, Edge>>;
-  /** The pane that had the focus before the zoom, or null. */
-  owner: string | null;
-  /** The panes that this feature hides. */
-  covered: ReadonlySet<string>;
-}
-
 function useZoom(
   context: ViewContext,
   { state, gap }: ViewRender
 ): FeatureHooks {
   const { filled, covered } = presentation(state);
-  const [memory] = useState<ZoomMemory>(() => ({
-    edges: {},
-    owner: null,
-    covered: new Set(),
-  }));
-  // Hide exactly the panes in `ids` for the zoom.
-  const cover = (ids: ReadonlySet<string>): void => {
-    for (const id of memory.covered)
-      if (!ids.has(id)) context.visibility.set(id, ZOOM, 0);
-    for (const id of ids) context.visibility.set(id, ZOOM, ZOOM);
-    memory.covered = ids;
-  };
-  // After React commits a zoom: move the focus into the zoomed pane first,
-  // because a focused element in a pane that skips its rendering loses the
-  // focus to `body`. Then hide the covered panes when the zoom animation
-  // ends. A tree change during the zoom cancels its animations, and the
-  // covered panes then hide at once.
+  const { visibility } = context;
+  // The edge past which each covered pane leaves, from the boxes before the
+  // zoom; the pane that had the focus before the zoom; the panes that this
+  // feature covers; and a count of the commits of a zoom, so that the end of
+  // an old animation does nothing.
+  const [edges] = useState(() => cell<Readonly<Record<string, Edge>>>({}));
+  const [owner] = useState(() => cell<string | null>(null));
+  const [marked] = useState(() => cell<ReadonlySet<string>>(new Set()));
+  const [commits] = useState(() => cell(0));
+  // While the zoom animation runs, the covered panes still render, so their
+  // controls could take the focus. A focus that enters a covered pane goes
+  // to the zoomed pane.
   useEffect(() => {
     const element = context.element();
-    const owner = memory.owner;
-    memory.owner = null;
-    if (element === null || filled === null) return;
-    focusZoomedPane(element, filled, owner);
-    let current = true;
-    void Promise.allSettled(
-      flipAnimations(element).map((animation) => animation.finished)
-    ).then(() => {
-      if (current) cover(covered);
-    });
-    return () => {
-      current = false;
+    if (element === null) return;
+    const guard = (event: FocusEvent): void => {
+      const host = (event.target as Element).closest('[data-layout-pane]');
+      const zoomed = presentation(context.store.getSnapshot()).filled;
+      if (
+        zoomed !== null &&
+        host?.parentElement === element &&
+        host.getAttribute('aria-hidden') === 'true'
+      )
+        focusPane(element, zoomed);
     };
-    // `cover` reads only `memory` and the context.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [filled, covered, context, memory]);
+    element.addEventListener('focusin', guard);
+    return () => element.removeEventListener('focusin', guard);
+  }, [context]);
   const title = (id: string): string => {
     const pane = treeIndex(state.root).panes.get(id)?.pane;
     return pane === undefined ? id : context.title(pane);
@@ -112,17 +99,45 @@ function useZoom(
       if (zoomKey(previous) === zoomKey(next)) return;
       if (presentation(next).filled !== null) {
         // The boxes are clean here, before React applies the change.
-        memory.owner = focusOwner(element);
+        owner.set(focusOwner(element));
         const bounds = element.getBoundingClientRect();
-        memory.edges = getExitEdges(
-          readBoxes(element),
-          bounds.width,
-          bounds.height
+        edges.set(
+          getExitEdges(
+            boxesBeforeChange(context, element),
+            bounds.width,
+            bounds.height
+          )
         );
       }
       // Show the covered panes before React commits a zoom change, so that
       // they render during its animation.
-      cover(new Set());
+      for (const id of marked.get()) visibility.set(id, COVERED | ZOOM, 0);
+      marked.set(new Set());
+      commits.set(commits.get() + 1);
+    },
+    // After each commit of a zoom: the covered panes leave the accessibility
+    // tree and the tab order at once, the focus moves into the zoomed pane,
+    // and the covered panes stop rendering when the animations of the layout
+    // end. A pane that a change uncovers renders again at once.
+    afterChange(_previous, next, element) {
+      const { filled: zoomed, covered: panes } = presentation(next);
+      if (zoomed === null) return;
+      for (const id of marked.get())
+        if (!panes.has(id)) visibility.set(id, COVERED | ZOOM, 0);
+      for (const id of panes) visibility.set(id, COVERED, COVERED);
+      marked.set(panes);
+      // Move the focus into the zoomed pane first: a focused element in a
+      // pane that skips its rendering loses the focus to `body`.
+      focusZoomedPane(element, zoomed, owner.get());
+      owner.set(null);
+      const commit = commits.get() + 1;
+      commits.set(commit);
+      void Promise.allSettled(
+        flipAnimations(element).map((animation) => animation.finished)
+      ).then(() => {
+        if (commits.get() === commit)
+          for (const id of panes) visibility.set(id, ZOOM, ZOOM);
+      });
     },
     host({ pane, rect }) {
       if (pane.id === filled)
@@ -134,7 +149,7 @@ function useZoom(
         return {
           style: {
             ...rect,
-            transform: exitTransform(memory.edges[pane.id] ?? 'left', gap),
+            transform: exitTransform(edges.get()[pane.id] ?? 'left', gap),
           },
         };
       return undefined;

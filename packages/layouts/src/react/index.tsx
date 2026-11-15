@@ -38,10 +38,17 @@ export {
   type FeatureCommands,
   type LayoutObject,
 } from './create-layout';
+export {
+  type AllFeatures,
+  allFeatures,
+  type AllFeaturesOptions,
+} from './features/all';
 export { corners } from './features/corners';
+export { flip, type FlipOptions } from './features/flip';
 export { focusRing } from './features/focus-ring';
 export { paneDrag } from './features/pane-drag';
 export { stacks } from './features/stacks';
+export { tabDrag } from './features/tab-drag';
 export { edits, hiddenPanes, persistence } from './features/store-only';
 export { zoom } from './features/zoom';
 export {
