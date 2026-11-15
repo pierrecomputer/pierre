@@ -10,7 +10,10 @@
 //
 // Each feature carries its store part, its view part, and its sheets. A
 // bundler keeps only the parts and features that an app uses.
-export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
+export {
+  PANE_VISIBILITY_EVENT,
+  type PaneVisibilityEvent,
+} from '../dom/pane-visibility-event';
 export type { PaneEdges } from '../css-layout';
 export type { DropPlace } from '../drop';
 export { naryTree } from '../models/n-ary';

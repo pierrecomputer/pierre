@@ -1,7 +1,9 @@
 # Consumer controls and persistence
 
 A split-pane layout engine with tabs, resize controls, and a React view. The
-root entry has no DOM or React dependency. The package is private.
+root entry needs neither the DOM nor React to load, so a server can import it.
+Its overlay and cover functions use the DOM only when an app calls them. The
+package is private.
 
 ## Customize a header
 

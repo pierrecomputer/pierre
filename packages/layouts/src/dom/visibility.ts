@@ -1,4 +1,4 @@
-import { PANE_VISIBILITY_EVENT } from './panes';
+import { PANE_VISIBILITY_EVENT } from './pane-visibility-event';
 
 // The reasons why a pane does not show all of its content, as bits. A pane
 // with no reason shows, and its content renders.

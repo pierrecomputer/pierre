@@ -3,7 +3,7 @@
 // covers completely stop rendering until the release, and the layout element
 // reports the covered and the overlapped panes. This module imports nothing
 // from the store or the geometry.
-import { PANE_VISIBILITY_EVENT } from '../dom/panes';
+import { PANE_VISIBILITY_EVENT } from '../dom/pane-visibility-event';
 import { OVERLAY, type PaneVisibility, visibilityOf } from '../dom/visibility';
 
 /** The panes under an overlay. */

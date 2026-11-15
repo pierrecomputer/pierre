@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { brotliCompressSync, constants } from 'node:zlib';
@@ -16,9 +16,9 @@ const PACKAGE = join(import.meta.dir, '..');
 // (`DEC-layouts-modular-size-budget`, the values after step 14 of
 // `refactor-entries-feature-modules`). Bytes, minified and brotli.
 const BUDGET = {
-  'two-pane source': { minified: 27_001, brotli: 9_018 },
-  'two-pane rolldown': { minified: 26_998, brotli: 9_027 },
-  'two-pane esbuild': { minified: 27_409, brotli: 9_589 },
+  'two-pane source': { minified: 27_000, brotli: 9_015 },
+  'two-pane rolldown': { minified: 26_998, brotli: 9_031 },
+  'two-pane esbuild': { minified: 27_409, brotli: 9_616 },
 } as const;
 
 interface Output {
@@ -35,6 +35,9 @@ const brotli = (code: string): number =>
     },
   }).length;
 
+// The installed package: its `package.json`, whose `sideEffects` lets a
+// bundler drop the files of the dist that an app does not use, and the dist.
+let installed = '';
 let dist = '';
 const outputs = new Map<string, Output>();
 
@@ -109,7 +112,12 @@ beforeAll(async () => {
   const nodeEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';
   try {
-    dist = mkdtempSync(join(tmpdir(), 'pierre-layouts-proof-'));
+    installed = mkdtempSync(join(tmpdir(), 'pierre-layouts-proof-'));
+    copyFileSync(
+      join(PACKAGE, 'package.json'),
+      join(installed, 'package.json')
+    );
+    dist = join(installed, 'dist');
     const { build } = await import('tsdown');
     await build({
       cwd: PACKAGE,
@@ -142,7 +150,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(() => {
-  if (dist !== '') rmSync(dist, { recursive: true, force: true });
+  if (installed !== '') rmSync(installed, { recursive: true, force: true });
 });
 
 // A mark of each part, feature, and sheet in an output. A sheet is a minified
