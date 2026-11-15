@@ -9,6 +9,7 @@ import { presentation } from '../../presentation';
 import { treeIndex } from '../../tree-index';
 import type { Edge, LayoutState } from '../../types';
 import type {
+  EdgeMessageValues,
   Feature,
   FeatureHooks,
   ViewContext,
@@ -18,8 +19,12 @@ import { type Drag, DropPreview, startDrag, useDrag } from '../drag';
 
 const PANE = 'pane';
 
-const moveText = (title: string, edge: Edge, target: string): string =>
-  `Move ${title} to the ${edge} of ${target}`;
+const moveText = ({
+  paneTitle,
+  targetTitle,
+  edge,
+}: EdgeMessageValues): string =>
+  `Move ${paneTitle} to the ${edge} of ${targetTitle}`;
 
 /** The title of a pane of a state, by ID. */
 function titleOf(context: ViewContext, state: LayoutState, id: string): string {
@@ -59,11 +64,13 @@ function usePaneDrag(
     status:
       drag === null || target === null
         ? null
-        : (context.messages().move ?? moveText)(
-            titleOf(context, state, drag.source.id),
-            target.place as Edge,
-            titleOf(context, state, target.paneId)
-          ),
+        : (context.messages().move ?? moveText)({
+            paneTitle: titleOf(context, state, drag.source.id),
+            paneId: drag.source.id,
+            targetTitle: titleOf(context, state, target.paneId),
+            targetId: target.paneId,
+            edge: target.place as Edge,
+          }),
   };
 }
 

@@ -10,12 +10,20 @@ import { focusTab, paneHosts } from '../../dom/panes';
 import { type StackCommands, stacks as stacksStore } from '../../stacks';
 import { treeIndex } from '../../tree-index';
 import { cell } from '../cell';
-import type { Feature, FeatureHooks, ViewContext } from '../contract';
+import type {
+  Feature,
+  FeatureHooks,
+  TargetMessageValues,
+  ViewContext,
+} from '../contract';
 
 let warnedTabList = false;
 
-const movedToTabsText = (title: string, target: string): string =>
-  `${title} moved into the group of ${target}`;
+const movedToTabsText = ({
+  paneTitle,
+  targetTitle,
+}: TargetMessageValues): string =>
+  `${paneTitle} moved into the group of ${targetTitle}`;
 
 function useStacks(context: ViewContext): FeatureHooks {
   // The tab to focus after the next change, when its host shows.
@@ -79,16 +87,16 @@ export function stacks(): Feature<StackCommands> {
     requires: ['edits'],
     store: stacksStore,
     // A move into another stack. The tab list shows a move inside one stack.
-    announce(operation, { previous, title, messages }) {
+    announce(operation, { previous, pane, target, messages }) {
       if (operation.type !== 'moveToStack') return null;
       const { panes } = treeIndex(previous.root);
       const stack = panes.get(operation.pane)?.stack;
       return stack != null && stack === panes.get(operation.target)?.stack
         ? null
-        : (messages.movedToTabs ?? movedToTabsText)(
-            title(operation.pane),
-            title(operation.target)
-          );
+        : (messages.movedToTabs ?? movedToTabsText)({
+            ...pane(operation.pane),
+            ...target(operation.target),
+          });
     },
     use: useStacks,
   };

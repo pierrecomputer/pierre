@@ -12,10 +12,12 @@ import { presentation } from '../../presentation';
 import type { StackCommands } from '../../stacks';
 import { tabInsertIndex, tabMoveIndex } from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
-import type { Edge, LayoutState } from '../../types';
+import type { LayoutState } from '../../types';
 import type {
+  EdgeMessageValues,
   Feature,
   FeatureHooks,
+  TargetMessageValues,
   ViewContext,
   ViewRender,
 } from '../contract';
@@ -29,11 +31,18 @@ import {
 
 const TAB = 'tab';
 
-const moveText = (title: string, edge: Edge, target: string): string =>
-  `Move ${title} to the ${edge} of ${target}`;
+const moveText = ({
+  paneTitle,
+  targetTitle,
+  edge,
+}: EdgeMessageValues): string =>
+  `Move ${paneTitle} to the ${edge} of ${targetTitle}`;
 
-const moveIntoText = (title: string, target: string): string =>
-  `Move ${title} into the group of ${target}`;
+const moveIntoText = ({
+  paneTitle,
+  targetTitle,
+}: TargetMessageValues): string =>
+  `Move ${paneTitle} into the group of ${targetTitle}`;
 
 function titleOf(context: ViewContext, state: LayoutState, id: string): string {
   const pane = treeIndex(state.root).panes.get(id)?.pane;
@@ -120,15 +129,19 @@ function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
       drag === null || target === null
         ? null
         : target.place === 'center'
-          ? (messages.moveInto ?? moveIntoText)(
-              titleOf(context, state, drag.source.id),
-              titleOf(context, state, target.paneId)
-            )
-          : (messages.move ?? moveText)(
-              titleOf(context, state, drag.source.id),
-              target.place,
-              titleOf(context, state, target.paneId)
-            ),
+          ? (messages.moveInto ?? moveIntoText)({
+              paneTitle: titleOf(context, state, drag.source.id),
+              paneId: drag.source.id,
+              targetTitle: titleOf(context, state, target.paneId),
+              targetId: target.paneId,
+            })
+          : (messages.move ?? moveText)({
+              paneTitle: titleOf(context, state, drag.source.id),
+              paneId: drag.source.id,
+              targetTitle: titleOf(context, state, target.paneId),
+              targetId: target.paneId,
+              edge: target.place,
+            }),
   };
 }
 

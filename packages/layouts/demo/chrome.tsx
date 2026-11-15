@@ -28,14 +28,23 @@ const withoutFeatures = params.get('features') === 'none';
 const unstableRender = params.get('render') === 'unstable';
 const startHidden = params.get('start') === 'hidden';
 
+// Each function takes named values, as an ICU message catalog does:
+// "Replier {paneTitle}". The pane ID finds the form of a name that a sentence
+// needs, with its article.
+const FRENCH_NAMES: Readonly<Record<string, string>> = {
+  editor: "l'éditeur",
+  terminal: 'le terminal',
+  notes: 'les notes',
+};
 const FRENCH: LayoutMessages = {
   layout: 'Espace de travail',
-  paneCount: (count) => `${count} panneaux`,
-  separator: (before, after) =>
-    `Redimensionner ${before.join(', ')} et ${after.join(', ')}`,
-  separatorValue: (percent) => `${percent} % de la position préférée`,
-  collapse: (title) => `Replier ${title}`,
-  close: (title) => `Fermer ${title}`,
+  paneCount: ({ count }) => `${count} panneaux`,
+  separator: ({ beforeTitles, afterTitles }) =>
+    `Redimensionner ${beforeTitles} et ${afterTitles}`,
+  separatorValue: ({ percent }) => `${percent} % de la position préférée`,
+  collapse: ({ paneTitle }) => `Replier ${paneTitle}`,
+  close: ({ paneId, paneTitle }) =>
+    `Fermer ${FRENCH_NAMES[paneId] ?? paneTitle}`,
 };
 const messages = params.get('messages') === 'fr' ? FRENCH : undefined;
 

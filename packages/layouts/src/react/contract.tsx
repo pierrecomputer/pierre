@@ -65,75 +65,120 @@ export type StylesheetsSetting = { readonly nonce?: string } | null | undefined;
  * string that names a pane uses its title from `getPaneTitle`. Each missing
  * string takes its English default.
  */
+/** The values of a message about one pane: its title from `getPaneTitle`, and its ID. */
+export interface PaneMessageValues {
+  readonly paneTitle: string;
+  /** The `PaneNode.id` of the pane. */
+  readonly paneId: string;
+}
+
+/** The values of a message about a pane and a target pane. */
+export interface TargetMessageValues extends PaneMessageValues {
+  readonly targetTitle: string;
+  /** The `PaneNode.id` of the target pane. */
+  readonly targetId: string;
+}
+
+/** The values of a message about a pane at an edge of a target pane. */
+export interface EdgeMessageValues extends TargetMessageValues {
+  readonly edge: Edge;
+}
+
+/** The values of the name of a separator: the panes that show on each side of it. */
+export interface SeparatorMessageValues {
+  /** The titles of the panes before the separator, joined with ", ". */
+  readonly beforeTitles: string;
+  /** The titles of the panes after the separator, joined with ", ". */
+  readonly afterTitles: string;
+  /** The number of panes before the separator. */
+  readonly beforeCount: number;
+  /** The number of panes after the separator. */
+  readonly afterCount: number;
+  /** The ID of the first pane before the separator, in reading order. */
+  readonly beforeId: string;
+  /** The ID of the first pane after the separator, in reading order. */
+  readonly afterId: string;
+}
+
+/**
+ * The strings of a layout (`DEC-layouts-messages-option`). Each function
+ * returns the whole sentence, so a translation chooses its own words and word
+ * order, and takes one flat object of named values, which an ICU message
+ * catalog takes as it is: pane titles from `getPaneTitle` (`paneTitle`,
+ * `targetTitle`), the IDs of the same panes (`paneId`, `targetId`), edges as
+ * `Edge` values, and counts and percents as numbers.
+ */
 export interface LayoutMessages {
   /** The name of the layout. Default: "Workspace". */
   readonly layout?: string;
   /** The status message with the count of panes that show. Default: "2 panes". */
-  readonly paneCount?: (count: number) => string;
+  readonly paneCount?: (values: { readonly count: number }) => string;
   /**
-   * The name of a separator, from the titles of the panes that it resizes
-   * first on each side. Default: "Resize Files and Editor".
+   * The name of a separator, from the titles of the panes that show on each
+   * side of it. Default: "Resize Files and Editor".
    */
-  readonly separator?: (
-    before: readonly string[],
-    after: readonly string[]
-  ) => string;
-  /** The value of a separator: its preferred place in percent. Default: "50% preferred position". */
-  readonly separatorValue?: (percent: number) => string;
+  readonly separator?: (values: SeparatorMessageValues) => string;
+  /**
+   * The value of a separator: its preferred place in percent. Default: "50%
+   * preferred position".
+   */
+  readonly separatorValue?: (values: { readonly percent: number }) => string;
   /** The name of `Layout.CollapseButton`. Default: "Collapse Editor". */
-  readonly collapse?: (title: string) => string;
+  readonly collapse?: (values: PaneMessageValues) => string;
   /** The name of `Layout.CloseButton`. Default: "Close Editor". */
-  readonly close?: (title: string) => string;
+  readonly close?: (values: PaneMessageValues) => string;
   /**
    * The name of `Layout.ZoomButton`, for a pane that is zoomed or not.
    * Default: "Zoom Editor", or "Restore Editor" while it is zoomed.
    */
-  readonly zoom?: (title: string, zoomed: boolean) => string;
+  readonly zoom?: (
+    values: PaneMessageValues & { readonly zoomed: boolean }
+  ) => string;
   /** The announcement of a zoom. Default: "Editor zoomed". */
-  readonly zoomed?: (title: string) => string;
+  readonly zoomed?: (values: PaneMessageValues) => string;
   /** The announcement of the end of a zoom. Default: "Editor restored". */
-  readonly restored?: (title: string) => string;
+  readonly restored?: (values: PaneMessageValues) => string;
   /** The announcement of a close. Default: "Editor closed". */
-  readonly closed?: (title: string) => string;
+  readonly closed?: (values: PaneMessageValues) => string;
   /**
    * The announcement of a new pane at an edge of another. Default: "Terminal
    * opened to the bottom of Editor".
    */
-  readonly opened?: (title: string, target: string, edge: Edge) => string;
+  readonly opened?: (values: EdgeMessageValues) => string;
   /**
    * The announcement of a move to an edge of another pane. Default: "Editor
    * moved to the right of Files".
    */
-  readonly moved?: (title: string, target: string, edge: Edge) => string;
+  readonly moved?: (values: EdgeMessageValues) => string;
   /**
    * The announcement of a move into another stack. Default: "Editor moved
    * into the group of Files".
    */
-  readonly movedToTabs?: (title: string, target: string) => string;
+  readonly movedToTabs?: (values: TargetMessageValues) => string;
   /** The announcement of a collapse. Default: "Editor collapsed". */
-  readonly collapsed?: (title: string) => string;
+  readonly collapsed?: (values: PaneMessageValues) => string;
   /** The announcement of an expand. Default: "Editor expanded". */
-  readonly expanded?: (title: string) => string;
+  readonly expanded?: (values: PaneMessageValues) => string;
   /** The announcement of a hide. Default: "Editor hidden". */
-  readonly hidden?: (title: string) => string;
+  readonly hidden?: (values: PaneMessageValues) => string;
   /** The announcement of a show. Default: "Editor shown". */
-  readonly shown?: (title: string) => string;
+  readonly shown?: (values: PaneMessageValues) => string;
   /** The name of `Layout.MoveHandle`. Default: "Drag Editor". */
-  readonly drag?: (title: string) => string;
+  readonly drag?: (values: PaneMessageValues) => string;
   /**
-   * The status message during a pane drag: the pane, the edge, and the target
-   * pane. Default: "Move Editor to the right of Files".
+   * The status message during a pane drag or a tab drag to an edge of a
+   * target pane. Default: "Move Editor to the right of Files".
    */
-  readonly move?: (title: string, edge: Edge, target: string) => string;
+  readonly move?: (values: EdgeMessageValues) => string;
   /** The name of a corner of `corners()`. Default: "Resize both axes". */
   readonly corner?: string;
   /** The name of `Layout.TabList`. Default: "Tabs of Editor". */
-  readonly tabs?: (title: string) => string;
+  readonly tabs?: (values: PaneMessageValues) => string;
   /**
    * The status message during a tab drag into a stack: the tab and a pane of
    * the target stack. Default: "Move Editor into the group of Files".
    */
-  readonly moveInto?: (title: string, target: string) => string;
+  readonly moveInto?: (values: TargetMessageValues) => string;
 }
 
 /** A layout object: the store, with the features of the layout. */
@@ -268,6 +313,10 @@ export interface AnnounceContext {
   readonly next: LayoutState;
   /** The title of a pane, from the state after the change or before it. */
   title(id: string): string;
+  /** The values of a message about a pane: its title and its ID. */
+  pane(id: string): PaneMessageValues;
+  /** The values of a message about a target pane: its title and its ID. */
+  target(id: string): Pick<TargetMessageValues, 'targetTitle' | 'targetId'>;
   readonly messages: LayoutMessages;
 }
 

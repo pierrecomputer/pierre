@@ -9,7 +9,7 @@ import contentCss from '../../css/content.css?inline';
 import headersCss from '../../css/headers.css?inline';
 import { presentation } from '../../presentation';
 import type { ZoomCommands } from '../../zoom';
-import { Style } from '../contract';
+import { type PaneMessageValues, Style } from '../contract';
 import { useDrag } from '../drag';
 import { DISABLED_GRIP_STYLE, GRIP_STYLE } from '../gesture-styles';
 import { usePaneContext, usePaneState } from '../use-pane';
@@ -124,9 +124,10 @@ export function CollapseButton({
     render,
     mergeProps(props, {
       type: 'button',
-      'aria-label': (context.messages().collapse ?? collapseName)(
-        context.title(pane)
-      ),
+      'aria-label': (context.messages().collapse ?? collapseName)({
+        paneTitle: context.title(pane),
+        paneId: pane.id,
+      }),
       'aria-pressed': collapsed,
       'data-collapsed': collapsed || undefined,
       onClick: () => context.store.setCollapsed(id, !collapsed),
@@ -136,9 +137,11 @@ export function CollapseButton({
   );
 }
 
-const collapseName = (title: string): string => `Collapse ${title}`;
+const collapseName = ({ paneTitle }: PaneMessageValues): string =>
+  `Collapse ${paneTitle}`;
 
-const closeName = (title: string): string => `Close ${title}`;
+const closeName = ({ paneTitle }: PaneMessageValues): string =>
+  `Close ${paneTitle}`;
 
 export interface CloseButtonState {
   /** The pane cannot close: it is the last pane that shows. */
@@ -170,9 +173,10 @@ export function CloseButton({
     render,
     mergeProps(props, {
       type: 'button',
-      'aria-label': (context.messages().close ?? closeName)(
-        context.title(pane)
-      ),
+      'aria-label': (context.messages().close ?? closeName)({
+        paneTitle: context.title(pane),
+        paneId: pane.id,
+      }),
       disabled,
       'data-disabled': disabled || undefined,
       onClick: () => {
@@ -188,8 +192,11 @@ export interface ZoomButtonState {
   zoomed: boolean;
 }
 
-const zoomName = (title: string, zoomed: boolean): string =>
-  `${zoomed ? 'Restore' : 'Zoom'} ${title}`;
+const zoomName = ({
+  paneTitle,
+  zoomed,
+}: PaneMessageValues & { zoomed: boolean }): string =>
+  `${zoomed ? 'Restore' : 'Zoom'} ${paneTitle}`;
 
 /** Zoom the pane, or restore the layout. It needs `zoom()`. */
 export function ZoomButton({
@@ -207,10 +214,11 @@ export function ZoomButton({
     render,
     mergeProps(props, {
       type: 'button',
-      'aria-label': (context.messages().zoom ?? zoomName)(
-        context.title(pane),
-        zoomed
-      ),
+      'aria-label': (context.messages().zoom ?? zoomName)({
+        paneTitle: context.title(pane),
+        paneId: pane.id,
+        zoomed,
+      }),
       'aria-pressed': zoomed,
       'data-zoomed': zoomed || undefined,
       onClick: () => (context.store as Partial<ZoomCommands>).toggleZoom?.(id),
@@ -227,7 +235,8 @@ export interface MoveHandleState {
   disabled: boolean;
 }
 
-const dragName = (title: string): string => `Drag ${title}`;
+const dragName = ({ paneTitle }: PaneMessageValues): string =>
+  `Drag ${paneTitle}`;
 
 /**
  * Move the pane with a pointer drag, beside another pane. It needs
@@ -259,7 +268,10 @@ export function MoveHandle({
     mergeProps(props, {
       type: 'button',
       className: 'pierre-layout-grip',
-      'aria-label': (context.messages().drag ?? dragName)(context.title(pane)),
+      'aria-label': (context.messages().drag ?? dragName)({
+        paneTitle: context.title(pane),
+        paneId: pane.id,
+      }),
       // Not `disabled`: the handle keeps its place in the tab order.
       'aria-disabled': disabled || undefined,
       'data-dragging': dragging || undefined,

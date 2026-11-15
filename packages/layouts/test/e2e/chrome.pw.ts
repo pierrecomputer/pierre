@@ -334,9 +334,10 @@ test('messages replace each string of the layout', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Replier terminal' })
   ).toHaveCount(1);
-  await expect(page.getByRole('button', { name: 'Fermer editor' })).toHaveCount(
-    1
-  );
+  // The close name takes the form of the name from the pane ID.
+  await expect(
+    page.getByRole('button', { name: "Fermer l'éditeur" })
+  ).toHaveCount(1);
 });
 
 test('getSeparatorProps gets the public separator, and getPaneProps adds data attributes', async ({

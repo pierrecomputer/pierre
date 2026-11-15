@@ -23,6 +23,7 @@ import { cell } from '../cell';
 import type {
   Feature,
   FeatureHooks,
+  PaneMessageValues,
   ViewContext,
   ViewRender,
 } from '../contract';
@@ -54,8 +55,10 @@ const exitTransform = (edge: Edge, gap: number): string =>
     ? `translateX(calc(${edge === 'left' ? '-' : ''}100cqw ${edge === 'left' ? '-' : '+'} ${gap}px))`
     : `translateY(calc(${edge === 'top' ? '-' : ''}100cqh ${edge === 'top' ? '-' : '+'} ${gap}px))`;
 
-const zoomedText = (title: string): string => `${title} zoomed`;
-const restoredText = (title: string): string => `${title} restored`;
+const zoomedText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} zoomed`;
+const restoredText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} restored`;
 
 function useZoom(
   context: ViewContext,
@@ -169,13 +172,13 @@ export function zoom(): Feature<ZoomCommands> {
   return {
     name: 'zoom',
     store: zoomStore,
-    announce(operation, { previous, title, messages }) {
+    announce(operation, { previous, pane, messages }) {
       if (operation.type !== 'zoom') return null;
       if (operation.pane !== null)
-        return (messages.zoomed ?? zoomedText)(title(operation.pane));
+        return (messages.zoomed ?? zoomedText)(pane(operation.pane));
       return previous.zoomedPane === null
         ? null
-        : (messages.restored ?? restoredText)(title(previous.zoomedPane));
+        : (messages.restored ?? restoredText)(pane(previous.zoomedPane));
     },
     use: useZoom,
     stylesheets: [['zoom', zoomCss]],

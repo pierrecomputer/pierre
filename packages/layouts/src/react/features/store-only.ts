@@ -8,16 +8,23 @@ import {
   type PersistenceCommands,
   persistence as persistenceStore,
 } from '../../persistence';
-import type { Edge, TreeModel } from '../../types';
-import type { Feature } from '../contract';
+import type { TreeModel } from '../../types';
+import type {
+  EdgeMessageValues,
+  Feature,
+  PaneMessageValues,
+} from '../contract';
 
-const closedText = (title: string): string => `${title} closed`;
-const openedText = (title: string, target: string, edge: Edge): string =>
-  `${title} opened to the ${edge} of ${target}`;
-const movedText = (title: string, target: string, edge: Edge): string =>
-  `${title} moved to the ${edge} of ${target}`;
-const hiddenText = (title: string): string => `${title} hidden`;
-const shownText = (title: string): string => `${title} shown`;
+const closedText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} closed`;
+const openedText = ({ paneTitle, targetTitle, edge }: EdgeMessageValues) =>
+  `${paneTitle} opened to the ${edge} of ${targetTitle}`;
+const movedText = ({ paneTitle, targetTitle, edge }: EdgeMessageValues) =>
+  `${paneTitle} moved to the ${edge} of ${targetTitle}`;
+const hiddenText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} hidden`;
+const shownText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} shown`;
 
 /**
  * Split, close, move, and swap panes, with the rules of a tree model:
@@ -28,21 +35,21 @@ export function edits(model: TreeModel): Feature<EditCommands> {
   return {
     name: 'edits',
     store: editsStore(model),
-    announce(operation, { title, messages }) {
+    announce(operation, { pane, target, messages }) {
       if (operation.type === 'close')
-        return (messages.closed ?? closedText)(title(operation.pane));
+        return (messages.closed ?? closedText)(pane(operation.pane));
       if (operation.type === 'split')
-        return (messages.opened ?? openedText)(
-          title(operation.pane.id),
-          title(operation.target),
-          operation.edge
-        );
+        return (messages.opened ?? openedText)({
+          ...pane(operation.pane.id),
+          ...target(operation.target),
+          edge: operation.edge,
+        });
       if (operation.type === 'move')
-        return (messages.moved ?? movedText)(
-          title(operation.pane),
-          title(operation.target),
-          operation.edge
-        );
+        return (messages.moved ?? movedText)({
+          ...pane(operation.pane),
+          ...target(operation.target),
+          edge: operation.edge,
+        });
       return null;
     },
   };
@@ -53,12 +60,12 @@ export function hiddenPanes(): Feature<HiddenPaneCommands> {
   return {
     name: 'hidden-panes',
     store: hiddenPanesStore,
-    announce: (operation, { title, messages }) =>
+    announce: (operation, { pane, messages }) =>
       operation.type !== 'hide'
         ? null
         : (operation.hidden
             ? (messages.hidden ?? hiddenText)
-            : (messages.shown ?? shownText))(title(operation.pane)),
+            : (messages.shown ?? shownText))(pane(operation.pane)),
   };
 }
 

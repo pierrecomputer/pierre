@@ -20,6 +20,7 @@ import { treeIndex } from '../../tree-index';
 import type { PaneNode } from '../../types';
 import {
   paneIdOf,
+  type PaneMessageValues,
   Style,
   TabContext,
   type TabContextValue,
@@ -37,7 +38,8 @@ import {
   warnMissing,
 } from './part';
 
-const tabsName = (title: string): string => `Tabs of ${title}`;
+const tabsName = ({ paneTitle }: PaneMessageValues): string =>
+  `Tabs of ${paneTitle}`;
 
 /** The state of a tab, for the children of `Layout.TabList`. */
 export interface TabListItemState {
@@ -117,9 +119,10 @@ export function TabList({
         mergeProps(props, {
           ref: tablist,
           role: 'tablist',
-          'aria-label': (context.messages().tabs ?? tabsName)(
-            context.title(pane)
-          ),
+          'aria-label': (context.messages().tabs ?? tabsName)({
+            paneTitle: context.title(pane),
+            paneId: pane.id,
+          }),
           className: 'pierre-layout-tabs',
           'data-layout-tablist': '',
           children: shown.map((tab, index) => (

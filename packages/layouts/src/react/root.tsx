@@ -62,6 +62,8 @@ import {
   PaneContext,
   type PaneContextValue,
   paneIdOf,
+  type PaneMessageValues,
+  type SeparatorMessageValues,
   Style,
   type StylesheetsSetting,
   type ViewContext,
@@ -157,18 +159,21 @@ const defaultTitle = (pane: PaneNode): string => pane.id;
 
 const NO_MESSAGES: LayoutMessages = {};
 
-const separatorName = (
-  before: readonly string[],
-  after: readonly string[]
-): string => `Resize ${before.join(', ')} and ${after.join(', ')}`;
+const separatorName = ({
+  beforeTitles,
+  afterTitles,
+}: SeparatorMessageValues): string =>
+  `Resize ${beforeTitles} and ${afterTitles}`;
 
-const separatorValue = (percent: number): string =>
+const separatorValue = ({ percent }: { percent: number }): string =>
   `${percent}% preferred position`;
 
-const paneCount = (count: number): string => `${count} panes`;
+const paneCount = ({ count }: { count: number }): string => `${count} panes`;
 
-const collapsedText = (title: string): string => `${title} collapsed`;
-const expandedText = (title: string): string => `${title} expanded`;
+const collapsedText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} collapsed`;
+const expandedText = ({ paneTitle }: PaneMessageValues): string =>
+  `${paneTitle} expanded`;
 
 /**
  * The announcement of a local change: the text of its last operation that has
@@ -183,23 +188,26 @@ function announcementOf(
   latest: LatestProps
 ): string | null {
   const messages = latest.messages ?? NO_MESSAGES;
+  // The title of a pane after the change, or before it for a pane that closes.
+  const title = (id: string): string => {
+    const pane = [...getPanes(next.root), ...getPanes(previous.root)].find(
+      (each) => each.id === id
+    );
+    return pane === undefined ? id : latest.getPaneTitle(pane);
+  };
   const context: AnnounceContext = {
     previous,
     next,
     messages,
-    title(id) {
-      // The pane after the change, or before it for a pane that closes.
-      const pane = [...getPanes(next.root), ...getPanes(previous.root)].find(
-        (each) => each.id === id
-      );
-      return pane === undefined ? id : latest.getPaneTitle(pane);
-    },
+    title,
+    pane: (id) => ({ paneTitle: title(id), paneId: id }),
+    target: (id) => ({ targetTitle: title(id), targetId: id }),
   };
   const textOf = (operation: LayoutOperation): string | null | undefined =>
     operation.type === 'collapse'
       ? (operation.collapsed
           ? (messages.collapsed ?? collapsedText)
-          : (messages.expanded ?? expandedText))(context.title(operation.pane))
+          : (messages.expanded ?? expandedText))(context.pane(operation.pane))
       : features
           .map((feature) => feature.announce?.(operation, context))
           .find((text) => text != null);
@@ -786,7 +794,7 @@ export function Root(props: RootProps): JSX.Element {
   const status =
     hooks.find((hook) => hook.status != null)?.status ??
     message?.text ??
-    (messages?.paneCount ?? paneCount)(visibleCount);
+    (messages?.paneCount ?? paneCount)({ count: visibleCount });
   const sheets = new Map<string, string>([['split', splitCss]]);
   for (const feature of features)
     for (const [name, css] of feature.stylesheets ?? []) sheets.set(name, css);
@@ -897,10 +905,14 @@ export function Root(props: RootProps): JSX.Element {
               tabIndex={0}
               aria-label={
                 custom?.['aria-label'] ??
-                (messages?.separator ?? separatorName)(
-                  before.map(getPaneTitle),
-                  after.map(getPaneTitle)
-                )
+                (messages?.separator ?? separatorName)({
+                  beforeTitles: before.map(getPaneTitle).join(', '),
+                  afterTitles: after.map(getPaneTitle).join(', '),
+                  beforeCount: before.length,
+                  afterCount: after.length,
+                  beforeId: before[0]?.id ?? '',
+                  afterId: after[0]?.id ?? '',
+                })
               }
               aria-orientation={
                 split.direction === 'horizontal' ? 'vertical' : 'horizontal'
@@ -911,9 +923,9 @@ export function Root(props: RootProps): JSX.Element {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={value}
-              aria-valuetext={(messages?.separatorValue ?? separatorValue)(
-                value
-              )}
+              aria-valuetext={(messages?.separatorValue ?? separatorValue)({
+                percent: value,
+              })}
               data-direction={split.direction}
               data-layout-flip={`separator:${id}`}
               style={separatorStyles.get(id)}
