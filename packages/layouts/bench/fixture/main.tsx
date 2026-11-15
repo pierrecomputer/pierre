@@ -2,7 +2,6 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import {
-  binaryTree,
   type LayoutNode,
   LayoutStore,
   naryTree,
@@ -131,11 +130,8 @@ function buildTree(ids: readonly string[], depth = 0): LayoutNode {
   };
 }
 
-// The tree model: `binary` by default, or `n-ary`. The balanced tree has the
-// same shape in both, but a split, a close, or a move can change it in
-// different ways.
-const model = params.get('model') === 'n-ary' ? naryTree : binaryTree;
-const store = new LayoutStore(buildTree(paneIds), { model });
+// The tree model of the apps: `naryTree` (`DEC-layouts-nary-tree-default`).
+const store = new LayoutStore(buildTree(paneIds), { model: naryTree });
 
 const title = (pane: PaneNode): string =>
   `${pane.id} ${kindOf(indexOf.get(pane.id) ?? 0)}`;
