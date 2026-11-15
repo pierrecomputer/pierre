@@ -223,7 +223,7 @@ export function ZoomButton({
 export interface MoveHandleState {
   /** The pane moves in a drag. */
   dragging: boolean;
-  /** No drag starts: a pane fills the layout. */
+  /** No drag starts: the pane fills the layout. */
   disabled: boolean;
 }
 
@@ -231,8 +231,10 @@ const dragName = (title: string): string => `Drag ${title}`;
 
 /**
  * Move the pane with a pointer drag, beside another pane. It needs
- * `paneDrag()`. While a pane fills the layout, it is `aria-disabled` and
- * starts no drag.
+ * `paneDrag()`. While its pane fills the layout, it is `aria-disabled`. No
+ * drag starts while any pane fills the layout; the handles of the covered
+ * panes do not change, so a zoom lays no other pane out, and the covered
+ * panes are out of the accessibility tree.
  */
 export function MoveHandle({
   render,
@@ -243,9 +245,9 @@ export function MoveHandle({
   const { id, context } = value;
   warnMissing(context.has('pane-drag'), 'Layout.MoveHandle', 'paneDrag()');
   const pane = usePaneState(value, (state) => state.pane);
-  const disabled = !useLayoutState(
+  const disabled = useLayoutState(
     context.store,
-    (state) => presentation(state).rearrangeable
+    (state) => presentation(state).filled === id
   );
   const dragging = useDrag(
     context,
