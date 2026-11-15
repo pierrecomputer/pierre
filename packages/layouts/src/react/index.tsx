@@ -14,7 +14,6 @@ export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
 export type { ResizeStrategy } from '../dom/resize-work';
 export type { PaneEdges } from '../css-layout';
 export type { DropPlace } from '../drop';
-export { binaryTree } from '../models/binary';
 export { naryTree } from '../models/n-ary';
 export { type Presentation, presentation } from '../presentation';
 export type { ZoomCommands } from '../zoom';

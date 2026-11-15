@@ -4,7 +4,7 @@
 // `createLayoutStore` and its features.
 import { type EditCommands, edits } from './edits';
 import { type HiddenPaneCommands, hiddenPanes } from './hidden-panes';
-import { binaryTree } from './models/binary';
+import { naryTree } from './models/n-ary';
 import { persistence, type PersistenceCommands } from './persistence';
 import { type StackCommands, stacks } from './stacks';
 import { createLayoutStore, type StoreFeature, type StoreWith } from './store';
@@ -22,27 +22,10 @@ import { zoom, type ZoomCommands } from './zoom';
 
 export interface LayoutStoreOptions {
   /**
-   * The rules of the tree's shape, and how a split and a close change it:
-   * `binaryTree` (the default) or `naryTree`.
+   * The rules of the tree's shape, and how a split and a close change it.
+   * `naryTree` by default.
    */
   model?: TreeModel;
-}
-
-/**
- * A tree model that calls the current model of a `LayoutStore`, so that
- * `setModel` can change the model of the store that the class wraps.
- */
-function currentModel(get: () => TreeModel): TreeModel {
-  return {
-    get name() {
-      return get().name;
-    },
-    validate: (root) => get().validate(root),
-    normalize: (root, nextId) => get().normalize(root, nextId),
-    split: (root, targetId, pane, edge, nextId) =>
-      get().split(root, targetId, pane, edge, nextId),
-    remove: (root, id) => get().remove(root, id),
-  };
 }
 
 type AllFeatures = [
@@ -57,13 +40,11 @@ type AllFeatures = [
 export class LayoutStore {
   readonly getSnapshot: () => LayoutState;
   readonly subscribe: (listener: () => void) => () => void;
-  private model: TreeModel;
   private readonly store: StoreWith<AllFeatures>;
 
   constructor(root: LayoutNode, options: LayoutStoreOptions = {}) {
-    this.model = options.model ?? binaryTree;
     this.store = createLayoutStore(root, [
-      edits(currentModel(() => this.model)),
+      edits(options.model ?? naryTree),
       stacks,
       zoom,
       hiddenPanes,
@@ -71,23 +52,6 @@ export class LayoutStore {
     ]);
     this.getSnapshot = this.store.getSnapshot;
     this.subscribe = this.store.subscribe;
-  }
-
-  getModel(): TreeModel {
-    return this.model;
-  }
-
-  /** Change the tree model, and give the tree the shape of the new model. */
-  setModel(model: TreeModel): void {
-    if (model === this.model) return;
-    const previous = this.model;
-    this.model = model;
-    try {
-      this.store.setRoot(this.getSnapshot().root);
-    } catch (error) {
-      this.model = previous;
-      throw error;
-    }
   }
 
   /** Set the tree. A tree of another shape takes the shape of the model. */

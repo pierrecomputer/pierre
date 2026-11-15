@@ -235,7 +235,6 @@ test('a separator drag changes only the panes beside it in the n-ary model', asy
     await page.mouse.up();
   };
 
-  await expect(page.getByLabel('Tree model')).toHaveValue('n-ary');
   const sessions = await width('sessions');
   const agent = await width('agent');
   const editor = await width('editor');
@@ -245,10 +244,4 @@ test('a separator drag changes only the panes beside it in the n-ary model', asy
   expect(await width('agent')).toBeCloseTo(agent - 80, 0);
   expect(await width('editor')).toBeCloseTo(editor, 0);
   expect(await width('files')).toBeCloseTo(files, 0);
-
-  // In the binary model, the same drag also resizes the panes after the agent chat.
-  await page.getByLabel('Tree model').selectOption('binary');
-  const before = await width('editor');
-  await drag(40);
-  expect(await width('editor')).toBeLessThan(before - 5);
 });

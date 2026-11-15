@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  binaryTree,
   type ChildSize,
   computeCSSLayout,
   computeLayout,
@@ -83,8 +82,8 @@ let sequence = 0;
 const nextId = (): string => `new-${++sequence}`;
 
 describe('tree operations', () => {
-  test('a move across ancestors promotes the former sibling, in both models', () => {
-    for (const model of [binaryTree, naryTree]) {
+  test('a move across ancestors promotes the former sibling', () => {
+    for (const model of [naryTree]) {
       const store = new LayoutStore(root, { model });
       store.move('files', 'terminal', 'bottom');
       const next = store.getSnapshot().root;
@@ -92,25 +91,6 @@ describe('tree operations', () => {
       expect(ids(next)).toEqual(['editor', 'terminal', 'files']);
     }
     expect(ids(root)).toEqual(['files', 'editor', 'terminal']);
-  });
-
-  test('the binary model splits at each edge with a new split', () => {
-    for (const edge of ['left', 'right', 'top', 'bottom'] as const) {
-      const next = binaryTree.split(pane('a'), 'a', pane('b'), edge, () => 's');
-      if (next.type !== 'split') throw new Error('Expected split');
-      expect(next.direction).toBe(
-        edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
-      );
-      expect(ids(next)).toEqual(
-        edge === 'left' || edge === 'top' ? ['b', 'a'] : ['a', 'b']
-      );
-    }
-    // A split beside a pane in a row is a new row in that row.
-    const next = binaryTree.split(root, 'files', pane('x'), 'right', nextId);
-    if (next.type !== 'split') throw new Error('Expected split');
-    expect(next.children).toHaveLength(2);
-    expect(next.children[0].type).toBe('split');
-    binaryTree.validate(next);
   });
 
   test('the n-ary model adds a pane to a split of the same direction', () => {
@@ -160,52 +140,22 @@ describe('tree operations', () => {
     expect(next?.id).toBe('r');
     near(sizesOf(next), [0.4, 0.15, 0.45]);
     expect(ids(next ?? nested)).toEqual(['a', 'd', 'e']);
-    // The binary model keeps the row in the row.
-    const binary = fromBinaryLayout({
-      type: 'split',
-      id: 'r',
-      direction: 'horizontal',
-      ratio: 0.4,
-      first: pane('a'),
-      second: {
-        type: 'split',
-        id: 'c',
-        direction: 'vertical',
-        ratio: 0.5,
-        first: pane('b'),
-        second: {
-          type: 'split',
-          id: 'i',
-          direction: 'horizontal',
-          ratio: 0.25,
-          first: pane('d'),
-          second: pane('e'),
-        },
-      },
-    });
-    expect(binaryTree.remove(binary, 'b')).toMatchObject({
-      id: 'r',
-      sizes: [0.4, 0.6],
-      children: [{ id: 'a' }, { id: 'i', sizes: [0.25, 0.75] }],
-    });
   });
 
   test('normalize gives a tree the shape of a model, and keeps the nodes that have it', () => {
     const flat = row('r', [0.2, 0.3, 0.5], [pane('a'), pane('b'), pane('c')]);
     expect(naryTree.normalize(flat, nextId)).toBe(flat);
-    const nested = binaryTree.normalize(flat, () => 'rest');
-    binaryTree.validate(nested);
-    expect(nested).toMatchObject({
-      id: 'r',
-      sizes: [0.2, 0.8],
-      children: [{ id: 'a' }, { id: 'rest', sizes: [0.3, 0.5] }],
-    });
+    // A row in a row of the same direction joins its parent.
+    const nested = row(
+      'r',
+      [0.2, 0.8],
+      [getPanes(flat)[0], row('rest', [0.3, 0.5], getPanes(flat).slice(1))]
+    );
     const joined = naryTree.normalize(nested, nextId);
     naryTree.validate(joined);
     expect(joined.id).toBe('r');
     near(sizesOf(joined), [0.2, 0.3, 0.5]);
     expect(getPanes(joined)[1]).toBe(getPanes(flat)[1]);
-    expect(binaryTree.normalize(root, nextId)).toBe(root);
     expect(naryTree.normalize(root, nextId)).toBe(root);
   });
 
@@ -214,16 +164,6 @@ describe('tree operations', () => {
     validateLayout(next);
     expect(ids(next)).toEqual(['terminal', 'editor', 'files']);
     expect(getPanes(next)[0].minWidth).toBe(200);
-  });
-
-  test('the binary model collapses a split that a close empties', () => {
-    if (root.type !== 'split') throw new Error('Expected split');
-    expect(binaryTree.remove(root, 'terminal')).toEqual({
-      ...root,
-      children: [root.children[0], getPanes(root)[1]],
-    });
-    expect(binaryTree.remove(pane('only'), 'only')).toBeNull();
-    expect(binaryTree.remove(root, 'missing')).toBe(root);
   });
 
   test('duplicate IDs, invalid dimensions, invalid sizes, and other shapes are rejected', () => {
@@ -240,7 +180,6 @@ describe('tree operations', () => {
     expect(() => validateLayout({ ...root, sizes: [1] })).toThrow();
     expect(() => validateLayout(row('r', [1], [pane('a')]))).toThrow();
     const three = row('r', [1, 1, 1], [pane('a'), pane('b'), pane('c')]);
-    expect(() => binaryTree.validate(three)).toThrow();
     naryTree.validate(three);
     const nested = row(
       'r',
@@ -248,7 +187,6 @@ describe('tree operations', () => {
       [pane('a'), row('i', [1, 1], [pane('b'), pane('c')])]
     );
     expect(() => naryTree.validate(nested)).toThrow();
-    binaryTree.validate(nested);
   });
 
   test('a saved tree of version 1 converts with its shape', () => {
@@ -363,7 +301,7 @@ describe('css layout', () => {
   test('a split that wraps a pane keeps the IDs of the separators around it', () => {
     const before = computeCSSLayout(root).separators.map(({ id }) => id);
     expect(before).toEqual(['outer:1', 'inner:1']);
-    const next = binaryTree.split(
+    const next = naryTree.split(
       root,
       'terminal',
       pane('x'),
@@ -536,27 +474,10 @@ describe('store', () => {
       focusedPane: 'b',
       zoomedPane: null,
     });
-    const binary = new LayoutStore(pane('x'));
-    binary.restore(saved);
-    expect(binary.getSnapshot().root).toMatchObject({ sizes: [0.5, 0.5] });
     const nary = new LayoutStore(pane('x'), { model: naryTree });
     nary.restore(saved);
     near(sizesOf(nary.getSnapshot().root), [0.5, 0.25, 0.25]);
     expect(nary.getSnapshot().focusedPane).toBe('b');
-  });
-
-  test('setModel gives the tree the shape of the new model and keeps its panes', () => {
-    const flat = row('r', [0.2, 0.3, 0.5], [pane('a'), pane('b'), pane('c')]);
-    const store = new LayoutStore(flat);
-    expect(store.getModel()).toBe(binaryTree);
-    const panes = getPanes(store.getSnapshot().root);
-    expect(store.getSnapshot().root).toMatchObject({ sizes: [0.2, 0.8] });
-    store.setModel(naryTree);
-    expect(store.getModel()).toBe(naryTree);
-    near(sizesOf(store.getSnapshot().root), [0.2, 0.3, 0.5]);
-    getPanes(store.getSnapshot().root).forEach((node, index) =>
-      expect(node).toBe(panes[index])
-    );
   });
 
   test('zoom does not change geometry and final pane cannot be closed', () => {
@@ -668,7 +589,7 @@ describe('stacks', () => {
   });
 
   test('a new tab makes a stack in the place of its target, and shows', () => {
-    for (const model of [binaryTree, naryTree]) {
+    for (const model of [naryTree]) {
       const store = new LayoutStore(root, { model });
       store.addTab('terminal', pane('logs'));
       const next = store.getSnapshot();
@@ -769,7 +690,7 @@ describe('stacks', () => {
   });
 
   test('a close shows the nearest tab, and a stack of one pane gives way to it', () => {
-    for (const model of [binaryTree, naryTree]) {
+    for (const model of [naryTree]) {
       const store = new LayoutStore(
         row(
           'r',
@@ -792,7 +713,7 @@ describe('stacks', () => {
   });
 
   test('a split or a move beside a tab goes beside its stack', () => {
-    for (const model of [binaryTree, naryTree]) {
+    for (const model of [naryTree]) {
       const store = new LayoutStore(
         row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])]),
         { model }
@@ -814,16 +735,15 @@ describe('stacks', () => {
   });
 
   test('moveToStack moves a pane into a stack, or changes the order of tabs', () => {
-    for (const model of [binaryTree, naryTree]) {
+    for (const model of [naryTree]) {
       const store = new LayoutStore(
         row(
           'r',
           [1, 1, 1],
           [pane('a'), stack('s', 'b', [pane('b'), pane('c')]), pane('d')]
         ),
-        { model: naryTree }
+        { model }
       );
-      store.setModel(model);
       store.moveToStack('d', 'b');
       expect(ids(store.getSnapshot().root)).toEqual(['a', 'b', 'd', 'c']);
       expect(store.getSnapshot().focusedPane).toBe('d');
@@ -1009,10 +929,6 @@ describe('sizes in pixels and maximum sizes', () => {
       nextId
     );
     expect(sizesOf(nested)).toEqual([{ px: 100 }, { px: 200 }, 1]);
-    // The binary model nests a row of three; the place of the rest takes the
-    // weights of its children.
-    const binary = binaryTree.normalize(tree, nextId);
-    expect(sizesOf(binary)).toEqual([{ px: 240 }, 3]);
   });
 
   test('sizes in pixels save, restore, and change with setSizes', () => {
@@ -1354,7 +1270,7 @@ describe('tab order', () => {
   });
 
   test('moveTab puts a tab at an index among the other tabs, shows it, and focuses it', () => {
-    for (const model of [binaryTree, naryTree]) {
+    for (const model of [naryTree]) {
       const store = new LayoutStore(tree(), { model });
       const before = store.getSnapshot().root;
       store.moveTab('c', 0);

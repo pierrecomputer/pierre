@@ -16,7 +16,6 @@ import {
 } from '../../src';
 import { Layout, type PaneAction } from '../../src/react';
 import AgentPane from '../agent';
-import { ModelSelect } from '../model-select';
 import { ResizeSelect, type ResizeStrategy } from '../resize-select';
 import { AppOverlays } from './overlays';
 import { Sessions, useSessions } from './sessions';
@@ -42,7 +41,6 @@ const LABELS: Record<string, string> = {
 };
 
 // Every pane of the app, in place. A toggle hides a place or shows it again.
-// The binary model nests the row as sessions | (agent | (tools | files)).
 // The sessions and the files are sidebars: they keep their widths in pixels
 // when the window changes size, and the agent chat and the tools share the
 // rest. The files grow to 360 px at most.
@@ -256,13 +254,6 @@ export default function App(): JSX.Element {
           <span className="app-resize">
             Drag
             <ResizeSelect value={resize} onChange={setResize} />
-          </span>
-          <span className="app-resize">
-            Tree
-            <ModelSelect
-              value={store.getModel()}
-              onChange={(model) => store.setModel(model)}
-            />
           </span>
           <a href="/">Playground</a>
         </div>

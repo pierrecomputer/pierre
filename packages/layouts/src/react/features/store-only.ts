@@ -13,7 +13,7 @@ import type { Feature } from '../contract';
 
 /**
  * Split, close, move, and swap panes, with the rules of a tree model:
- * `edits(naryTree)` or `edits(binaryTree)`. The layout gives its trees the
+ * `edits(naryTree)`. The layout gives its trees the
  * shape of the model.
  */
 export function edits(model: TreeModel): Feature<EditCommands> {

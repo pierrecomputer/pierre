@@ -19,7 +19,6 @@ export {
   validateLayout,
   visibleTree,
 } from './model';
-export { binaryTree } from './models/binary';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
 export { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';

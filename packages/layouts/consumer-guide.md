@@ -55,9 +55,8 @@ drawer entries remain separate.
 and zoom. Parse untrusted data with `parseStoredLayoutTree(value, model)` before
 passing it to `store.setStoredTree(tree)`. Parsing rejects unknown fields and
 invalid nodes with `InvalidLayoutTreeError`, which includes the field path. The
-default parser model is `naryTree`; pass `binaryTree` when the consumer uses it.
-The existing `serialize` and `restore` methods still include local focus and
-zoom.
+default parser model is `naryTree`. The existing `serialize` and `restore`
+methods still include local focus and zoom.
 
 `defaultLayoutTree(tabIds)` creates one group, one pane, or `null` for an empty
 list. `reconcileLayoutTree(root, tabIds, model)` removes closed tabs and appends

@@ -17,7 +17,6 @@ import {
 } from '../src';
 import { Layout } from '../src/react';
 import '../src/styles.css';
-import { ModelSelect } from './model-select';
 import { ResizeSelect, type ResizeStrategy } from './resize-select';
 import './style.css';
 
@@ -25,7 +24,6 @@ function pane(id: string): PaneNode {
   return { type: 'pane', id, minWidth: 110, minHeight: 100 };
 }
 
-// The trees nest as binary trees, so that the binary model keeps their shape.
 // The n-ary model joins each split into a parent of the same direction.
 const mosaic: LayoutNode = {
   type: 'split',
@@ -371,11 +369,6 @@ function Playground(): JSX.Element {
         </button>
         <span>Resize drag</span>
         <ResizeSelect value={resize} onChange={setResize} />
-        <span>Tree model</span>
-        <ModelSelect
-          value={store.getModel()}
-          onChange={(model) => store.setModel(model)}
-        />
         <span className="demo-message" role="status">
           {message}
         </span>

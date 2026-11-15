@@ -332,36 +332,26 @@ collapsed panes. `restore` also accepts version 2, which has the same form
 without them, and version 1, where each split had `ratio`, `first`, and
 `second`; `fromBinaryLayout` converts such a tree.
 
-### Tree models
+### Tree model
 
 The tree model of the store sets the shape of the tree and how a split and a
-close change it. The geometry, the drag rules, and the view are the same for
-each model.
-
-- `binaryTree` (the default): each split has two children, and a split can hold
-  a split of the same direction. A split of a pane always puts a new split in
-  its place, and a close gives the space of the split to the sibling. A row of
-  three panes is a row in a row, so a drag of a separator also resizes every
-  pane of the subtree on the other side, and two rows that look the same can
-  behave differently.
-- `naryTree`: no split holds a split of the same direction, so each visual row
-  or column is one node. A split of a pane to its left or right, in a row, adds
-  the new pane to the row with half of the pane's size. A close gives the size
-  of a pane to the nearest visible child before it, or after it when there is
-  none. A drag of a separator changes only the panes beside it until one of them
-  reaches its minimum size.
+close change it. `naryTree` is the model, and the default: no split holds a
+split of the same direction, so each visual row or column is one node. A split
+of a pane to its left or right, in a row, adds the new pane to the row with half
+of the pane's size. A close gives the size of a pane to the nearest visible
+child before it, or after it when there is none. A drag of a separator changes
+only the panes beside it until one of them reaches its minimum size. The
+`TreeModel` interface is the seam for another model.
 
 ```ts
-import { binaryTree, LayoutStore, naryTree } from '@pierre/layouts';
+import { LayoutStore, naryTree } from '@pierre/layouts';
 
 const store = new LayoutStore(root, { model: naryTree });
-store.setModel(binaryTree); // Gives the tree the shape of the binary model.
 ```
 
 The store gives each tree that it receives the shape of its model: the n-ary
-model joins a split into a parent of the same direction, and the binary model
-nests the children after the first in new splits. A pane keeps its node, so its
-content does not render again.
+model joins a split into a parent of the same direction. A pane keeps its node,
+so its content does not render again.
 
 ### Stores with features
 

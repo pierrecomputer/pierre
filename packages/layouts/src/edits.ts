@@ -25,7 +25,7 @@ export interface EditCommands {
 }
 
 /**
- * The tree edits of a store, with the rules of a tree model: `binaryTree` or
+ * The tree edits of a store, with the rules of a tree model, such as
  * `naryTree`. The store also gives its trees the shape of the model.
  */
 export function edits(model: TreeModel): StoreFeature<EditCommands> {

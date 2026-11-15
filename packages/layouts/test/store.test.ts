@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  binaryTree,
   createLayoutStore,
   type Edge,
   edits,
@@ -69,10 +68,9 @@ describe('createLayoutStore', () => {
   });
 
   test('edits gives the store the tree model and the edit commands', () => {
-    const store = createLayoutStore(row, [edits(binaryTree)]);
-    // The binary model has two children in each split.
+    const store = createLayoutStore(row, [edits(naryTree)]);
     const root = store.getSnapshot().root;
-    expect(root.type === 'split' && root.children.length).toBe(2);
+    expect(root.type === 'split' && root.children.length).toBe(3);
     store.split('a', pane('d'), 'bottom');
     expect(ids(store.getSnapshot().root)).toEqual(['a', 'd', 'b', 'c']);
     expect(store.getSnapshot().focusedPane).toBe('d');
@@ -218,16 +216,5 @@ describe('LayoutStore over createLayoutStore', () => {
     store.move('a', 'c', 'right');
     expect(store.moves).toEqual(['a>c']);
     expect(ids(store.getSnapshot().root)).toEqual(['b', 'c', 'a']);
-  });
-
-  test('setModel changes the model of the edit commands', () => {
-    const store = new LayoutStore(row, { model: naryTree });
-    store.setModel(binaryTree);
-    expect(store.getModel()).toBe(binaryTree);
-    store.split('a', pane('d'), 'right');
-    const root = store.getSnapshot().root;
-    // The binary model puts the new pane in a new split of two.
-    expect(root.type === 'split' && root.children.length).toBe(2);
-    expect(ids(root)).toEqual(['a', 'd', 'b', 'c']);
   });
 });

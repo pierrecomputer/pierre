@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  binaryTree,
   InvalidLayoutTreeError,
   type LayoutNode,
   LayoutStore,
@@ -216,8 +215,5 @@ describe('the stored tree', () => {
       },
     };
     expect(parseStoredLayoutTree(row).root.type).toBe('split');
-    expect(() => parseStoredLayoutTree(row, binaryTree)).toThrow(
-      InvalidLayoutTreeError
-    );
   });
 });
