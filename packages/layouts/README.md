@@ -247,16 +247,20 @@ store.setCollapsed('terminal', true);
 
 ## Overlays
 
-`@pierre/layouts/overlays` (DOM) and `@pierre/layouts/react/overlays` (React)
-supply two overlays over the workspace: a modal and a drawer that slides in from
-an edge. An app that does not import them does not load them. Each overlay
-renders in the top layer and takes the box of the layout root as its area: a
-modal centers in the workspace and stays inside it, and a drawer fills one edge
-of it.
+`createModal` and `createDrawer` (DOM, from `@pierre/layouts`) and `Modal` and
+`Drawer` (React, from `@pierre/layouts/react`) supply two overlays over the
+workspace: a modal and a drawer that slides in from an edge. An app that does
+not import them does not bundle them. Each overlay renders in the top layer and
+takes the box of the layout root as its area: a modal centers in the workspace
+and stays inside it, and a drawer fills one edge of it.
+
+`Modal` and `Drawer` inject their sheet, as `Layout.Root` does, and take the
+same `stylesheets` prop. With `stylesheets={null}`, and with `createModal` and
+`createDrawer`, link `@pierre/layouts/overlays.css`. `styles.css` does not hold
+the overlay rules.
 
 ```tsx
-import { Drawer, Modal } from '@pierre/layouts/react/overlays';
-import '@pierre/layouts/overlays.css';
+import { Drawer, Modal } from '@pierre/layouts/react';
 
 const workspace = useRef<HTMLDivElement>(null);
 const trigger = useRef<HTMLButtonElement>(null);
@@ -300,18 +304,41 @@ const trigger = useRef<HTMLButtonElement>(null);
   overlays, so the app hides it there.
 - Both overlays animate their entry and exit with transforms and opacity on the
   compositor, and not at all with `prefers-reduced-motion: reduce`.
-- `experimentalStrategy` selects how the modal keeps the user in it, for the
-  comparison of the overlay exploration: `popover` (the default),
-  `dialog-hide-covered` (the covered panes stop rendering, then `showModal()`),
-  or `dialog` (`showModal()` alone). A `<dialog>` closes with no exit animation:
-  an animation that keeps it in the top layer after it closes runs on the main
-  thread.
 - The overlays' size comes from CSS. `--layout-workspace-width` and
   `--layout-workspace-height` on the overlay hold the workspace's size, and
   `--layout-drawer-size` sets the depth of a drawer (360 px by default).
 
 The `/app` demo has a modal ("Review changes") and a drawer ("Activity"). Its
-URL takes `?modal=popover|dialog-hide-covered|dialog` and `?backdrop=opaque`.
+URL takes `?backdrop=opaque`, and `?modal=popover|dialog-hide-covered|dialog`,
+which selects an internal strategy of the modal for the comparison of the
+overlay exploration.
+
+### Cover a layout with any overlay
+
+A dialog, a popover, or a drawer of the app, or of any other library, can cover
+the panes of a layout as `Modal` and `Drawer` do. Call
+`coverLayout(layout, overlay, options)` from `@pierre/layouts` when the overlay
+opens, and call the release that it returns when its close starts, so that the
+panes render under its exit. In React,
+`Layout.useCover(layout, overlayRef, open, options)` does the same while `open`
+is true; `layout` is the layout object of `Layout.Root`, or a ref of the layout
+element.
+
+```tsx
+const dialog = useRef<HTMLDialogElement>(null);
+Layout.useCover(layout, dialog, open, { area: 'all' });
+```
+
+- A pane inside the overlay's box stops rendering until the release: its host
+  gets `data-overlay-covered` and `content-visibility: hidden`, and receives
+  `PANE_VISIBILITY_EVENT`. A pane under two overlays renders again after both
+  release it.
+- `area: 'all'` covers every pane at once, for an opaque backdrop or a modal
+  `<dialog>`, whose `showModal()` makes the page inert. The cover comes first,
+  so the covered content gets no new style.
+- `onCover({ covered, overlapped })` and `OVERLAY_COVER_EVENT` on the layout
+  element report the panes inside the overlay's box and the panes that it
+  crosses, when they change and at the release.
 
 ## Model and state
 

@@ -35,6 +35,7 @@ const ENTRIES: Record<string, string> = {
   '@pierre/layouts': 'src/index.ts',
   '@pierre/layouts/react': 'src/react/index.tsx',
   '@pierre/layouts/styles.css': 'src/styles.css',
+  '@pierre/layouts/overlays.css': 'src/overlays.css',
 };
 
 // Each consumer is the module of an app that imports what the app uses, from

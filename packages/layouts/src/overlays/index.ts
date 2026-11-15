@@ -16,7 +16,7 @@ export {
  * position from the box of the layout root.
  *
  * An overlay hides the panes that it covers completely. Their hosts get
- * `data-overlay-covered` (`content-visibility: hidden` in `overlays.css`) and
+ * `data-overlay-covered` (`content-visibility: hidden` in the split sheet) and
  * `inert` in one style update, so their content skips style, layout, and
  * paint while the overlay is open, as the panes under a zoomed pane do. Each
  * change of cover goes to the app as `OVERLAY_COVER_EVENT` on the layout root:

@@ -10,7 +10,6 @@ import {
   useRef,
 } from 'react';
 
-import overlaysCss from '../css/overlays.css?inline';
 import {
   createDrawer,
   createModal,
@@ -19,6 +18,7 @@ import {
   type OverlayEdge,
   type OverlayHandle,
 } from '../overlays';
+import overlaysCss from '../overlays.css?inline';
 import { Style, type StylesheetsSetting } from './contract';
 
 interface OverlayProps {
