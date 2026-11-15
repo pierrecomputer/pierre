@@ -41,6 +41,7 @@ export {
 export { corners } from './features/corners';
 export { focusRing } from './features/focus-ring';
 export { paneDrag } from './features/pane-drag';
+export { stacks } from './features/stacks';
 export { edits, hiddenPanes, persistence } from './features/store-only';
 export { zoom } from './features/zoom';
 export {
@@ -66,6 +67,13 @@ export {
   type ZoomButtonState,
 } from './parts/chrome';
 export type { PartProps, RenderProp } from './parts/part';
+export {
+  Tab,
+  TabList,
+  type TabListItemState,
+  type TabListProps,
+  type TabState,
+} from './parts/tabs';
 export { type LayoutSeparator, Root, type RootProps } from './root';
 export { useControlledLayout } from './use-controlled-layout';
 export { type PaneState, usePane } from './use-pane';

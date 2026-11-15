@@ -24,7 +24,6 @@ import type {
   LayoutState,
   PaneNode,
   SeparatorGeometry,
-  StackNode,
 } from '../types';
 
 /** The start of a resize, for `onResizeStart`. */
@@ -131,6 +130,8 @@ export interface LayoutMessages {
   readonly move?: (title: string, edge: Edge, target: string) => string;
   /** The name of a corner of `corners()`. Default: "Resize both axes". */
   readonly corner?: string;
+  /** The name of `Layout.TabList`. Default: "Tabs of Editor". */
+  readonly tabs?: (title: string) => string;
 }
 
 /** A layout object: the store, with the features of the layout. */
@@ -242,8 +243,8 @@ export interface FeatureHooks {
   ): Readonly<Record<string, unknown>>;
   /** For `Tab`: show a tab, and give it the focus after the change. */
   selectTab?(id: string): void;
-  /** For `TabList`: a pane outside a stack has a tab strip of one tab. */
-  loneTabStrip?: boolean;
+  /** For `Tab`: move a tab to an index among the tabs of its stack, and keep the focus on it. */
+  moveTab?(id: string, index: number): void;
 }
 
 /**
@@ -276,11 +277,10 @@ export interface PaneContextValue {
 export const PaneContext: Context<PaneContextValue | null> =
   /* @__PURE__ */ createContext<PaneContextValue | null>(null);
 
-/** The tab of a `Tab`, from its `TabList`. */
+/** The tab of a `Tab`, from its `TabList`: its pane, and the tabs that show in the list. */
 export interface TabContextValue {
   readonly tab: PaneNode;
   readonly tabs: readonly PaneNode[];
-  readonly stack: StackNode | null;
 }
 
 export const TabContext: Context<TabContextValue | null> =

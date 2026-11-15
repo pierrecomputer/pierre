@@ -10,7 +10,8 @@ import type { LayoutNode, PaneNode, TabOptions } from './types';
 export interface StackCommands {
   /**
    * Show a pane of a stack. It takes the focus, and the zoom when the zoomed
-   * pane is in the same stack.
+   * pane is in the same stack. A pane outside a stack, whose tab is its own,
+   * takes the focus.
    */
   activate(id: string): void;
   /**
@@ -50,9 +51,14 @@ export const stacks: StoreFeature<StackCommands> = {
     activate(id) {
       requirePane(id);
       const state = get();
-      if (stackOf(state.root, id) === null)
-        throw new Error(`Pane not in a stack: ${id}`);
-      commit({ ...state, root: activatePane(state.root, id), focusedPane: id });
+      if (stackOf(state.root, id) === null) {
+        if (state.focusedPane !== id) commit({ ...state, focusedPane: id });
+      } else
+        commit({
+          ...state,
+          root: activatePane(state.root, id),
+          focusedPane: id,
+        });
     },
     addTab(targetId, pane, index, options = {}) {
       requirePane(targetId);

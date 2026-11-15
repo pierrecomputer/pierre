@@ -756,7 +756,10 @@ describe('stacks', () => {
     expect(next.root.type === 'split' && next.root.children[0]).toBe(
       before.type === 'split' && before.children[0]
     );
-    expect(() => store.activate('a')).toThrow();
+    // A pane outside a stack has its own tab: `activate` focuses it.
+    store.activate('a');
+    expect(store.getSnapshot().focusedPane).toBe('a');
+    expect(store.getSnapshot().zoomedPane).toBe('c');
     // A zoom of a pane that does not show makes it active.
     store.toggleZoom('c');
     store.toggleZoom('b');
