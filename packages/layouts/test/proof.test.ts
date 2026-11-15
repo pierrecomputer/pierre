@@ -13,12 +13,12 @@ import { brotliCompressSync, constants } from 'node:zlib';
 const PACKAGE = join(import.meta.dir, '..');
 
 // The budget of app A, with its CSS, for each build that the test measures
-// (`DEC-layouts-modular-size-budget`, the values after step 14 of
-// `refactor-entries-feature-modules`). Bytes, minified and brotli.
+// (`DEC-layouts-modular-size-budget`, the values after the store operations of
+// `explore-store-operations-on-commit`). Bytes, minified and brotli.
 const BUDGET = {
-  'two-pane source': { minified: 27_000, brotli: 9_015 },
-  'two-pane rolldown': { minified: 26_998, brotli: 9_031 },
-  'two-pane esbuild': { minified: 27_409, brotli: 9_616 },
+  'two-pane source': { minified: 28_230, brotli: 9_569 },
+  'two-pane rolldown': { minified: 28_229, brotli: 9_576 },
+  'two-pane esbuild': { minified: 28_644, brotli: 10_230 },
 } as const;
 
 interface Output {
