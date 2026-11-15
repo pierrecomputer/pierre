@@ -85,13 +85,7 @@ export {
   type CoverOptions,
   coverLayout,
   coverOf,
-  createDrawer,
-  createModal,
-  type DrawerOptions,
-  type ModalOptions,
   OVERLAY_COVER_EVENT,
   type OverlayCover,
   type OverlayCoverEvent,
-  type OverlayEdge,
-  type OverlayHandle,
-} from './overlays';
+} from './overlays/cover';

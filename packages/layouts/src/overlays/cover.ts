@@ -1,8 +1,7 @@
 // The cover of a layout by an overlay: any dialog, popover, or drawer of an
-// app, and the library's own `Modal` and `Drawer`. The panes that the overlay
-// covers completely stop rendering until the release, and the layout element
-// reports the covered and the overlapped panes. This module imports nothing
-// from the store or the geometry.
+// app. The panes that the overlay covers completely stop rendering until the
+// release, and the layout element reports the covered and the overlapped
+// panes. This module imports nothing from the store or the geometry.
 import { PANE_VISIBILITY_EVENT } from '../dom/pane-visibility-event';
 import { OVERLAY, type PaneVisibility, visibilityOf } from '../dom/visibility';
 
@@ -33,16 +32,6 @@ export interface CoverOptions {
   readonly area?: 'box' | 'all';
   /** Called when the covered or the overlapped panes change, and with no panes at the release. */
   readonly onCover?: (cover: OverlayCover) => void;
-}
-
-/** The options of the library's own overlays. */
-export interface CoverControl extends CoverOptions {
-  /** False: report the panes, and hide none (the reference of the bench). */
-  readonly hide?: boolean;
-  /** Cover every pane at once, then only the panes of the box after the first layout. */
-  readonly allFirst?: boolean;
-  /** Place the overlay over the workspace before each measure. */
-  place?(workspace: DOMRect): void;
 }
 
 interface Box {
@@ -83,7 +72,7 @@ export function coverOf(
 }
 
 /** The layout element: the element itself, or the first `.pierre-layout` inside it. */
-export function layoutRootOf(element: HTMLElement): HTMLElement {
+function layoutRootOf(element: HTMLElement): HTMLElement {
   if (element.classList.contains('pierre-layout')) return element;
   return element.querySelector<HTMLElement>('.pierre-layout') ?? element;
 }
@@ -164,11 +153,19 @@ function coverPane(
 const sameList = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
-/** The cover of the library's own overlays; `coverLayout` is its public form. */
-export function startCover(
+/**
+ * Start to cover the panes of a layout with an overlay element: any dialog,
+ * popover, or drawer of the app. The panes that the overlay covers completely
+ * stop rendering until the release, and the layout element receives
+ * `OVERLAY_COVER_EVENT` with the covered and the overlapped panes. Call it
+ * when the overlay opens, and call the release when its close starts, so that
+ * the panes render under its exit. A pane under two overlays renders again
+ * after both release it.
+ */
+export function coverLayout(
   layout: HTMLElement,
   overlay: HTMLElement,
-  control: CoverControl
+  options: CoverOptions = {}
 ): () => void {
   const root = layoutRootOf(layout);
   const token = {};
@@ -181,7 +178,7 @@ export function startCover(
     )
       return;
     cover = next;
-    control.onCover?.(next);
+    options.onCover?.(next);
     root.dispatchEvent(
       new CustomEvent(OVERLAY_COVER_EVENT, { detail: { ...next, overlay } })
     );
@@ -191,7 +188,6 @@ export function startCover(
     hosts: readonly HTMLElement[],
     ids: ReadonlySet<string>
   ) => {
-    if (control.hide === false) return;
     for (const host of hosts) {
       const id = paneIdOf(host);
       if (ids.has(id) && !hidden.has(id)) {
@@ -207,12 +203,11 @@ export function startCover(
   };
   const update = (): void => {
     const workspace = root.getBoundingClientRect();
-    control.place?.(workspace);
     const hosts = paneHostsOf(root).filter(shows);
     // Offsets ignore the transforms of running animations, so these are the
     // boxes at the end of them.
     const next =
-      control.area === 'all'
+      options.area === 'all'
         ? { covered: hosts.map(paneIdOf), overlapped: [] }
         : coverOf(
             hosts.map((host) => ({
@@ -234,10 +229,10 @@ export function startCover(
     hideOnly([...hosts, ...hidden.values()], new Set(next.covered));
     report(next);
   };
-  // Every pane stops rendering before the overlay shows, so that a modal
-  // `<dialog>` that makes the page inert gives the covered content no new
-  // style.
-  if (control.area === 'all' || control.allFirst === true) {
+  // With `area: 'all'`, every pane stops rendering before the overlay shows,
+  // so that a modal `<dialog>` that makes the page inert gives the covered
+  // content no new style.
+  if (options.area === 'all') {
     const hosts = paneHostsOf(root).filter(shows);
     hideOnly(hosts, new Set(hosts.map(paneIdOf)));
   }
@@ -252,21 +247,4 @@ export function startCover(
     hidden.clear();
     report(NO_COVER);
   };
-}
-
-/**
- * Start to cover the panes of a layout with an overlay element: any dialog,
- * popover, or drawer of the app. The panes that the overlay covers completely
- * stop rendering until the release, and the layout element receives
- * `OVERLAY_COVER_EVENT` with the covered and the overlapped panes. Call it
- * when the overlay opens, and call the release when its close starts, so that
- * the panes render under its exit. A pane under two overlays renders again
- * after both release it.
- */
-export function coverLayout(
-  layout: HTMLElement,
-  overlay: HTMLElement,
-  options: CoverOptions = {}
-): () => void {
-  return startCover(layout, overlay, options);
 }

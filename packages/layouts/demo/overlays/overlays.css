@@ -1,10 +1,9 @@
 @layer pierre-layouts {
-  /* Overlays over a layout (`createModal`, `createDrawer`, `Layout.Modal`, and
-     `Layout.Drawer`). It is not in `styles.css`: `Modal` and `Drawer` inject
-     it, and an app that links its sheets links `@pierre/layouts/overlays.css`.
-     The script sets the insets of each overlay from the workspace's box, and
-     the custom properties `--layout-workspace-width` and
-     `--layout-workspace-height` on the overlay. */
+  /* The reference overlays of the demo and the bench (`createModal`,
+     `createDrawer`, `Modal`, and `Drawer` in this folder). The script sets the
+     insets of each overlay from the workspace's box, and the custom
+     properties `--layout-workspace-width` and `--layout-workspace-height` on
+     the overlay. */
 
   .pierre-overlay {
     box-sizing: border-box;

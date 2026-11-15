@@ -74,13 +74,11 @@ export {
 } from './parts/tabs';
 export { type LayoutSeparator, Root, type RootProps } from './root';
 export { useControlledLayout } from './use-controlled-layout';
-export { Drawer, type DrawerProps, Modal, type ModalProps } from './overlays';
 export { useCover } from './use-cover';
 export {
   type CoverOptions,
   OVERLAY_COVER_EVENT,
   type OverlayCover,
   type OverlayCoverEvent,
-  type OverlayEdge,
-} from '../overlays';
+} from '../overlays/cover';
 export { type PaneState, usePane } from './use-pane';

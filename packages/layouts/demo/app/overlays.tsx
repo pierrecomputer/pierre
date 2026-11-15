@@ -1,7 +1,7 @@
 import { type JSX, type RefObject, useId, useRef, useState } from 'react';
 
-import { type ModalStrategy, setModalStrategy } from '../../src/overlays';
-import { Drawer, Modal } from '../../src/react';
+import { type ModalStrategy, setModalStrategy } from '../overlays/overlays';
+import { Drawer, Modal } from '../overlays/react';
 
 // `?modal=popover|dialog-hide-covered|dialog` and `?backdrop=opaque` select
 // the variant of the modal, for the comparison and its e2e tests.

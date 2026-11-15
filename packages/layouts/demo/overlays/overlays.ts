@@ -1,30 +1,24 @@
-import { layoutRootOf, type OverlayCover, startCover } from './cover';
-
-export {
-  type CoverOptions,
-  coverLayout,
-  coverOf,
-  OVERLAY_COVER_EVENT,
-  type OverlayCover,
-  type OverlayCoverEvent,
-} from './cover';
+import { coverLayout, type CoverOptions, type OverlayCover } from '../../src';
 
 /**
- * Overlays over a layout: a modal over the workspace and a drawer that slides
- * in from an edge of it. Each overlay renders in the top layer, so that no
- * pane, transform, or clip of the layout can hide it, and it takes its
- * position from the box of the layout root.
+ * The reference overlays of the demo and the bench, on the cover API of the
+ * library (`DEC-layouts-overlay-boundary`): a modal over the workspace and a
+ * drawer that slides in from an edge of it. An app writes its own overlays in
+ * the same way. Each overlay renders in the top layer, so that no pane,
+ * transform, or clip of the layout can hide it, and it takes its position
+ * from the box of the layout root.
  *
- * An overlay hides the panes that it covers completely. Their hosts get
- * `data-overlay-covered` (`content-visibility: hidden` in the split sheet) and
- * `inert` in one style update, so their content skips style, layout, and
- * paint while the overlay is open, as the panes under a zoomed pane do. Each
- * change of cover goes to the app as `OVERLAY_COVER_EVENT` on the layout root:
- * a native view in a pane, such as an Electron view, paints over DOM overlays,
- * and only the app can move it.
+ * An overlay covers the layout with `coverLayout`: the panes inside its box
+ * stop rendering until the close, and the layout root receives
+ * `OVERLAY_COVER_EVENT` with the covered and the overlapped panes. A native
+ * view in a pane, such as an Electron view, paints over DOM overlays, and
+ * only the app can move it.
  *
- * This module imports nothing from the store or the geometry, so an app loads
- * it only when it imports overlays.
+ * The modal is a `manual` popover with `role="dialog"`, `aria-modal`, a focus
+ * trap, `aria-hidden` on the page outside it, and a shield that takes the
+ * pointer. A modal `<dialog>` from `showModal()` makes the page inert, and
+ * Chromium then gives each element that renders a new style: about 300 ms at
+ * 16 panes of real content, at the open and again at the close.
  */
 
 export type OverlayEdge = 'left' | 'right' | 'top' | 'bottom';
@@ -102,6 +96,12 @@ export interface DrawerOptions extends OverlayOptions {
    * DOM, so that the Tab order goes from the button into the drawer.
    */
   trigger?: HTMLElement | null;
+}
+
+/** The layout element: the element itself, or the first `.pierre-layout` inside it. */
+function layoutRootOf(element: HTMLElement): HTMLElement {
+  if (element.classList.contains('pierre-layout')) return element;
+  return element.querySelector<HTMLElement>('.pierre-layout') ?? element;
 }
 
 const ANIMATION_ID = 'pierre-layout-overlay';
@@ -236,6 +236,52 @@ function hideOutside(element: HTMLElement): () => void {
   };
 }
 
+/** Keep an overlay over the workspace while the workspace changes size. */
+function placeOnResize(
+  root: HTMLElement,
+  element: HTMLElement,
+  edge: OverlayEdge | null
+): () => void {
+  const observer = new ResizeObserver(() =>
+    placeOverWorkspace(element, root.getBoundingClientRect(), edge)
+  );
+  observer.observe(root);
+  return () => observer.disconnect();
+}
+
+/**
+ * Cover the panes under an overlay with `coverLayout`. With `allFirst`, every
+ * pane stops rendering at once, and the panes outside the overlay's box show
+ * again after the first layout, when the cover of the box has run: a modal
+ * `<dialog>` that makes the page inert needs this, so that the covered content
+ * gets no new style. A pane under two covers renders again after both release
+ * it.
+ */
+function coverPanes(
+  root: HTMLElement,
+  element: HTMLElement,
+  allFirst: boolean,
+  options: CoverOptions
+): () => void {
+  let releaseAll = allFirst
+    ? coverLayout(root, element, { area: 'all' })
+    : null;
+  const release = coverLayout(root, element, options);
+  // Resize observers run in the order of their creation, so this one runs
+  // after the first update of the cover of the box.
+  const after = new ResizeObserver(() => {
+    releaseAll?.();
+    releaseAll = null;
+    after.disconnect();
+  });
+  if (releaseAll !== null) after.observe(element);
+  return () => {
+    after.disconnect();
+    releaseAll?.();
+    release();
+  };
+}
+
 interface OverlayBehavior {
   /** Put the element in the top layer, and move the focus into it. */
   show(): void;
@@ -324,13 +370,17 @@ class Overlay {
     placeOverWorkspace(this.element, root.getBoundingClientRect(), edge);
     // The cover starts before the overlay shows, so that the panes that it
     // hides at once stop rendering first.
-    this.release = startCover(root, this.element, {
-      area: this.behavior.coversAll ? 'all' : 'box',
-      allFirst: this.behavior.hidesAllFirst,
-      hide: this.behavior.hidesCovered,
-      onCover: (cover) => this.options.onCover?.(cover),
-      place: (workspace) => placeOverWorkspace(this.element, workspace, edge),
-    });
+    const unplace = placeOnResize(root, this.element, edge);
+    const uncover = this.behavior.hidesCovered
+      ? coverPanes(root, this.element, this.behavior.hidesAllFirst, {
+          area: this.behavior.coversAll ? 'all' : 'box',
+          onCover: (cover) => this.options.onCover?.(cover),
+        })
+      : null;
+    this.release = () => {
+      unplace();
+      uncover?.();
+    };
     this.behavior.show();
     this.shown = true;
     this.entry = this.animate();

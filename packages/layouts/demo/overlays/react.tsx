@@ -10,16 +10,15 @@ import {
   useRef,
 } from 'react';
 
+import './overlays.css';
+import type { OverlayCover } from '../../src';
 import {
   createDrawer,
   createModal,
   modalStrategy,
-  type OverlayCover,
   type OverlayEdge,
   type OverlayHandle,
-} from '../overlays';
-import overlaysCss from '../overlays.css?inline';
-import { Style, type StylesheetsSetting } from './contract';
+} from './overlays';
 
 interface OverlayProps {
   /** Whether the overlay shows. Escape and `onClose` ask the app to set it to false. */
@@ -36,8 +35,6 @@ interface OverlayProps {
   labelledBy?: string;
   className?: string;
   style?: CSSProperties;
-  /** The sheet of the overlays, as the `stylesheets` prop of `Root`. */
-  stylesheets?: StylesheetsSetting;
   children?: ReactNode;
 }
 
@@ -117,7 +114,7 @@ function useOverlay(
  * A modal over the workspace: a `manual` popover with `role="dialog"` and
  * `aria-modal`, which keeps the focus and hides the rest of the page from
  * assistive technology. It covers the panes in its box with `coverLayout`,
- * and renders its sheet.
+ *.
  */
 export function Modal(props: ModalProps): JSX.Element {
   const {
@@ -126,7 +123,6 @@ export function Modal(props: ModalProps): JSX.Element {
     labelledBy,
     className,
     style,
-    stylesheets,
     children,
   } = props;
   // The bench compares other strategies; an app gets the popover.
@@ -144,13 +140,9 @@ export function Modal(props: ModalProps): JSX.Element {
     'aria-labelledby': labelledBy,
     'data-backdrop': backdrop,
   };
-  const sheet = (
-    <Style name="overlays" css={overlaysCss} settings={stylesheets} />
-  );
   // The strategy decides the element, so a change of strategy mounts a new one.
   return strategy === 'popover' ? (
     <>
-      {sheet}
       <div
         key="popover"
         ref={ref as RefObject<HTMLDivElement | null>}
@@ -164,7 +156,6 @@ export function Modal(props: ModalProps): JSX.Element {
     </>
   ) : (
     <>
-      {sheet}
       <dialog
         key="dialog"
         ref={ref as RefObject<HTMLDialogElement | null>}
@@ -178,20 +169,11 @@ export function Modal(props: ModalProps): JSX.Element {
 
 /**
  * A non-modal drawer that slides in from an edge of the workspace, as a
- * `manual` popover. The panes that it covers completely stop rendering. It
- * renders its sheet.
+ * `manual` popover. The panes that it covers completely stop rendering.
  */
 export function Drawer(props: DrawerProps): JSX.Element {
-  const {
-    edge,
-    trigger,
-    label,
-    labelledBy,
-    className,
-    style,
-    stylesheets,
-    children,
-  } = props;
+  const { edge, trigger, label, labelledBy, className, style, children } =
+    props;
   const ref = useOverlay(
     props,
     (element, layout, callbacks) =>
@@ -205,7 +187,6 @@ export function Drawer(props: DrawerProps): JSX.Element {
   );
   return (
     <>
-      <Style name="overlays" css={overlaysCss} settings={stylesheets} />
       <div
         ref={ref as RefObject<HTMLDivElement | null>}
         role="dialog"

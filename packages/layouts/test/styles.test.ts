@@ -32,10 +32,7 @@ describe('stylesheets', () => {
   });
 
   test('every rule of a sheet is in the pierre-layouts layer', () => {
-    for (const path of [
-      ...SHEETS.map((name) => `css/${name}`),
-      'overlays.css',
-    ]) {
+    for (const path of SHEETS.map((name) => `css/${name}`)) {
       const text = read(path)
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .trim();

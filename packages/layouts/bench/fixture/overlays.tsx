@@ -1,7 +1,10 @@
 import { type JSX, type RefObject } from 'react';
 
-import { type ModalStrategy, setModalStrategy } from '../../src/overlays';
-import { Drawer, Modal } from '../../src/react';
+import {
+  type ModalStrategy,
+  setModalStrategy,
+} from '../../demo/overlays/overlays';
+import { Drawer, Modal } from '../../demo/overlays/react';
 
 /** The open state of the fixture's overlays. */
 export interface OverlayState {
