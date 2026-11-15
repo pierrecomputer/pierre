@@ -45,6 +45,25 @@ export interface PaneVisibility {
   set(id: string, mask: number, reasons: number): void;
   /** Call `listener` after the reasons of any pane change. */
   subscribe(listener: () => void): () => void;
+  /** Drop every entry of the panes that are not in `panes`. */
+  forget(panes: ReadonlySet<string>): void;
+}
+
+// In development, the maps of each visibility module, for the tests of
+// `forget`.
+const developmentMaps = /* @__PURE__ */ new WeakMap<
+  PaneVisibility,
+  readonly Map<string, unknown>[]
+>();
+
+/**
+ * The IDs of the panes that a visibility module keeps an entry for. Tests
+ * read it in a development build; in a production build it is empty.
+ */
+export function visibilityIds(visibility: PaneVisibility): Set<string> {
+  return new Set(
+    (developmentMaps.get(visibility) ?? []).flatMap((map) => [...map.keys()])
+  );
 }
 
 /** Set an attribute to `true`, or remove it, only when it changes. */
@@ -110,7 +129,8 @@ export function createPaneVisibility(): PaneVisibility {
     }
     return ref;
   };
-  return {
+  const maps = [reasons, hosts, contents, hostRefs, contentRefs];
+  const visibility: PaneVisibility = {
     hostRef: (id) => refOf(hostRefs, hosts, id),
     contentRef: (id) => refOf(contentRefs, contents, id),
     reasons: (id) => reasons.get(id) ?? 0,
@@ -134,5 +154,12 @@ export function createPaneVisibility(): PaneVisibility {
         listeners.delete(listener);
       };
     },
+    forget(panes) {
+      for (const map of maps)
+        for (const id of map.keys()) if (!panes.has(id)) map.delete(id);
+    },
   };
+  if (process.env.NODE_ENV !== 'production')
+    developmentMaps.set(visibility, maps);
+  return visibility;
 }

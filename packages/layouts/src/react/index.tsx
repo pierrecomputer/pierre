@@ -16,6 +16,8 @@ export type { PaneEdges } from '../css-layout';
 export type { DropPlace } from '../drop';
 export { binaryTree } from '../models/binary';
 export { naryTree } from '../models/n-ary';
+export { type Presentation, presentation } from '../presentation';
+export type { ZoomCommands } from '../zoom';
 export type {
   Feature,
   FeatureHooks,
@@ -36,7 +38,9 @@ export {
   type FeatureCommands,
   type LayoutObject,
 } from './create-layout';
+export { focusRing } from './features/focus-ring';
 export { edits, hiddenPanes, persistence } from './features/store-only';
+export { zoom } from './features/zoom';
 export {
   Layout,
   type LayoutProps,
@@ -54,14 +58,10 @@ export {
   Header,
   type HeaderState,
   Title,
+  ZoomButton,
+  type ZoomButtonState,
 } from './parts/chrome';
 export type { PartProps, RenderProp } from './parts/part';
-export {
-  type LayoutSeparator,
-  Root,
-  type RootCommonProps,
-  type RootControlledProps,
-  type RootLayoutProps,
-  type RootProps,
-} from './root';
+export { type LayoutSeparator, Root, type RootProps } from './root';
+export { useControlledLayout } from './use-controlled-layout';
 export { type PaneState, usePane } from './use-pane';

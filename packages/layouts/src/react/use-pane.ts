@@ -5,8 +5,14 @@
 // the layout once for all the components of the pane.
 import { useContext, useRef, useSyncExternalStore } from 'react';
 
-import type { CSSLayout, CSSPane, PaneEdges } from '../css-layout';
+import {
+  ALL_EDGES,
+  type CSSLayout,
+  type CSSPane,
+  type PaneEdges,
+} from '../css-layout';
 import { HOST_HIDDEN } from '../dom/visibility';
+import { presentation } from '../presentation';
 import { treeIndex } from '../tree-index';
 import type { LayoutState, PaneNode } from '../types';
 import { PaneContext, type PaneContextValue } from './contract';
@@ -26,7 +32,7 @@ export interface PaneState {
   readonly zoomed: boolean;
   /** The pane, or its stack, is collapsed. */
   readonly collapsed: boolean;
-  /** The edges of the layout that the pane touches. */
+  /** The edges of the layout that the pane touches: all of them when it is zoomed. */
   readonly edges: PaneEdges;
   /** The panes of the stack of the pane, in the order of their tabs, or the pane alone. */
   readonly tabs: readonly PaneNode[];
@@ -109,15 +115,17 @@ function paneStoreOf(value: PaneContextValue): PaneStore {
     if (entry === undefined && current !== null) return current;
     const pane = entry?.pane ?? { type: 'pane', id };
     const stack = entry?.stack ?? null;
-    const edges =
-      cssPaneOf(context.cssLayoutOf(nextState.root), id)?.edges ?? NO_EDGES;
+    const zoomed = presentation(nextState).filled === id;
+    const edges = zoomed
+      ? ALL_EDGES
+      : (cssPaneOf(context.cssLayoutOf(nextState.root), id)?.edges ?? NO_EDGES);
     const tabs = stack?.children ?? [pane];
     const next: PaneState = {
       id,
       pane,
       shown: (nextReasons & HOST_HIDDEN) === 0,
       focused: nextState.focusedPane === id,
-      zoomed: nextState.zoomedPane === id,
+      zoomed,
       collapsed: (stack ?? pane).collapsed === true,
       edges:
         current !== null && sameEdges(current.edges, edges)

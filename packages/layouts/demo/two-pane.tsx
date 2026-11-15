@@ -13,7 +13,7 @@ import {
   replaceNode,
 } from '../src';
 import * as Layout from '../src/react';
-import { createLayout } from '../src/react';
+import { createLayout, useControlledLayout } from '../src/react';
 
 const params = new URLSearchParams(location.search);
 const controlledForm = params.get('form') === 'controlled';
@@ -73,9 +73,10 @@ const report = (sizes: Readonly<Record<string, readonly ChildSize[]>>) => {
 // The controlled form: the app owns the tree and applies each resize.
 function Controlled(): JSX.Element {
   const [root, setRoot] = useState(initial);
+  const layout = useControlledLayout(root);
   return (
     <Layout.Root
-      root={root}
+      layout={layout}
       renderPane={renderPane}
       messages={MESSAGES}
       stylesheets={stylesheets}

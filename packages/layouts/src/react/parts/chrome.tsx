@@ -7,6 +7,7 @@ import type { JSX } from 'react';
 
 import contentCss from '../../css/content.css?inline';
 import headersCss from '../../css/headers.css?inline';
+import type { ZoomCommands } from '../../zoom';
 import { Style } from '../contract';
 import { usePaneContext, usePaneState } from '../use-pane';
 import { canClose, closePane, closes } from './close';
@@ -177,5 +178,41 @@ export function CloseButton({
       children: children ?? '×',
     }),
     { disabled }
+  );
+}
+
+export interface ZoomButtonState {
+  zoomed: boolean;
+}
+
+const zoomName = (title: string, zoomed: boolean): string =>
+  `${zoomed ? 'Restore' : 'Zoom'} ${title}`;
+
+/** Zoom the pane, or restore the layout. It needs `zoom()`. */
+export function ZoomButton({
+  render,
+  children,
+  ...props
+}: PartProps<ZoomButtonState>): JSX.Element {
+  const value = usePaneContext('Layout.ZoomButton');
+  const { id, context } = value;
+  warnMissing(context.has('zoom'), 'Layout.ZoomButton', 'zoom()');
+  const pane = usePaneState(value, (state) => state.pane);
+  const zoomed = usePaneState(value, (state) => state.zoomed);
+  return renderPart(
+    'button',
+    render,
+    mergeProps(props, {
+      type: 'button',
+      'aria-label': (context.messages().zoom ?? zoomName)(
+        context.title(pane),
+        zoomed
+      ),
+      'aria-pressed': zoomed,
+      'data-zoomed': zoomed || undefined,
+      onClick: () => (context.store as Partial<ZoomCommands>).toggleZoom?.(id),
+      children: children ?? (zoomed ? '↙' : '↗'),
+    }),
+    { zoomed }
   );
 }

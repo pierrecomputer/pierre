@@ -1,8 +1,8 @@
 // Persistence: the store commands that save a layout and restore it. The saved
 // form has version 3; `restore` also reads versions 2 and 1.
-import { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
+import { parseSerializedLayout } from './persistence-model';
 import type { StoreFeature } from './store';
-import type { LayoutNode, LayoutState, StoredLayoutTree } from './types';
+import type { StoredLayoutTree } from './types';
 
 export interface PersistenceCommands {
   /** The tree, the focus, and the zoom, as JSON of version 3. */
@@ -18,37 +18,6 @@ export interface PersistenceCommands {
   toStoredTree(): StoredLayoutTree;
   /** Set the tree of a stored tree. The focus and the zoom stay. */
   setStoredTree(tree: StoredLayoutTree): void;
-}
-
-/**
- * Read a layout from `serialize`, of version 1, 2, or 3. Throw when the value
- * does not have the form of a saved layout.
- */
-export function parseSerializedLayout(serialized: string): LayoutState {
-  const value: unknown = JSON.parse(serialized);
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    !('version' in value) ||
-    (value.version !== 1 && value.version !== 2 && value.version !== 3) ||
-    !('root' in value) ||
-    value.root === null ||
-    typeof value.root !== 'object' ||
-    !('focusedPane' in value) ||
-    typeof value.focusedPane !== 'string' ||
-    !('zoomedPane' in value) ||
-    (value.zoomedPane !== null && typeof value.zoomedPane !== 'string')
-  ) {
-    throw new Error('Invalid layout state');
-  }
-  return {
-    root:
-      value.version === 1
-        ? fromBinaryLayout(value.root as BinaryLayoutNode)
-        : (value.root as LayoutNode),
-    focusedPane: value.focusedPane,
-    zoomedPane: value.zoomedPane,
-  };
 }
 
 /** The save and restore commands of a store. */

@@ -40,6 +40,15 @@ export function createLayout<const F extends readonly Feature[] = []>(
   features?: F
 ): LayoutObject<F> {
   const list = features ?? ([] as unknown as F);
+  if (process.env.NODE_ENV !== 'production') {
+    const names = new Set(list.map((feature) => feature.name));
+    for (const feature of list)
+      for (const name of feature.requires ?? [])
+        if (!names.has(name))
+          console.warn(
+            `@pierre/layouts: the feature ${feature.name} needs the feature ${name} in the same layout.`
+          );
+  }
   const stores: StoreFeature[] = [];
   for (const feature of list)
     if (feature.store !== undefined) stores.push(feature.store);

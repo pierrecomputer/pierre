@@ -7,18 +7,22 @@ import type { Edge, Rect } from './types';
 export interface ZoomCommands {
   /**
    * Zoom a pane, the focused pane by default, or restore it. A pane of a stack
-   * also becomes active.
+   * also becomes active. The pane takes the focus.
    */
   toggleZoom(id?: string): void;
+  /**
+   * Zoom a pane, or restore the layout with `null`. A pane of a stack also
+   * becomes active, and the pane takes the focus. The focus stays at a
+   * restore.
+   */
+  setZoom(id: string | null): void;
 }
 
-/** The zoom command of a store. */
+/** The zoom commands of a store. */
 export const zoom: StoreFeature<ZoomCommands> = {
-  commands: ({ get, commit, requirePane }) => ({
-    toggleZoom(id = get().focusedPane) {
-      requirePane(id);
+  commands: ({ get, commit, requirePane }) => {
+    const zoomTo = (id: string, restore: boolean): void => {
       const state = get();
-      const restore = state.zoomedPane === id;
       commit({
         root:
           restore || stackOf(state.root, id) === null
@@ -27,8 +31,23 @@ export const zoom: StoreFeature<ZoomCommands> = {
         focusedPane: id,
         zoomedPane: restore ? null : id,
       });
-    },
-  }),
+    };
+    return {
+      toggleZoom(id = get().focusedPane) {
+        requirePane(id);
+        zoomTo(id, get().zoomedPane === id);
+      },
+      setZoom(id) {
+        const state = get();
+        if (id === state.zoomedPane) return;
+        if (id === null) commit({ ...state, zoomedPane: null });
+        else {
+          requirePane(id);
+          zoomTo(id, false);
+        }
+      },
+    };
+  },
 };
 
 /** Choose the direction of a zoom exit, preferring an edge the pane already touches. */

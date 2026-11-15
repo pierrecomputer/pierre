@@ -114,6 +114,13 @@ export interface LayoutMessages {
   readonly collapse?: (title: string) => string;
   /** The name of `Layout.CloseButton`. Default: "Close Editor". */
   readonly close?: (title: string) => string;
+  /**
+   * The name of `Layout.ZoomButton`, for a pane that is zoomed or not.
+   * Default: "Zoom Editor", or "Restore Editor" while it is zoomed.
+   */
+  readonly zoom?: (title: string, zoomed: boolean) => string;
+  /** The status message while a pane is zoomed. Default: "Editor zoomed". */
+  readonly zoomed?: (title: string) => string;
 }
 
 /** A layout object: the store, with the features of the layout. */
@@ -169,8 +176,10 @@ export interface ViewRender {
 }
 
 /**
- * What a feature changes on a pane host. A later feature's style wins. The
- * visibility of a host is not here: `ViewContext.visibility` owns it.
+ * What a feature changes on a pane host. One feature gives the style of a
+ * host: with two, the feature whose name comes last wins, and a development
+ * build warns. The visibility of a host is not here:
+ * `ViewContext.visibility` owns it.
  */
 export interface HostPatch {
   readonly attributes?: Readonly<Record<string, string | boolean | undefined>>;
@@ -201,7 +210,10 @@ export interface FeatureHooks {
   layers?(): ReactNode;
   /** False hides the separators, for example while a pane is zoomed. */
   separators?: boolean;
-  /** Apply the sizes of a pointer resize, in place of `store.setSizes`. */
+  /**
+   * Apply the sizes of a pointer resize, in place of `store.setSizes`. One
+   * feature fills this slot, as for the style of a host.
+   */
   applySizes?(
     element: HTMLElement,
     separators: readonly SeparatorGeometry[],
@@ -231,6 +243,11 @@ export interface FeatureHooks {
  */
 export interface Feature<Commands extends object = object> {
   readonly name: string;
+  /**
+   * The names of the features that this feature needs in the same layout.
+   * `createLayout` warns in development when one is missing.
+   */
+  readonly requires?: readonly string[];
   readonly store?: StoreFeature<Commands>;
   use?(context: ViewContext, render: ViewRender): FeatureHooks;
   /**

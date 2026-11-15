@@ -43,7 +43,7 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
           edge,
           () => nextId(root)
         );
-        commit({ root: next, focusedPane: pane.id, zoomedPane: null });
+        commit({ ...get(), root: next, focusedPane: pane.id }, pane.id);
       },
       close(id) {
         requirePane(id);
@@ -77,7 +77,7 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
                 edge,
                 () => nextId(current)
               );
-        commit({ root, focusedPane: sourceId, zoomedPane: null });
+        commit({ ...get(), root, focusedPane: sourceId }, sourceId);
       },
       swap(firstId, secondId) {
         requirePane(firstId);

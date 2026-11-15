@@ -23,6 +23,7 @@ export { binaryTree } from './models/binary';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
 export { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
+export { type Presentation, presentation } from './presentation';
 export { type StackCommands, stacks } from './stacks';
 export {
   type CommandsOf,

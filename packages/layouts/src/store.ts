@@ -48,10 +48,17 @@ export interface StoreContext {
    * Make a state the current state, and notify the listeners. The tree of
    * `next` holds only nodes that the store owns: nodes of the current tree,
    * and new nodes from a model function or from `own`. The store validates a
-   * new tree, freezes its new nodes, and moves the focus and the zoom to panes
-   * that show.
+   * new tree, freezes its new nodes, and moves the focus to a pane that
+   * shows.
+   *
+   * The commit owns the rules of the zoom. A zoom that `next` sets stays on a
+   * pane that shows. A zoom that `next` carries from the current state
+   * follows the tab that shows in the stack of the zoomed pane, and a
+   * structural edit ends it: `placed`, the pane that the change puts in a
+   * new place (a new pane, or a pane that moves), is the zoomed pane, or it
+   * shows outside the zoom.
    */
-  commit(next: LayoutState): void;
+  commit(next: LayoutState, placed?: string): void;
   /** The tree model of the store, or null when no feature gives one. */
   model(): TreeModel | null;
   /** Throw unless the current tree holds the pane. */
@@ -138,19 +145,29 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     zoomedPane: null,
   });
   const get = (): LayoutState => state;
-  const commit = (next: LayoutState): void => {
+  const commit = (next: LayoutState, placed?: string): void => {
     const sameTree = next.root === state.root;
     if (!sameTree) (model?.validate ?? validateLayout)(next.root);
     // Focus and zoom belong to panes that show only.
     const panes = shownPanes(next.root);
+    const shows = (id: string | null): boolean =>
+      panes.some((pane) => pane.id === id);
+    let zoomed = next.zoomedPane;
+    if (zoomed !== null && zoomed === state.zoomedPane && !sameTree) {
+      // The zoomed pane moves: a structural edit ends the zoom.
+      if (placed === zoomed) zoomed = null;
+      else {
+        // A zoomed stack follows the tab that shows.
+        zoomed = stackOf(next.root, zoomed)?.active ?? zoomed;
+        // A pane that shows in a new place outside the zoom ends it.
+        if (placed !== undefined && placed !== zoomed && shows(placed))
+          zoomed = null;
+      }
+    }
     state = Object.freeze({
       root: sameTree ? next.root : freezeNew(next.root),
-      focusedPane: panes.some(({ id }) => id === next.focusedPane)
-        ? next.focusedPane
-        : panes[0].id,
-      zoomedPane: panes.some(({ id }) => id === next.zoomedPane)
-        ? next.zoomedPane
-        : null,
+      focusedPane: shows(next.focusedPane) ? next.focusedPane : panes[0].id,
+      zoomedPane: shows(zoomed) ? zoomed : null,
     });
     for (const listener of [...listeners]) listener();
   };

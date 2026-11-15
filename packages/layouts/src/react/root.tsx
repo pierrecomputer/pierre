@@ -40,6 +40,7 @@ import {
 } from '../dom/visibility';
 import { dragSizes, keySizes } from '../gestures';
 import { collapsedSizeOf, findNode, shownPanes } from '../model';
+import { presentation } from '../presentation';
 import type {
   ChildSize,
   Direction,
@@ -66,7 +67,7 @@ import {
   type ViewState,
   type ViewStore,
 } from './contract';
-import { createLayout, type LayoutObject } from './create-layout';
+import type { LayoutObject } from './create-layout';
 import { separatorGestureStyle } from './gesture-styles';
 
 /** A separator, for `getSeparatorProps`. */
@@ -84,8 +85,13 @@ export interface LayoutSeparator {
   readonly after: readonly PaneNode[];
 }
 
-/** Props of `Root` in both forms. */
-export interface RootCommonProps {
+/** Props of `Root`. */
+export interface RootProps {
+  /**
+   * The layout: a layout object from `createLayout`, or from
+   * `useControlledLayout` for a tree that the app owns.
+   */
+  layout: LayoutObject;
   /**
    * The content of a pane, with its chrome: parts such as `Layout.Header`
    * and `Layout.Content`, and app components that call `Layout.usePane`,
@@ -151,28 +157,6 @@ export interface RootCommonProps {
   gap?: number;
 }
 
-/** A layout object from `createLayout`, which holds the state. */
-export interface RootLayoutProps extends RootCommonProps {
-  layout: LayoutObject;
-  root?: never;
-  features?: never;
-}
-
-/**
- * The controlled form: the app owns the tree, passes each new tree, and takes
- * the sizes of a resize from `onResize`.
- */
-export interface RootControlledProps extends RootCommonProps {
-  root: LayoutNode;
-  /** The features of the layout, read once, when `Root` mounts. */
-  features?: readonly Feature[];
-  layout?: never;
-}
-
-export type RootProps = RootLayoutProps | RootControlledProps;
-
-const NO_FEATURES: readonly Feature[] = [];
-
 // Pane layers save compositing time from about 6 visible panes, and cost tile
 // memory below that.
 const DEFAULT_PANE_LAYERS = { minPanes: 6 };
@@ -194,11 +178,11 @@ const paneCount = (count: number): string => `${count} panes`;
 /** The reasons from the layout state that a pane does not show all its content. */
 function stateReasons(
   { pane, stack, hidden, collapsed }: CSSPane,
-  zoomedPane: string | null
+  filled: string | null
 ): number {
   const inactive = stack !== null && stack.active !== pane.id;
-  // A zoomed pane shows its content, also when it is collapsed.
-  const folded = collapsed && zoomedPane !== pane.id;
+  // A pane that fills the layout shows its content, also when it is collapsed.
+  const folded = collapsed && filled !== pane.id;
   return (
     (inactive ? INACTIVE : hidden ? HIDDEN : 0) |
     (folded
@@ -209,12 +193,24 @@ function stateReasons(
 
 let warnedRenderPane = false;
 
+const warnedSlots = new Set<string>();
+
+/** In development, warn once when two features fill a slot that one feature fills. */
+function warnSlot(slot: string): void {
+  if (!warnedSlots.has(slot)) {
+    warnedSlots.add(slot);
+    console.warn(
+      `@pierre/layouts: two features fill ${slot}; the feature whose name comes last wins.`
+    );
+  }
+}
+
 /**
  * In development, warn once when `renderPane` changes while the tree does
  * not: the content of each pane then renders again for no change of its own.
  */
 function useRenderPaneCheck(
-  renderPane: RootCommonProps['renderPane'],
+  renderPane: RootProps['renderPane'],
   root: LayoutNode
 ): void {
   const last = useRef({ renderPane, root });
@@ -328,51 +324,30 @@ const PaneBody = /* @__PURE__ */ memo(function PaneBody({
   return <PaneContext value={value}>{renderPane(pane)}</PaneContext>;
 }, sameContentProps);
 
-/**
- * The status message of the layout: the drop of a drag when there is one,
- * or else the text of `Root`. It subscribes to the view state, so a drag
- * renders it and not the layout.
- */
-function Announcer({ view, text }: { view: ViewState; text: string }) {
-  const drop = useSyncExternalStore(
-    view.subscribe,
-    () => view.get().drop as { text: string } | null | undefined,
-    () => null
-  );
-  return (
-    <span className="pierre-layout-sr" role="status" aria-live="polite">
-      {drop?.text ?? text}
-    </span>
-  );
-}
-
-// One pane context for each pane ID of each view, kept for the life of the
-// view, so that the content of a pane does not render again for a new context.
-const paneContexts = new WeakMap<ViewContext, Map<string, PaneContextValue>>();
-
-function paneContextOf(context: ViewContext, id: string): PaneContextValue {
-  let byId = paneContexts.get(context);
-  if (byId === undefined) {
-    byId = new Map();
-    paneContexts.set(context, byId);
-  }
-  let value = byId.get(id);
-  if (value === undefined) {
-    value = { id, context };
-    byId.set(id, value);
-  }
-  return value;
-}
-
 /** The props of `Root` that its context reads after a render. */
 interface LatestProps {
   gap: number;
   getPaneTitle: (pane: PaneNode) => string;
-  onResize: RootCommonProps['onResize'];
-  onResizeStart: RootCommonProps['onResizeStart'];
-  onPaneClose: RootCommonProps['onPaneClose'];
+  onResize: RootProps['onResize'];
+  onResizeStart: RootProps['onResizeStart'];
+  onPaneClose: RootProps['onPaneClose'];
   stylesheets: StylesheetsSetting;
   messages: LayoutMessages | undefined;
+}
+
+// In development, the pane contexts of each view, for the tests of
+// `forgetPanes`.
+const developmentPaneContexts = /* @__PURE__ */ new WeakMap<
+  ViewContext,
+  ReadonlyMap<string, PaneContextValue>
+>();
+
+/**
+ * The IDs of the panes that a view keeps a pane context for. Tests read it in
+ * a development build; in a production build it is empty.
+ */
+export function paneContextIds(context: ViewContext): Set<string> {
+  return new Set(developmentPaneContexts.get(context)?.keys());
 }
 
 /** The internal parts of a view: its context, and what `Root` calls. */
@@ -392,6 +367,17 @@ interface ViewInternals {
   finish(cancel: boolean, pointerId?: number): void;
   /** True during a gesture. */
   gesturing(): boolean;
+  /**
+   * The context of a pane, the same object while the pane is in the tree, so
+   * that the content of a pane does not render again for a new context.
+   */
+  paneContext(id: string): PaneContextValue;
+  /**
+   * Drop the entries of the panes that left the tree from each cache that
+   * keeps an entry for each pane: the pane contexts (and with them the
+   * stores of `usePane`) and the visibility module.
+   */
+  forgetPanes(panes: ReadonlySet<string>): void;
 }
 
 /**
@@ -413,6 +399,7 @@ function createViewInternals(
   let gesture: Gesture | null = null;
   let resizing = false;
   let change = 0;
+  const paneContexts = new Map<string, PaneContextValue>();
   const readGeometry = (): LayoutGeometry =>
     element === null
       ? { panes: [], separators: [] }
@@ -538,6 +525,8 @@ function createViewInternals(
     stylesheets: () => latest.stylesheets,
     messages: () => latest.messages ?? NO_MESSAGES,
   };
+  if (process.env.NODE_ENV !== 'production')
+    developmentPaneContexts.set(context, paneContexts);
   return {
     context,
     setElement(next) {
@@ -571,6 +560,19 @@ function createViewInternals(
       active.end(cancel);
     },
     gesturing: () => gesture !== null,
+    paneContext(id) {
+      let value = paneContexts.get(id);
+      if (value === undefined) {
+        value = { id, context };
+        paneContexts.set(id, value);
+      }
+      return value;
+    },
+    forgetPanes(panes) {
+      for (const id of paneContexts.keys())
+        if (!panes.has(id)) paneContexts.delete(id);
+      context.visibility.forget(panes);
+    },
   };
 }
 
@@ -591,23 +593,15 @@ export function Root(props: RootProps): JSX.Element {
     style,
     gap = 8,
   } = props;
-  // The controlled form keeps its own layout object, which follows the tree
-  // of each render.
-  const [controlled] = useState(() =>
-    props.root === undefined
-      ? null
-      : createLayout(props.root, props.features ?? NO_FEATURES)
+  const store: ViewStore = props.layout;
+  // The features of the first render, in the order of their names: the view
+  // part of each is a hook, and a slot that one feature fills goes to the
+  // same feature in any order of the list.
+  const [features] = useState(() =>
+    [...store.features].sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+    )
   );
-  const appliedRoot = useRef(props.root);
-  useLayoutEffect(() => {
-    if (controlled === null || props.root === undefined) return;
-    if (props.root === appliedRoot.current) return;
-    appliedRoot.current = props.root;
-    controlled.setRoot(props.root);
-  }, [controlled, props.root]);
-  const store: ViewStore = props.layout ?? (controlled as ViewStore);
-  // The features of the first render: the view part of each is a hook.
-  const [features] = useState(() => store.features);
   const [resizing, setResizing] = useState(false);
   const prefix = useId();
   // The props that the context reads, from the last committed render. The
@@ -662,42 +656,50 @@ export function Root(props: RootProps): JSX.Element {
   // The condition is the same for each render of a build.
   if (process.env.NODE_ENV !== 'production')
     // oxlint-disable-next-line react-hooks/rules-of-hooks
-    useRenderPaneCheck(renderPane, props.root ?? state.root);
+    useRenderPaneCheck(renderPane, state.root);
   const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
   const render: ViewRender = { state, geometry, gap, visibleCount };
   const hooks: FeatureHooks[] = [];
   for (const feature of features)
     if (feature.use !== undefined) hooks.push(feature.use(context, render));
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    hooks.filter((hook) => hook.applySizes !== undefined).length > 1
+  )
+    warnSlot('applySizes');
   // Parts and the store subscription read the hooks outside a render, after
   // this commit. This effect comes before the effects that run the hooks.
   useLayoutEffect(() => {
     internals.setHooks(hooks);
   });
 
+  const { filled } = presentation(state);
   // The visibility of each host in the first render, which a server renders
   // too. After it, the visibility module writes the visibility: React renders
   // these same values again, so it does not write them.
   const [firstReasons] = useState(
     () =>
       new Map(
-        geometry.panes.map((host) => [
-          host.pane.id,
-          stateReasons(host, state.zoomedPane),
-        ])
+        geometry.panes.map((host) => [host.pane.id, stateReasons(host, filled)])
       )
   );
   // Give the visibility module the reasons from the state: a hide or a show,
   // a change of tab, or a collapse. It writes the hosts whose reasons change,
   // and tells the content that starts or stops rendering. The content stays
-  // mounted, so it can pause its own work.
+  // mounted, so it can pause its own work. Then the caches of the view
+  // forget the panes that left the tree.
   useLayoutEffect(() => {
-    for (const host of geometry.panes)
+    const panes = new Set<string>();
+    for (const host of geometry.panes) {
+      panes.add(host.pane.id);
       context.visibility.set(
         host.pane.id,
         STATE_REASONS,
-        stateReasons(host, state.zoomedPane)
+        stateReasons(host, filled)
       );
-  }, [geometry, state.zoomedPane, context]);
+    }
+    internals.forgetPanes(panes);
+  }, [geometry, filled, context, internals]);
 
   // After React commits a state, before the browser paints.
   const committed = useRef<LayoutState | null>(null);
@@ -798,7 +800,7 @@ export function Root(props: RootProps): JSX.Element {
       {paneHosts.map((host) => {
         const { pane, edges } = host;
         const custom = getPaneProps?.(pane);
-        let hostStyle: CSSProperties = host.rect;
+        let hostStyle: CSSProperties | undefined;
         const attributes: Record<string, string | boolean | undefined> = {
           'aria-label': getPaneTitle(pane),
           'data-layout-edges': edgeList(edges),
@@ -808,7 +810,14 @@ export function Root(props: RootProps): JSX.Element {
           if (patch === undefined) continue;
           if (patch.attributes !== undefined)
             Object.assign(attributes, patch.attributes);
-          if (patch.style !== undefined) hostStyle = patch.style;
+          if (patch.style !== undefined) {
+            if (
+              process.env.NODE_ENV !== 'production' &&
+              hostStyle !== undefined
+            )
+              warnSlot('the style of a pane host');
+            hostStyle = patch.style;
+          }
         }
         const first = firstReasons.get(pane.id) ?? 0;
         return (
@@ -828,7 +837,7 @@ export function Root(props: RootProps): JSX.Element {
             data-pane-hidden={(first & HOST_HIDDEN) !== 0 || undefined}
             data-collapsed={(first & COLLAPSED) !== 0 || undefined}
             data-focused={state.focusedPane === pane.id}
-            style={hostStyle}
+            style={hostStyle ?? host.rect}
             onFocusCapture={() => store.focusPane(pane.id)}
             onPointerDown={() => store.focusPane(pane.id)}
           >
@@ -837,7 +846,7 @@ export function Root(props: RootProps): JSX.Element {
               <PaneBody
                 pane={pane}
                 renderPane={renderPane}
-                value={paneContextOf(context, pane.id)}
+                value={internals.paneContext(pane.id)}
               />
             </div>
           </section>
@@ -898,7 +907,9 @@ export function Root(props: RootProps): JSX.Element {
       {hooks.map((hook, index) =>
         hook.layers === undefined ? null : <Layers key={index} hook={hook} />
       )}
-      <Announcer view={context.view} text={announce} />
+      <span className="pierre-layout-sr" role="status" aria-live="polite">
+        {announce}
+      </span>
     </div>
   );
 }

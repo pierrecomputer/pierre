@@ -1,10 +1,11 @@
 // Stacks of panes with tabs: the store commands that show, add, and move tabs.
 // A move of a tab into another stack takes the pane out of its place with the
-// tree model of the store, so it needs `edits`.
+// tree model of the store, so it needs `edits`. The store commit moves the
+// zoom of a stack to the tab that shows.
 import { activatePane, getPanes, stackOf } from './model';
 import { addToStack, moveTabTo } from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
-import type { LayoutNode, LayoutState, PaneNode, TabOptions } from './types';
+import type { LayoutNode, PaneNode, TabOptions } from './types';
 
 export interface StackCommands {
   /**
@@ -43,40 +44,6 @@ export interface StackCommands {
   moveTab(id: string, index: number): void;
 }
 
-/**
- * The zoom after a pane of a stack shows: it takes the zoom when the zoomed
- * pane is in the same stack of `root`.
- */
-function zoomInStack(
-  state: LayoutState,
-  root: LayoutNode,
-  id: string
-): string | null {
-  const zoomed = state.zoomedPane;
-  return zoomed !== null &&
-    stackOf(root, id)?.children.some((pane) => pane.id === zoomed) === true
-    ? id
-    : zoomed;
-}
-
-/**
- * The zoom after a new tab: the new tab takes the zoom of its stack or of its
- * target. A zoom of another pane ends, so that the new tab shows.
- */
-function zoomAfterTab(
-  state: LayoutState,
-  targetId: string,
-  paneId: string
-): string | null {
-  const zoomed = state.zoomedPane;
-  if (zoomed === null) return null;
-  const stack = stackOf(state.root, targetId);
-  const same =
-    zoomed === targetId ||
-    (stack !== null && stack.children.some(({ id }) => id === zoomed));
-  return same ? paneId : null;
-}
-
 /** The tab commands of a store. */
 export const stacks: StoreFeature<StackCommands> = {
   commands: ({ get, commit, model, requirePane, nextId }) => ({
@@ -85,11 +52,7 @@ export const stacks: StoreFeature<StackCommands> = {
       const state = get();
       if (stackOf(state.root, id) === null)
         throw new Error(`Pane not in a stack: ${id}`);
-      commit({
-        root: activatePane(state.root, id),
-        focusedPane: id,
-        zoomedPane: zoomInStack(state, state.root, id),
-      });
+      commit({ ...state, root: activatePane(state.root, id), focusedPane: id });
     },
     addTab(targetId, pane, index, options = {}) {
       requirePane(targetId);
@@ -105,12 +68,9 @@ export const stacks: StoreFeature<StackCommands> = {
       );
       commit(
         activate
-          ? {
-              root,
-              focusedPane: pane.id,
-              zoomedPane: zoomAfterTab(state, targetId, pane.id),
-            }
-          : { ...state, root }
+          ? { ...state, root, focusedPane: pane.id }
+          : { ...state, root },
+        pane.id
       );
     },
     moveToStack(sourceId, targetId, index, options = {}) {
@@ -148,13 +108,14 @@ export const stacks: StoreFeature<StackCommands> = {
         );
       }
       commit(
-        activate
-          ? { root, focusedPane: sourceId, zoomedPane: null }
-          : {
-              ...state,
-              root,
-              focusedPane: focusAfterLeaving(state, sourceId, root),
-            }
+        {
+          ...state,
+          root,
+          focusedPane: activate
+            ? sourceId
+            : focusAfterLeaving(state, sourceId, root),
+        },
+        sourceId
       );
     },
     moveTab(id, index) {
@@ -162,11 +123,7 @@ export const stacks: StoreFeature<StackCommands> = {
       const state = get();
       const root = moveTabTo(state.root, id, index);
       if (root === state.root) return;
-      commit({
-        root,
-        focusedPane: id,
-        zoomedPane: zoomInStack(state, root, id),
-      });
+      commit({ ...state, root, focusedPane: id });
     },
   }),
 };
