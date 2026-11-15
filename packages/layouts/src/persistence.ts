@@ -17,11 +17,11 @@ export interface PersistenceCommands {
 
 /** The commands of the saved form of a store. */
 export const persistence: StoreFeature<PersistenceCommands> = {
-  commands: ({ get, commit, own }) => ({
+  commands: ({ get, commit, fold, own }) => ({
     toStoredTree: () => Object.freeze({ version: 3, root: get().root }),
     setStoredTree(tree) {
       const operation = { type: 'setRoot', root: own(tree.root) } as const;
-      commit({ ...get(), root: operation.root }, [operation]);
+      commit({ ...get(), root: fold(operation) }, [operation]);
     },
   }),
 };

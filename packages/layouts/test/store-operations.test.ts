@@ -494,3 +494,44 @@ describe('parseLayoutOperations', () => {
       );
   });
 });
+
+describe('a tree that equals the current tree', () => {
+  const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+  test('is no change, from a local or a remote setRoot', () => {
+    const store = storeOf();
+    store.setSizes({ row: [2, 1, 1] });
+    const before = store.getSnapshot();
+    const changes = record(store);
+    store.setRoot(copy(before.root));
+    applyOperations(store, [{ type: 'setRoot', root: copy(before.root) }]);
+    expect(changes).toEqual([]);
+    expect(store.getSnapshot()).toBe(before);
+  });
+
+  test('keeps the node of each pane that does not change', () => {
+    const store = storeOf();
+    const before = store.getSnapshot().root;
+    const next = copy(before);
+    if (next.type !== 'split') throw new Error('Expected a split');
+    applyOperations(store, [
+      {
+        type: 'setRoot',
+        root: {
+          ...next,
+          sizes: [3, 1, 1],
+          children: next.children.map((child) =>
+            child.id === 'a' ? { ...child, minWidth: 40 } : child
+          ),
+        },
+      },
+    ]);
+    const after = store.getSnapshot().root;
+    expect(after).not.toBe(before);
+    if (after.type !== 'split' || before.type !== 'split')
+      throw new Error('Expected a split');
+    expect(
+      after.children.map((child, index) => child === before.children[index])
+    ).toEqual(after.children.map((child) => child.id !== 'a'));
+  });
+});
