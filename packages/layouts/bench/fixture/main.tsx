@@ -1,14 +1,15 @@
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import type { LayoutNode, PaneNode } from '../../src';
+import * as Layout from '../../src/react';
 import {
-  type LayoutNode,
-  LayoutStore,
+  allFeatures,
+  createLayout,
+  type LayoutObject,
   naryTree,
-  type PaneNode,
-} from '../../src';
-import { Layout } from '../../src/react';
-import '../../src/styles.css';
+} from '../../src/react';
+import { resizeStrategy } from '../../src/react/features/resize-strategy';
 import {
   appendTo,
   type ContentWeight,
@@ -26,7 +27,7 @@ export interface LayoutsBench {
   paneCount: number;
   weight: ContentWeight;
   paneIds: string[];
-  store: LayoutStore;
+  store: LayoutObject<ReturnType<typeof allFeatures>>;
   counters(): {
     renders: number;
     resizeCallbacks: number;
@@ -104,6 +105,7 @@ const modalStrategy =
     : 'popover';
 const backdrop = params.get('backdrop') === 'opaque' ? 'opaque' : 'translucent';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
+const MESSAGES = { layout: 'Benchmark workspace' };
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
 // Build a balanced tree that alternates the split direction at each depth.
@@ -130,18 +132,46 @@ function buildTree(ids: readonly string[], depth = 0): LayoutNode {
   };
 }
 
-// The tree model of the apps: `naryTree` (`DEC-layouts-nary-tree-default`).
-const store = new LayoutStore(buildTree(paneIds), { model: naryTree });
+// Every feature, with the tree model of the apps, and the resize strategy of
+// the run, which is an internal feature (`DEC-layouts-experiments-internal`).
+const store = createLayout(buildTree(paneIds), [
+  ...allFeatures({ model: naryTree }),
+  resizeStrategy(resize),
+]);
 
 const title = (pane: PaneNode): string =>
   `${pane.id} ${kindOf(indexOf.get(pane.id) ?? 0)}`;
 
+// The tabs of a pane in a stack, or the title of a lone pane, as the default
+// header of the \`Layout\` component before showed them.
+function TabsOrTitle({
+  tab,
+}: {
+  tab?: (tab: PaneNode) => JSX.Element;
+}): JSX.Element {
+  const stacked = Layout.usePane((state) => state.tabs.length > 1);
+  return stacked ? <Layout.TabList>{tab}</Layout.TabList> : <Layout.Title />;
+}
+
+// The header of each pane, as the default header of the `Layout` component
+// before it: a move handle, the tabs or the title, and the zoom and close
+// buttons.
 const renderPane = (pane: PaneNode): JSX.Element => (
-  <PaneContent
-    id={pane.id}
-    index={indexOf.get(pane.id) ?? paneIds.length}
-    weight={weight}
-  />
+  <>
+    <Layout.Header>
+      <Layout.MoveHandle />
+      <TabsOrTitle />
+      <Layout.ZoomButton />
+      <Layout.CloseButton />
+    </Layout.Header>
+    <Layout.Content>
+      <PaneContent
+        id={pane.id}
+        index={indexOf.get(pane.id) ?? paneIds.length}
+        weight={weight}
+      />
+    </Layout.Content>
+  </>
 );
 
 function sum(map: Map<string, number>): number {
@@ -217,12 +247,11 @@ function Bench(): JSX.Element {
   return (
     <>
       <div className="bench-workspace" ref={workspace}>
-        <Layout
-          store={store}
+        <Layout.Root
+          layout={store}
           renderPane={renderPane}
           getPaneTitle={title}
-          label="Benchmark workspace"
-          experimentalResize={resize}
+          messages={MESSAGES}
           paneLayers={paneLayers}
         />
       </div>

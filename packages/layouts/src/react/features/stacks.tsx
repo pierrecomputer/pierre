@@ -1,20 +1,16 @@
 'use client';
 
 // `stacks()`: panes in stacks with tabs. The store part has `activate`,
-// `addTab`, `moveToStack`, and `moveTab`. The view part makes each pane host
-// the tab panel of its tab in `Layout.TabList`, and gives `Layout.Tab` the
-// commands that show or move a tab and keep the focus on it.
+// `addTab`, `moveToStack`, and `moveTab`. The view part gives `Layout.Tab`
+// the commands that show or move a tab and keep the focus on it.
+// `Layout.TabList` makes the host of its pane the tab panel of its tab.
 import { useEffect, useState } from 'react';
 
 import { focusTab, paneHosts } from '../../dom/panes';
 import { type StackCommands, stacks as stacksStore } from '../../stacks';
+import { treeIndex } from '../../tree-index';
 import { cell } from '../cell';
-import {
-  type Feature,
-  type FeatureHooks,
-  tabIdOf,
-  type ViewContext,
-} from '../contract';
+import type { Feature, FeatureHooks, ViewContext } from '../contract';
 
 let warnedTabList = false;
 
@@ -28,26 +24,22 @@ function useStacks(context: ViewContext): FeatureHooks {
     useEffect(() => {
       const element = context.element();
       if (element === null || warnedTabList) return;
+      const { panes } = treeIndex(context.store.getSnapshot().root);
       for (const host of paneHosts(element)) {
-        const tab = host.getAttribute('aria-labelledby');
-        if (tab !== null && document.getElementById(tab) === null) {
+        const id = host.getAttribute('data-layout-pane') ?? '';
+        if (
+          panes.get(id)?.stack != null &&
+          host.getAttribute('role') !== 'tabpanel'
+        ) {
           warnedTabList = true;
           console.warn(
-            '@pierre/layouts: stacks() names each pane by its tab. Render Layout.TabList in the header of each pane.'
+            '@pierre/layouts: a pane of a stack shows its tabs. Render Layout.TabList in the header of each pane of a stack.'
           );
           return;
         }
       }
     });
   return {
-    // Each host is the tab panel of the tab of its pane, in its own tab list.
-    host: ({ pane }) => ({
-      attributes: {
-        role: 'tabpanel',
-        'aria-label': undefined,
-        'aria-labelledby': tabIdOf(context.prefix, pane.id, pane.id),
-      },
-    }),
     selectTab(id) {
       const before = context.store.getSnapshot();
       pending.set(id);
@@ -74,9 +66,9 @@ function useStacks(context: ViewContext): FeatureHooks {
 
 /**
  * Stacks of panes with tabs: `layout.activate`, `addTab`, `moveToStack`, and
- * `moveTab`, with `Layout.TabList` and `Layout.Tab`. Each pane host is the
- * tab panel of its tab, so render a `Layout.TabList` in the header of each
- * pane; a pane outside a stack shows its own tab.
+ * `moveTab`, with `Layout.TabList` and `Layout.Tab`. Render a
+ * `Layout.TabList` in the header of each pane of a stack; a pane outside a
+ * stack can show its own tab with one too, or a `Layout.Title`.
  */
 export function stacks(): Feature<StackCommands> {
   return {

@@ -207,7 +207,9 @@ test('a tab list without stacks(), and stacks() without a tab list in a pane, wa
     .poll(
       () =>
         warnings.filter((text) =>
-          text.includes('Render Layout.TabList in the header of each pane')
+          text.includes(
+            'Render Layout.TabList in the header of each pane of a stack'
+          )
         ).length
     )
     .toBe(1);

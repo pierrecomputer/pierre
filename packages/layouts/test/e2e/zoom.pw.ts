@@ -74,7 +74,7 @@ test('the zoom button zooms a pane over the layout and restores it', async ({
   );
   // The covered panes skip their rendering and leave the tab order.
   for (const id of ['notes', 'files', 'terminal']) {
-    await expect(host(page, id)).toHaveAttribute('data-pane-hidden', 'true');
+    await expect(host(page, id)).toHaveAttribute('data-hidden', 'true');
     expect(
       await host(page, id).evaluate((element: HTMLElement) => element.inert)
     ).toBe(true);
@@ -89,7 +89,7 @@ test('the zoom button zooms a pane over the layout and restores it', async ({
   await expect(editor).not.toHaveAttribute('data-zoomed');
   await expect(page.getByRole('separator')).toHaveCount(3);
   for (const id of ['notes', 'files', 'terminal'])
-    await expect(host(page, id)).not.toHaveAttribute('data-pane-hidden');
+    await expect(host(page, id)).not.toHaveAttribute('data-hidden');
   expect(await visibility(page)).toEqual({
     notes: [true, false],
     files: [true, false],
@@ -104,10 +104,10 @@ test('Escape restores the zoom, and the focus moves into the zoomed pane', async
   await page.getByLabel('Note in files').focus();
   await command(page, 'setZoom', 'editor');
   await expect(host(page, 'editor')).toBeFocused();
-  await expect(host(page, 'files')).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
   await page.keyboard.press('Escape');
   await expect(host(page, 'editor')).not.toHaveAttribute('data-zoomed');
-  await expect(host(page, 'files')).not.toHaveAttribute('data-pane-hidden');
+  await expect(host(page, 'files')).not.toHaveAttribute('data-hidden');
 });
 
 test('a collapsed pane under a zoom gets no visibility event at the zoom, after it, or at the restore', async ({
@@ -121,17 +121,14 @@ test('a collapsed pane under a zoom gets no visibility event at the zoom, after 
   );
   expect((await visibility(page)).terminal).toEqual([true]);
   await page.getByRole('button', { name: 'Zoom editor' }).click();
-  await expect(host(page, 'terminal')).toHaveAttribute(
-    'data-pane-hidden',
-    'true'
-  );
+  await expect(host(page, 'terminal')).toHaveAttribute('data-hidden', 'true');
   // The hide of the covered panes waits for the animations of the zoom.
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(resolve))
   );
   expect((await visibility(page)).terminal).toEqual([true]);
   await page.getByRole('button', { name: 'Restore editor' }).click();
-  await expect(host(page, 'terminal')).not.toHaveAttribute('data-pane-hidden');
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-hidden');
   await expect(host(page, 'terminal')).toHaveAttribute(
     'data-collapsed',
     'true'

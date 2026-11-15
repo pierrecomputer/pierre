@@ -101,7 +101,7 @@ test('the terminal collapses to its header and expands with its content', async 
     .click();
 
   await terminal.getByRole('button', { name: 'Collapse Terminal' }).click();
-  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
+  await expect(terminal).not.toHaveAttribute('data-collapsed');
   await expect(content).not.toHaveAttribute('inert', '');
   expect((await terminal.boundingBox())?.height).toBeCloseTo(
     before?.height ?? 0,

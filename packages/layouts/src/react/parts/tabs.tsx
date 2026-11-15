@@ -8,7 +8,10 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
   useContext,
+  useLayoutEffect,
+  useRef,
 } from 'react';
 
 import tabsCss from '../../css/tabs.css?inline';
@@ -52,6 +55,32 @@ export interface TabListProps extends Omit<PartProps<object>, 'children'> {
 const defaultTab = (): ReactNode => <Tab />;
 
 /**
+ * Make the host of a pane the tab panel of the tab of its pane, named by that
+ * tab, while a tab list shows in the host. A host without a tab list stays a
+ * region named by the title of its pane. A tab list knows that it is there;
+ * the view does not, so the tab list writes these two attributes.
+ */
+function useTabPanel(
+  context: ViewContext,
+  id: string
+): RefObject<HTMLElement | null> {
+  const tablist = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const host = tablist.current?.closest<HTMLElement>(
+      `[data-layout-pane="${CSS.escape(id)}"]`
+    );
+    if (host == null) return;
+    host.setAttribute('role', 'tabpanel');
+    host.setAttribute('aria-labelledby', tabIdOf(context.prefix, id, id));
+    return () => {
+      host.removeAttribute('role');
+      host.removeAttribute('aria-labelledby');
+    };
+  }, [context, id]);
+  return tablist;
+}
+
+/**
  * The tabs of the stack of the pane, in a `tablist`: the tabs that show, in
  * their order. A pane outside a stack shows its own tab. It needs
  * `stacks()`.
@@ -70,6 +99,7 @@ export function TabList({
   const value = usePaneContext('Layout.TabList');
   const { context } = value;
   warnMissing(context.has('stacks'), 'Layout.TabList', 'stacks()');
+  const tablist = useTabPanel(context, value.id);
   const pane = usePaneState(value, (state) => state.pane);
   const tabs = usePaneState(value, (state) => state.tabs);
   // The pane of the host is the tab that shows in its stack. Only this value
@@ -85,6 +115,7 @@ export function TabList({
         'div',
         render,
         mergeProps(props, {
+          ref: tablist,
           role: 'tablist',
           'aria-label': (context.messages().tabs ?? tabsName)(
             context.title(pane)
@@ -198,13 +229,20 @@ export function Tab({
       onClick: () => {
         if (!active) select(tab.id);
       },
-      onPointerDown: (event: PointerEvent<HTMLElement>) =>
-        context
-          .hooks()
-          .find((hooks) => hooks.startTabDrag !== undefined)
-          ?.startTabDrag?.(tab, tabs, event),
+      // A press on a close mark (`data-layout-tab-close`) is a click.
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        if (
+          (event.target as Element).closest('[data-layout-tab-close]') === null
+        )
+          context
+            .hooks()
+            .find((hooks) => hooks.startTabDrag !== undefined)
+            ?.startTabDrag?.(tab, tabs, event);
+      },
       onKeyDown,
-      children: children ?? context.title(tab),
+      children: children ?? (
+        <span className="pierre-layout-tab-title">{context.title(tab)}</span>
+      ),
     }),
     { active, dragging }
   );

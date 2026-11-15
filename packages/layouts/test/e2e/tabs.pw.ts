@@ -48,9 +48,8 @@ test('the tabs of a stack follow the APG tabs pattern', async ({ page }) => {
     'true'
   );
   await expect(host(page, 'terminal')).toHaveAttribute('inert', '');
-  await expect(host(page, 'terminal-server')).toHaveAttribute(
-    'data-pane-hidden',
-    'false'
+  await expect(host(page, 'terminal-server')).not.toHaveAttribute(
+    'data-pane-hidden'
   );
   // The arrows wrap; Home and End go to the first and the last tab.
   await page.keyboard.press('ArrowRight');
@@ -97,9 +96,8 @@ test('a change of tab keeps content state and moves no other pane', async ({
   await tabsOf(page, 'terminal')
     .getByRole('tab', { name: 'Dev server' })
     .click();
-  await expect(host(page, 'terminal-server')).toHaveAttribute(
-    'data-pane-hidden',
-    'false'
+  await expect(host(page, 'terminal-server')).not.toHaveAttribute(
+    'data-pane-hidden'
   );
   // Each pane of the stack has the box of the stack.
   expect(await host(page, 'terminal-server').boundingBox()).toEqual(terminal);
@@ -163,10 +161,7 @@ test('a tab closes from its close mark or with Delete, and new tabs show', async
     'data-pane-hidden',
     'true'
   );
-  await expect(host(page, 'terminal')).toHaveAttribute(
-    'data-pane-hidden',
-    'false'
-  );
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-pane-hidden');
   // The focus goes to the tab that shows next.
   await expect(
     tabsOf(page, 'terminal').getByRole('tab', { name: 'Terminal' })
@@ -197,9 +192,8 @@ test('a zoomed stack stays zoomed when its tab changes', async ({ page }) => {
     'true'
   );
   await page.keyboard.press('Escape');
-  await expect(host(page, 'terminal-server')).toHaveAttribute(
-    'data-zoomed',
-    'false'
+  await expect(host(page, 'terminal-server')).not.toHaveAttribute(
+    'data-zoomed'
   );
 });
 
@@ -256,9 +250,8 @@ test('a pointer drag in the tab bar reorders the tabs and shows the drop place',
     'Dev server',
     'Terminal',
   ]);
-  await expect(host(page, 'terminal-server')).toHaveAttribute(
-    'data-pane-hidden',
-    'false'
+  await expect(host(page, 'terminal-server')).not.toHaveAttribute(
+    'data-pane-hidden'
   );
   await expect(
     tabsOf(page, 'terminal-server').getByRole('tab', { name: 'Dev server' })

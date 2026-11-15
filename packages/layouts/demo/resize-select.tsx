@@ -1,8 +1,8 @@
 import type { JSX } from 'react';
 
-import type { LayoutProps } from '../src/react';
+import type { ResizeStrategy } from '../src/dom/resize-work';
 
-export type ResizeStrategy = NonNullable<LayoutProps['experimentalResize']>;
+export type { ResizeStrategy };
 
 /** Experimental: how a pointer resize applies its sizes, to compare how each feels. */
 export function ResizeSelect({

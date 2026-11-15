@@ -13,7 +13,9 @@ const host = (page: Page, id: string) =>
 test('custom headers retain keyboard tabs, lone tabs, close controls, and edge metadata', async ({
   page,
 }) => {
-  await expect(page.locator('[data-custom-header]')).toHaveCount(2);
+  // Each host renders its header; the hosts that show are the editor and the
+  // terminal.
+  await expect(page.locator('[data-custom-header]:visible')).toHaveCount(2);
   await expect(host(page, 'editor')).toHaveAttribute(
     'data-layout-edges',
     'top bottom left'
@@ -29,7 +31,7 @@ test('custom headers retain keyboard tabs, lone tabs, close controls, and edge m
   ).toBeFocused();
   await expect(
     host(page, 'editor').locator('[data-custom-header]')
-  ).toHaveCount(0);
+  ).toBeHidden();
   await page
     .getByRole('tab', { name: 'preview', exact: true })
     .locator('[data-layout-tab-close]')
@@ -214,15 +216,18 @@ test('separator and pane host props add app classes, children, labels, and attri
     'editor'
   );
   await expect(host(page, 'editor')).toHaveAttribute('tabindex', '0');
-  // A structural host: no drop target and no tab stop.
+  // A host with no drop target.
   await expect(host(page, 'terminal')).not.toHaveAttribute('data-drop-target');
-  await expect(host(page, 'terminal')).toHaveAttribute('tabindex', '-1');
-  // A hidden tab is never a tab stop.
+  // A hidden tab is never a tab stop: its host is inert.
   await expect(host(page, 'preview')).toHaveAttribute(
     'data-drop-target',
     'preview'
   );
-  await expect(host(page, 'preview')).toHaveAttribute('tabindex', '-1');
+  expect(
+    await host(page, 'preview').evaluate(
+      (element: HTMLElement) => element.inert
+    )
+  ).toBe(true);
   // A resize key stays in the layout; another key reaches the app.
   await separator.focus();
   await page.keyboard.press('ArrowRight');
@@ -245,5 +250,5 @@ test('a key that pane content handles does not reach the layout', async ({
   await expect(input).toHaveValue('');
   await expect(host(page, 'terminal')).toHaveAttribute('data-zoomed', 'true');
   await input.press('Escape');
-  await expect(host(page, 'terminal')).toHaveAttribute('data-zoomed', 'false');
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-zoomed');
 });

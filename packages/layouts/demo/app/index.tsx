@@ -1,5 +1,6 @@
 import {
   type JSX,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -7,14 +8,10 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import {
-  getPanes,
-  type LayoutNode,
-  LayoutStore,
-  naryTree,
-  type PaneNode,
-} from '../../src';
-import { Layout, type PaneAction } from '../../src/react';
+import { getPanes, type LayoutNode, type PaneNode } from '../../src';
+import * as Layout from '../../src/react';
+import { allFeatures, createLayout, naryTree } from '../../src/react';
+import { resizeStrategy } from '../../src/react/features/resize-strategy';
 import AgentPane from '../agent';
 import { ResizeSelect, type ResizeStrategy } from '../resize-select';
 import { AppOverlays } from './overlays';
@@ -97,15 +94,17 @@ const TEMPLATE: LayoutNode = {
 
 let nextTerminal = 1;
 
+type PaneAction = 'move' | 'collapse' | 'zoom' | 'close';
+
 // Sessions is a fixed sidebar; the main agent chat can move but always
 // stays; the tools and the other tabs can move, and their close button hides
 // them. The terminal can also collapse to its header.
-const paneActions = (pane: PaneNode): readonly PaneAction[] =>
-  pane.id === 'sessions'
+const paneActions = (id: string): readonly PaneAction[] =>
+  id === 'sessions'
     ? []
-    : pane.id === 'agent'
+    : id === 'agent'
       ? ['move', 'zoom']
-      : pane.id.startsWith('terminal')
+      : id.startsWith('terminal')
         ? ['move', 'collapse', 'zoom', 'close']
         : ['move', 'zoom', 'close'];
 
@@ -114,17 +113,94 @@ function showPlace(ids: readonly string[]): void {
   for (const id of [...ids].reverse()) store.setHidden(id, false);
 }
 
+// The animations and the resize strategy of the header controls. `flip()`
+// reads its options at each change, and the internal resize feature reads
+// its strategy at each pointer resize.
+const animate = { layout: true, zoom: true };
+let resizeOfMenu: ResizeStrategy = 'live';
+
 // The n-ary model: a drag of a separator changes only the panes beside it.
-const store = new LayoutStore(TEMPLATE, { model: naryTree });
+const store = createLayout(TEMPLATE, [
+  ...allFeatures({ model: naryTree, animate }),
+  resizeStrategy(() => resizeOfMenu),
+]);
 
 // A hidden pane keeps its content, so the close button hides it, and the
 // header toggle shows it again in its place.
 const hidePane = (pane: PaneNode): void => store.setHidden(pane.id, true);
 
+// A tab can close when another pane, or another tab of its stack, would
+// still show.
+function closable(id: string): boolean {
+  const panes = getPanes(store.getSnapshot().root);
+  return panes.some((pane) => pane.id !== id && pane.hidden !== true);
+}
+
+// A tab with its title, and a close mark for a tab that can close: a
+// pointer shortcut, out of the tab's name. Delete on the tab and the close
+// button of the header do the same. The agent chat, whose title follows the
+// session, has no close mark.
+function renderTab(tab: PaneNode): JSX.Element {
+  if (!paneActions(tab.id).includes('close')) return <Layout.Tab />;
+  return (
+    <Layout.Tab
+      render={(props) => (
+        <button {...props}>
+          {props.children as ReactNode}
+          {closable(tab.id) && (
+            <span
+              className="pierre-layout-tab-close"
+              data-layout-tab-close=""
+              aria-hidden="true"
+              title={`Close ${LABELS[tab.id] ?? tab.id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                hidePane(tab);
+              }}
+            >
+              ×
+            </span>
+          )}
+        </button>
+      )}
+    />
+  );
+}
+
+// The tabs of a pane in a stack, or the title of a lone pane, as the default
+// header of the \`Layout\` component before showed them.
+function TabsOrTitle({
+  tab,
+}: {
+  tab?: (tab: PaneNode) => JSX.Element;
+}): JSX.Element {
+  const stacked = Layout.usePane((state) => state.tabs.length > 1);
+  return stacked ? <Layout.TabList>{tab}</Layout.TabList> : <Layout.Title />;
+}
+
 // A stable function, so that a change of the app's state does not render the
-// content of every pane again.
-const renderPane = (pane: PaneNode): JSX.Element =>
-  pane.id === 'sessions' ? <Sessions /> : <AgentPane id={pane.id} />;
+// content of every pane again. The header holds the controls of the pane.
+const renderPane = (pane: PaneNode): JSX.Element => {
+  const actions = paneActions(pane.id);
+  return (
+    <>
+      <Layout.Header>
+        {actions.includes('move') && (
+          <Layout.MoveHandle title="Drag to move this pane beside another" />
+        )}
+        <TabsOrTitle tab={renderTab} />
+        {actions.includes('collapse') && <Layout.CollapseButton />}
+        {actions.includes('zoom') && <Layout.ZoomButton />}
+        {actions.includes('close') && <Layout.CloseButton />}
+      </Layout.Header>
+      <Layout.Content>
+        {pane.id === 'sessions' ? <Sessions /> : <AgentPane id={pane.id} />}
+      </Layout.Content>
+    </>
+  );
+};
+
+const MESSAGES = { layout: 'Agent workspace' };
 
 /** An agent app built with the layouts library: a full window with no page scroll. */
 export default function App(): JSX.Element {
@@ -134,9 +210,9 @@ export default function App(): JSX.Element {
     store.getSnapshot
   );
   const { sessions, active } = useSessions();
-  const [resize, setResize] = useState<ResizeStrategy>('live');
-  const [animateLayout, setAnimateLayout] = useState(true);
-  const [animateZoom, setAnimateZoom] = useState(true);
+  const [resize, setResize] = useState<ResizeStrategy>(resizeOfMenu);
+  const [animateLayout, setAnimateLayout] = useState(animate.layout);
+  const [animateZoom, setAnimateZoom] = useState(animate.zoom);
   const [layers, setLayers] = useState<'on' | 'off' | 'auto'>('auto');
   const workspace = useRef<HTMLElement>(null);
   const visible = new Set(
@@ -221,7 +297,10 @@ export default function App(): JSX.Element {
                 type="checkbox"
                 aria-label="Animate panes"
                 checked={animateLayout}
-                onChange={(event) => setAnimateLayout(event.target.checked)}
+                onChange={(event) => {
+                  animate.layout = event.target.checked;
+                  setAnimateLayout(event.target.checked);
+                }}
               />
               panes
             </label>
@@ -230,7 +309,10 @@ export default function App(): JSX.Element {
                 type="checkbox"
                 aria-label="Animate zoom"
                 checked={animateZoom}
-                onChange={(event) => setAnimateZoom(event.target.checked)}
+                onChange={(event) => {
+                  animate.zoom = event.target.checked;
+                  setAnimateZoom(event.target.checked);
+                }}
               />
               zoom
             </label>
@@ -253,21 +335,24 @@ export default function App(): JSX.Element {
           </span>
           <span className="app-resize">
             Drag
-            <ResizeSelect value={resize} onChange={setResize} />
+            <ResizeSelect
+              value={resize}
+              onChange={(value) => {
+                resizeOfMenu = value;
+                setResize(value);
+              }}
+            />
           </span>
           <a href="/">Playground</a>
         </div>
       </header>
       <main className="app-main" ref={workspace}>
-        <Layout
-          store={store}
+        <Layout.Root
+          layout={store}
           renderPane={renderPane}
           getPaneTitle={getPaneTitle}
-          paneActions={paneActions}
           onPaneClose={hidePane}
-          label="Agent workspace"
-          experimentalResize={resize}
-          animate={{ layout: animateLayout, zoom: animateZoom }}
+          messages={MESSAGES}
           paneLayers={layers === 'auto' ? undefined : layers === 'on'}
         />
       </main>

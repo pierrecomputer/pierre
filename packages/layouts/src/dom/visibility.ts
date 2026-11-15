@@ -38,8 +38,11 @@ export const STATE_REASONS: number =
 /**
  * The owner of the visibility of the pane hosts of a view. It keeps the
  * reasons of each pane, and it alone writes `inert` and the visibility
- * attributes: `data-pane-hidden`, `data-collapsed`, `aria-hidden`, and the
- * tab stop of a covered host, and `data-collapsed` on the content. A host
+ * attributes: `data-pane-hidden` (hidden, an inactive tab, or a collapse to 0
+ * pixels: the host does not show), `data-hidden` (under a zoom: the host
+ * keeps its box and skips its rendering), `data-overlay-covered`,
+ * `data-collapsed`, `aria-hidden`, and the tab stop of a covered host, and
+ * `data-collapsed` on the content. A host
  * receives `PANE_VISIBILITY_EVENT` only when its content starts or stops
  * rendering: `COVERED` alone does not stop it.
  */
@@ -106,7 +109,13 @@ export function createPaneVisibility(): PaneVisibility {
       const hidden = (bits & HOST_HIDDEN) !== 0;
       const covered = (bits & COVERED) !== 0;
       if (host.inert !== hidden) host.inert = hidden;
-      mark(host, 'data-pane-hidden', hidden);
+      mark(
+        host,
+        'data-pane-hidden',
+        (bits & (HIDDEN | INACTIVE | COLLAPSED_WHOLE)) !== 0
+      );
+      mark(host, 'data-hidden', (bits & ZOOM) !== 0);
+      mark(host, 'data-overlay-covered', (bits & OVERLAY) !== 0);
       mark(host, 'data-collapsed', collapsed);
       mark(host, 'aria-hidden', covered);
       // `Root` renders each host as a tab stop.

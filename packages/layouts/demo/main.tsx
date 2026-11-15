@@ -8,15 +8,10 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import {
-  type Edge,
-  getPanes,
-  type LayoutNode,
-  LayoutStore,
-  type PaneNode,
-} from '../src';
-import { Layout } from '../src/react';
-import '../src/styles.css';
+import { type Edge, getPanes, type LayoutNode, type PaneNode } from '../src';
+import * as Layout from '../src/react';
+import { allFeatures, createLayout, naryTree } from '../src/react';
+import { resizeStrategy } from '../src/react/features/resize-strategy';
 import { ResizeSelect, type ResizeStrategy } from './resize-select';
 import './style.css';
 
@@ -144,7 +139,13 @@ const AGENT_TITLES: Partial<Record<string, string>> = {
 
 const AgentPane = lazy(() => import('./agent'));
 
-const store = new LayoutStore(mosaic);
+// The resize strategy of the menu, which the internal feature of the bench
+// reads at each pointer resize.
+let resizeOfMenu: ResizeStrategy = 'live';
+const store = createLayout(mosaic, [
+  ...allFeatures({ model: naryTree }),
+  resizeStrategy(() => resizeOfMenu),
+]);
 let nextPane = 8;
 const colors = [
   '#edf2ff',
@@ -187,14 +188,40 @@ function PaneContent({ pane: node }: { pane: PaneNode }): JSX.Element {
   );
 }
 
-const renderPane = (node: PaneNode): JSX.Element =>
-  AGENT_TITLES[node.id] === undefined ? (
-    <PaneContent pane={node} />
-  ) : (
-    <Suspense fallback={<div className="demo-loading">Loading…</div>}>
-      <AgentPane id={node.id} />
-    </Suspense>
-  );
+// The tabs of a pane in a stack, or the title of a lone pane, as the default
+// header of the \`Layout\` component before showed them.
+function TabsOrTitle({
+  tab,
+}: {
+  tab?: (tab: PaneNode) => JSX.Element;
+}): JSX.Element {
+  const stacked = Layout.usePane((state) => state.tabs.length > 1);
+  return stacked ? <Layout.TabList>{tab}</Layout.TabList> : <Layout.Title />;
+}
+
+// Each pane has a header with a move handle, its tabs or its title, and the
+// zoom and close buttons, and its content.
+const renderPane = (node: PaneNode): JSX.Element => (
+  <>
+    <Layout.Header>
+      <Layout.MoveHandle title="Drag to move this pane beside another" />
+      <TabsOrTitle />
+      <Layout.ZoomButton />
+      <Layout.CloseButton />
+    </Layout.Header>
+    <Layout.Content>
+      {AGENT_TITLES[node.id] === undefined ? (
+        <PaneContent pane={node} />
+      ) : (
+        <Suspense fallback={<div className="demo-loading">Loading…</div>}>
+          <AgentPane id={node.id} />
+        </Suspense>
+      )}
+    </Layout.Content>
+  </>
+);
+
+const MESSAGES = { layout: 'Layout playground' };
 
 function Playground(): JSX.Element {
   const state = useSyncExternalStore(
@@ -207,7 +234,7 @@ function Playground(): JSX.Element {
   // An edge, or `tabs` to move the focused pane into the target's tabs.
   const [edge, setEdge] = useState<Edge | 'tabs'>('right');
   // Experimental: how a pointer resize applies its sizes, to compare how each feels.
-  const [resize, setResize] = useState<ResizeStrategy>('live');
+  const [resize, setResize] = useState<ResizeStrategy>(resizeOfMenu);
   const panes = getPanes(state.root);
   const otherPanes = panes.filter(({ id }) => id !== state.focusedPane);
   const actualTarget = otherPanes.some(({ id }) => id === target)
@@ -312,12 +339,11 @@ function Playground(): JSX.Element {
         </div>
       </div>
       <div className="demo-workspace">
-        <Layout
-          store={store}
+        <Layout.Root
+          layout={store}
           renderPane={renderPane}
           getPaneTitle={title}
-          label="Layout playground"
-          experimentalResize={resize}
+          messages={MESSAGES}
           style={{ '--layout-pane-background': '#fbfcfd' } as CSSProperties}
         />
       </div>
@@ -368,7 +394,13 @@ function Playground(): JSX.Element {
           Move
         </button>
         <span>Resize drag</span>
-        <ResizeSelect value={resize} onChange={setResize} />
+        <ResizeSelect
+          value={resize}
+          onChange={(value) => {
+            resizeOfMenu = value;
+            setResize(value);
+          }}
+        />
         <span className="demo-message" role="status">
           {message}
         </span>

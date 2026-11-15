@@ -33,7 +33,7 @@ test('a hidden pane keeps its content and shows again in its place', async ({
   expect(editor?.height).toBeGreaterThan((before?.height ?? 0) + 100);
 
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-pane-hidden', 'false');
+  await expect(terminal).not.toHaveAttribute('data-pane-hidden');
   await expect(terminal.locator('.agent-terminal')).toHaveAttribute(
     'data-kept',
     'yes'
@@ -100,7 +100,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
     return element.getAnimations().length;
   });
   expect(running).toBe(0);
-  await expect(terminal).toHaveAttribute('data-pane-hidden', 'false');
+  await expect(terminal).not.toHaveAttribute('data-pane-hidden');
 });
 
 test('the close button of a tool hides it, and each pane has its own buttons', async ({
@@ -128,10 +128,7 @@ test('the close button of a tool hides it, and each pane has its own buttons', a
     page.getByRole('button', { name: 'Files', exact: true })
   ).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Files', exact: true }).click();
-  await expect(host(page, 'files')).toHaveAttribute(
-    'data-pane-hidden',
-    'false'
-  );
+  await expect(host(page, 'files')).not.toHaveAttribute('data-pane-hidden');
 });
 
 test('panes and the zoom change at once when their animations are off', async ({
@@ -169,10 +166,7 @@ test('panes and the zoom change at once when their animations are off', async ({
   await page.getByLabel('Animate panes').uncheck();
   await page.waitForTimeout(400);
   expect(await clickAndCount('Files')).toBe(0);
-  await expect(host(page, 'files')).toHaveAttribute(
-    'data-pane-hidden',
-    'false'
-  );
+  await expect(host(page, 'files')).not.toHaveAttribute('data-pane-hidden');
 
   expect(await clickAndCount('Zoom Editor')).toBeGreaterThan(0);
   await page.waitForTimeout(400);

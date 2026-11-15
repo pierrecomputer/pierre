@@ -83,7 +83,7 @@ for (const strategy of STRATEGIES) {
         (box?.y ?? 0) + (box?.height ?? 0) / 2
       );
       await expect(modal).toBeVisible();
-      await expect(host(page, 'agent')).toHaveAttribute('data-zoomed', 'false');
+      await expect(host(page, 'agent')).not.toHaveAttribute('data-zoomed');
       expect(await focusPlace(modal)).toBe('inside');
     });
 
@@ -309,5 +309,5 @@ test('an overlay keeps the state of tabs that do not show and of a collapsed pan
     await expect(host(page, id)).toHaveAttribute('inert', '');
   await expect(terminal).not.toHaveAttribute('inert');
   await collapse.click();
-  await expect(terminal).toHaveAttribute('data-collapsed', 'false');
+  await expect(terminal).not.toHaveAttribute('data-collapsed');
 });

@@ -3,18 +3,20 @@ import { createRoot } from 'react-dom/client';
 
 import {
   type ChildSize,
-  LayoutStore,
-  naryTree,
+  getPanes,
+  type PaneNode,
   toLayoutNodeView,
 } from '../src';
+import { findNode } from '../src/model';
+import * as Layout from '../src/react';
 import {
-  Layout,
+  allFeatures,
+  createLayout,
   type LayoutResizeSession,
-  type PaneHeaderProps,
+  naryTree,
 } from '../src/react';
-import '../src/styles.css';
 
-const store = new LayoutStore(
+const store = createLayout(
   {
     type: 'split',
     id: 'row',
@@ -33,44 +35,65 @@ const store = new LayoutStore(
       { type: 'pane', id: 'terminal' },
     ],
   },
-  { model: naryTree }
+  allFeatures({ model: naryTree, animate: false })
 );
 
-function Header(header: PaneHeaderProps): JSX.Element {
+// A tab can close when another pane would still show.
+const closable = (id: string): boolean =>
+  getPanes(store.getSnapshot().root).some(
+    (pane) => pane.id !== id && pane.hidden !== true
+  );
+
+// The app's own tab: the ID of its pane, and a close mark that closes it.
+// The part keeps the roles, the keys, and the drag.
+function renderTab(tab: PaneNode): JSX.Element {
   return (
-    <header className="pierre-layout-header" data-custom-header="">
-      <div {...header.tablistProps} className="pierre-layout-tabs">
-        {header.tabs.map((tab) => (
-          <button
-            key={tab.id}
-            {...header.getTabProps(tab)}
-            className="pierre-layout-tab"
-          >
-            {tab.id}
-            {header.canClose(tab.id) && (
-              <span
-                data-layout-tab-close=""
-                aria-hidden="true"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  header.close(tab.id);
-                }}
-              >
-                ×
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-      <button onClick={() => store.toggleZoom(header.pane.id)}>
-        Zoom {header.pane.id}
-      </button>
-    </header>
+    <Layout.Tab
+      render={(props) => (
+        <button {...props}>
+          {tab.id}
+          {closable(tab.id) && (
+            <span
+              data-layout-tab-close=""
+              aria-hidden="true"
+              onClick={(event) => {
+                event.stopPropagation();
+                store.close(tab.id);
+              }}
+            >
+              ×
+            </span>
+          )}
+        </button>
+      )}
+    />
   );
 }
 
-// Moves the separator of each split of two weighted children to the nearest
-// eighth of the split, between one eighth and seven eighths.
+// The app's own header element, with the tabs of the pane and its own zoom
+// button. A pane outside a stack shows its own tab.
+const renderPane = (pane: PaneNode): JSX.Element => (
+  <>
+    <Layout.Header render={<header data-custom-header="" />}>
+      <Layout.TabList>{renderTab}</Layout.TabList>
+      <button type="button" onClick={() => store.toggleZoom(pane.id)}>
+        Zoom {pane.id}
+      </button>
+    </Layout.Header>
+    <Layout.Content>
+      <input
+        aria-label={`Content ${pane.id}`}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || event.currentTarget.value === '')
+            return;
+          event.preventDefault();
+          event.currentTarget.value = '';
+        }}
+      />
+    </Layout.Content>
+  </>
+);
+
 function snapToEighths(
   sizes: Record<string, ChildSize[]>
 ): Record<string, ChildSize[]> {
@@ -116,41 +139,28 @@ function Consumer(): JSX.Element {
       {/* An app key handler above the layout: it counts the keys that reach it. */}
       <div onKeyDown={() => setAppKeys((count) => count + 1)}>
         {mounted && (
-          <Layout
-            store={store}
+          <Layout.Root
+            layout={store}
             style={{ width: 1000, height: 600 }}
-            animate={false}
-            loneTabStrip
-            renderHeader={Header}
-            renderPane={(pane) => (
-              <input
-                aria-label={`Content ${pane.id}`}
-                // Escape clears the input first; the layout then leaves it alone.
-                onKeyDown={(event) => {
-                  if (
-                    event.key !== 'Escape' ||
-                    event.currentTarget.value === ''
-                  )
-                    return;
-                  event.preventDefault();
-                  event.currentTarget.value = '';
-                }}
-              />
-            )}
-            // The terminal host is structural: no drop target, no tab stop.
+            renderPane={renderPane}
             getPaneProps={(pane) => ({
               className: 'consumer-pane',
               'data-drop-target': pane.id === 'terminal' ? undefined : pane.id,
-              tabIndex: pane.id === 'terminal' ? -1 : undefined,
             })}
             getSeparatorProps={(separator) => ({
-              'aria-label': `Resize the ${separator.split.id} split`,
+              'aria-label': `Resize the ${separator.splitId} split`,
               className: 'consumer-separator',
               children: <span data-separator-grip="" />,
-              onDoubleClick: () =>
-                store.setSizes({
-                  [separator.split.id]: separator.split.children.map(() => 1),
-                }),
+              onDoubleClick: () => {
+                const split = findNode(
+                  store.getSnapshot().root,
+                  separator.splitId
+                );
+                if (split?.type === 'split')
+                  store.setSizes({
+                    [split.id]: split.children.map(() => 1),
+                  });
+              },
             })}
             onResizeStart={({ source }): LayoutResizeSession => ({
               update: snap ? (sizes) => snapToEighths(sizes) : undefined,

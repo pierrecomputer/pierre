@@ -3,7 +3,8 @@
 // use it.
 //
 // - `?features=nostacks`: no `stacks()`, so the tab lists warn.
-// - `?tablist=none`: no tab list in the files pane, so `stacks()` warns.
+// - `?tablist=none`: no tab list in the panes of the tools stack, so
+//   `stacks()` warns. The lone files pane shows its title.
 import { type JSX, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -22,7 +23,7 @@ import {
 
 const params = new URLSearchParams(location.search);
 const withoutStacks = params.get('features') === 'nostacks';
-const filesWithoutTabList = params.get('tablist') === 'none';
+const toolsWithoutTabList = params.get('tablist') === 'none';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -93,7 +94,8 @@ function renderPane(pane: PaneNode): JSX.Element {
   return (
     <>
       <Layout.Header>
-        {filesWithoutTabList && pane.id === 'files' ? (
+        {toolsWithoutTabList &&
+        (pane.id === 'terminal' || pane.id === 'output') ? (
           <Layout.Title />
         ) : (
           <Layout.TabList />
