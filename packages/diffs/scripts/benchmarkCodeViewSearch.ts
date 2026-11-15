@@ -1,4 +1,3 @@
-import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import { TextDocument } from '../src/editor/textDocument';
 import {
   MAX_SEARCH_MATCHES,
@@ -6,20 +5,10 @@ import {
   type SearchParams,
 } from '../src/search';
 import {
-  type CodeViewSearchLine,
-  type CodeViewSearchMatch,
-  collectCodeViewLineMatches,
+  type CodeViewSearchItem,
+  CodeViewSearchScan,
 } from '../src/search/codeViewSearch';
-import type {
-  CodeViewItem,
-  FileDiffMetadata,
-  SelectionSide,
-} from '../src/types';
-import { linesFromFileContents } from '../src/utils/computeFileOffsets';
-import {
-  type DiffLineMetadata,
-  iterateOverDiff,
-} from '../src/utils/iterateOverDiff';
+import type { CodeViewItem, FileDiffMetadata } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
 interface BenchmarkConfig {
@@ -179,128 +168,26 @@ function createEditedDocument(
   return document;
 }
 
-// Mirrors CodeView.searchFileItem: collect line records, then match them.
-function searchFileItem(
-  contents: string,
+// Measures the same scan used by CodeView, including source preparation.
+function searchItem(
+  getItem: () => CodeViewSearchItem,
   params: SearchParams
 ): BenchmarkSample {
   const start = performance.now();
-  const lines = linesFromFileContents(contents).map(
-    (text, lineIndex): CodeViewSearchLine => ({
-      text,
-      metadata: {
-        itemId: 'file',
-        itemType: 'file',
-        side: undefined,
-        lineNumber: lineIndex + 1,
-        lineIndex,
-      },
-    })
+  const scan = new CodeViewSearchScan(
+    params,
+    ['item'],
+    getItem,
+    MAX_SEARCH_MATCHES
   );
-  const collected = performance.now();
-  const matches = collectCodeViewLineMatches(lines, params, MAX_SEARCH_MATCHES);
-  const end = performance.now();
-  return {
-    collectMs: collected - start,
-    matchMs: end - collected,
-    totalMs: end - start,
-    matchCount: matches.length,
-  };
-}
-
-// Mirrors CodeView.searchDiffItem, including retained
-// editor text. Diff resolution and fixture preparation are outside the timing.
-function searchDiffItem(
-  fileDiff: FileDiffMetadata,
-  diffStyle: 'split' | 'unified',
-  document: TextDocument | undefined,
-  params: SearchParams
-): BenchmarkSample {
-  const start = performance.now();
-  const lines: CodeViewSearchLine[] = [];
-  // Adds one side's current text with the source coordinates used for results.
-  const addLine = (
-    side: SelectionSide,
-    line: DiffLineMetadata | undefined
-  ): void => {
-    if (line == null) return;
-    const sourceLines =
-      side === 'additions' ? fileDiff.additionLines : fileDiff.deletionLines;
-    const text =
-      side === 'additions' && document != null
-        ? document.getLineText(line.lineIndex, true)
-        : sourceLines[line.lineIndex];
-    if (text == null) return;
-    lines.push({
-      text,
-      metadata: {
-        itemId: 'diff',
-        itemType: 'diff',
-        side,
-        lineNumber: line.lineNumber,
-        lineIndex: line.lineIndex,
-      },
-    });
-  };
-  iterateOverDiff({
-    diff: fileDiff,
-    diffStyle,
-    expandedHunks: true,
-    collapsedContextThreshold: DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-    callback: ({ additionLine, deletionLine }) => {
-      if (diffStyle === 'unified') {
-        if (
-          additionLine != null &&
-          fileDiff.additionLines[additionLine.lineIndex] != null
-        ) {
-          addLine('additions', additionLine);
-        } else {
-          addLine('deletions', deletionLine);
-        }
-        return;
-      }
-      addLine('deletions', deletionLine);
-      addLine('additions', additionLine);
-    },
-  });
-  const collected = performance.now();
-  const matches = collectCodeViewLineMatches(lines, params, MAX_SEARCH_MATCHES);
-  const end = performance.now();
-  return {
-    collectMs: collected - start,
-    matchMs: end - collected,
-    totalMs: end - start,
-    matchCount: matches.length,
-  };
-}
-
-// Mirrors CodeView.searchEditedItem: document.search and positionAt mapping.
-// There is no separate line collection; matching includes result conversion.
-function searchEditedItem(
-  document: TextDocument,
-  params: SearchParams
-): BenchmarkSample {
-  const start = performance.now();
-  const matches = document
-    .search(params, MAX_SEARCH_MATCHES)
-    .map(([start, end]): CodeViewSearchMatch => {
-      const position = document.positionAt(start);
-      return {
-        itemId: 'edited-file',
-        itemType: 'file',
-        side: undefined,
-        lineNumber: position.line + 1,
-        lineIndex: position.line,
-        startCharacter: position.character,
-        endCharacter: position.character + end - start,
-      };
-    });
+  scan.advance();
+  const matches = scan.getItemMatches('item');
   const elapsed = performance.now() - start;
   return {
     collectMs: 0,
     matchMs: elapsed,
     totalMs: elapsed,
-    matchCount: matches.length,
+    matchCount: matches?.length ?? 0,
   };
 }
 
@@ -325,7 +212,10 @@ function createCases(lines: number): BenchmarkCase[] {
       prepare:
         ({ contents }) =>
         (params) =>
-          searchFileItem(contents.after, params),
+          searchItem(
+            () => ({ type: 'file', contents: contents.after }),
+            params
+          ),
     },
   ];
   const diffStyles: ('split' | 'unified')[] = ['split', 'unified'];
@@ -338,7 +228,10 @@ function createCases(lines: number): BenchmarkCase[] {
       prepare:
         ({ fileDiff }) =>
         (params) =>
-          searchDiffItem(fileDiff, diffStyle, undefined, params),
+          searchItem(
+            () => ({ type: 'diff', fileDiff, diffStyle, additionsOnly: false }),
+            params
+          ),
     });
   }
   for (const inserts of [0, 100, 5000]) {
@@ -347,7 +240,11 @@ function createCases(lines: number): BenchmarkCase[] {
       expectedLines: lines,
       prepare: ({ contents }) => {
         const document = createEditedDocument(contents.after, lines, inserts);
-        return (params) => searchEditedItem(document, params);
+        return (params) =>
+          searchItem(
+            () => ({ type: 'file', contents: document.getText() }),
+            params
+          );
       },
     });
     for (const diffStyle of diffStyles) {
@@ -364,7 +261,16 @@ function createCases(lines: number): BenchmarkCase[] {
             true
           );
           return (params) =>
-            searchDiffItem(fileDiff, diffStyle, document, params);
+            searchItem(
+              () => ({
+                type: 'diff',
+                fileDiff,
+                diffStyle,
+                additionsOnly: false,
+                additionContents: document.getText(),
+              }),
+              params
+            );
         },
       });
     }
@@ -589,7 +495,7 @@ if (config.outputJson) {
         measurement: {
           fixturePreparationExcluded: true,
           forcedGcBeforeTiming: true,
-          editedFileMatchingIncludesPositionMapping: true,
+          perItemMatchingIncludesPreparation: true,
           codeView:
             'Synchronous public query update in jsdom at every configured size and query, for files and split diffs in items of up to 1000 lines; final-query/count waiting excluded',
         },
@@ -604,7 +510,7 @@ if (config.outputJson) {
     `CodeView search: ${config.runs} measured runs, ${config.warmupRuns} warmups per case; cap=${MAX_SEARCH_MATCHES}`
   );
   console.log(
-    'Times are best/median ms. Edited-file matching includes position mapping; collection is zero. Fixture preparation and forced GC are excluded.'
+    'Times are best/median ms. Per-item scans include preparation and matching; collection is zero. Fixture preparation and forced GC are excluded.'
   );
   console.log(
     'CodeView cases search files and split diffs at every configured size and query, in items of up to 1000 lines. Total is the synchronous public query update in jsdom; final-query/count waiting is excluded.'

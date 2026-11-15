@@ -7,6 +7,7 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import { CodeViewSearchScan } from '../src/search/codeViewSearch';
 import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -55,7 +56,7 @@ describe('CodeView search', () => {
       createEditor: (type, options, editStateKey) =>
         new Editor(type, options, editStateKey),
     });
-    const search = spyOn(TextDocument.prototype, 'search');
+    const search = spyOn(CodeViewSearchScan.prototype, 'advance');
     const render = spyOn(viewer, 'render');
     try {
       const root = createRoot();

@@ -9,10 +9,7 @@ import {
   searchDocument,
   type SearchParams,
 } from '../src/search';
-import {
-  type CodeViewSearchLine,
-  collectCodeViewLineMatches,
-} from '../src/search/codeViewSearch';
+import { CodeViewSearchScan } from '../src/search/codeViewSearch';
 
 function createSearchDocument(text: string): SearchableDocument {
   const lineStarts = [0];
@@ -197,24 +194,14 @@ describe('searchDocument', () => {
   });
 
   test('matches whole words at CodeView line edges after trimming CRLF', () => {
-    const lines: CodeViewSearchLine[] = [];
-    for (const text of ['foo foo\n', 'foo foo\r\n', 'foo foo']) {
-      lines.push({
-        text,
-        metadata: {
-          itemId: 'word-boundaries',
-          itemType: 'file',
-          side: undefined,
-          lineIndex: lines.length,
-          lineNumber: lines.length + 1,
-        },
-      });
-    }
-    const matches = collectCodeViewLineMatches(
-      lines,
+    const scan = new CodeViewSearchScan(
       searchParams({ text: 'foo', wholeWord: true }),
+      ['word-boundaries'],
+      () => ({ type: 'file', contents: 'foo foo\nfoo foo\r\nfoo foo' }),
       100
     );
+    scan.advance();
+    const matches = scan.getMatches();
 
     expect(
       matches.map(({ lineIndex, startCharacter, endCharacter }) => [

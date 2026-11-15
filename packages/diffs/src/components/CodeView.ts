@@ -44,11 +44,9 @@ import {
   areCodeViewSearchMatchArraysEqual,
   areCodeViewSearchMatchesEqual,
   areOptionalCodeViewSearchMatchesEqual,
-  type CodeViewItemSearchMatches,
-  type CodeViewSearchLine,
+  type CodeViewSearchItem,
   type CodeViewSearchMatch,
-  collectCodeViewLineMatches,
-  groupCodeViewSearchMatchesByItem,
+  CodeViewSearchScan,
 } from '../search/codeViewSearch';
 import { revealMatchHorizontally } from '../search/revealMatchHorizontally';
 import { SearchHighlighter } from '../search/SearchHighlighter';
@@ -84,7 +82,6 @@ import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
-import { linesFromFileContents } from '../utils/computeFileOffsets';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
@@ -92,8 +89,6 @@ import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isUserScrollInput } from '../utils/isUserScrollInput';
-import type { DiffLineMetadata } from '../utils/iterateOverDiff';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { isFirefox } from '../utils/platform';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
@@ -217,7 +212,7 @@ interface PagedScrollPosition {
 interface CodeViewSearchState {
   scope: { itemId: string } | undefined;
   matches: CodeViewSearchMatch[];
-  matchesByItem: Map<string, CodeViewItemSearchMatches>;
+  scan: CodeViewSearchScan | undefined;
   current: CodeViewSearchMatch | undefined;
   // Once a result requires scrolling, center subsequent navigation until the
   // query or scope changes. Background match refreshes preserve this choice.
@@ -984,7 +979,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private searchState: CodeViewSearchState = {
     scope: undefined,
     matches: [],
-    matchesByItem: new Map(),
+    scan: undefined,
     current: undefined,
     centerNavigation: false,
     pendingHorizontalReveal: false,
@@ -1660,7 +1655,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchHighlighter?.clear();
     this.searchState.scope = undefined;
     this.searchState.matches = [];
-    this.searchState.matchesByItem = new Map();
+    this.searchState.scan = undefined;
     this.searchState.current = undefined;
     this.searchState.centerNavigation = false;
     this.searchMatchesDirty = false;
@@ -1950,8 +1945,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     if (matchesChanged) {
       this.searchState.matches = matches;
-      this.searchState.matchesByItem =
-        groupCodeViewSearchMatchesByItem(matches);
     }
     this.searchState.current = current;
     if (current == null) this.searchState.pendingHorizontalReveal = false;
@@ -1990,13 +1983,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     highlighter.clear();
     if (this.searchState.matches.length === 0) return;
     const { firstIndex, lastIndex } = this.renderState;
+    const { scan } = this.searchState;
     for (let index = firstIndex; index >= 0 && index <= lastIndex; index++) {
       const item = this.items[index];
       const root = item.element?.shadowRoot;
-      const itemMatches = this.searchState.matchesByItem.get(item.item.id);
-      if (root != null && itemMatches != null) {
+      if (root != null && scan != null) {
         highlighter.paint(root, (lineNumber, side) =>
-          itemMatches.get(`${side}:${lineNumber}`)?.map((match) => ({
+          scan.getLineMatches(item.item.id, lineNumber, side)?.map((match) => ({
             startCharacter: match.startCharacter,
             endCharacter: match.endCharacter,
             current:
@@ -2007,6 +2000,31 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       }
     }
   }
+
+  // Resolves an item's current searchable text and diff when the scan reaches it.
+  private getSearchItem = (itemId: string): CodeViewSearchItem => {
+    const { idToItem, itemEditors, options, searchState } = this;
+    const item = idToItem.get(itemId);
+    if (item == null) {
+      throw new Error(
+        `CodeView.getSearchItem: item "${itemId}" does not exist`
+      );
+    }
+    const document = itemEditors.get(itemId)?.editor.getEditState()?.document;
+    const contents = document?.getText();
+    return item.type === 'file'
+      ? { type: 'file', contents: contents ?? item.item.file.contents }
+      : {
+          type: 'diff',
+          fileDiff:
+            document != null
+              ? (item.instance.getDiffForSearch() ?? item.item.fileDiff)
+              : item.item.fileDiff,
+          additionContents: contents,
+          diffStyle: options.diffStyle ?? 'split',
+          additionsOnly: searchState.scope?.itemId === itemId,
+        };
+  };
 
   private searchCodeView(
     searchParams: SearchParams
@@ -2022,19 +2040,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       scope != null ? this.idToItem.get(scope.itemId) : undefined;
     const items =
       scope == null ? this.items : scopedItem == null ? [] : [scopedItem];
+    const { getSearchItem } = this;
+    const scan = new CodeViewSearchScan(
+      searchParams,
+      items.map(({ item }) => item.id),
+      getSearchItem,
+      MAX_SEARCH_MATCHES
+    );
+    this.searchState.scan = scan;
+    scan.advance();
     for (const item of items) {
-      const remaining = MAX_SEARCH_MATCHES - matches.length;
-      if (remaining <= 0) {
-        break;
-      }
-
-      const nextMatches =
-        (scope != null || item.type === 'file'
-          ? this.searchEditedItem(item, searchParams, remaining)
-          : undefined) ??
-        (item.type === 'file'
-          ? this.searchFileItem(item, searchParams, remaining)
-          : this.searchDiffItem(item, searchParams, remaining));
+      const nextMatches = scan.getItemMatches(item.item.id);
+      if (nextMatches == null) break;
       // A collapsed file renders no lines, so its header stands in for all
       // of its matches.
       const collapsed = item.item.collapsed === true;
@@ -2090,135 +2107,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       preferredMatch:
         matches[firstVisible ?? firstRendered ?? firstAfterRendered ?? 0],
     };
-  }
-
-  // Retained editor documents include edits the host has not echoed back yet.
-  private searchEditedItem(
-    item: CodeViewContextItem<LAnnotation, Caret>,
-    searchParams: SearchParams,
-    limit: number
-  ): CodeViewSearchMatch[] | undefined {
-    const document = this.itemEditors
-      .get(item.item.id)
-      ?.editor.getEditState()?.document;
-    if (document === undefined) {
-      return undefined;
-    }
-
-    return document
-      .search(searchParams, limit)
-      .map(([start, end]): CodeViewSearchMatch => {
-        const position = document.positionAt(start);
-        return {
-          itemId: item.item.id,
-          itemType: item.type,
-          side: item.type === 'diff' ? 'additions' : undefined,
-          lineNumber: position.line + 1,
-          lineIndex: position.line,
-          startCharacter: position.character,
-          endCharacter: position.character + end - start,
-        };
-      });
-  }
-
-  private searchFileItem(
-    item: CodeViewFileItemContext<LAnnotation, Caret>,
-    searchParams: SearchParams,
-    limit: number
-  ): CodeViewSearchMatch[] {
-    const lines = linesFromFileContents(item.item.file.contents).map(
-      (text, lineIndex): CodeViewSearchLine => ({
-        text,
-        metadata: {
-          itemId: item.item.id,
-          itemType: 'file',
-          side: undefined,
-          lineNumber: lineIndex + 1,
-          lineIndex,
-        },
-      })
-    );
-
-    return collectCodeViewLineMatches(lines, searchParams, limit);
-  }
-
-  private searchDiffItem(
-    item: CodeViewDiffItemContext<LAnnotation, Caret>,
-    searchParams: SearchParams,
-    limit: number
-  ): CodeViewSearchMatch[] {
-    const doc = this.itemEditors
-      .get(item.item.id)
-      ?.editor.getEditState()?.document;
-    const fileDiff =
-      doc == null
-        ? item.item.fileDiff
-        : (item.instance.getDiffForSearch() ?? item.item.fileDiff);
-    const scoped = this.searchState.scope?.itemId === item.item.id;
-    const diffStyle = this.options.diffStyle ?? 'split';
-    const lines: CodeViewSearchLine[] = [];
-
-    const addLine = (
-      side: SelectionSide,
-      line: DiffLineMetadata | undefined
-    ): void => {
-      if (line === undefined) {
-        return;
-      }
-
-      const sourceLines =
-        side === 'additions' ? fileDiff.additionLines : fileDiff.deletionLines;
-      const text =
-        side === 'additions' && doc != null
-          ? doc.getLineText(line.lineIndex, true)
-          : sourceLines[line.lineIndex];
-      if (text === undefined) {
-        return;
-      }
-
-      lines.push({
-        text,
-        metadata: {
-          itemId: item.item.id,
-          itemType: 'diff',
-          side,
-          lineNumber: line.lineNumber,
-          lineIndex: line.lineIndex,
-        },
-      });
-    };
-
-    // Every line is searched, collapsed context included.
-    iterateOverDiff({
-      diff: fileDiff,
-      diffStyle,
-      expandedHunks: true,
-      collapsedContextThreshold:
-        this.options.collapsedContextThreshold ??
-        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      callback: ({ additionLine, deletionLine }) => {
-        if (scoped) {
-          addLine('additions', additionLine);
-          return;
-        }
-        if (diffStyle === 'unified') {
-          if (
-            additionLine !== undefined &&
-            fileDiff.additionLines[additionLine.lineIndex] !== undefined
-          ) {
-            addLine('additions', additionLine);
-          } else {
-            addLine('deletions', deletionLine);
-          }
-          return;
-        }
-
-        addLine('deletions', deletionLine);
-        addLine('additions', additionLine);
-      },
-    });
-
-    return collectCodeViewLineMatches(lines, searchParams, limit);
   }
 
   private cleanAllRenderedItems() {
@@ -2651,6 +2539,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         onSearchStateChange?.(state);
       },
       onQueryChange: () => {
+        this.searchState.scan = undefined;
         this.searchState.centerNavigation = false;
       },
       search: (searchParams) => this.searchCodeView(searchParams),

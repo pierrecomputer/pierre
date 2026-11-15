@@ -1,6 +1,7 @@
 import { compileSearchQuery, matchSearchLine } from './lineSearch';
 
 export * from './lineSearch';
+export * from './codeViewSearch';
 
 export type MatchRange = [startOffset: number, endOffset: number];
 
