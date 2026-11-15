@@ -98,11 +98,11 @@ activation default; pass `{ activate: false }` to change it.
 
 The batch runs against an isolated store and returns a new tree only if every
 operation succeeds. `LayoutOperationError.code` is `tab_not_found`,
-`invalid_place`, `layout_limit`, `last_tab`, or `invalid_sizes`, and `last_pane`
-for a close of the last pane that is not hidden. `maxGroups` is optional; the
-default has no group limit. The default operation model is `naryTree`. Closing
-the last tab through an operation is an error; reconciliation can return `null`
-for an empty tab list.
+`invalid_place`, `layout_limit`, `last_tab`, or `invalid_sizes`. A close of the
+last pane that is not hidden throws `TreeOperationError` with `last_pane`.
+`maxGroups` is optional; the default has no group limit. The default operation
+model is `naryTree`. Closing the last tab through an operation is an error;
+reconciliation can return `null` for an empty tab list.
 
 ## Save resize changes
 

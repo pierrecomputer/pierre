@@ -87,32 +87,30 @@ export interface LayoutChange {
 }
 
 /**
- * The codes of `LayoutOperationError`. The codes `tab_not_found`,
- * `invalid_place`, `layout_limit`, and `last_tab` belong to the old server
- * operations, which go with them.
+ * The codes of `TreeOperationError`. This is the final type of
+ * `LayoutOperationErrorCode`, under a temporary name until the old server
+ * operations go.
  */
-export type LayoutOperationErrorCode =
+export type TreeOperationErrorCode =
   | 'pane_not_found'
   | 'node_not_found'
   | 'last_pane'
   | 'invalid_sizes'
   | 'id_in_use'
-  | 'unknown_operation'
-  | 'tab_not_found'
-  | 'invalid_place'
-  | 'layout_limit'
-  | 'last_tab';
+  | 'unknown_operation';
 
 /**
  * An operation that a tree refuses. The tree stays as it was. The message is
  * the code and a detail, such as the ID of the pane: `pane_not_found: editor`.
+ * This is the final class of `LayoutOperationError`, under a temporary name
+ * until the old server operations go.
  */
-export class LayoutOperationError extends Error {
-  readonly code: LayoutOperationErrorCode;
+export class TreeOperationError extends Error {
+  readonly code: TreeOperationErrorCode;
 
-  constructor(code: LayoutOperationErrorCode, detail: string) {
+  constructor(code: TreeOperationErrorCode, detail: string) {
     super(`${code}: ${detail}`);
-    this.name = 'LayoutOperationError';
+    this.name = 'TreeOperationError';
     this.code = code;
   }
 }

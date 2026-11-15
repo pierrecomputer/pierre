@@ -465,11 +465,11 @@ applyOperations(store, [{ type: 'setRoot', root: response.tree.root }]);
 - On a server, `parseLayoutOperations(value)` checks operations from a client,
   with the path of each wrong field, and `applyTreeOperations(root, operations)`
   folds them on the stored tree, with the same IDs as the client. A refused
-  operation throws `LayoutOperationError` with a code: `pane_not_found`,
+  operation throws `TreeOperationError` with a code: `pane_not_found`,
   `node_not_found`, `last_pane`, `invalid_sizes`, `id_in_use`, or
-  `unknown_operation`. `applyTreeOperations` takes the name
-  `applyLayoutOperations` when the old server operations of the consumer guide
-  go.
+  `unknown_operation`. When the old server operations of the consumer guide go,
+  `applyTreeOperations` takes the name `applyLayoutOperations`, and
+  `TreeOperationError` the name `LayoutOperationError`.
 - Undo keeps the settled states: a listener that skips transient and remote
   changes pushes the state before each local change, and an undo sets that tree
   again with `setRoot`.

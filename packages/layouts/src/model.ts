@@ -1,7 +1,7 @@
 // The core of the layout tree: validation, queries, and the changes that every
 // layout needs (sizes, collapse, hidden panes, the active pane of a stack).
 // Feature modules import from this module. This module imports no feature.
-import { LayoutOperationError } from './layout-operation';
+import { TreeOperationError } from './layout-operation';
 import type { Fold } from './store';
 import type {
   ChildSize,
@@ -149,10 +149,10 @@ export function getPanes(root: LayoutNode): PaneNode[] {
   return root.type === 'pane' ? [root] : root.children.flatMap(getPanes);
 }
 
-/** A pane of a tree, or `LayoutOperationError('pane_not_found')`. */
+/** A pane of a tree, or `TreeOperationError('pane_not_found')`. */
 export function paneIn(root: LayoutNode, id: string): PaneNode {
   const pane = getPanes(root).find((each) => each.id === id);
-  if (pane === undefined) throw new LayoutOperationError('pane_not_found', id);
+  if (pane === undefined) throw new TreeOperationError('pane_not_found', id);
   return pane;
 }
 
@@ -169,7 +169,7 @@ export function canClose(root: LayoutNode, id: string): boolean {
 /** Throw `id_in_use` when a tree holds a node with the ID of a new pane. */
 export function requireNewPane(root: LayoutNode, pane: PaneNode): void {
   if (findNode(root, pane.id) !== null)
-    throw new LayoutOperationError('id_in_use', pane.id);
+    throw new TreeOperationError('id_in_use', pane.id);
 }
 
 /**

@@ -3,7 +3,7 @@
 // the pane out of its place with the tree model of the store, so it needs
 // `edits`. The store commit moves the zoom of a stack to the tab that shows.
 import { randomIds } from './ids';
-import { LayoutOperationError } from './layout-operation';
+import { TreeOperationError } from './layout-operation';
 import { foldActivate, paneIn, requireNewPane, stackOf } from './model';
 import { addToStack, moveTabTo } from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
@@ -80,7 +80,7 @@ export const stacks: StoreFeature<StackCommands> = {
         );
       }
       if (model === null)
-        throw new LayoutOperationError(
+        throw new TreeOperationError(
           'unknown_operation',
           'A move into another stack needs a tree model'
         );

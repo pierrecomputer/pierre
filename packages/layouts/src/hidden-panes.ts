@@ -1,6 +1,6 @@
 // Hidden panes: the store command that hides a pane, which keeps its place,
 // its content, and its state, and takes no space, and the fold of `hide`.
-import { LayoutOperationError } from './layout-operation';
+import { TreeOperationError } from './layout-operation';
 import {
   activatePane,
   canClose,
@@ -27,7 +27,7 @@ export const hiddenPanes: StoreFeature<HiddenPaneCommands> = {
     hide(root, { pane, hidden }) {
       paneIn(root, pane);
       if (hidden && !canClose(root, pane))
-        throw new LayoutOperationError('last_pane', pane);
+        throw new TreeOperationError('last_pane', pane);
       const next = setPaneHidden(root, pane, hidden);
       return !hidden && stackOf(next, pane) !== null
         ? activatePane(next, pane)

@@ -73,7 +73,7 @@ export interface FoldContext {
 
 /**
  * The change that one operation makes to a tree: the same change for the
- * command of a store and for a server. It throws `LayoutOperationError` for an
+ * command of a store and for a server. It throws `TreeOperationError` for an
  * operation that the tree refuses.
  */
 export type Fold<T extends TreeOperation = TreeOperation> = (

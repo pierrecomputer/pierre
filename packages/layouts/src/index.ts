@@ -17,10 +17,10 @@ export {
   isTreeOperation,
   type LayoutChange,
   type LayoutOperation,
-  LayoutOperationError,
-  type LayoutOperationErrorCode,
   type LayoutWindowOperation,
   type TreeOperation,
+  TreeOperationError,
+  type TreeOperationErrorCode,
 } from './layout-operation';
 export { LayoutStore, type LayoutStoreOptions } from './layout-store';
 export {
@@ -72,6 +72,8 @@ export type {
 export {
   applyLayoutOperations,
   type ApplyLayoutOperationsOptions,
+  LayoutOperationError,
+  type LayoutOperationErrorCode,
   type LayoutTreeOperation,
   type SplitAddress,
   splitAddressOf,
