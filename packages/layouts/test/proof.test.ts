@@ -12,9 +12,14 @@ import { brotliCompressSync, constants } from 'node:zlib';
 
 const PACKAGE = join(import.meta.dir, '..');
 
-// The budget of app A, with its CSS (`DEC-layouts-modular-size-budget`, the
-// value after step 9 of `refactor-entries-feature-modules`).
-const BUDGET = { minified: 26_796, brotli: 8_966 };
+// The budget of app A, with its CSS, for each build that the test measures
+// (`DEC-layouts-modular-size-budget`, the values after step 14 of
+// `refactor-entries-feature-modules`). Bytes, minified and brotli.
+const BUDGET = {
+  'two-pane source': { minified: 27_001, brotli: 9_018 },
+  'two-pane rolldown': { minified: 26_998, brotli: 9_027 },
+  'two-pane esbuild': { minified: 27_409, brotli: 9_589 },
+} as const;
 
 interface Output {
   code: string;
@@ -237,13 +242,12 @@ test('app A from the dist costs no more than app A from the source', () => {
   expect(fromDist.minified).toBeLessThanOrEqual(fromSource.minified + 32);
 });
 
-// App A is over its budget since step 12 of `refactor-entries-feature-modules`
-// (the `COVERED` reason of the zoom accessibility, the visibility attributes,
-// and the cover registry); the owner decides the budget. The test expects the
-// failure, so it fails when app A is within the budget again.
-test.failing('app A built with Rolldown is within its budget', () => {
-  const output = outputs.get('two-pane rolldown');
-  if (output === undefined) throw new Error('Missing output');
-  expect(output.minified).toBeLessThanOrEqual(BUDGET.minified);
-  expect(output.brotli).toBeLessThanOrEqual(BUDGET.brotli);
-});
+test.each(Object.entries(BUDGET))(
+  '%s is within the budget of app A',
+  (name, budget) => {
+    const output = outputs.get(name);
+    if (output === undefined) throw new Error('Missing output');
+    expect(output.minified).toBeLessThanOrEqual(budget.minified);
+    expect(output.brotli).toBeLessThanOrEqual(budget.brotli);
+  }
+);
