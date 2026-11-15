@@ -54,8 +54,8 @@ function attach(ref: unknown, element: unknown): () => void {
 
 /**
  * The app's props, then the part's own. Both event handlers run, the app's
- * first; the classes join; both refs get the element. For any other prop,
- * the part's value wins.
+ * first; the classes join; both refs get the element; the styles join, with
+ * the part's values last. For any other prop, the part's value wins.
  */
 export function mergeProps(app: Props, own: Props): Props {
   const merged: Props = { ...app, ...own };
@@ -65,6 +65,7 @@ export function mergeProps(app: Props, own: Props): Props {
     if (appValue == null || ownValue == null) continue;
     if (key === 'className')
       merged[key] = `${ownValue as string} ${appValue as string}`;
+    else if (key === 'style') merged[key] = { ...appValue, ...ownValue };
     else if (key === 'ref')
       merged[key] = (element: unknown) => {
         const detachApp = attach(appValue, element);

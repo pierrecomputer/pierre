@@ -18,6 +18,7 @@ import type { PaneVisibility } from '../dom/visibility';
 import type { CoreLayoutStore, StoreFeature } from '../store';
 import type {
   ChildSize,
+  Edge,
   LayoutGeometry,
   LayoutNode,
   LayoutState,
@@ -121,6 +122,15 @@ export interface LayoutMessages {
   readonly zoom?: (title: string, zoomed: boolean) => string;
   /** The status message while a pane is zoomed. Default: "Editor zoomed". */
   readonly zoomed?: (title: string) => string;
+  /** The name of `Layout.MoveHandle`. Default: "Drag Editor". */
+  readonly drag?: (title: string) => string;
+  /**
+   * The status message during a pane drag: the pane, the edge, and the target
+   * pane. Default: "Move Editor to the right of Files".
+   */
+  readonly move?: (title: string, edge: Edge, target: string) => string;
+  /** The name of a corner of `corners()`. Default: "Resize both axes". */
+  readonly corner?: string;
 }
 
 /** A layout object: the store, with the features of the layout. */

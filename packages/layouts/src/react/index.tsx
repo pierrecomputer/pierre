@@ -38,7 +38,9 @@ export {
   type FeatureCommands,
   type LayoutObject,
 } from './create-layout';
+export { corners } from './features/corners';
 export { focusRing } from './features/focus-ring';
+export { paneDrag } from './features/pane-drag';
 export { edits, hiddenPanes, persistence } from './features/store-only';
 export { zoom } from './features/zoom';
 export {
@@ -57,6 +59,8 @@ export {
   Content,
   Header,
   type HeaderState,
+  MoveHandle,
+  type MoveHandleState,
   Title,
   ZoomButton,
   type ZoomButtonState,

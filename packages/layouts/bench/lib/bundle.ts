@@ -67,6 +67,7 @@ const APPS: Record<string, string> = {
   'app C: full set': 'bench/apps/full.tsx',
   'app D: side panel': 'bench/apps/side-panel.tsx',
   'modular app A: two-pane split': 'bench/apps/modular/two-pane.tsx',
+  'modular app B: tiled grid': 'bench/apps/modular/tiled.tsx',
 };
 
 const MODES: readonly BundleMode[] = ['app', 'library'];

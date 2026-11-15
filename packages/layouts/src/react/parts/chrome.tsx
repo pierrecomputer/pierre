@@ -3,12 +3,15 @@
 // Pane chrome parts: each reads its pane from the pane context, subscribes to
 // the state that it shows, sets that state as data attributes, and takes a
 // `render` prop.
-import type { JSX } from 'react';
+import type { JSX, PointerEvent } from 'react';
 
 import contentCss from '../../css/content.css?inline';
 import headersCss from '../../css/headers.css?inline';
+import { presentation } from '../../presentation';
 import type { ZoomCommands } from '../../zoom';
 import { Style } from '../contract';
+import { useDrag } from '../drag';
+import { DISABLED_GRIP_STYLE, GRIP_STYLE } from '../gesture-styles';
 import { usePaneContext, usePaneState } from '../use-pane';
 import { canClose, closePane, closes } from './close';
 import {
@@ -214,5 +217,60 @@ export function ZoomButton({
       children: children ?? (zoomed ? '↙' : '↗'),
     }),
     { zoomed }
+  );
+}
+
+export interface MoveHandleState {
+  /** The pane moves in a drag. */
+  dragging: boolean;
+  /** No drag starts: a pane fills the layout. */
+  disabled: boolean;
+}
+
+const dragName = (title: string): string => `Drag ${title}`;
+
+/**
+ * Move the pane with a pointer drag, beside another pane. It needs
+ * `paneDrag()`. While a pane fills the layout, it is `aria-disabled` and
+ * starts no drag.
+ */
+export function MoveHandle({
+  render,
+  children,
+  ...props
+}: PartProps<MoveHandleState>): JSX.Element {
+  const value = usePaneContext('Layout.MoveHandle');
+  const { id, context } = value;
+  warnMissing(context.has('pane-drag'), 'Layout.MoveHandle', 'paneDrag()');
+  const pane = usePaneState(value, (state) => state.pane);
+  const disabled = !useLayoutState(
+    context.store,
+    (state) => presentation(state).rearrangeable
+  );
+  const dragging = useDrag(
+    context,
+    (drag) => drag?.source.kind === 'pane' && drag.source.id === id
+  );
+  return renderPart(
+    'button',
+    render,
+    mergeProps(props, {
+      type: 'button',
+      className: 'pierre-layout-grip',
+      'aria-label': (context.messages().drag ?? dragName)(context.title(pane)),
+      // Not `disabled`: the handle keeps its place in the tab order.
+      'aria-disabled': disabled || undefined,
+      'data-dragging': dragging || undefined,
+      style: disabled ? DISABLED_GRIP_STYLE : GRIP_STYLE,
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        if (disabled) return;
+        context
+          .hooks()
+          .find((hook) => hook.startMove !== undefined)
+          ?.startMove?.(id, event);
+      },
+      children: children ?? '⠿',
+    }),
+    { dragging, disabled }
   );
 }
