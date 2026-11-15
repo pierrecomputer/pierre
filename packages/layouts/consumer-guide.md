@@ -51,7 +51,7 @@ keyboard focus outside the layout when focus starts there.
 `/consumer.html` demo shows custom headers and resize reporting. The modal and
 drawer entries remain separate.
 
-## Store and reconcile a tree
+## Store a tree
 
 `store.toStoredTree()` returns `{ version: 3, root }`. It excludes window focus
 and zoom. Parse untrusted data with `parseStoredLayoutTree(value, model)` before
@@ -60,49 +60,9 @@ invalid nodes with `InvalidLayoutTreeError`, which includes the field path. The
 default parser model is `naryTree`. The existing `serialize` and `restore`
 methods still include local focus and zoom.
 
-`defaultLayoutTree(tabIds)` creates one group, one pane, or `null` for an empty
-list. `reconcileLayoutTree(root, tabIds, model)` removes closed tabs and appends
-new tabs to the first group without selecting them. It retains the arrangement
-of surviving tabs. If no tab survives, it builds the default tree. Its default
-model is also `naryTree`.
-
-`toLayoutNodeView(root)` gives a compact read form: groups have `tabs` and
-`active`; splits have a `row` or `column` direction, sizes, and children.
-`fromLayoutNodeView` rebuilds that trusted form with deterministic node IDs. The
-read form omits size constraints and hidden/collapsed state. Use
-`StoredLayoutTree` for full persistence.
-
-## Apply operations
-
-These tab and group operations go when chat-bb uses the store operations: see
-"Operations" in the README, with `applyTreeOperations` and
-`parseLayoutOperations`.
-
-```ts
-const next = applyLayoutOperations(
-  root,
-  [
-    { op: 'open', tab: 'preview', place: { beside: 'editor', edge: 'right' } },
-    { op: 'resize', tab: 'editor', sizes: [2, 1] },
-  ],
-  { model: naryTree, maxGroups: 12 }
-);
-```
-
-Operations open, select, close, move, or resize tabs and groups. A place is
-`{ into: tabId, index? }` or `{ beside: tabId, edge }`. An open without a place
-appends to the first group. Opening an existing tab is idempotent.
-`select: true` activates an opened tab. A move into a group does not activate
-it. Direct `store.addTab` and `store.moveToStack` calls retain their existing
-activation default; pass `{ activate: false }` to change it.
-
-The batch runs against an isolated store and returns a new tree only if every
-operation succeeds. `LayoutOperationError.code` is `tab_not_found`,
-`invalid_place`, `layout_limit`, `last_tab`, or `invalid_sizes`. A close of the
-last pane that is not hidden throws `TreeOperationError` with `last_pane`.
-`maxGroups` is optional; the default has no group limit. The default operation
-model is `naryTree`. Closing the last tab through an operation is an error;
-reconciliation can return `null` for an empty tab list.
+To keep a server's tree the same as the store's tree, send the store's
+operations and fold them on the server: see "Operations" in the README, with
+`parseLayoutOperations` and `applyLayoutOperations`.
 
 ## Save resize changes
 
@@ -110,12 +70,10 @@ reconciliation can return `null` for an empty tab list.
 completed pointer drag, and after each keyboard resize that changes a size. A
 cancelled drag reports nothing. Programmatic store updates do not call it.
 
-Use `splitAddressOf(root, splitId)` to convert a reported split ID into
-`{ tab, level }`, then persist `{ op: 'resize', ...address, sizes }`. Level zero
-names the split directly above the tab's group. Higher levels name its
-ancestors. Each child has a positive weight or `{ px: nonNegativePixels }`; the
-count must match the split's children. Storage and network writes remain the
-consumer's responsibility.
+Each completed resize also gives one `resize` operation to the store's
+listeners, with the same split IDs. A server folds it with
+`applyLayoutOperations`. Storage and network writes remain the consumer's
+responsibility.
 
 ## Control a resize
 

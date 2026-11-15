@@ -1,12 +1,7 @@
 import { type JSX, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import {
-  type ChildSize,
-  getPanes,
-  type PaneNode,
-  toLayoutNodeView,
-} from '../src';
+import { type ChildSize, getPanes, type PaneNode } from '../src';
 import { findNode } from '../src/model';
 import * as Layout from '../src/react';
 import { allFeatures, createLayout, naryTree } from '../src/react';
@@ -137,7 +132,7 @@ function Consumer(): JSX.Element {
           />
         )}
       </div>
-      <pre id="tree">{JSON.stringify(toLayoutNodeView(state.root))}</pre>
+      <pre id="tree">{JSON.stringify(state.root)}</pre>
       <pre id="resizes">{JSON.stringify(resizes)}</pre>
       <pre id="app-keys">{appKeys}</pre>
     </>

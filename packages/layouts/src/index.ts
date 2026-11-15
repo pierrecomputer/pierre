@@ -70,36 +70,10 @@ export type {
   TreeModel,
 } from './types';
 export {
-  applyLayoutOperations,
-  type ApplyLayoutOperationsOptions,
-  LayoutOperationError,
-  type LayoutOperationErrorCode,
-  type LayoutTreeOperation,
-  type SplitAddress,
-  splitAddressOf,
-  splitOfTab,
-  type TabPlace,
-} from './operations';
-export {
-  DEFAULT_LAYOUT_GROUP_ID,
-  defaultLayoutTree,
-  reconcileLayoutTree,
-} from './reconcile';
-export {
   InvalidLayoutTreeError,
   parseLayoutOperations,
   parseStoredLayoutTree,
 } from './stored-tree';
-export {
-  exceedsGroupLimit,
-  fromLayoutNodeView,
-  groupOf,
-  groupsOf,
-  type LayoutGroupView,
-  type LayoutNodeView,
-  type LayoutSplitView,
-  toLayoutNodeView,
-} from './view';
 export { computeCSSLayout } from './css-layout';
 export type {
   CSSLayout,

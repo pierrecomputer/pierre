@@ -6,8 +6,9 @@ import { dirname, relative, resolve } from 'node:path';
 // exports. Some app bundlers put each module that an app module reaches in
 // the chunk of that app module, even when the app uses only one function of
 // the module. chat-bb's chunk groups do this. So if the root entry reaches
-// the DOM code of the view, an app module that imports only `reconcileLayoutTree`
-// takes the view's code into its chunk, out of the chunk that loads the view.
+// the DOM code of the view, an app module that imports only
+// `parseLayoutOperations` takes the view's code into its chunk, out of the
+// chunk that loads the view.
 
 const SOURCE = resolve(import.meta.dir, '../src');
 
