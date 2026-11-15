@@ -54,6 +54,12 @@ const defaultTab = (): ReactNode => <Tab />;
  * The tabs of the stack of the pane, in a `tablist`: the tabs that show, in
  * their order. A pane outside a stack shows its own tab. It needs
  * `stacks()`.
+ *
+ * Each host of a stack renders its pane's chrome, also the hosts of the tabs
+ * that do not show. There, the list holds only the tab of its own pane, which
+ * names the tab panel of the host. So a stack of n tabs renders 2n - 1 tabs,
+ * and a change of tab renders two tab lists: the one that hides and the one
+ * that shows.
  */
 export function TabList({
   render,
@@ -65,8 +71,12 @@ export function TabList({
   warnMissing(context.has('stacks'), 'Layout.TabList', 'stacks()');
   const pane = usePaneState(value, (state) => state.pane);
   const tabs = usePaneState(value, (state) => state.tabs);
-  const activeTab = usePaneState(value, (state) => state.activeTab);
-  const shown = tabs.filter((tab) => tab.hidden !== true);
+  // The pane of the host is the tab that shows in its stack. Only this value
+  // changes for a change of tab, so only two tab lists render for it.
+  const own = usePaneState(value, (state) => state.activeTab === state.id);
+  const shown = tabs.filter((tab) =>
+    own ? tab.hidden !== true : tab.id === value.id
+  );
   return (
     <>
       <Style name="tabs" css={tabsCss} settings={context.stylesheets()} />
@@ -82,7 +92,7 @@ export function TabList({
           'data-layout-tablist': '',
           children: shown.map((tab, index) => (
             <TabContext key={tab.id} value={{ tab, tabs: shown }}>
-              {children(tab, { active: tab.id === activeTab, index })}
+              {children(tab, { active: own && tab.id === value.id, index })}
             </TabContext>
           )),
         }),

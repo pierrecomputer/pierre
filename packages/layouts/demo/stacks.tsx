@@ -1,4 +1,4 @@
-// `stacks()` with `Layout.TabList` and `Layout.Tab`: a stack of three editor
+// `stacks()` with `Layout.TabList` and `Layout.Tab`: a stack of five editor
 // tabs, a pane outside a stack, and a stack of two tool tabs. The e2e tests
 // use it.
 //
@@ -26,6 +26,8 @@ const TITLES: Record<string, string> = {
   main: 'main.ts',
   util: 'util.ts',
   test: 'test.ts',
+  types: 'types.ts',
+  docs: 'README.md',
   files: 'Files',
   terminal: 'Terminal',
   output: 'Output',
@@ -53,6 +55,8 @@ const page = {
             { type: 'pane', id: 'main' },
             { type: 'pane', id: 'util' },
             { type: 'pane', id: 'test' },
+            { type: 'pane', id: 'types' },
+            { type: 'pane', id: 'docs' },
           ],
         },
         { type: 'pane', id: 'files' },

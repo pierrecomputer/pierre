@@ -44,7 +44,7 @@ test('the tab list follows the APG tabs pattern', async ({ page }) => {
   await page.goto('/stacks.html');
   const tabs = tabsOf(page, 'main');
   await expect(tabs).toHaveAccessibleName('Tabs of main.ts');
-  await expect(tabs.getByRole('tab')).toHaveCount(3);
+  await expect(tabs.getByRole('tab')).toHaveCount(5);
   const main = tabs.getByRole('tab', { name: 'main.ts' });
   await expect(main).toHaveAttribute('aria-selected', 'true');
   await expect(main).toHaveAttribute('tabindex', '0');
@@ -79,7 +79,7 @@ test('the arrows, Home, and End move the focus to a tab that shows, with no rend
   await expect(host(page, 'main')).toHaveAttribute('data-pane-hidden', 'true');
   await page.keyboard.press('End');
   await expect(
-    tabsOf(page, 'test').getByRole('tab', { name: 'test.ts' })
+    tabsOf(page, 'docs').getByRole('tab', { name: 'README.md' })
   ).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(
@@ -109,7 +109,7 @@ test('Delete closes the focused tab, and the focus goes to the tab that shows ne
   await tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' }).focus();
   await page.keyboard.press('Delete');
   await expect(host(page, 'main')).toHaveCount(0);
-  await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(2);
+  await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(4);
   await expect(
     tabsOf(page, 'util').getByRole('tab', { name: 'util.ts' })
   ).toBeFocused();
@@ -122,12 +122,42 @@ test('Ctrl+Shift+PageDown and PageUp move the focused tab, which keeps the focus
   const names = () => tabsOf(page, 'main').getByRole('tab').allTextContents();
   await tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' }).focus();
   await page.keyboard.press('Control+Shift+PageDown');
-  await expect.poll(names).toEqual(['util.ts', 'main.ts', 'test.ts']);
+  await expect
+    .poll(names)
+    .toEqual(['util.ts', 'main.ts', 'test.ts', 'types.ts', 'README.md']);
   await expect(
     tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' })
   ).toBeFocused();
   await page.keyboard.press('Control+Shift+PageUp');
-  await expect.poll(names).toEqual(['main.ts', 'util.ts', 'test.ts']);
+  await expect
+    .poll(names)
+    .toEqual(['main.ts', 'util.ts', 'test.ts', 'types.ts', 'README.md']);
+});
+
+test('a host of a tab that does not show holds only its own tab', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  const editors = ['main', 'util', 'test', 'types', 'docs'];
+  const count = () =>
+    page.evaluate(
+      (ids) =>
+        [...document.querySelectorAll<HTMLElement>('[data-layout-tab]')].filter(
+          (tab) => ids.includes(tab.dataset.layoutTab ?? '')
+        ).length,
+      editors
+    );
+  // Five tabs in the host that shows, and one in each of the four others.
+  expect(await count()).toBe(9);
+  for (const id of editors.slice(1))
+    await expect(host(page, id).locator('[data-layout-tab]')).toHaveCount(1);
+  await tabsOf(page, 'main').getByRole('tab', { name: 'types.ts' }).click();
+  await expect(
+    tabsOf(page, 'types').getByRole('tab', { name: 'types.ts' })
+  ).toBeFocused();
+  await expect(tabsOf(page, 'types').getByRole('tab')).toHaveCount(5);
+  await expect(host(page, 'main').locator('[data-layout-tab]')).toHaveCount(1);
+  expect(await count()).toBe(9);
 });
 
 test('a pane outside a stack shows its own tab, and activate focuses it', async ({
@@ -156,7 +186,7 @@ test('a pane outside a stack shows its own tab, and activate focuses it', async 
 test('a hidden tab leaves the tab list', async ({ page }) => {
   await page.goto('/stacks.html');
   await command(page, 'setHidden', 'util', true);
-  await expect(tabsOf(page, 'main').getByRole('tab')).toHaveCount(2);
+  await expect(tabsOf(page, 'main').getByRole('tab')).toHaveCount(4);
   await expect(
     tabsOf(page, 'main').getByRole('tab', { name: 'util.ts' })
   ).toHaveCount(0);
@@ -167,12 +197,12 @@ test('a tab list without stacks(), and stacks() without a tab list in a pane, wa
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/stacks.html?features=nostacks');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(6);
+  await expect(page.locator('[data-layout-pane]')).toHaveCount(8);
   expect(
     warnings.filter((text) => text.includes('Layout.TabList needs stacks()'))
   ).toHaveLength(1);
   await page.goto('/stacks.html?tablist=none');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(6);
+  await expect(page.locator('[data-layout-pane]')).toHaveCount(8);
   await expect
     .poll(
       () =>
