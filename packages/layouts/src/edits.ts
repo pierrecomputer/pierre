@@ -2,6 +2,7 @@
 // the folds of their operations. The tree model is an argument, so an app
 // loads only the model that it uses.
 import { swapPanes } from './edits-model';
+import { randomIds } from './ids';
 import { LayoutOperationError } from './layout-operation';
 import { canClose, paneIn, requireNewPane, slotOf } from './model';
 import { focusAfterLeaving, type StoreFeature } from './store';
@@ -34,6 +35,7 @@ export interface EditCommands {
 export function edits(model: TreeModel): StoreFeature<EditCommands> {
   return {
     model,
+    ids: randomIds,
     folds: {
       split(root, { target, pane, edge, id }, { newId }) {
         paneIn(root, target);
@@ -82,9 +84,12 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
           edge,
           id: newId('split'),
         } as const;
-        commit({ ...get(), root: fold(operation), focusedPane: pane.id }, [
-          operation,
-        ]);
+        commit(
+          { ...get(), root: fold(operation), focusedPane: pane.id },
+          [operation],
+          'local',
+          pane.id
+        );
       },
       close(id) {
         const state = get();
@@ -103,9 +108,12 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
           edge,
           id: newId('split'),
         } as const;
-        commit({ ...get(), root: fold(operation), focusedPane: sourceId }, [
-          operation,
-        ]);
+        commit(
+          { ...get(), root: fold(operation), focusedPane: sourceId },
+          [operation],
+          'local',
+          sourceId
+        );
       },
       swap(firstId, secondId) {
         const operation = {

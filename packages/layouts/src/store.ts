@@ -1,8 +1,7 @@
-import {
-  type LayoutChange,
-  type LayoutOperation,
-  LayoutOperationError,
-  type TreeOperation,
+import type {
+  LayoutChange,
+  LayoutOperation,
+  TreeOperation,
 } from './layout-operation';
 import {
   findNode,
@@ -115,14 +114,16 @@ export interface StoreContext {
    * The commit owns the rules of the zoom. A zoom that `next` sets stays on a
    * pane that shows. A zoom that `next` carries from the current state
    * follows the tab that shows in the stack of the zoomed pane. A local
-   * structural edit ends it: the pane that an operation puts in a new place
-   * (a new pane, or a pane that moves) is the zoomed pane, or it shows outside
-   * the zoom. A remote change ends it only when the zoomed pane stops showing.
+   * structural edit ends it: `placed`, the pane that the change puts in a new
+   * place (a new pane, or a pane that moves), is the zoomed pane, or it shows
+   * outside the zoom. A remote change ends it only when the zoomed pane stops
+   * showing.
    */
   commit(
     next: LayoutState,
     operations: readonly LayoutOperation[],
-    origin?: LayoutChange['origin']
+    origin?: LayoutChange['origin'],
+    placed?: string
   ): void;
   /** The tree model of the store, or null when no feature gives one. */
   model(): TreeModel | null;
@@ -149,13 +150,19 @@ export interface StoreFeature<Commands extends object = object> {
   commands(context: StoreContext): Commands;
   /** The folds of the operations of the commands. */
   readonly folds?: Folds;
+  /**
+   * The maker of the new IDs of the store, for a feature that makes nodes:
+   * `randomIds`. The first feature that has one gives it to the store.
+   */
+  readonly ids?: () => (kind: 'split' | 'stack') => string;
 }
 
 export interface CreateLayoutStoreOptions {
   /**
    * The maker of new split and stack IDs, for a test or a server. By
-   * default, `<kind>-<prefix>-<count>`, with 8 random characters of prefix
-   * for each store.
+   * default, the maker of the features (`randomIds`):
+   * `<kind>-<prefix>-<count>`, with 8 random characters of prefix for each
+   * store.
    */
   readonly newId?: (kind: 'split' | 'stack') => string;
 }
@@ -191,28 +198,20 @@ export interface ContextOfStore {
   readonly [STORE_CONTEXT]: StoreContext;
 }
 
-// The pane that an operation puts in a new place, for the end of a zoom.
-const placedBy = (operation: LayoutOperation): string | undefined =>
-  operation.type === 'split' || operation.type === 'addTab'
-    ? operation.pane.id
-    : operation.type === 'move' || operation.type === 'moveToStack'
-      ? operation.pane
-      : undefined;
-
 // The folds of the core commands.
 const CORE_FOLDS: Folds = {
   setRoot: (_root, { root }, { own }) => own(root),
   resize(root, { sizes }) {
     let next = root;
     for (const [id, values] of Object.entries(sizes)) {
+      // `applyOperations` checks the splits and the sizes of an operation
+      // from elsewhere.
       const node = findNode(next, id);
-      if (node?.type !== 'split' || values.length !== node.children.length)
-        throw new LayoutOperationError(
-          node === null ? 'node_not_found' : 'invalid_sizes',
-          id
-        );
       // Sizes that do not change keep the tree, so the change has no operation.
-      if (JSON.stringify(values) !== JSON.stringify(node.sizes))
+      if (
+        node?.type === 'split' &&
+        JSON.stringify(values) !== JSON.stringify(node.sizes)
+      )
         next = replaceNode(next, id, () => ({ ...node, sizes: [...values] }));
     }
     return next;
@@ -246,20 +245,15 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     ...list.map((feature) => feature.folds)
   );
   const listeners = new Set<(change: LayoutChange) => void>();
-  let prefix: string | null = null;
   let count = 0;
   // While above 0, each commit is transient.
   let transientDepth = 0;
 
+  // A store whose features make no node keeps a plain count.
   const newId =
     options.newId ??
-    ((kind: 'split' | 'stack'): string => {
-      // 8 random base-36 characters, made at the first new ID.
-      prefix ??= Array.from(crypto.getRandomValues(new Uint8Array(8)), (byte) =>
-        (byte % 36).toString(36)
-      ).join('');
-      return `${kind}-${prefix}-${++count}`;
-    });
+    list.find((feature) => feature.ids !== undefined)?.ids?.() ??
+    ((kind: 'split' | 'stack'): string => `${kind}-${++count}`);
   // Give a tree the shape of the model, and validate it. The checks of
   // `validateLayout` come first, so that the model gets a sound tree.
   const shape = (root: LayoutNode): LayoutNode => {
@@ -298,7 +292,8 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   const commit = (
     next: LayoutState,
     operations: readonly LayoutOperation[],
-    origin: LayoutChange['origin'] = 'local'
+    origin: LayoutChange['origin'] = 'local',
+    placed?: string
   ): void => {
     const sameTree = next.root === state.root;
     if (!sameTree) (model?.validate ?? validateLayout)(next.root);
@@ -311,11 +306,8 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       // A zoomed stack follows the tab that shows.
       zoomed = stackOf(next.root, zoomed)?.active ?? zoomed;
       // A local structural edit that moves the zoomed pane, or that shows a
-      // pane in a new place outside the zoom, ends it.
-      const placed =
-        origin === 'local'
-          ? operations.map(placedBy).findLast((id) => id !== undefined)
-          : undefined;
+      // pane in a new place outside the zoom, ends it. A remote change names
+      // no placed pane, so it keeps the zoom while the zoomed pane shows.
       if (
         placed === state.zoomedPane ||
         (placed !== undefined && placed !== zoomed && shows(placed))

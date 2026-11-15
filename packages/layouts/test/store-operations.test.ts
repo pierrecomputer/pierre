@@ -251,12 +251,13 @@ describe('the operations of each command', () => {
     expect(() => store.close('nothing')).toThrow(
       expect.objectContaining({ code: 'pane_not_found' })
     );
-    expect(() => store.setSizes({ nothing: [1, 1] })).toThrow(
-      expect.objectContaining({ code: 'node_not_found' })
-    );
-    expect(() => store.setSizes({ row: [1, 1] })).toThrow(
-      expect.objectContaining({ code: 'invalid_sizes' })
-    );
+    // A server checks the sizes of an operation from elsewhere.
+    expect(() =>
+      applyOperations(store, [{ type: 'resize', sizes: { nothing: [1, 1] } }])
+    ).toThrow(expect.objectContaining({ code: 'node_not_found' }));
+    expect(() =>
+      applyTreeOperations(start, [{ type: 'resize', sizes: { row: [1, 1] } }])
+    ).toThrow(expect.objectContaining({ code: 'invalid_sizes' }));
     expect(() => store.split('a', pane('b'))).toThrow(
       expect.objectContaining({ code: 'id_in_use' })
     );

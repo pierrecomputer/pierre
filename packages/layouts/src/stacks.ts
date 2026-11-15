@@ -2,6 +2,7 @@
 // and the folds of their operations. A move of a tab into another stack takes
 // the pane out of its place with the tree model of the store, so it needs
 // `edits`. The store commit moves the zoom of a stack to the tab that shows.
+import { randomIds } from './ids';
 import { LayoutOperationError } from './layout-operation';
 import { foldActivate, paneIn, requireNewPane, stackOf } from './model';
 import { addToStack, moveTabTo } from './stacks-model';
@@ -48,6 +49,7 @@ export interface StackCommands {
 
 /** The tab commands of a store. */
 export const stacks: StoreFeature<StackCommands> = {
+  ids: randomIds,
   folds: {
     activate: foldActivate,
     addTab(root, { target, pane, index, activate, id }, { newId }) {
@@ -121,7 +123,9 @@ export const stacks: StoreFeature<StackCommands> = {
         activate
           ? { ...state, root, focusedPane: pane.id }
           : { ...state, root },
-        [operation]
+        [operation],
+        'local',
+        pane.id
       );
     },
     moveToStack(sourceId, targetId, index, options = {}) {
@@ -145,7 +149,9 @@ export const stacks: StoreFeature<StackCommands> = {
             ? sourceId
             : focusAfterLeaving(state, sourceId, root),
         },
-        [operation]
+        [operation],
+        'local',
+        sourceId
       );
     },
     moveTab(id, index) {

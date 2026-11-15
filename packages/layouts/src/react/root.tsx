@@ -41,10 +41,9 @@ import {
 } from '../dom/visibility';
 import { dragSizes, keySizes } from '../gestures';
 import type { LayoutChange, LayoutOperation } from '../layout-operation';
-import { collapsedSizeOf, shownPanes } from '../model';
+import { collapsedSizeOf, getPanes, shownPanes } from '../model';
 import { presentation } from '../presentation';
 import { startResizeGesture } from '../resize-gesture';
-import { treeIndex } from '../tree-index';
 import type {
   ChildSize,
   Direction,
@@ -189,9 +188,10 @@ function announcementOf(
     next,
     messages,
     title(id) {
-      const pane =
-        treeIndex(next.root).panes.get(id)?.pane ??
-        treeIndex(previous.root).panes.get(id)?.pane;
+      // The pane after the change, or before it for a pane that closes.
+      const pane = [...getPanes(next.root), ...getPanes(previous.root)].find(
+        (each) => each.id === id
+      );
       return pane === undefined ? id : latest.getPaneTitle(pane);
     },
   };
