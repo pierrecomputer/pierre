@@ -498,13 +498,13 @@ describe('parseLayoutOperations', () => {
 describe('a tree that equals the current tree', () => {
   const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-  test('is no change, from a local or a remote setRoot', () => {
+  test('is no change from a remote setRoot or a saved form', () => {
     const store = storeOf();
     store.setSizes({ row: [2, 1, 1] });
     const before = store.getSnapshot();
     const changes = record(store);
-    store.setRoot(copy(before.root));
     applyOperations(store, [{ type: 'setRoot', root: copy(before.root) }]);
+    store.setStoredTree(copy(store.toStoredTree()));
     expect(changes).toEqual([]);
     expect(store.getSnapshot()).toBe(before);
   });

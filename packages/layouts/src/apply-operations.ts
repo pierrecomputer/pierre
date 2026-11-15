@@ -3,6 +3,7 @@
 // it.
 import { edits } from './edits';
 import { hiddenPanes } from './hidden-panes';
+import { keepEqual, nodesById } from './keep-equal';
 import type {
   LayoutChange,
   LayoutOperation,
@@ -57,7 +58,12 @@ export function applyOperations(
           if (sizes.length !== node.children.length)
             throw new LayoutOperationError('invalid_sizes', split);
         }
-      root = context.fold(operation, root);
+      // A tree from elsewhere keeps the nodes that equal the current ones, so
+      // an equal tree is no change.
+      root =
+        operation.type === 'setRoot'
+          ? keepEqual(context.fold(operation, root), nodesById(root))
+          : context.fold(operation, root);
     }
   }
   context.commit({ root, focusedPane, zoomedPane }, operations, origin);
