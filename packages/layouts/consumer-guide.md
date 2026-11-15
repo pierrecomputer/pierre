@@ -1,144 +1,173 @@
 # Consumer controls and persistence
 
-A split-pane layout engine with tabs, resize controls, and a React view. The
-root entry needs neither the DOM nor React to load, so a server can import it.
-Its overlay and cover functions use the DOM only when an app calls them. The
-package is private.
+How an app fits the layout to its own chrome, stores and syncs its tree, and
+puts its overlays over it. The root entry needs neither the DOM nor React to
+load, so a server can import it. Its cover functions use the DOM only when an
+app calls them. The package is private.
 
-## Customize a header
+## An app's own pane header
 
-Pass `renderHeader` to `Layout` to replace the default header. The callback
-receives the pane, its stack, its visible tabs, its outer edges, and its focus,
-zoom, and collapse state. It also receives `select`, `close`, and `canClose`
-controls.
+`Root` renders no header of its own. The output of `renderPane` is the content
+of each pane host, so an app renders its header there, from the parts of the
+layout or from its own components. A component reads the state of its pane with
+`Layout.usePane(select)`, and calls the commands of the layout object:
 
 ```tsx
-<Layout
-  store={store}
-  loneTabStrip
-  animate={false}
-  renderPane={(pane) => <Document id={pane.id} />}
-  renderHeader={(header) => (
-    <div {...header.tablistProps}>
-      {header.tabs.map((tab) => (
-        <button key={tab.id} {...header.getTabProps(tab)}>
+const layout = createLayout(tree, [edits(naryTree), stacks()]);
+
+function PaneHeader() {
+  const tabs = Layout.usePane((pane) => pane.tabs);
+  const active = Layout.usePane((pane) => pane.activeTab);
+  const edges = Layout.usePane((pane) => pane.edges);
+  return (
+    <div className="app-header" data-top={edges.top || undefined}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          aria-pressed={tab.id === active}
+          onClick={() => layout.activate(tab.id)}
+        >
           {tab.id}
         </button>
       ))}
     </div>
-  )}
-/>
+  );
+}
+
+const renderPane = (pane: PaneNode) => (
+  <>
+    <PaneHeader />
+    <Layout.Content>{pane.id}</Layout.Content>
+  </>
+);
 ```
 
-Spread `tablistProps` on the tab strip and `getTabProps(tab)` on each tab to
-retain accessible roles, keyboard navigation, selection, and pointer drag. Mark
-a close control inside a tab with `data-layout-tab-close` so that it does not
-start a drag. A custom header owns its markup and styling. A hidden tab keeps
-its content, but has no header.
+The component renders again only when a value that its selectors return changes:
+a change in one pane renders only the components of that pane.
 
-`loneTabStrip` gives a pane outside a stack one tab. Without it, the default
-header keeps its title. A dragged tab can join another group, reorder within a
-strip, or split at a pane edge. The outer 28% of the width and 30% of the height
-are edge drop zones; the center joins a group.
+To keep the roles, the keys, and the drag of the tabs of the library, render
+`Layout.TabList` with the app's own tab in the `render` prop of `Layout.Tab`.
+The tab list makes the pane host the tab panel of its tab:
 
-Pane hosts retain `data-layout-pane` and expose `data-layout-edges` as a
-space-separated list of `top`, `right`, `bottom`, and `left`. `computeCSSLayout`
-returns the same edge flags. A zoomed pane touches every edge. Zoom keeps
-keyboard focus outside the layout when focus starts there.
+```tsx
+<Layout.Header>
+  <Layout.TabList>
+    {(tab) => (
+      <Layout.Tab render={(props) => <AppTab {...props} pane={tab} />} />
+    )}
+  </Layout.TabList>
+</Layout.Header>
+```
 
-`animate={false}` disables both layout and zoom animations. The existing
-`{ layout: false }` and `{ zoom: false }` controls remain available. The
-`/consumer.html` demo shows custom headers and resize reporting. The modal and
-drawer entries remain separate.
+Mark a close control inside a tab with `data-layout-tab-close`, so that a press
+on it does not start a drag. An app that keeps its own tab strip, with no
+`Layout.TabList`, gets one development warning from `stacks()`; each pane host
+then stays a region named by the title of its pane.
+
+## Pane host attributes
+
+Each pane host has `data-layout-pane` with the ID of its pane, and
+`data-layout-edges`, a space-separated list of `top`, `right`, `bottom`, and
+`left`: the edges of the layout that the pane touches. `Layout.usePane` gives
+the same `edges`, and `computeCSSLayout` returns the same edge flags. A zoomed
+pane touches every edge. The host also has `data-focused`, and, when they apply,
+`data-zoomed`, `data-pane-hidden`, `data-collapsed`, `data-hidden` (under a
+zoom), and `data-overlay-covered`.
+
+Layout and zoom changes animate only with `flip()`. Without it, each change
+applies at once.
 
 ## Store a tree
 
-`store.toStoredTree()` returns `{ version: 3, root }`. It excludes window focus
-and zoom. Parse untrusted data with `parseStoredLayoutTree(value, model)` before
-passing it to `store.setStoredTree(tree)`. Parsing rejects unknown fields and
-invalid nodes with `InvalidLayoutTreeError`, which includes the field path. The
-default parser model is `naryTree`. The existing `serialize` and `restore`
-methods still include local focus and zoom.
+`layout.toStoredTree()` from `persistence()` returns `{ version: 3, root }`. It
+excludes window focus and zoom. Parse untrusted data with
+`parseStoredLayoutTree(value)` before passing it to
+`layout.setStoredTree(tree)`. Parsing checks the core shape of the tree and
+rejects unknown fields and invalid nodes with `InvalidLayoutTreeError`, which
+includes the field path. The store gives the tree the shape of its model. A
+saved tree that equals the current tree is no change.
 
-To keep a server's tree the same as the store's tree, send the store's
-operations and fold them on the server: see "Operations" in the README, with
-`parseLayoutOperations` and `applyLayoutOperations`.
+## Sync with a server
+
+The store gives each change to its listeners with its operations and its origin.
+Send the local tree operations, and apply the server's tree as a remote change,
+which the listener does not send back:
+
+```ts
+layout.subscribe(({ operations, origin }) => {
+  if (origin !== 'local') return;
+  const tree = operations.filter(isTreeOperation);
+  if (tree.length > 0) send(tree);
+});
+
+applyOperations(layout, [{ type: 'setRoot', root: serverTree }]);
+```
+
+A remote `setRoot` keeps each node that equals the current one, so the server's
+tree after a sync, which equals the window's tree, is no change, and an app does
+not compare the trees first. On the server, `parseLayoutOperations` checks the
+operations of a client and `applyLayoutOperations` folds them on the stored tree
+with the same IDs. See "Operations" in the README.
 
 ## Save resize changes
 
-`Layout.onResize(sizes)` reports changed split IDs and their sizes once after a
-completed pointer drag, and after each keyboard resize that changes a size. A
-cancelled drag reports nothing. Programmatic store updates do not call it.
-
-Each completed resize also gives one `resize` operation to the store's
-listeners, with the same split IDs. A server folds it with
-`applyLayoutOperations`. Storage and network writes remain the consumer's
-responsibility.
-
-## Control a resize
-
-`Layout.onResizeStart(context)` runs when a pointer resize starts and for each
-keyboard resize. Only the `Layout` component has it; `Layout.Root` does not.
-`context` holds the separator or corner `element`, the pixel geometry of the
-`separators` that the resize changes, and its `source`: `pointer` or `keyboard`.
-The callback can return a `LayoutResizeSession`:
-
-```tsx
-<Layout
-  store={store}
-  renderPane={renderPane}
-  onResizeStart={() => {
-    setResizing(true);
-    return {
-      update: (sizes) => snapToColumns(sizes),
-      end: () => setResizing(false),
-    };
-  }}
-/>
-```
-
-- `update(sizes, point)` returns the sizes to apply in place of the proposed
-  sizes, for example sizes that snap to a position. `point` holds the pointer's
-  `clientX` and `clientY`, or is null for a keyboard resize.
-- `end(cancelled)` runs once when the resize ends: with `false` after the sizes
-  apply, and with `true` after a cancellation or an unmount. A cancellation and
-  an unmount restore the sizes from before the resize.
-
-A pointer resize is one session from press to release. Each key press that
-resizes is a session of its own. A window blur during a pointer resize applies
-the current sizes and ends the session, because the pointer release may never
-come. The view keeps the pointer capture and the keyboard handling: a key that
-resizes does not reach key handlers above the layout. `onResize` reports the
-applied sizes before `end` runs.
+`onResize(sizes)` of `Root` reports the changed split IDs and their sizes for
+each local `resize` operation: a pointer release, a key press on a separator
+that changes a size, or a call of `layout.setSizes`. A cancelled drag reports
+nothing. The same resize reaches the store's listeners as one `resize`
+operation. Storage and network writes remain the consumer's responsibility.
 
 ## Add props to separators and pane hosts
 
 `getSeparatorProps(separator)` adds props to each separator: `className`,
-`children`, `aria-label`, `hidden`, and `onDoubleClick`. `separator` is the
-`CSSSeparator` of `computeCSSLayout`, with its split and the index of the child
-after it. For example, children can give the separator a larger hit area, and a
-double click can reset the split. The view keeps the geometry, the focus, and
-the resize handlers. Without `aria-label`, the label names the panes on both
-sides.
+`children`, `aria-label`, `hidden`, and `onDoubleClick`. `separator` is a
+`LayoutSeparator`: its ID, its split, the index of the child after it, its
+direction, and the panes before and after it. For example, children can give the
+separator a larger hit area, and a double click can reset the split. The view
+keeps the geometry, the focus, and the resize handlers. Without `aria-label`,
+the label names the panes on both sides, from `messages`.
 
-`getPaneProps(pane)` adds props to each pane host: `className`, `tabIndex`,
-`aria-label`, and `data-*` attributes. An app can mark its own drop targets with
-a data attribute, and leave it out on a structural host, such as the host of a
-sidebar, which also needs no tab stop:
+`getPaneProps(pane)` adds a `className` and `data-*` attributes to each pane
+host. An app can mark its own drop targets with a data attribute:
 
 ```tsx
-<Layout
-  store={store}
+<Layout.Root
+  layout={layout}
   renderPane={renderPane}
-  getPaneProps={(pane) =>
-    pane.id === 'sidebar' ? { tabIndex: -1 } : { 'data-drop-target': pane.id }
-  }
+  getPaneProps={(pane) => ({ 'data-drop-target': pane.id })}
 />
 ```
 
 The view's own attributes, such as `data-layout-pane` and `data-focused`, take
-precedence. A hidden host is never a tab stop. `aria-label` names a host without
-tabs; a host with tabs takes its name from its tab.
+precedence. A key that pane content handles with `preventDefault()`, for example
+Escape in a menu, does not cancel a gesture or restore a zoom.
 
-A key that pane content handles with `preventDefault()`, for example Escape in a
-menu, does not cancel a gesture or restore a zoom.
+## A modal over a layout
+
+The library supplies no modal or drawer: an app uses its own, and covers the
+panes under it with `coverLayout` or `Layout.useCover` (see "Overlays" in the
+README). Choose the modal pattern with care. A modal `<dialog>` from
+`showModal()` makes the whole document inert, and Chromium then gives each
+element that renders a new style: about 300 ms to open and again to close at 16
+panes of real content. This pattern avoids that cost:
+
+- A `manual` popover (`popover="manual"`, `showPopover()`) with `role="dialog"`
+  and `aria-modal="true"`, in the top layer.
+- A focus trap: the focus moves into the modal when it opens, Tab and Shift+Tab
+  wrap inside it, and a focus that leaves it comes back. Escape closes it, and
+  the focus returns to the element that opened it.
+- `aria-hidden="true"` on the page outside the modal: on each sibling of the
+  modal and of each of its ancestors. Chromium keeps the page in its
+  accessibility tree for `aria-modal` alone. `aria-hidden` gives no element a
+  new style, unless a style rule of the app selects it.
+- A shield that takes the pointer: an empty `manual` popover in the top layer
+  under the modal, which also carries the backdrop color. The `::backdrop` of a
+  popover lets the pointer through.
+- `coverLayout(layout, modal)` when it opens, and its release when its close
+  starts, so that the panes under the modal stop rendering.
+
+Unlike `inert`, `aria-hidden` leaves the panes open to a script's `focus()`,
+which the trap moves back, and to the browser's find in page. The reference
+modal and drawer of the demo, in `demo/overlays`, follow this pattern, and the
+`/app` demo shows them ("Review changes" and "Activity").

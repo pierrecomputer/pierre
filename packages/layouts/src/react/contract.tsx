@@ -60,11 +60,6 @@ export interface ViewState {
  */
 export type StylesheetsSetting = { readonly nonce?: string } | null | undefined;
 
-/**
- * The strings that the library owns, for the `messages` prop of `Root`. A
- * string that names a pane uses its title from `getPaneTitle`. Each missing
- * string takes its English default.
- */
 /** The values of a message about one pane: its title from `getPaneTitle`, and its ID. */
 export interface PaneMessageValues {
   readonly paneTitle: string;
@@ -106,7 +101,8 @@ export interface SeparatorMessageValues {
  * order, and takes one flat object of named values, which an ICU message
  * catalog takes as it is: pane titles from `getPaneTitle` (`paneTitle`,
  * `targetTitle`), the IDs of the same panes (`paneId`, `targetId`), edges as
- * `Edge` values, and counts and percents as numbers.
+ * `Edge` values, and counts and percents as numbers. Each missing string takes
+ * its English default.
  */
 export interface LayoutMessages {
   /** The name of the layout. Default: "Workspace". */
