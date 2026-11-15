@@ -10,22 +10,16 @@ import {
   useRef,
 } from 'react';
 
+import overlaysCss from '../css/overlays.css?inline';
 import {
   createDrawer,
   createModal,
-  type ModalStrategy,
+  modalStrategy,
   type OverlayCover,
   type OverlayEdge,
   type OverlayHandle,
 } from '../overlays';
-
-export {
-  type ModalStrategy,
-  OVERLAY_COVER_EVENT,
-  type OverlayCover,
-  type OverlayCoverEvent,
-  type OverlayEdge,
-} from '../overlays';
+import { Style, type StylesheetsSetting } from './contract';
 
 interface OverlayProps {
   /** Whether the overlay shows. Escape and `onClose` ask the app to set it to false. */
@@ -42,6 +36,8 @@ interface OverlayProps {
   labelledBy?: string;
   className?: string;
   style?: CSSProperties;
+  /** The sheet of the overlays, as the `stylesheets` prop of `Root`. */
+  stylesheets?: StylesheetsSetting;
   children?: ReactNode;
 }
 
@@ -51,8 +47,6 @@ export interface ModalProps extends OverlayProps {
    * hides the page, so no pane renders while the modal is open.
    */
   backdrop?: 'translucent' | 'opaque';
-  /** Experimental, for `explore-overlays-boundary` (see `ModalStrategy`). */
-  experimentalStrategy?: ModalStrategy;
 }
 
 export interface DrawerProps extends OverlayProps {
@@ -121,30 +115,27 @@ function useOverlay(
 
 /**
  * A modal over the workspace: a `manual` popover with `role="dialog"` and
- * `aria-modal` by default, which keeps the focus and hides the rest of the
- * page from assistive technology (see `ModalStrategy`). Import
- * `@pierre/layouts/overlays.css` for its base styles.
+ * `aria-modal`, which keeps the focus and hides the rest of the page from
+ * assistive technology. It covers the panes in its box with `coverLayout`,
+ * and renders its sheet.
  */
 export function Modal(props: ModalProps): JSX.Element {
   const {
     backdrop = 'translucent',
-    experimentalStrategy = 'popover',
     label,
     labelledBy,
     className,
     style,
+    stylesheets,
     children,
   } = props;
+  // The bench compares other strategies; an app gets the popover.
+  const strategy = modalStrategy();
   const ref = useOverlay(
     props,
     (element, layout, callbacks) =>
-      createModal(element, {
-        layout,
-        backdrop,
-        strategy: experimentalStrategy,
-        ...callbacks,
-      }),
-    `${experimentalStrategy}:${backdrop}`
+      createModal(element, { layout, backdrop, ...callbacks }),
+    `${strategy}:${backdrop}`
   );
   const common = {
     className: `pierre-overlay pierre-modal ${className ?? ''}`,
@@ -153,37 +144,54 @@ export function Modal(props: ModalProps): JSX.Element {
     'aria-labelledby': labelledBy,
     'data-backdrop': backdrop,
   };
+  const sheet = (
+    <Style name="overlays" css={overlaysCss} settings={stylesheets} />
+  );
   // The strategy decides the element, so a change of strategy mounts a new one.
-  return experimentalStrategy === 'popover' ? (
-    <div
-      key="popover"
-      ref={ref as RefObject<HTMLDivElement | null>}
-      role="dialog"
-      aria-modal="true"
-      popover="manual"
-      {...common}
-    >
-      {children}
-    </div>
+  return strategy === 'popover' ? (
+    <>
+      {sheet}
+      <div
+        key="popover"
+        ref={ref as RefObject<HTMLDivElement | null>}
+        role="dialog"
+        aria-modal="true"
+        popover="manual"
+        {...common}
+      >
+        {children}
+      </div>
+    </>
   ) : (
-    <dialog
-      key="dialog"
-      ref={ref as RefObject<HTMLDialogElement | null>}
-      {...common}
-    >
-      {children}
-    </dialog>
+    <>
+      {sheet}
+      <dialog
+        key="dialog"
+        ref={ref as RefObject<HTMLDialogElement | null>}
+        {...common}
+      >
+        {children}
+      </dialog>
+    </>
   );
 }
 
 /**
  * A non-modal drawer that slides in from an edge of the workspace, as a
- * `manual` popover. The panes that it covers completely stop rendering.
- * Import `@pierre/layouts/overlays.css` for its base styles.
+ * `manual` popover. The panes that it covers completely stop rendering. It
+ * renders its sheet.
  */
 export function Drawer(props: DrawerProps): JSX.Element {
-  const { edge, trigger, label, labelledBy, className, style, children } =
-    props;
+  const {
+    edge,
+    trigger,
+    label,
+    labelledBy,
+    className,
+    style,
+    stylesheets,
+    children,
+  } = props;
   const ref = useOverlay(
     props,
     (element, layout, callbacks) =>
@@ -196,17 +204,20 @@ export function Drawer(props: DrawerProps): JSX.Element {
     edge
   );
   return (
-    <div
-      ref={ref as RefObject<HTMLDivElement | null>}
-      role="dialog"
-      popover="manual"
-      aria-label={label}
-      aria-labelledby={labelledBy}
-      className={`pierre-overlay pierre-drawer ${className ?? ''}`}
-      data-edge={edge}
-      style={style}
-    >
-      {children}
-    </div>
+    <>
+      <Style name="overlays" css={overlaysCss} settings={stylesheets} />
+      <div
+        ref={ref as RefObject<HTMLDivElement | null>}
+        role="dialog"
+        popover="manual"
+        aria-label={label}
+        aria-labelledby={labelledBy}
+        className={`pierre-overlay pierre-drawer ${className ?? ''}`}
+        data-edge={edge}
+        style={style}
+      >
+        {children}
+      </div>
+    </>
   );
 }

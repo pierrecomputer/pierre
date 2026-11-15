@@ -102,6 +102,7 @@ catalog:
   'cmdk': '1.1.1'
   'culori': '4.0.2'
   'diff': '9.0.0'
+  esbuild: '0.28.2'
   'hast-util-heading-rank': '3.0.0'
   'hast-util-to-html': '9.0.5'
   'hast-util-to-string': '3.0.1'
@@ -171,6 +172,9 @@ overrides:
 allowBuilds:
   '@tailwindcss/oxide': true
   '@vscode/vsce-sign': true
+  # The install script of esbuild only checks its platform binary, which the
+  # optional dependency installs.
+  esbuild: false
   'keytar': true
   'msw': true
   'sharp': true

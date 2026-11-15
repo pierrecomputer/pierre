@@ -1,5 +1,6 @@
 @layer pierre-layouts {
-  /* Overlays over a layout (`@pierre/layouts/overlays`). The script sets the
+  /* Overlays over a layout (`createModal`, `createDrawer`, `Layout.Modal`, and
+     `Layout.Drawer`). The script sets the
      insets of each overlay from the workspace's box, and the custom properties
      `--layout-workspace-width` and `--layout-workspace-height` on the overlay. */
 

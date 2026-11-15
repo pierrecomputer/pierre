@@ -36,6 +36,7 @@ import {
   HIDDEN,
   HOST_HIDDEN,
   INACTIVE,
+  registerVisibility,
   STATE_REASONS,
 } from '../dom/visibility';
 import { dragSizes, keySizes } from '../gestures';
@@ -69,6 +70,8 @@ import {
 } from './contract';
 import type { LayoutObject } from './create-layout';
 import { separatorGestureStyle } from './gesture-styles';
+import { registerLayoutElement } from './layout-elements';
+import { paneLayers } from './pane-layers';
 
 /** A separator, for `getSeparatorProps`. */
 export interface LayoutSeparator {
@@ -138,12 +141,6 @@ export interface RootProps {
     'className' | 'children' | 'onDoubleClick' | 'aria-label' | 'hidden'
   >;
   /**
-   * Whether each pane host is its own compositor layer: `true`, `false`, or
-   * `{ minPanes }` to turn the layers on from that number of visible panes.
-   * `{ minPanes: 6 }` by default.
-   */
-  paneLayers?: boolean | { minPanes: number };
-  /**
    * The sheets of the layout. By default, `Root`, its features, and its parts
    * render the sheets that they use, once per document. `{ nonce }` gives
    * each sheet a nonce for a content security policy. `null` renders no
@@ -156,10 +153,6 @@ export interface RootProps {
   style?: CSSProperties;
   gap?: number;
 }
-
-// Pane layers save compositing time from about 6 visible panes, and cost tile
-// memory below that.
-const DEFAULT_PANE_LAYERS = { minPanes: 6 };
 
 const defaultTitle = (pane: PaneNode): string => pane.id;
 
@@ -530,7 +523,10 @@ function createViewInternals(
   return {
     context,
     setElement(next) {
+      if (element !== null) registerVisibility(element, null);
       element = next;
+      if (element !== null) registerVisibility(element, context.visibility);
+      registerLayoutElement(store, element);
     },
     setLatest(next) {
       latest = next;
@@ -586,7 +582,6 @@ export function Root(props: RootProps): JSX.Element {
     onPaneClose,
     getPaneProps,
     getSeparatorProps,
-    paneLayers = DEFAULT_PANE_LAYERS,
     stylesheets,
     messages,
     className,
@@ -762,10 +757,9 @@ export function Root(props: RootProps): JSX.Element {
     [geometry]
   );
   const showSeparators = hooks.every((hook) => hook.separators !== false);
+  const layers = paneLayers();
   const layered =
-    typeof paneLayers === 'boolean'
-      ? paneLayers
-      : visibleCount >= paneLayers.minPanes;
+    typeof layers === 'boolean' ? layers : visibleCount >= layers.minPanes;
   const announce =
     hooks.find((hook) => hook.announce != null)?.announce ??
     (messages?.paneCount ?? paneCount)(visibleCount);

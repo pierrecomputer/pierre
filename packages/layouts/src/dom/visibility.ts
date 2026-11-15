@@ -188,3 +188,21 @@ export function createPaneVisibility(): PaneVisibility {
     developmentMaps.set(visibility, maps);
   return visibility;
 }
+
+// The visibility module of each layout element that a view renders, so that
+// the cover of an overlay finds it with no import of the view.
+const registered = new WeakMap<HTMLElement, PaneVisibility>();
+
+/** Register the visibility module of a layout element, or remove it with null. */
+export function registerVisibility(
+  element: HTMLElement,
+  visibility: PaneVisibility | null
+): void {
+  if (visibility === null) registered.delete(element);
+  else registered.set(element, visibility);
+}
+
+/** The visibility module of a layout element, or undefined (the old `Layout` component). */
+export const visibilityOf = (
+  element: HTMLElement
+): PaneVisibility | undefined => registered.get(element);

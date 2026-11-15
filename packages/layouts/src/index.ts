@@ -86,3 +86,17 @@ export type {
   PaneEdges,
 } from './css-layout';
 export { getExitEdge, zoom, type ZoomCommands } from './zoom';
+export {
+  type CoverOptions,
+  coverLayout,
+  coverOf,
+  createDrawer,
+  createModal,
+  type DrawerOptions,
+  type ModalOptions,
+  OVERLAY_COVER_EVENT,
+  type OverlayCover,
+  type OverlayCoverEvent,
+  type OverlayEdge,
+  type OverlayHandle,
+} from './overlays';

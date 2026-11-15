@@ -1,8 +1,7 @@
 import { type JSX, type RefObject, useId, useRef, useState } from 'react';
 
-import type { ModalStrategy } from '../../src/overlays';
-import { Drawer, Modal } from '../../src/react/overlays';
-import '../../src/overlays.css';
+import { type ModalStrategy, setModalStrategy } from '../../src/overlays';
+import { Drawer, Modal } from '../../src/react';
 
 // `?modal=popover|dialog-hide-covered|dialog` and `?backdrop=opaque` select
 // the variant of the modal, for the comparison and its e2e tests.
@@ -12,6 +11,8 @@ const STRATEGY: ModalStrategy =
   requestedStrategy === 'dialog' || requestedStrategy === 'dialog-hide-covered'
     ? requestedStrategy
     : 'popover';
+// The strategy is an internal setting of the library.
+setModalStrategy(STRATEGY);
 const BACKDROP = params.get('backdrop') === 'opaque' ? 'opaque' : 'translucent';
 
 const CHANGES = [
@@ -60,7 +61,6 @@ export function AppOverlays({
         layout={workspace}
         labelledBy={reviewTitle}
         backdrop={BACKDROP}
-        experimentalStrategy={STRATEGY}
         className="app-review"
       >
         <header className="app-overlay-header">

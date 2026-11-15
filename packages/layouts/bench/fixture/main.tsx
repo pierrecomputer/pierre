@@ -10,6 +10,7 @@ import {
   naryTree,
 } from '../../src/react';
 import { resizeStrategy } from '../../src/react/features/resize-strategy';
+import { setPaneLayers } from '../../src/react/pane-layers';
 import {
   appendTo,
   type ContentWeight,
@@ -85,17 +86,14 @@ if (isolate !== null && isolate in ISOLATION) {
   sheet.textContent = ISOLATION[isolate];
   document.head.append(sheet);
 }
-// The paneLayers option: `on`, `off`, or a number of panes from which the
-// layers start. Without the parameter, the option has its default.
+// The pane layers: `on`, `off`, or a number of panes from which the layers
+// start. Without the parameter, the policy has its default. The policy is an
+// internal setting of the library (`DEC-layouts-experiments-internal`).
 const requestedLayers = params.get('layers');
-const paneLayers: boolean | { minPanes: number } | undefined =
-  requestedLayers === 'on'
-    ? true
-    : requestedLayers === 'off'
-      ? false
-      : requestedLayers !== null && /^\d+$/.test(requestedLayers)
-        ? { minPanes: Number(requestedLayers) }
-        : undefined;
+if (requestedLayers === 'on' || requestedLayers === 'off')
+  setPaneLayers(requestedLayers === 'on');
+else if (requestedLayers !== null && /^\d+$/.test(requestedLayers))
+  setPaneLayers({ minPanes: Number(requestedLayers) });
 // The modal strategy: `popover` (the default), `dialog-hide-covered`, or
 // `dialog`; and `backdrop=opaque` for a backdrop that hides the page.
 const requestedModal = params.get('modal');
@@ -252,7 +250,6 @@ function Bench(): JSX.Element {
           renderPane={renderPane}
           getPaneTitle={title}
           messages={MESSAGES}
-          paneLayers={paneLayers}
         />
       </div>
       {overlaysMounted && (

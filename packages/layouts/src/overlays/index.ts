@@ -1,4 +1,13 @@
-import { PANE_VISIBILITY_EVENT } from '../dom/panes';
+import { layoutRootOf, type OverlayCover, startCover } from './cover';
+
+export {
+  type CoverOptions,
+  coverLayout,
+  coverOf,
+  OVERLAY_COVER_EVENT,
+  type OverlayCover,
+  type OverlayCoverEvent,
+} from './cover';
 
 /**
  * Overlays over a layout: a modal over the workspace and a drawer that slides
@@ -21,7 +30,7 @@ import { PANE_VISIBILITY_EVENT } from '../dom/panes';
 export type OverlayEdge = 'left' | 'right' | 'top' | 'bottom';
 
 /**
- * How a modal keeps the user in it. Experimental, for the comparison of
+ * How a modal keeps the user in it. Internal, for the comparison of
  * `explore-overlays-boundary`:
  *
  * - `popover` (the default): a `manual` popover with `role="dialog"`,
@@ -39,24 +48,6 @@ export type OverlayEdge = 'left' | 'right' | 'top' | 'bottom';
  * A `<dialog>` closes with no exit animation (see `closesAtOnce`).
  */
 export type ModalStrategy = 'dialog' | 'dialog-hide-covered' | 'popover';
-
-/** The panes under an overlay. */
-export interface OverlayCover {
-  /** Panes inside the overlay's box. */
-  readonly covered: readonly string[];
-  /** Panes that the overlay's box crosses: they show in part. */
-  readonly overlapped: readonly string[];
-}
-
-/**
- * The event that the layout root receives when the panes under an overlay
- * change: when it opens, when the workspace changes size, and when it starts
- * to close (with no panes).
- */
-export const OVERLAY_COVER_EVENT = 'pierre-layout-cover';
-export type OverlayCoverEvent = CustomEvent<
-  OverlayCover & { overlay: HTMLElement }
->;
 
 /** An overlay that the app opens and closes. */
 export interface OverlayHandle {
@@ -88,9 +79,19 @@ export interface ModalOptions extends OverlayOptions {
    * renders while the modal is open.
    */
   backdrop?: 'translucent' | 'opaque';
-  /** See `ModalStrategy`. The element is a `<dialog>` unless this is `popover`. */
-  strategy?: ModalStrategy;
 }
+
+// The modal strategy of the modals that the app creates next: `popover`, or
+// another strategy for the bench (`DEC-layouts-experiments-internal`).
+let strategyOverride: ModalStrategy = 'popover';
+
+/** For the bench and the demos: the strategy of the modals that open next. Internal. */
+export function setModalStrategy(strategy: ModalStrategy): void {
+  strategyOverride = strategy;
+}
+
+/** The strategy of a modal that opens now. Internal. */
+export const modalStrategy = (): ModalStrategy => strategyOverride;
 
 export interface DrawerOptions extends OverlayOptions {
   /** The edge of the workspace that the drawer slides in from. */
@@ -103,42 +104,6 @@ export interface DrawerOptions extends OverlayOptions {
   trigger?: HTMLElement | null;
 }
 
-interface Box {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-}
-
-/**
- * Sort panes into the ones inside an overlay's box and the ones that cross
- * it. Half a pixel of tolerance absorbs the rounding of fractional boxes.
- */
-export function coverOf(
-  panes: readonly { id: string; box: Box }[],
-  box: Box
-): OverlayCover {
-  const covered: string[] = [];
-  const overlapped: string[] = [];
-  const slack = 0.5;
-  for (const { id, box: pane } of panes) {
-    const inside =
-      pane.left >= box.left - slack &&
-      pane.top >= box.top - slack &&
-      pane.right <= box.right + slack &&
-      pane.bottom <= box.bottom + slack;
-    const crosses =
-      pane.left < box.right - slack &&
-      pane.right > box.left + slack &&
-      pane.top < box.bottom - slack &&
-      pane.bottom > box.top + slack;
-    if (inside) covered.push(id);
-    else if (crosses) overlapped.push(id);
-  }
-  return { covered, overlapped };
-}
-
-const NO_COVER: OverlayCover = { covered: [], overlapped: [] };
 const ANIMATION_ID = 'pierre-layout-overlay';
 const DEFAULT_DURATION_MS = 240;
 // The ease-out curve of the layout's own animations, as cubic-bezier: Safari
@@ -147,64 +112,6 @@ const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 // Elements that take the focus with Tab, for the focus of a popover modal.
 const TABBABLE =
   'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, [contenteditable]:not([contenteditable="false"]), [tabindex]:not([tabindex="-1"])';
-
-/** The layout root: the element itself, or the first `.pierre-layout` inside it. */
-function layoutRootOf(element: HTMLElement): HTMLElement {
-  if (element.classList.contains('pierre-layout')) return element;
-  return element.querySelector<HTMLElement>('.pierre-layout') ?? element;
-}
-
-/** The pane hosts: children of the root, so no query walks pane content. */
-function paneHostsOf(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.dataset.layoutPane !== undefined
-  );
-}
-
-const paneIdOf = (host: HTMLElement): string => host.dataset.layoutPane ?? '';
-
-// A pane host that renders apart from overlays. A hidden pane or a tab that
-// does not show (`data-pane-hidden`) and a pane under a zoom (`data-hidden`)
-// keep their own `inert`, and an overlay does not change their state. A
-// collapsed pane renders its header, so an overlay can cover it.
-const rendersAlready = (host: HTMLElement): boolean =>
-  host.dataset.paneHidden !== 'true' && host.dataset.hidden !== 'true';
-
-// The overlays that hide each pane host. A host shows again when the last of
-// them stops hiding it.
-const coveringOverlays = new WeakMap<HTMLElement, Set<object>>();
-
-function notify(host: HTMLElement, hidden: boolean): void {
-  host.dispatchEvent(
-    new CustomEvent(PANE_VISIBILITY_EVENT, { detail: { hidden } })
-  );
-}
-
-/**
- * Stop a pane host from rendering for an overlay. `inert` changes in the same
- * style update as `content-visibility`, so the content gets no new style for
- * either change.
- */
-function coverHost(host: HTMLElement, overlay: object): void {
-  const overlays = coveringOverlays.get(host) ?? new Set();
-  coveringOverlays.set(host, overlays);
-  if (overlays.has(overlay)) return;
-  overlays.add(overlay);
-  if (overlays.size > 1) return;
-  host.dataset.overlayCovered = 'true';
-  host.inert = true;
-  notify(host, true);
-}
-
-function uncoverHost(host: HTMLElement, overlay: object): void {
-  const overlays = coveringOverlays.get(host);
-  if (overlays?.delete(overlay) !== true || overlays.size > 0) return;
-  delete host.dataset.overlayCovered;
-  // A zoom or a hidden pane keeps its own `inert`.
-  if (rendersAlready(host)) host.inert = false;
-  notify(host, false);
-}
 
 function durationOf(root: HTMLElement): number {
   const value = getComputedStyle(root).getPropertyValue('--layout-duration');
@@ -374,21 +281,27 @@ interface OverlayBehavior {
  */
 class Overlay {
   private opened = false;
-  private root: HTMLElement | null = null;
   private returnFocus: HTMLElement | null = null;
-  private observer: ResizeObserver | null = null;
-  private cover: OverlayCover = NO_COVER;
-  private readonly hidden = new Set<HTMLElement>();
+  /** The release of the cover of the layout, while the overlay is open. */
+  private release: (() => void) | null = null;
   private entry: Animation[] = [];
   private exit: Animation[] = [];
   private shown = false;
   private duration: number | null = null;
 
+  private readonly element: HTMLElement;
+  private readonly options: OverlayOptions;
+  private readonly behavior: OverlayBehavior;
+
   constructor(
-    private readonly element: HTMLElement,
-    private readonly options: OverlayOptions,
-    private readonly behavior: OverlayBehavior
-  ) {}
+    element: HTMLElement,
+    options: OverlayOptions,
+    behavior: OverlayBehavior
+  ) {
+    this.element = element;
+    this.options = options;
+    this.behavior = behavior;
+  }
 
   get isOpen(): boolean {
     return this.opened;
@@ -399,7 +312,6 @@ class Overlay {
     if (this.opened) return;
     this.opened = true;
     const root = layoutRootOf(this.options.layout);
-    this.root = root;
     // Read before the first change: a read after it would force a new style
     // for the whole page when a modal makes it inert.
     this.duration ??= durationOf(root);
@@ -408,34 +320,29 @@ class Overlay {
       opener instanceof HTMLElement && opener !== document.body ? opener : null
     );
 
-    placeOverWorkspace(
-      this.element,
-      root.getBoundingClientRect(),
-      this.behavior.edge
-    );
-    if (this.behavior.hidesAllFirst)
-      for (const host of paneHostsOf(root).filter(rendersAlready))
-        this.hide(host);
+    const { edge } = this.behavior;
+    placeOverWorkspace(this.element, root.getBoundingClientRect(), edge);
+    // The cover starts before the overlay shows, so that the panes that it
+    // hides at once stop rendering first.
+    this.release = startCover(root, this.element, {
+      area: this.behavior.coversAll ? 'all' : 'box',
+      allFirst: this.behavior.hidesAllFirst,
+      hide: this.behavior.hidesCovered,
+      onCover: (cover) => this.options.onCover?.(cover),
+      place: (workspace) => placeOverWorkspace(this.element, workspace, edge),
+    });
     this.behavior.show();
     this.shown = true;
     this.entry = this.animate();
-    // Read the boxes after the browser lays them out, in the same frame: a
-    // read now would force that layout in this task.
-    this.observer = new ResizeObserver(() => this.update());
-    this.observer.observe(root);
-    this.observer.observe(this.element);
   }
 
   close(): void {
     if (!this.opened || this.exit.length > 0) return;
     this.options.onClose?.();
-    this.observer?.disconnect();
-    this.observer = null;
     // The panes show again at the start of the exit, so that they render
     // under the closing overlay.
-    for (const host of this.hidden) uncoverHost(host, this);
-    this.hidden.clear();
-    this.report(NO_COVER);
+    this.release?.();
+    this.release = null;
     this.behavior.release?.();
     if (this.behavior.closesAtOnce) this.leaveTopLayer();
     this.restoreFocus();
@@ -468,57 +375,11 @@ class Overlay {
 
   destroy(): void {
     if (!this.opened) return;
-    this.observer?.disconnect();
-    this.observer = null;
-    for (const host of this.hidden) uncoverHost(host, this);
-    this.hidden.clear();
-    this.report(NO_COVER);
+    this.release?.();
+    this.release = null;
     this.behavior.release?.();
     this.restoreFocus();
     this.finish();
-  }
-
-  /** Report the panes under the overlay, and hide the ones that it covers. */
-  private update(): void {
-    const root = this.root;
-    if (root === null || !this.opened || this.exit.length > 0) return;
-    const workspace = root.getBoundingClientRect();
-    placeOverWorkspace(this.element, workspace, this.behavior.edge);
-    const hosts = paneHostsOf(root).filter(rendersAlready);
-    // Offsets ignore the transforms of running animations, so these are the
-    // boxes at the end of them.
-    const cover = this.behavior.coversAll
-      ? { covered: hosts.map(paneIdOf), overlapped: [] }
-      : coverOf(
-          hosts.map((host) => ({
-            id: paneIdOf(host),
-            box: {
-              left: workspace.left + host.offsetLeft,
-              top: workspace.top + host.offsetTop,
-              right: workspace.left + host.offsetLeft + host.offsetWidth,
-              bottom: workspace.top + host.offsetTop + host.offsetHeight,
-            },
-          })),
-          {
-            left: this.element.offsetLeft,
-            top: this.element.offsetTop,
-            right: this.element.offsetLeft + this.element.offsetWidth,
-            bottom: this.element.offsetTop + this.element.offsetHeight,
-          }
-        );
-    if (this.behavior.hidesCovered) {
-      const covered = new Set(cover.covered);
-      for (const host of hosts) {
-        if (covered.has(paneIdOf(host))) this.hide(host);
-        else if (this.hidden.delete(host)) uncoverHost(host, this);
-      }
-    }
-    this.report(cover);
-  }
-
-  private hide(host: HTMLElement): void {
-    this.hidden.add(host);
-    coverHost(host, this);
   }
 
   private leaveTopLayer(): void {
@@ -577,23 +438,6 @@ class Overlay {
       );
     return animations;
   }
-
-  private report(cover: OverlayCover): void {
-    if (sameCover(cover, this.cover)) return;
-    this.cover = cover;
-    this.options.onCover?.(cover);
-    this.root?.dispatchEvent(
-      new CustomEvent(OVERLAY_COVER_EVENT, {
-        detail: { ...cover, overlay: this.element },
-      })
-    );
-  }
-}
-
-function sameCover(a: OverlayCover, b: OverlayCover): boolean {
-  const same = (x: readonly string[], y: readonly string[]): boolean =>
-    x.length === y.length && x.every((value, index) => value === y[index]);
-  return same(a.covered, b.covered) && same(a.overlapped, b.overlapped);
 }
 
 function handleOf(overlay: Overlay, cleanup: () => void): OverlayHandle {
@@ -648,7 +492,7 @@ export function createModal(
   element: HTMLElement,
   options: ModalOptions
 ): OverlayHandle {
-  const strategy = options.strategy ?? 'popover';
+  const strategy = modalStrategy();
   const opaque = options.backdrop === 'opaque';
   const dialog =
     strategy === 'popover'

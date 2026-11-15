@@ -11,7 +11,6 @@
 // Each feature carries its store part, its view part, and its sheets. A
 // bundler keeps only the parts and features that an app uses.
 export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
-export type { ResizeStrategy } from '../dom/resize-work';
 export type { PaneEdges } from '../css-layout';
 export type { DropPlace } from '../drop';
 export { naryTree } from '../models/n-ary';
@@ -82,4 +81,13 @@ export {
 } from './parts/tabs';
 export { type LayoutSeparator, Root, type RootProps } from './root';
 export { useControlledLayout } from './use-controlled-layout';
+export { Drawer, type DrawerProps, Modal, type ModalProps } from './overlays';
+export { useCover } from './use-cover';
+export {
+  type CoverOptions,
+  OVERLAY_COVER_EVENT,
+  type OverlayCover,
+  type OverlayCoverEvent,
+  type OverlayEdge,
+} from '../overlays';
 export { type PaneState, usePane } from './use-pane';

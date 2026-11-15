@@ -5,8 +5,7 @@
   "license": "apache-2.0",
   "type": "module",
   "sideEffects": [
-    "./src/styles.css",
-    "./src/overlays.css"
+    "./src/styles.css"
   ],
   "exports": {
     ".": {
@@ -17,16 +16,7 @@
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
     },
-    "./overlays": {
-      "types": "./dist/overlays/index.d.ts",
-      "import": "./dist/overlays/index.js"
-    },
-    "./react/overlays": {
-      "types": "./dist/react/overlays.d.ts",
-      "import": "./dist/react/overlays.js"
-    },
-    "./styles.css": "./src/styles.css",
-    "./overlays.css": "./src/overlays.css"
+    "./styles.css": "./src/styles.css"
   },
   "devDependencies": {
     "@pierre/diffs": "workspace:*",
@@ -36,6 +26,7 @@
     "@types/react-dom": "catalog:",
     "@xterm/addon-fit": "catalog:",
     "@xterm/xterm": "catalog:",
+    "esbuild": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "tsdown": "catalog:",

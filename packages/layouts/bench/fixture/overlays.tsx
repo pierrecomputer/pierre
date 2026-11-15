@@ -1,8 +1,7 @@
 import { type JSX, type RefObject } from 'react';
 
-import type { ModalStrategy } from '../../src/overlays';
-import '../../src/overlays.css';
-import { Drawer, Modal } from '../../src/react/overlays';
+import { type ModalStrategy, setModalStrategy } from '../../src/overlays';
+import { Drawer, Modal } from '../../src/react';
 
 /** The open state of the fixture's overlays. */
 export interface OverlayState {
@@ -32,6 +31,8 @@ export function BenchOverlays({
   strategy: ModalStrategy;
   backdrop: 'translucent' | 'opaque';
 }): JSX.Element {
+  // The strategy is an internal setting of the library, for the bench.
+  setModalStrategy(strategy);
   return (
     <>
       <Modal
@@ -40,7 +41,6 @@ export function BenchOverlays({
         layout={workspace}
         label="Benchmark modal"
         backdrop={backdrop}
-        experimentalStrategy={strategy}
         className="bench-modal"
       >
         <h2>Review changes</h2>

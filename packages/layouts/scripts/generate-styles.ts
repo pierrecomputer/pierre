@@ -18,6 +18,7 @@ export const STYLE_SHEETS: readonly string[] = [
   'tabs',
   'tab-drag',
   'corners',
+  'overlays',
 ];
 
 const SOURCE = new URL('../src/', import.meta.url);

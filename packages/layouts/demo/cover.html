@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cover API</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      /* The app's own overlays: a modal dialog over the left half, and a
+         popover over the middle half. */
+      .app-dialog {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: 50vw;
+        height: 100vh;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+      .app-popover {
+        position: fixed;
+        inset: 0 auto 0 25vw;
+        width: 50vw;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./cover.tsx"></script>
+  </body>
+</html>

@@ -12,6 +12,7 @@ import { getPanes, type LayoutNode, type PaneNode } from '../../src';
 import * as Layout from '../../src/react';
 import { allFeatures, createLayout, naryTree } from '../../src/react';
 import { resizeStrategy } from '../../src/react/features/resize-strategy';
+import { setPaneLayers } from '../../src/react/pane-layers';
 import AgentPane from '../agent';
 import { ResizeSelect, type ResizeStrategy } from '../resize-select';
 import { AppOverlays } from './overlays';
@@ -322,9 +323,14 @@ export default function App(): JSX.Element {
             <select
               aria-label="Pane layers"
               value={layers}
-              onChange={(event) =>
-                setLayers(event.target.value as 'on' | 'off' | 'auto')
-              }
+              onChange={(event) => {
+                const value = event.target.value as 'on' | 'off' | 'auto';
+                // The pane layers are an internal setting of the library.
+                setPaneLayers(
+                  value === 'auto' ? { minPanes: 6 } : value === 'on'
+                );
+                setLayers(value);
+              }}
             >
               <option value="auto" title="From 6 visible panes (default)">
                 auto (6+)
@@ -353,7 +359,6 @@ export default function App(): JSX.Element {
           getPaneTitle={getPaneTitle}
           onPaneClose={hidePane}
           messages={MESSAGES}
-          paneLayers={layers === 'auto' ? undefined : layers === 'on'}
         />
       </main>
     </div>

@@ -84,6 +84,12 @@
     pointer-events: none;
   }
 
+  /* A pane that an overlay covers completely (`coverLayout`) skips its
+     style, layout, and paint. It keeps its box. */
+  .pierre-layout-pane[data-overlay-covered='true'] {
+    content-visibility: hidden;
+  }
+
   .pierre-layout-pane:focus-visible {
     outline: 2px solid var(--layout-accent);
     outline-offset: -3px;
