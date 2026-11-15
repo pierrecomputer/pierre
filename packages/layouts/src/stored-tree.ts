@@ -1,5 +1,4 @@
 import type { LayoutTreeOperation } from './layout-operation';
-import { validateLayout } from './model';
 import type {
   ChildSize,
   Direction,
@@ -10,6 +9,7 @@ import type {
   StackNode,
   StoredLayoutTree,
 } from './types';
+import { validateLayout } from './validate';
 
 /**
  * A tree or a list of operations from storage or from a client that does not

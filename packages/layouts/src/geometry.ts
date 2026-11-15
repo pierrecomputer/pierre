@@ -1,5 +1,5 @@
 import { type ChildSpec, divideSpace } from './divide';
-import { collapsedSizeOf, hasVisiblePane, isFixed, shownPane } from './model';
+import { collapsedSizeOf, isFixed, shownPane } from './model';
 import type {
   ChildExtent,
   LayoutGeometry,
@@ -8,6 +8,7 @@ import type {
   SeparatorGeometry,
   SplitNode,
 } from './types';
+import { hasVisiblePane } from './validate';
 
 const DEFAULT_MIN_WIDTH = 120;
 const DEFAULT_MIN_HEIGHT = 80;

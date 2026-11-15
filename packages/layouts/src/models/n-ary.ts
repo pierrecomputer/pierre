@@ -6,8 +6,9 @@ import {
   requireSlot,
   wrapPane,
 } from '../edits-model';
-import { parentOf, replaceNode, sameNodes, validateLayout } from '../model';
+import { parentOf, replaceNode, sameNodes } from '../model';
 import type { Direction, LayoutNode, TreeModel } from '../types';
+import { validateLayout } from '../validate';
 
 /**
  * A split holds two or more children, and no child is a split of the same

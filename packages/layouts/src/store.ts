@@ -13,7 +13,6 @@ import {
   shownPanes,
   slotOf,
   stackOf,
-  validateLayout,
 } from './model';
 import type {
   ChildSize,
@@ -22,6 +21,7 @@ import type {
   PaneNode,
   TreeModel,
 } from './types';
+import { validateLayout } from './validate';
 
 /**
  * The commands that every store has: the state, the tree, sizes, collapse, and

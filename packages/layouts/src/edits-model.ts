@@ -3,7 +3,6 @@
 import {
   findNode,
   getPanes,
-  hasVisiblePane,
   isFixed,
   nearestVisible,
   replaceNode,
@@ -18,6 +17,7 @@ import type {
   PaneNode,
   StackNode,
 } from './types';
+import { hasVisiblePane } from './validate';
 
 /** The direction of a split that puts a pane at an edge of another. */
 export const directionOf = (edge: Edge): Direction =>

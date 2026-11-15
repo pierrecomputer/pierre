@@ -82,6 +82,56 @@ async function rolldown(
     .join('');
 }
 
+interface Chunk {
+  code: string;
+  /** The chunks that this chunk imports statically. */
+  imports: readonly string[];
+  isEntry: boolean;
+}
+
+/** The chunks of an app that Rolldown splits at its dynamic imports, by file name. */
+async function rolldownChunks(entry: string): Promise<Map<string, Chunk>> {
+  const { build } = await import('vite');
+  const result = await build({
+    configFile: false,
+    logLevel: 'silent',
+    root: PACKAGE,
+    define: { 'process.env.NODE_ENV': '"production"' },
+    resolve: { alias: aliases() },
+    build: {
+      write: false,
+      minify: true,
+      rolldownOptions: {
+        input: entry,
+        preserveEntrySignatures: 'exports-only',
+        external: [/^react($|\/)/, /^react-dom($|\/)/],
+        output: { minify: true, comments: false },
+      },
+    },
+  });
+  const chunks = (Array.isArray(result) ? result : [result]).flatMap((output) =>
+    'output' in output ? output.output : []
+  );
+  return new Map(
+    chunks.flatMap((chunk) =>
+      chunk.type === 'chunk'
+        ? [
+            [
+              chunk.fileName,
+              {
+                code: chunk.code,
+                imports: chunk.imports,
+                isEntry: chunk.isEntry,
+              },
+            ] as const,
+          ]
+        : []
+    )
+  );
+}
+
+let splitApp = new Map<string, Chunk>();
+
 async function esbuild(entry: string): Promise<string> {
   const { build } = await import('esbuild');
   const result = await build({
@@ -135,6 +185,7 @@ beforeAll(async () => {
           `${app} ${bundler}`,
           measure(await bundle(join(PACKAGE, `test/proof/${app}.tsx`)))
         );
+    splitApp = await rolldownChunks(join(PACKAGE, 'test/proof/eager-root.tsx'));
     outputs.set(
       'two-pane source',
       measure(
@@ -259,3 +310,35 @@ test.each(Object.entries(BUDGET))(
     expect(output.brotli).toBeLessThanOrEqual(budget.brotli);
   }
 );
+
+// An app imports the root entry at once and the React entry behind a dynamic
+// import. A bundler places each module of the dist in the chunk of its user,
+// so the eager chunk holds the parser of the saved tree and none of the view
+// or the commands.
+test('an eager import of the root entry takes none of the lazy view into the eager chunks', () => {
+  // The entry chunk and each chunk that it imports statically load at once.
+  const eager = new Set<string>();
+  const visit = (name: string): void => {
+    if (eager.has(name)) return;
+    eager.add(name);
+    for (const imported of splitApp.get(name)?.imports ?? []) visit(imported);
+  };
+  for (const [name, chunk] of splitApp) if (chunk.isEntry) visit(name);
+  const code = [...eager].map((name) => splitApp.get(name)?.code).join('');
+  const lazy = [...splitApp]
+    .filter(([name]) => !eager.has(name))
+    .map(([, chunk]) => chunk.code)
+    .join('');
+  expect(code).toContain('must be 3');
+  for (const mark of [
+    '.pierre-layout-separator{',
+    'must be in the output of renderPane',
+    'moved into the group of',
+    'zoomed',
+    'unknown_operation',
+    'id_in_use',
+  ])
+    expect([mark, code.includes(mark)]).toEqual([mark, false]);
+  expect(lazy).toContain('.pierre-layout-separator{');
+  expect(code.length).toBeLessThan(8_000);
+});

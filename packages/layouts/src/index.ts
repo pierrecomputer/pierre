@@ -25,14 +25,13 @@ export {
 export {
   canClose,
   getPanes,
-  hasVisiblePane,
   replaceNode,
   setPaneHidden,
   shownPanes,
   stackOf,
-  validateLayout,
   visibleTree,
 } from './model';
+export { hasVisiblePane, validateLayout } from './validate';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
 export { type Presentation, presentation } from './presentation';
