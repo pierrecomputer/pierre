@@ -26,7 +26,7 @@ import type {
   SeparatorGeometry,
 } from '../types';
 
-/** The start of a resize, for `onResizeStart`. */
+/** The start of a resize, for `onResizeStart` of the `Layout` component. */
 export interface LayoutResizeContext {
   /** The separator or the corner that the user resizes with. */
   element: HTMLElement;

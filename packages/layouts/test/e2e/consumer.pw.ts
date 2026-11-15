@@ -120,9 +120,6 @@ test('resize reports once at pointer release, after keyboard changes, and never 
   expect(JSON.parse(await page.locator('#resizes').innerText())).toHaveLength(
     2
   );
-  await expect(page.locator('#sessions')).toHaveText(
-    JSON.stringify(['pointer applied', 'keyboard applied', 'pointer cancelled'])
-  );
 });
 
 const readJson = async (page: Page, selector: string): Promise<unknown> =>
@@ -143,36 +140,12 @@ async function startRowDrag(page: Page): Promise<void> {
   await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 5 });
 }
 
-test('a resize session constrains pointer and keyboard resizes and ends each once', async ({
-  page,
-}) => {
-  await page.getByRole('button', { name: 'Snap to eighths' }).click();
-  await startRowDrag(page);
-  await page.mouse.up();
-  expect(await rowSizes(page)).toEqual([0.625, 0.375]);
-  await page.getByRole('separator', { name: 'Resize the row split' }).focus();
-  await page.keyboard.press('End');
-  expect(await rowSizes(page)).toEqual([0.875, 0.125]);
-  await expect(page.locator('#sessions')).toHaveText(
-    JSON.stringify(['pointer applied', 'keyboard applied'])
-  );
-  expect(await readJson(page, '#resizes')).toEqual([
-    { row: [0.625, 0.375] },
-    { row: [0.875, 0.125] },
-  ]);
-});
-
-test('a window blur applies an active resize and ends its session', async ({
-  page,
-}) => {
+test('a window blur applies an active resize', async ({ page }) => {
   await startRowDrag(page);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await expect(page.locator('.pierre-layout')).toHaveAttribute(
     'data-resizing',
     'false'
-  );
-  await expect(page.locator('#sessions')).toHaveText(
-    JSON.stringify(['pointer applied'])
   );
   const applied = await rowSizes(page);
   expect(applied).not.toEqual([1, 1]);
@@ -182,17 +155,12 @@ test('a window blur applies an active resize and ends its session', async ({
   expect(await readJson(page, '#resizes')).toHaveLength(1);
 });
 
-test('an unmount during a resize restores the sizes and cancels the session', async ({
-  page,
-}) => {
+test('an unmount during a resize restores the sizes', async ({ page }) => {
   await startRowDrag(page);
   expect(await rowSizes(page)).not.toEqual([1, 1]);
   // A click from script: the pointer stays down on the separator.
   await page.evaluate(() => document.getElementById('mount')?.click());
   await expect(page.locator('.pierre-layout')).toHaveCount(0);
-  await expect(page.locator('#sessions')).toHaveText(
-    JSON.stringify(['pointer cancelled'])
-  );
   expect(await rowSizes(page)).toEqual([1, 1]);
   await page.mouse.up();
   await expect(page.locator('#resizes')).toHaveText('[]');

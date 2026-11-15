@@ -56,8 +56,6 @@ import {
   type FeatureHooks,
   type Gesture,
   type LayoutMessages,
-  type LayoutResizeContext,
-  type LayoutResizeSession,
   PaneContext,
   type PaneContextValue,
   paneIdOf,
@@ -112,12 +110,6 @@ export interface RootProps {
   getPaneTitle?: (pane: PaneNode) => string;
   /** Report changed split sizes at pointer release or after a keyboard resize. Cancellation reports nothing. */
   onResize?: (sizes: Readonly<Record<string, readonly ChildSize[]>>) => void;
-  /**
-   * Called when a pointer resize starts and for each keyboard resize. It can
-   * return a `LayoutResizeSession` that constrains the sizes and releases app
-   * state when the resize ends.
-   */
-  onResizeStart?: (context: LayoutResizeContext) => LayoutResizeSession | void;
   /**
    * Called by `Layout.CloseButton` and by Delete on a tab, in place of
    * `layout.close`, for example to hide the pane so that it keeps its content.
@@ -322,7 +314,6 @@ interface LatestProps {
   gap: number;
   getPaneTitle: (pane: PaneNode) => string;
   onResize: RootProps['onResize'];
-  onResizeStart: RootProps['onResizeStart'];
   onPaneClose: RootProps['onPaneClose'];
   stylesheets: StylesheetsSetting;
   messages: LayoutMessages | undefined;
@@ -443,11 +434,6 @@ function createViewInternals(
       const originalSizes = Object.fromEntries(
         separators.map(({ split }) => [split.id, split.sizes])
       );
-      const session = latest.onResizeStart?.({
-        element: target,
-        separators,
-        source: 'pointer',
-      });
       // A feature can apply the sizes of each move in place of the store.
       const strategy = hooks.findLast((hook) => hook.applySizes !== undefined);
       resizing = true;
@@ -460,10 +446,9 @@ function createViewInternals(
             move.clientX - x,
             move.clientY - y
           );
-          const sizes = session?.update?.(proposed, move) ?? proposed;
           if (strategy?.applySizes !== undefined)
-            strategy.applySizes(element, separators, sizes);
-          else store.setSizes(sizes);
+            strategy.applySizes(element, separators, proposed);
+          else store.setSizes(proposed);
         },
         end(cancel) {
           // A strategy that defers its sizes applies them while the resize
@@ -485,31 +470,23 @@ function createViewInternals(
               )
             );
           }
-          session?.end?.(cancel);
           setResizing(false);
         },
       };
       setResizing(true);
     },
-    // A key press that resizes is a whole resize: it starts a session,
-    // applies the session's sizes, and ends it. The key does not reach the
-    // app's own key handlers above the layout.
+    // A key press that resizes is a whole resize: it applies the sizes and
+    // reports them. The key does not reach the app's own key handlers above
+    // the layout.
     resizeKey(event, ids) {
       const separators = separatorsOf(ids);
       const proposed = keySizes(separators, event.key, event.shiftKey);
       if (proposed === null) return;
       event.preventDefault();
       event.stopPropagation();
-      const session = latest.onResizeStart?.({
-        element: event.currentTarget,
-        separators,
-        source: 'keyboard',
-      });
-      const sizes = session?.update?.(proposed, null) ?? proposed;
       const before = store.getSnapshot().root;
-      store.setSizes(sizes);
-      reportChanged(before, sizes);
-      session?.end?.(false);
+      store.setSizes(proposed);
+      reportChanged(before, proposed);
     },
     title: (pane) => latest.getPaneTitle(pane),
     onPaneClose: () => latest.onPaneClose,
@@ -578,7 +555,6 @@ export function Root(props: RootProps): JSX.Element {
     renderPane,
     getPaneTitle = defaultTitle,
     onResize,
-    onResizeStart,
     onPaneClose,
     getPaneProps,
     getSeparatorProps,
@@ -605,7 +581,6 @@ export function Root(props: RootProps): JSX.Element {
     gap,
     getPaneTitle,
     onResize,
-    onResizeStart,
     onPaneClose,
     stylesheets,
     messages,
@@ -718,7 +693,7 @@ export function Root(props: RootProps): JSX.Element {
   }, [resizing, finish]);
 
   // An unmount during a gesture cancels it: a resize restores the sizes from
-  // before it and ends the app's session.
+  // before it.
   useEffect(() => () => finish(true), [finish]);
 
   useEffect(() => {

@@ -9,12 +9,7 @@ import {
 } from '../src';
 import { findNode } from '../src/model';
 import * as Layout from '../src/react';
-import {
-  allFeatures,
-  createLayout,
-  type LayoutResizeSession,
-  naryTree,
-} from '../src/react';
+import { allFeatures, createLayout, naryTree } from '../src/react';
 
 const store = createLayout(
   {
@@ -94,32 +89,11 @@ const renderPane = (pane: PaneNode): JSX.Element => (
   </>
 );
 
-function snapToEighths(
-  sizes: Record<string, ChildSize[]>
-): Record<string, ChildSize[]> {
-  return Object.fromEntries(
-    Object.entries(sizes).map(([id, split]) => {
-      const [before, after] = split;
-      if (
-        split.length !== 2 ||
-        typeof before !== 'number' ||
-        typeof after !== 'number'
-      )
-        return [id, split];
-      const eighths = Math.round((8 * before) / (before + after));
-      const share = Math.min(7, Math.max(1, eighths)) / 8;
-      return [id, [share, 1 - share]];
-    })
-  );
-}
-
 function Consumer(): JSX.Element {
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [resizes, setResizes] = useState<
     Readonly<Record<string, readonly ChildSize[]>>[]
   >([]);
-  const [sessions, setSessions] = useState<string[]>([]);
-  const [snap, setSnap] = useState(false);
   const [mounted, setMounted] = useState(true);
   const [appKeys, setAppKeys] = useState(0);
   return (
@@ -129,9 +103,6 @@ function Consumer(): JSX.Element {
       </button>
       <button onClick={() => store.setRoot({ type: 'pane', id: 'only' })}>
         Single pane
-      </button>
-      <button aria-pressed={snap} onClick={() => setSnap((on) => !on)}>
-        Snap to eighths
       </button>
       <button id="mount" onClick={() => setMounted((on) => !on)}>
         {mounted ? 'Unmount layout' : 'Mount layout'}
@@ -162,21 +133,12 @@ function Consumer(): JSX.Element {
                   });
               },
             })}
-            onResizeStart={({ source }): LayoutResizeSession => ({
-              update: snap ? (sizes) => snapToEighths(sizes) : undefined,
-              end: (cancelled) =>
-                setSessions((previous) => [
-                  ...previous,
-                  `${source} ${cancelled ? 'cancelled' : 'applied'}`,
-                ]),
-            })}
             onResize={(sizes) => setResizes((previous) => [...previous, sizes])}
           />
         )}
       </div>
       <pre id="tree">{JSON.stringify(toLayoutNodeView(state.root))}</pre>
       <pre id="resizes">{JSON.stringify(resizes)}</pre>
-      <pre id="sessions">{JSON.stringify(sessions)}</pre>
       <pre id="app-keys">{appKeys}</pre>
     </>
   );

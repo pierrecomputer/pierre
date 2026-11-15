@@ -113,9 +113,10 @@ consumer's responsibility.
 ## Control a resize
 
 `Layout.onResizeStart(context)` runs when a pointer resize starts and for each
-keyboard resize. `context` holds the separator or corner `element`, the pixel
-geometry of the `separators` that the resize changes, and its `source`:
-`pointer` or `keyboard`. The callback can return a `LayoutResizeSession`:
+keyboard resize. Only the `Layout` component has it; `Layout.Root` does not.
+`context` holds the separator or corner `element`, the pixel geometry of the
+`separators` that the resize changes, and its `source`: `pointer` or `keyboard`.
+The callback can return a `LayoutResizeSession`:
 
 ```tsx
 <Layout
