@@ -8,7 +8,13 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { type Edge, getPanes, type LayoutNode, type PaneNode } from '../src';
+import {
+  type Edge,
+  getPanes,
+  type LayoutNode,
+  type PaneNode,
+  parseStoredLayoutTree,
+} from '../src';
 import * as Layout from '../src/react';
 import { allFeatures, createLayout, naryTree } from '../src/react';
 import { resizeStrategy } from '../src/react/features/resize-strategy';
@@ -309,7 +315,10 @@ function Playground(): JSX.Element {
             type="button"
             onClick={() => {
               try {
-                localStorage.setItem('pierre-layouts-demo', store.serialize());
+                localStorage.setItem(
+                  'pierre-layouts-demo',
+                  JSON.stringify(store.toStoredTree())
+                );
                 setMessage('Layout saved to this browser.');
               } catch {
                 setMessage('This browser could not save the layout.');
@@ -327,7 +336,7 @@ function Playground(): JSX.Element {
                   setMessage('Save a layout first.');
                   return;
                 }
-                store.restore(saved);
+                store.setStoredTree(parseStoredLayoutTree(JSON.parse(saved)));
                 setMessage('Saved layout restored.');
               } catch {
                 setMessage('The saved layout could not be restored.');

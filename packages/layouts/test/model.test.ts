@@ -6,13 +6,12 @@ import {
   computeLayout,
   cssCorners,
   type Direction,
-  fromBinaryLayout,
   getExitEdge,
   getPanes,
   type LayoutNode,
-  LayoutStore,
   naryTree,
   type PaneNode,
+  parseStoredLayoutTree,
   pixelCorners,
   setPaneHidden,
   type SplitNode,
@@ -23,6 +22,7 @@ import {
 } from '../src';
 import { shareSpace } from '../src/geometry';
 import { evaluateCSS } from './evaluate-css';
+import { saveAndLoad, testStore } from './helpers/store';
 
 const root: LayoutNode = {
   type: 'split',
@@ -84,7 +84,7 @@ const nextId = (): string => `new-${++sequence}`;
 describe('tree operations', () => {
   test('a move across ancestors promotes the former sibling', () => {
     for (const model of [naryTree]) {
-      const store = new LayoutStore(root, { model });
+      const store = testStore(root, model);
       store.move('files', 'terminal', 'bottom');
       const next = store.getSnapshot().root;
       expect(next.id).toBe('inner');
@@ -187,19 +187,6 @@ describe('tree operations', () => {
       [pane('a'), row('i', [1, 1], [pane('b'), pane('c')])]
     );
     expect(() => naryTree.validate(nested)).toThrow();
-  });
-
-  test('a saved tree of version 1 converts with its shape', () => {
-    expect(
-      fromBinaryLayout({
-        type: 'split',
-        id: 's',
-        direction: 'vertical',
-        ratio: 0.25,
-        first: pane('a'),
-        second: pane('b'),
-      })
-    ).toEqual(column('s', [0.25, 0.75], [pane('a'), pane('b')]));
   });
 });
 
@@ -387,7 +374,7 @@ describe('hidden panes', () => {
   });
 
   test('the store hides and shows panes, and keeps focus and zoom on visible panes', () => {
-    const store = new LayoutStore(root);
+    const store = testStore(root);
     store.focusPane('terminal');
     store.toggleZoom('terminal');
     store.setHidden('terminal', true);
@@ -417,7 +404,7 @@ describe('hidden panes', () => {
 
 describe('store', () => {
   test('snapshots are stable between updates and do not freeze caller inputs', () => {
-    const store = new LayoutStore(root);
+    const store = testStore(root);
     expect(store.getSnapshot()).toBe(store.getSnapshot());
     expect(Object.isFrozen(store.getSnapshot().root)).toBe(true);
     expect(Object.isFrozen(root)).toBe(false);
@@ -435,57 +422,24 @@ describe('store', () => {
   });
 
   test('failed updates are atomic and persistence validates before committing', () => {
-    const store = new LayoutStore(root);
+    const store = testStore(root);
     const before = store.getSnapshot();
     expect(() =>
       store.split('editor', { type: 'pane', id: 'files' })
     ).toThrow();
-    expect(() =>
-      store.restore(
-        '{"version":2,"root":null,"focusedPane":"a","zoomedPane":null}'
-      )
-    ).toThrow();
+    expect(() => parseStoredLayoutTree({ version: 2, root: null })).toThrow();
     expect(() => store.setSizes({ outer: [0.5, -1] })).toThrow();
     expect(() => store.setSizes({ outer: [1, 1, 1] })).toThrow();
     expect(store.getSnapshot()).toBe(before);
-    store.toggleZoom('editor');
-    const saved = store.serialize();
-    expect(JSON.parse(saved).version).toBe(3);
+    const saved = store.toStoredTree();
+    expect(saved.version).toBe(3);
     store.close('editor');
-    store.restore(saved);
-    expect(store.getSnapshot().zoomedPane).toBe('editor');
+    store.setStoredTree(saved);
     expect(getPanes(store.getSnapshot().root)).toHaveLength(3);
   });
 
-  test('a layout of version 1 restores into either model', () => {
-    const saved = JSON.stringify({
-      version: 1,
-      root: {
-        type: 'split',
-        id: 'r',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: pane('a'),
-        second: {
-          type: 'split',
-          id: 'i',
-          direction: 'horizontal',
-          ratio: 0.5,
-          first: pane('b'),
-          second: pane('c'),
-        },
-      },
-      focusedPane: 'b',
-      zoomedPane: null,
-    });
-    const nary = new LayoutStore(pane('x'), { model: naryTree });
-    nary.restore(saved);
-    near(sizesOf(nary.getSnapshot().root), [0.5, 0.25, 0.25]);
-    expect(nary.getSnapshot().focusedPane).toBe('b');
-  });
-
   test('zoom does not change geometry and final pane cannot be closed', () => {
-    const store = new LayoutStore({ type: 'pane', id: 'only' });
+    const store = testStore({ type: 'pane', id: 'only' });
     const tree = store.getSnapshot().root;
     store.toggleZoom();
     store.toggleZoom();
@@ -497,7 +451,7 @@ describe('store', () => {
   });
 
   test('setRoot keeps the nodes of the store and copies the others', () => {
-    const store = new LayoutStore(root);
+    const store = testStore(root);
     const panes = new Map(
       getPanes(store.getSnapshot().root).map((node) => [node.id, node])
     );
@@ -522,7 +476,7 @@ describe('store', () => {
   });
 
   test('a change keeps the identity of every node that it does not touch', () => {
-    const store = new LayoutStore(root);
+    const store = testStore(root);
     const before = store.getSnapshot().root;
     const panes = getPanes(before);
     store.setSizes({ inner: [0.4, 0.6] });
@@ -551,7 +505,7 @@ describe('store', () => {
   });
 
   test('the store copies the pane that a caller adds', () => {
-    const store = new LayoutStore(root);
+    const store = testStore(root);
     const added = { type: 'pane' as const, id: 'added', minWidth: 100 };
     store.split('editor', added, 'right');
     const node = getPanes(store.getSnapshot().root).find(
@@ -564,7 +518,7 @@ describe('store', () => {
   });
 
   test('generated split IDs avoid restored trees', () => {
-    const store = new LayoutStore({ ...root, id: 'layout-split-1' });
+    const store = testStore({ ...root, id: 'layout-split-1' });
     store.split('editor', { type: 'pane', id: 'new' });
     validateLayout(store.getSnapshot().root);
   });
@@ -596,7 +550,7 @@ describe('stacks', () => {
 
   test('a new tab makes a stack in the place of its target, and shows', () => {
     for (const model of [naryTree]) {
-      const store = new LayoutStore(root, { model });
+      const store = testStore(root, model);
       store.addTab('terminal', pane('logs'));
       const next = store.getSnapshot();
       expect(next.focusedPane).toBe('logs');
@@ -670,7 +624,7 @@ describe('stacks', () => {
   });
 
   test('activate shows a tab, and the zoom of its stack follows it', () => {
-    const store = new LayoutStore(
+    const store = testStore(
       row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])])
     );
     const before = store.getSnapshot().root;
@@ -697,13 +651,13 @@ describe('stacks', () => {
 
   test('a close shows the nearest tab, and a stack of one pane gives way to it', () => {
     for (const model of [naryTree]) {
-      const store = new LayoutStore(
+      const store = testStore(
         row(
           'r',
           [0.25, 0.75],
           [pane('a'), stack('s', 'c', [pane('b'), pane('c'), pane('d')])]
         ),
-        { model }
+        model
       );
       store.close('c');
       expect(store.getSnapshot().root).toMatchObject({
@@ -720,9 +674,9 @@ describe('stacks', () => {
 
   test('a split or a move beside a tab goes beside its stack', () => {
     for (const model of [naryTree]) {
-      const store = new LayoutStore(
+      const store = testStore(
         row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])]),
-        { model }
+        model
       );
       store.split('c', pane('x'), 'bottom');
       const split = store.getSnapshot().root;
@@ -742,13 +696,13 @@ describe('stacks', () => {
 
   test('moveToStack moves a pane into a stack, or changes the order of tabs', () => {
     for (const model of [naryTree]) {
-      const store = new LayoutStore(
+      const store = testStore(
         row(
           'r',
           [1, 1, 1],
           [pane('a'), stack('s', 'b', [pane('b'), pane('c')]), pane('d')]
         ),
-        { model }
+        model
       );
       store.moveToStack('d', 'b');
       expect(ids(store.getSnapshot().root)).toEqual(['a', 'b', 'd', 'c']);
@@ -769,7 +723,7 @@ describe('stacks', () => {
   });
 
   test('a hidden tab leaves its stack and shows again as the active tab', () => {
-    const store = new LayoutStore(
+    const store = testStore(
       row('r', [1, 1], [pane('a'), stack('s', 'b', [pane('b'), pane('c')])])
     );
     store.setHidden('b', true);
@@ -790,17 +744,16 @@ describe('stacks', () => {
     expect(store.getSnapshot().focusedPane).toBe('b');
   });
 
-  test('stacks save and restore with version 3, and keep their identity', () => {
+  test('stacks save and load in the saved form, and keep their identity', () => {
     const tree = row(
       'r',
       [1, 1],
       [pane('a'), stack('s', 'c', [pane('b'), pane('c')])]
     );
-    const store = new LayoutStore(tree);
-    const saved = store.serialize();
-    expect(JSON.parse(saved).version).toBe(3);
-    const other = new LayoutStore(root);
-    other.restore(saved);
+    const store = testStore(tree);
+    expect(store.toStoredTree().version).toBe(3);
+    const other = testStore(root);
+    saveAndLoad(store, other);
     expect(other.getSnapshot().root).toEqual(store.getSnapshot().root);
     // A change outside the stack keeps the stack node.
     const before = store.getSnapshot().root;
@@ -812,11 +765,6 @@ describe('stacks', () => {
     expect(Object.isFrozen(after.type === 'split' && after.children[1])).toBe(
       true
     );
-    // A layout of version 2 restores as it is.
-    other.restore(
-      JSON.stringify({ ...JSON.parse(store.serialize()), version: 2 })
-    );
-    expect(other.getSnapshot().root).toEqual(after);
   });
 });
 
@@ -937,12 +885,11 @@ describe('sizes in pixels and maximum sizes', () => {
     expect(sizesOf(nested)).toEqual([{ px: 100 }, { px: 200 }, 1]);
   });
 
-  test('sizes in pixels save, restore, and change with setSizes', () => {
-    const store = new LayoutStore(tree, { model: naryTree });
+  test('sizes in pixels save, load, and change with setSizes', () => {
+    const store = testStore(tree, naryTree);
     store.setSizes({ row: [{ px: 300 }, 1, 1] });
-    const saved = store.serialize();
-    const other = new LayoutStore(root, { model: naryTree });
-    other.restore(saved);
+    const other = testStore(root, naryTree);
+    saveAndLoad(store, other);
     expect(sizesOf(other.getSnapshot().root)).toEqual([{ px: 300 }, 1, 1]);
     expect(() => store.setSizes({ row: [{ px: -5 }, 1, 1] })).toThrow();
   });
@@ -964,7 +911,7 @@ describe('collapsed panes', () => {
     computeLayout(tree, 600, height, 8).panes.map(({ rect }) => rect.height);
 
   test('a collapsed pane takes its collapsed size, and keeps its size in the split', () => {
-    const store = new LayoutStore(tools);
+    const store = testStore(tools);
     store.setCollapsed('terminal', true);
     const collapsed = store.getSnapshot().root;
     near(heights(collapsed, 608), [562, 38]);
@@ -981,7 +928,7 @@ describe('collapsed panes', () => {
   });
 
   test('a tab collapses its stack, and the root does not collapse', () => {
-    const store = new LayoutStore(tools);
+    const store = testStore(tools);
     store.addTab('terminal', pane('server'));
     store.setCollapsed('server', true);
     const root = store.getSnapshot().root;
@@ -1001,7 +948,7 @@ describe('collapsed panes', () => {
       ],
     });
     // A pane alone in the layout fills it.
-    const alone = new LayoutStore(pane('only'));
+    const alone = testStore(pane('only'));
     alone.setCollapsed('only', true);
     expect(alone.getSnapshot().root).toEqual(pane('only'));
   });
@@ -1016,10 +963,10 @@ describe('collapsed panes', () => {
       })
     ).toThrow();
     expect(() => validateLayout({ ...pane('a'), collapsedSize: -1 })).toThrow();
-    const store = new LayoutStore(tools);
+    const store = testStore(tools);
     store.setCollapsed('terminal', true);
-    const other = new LayoutStore(root);
-    other.restore(store.serialize());
+    const other = testStore(root);
+    saveAndLoad(store, other);
     expect(other.getSnapshot().root).toEqual(store.getSnapshot().root);
   });
 });
@@ -1277,7 +1224,7 @@ describe('tab order', () => {
 
   test('moveTab puts a tab at an index among the other tabs, shows it, and focuses it', () => {
     for (const model of [naryTree]) {
-      const store = new LayoutStore(tree(), { model });
+      const store = testStore(tree(), model);
       const before = store.getSnapshot().root;
       store.moveTab('c', 0);
       const next = store.getSnapshot();
@@ -1297,7 +1244,7 @@ describe('tab order', () => {
   });
 
   test('moveTab keeps the zoom of the stack, and does nothing in place', () => {
-    const store = new LayoutStore(tree('b'));
+    const store = testStore(tree('b'));
     store.toggleZoom('b');
     store.moveTab('b', 2);
     expect(store.getSnapshot().zoomedPane).toBe('b');

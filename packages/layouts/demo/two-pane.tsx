@@ -16,6 +16,7 @@ import {
 import * as Layout from '../src/react';
 import { createLayout, useControlledLayout } from '../src/react';
 import { resizeStrategy } from '../src/react/features/resize-strategy';
+import stylesheetUrl from '../src/styles.css?url';
 
 const params = new URLSearchParams(location.search);
 const controlledForm = params.get('form') === 'controlled';
@@ -26,8 +27,13 @@ const stylesheets =
     : stylesheetsParam === 'none'
       ? null
       : undefined;
-// An app that renders no sheets links the generated stylesheet.
-if (stylesheets === null) void import('../src/styles.css');
+// An app that renders no sheets links the generated stylesheet, as a file.
+if (stylesheets === null) {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = stylesheetUrl;
+  document.head.append(link);
+}
 
 const MESSAGES = { layout: 'Two-pane split' };
 

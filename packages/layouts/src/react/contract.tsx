@@ -27,37 +27,6 @@ import type {
   SeparatorGeometry,
 } from '../types';
 
-/** The start of a resize, for `onResizeStart` of the `Layout` component. */
-export interface LayoutResizeContext {
-  /** The separator or the corner that the user resizes with. */
-  element: HTMLElement;
-  /** The pixel geometry of the separators that the resize changes. */
-  separators: readonly SeparatorGeometry[];
-  source: 'pointer' | 'keyboard';
-}
-
-/**
- * An app's part in one resize: a pointer drag from press to release, or one
- * key press.
- */
-export interface LayoutResizeSession {
-  /**
-   * Returns the sizes to apply in place of the proposed sizes, for example
-   * sizes that snap to a position. `point` is the pointer position, or null
-   * for a keyboard resize.
-   */
-  update?: (
-    sizes: Record<string, ChildSize[]>,
-    point: { clientX: number; clientY: number } | null
-  ) => Record<string, ChildSize[]>;
-  /**
-   * Called once when the resize ends: with `false` after it applies, and with
-   * `true` after a cancellation or an unmount, which restore the sizes from
-   * before the resize.
-   */
-  end?: (cancelled: boolean) => void;
-}
-
 /** The sizes of splits, by split ID. */
 export type Sizes = Record<string, ChildSize[]>;
 

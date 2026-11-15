@@ -1,13 +1,13 @@
-// Example app C for the bundle step: the full set of features, with stacks,
-// every pane action, and a saved layout. It uses the `Layout` component and
-// the `LayoutStore` class, and loads the package stylesheet.
+// Example app C for the bundle step: the full set of features from
+// `allFeatures()`, every part in the header of each pane, and a stored tree.
+// Its sheets are inside the JavaScript.
 import type { JSX } from 'react';
 
-import { LayoutStore, naryTree, type PaneNode } from '../../src';
-import { Layout, type PaneAction } from '../../src/react';
-import '../../src/styles.css';
+import type { StoredLayoutTree } from '../../src';
+import * as Layout from '../../src/react';
+import { allFeatures, createLayout } from '../../src/react';
 
-export const store: LayoutStore = new LayoutStore(
+const layout = createLayout(
   {
     type: 'split',
     id: 'row',
@@ -26,21 +26,26 @@ export const store: LayoutStore = new LayoutStore(
       { type: 'pane', id: 'c' },
     ],
   },
-  { model: naryTree }
+  allFeatures()
 );
-const renderPane = (pane: PaneNode) => <div>{pane.id}</div>;
-const paneActions: readonly PaneAction[] = [
-  'move',
-  'collapse',
-  'zoom',
-  'close',
-];
+
+const renderPane = () => (
+  <>
+    <Layout.Header>
+      <Layout.MoveHandle />
+      <Layout.TabList />
+      <Layout.CollapseButton />
+      <Layout.ZoomButton />
+      <Layout.CloseButton />
+    </Layout.Header>
+    <Layout.Content />
+  </>
+);
 
 export function App(): JSX.Element {
-  return (
-    <Layout store={store} renderPane={renderPane} paneActions={paneActions} />
-  );
+  return <Layout.Root layout={layout} renderPane={renderPane} />;
 }
 
-export const save = (): string => store.serialize();
-export const load = (saved: string): void => store.restore(saved);
+export const save = (): StoredLayoutTree => layout.toStoredTree();
+export const load = (tree: StoredLayoutTree): void =>
+  layout.setStoredTree(tree);

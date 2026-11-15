@@ -62,7 +62,7 @@ export function hiddenPanes(): Feature<HiddenPaneCommands> {
   };
 }
 
-/** Save and restore a layout: `layout.serialize`, `layout.restore`, and the stored tree. */
+/** The saved form of a layout: `layout.toStoredTree` and `layout.setStoredTree`. */
 export function persistence(): Feature<PersistenceCommands> {
   return { name: 'persistence', store: persistenceStore };
 }

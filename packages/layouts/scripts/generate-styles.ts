@@ -1,9 +1,10 @@
-// Write `src/styles.css`, the stylesheet of the `Layout` component, from the
+// Write `src/styles.css`, the stylesheet for `stylesheets={null}`, from the
 // sheets in `src/css`. Each sheet holds the rules of one feature or part, inside
-// `@layer pierre-layouts`, so that a module can render only the sheets that an
-// app uses. An app that renders `Layout` imports `styles.css`, which holds
-// every sheet. Run `moon run layouts:generate-styles` after a change to a
-// sheet; a unit test checks that `styles.css` is current.
+// `@layer pierre-layouts`, and the module of that feature or part injects it.
+// An app that passes `stylesheets={null}` to `Layout.Root` links `styles.css`,
+// which holds every sheet, in place of the injected ones. Run
+// `moon run layouts:generate-styles` after a change to a sheet; a unit test
+// checks that `styles.css` is current.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 /** The sheets of `styles.css`, in their order in the file. */

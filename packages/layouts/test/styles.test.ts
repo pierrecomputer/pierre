@@ -10,8 +10,21 @@ const SHEETS = readdirSync(new URL('../src/css', import.meta.url)).filter(
   (name) => name.endsWith('.css')
 );
 
+// The sheets that the modules of the view inject: each module imports its
+// sheet as a string with `?inline` and renders it with `Style` or through its
+// feature.
+const INJECTED = new Set(
+  readdirSync(new URL('../src', import.meta.url), { recursive: true })
+    .filter((path) => /\.tsx?$/.test(String(path)))
+    .flatMap((path) => [
+      ...read(String(path)).matchAll(/css\/([a-z-]+)\.css\?inline/g),
+    ])
+    .map((match) => match[1])
+);
+
 describe('stylesheets', () => {
-  test('styles.css holds every sheet, as the script writes it', () => {
+  test('styles.css holds each sheet that a module injects, and nothing else', () => {
+    expect([...STYLE_SHEETS].sort()).toEqual([...INJECTED].sort());
     expect([...STYLE_SHEETS].sort()).toEqual(
       SHEETS.map((name) => name.replace(/\.css$/, '')).sort()
     );

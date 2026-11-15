@@ -3,10 +3,11 @@ import { describe, expect, test } from 'bun:test';
 import {
   InvalidLayoutTreeError,
   type LayoutNode,
-  LayoutStore,
   naryTree,
   parseStoredLayoutTree,
+  type StoredLayoutTree,
 } from '../src/index';
+import { testStore } from './helpers/store';
 
 const tree: LayoutNode = {
   type: 'split',
@@ -29,7 +30,7 @@ const tree: LayoutNode = {
 
 describe('the stored tree', () => {
   test('goes from a store through JSON and back with the same tree', () => {
-    const store = new LayoutStore(tree, { model: naryTree });
+    const store = testStore(tree, naryTree);
     store.focusPane('terminal');
     store.toggleZoom('terminal');
     const stored = store.toStoredTree();
@@ -37,19 +38,14 @@ describe('the stored tree', () => {
     const parsed = parseStoredLayoutTree(JSON.parse(JSON.stringify(stored)));
     expect(parsed).toEqual({ version: 3, root: tree });
 
-    const other = new LayoutStore(
-      { type: 'pane', id: 'placeholder' },
-      {
-        model: naryTree,
-      }
-    );
+    const other = testStore({ type: 'pane', id: 'placeholder' }, naryTree);
     other.setStoredTree(parsed);
     expect(other.getSnapshot().root).toEqual(tree);
     expect(other.getSnapshot().zoomedPane).toBeNull();
   });
 
   test("keeps a window's focus and zoom when they still show", () => {
-    const store = new LayoutStore(tree, { model: naryTree });
+    const store = testStore(tree, naryTree);
     store.focusPane('terminal');
     store.toggleZoom('terminal');
     store.setStoredTree(
@@ -161,32 +157,6 @@ describe('the stored tree', () => {
       'tree.root',
       'unique',
     ],
-    [
-      {
-        version: 3,
-        root: {
-          type: 'split',
-          id: 'r',
-          direction: 'horizontal',
-          sizes: [1, 1],
-          children: [
-            { type: 'pane', id: 'a' },
-            {
-              type: 'split',
-              id: 'inner',
-              direction: 'horizontal',
-              sizes: [1, 1],
-              children: [
-                { type: 'pane', id: 'b' },
-                { type: 'pane', id: 'c' },
-              ],
-            },
-          ],
-        },
-      },
-      'tree.root',
-      'same direction',
-    ],
   ])('rejects %j at %s', (value, path, message) => {
     let error: unknown;
     try {
@@ -199,21 +169,38 @@ describe('the stored tree', () => {
     expect((error as InvalidLayoutTreeError).message).toContain(message);
   });
 
-  test('checks the shape of the model that the caller names', () => {
-    const row = {
+  test('checks the core shape, and the store gives the tree the shape of its model', () => {
+    const nested: StoredLayoutTree = {
       version: 3,
       root: {
         type: 'split',
         id: 'r',
         direction: 'horizontal',
-        sizes: [1, 1, 1],
+        sizes: [1, 1],
         children: [
           { type: 'pane', id: 'a' },
-          { type: 'pane', id: 'b' },
-          { type: 'pane', id: 'c' },
+          {
+            type: 'split',
+            id: 'inner',
+            direction: 'horizontal',
+            sizes: [1, 1],
+            children: [
+              { type: 'pane', id: 'b' },
+              { type: 'pane', id: 'c' },
+            ],
+          },
         ],
       },
     };
-    expect(parseStoredLayoutTree(row).root.type).toBe('split');
+    const parsed = parseStoredLayoutTree(nested);
+    expect(parsed).toEqual(nested);
+    const store = testStore({ type: 'pane', id: 'placeholder' });
+    store.setStoredTree(parsed);
+    const root = store.getSnapshot().root;
+    expect(root.type === 'split' && root.children.map(({ id }) => id)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
   });
 });

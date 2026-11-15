@@ -12,7 +12,6 @@ import {
   type LayoutOperation,
   type LayoutTreeOperation,
 } from '../src/layout-operation';
-import { LayoutStore } from '../src/layout-store';
 import { canClose, getPanes } from '../src/model';
 import { naryTree } from '../src/models/n-ary';
 import { persistence } from '../src/persistence';
@@ -24,6 +23,7 @@ import { type CoreLayoutStore, createLayoutStore } from '../src/store';
 import { parseLayoutOperations } from '../src/stored-tree';
 import type { LayoutNode, LayoutState, PaneNode } from '../src/types';
 import { zoom } from '../src/zoom';
+import { testStore } from './helpers/store';
 
 const pane = (id: string): PaneNode => ({ type: 'pane', id });
 
@@ -325,8 +325,8 @@ describe('remote operations', () => {
 
 describe('the zoom rule of local and remote changes', () => {
   for (const [name, create] of [
-    ['createLayoutStore', () => storeOf()],
-    ['LayoutStore', () => new LayoutStore(start)],
+    ['a store of the core features', () => storeOf()],
+    ['a store of every feature', () => testStore(start)],
   ] as const) {
     test(`${name}: a local structural edit ends the zoom`, () => {
       const store = create();

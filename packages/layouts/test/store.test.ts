@@ -2,13 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   createLayoutStore,
-  type Edge,
   edits,
   getPanes,
   hiddenPanes,
   type LayoutNode,
-  LayoutStore,
   naryTree,
+  parseStoredLayoutTree,
   persistence,
   stacks,
   type StoreFeature,
@@ -198,38 +197,22 @@ describe('store features', () => {
     expect(store.getSnapshot().focusedPane).toBe('c');
   });
 
-  test('persistence restores the tree, the focus, and the zoom in one change', () => {
-    const source = createLayoutStore(tabs, [stacks, zoom, persistence]);
+  test('persistence gives the saved form and sets a tree from it in one change', () => {
+    const source = createLayoutStore(tabs, [stacks, persistence]);
     source.activate('b');
-    source.toggleZoom('c');
-    const saved = source.serialize();
+    const saved = parseStoredLayoutTree(
+      JSON.parse(JSON.stringify(source.toStoredTree()))
+    );
     const store = createLayoutStore(row, [persistence]);
     let calls = 0;
     store.subscribe(() => calls++);
-    store.restore(saved);
+    store.setStoredTree(saved);
     expect(calls).toBe(1);
-    expect(store.getSnapshot()).toEqual(source.getSnapshot());
+    expect(store.getSnapshot().root).toEqual(source.getSnapshot().root);
     expect(Object.isFrozen(store.getSnapshot().root)).toBe(true);
     expect(store.toStoredTree()).toEqual({
       version: 3,
       root: source.getSnapshot().root,
     });
-  });
-});
-
-describe('LayoutStore over createLayoutStore', () => {
-  test('a subclass overrides a command and calls the class command', () => {
-    class RecordingStore extends LayoutStore {
-      readonly moves: string[] = [];
-
-      override move(sourceId: string, targetId: string, edge: Edge): void {
-        super.move(sourceId, targetId, edge);
-        this.moves.push(`${sourceId}>${targetId}`);
-      }
-    }
-    const store = new RecordingStore(row, { model: naryTree });
-    store.move('a', 'c', 'right');
-    expect(store.moves).toEqual(['a>c']);
-    expect(ids(store.getSnapshot().root)).toEqual(['b', 'c', 'a']);
   });
 });

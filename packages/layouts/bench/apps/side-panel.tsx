@@ -1,69 +1,91 @@
 // Example app D for the bundle step: the side panel of an agent app. It has
-// stacks with a tab strip for each pane, zoom, tree edits, a store subclass
-// that records the operations of the user, and the app's own pane header. It
-// uses the `Layout` component and the `LayoutStore` class, and loads the
-// package stylesheet.
-import type { JSX } from 'react';
+// stacks with the app's own tab strip and pane header, zoom, tree edits, and a
+// listener that sends the tree operations of the user to a server, which
+// sends its tree back as a remote change.
+import { type JSX, useCallback } from 'react';
 
 import {
+  applyOperations,
+  type EditCommands,
+  isTreeOperation,
   type LayoutNode,
-  LayoutStore,
-  naryTree,
+  type LayoutTreeOperation,
   type PaneNode,
+  type StackCommands,
 } from '../../src';
-import { Layout, type PaneHeaderProps } from '../../src/react';
-import '../../src/styles.css';
+import * as Layout from '../../src/react';
+import {
+  createLayout,
+  edits,
+  type Feature,
+  type LayoutObject,
+  naryTree,
+  stacks,
+  zoom,
+  type ZoomCommands,
+} from '../../src/react';
 
-export class PanelLayoutStore extends LayoutStore {
-  private readonly record: (operation: string) => void;
+type PanelLayout = LayoutObject<
+  readonly [
+    Feature<EditCommands>,
+    Feature<StackCommands>,
+    Feature<ZoomCommands>,
+  ]
+>;
 
-  constructor(root: LayoutNode, record: (operation: string) => void) {
-    super(root, { model: naryTree });
-    this.record = record;
-  }
-
-  override activate(id: string): void {
-    const before = this.getSnapshot().root;
-    super.activate(id);
-    if (this.getSnapshot().root !== before) this.record(`select ${id}`);
-  }
+export function createPanelLayout(
+  root: LayoutNode,
+  send: (operations: LayoutTreeOperation[]) => void
+): PanelLayout {
+  const layout = createLayout(root, [edits(naryTree), stacks(), zoom()]);
+  layout.subscribe(({ operations, origin }) => {
+    if (origin !== 'local') return;
+    const tree = operations.filter(isTreeOperation);
+    if (tree.length > 0) send(tree);
+  });
+  return layout;
 }
 
-const renderPane = (pane: PaneNode) => <div>{pane.id}</div>;
+export const applyServerTree = (layout: PanelLayout, root: LayoutNode): void =>
+  applyOperations(layout, [{ type: 'setRoot', root }]);
 
-const renderHeader =
-  (store: PanelLayoutStore) =>
-  (header: PaneHeaderProps): JSX.Element => (
-    <div className="app-header">
-      <div {...header.tablistProps}>
-        {header.tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className="app-tab"
-            {...header.getTabProps(tab)}
-          >
-            {tab.id}
-          </button>
-        ))}
-      </div>
+function PanelHeader({ layout }: { layout: PanelLayout }): JSX.Element {
+  const tabs = Layout.usePane((pane) => pane.tabs);
+  const active = Layout.usePane((pane) => pane.activeTab);
+  const edges = Layout.usePane((pane) => pane.edges);
+  const id = Layout.usePane((pane) => pane.id);
+  return (
+    <div className="app-header" data-top={edges.top || undefined}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          className="app-tab"
+          aria-pressed={tab.id === active}
+          onClick={() => layout.activate(tab.id)}
+        >
+          {tab.id}
+        </button>
+      ))}
       <button
         type="button"
         className="app-zoom"
-        onClick={() => store.toggleZoom(header.pane.id)}
+        onClick={() => layout.toggleZoom(id)}
       />
     </div>
   );
+}
 
-export function App({ store }: { store: PanelLayoutStore }): JSX.Element {
-  return (
-    <Layout
-      store={store}
-      gap={1}
-      loneTabStrip
-      animate={false}
-      renderPane={renderPane}
-      renderHeader={renderHeader(store)}
-    />
+export function App({ layout }: { layout: PanelLayout }): JSX.Element {
+  const renderPane = useCallback(
+    (pane: PaneNode) =>
+      pane.id === undefined ? null : (
+        <>
+          <PanelHeader layout={layout} />
+          <Layout.Content>{pane.id}</Layout.Content>
+        </>
+      ),
+    [layout]
   );
+  return <Layout.Root layout={layout} gap={1} renderPane={renderPane} />;
 }

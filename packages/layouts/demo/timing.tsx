@@ -1,15 +1,14 @@
 // The timing of `PANE_VISIBILITY_EVENT` against the paint of the frame that
-// shows the change, for the old `Layout` component (`?view=old`) and for
-// `Layout.Root`. The e2e tests use it.
+// shows the change, for `Layout.Root`. The e2e tests use it.
 //
 // Each click on the page, and each change from a timer, starts a mark: a
 // frame callback, and a message from it that runs after the paint of that
 // frame. Each event records whether the frame callback and the paint came
 // before it.
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { type LayoutNode, LayoutStore, type PaneNode } from '../src';
+import type { LayoutNode, PaneNode } from '../src';
 import * as Layout from '../src/react';
 import {
   createLayout,
@@ -21,8 +20,6 @@ import {
   type PaneVisibilityEvent,
 } from '../src/react';
 import { type StackCommands, stacks } from '../src/stacks';
-
-const oldView = new URLSearchParams(location.search).get('view') === 'old';
 
 const tree: LayoutNode = {
   type: 'split',
@@ -76,13 +73,11 @@ function startMark(trigger: string): void {
 document.addEventListener('click', () => startMark('click'), true);
 
 const stackCommands: Feature<StackCommands> = { name: 'stacks', store: stacks };
-const oldStore = oldView ? new LayoutStore(tree, { model: naryTree }) : null;
 const layout = createLayout(tree, [
   edits(naryTree),
   stackCommands,
   hiddenPanes(),
 ]);
-const store = oldStore ?? layout;
 
 const page = {
   records: [] as EventRecord[],
@@ -90,7 +85,7 @@ const page = {
   setHiddenLater(id: string, hidden: boolean): void {
     setTimeout(() => {
       startMark('timer');
-      store.setHidden(id, hidden);
+      layout.setHidden(id, hidden);
     }, 0);
   },
 };
@@ -110,7 +105,7 @@ function content(pane: PaneNode): JSX.Element {
   return <p>{pane.id}</p>;
 }
 
-function renderNewPane(pane: PaneNode): JSX.Element {
+function renderPane(pane: PaneNode): JSX.Element {
   return (
     <>
       <Layout.Header>
@@ -123,7 +118,6 @@ function renderNewPane(pane: PaneNode): JSX.Element {
 }
 
 function App(): JSX.Element {
-  const [renderPane] = useState(() => (oldView ? content : renderNewPane));
   useEffect(() => {
     for (const host of document.querySelectorAll<HTMLElement>(
       '[data-layout-pane]'
@@ -136,19 +130,11 @@ function App(): JSX.Element {
   }, []);
   return (
     <main style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <button type="button" onClick={() => store.activate('output')}>
+      <button type="button" onClick={() => layout.activate('output')}>
         Show output
       </button>
       <div style={{ flex: 1, minHeight: 0 }}>
-        {oldStore === null ? (
-          <Layout.Root layout={layout} renderPane={renderPane} />
-        ) : (
-          <Layout.Layout
-            store={oldStore}
-            renderPane={renderPane}
-            paneActions={['collapse']}
-          />
-        )}
+        <Layout.Root layout={layout} renderPane={renderPane} />
       </div>
     </main>
   );

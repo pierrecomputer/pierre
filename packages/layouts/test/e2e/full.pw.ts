@@ -22,8 +22,8 @@ test('allFeatures() gives every command, and the parts render every sheet', asyn
       'moveToStack',
       'moveTab',
       'setHidden',
-      'serialize',
-      'restore',
+      'toStoredTree',
+      'setStoredTree',
       'toggleZoom',
       'setZoom',
     ].filter((name) => typeof layout[name] !== 'function');

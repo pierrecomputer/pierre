@@ -1,5 +1,5 @@
 import type { LayoutTreeOperation } from './layout-operation';
-import { naryTree } from './models/n-ary';
+import { validateLayout } from './model';
 import type {
   ChildSize,
   Direction,
@@ -9,7 +9,6 @@ import type {
   SplitNode,
   StackNode,
   StoredLayoutTree,
-  TreeModel,
 } from './types';
 
 /**
@@ -202,17 +201,19 @@ function parseNode(value: unknown, path: string): LayoutNode {
   );
 }
 
-/** Validate a tree read from storage, without importing DOM or window state. */
-export function parseStoredLayoutTree(
-  value: unknown,
-  model: TreeModel = naryTree
-): StoredLayoutTree {
+/**
+ * Validate the saved form of a layout, `{ version: 3, root }`, read from
+ * storage or from a client. It checks the core shape of the tree: the fields
+ * of each node, unique IDs, and one size for each child. A store gives the
+ * tree the shape of its model when it takes it.
+ */
+export function parseStoredLayoutTree(value: unknown): StoredLayoutTree {
   const fields = fieldsOf(value, 'tree', TREE_KEYS);
   if (fields.version !== 3)
     throw new InvalidLayoutTreeError('tree.version', 'must be 3');
   const root = parseNode(fields.root, 'tree.root');
   try {
-    model.validate(root);
+    validateLayout(root);
   } catch (error) {
     throw new InvalidLayoutTreeError(
       'tree.root',

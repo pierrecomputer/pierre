@@ -1,13 +1,13 @@
 // Example app A for the bundle step: a fixed two-pane split with a sidebar
-// that collapses. It uses the `Layout` component and the `LayoutStore` class,
-// and loads the package stylesheet.
+// that collapses, with `Layout.Root` only. Its sheets are inside the
+// JavaScript.
 import type { JSX } from 'react';
 
-import { LayoutStore, type PaneNode } from '../../src';
-import { Layout } from '../../src/react';
-import '../../src/styles.css';
+import type { PaneNode } from '../../src';
+import * as Layout from '../../src/react';
+import { createLayout } from '../../src/react';
 
-const store = new LayoutStore({
+const layout = createLayout({
   type: 'split',
   id: 'root',
   direction: 'horizontal',
@@ -18,13 +18,10 @@ const store = new LayoutStore({
   ],
 });
 const renderPane = (pane: PaneNode) => <div>{pane.id}</div>;
-const renderHeader = () => null;
 
 export function App(): JSX.Element {
-  return (
-    <Layout store={store} renderPane={renderPane} renderHeader={renderHeader} />
-  );
+  return <Layout.Root layout={layout} renderPane={renderPane} />;
 }
 
 export const toggleSidebar = (collapsed: boolean): void =>
-  store.setCollapsed('sidebar', collapsed);
+  layout.setCollapsed('sidebar', collapsed);

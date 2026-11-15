@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   type LayoutNode,
-  LayoutStore,
   naryTree,
   type StackNode,
   stackOf,
 } from '../src/index';
+import { testStore } from './helpers/store';
 
 const stack = (id: string, active: string, tabs: string[]): StackNode => ({
   type: 'stack',
@@ -25,7 +25,7 @@ const twoGroups: LayoutNode = {
 
 describe('addTab with activate: false', () => {
   test('keeps the active tab, the focused pane, and the zoom', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.focusPane('a');
     store.toggleZoom('a');
     store.addTab('b', { type: 'pane', id: 'new' }, undefined, {
@@ -40,7 +40,7 @@ describe('addTab with activate: false', () => {
   });
 
   test('makes a stack of a lone pane whose active tab stays the pane', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.focusPane('a');
     store.addTab('c', { type: 'pane', id: 'new' }, undefined, {
       activate: false,
@@ -53,7 +53,7 @@ describe('addTab with activate: false', () => {
   });
 
   test('puts the tab at the index among the tabs of the group', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.addTab('a', { type: 'pane', id: 'new' }, 0, { activate: false });
     expect(
       stackOf(store.getSnapshot().root, 'a')?.children.map((tab) => tab.id)
@@ -61,7 +61,7 @@ describe('addTab with activate: false', () => {
   });
 
   test('activates and focuses the new tab by default, as before', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.addTab('a', { type: 'pane', id: 'new' });
     const { root, focusedPane } = store.getSnapshot();
     expect(stackOf(root, 'new')?.active).toBe('new');
@@ -71,7 +71,7 @@ describe('addTab with activate: false', () => {
 
 describe('moveToStack', () => {
   test('into a lone pane makes a stack of the two', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.moveToStack('b', 'c', undefined, { activate: false });
     const { root } = store.getSnapshot();
     expect(root.type).toBe('split');
@@ -92,7 +92,7 @@ describe('moveToStack', () => {
         { type: 'pane', id: 'y' },
       ],
     };
-    const store = new LayoutStore(row, { model: naryTree });
+    const store = testStore(row, naryTree);
     store.moveToStack('y', 'x', undefined, { activate: false });
     expect(store.getSnapshot().root).toEqual({
       type: 'stack',
@@ -106,7 +106,7 @@ describe('moveToStack', () => {
   });
 
   test('without activation moves the focus to the tab that shows in its place', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.activate('b');
     store.moveToStack('b', 'c', undefined, { activate: false });
     const { root, focusedPane } = store.getSnapshot();
@@ -115,9 +115,7 @@ describe('moveToStack', () => {
   });
 
   test('inside one stack without activation keeps the active tab', () => {
-    const store = new LayoutStore(stack('s', 'a', ['a', 'b', 'c']), {
-      model: naryTree,
-    });
+    const store = testStore(stack('s', 'a', ['a', 'b', 'c']), naryTree);
     store.moveToStack('c', 'a', 0, { activate: false });
     const moved = stackOf(store.getSnapshot().root, 'a');
     expect(moved?.children.map((tab) => tab.id)).toEqual(['c', 'a', 'b']);
@@ -125,7 +123,7 @@ describe('moveToStack', () => {
   });
 
   test('activates the moved tab by default, as before', () => {
-    const store = new LayoutStore(twoGroups, { model: naryTree });
+    const store = testStore(twoGroups, naryTree);
     store.moveToStack('b', 'c');
     const { root, focusedPane } = store.getSnapshot();
     expect(stackOf(root, 'c')?.active).toBe('b');

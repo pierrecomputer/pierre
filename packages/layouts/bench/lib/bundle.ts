@@ -40,32 +40,25 @@ const ENTRIES: Record<string, string> = {
 
 // Each consumer is the module of an app that imports what the app uses, from
 // one or more entry points. The module exports the imports again, so that the
-// bundle keeps the code that they need, as an app that uses them does. The
-// React entry imports `LayoutStore` only as a type, so an app that renders
-// `Layout` loads code that the entry alone leaves out.
+// bundle keeps the code that they need, as an app that uses them does.
 const CONSUMERS: Record<string, string> = {
-  'consumer: Layout + LayoutStore': [
-    "export { Layout } from '/src/react/index.tsx';",
-    "export { LayoutStore } from '/src/index.ts';",
+  'consumer: Root + createLayout': [
+    "export { Root, createLayout } from '/src/react/index.tsx';",
   ].join('\n'),
 };
 
-// Each example app is a module of an app that renders a layout, with the
-// stylesheets that it loads. Its size is the JavaScript file and the CSS file
-// that the app ships, each compressed alone, added together. The apps match
-// the examples of the modular entry points proposal, so that the sizes before
-// and after the change compare: A is a fixed two-pane split with collapse, B a
-// tiled grid with move and zoom, C the full set of features, and D the side
-// panel of an agent app. The apps with the prefix `modular` use the API of
-// feature modules (`Layout.Root`, `createLayout`, features, and parts), which
-// holds its sheets inside the JavaScript.
+// Each example app is a module of an app that renders a layout. Its size is
+// the JavaScript file and the CSS file that the app ships, each compressed
+// alone, added together; the sheets of the layout are inside the JavaScript,
+// so the CSS file is empty. The apps match the examples of the modular entry
+// points proposal: A is a fixed two-pane split with collapse, B a tiled grid
+// with move and zoom, C the full set of features with `allFeatures()` and
+// every part, and D the side panel of an agent app.
 const APPS: Record<string, string> = {
   'app A: two-pane split': 'bench/apps/two-pane.tsx',
   'app B: tiled grid': 'bench/apps/tiled.tsx',
   'app C: full set': 'bench/apps/full.tsx',
   'app D: side panel': 'bench/apps/side-panel.tsx',
-  'modular app A: two-pane split': 'bench/apps/modular/two-pane.tsx',
-  'modular app B: tiled grid': 'bench/apps/modular/tiled.tsx',
 };
 
 const MODES: readonly BundleMode[] = ['app', 'library'];

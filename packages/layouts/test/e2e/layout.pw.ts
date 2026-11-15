@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { computeLayout, LayoutStore } from '../../src';
+import { computeLayout, parseStoredLayoutTree } from '../../src';
 import {
   PANE_VISIBILITY_EVENT,
   type PaneVisibilityEvent,
@@ -21,8 +21,7 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
     localStorage.getItem('pierre-layouts-demo')
   );
   if (saved === null) throw new Error('Missing saved layout');
-  const store = new LayoutStore({ type: 'pane', id: 'initial' });
-  store.restore(saved);
+  const { root } = parseStoredLayoutTree(JSON.parse(saved));
   const workspace = page.getByRole('group', { name: 'Layout playground' });
   const updates = await workspace.evaluate((element) => {
     const container = element as HTMLElement;
@@ -67,11 +66,7 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
     return samples;
   });
   for (const sample of updates) {
-    const expected = computeLayout(
-      store.getSnapshot().root,
-      sample.width,
-      sample.height
-    );
+    const expected = computeLayout(root, sample.width, sample.height);
     expect(sample.unchangedStyles).toBe(true);
     for (const actual of sample.panes) {
       const pane = expected.panes.find(({ pane }) => pane.id === actual.id);

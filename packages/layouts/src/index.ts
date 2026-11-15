@@ -22,7 +22,6 @@ export {
   LayoutOperationError,
   type LayoutOperationErrorCode,
 } from './layout-operation';
-export { LayoutStore, type LayoutStoreOptions } from './layout-store';
 export {
   canClose,
   getPanes,
@@ -36,7 +35,6 @@ export {
 } from './model';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
-export { type BinaryLayoutNode, fromBinaryLayout } from './persistence-model';
 export { type Presentation, presentation } from './presentation';
 export { type StackCommands, stacks } from './stacks';
 export {

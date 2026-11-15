@@ -25,8 +25,6 @@ export type {
   Gesture,
   HostPatch,
   LayoutMessages,
-  LayoutResizeContext,
-  LayoutResizeSession,
   PaneContextValue,
   StylesheetsSetting,
   ViewContext,
@@ -52,14 +50,6 @@ export { stacks } from './features/stacks';
 export { tabDrag } from './features/tab-drag';
 export { edits, hiddenPanes, persistence } from './features/store-only';
 export { zoom } from './features/zoom';
-export {
-  Layout,
-  type LayoutProps,
-  type LayoutTablistProps,
-  type LayoutTabProps,
-  type PaneAction,
-  type PaneHeaderProps,
-} from './layout';
 export {
   CloseButton,
   type CloseButtonState,

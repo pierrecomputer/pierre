@@ -1,13 +1,20 @@
 // Example app B for the bundle step: a tiled grid of four panes that the user
-// moves and zooms from the pane headers. It uses the `Layout` component and
-// the `LayoutStore` class, and loads the package stylesheet.
+// moves and zooms from the pane headers, with `paneDrag()`, `corners()`, and
+// `zoom()`. Its sheets are inside the JavaScript.
 import type { JSX } from 'react';
 
-import { LayoutStore, naryTree, type PaneNode } from '../../src';
-import { Layout, type PaneAction } from '../../src/react';
-import '../../src/styles.css';
+import type { PaneNode } from '../../src';
+import * as Layout from '../../src/react';
+import {
+  corners,
+  createLayout,
+  edits,
+  naryTree,
+  paneDrag,
+  zoom,
+} from '../../src/react';
 
-export const store: LayoutStore = new LayoutStore(
+const layout = createLayout(
   {
     type: 'split',
     id: 'rows',
@@ -36,16 +43,22 @@ export const store: LayoutStore = new LayoutStore(
       },
     ],
   },
-  { model: naryTree }
+  [edits(naryTree), paneDrag(), corners(), zoom()]
 );
-const renderPane = (pane: PaneNode) => <div>{pane.id}</div>;
-const paneActions: readonly PaneAction[] = ['move', 'zoom'];
+const renderPane = (pane: PaneNode) => (
+  <>
+    <Layout.Header>
+      <Layout.MoveHandle />
+      <Layout.Title />
+      <Layout.ZoomButton />
+    </Layout.Header>
+    <Layout.Content>{pane.id}</Layout.Content>
+  </>
+);
 
 export function App(): JSX.Element {
-  return (
-    <Layout store={store} renderPane={renderPane} paneActions={paneActions} />
-  );
+  return <Layout.Root layout={layout} renderPane={renderPane} />;
 }
 
 export const split = (): void =>
-  store.split('a', { type: 'pane', id: 'e' }, 'right');
+  layout.split('a', { type: 'pane', id: 'e' }, 'right');
