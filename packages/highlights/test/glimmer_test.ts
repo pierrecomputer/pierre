@@ -209,3 +209,12 @@ void t.test('glimmer: a metadata key never reads the next line', () => {
     }
   }
 });
+
+void t.test(
+  'glimmer: a script cut by </template> ends there in a stream',
+  () => {
+    for (const lang of ['glimmer-js', 'glimmer-ts'] as const) {
+      assertLineFedParity(lang, 'const<template><script>`</template>}');
+    }
+  }
+);

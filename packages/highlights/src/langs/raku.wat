@@ -270,7 +270,7 @@
             (global.set $ptr (global.get $end))
             (call $emitTok (enum.get $Token.comment.doc) (local.get $gap) (global.get $ptr))
             (br $done)))
-        (if (local.get $hdLen)
+        (if (i32.and (i32.ne (local.get $hdLen) (i32.const 0)) (i32.eqz (local.get $sq)))
           (then
             ;; the pending heredoc body starts after this line's break
             (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
@@ -625,6 +625,13 @@
                   (if (i32.eq (call $templateByte (global.get $ptr)) (local.get $c3))
                     (then
                       (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))
+                      ;; a longer terminator cannot be checkpointed (see $streamSetLine)
+                      (if (i32.gt_u (local.get $hdLen) (i32.const 32))
+                        (then (local.set $hdLen (i32.const 0))))
+                      ;; a quoted body after the opener can cross a chunk end
+                      ;; before the heredoc body starts, so keep a copy
+                      (memory.copy (i32.const $mem.streamDelimiter) (local.get $hdDelim) (local.get $hdLen))
+                      (local.set $hdDelim (i32.const $mem.streamDelimiter))
                       (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                       (local.set $hl (enum.get $Token.string))
                       (br $valueTok)))))

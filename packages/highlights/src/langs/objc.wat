@@ -145,10 +145,12 @@
       (loop $next
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
+        ;; the byte before the gap counts too: a body a host starts at a
+        ;; line start has an empty gap
         (local.set $nl
           (i32.lt_u
             (call $scanFindSpecial
-              (local.get $gap)
+              (i32.sub (local.get $gap) (i32.gt_u (local.get $gap) (global.get $srcBase)))
               (global.get $ptr)
               (i32.const 10)
               (i32.const 0)

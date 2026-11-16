@@ -107,7 +107,8 @@ live tokenizer that the renderer releases when no longer needed.
 The plugin uses the main `@pierre/highlights` entry, which loads all built-in
 lexers. To add a language, call `registerLanguages([lexer])` from
 `@pierre/highlights` with a lexer from `@pierre/wat-tools`. An open fence in
-such a language renders again in full on each update.
+such a language uses the live tokenizer too. Only an open `ansi` fence renders
+again in full on each update.
 
 Use [Highlights themes](https://diffs.com/docs#highlights-themes) for theme
 objects, multiple themes, and CSS variable colors. These themes use the

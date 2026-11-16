@@ -99,9 +99,11 @@ that language.
 
 `resolveLanguage(s)`, `getResolvedLanguages`, `hasResolvedLanguages`,
 `getResolvedOrResolveLanguage`, `attachResolvedLanguages`,
-`areLanguagesAttached`, and `cleanUpResolvedLanguages` support grammar and lexer
-loading. A `ResolvedLanguage` carries a Highlights lexer in `highlights`.
-Language loader/cache maps remain available for compatibility.
+`areLanguagesAttached`, and `cleanUpResolvedLanguages` load and attach TextMate
+grammars. They do not load a registered Highlights lexer: the Highlights backend
+and the worker pool load it when they render. `attachResolvedLanguages` also
+accepts a `ResolvedLanguage` that carries a lexer in `highlights`. Language
+loader/cache maps remain available for compatibility.
 
 ## Rendering and streams
 

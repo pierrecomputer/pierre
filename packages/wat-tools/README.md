@@ -63,7 +63,8 @@ the lexer to the shared `codeToHtml()` and `codeToTokens()` functions. Its names
 override built-in names there. `StreamTokenizer` and `LiveTokenizer` use it too.
 A Markdown fence uses a custom lexer only when the
 `@pierre/highlights/langs/markdown` module is in the same `langs` list or is
-registered too.
+registered too. The two tokenizers run a built-in language module with the
+built-in lexers, so they leave such a fence plain.
 
 In `@pierre/diffs`, use
 `registerCustomLanguage(name, loader, files, 'highlights')`. The loader returns
@@ -78,7 +79,8 @@ shared scanners.
 
 - `$ptr` is the current input pointer. `$end` is the exclusive input end.
 - `$emitTok(type, start, end)` emits a token. Emit contiguous input spans in
-  order. Bytes that no token covers become plain text.
+  order: a token also takes the bytes skipped before it. Bytes after the last
+  token become plain text.
 - `$emitGap(start, end)` emits whitespace that inherits the previous token.
 - `(enum.get $Token.number)` selects a token type. See
   `@pierre/wat-tools/token.wat` for the available types. Do not emit
@@ -95,7 +97,8 @@ shared scanners.
 
 Your code and the shared modules have one namespace. Do not define a name that a
 shared module uses, such as `$ptr` or a `$lex*`, `$scan*`, `$stream*`, or
-`$sig*` function. Use a prefix for your own functions and globals.
+`$sig*` function. The `$hl` prefix belongs to the built-in lexers. Use your own
+prefix for functions and globals.
 
 The shared modules are already available, so imports such as
 `(import "@pierre/wat-tools/common.wat")` and

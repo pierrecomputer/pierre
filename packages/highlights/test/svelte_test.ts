@@ -369,3 +369,13 @@ void t.test(
     }
   }
 );
+
+void t.test('svelte: a script name ends where the html lexer ends it', () => {
+  for (const code of [
+    '<script"">\n{',
+    '<script"">\n{x}</script>\n{y}\n',
+    '<style=a>\n{b}</style>{c}\n',
+  ]) {
+    assertLineFedParity('svelte', code);
+  }
+});

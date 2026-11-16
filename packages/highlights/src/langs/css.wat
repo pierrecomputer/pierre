@@ -149,6 +149,15 @@
             (global.set $streamMode (i32.const 17))
             (global.set $streamA (local.get $q))))
         (br $wide)))
+    ;; a host can end a chunk inside a string, at a template expression in a
+    ;; style body; the next chunk resumes it too
+    (if
+      (i32.and
+        (i32.and (local.get $open) (global.get $streaming))
+        (i32.eq (global.get $ptr) (global.get $eof)))
+      (then
+        (global.set $streamMode (i32.const 17))
+        (global.set $streamA (local.get $q))))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $open))
 

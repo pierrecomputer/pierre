@@ -385,6 +385,39 @@ test.each(['markdown', 'mdx'] as const)(
   }
 );
 
+test.each([
+  ['razor', '<style>a{content:"@Model.Name px"; color: red}</style>'],
+  ['razor', `<style>a{b:'@a @b'; c: "}"} d{e:f}</style>`],
+  ['blade', '<style>a{content:"{{ $r }} x"}</style>'],
+] as const)(
+  'standalone %s resumes a style string after a template expression',
+  async (lang, code) => {
+    const selective = await createHighlighter({
+      langs: [...langs, await loadLanguage(lang)],
+      themes: [cssVariables],
+    });
+    const options = { lang, theme: cssVariables };
+    expect(selective.codeToTokens(code, options)).toEqual(
+      reference.codeToTokens(code, options)
+    );
+  }
+);
+
+test('standalone templ starts a css body in its declaration block', async () => {
+  const selective = await createHighlighter({
+    langs: [...langs, await loadLanguage('templ')],
+    themes: [cssVariables],
+  });
+  const options = { lang: 'templ', theme: cssVariables } as const;
+  for (const code of [
+    'css name() {\n\tg:*\n\tcolor: red\n}\n',
+    'css (x T) name() {\n\tg:*\n}\ncss b() {\n\tg:*\n}\n',
+  ])
+    expect(selective.codeToTokens(code, options)).toEqual(
+      reference.codeToTokens(code, options)
+    );
+});
+
 test('HTML embeds registered scripts and leaves unregistered styles plain', async () => {
   const highlighter = await createHighlighter({
     langs: [typescript, html],

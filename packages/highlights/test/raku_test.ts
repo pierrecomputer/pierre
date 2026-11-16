@@ -1,6 +1,13 @@
 import { expect, test } from 'bun:test';
 
-import { assertLineFedParity, tokenKinds } from './_util';
+import { codeToHtml } from '../lib/core';
+import {
+  assertLineFedParity,
+  distinctTheme,
+  initFullModule,
+  textOf,
+  tokenKinds,
+} from './_util';
 
 test('raku: declarators, traits, types, and routines', () => {
   expect(
@@ -347,4 +354,23 @@ test('raku: many plain strings lex in linear time', () => {
     ['}', 'punctuation.special'],
     ['" "b"', 'string'],
   ]);
+});
+
+test('raku: an open quote after a heredoc opener keeps its spaces', () => {
+  initFullModule();
+  // HTML output lost the space that the pending heredoc had skipped
+  for (const code of ["q:to/E/' ", "qq:to/E/' x\n"]) {
+    const html = codeToHtml(code, { lang: 'raku', theme: distinctTheme });
+    expect(textOf(new TextDecoder().decode(html))).toBe(code);
+  }
+});
+
+test('raku: a streamed heredoc keeps its terminator', () => {
+  // a terminator longer than 32 bytes opens no heredoc
+  assertLineFedParity('raku', `q:to/${'E'.repeat(33)}/;\n \n`);
+  // a regex after the opener crosses the line break before the body starts
+  assertLineFedParity(
+    'raku',
+    '=begin pod\n=end pod\nq:to/END/f/\nc/co\nEND\n$'
+  );
 });

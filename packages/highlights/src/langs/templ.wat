@@ -328,14 +328,19 @@
               (local.set $p (call $templTrailingBrace (global.get $ptr)))
               (drop (call $templGo (select (local.get $p) (local.get $lineEnd) (local.get $p)) (i32.const -1)))
               (br_if $next (i32.eqz (local.get $p)))
-              (call $templBracket (local.get $p))
+              ;; CSS sees the `{`, so a child lexer also starts in a
+              ;; declaration block
+              (if (i32.eq (local.get $r) (i32.const 2))
+                (then
+                  (global.set $ptr (local.get $p))
+                  (local.set $css (call $embedCssLine (i32.add (local.get $p) (i32.const 1)) (i32.const 256))))
+                (else (call $templBracket (local.get $p))))
               ;; the Go lines' saved locals would keep live line states apart
               (call $streamClearCheckpoints)
               (local.set $go (i32.const 0))
               (local.set $sec (local.get $r))
               (local.set $depth (i32.const 1))
               (local.set $markup (i32.const 0))
-              (local.set $css (i32.const 0))
               (if (i32.eq (local.get $r) (i32.const 3))
                 (then
                   ;; the first line of a `script` body

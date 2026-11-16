@@ -271,57 +271,52 @@
     (call $htmlTagEnd
       (call $vueAttrs (i32.const 0) (i32.const 0) (i32.const 0) (local.get $kind))))
 
+  ;; The first Vue construct at or after $p: a tag, `<!`, `<?`, or `{{`, else
+  ;; $end. Text before it is an HTML range. A streamed HTML range ends here
+  ;; too, so a quote left open in it ends as in a whole buffer.
+  (func $vueRangeEnd (param $p i32) (result i32)
+    (local $q i32)
+    (block $done
+      (loop $scan
+        (local.set $p (call $lexFindEither (local.get $p) (i32.const "{") (i32.const "<")))
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $q (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
+          (then
+            (br_if $done (i32.or (i32.eq (local.get $q) (i32.const "!")) (i32.eq (local.get $q) (i32.const "?"))))
+            ;; past the `/` of a close tag
+            (if (i32.eq (local.get $q) (i32.const "/"))
+              (then (local.set $q (call $templateByte (i32.add (local.get $p) (i32.const 2))))))
+            (br_if $done (i32.and (i32.ne (local.get $q) (i32.const 0)) (call $lexIsIdentStart (local.get $q)))))
+          (else (br_if $done (i32.eq (local.get $q) (i32.const "{")))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $scan)))
+    (local.get $p))
+
   (func $hlVue
-    (local $c i32)
     (local $from i32)
     (local $p i32)
     (local $q i32)
     (call $lexEmitLeadingContinuation)
     (local.set $from (global.get $ptr))
-    (local.set $p (global.get $ptr))
     (block $done
       (loop $scan
-        ;; a construct consumed through $ptr branches to $resync
-        (block $resync
-        (local.set $p (call $lexFindEither (local.get $p) (i32.const "{") (i32.const "<")))
+        (local.set $p (call $vueRangeEnd (local.get $from)))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (local.set $c (i32.load8_u (local.get $p)))
-        (if (i32.eq (local.get $c) (i32.const "<"))
+        (call $vueHtmlRange (local.get $from) (local.get $p))
+        (global.set $ptr (local.get $p))
+        (local.set $q (i32.load8_u offset=1 (local.get $p)))
+        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
           (then
-            ;; `<!` and `<?` run to their own close, whatever cut lies inside
-            (local.set $q (call $templateByte (i32.add (local.get $p) (i32.const 1))))
-            (if (i32.or (i32.eq (local.get $q) (i32.const "!")) (i32.eq (local.get $q) (i32.const "?")))
-              (then
-                (call $vueHtmlRange (local.get $from) (local.get $p))
-                (global.set $ptr (local.get $p))
-                (call $htmlBang (local.get $q))
-                (br $resync)))
+            ;; `<!` and `<?` run to their own close, whatever cut lies inside.
             ;; Tags are Vue's own: directive values are expressions, and a
             ;; script/style body is scanned once here.
-            ;; $q: the name start, past the `/` of a close tag
-            (local.set $q
-              (i32.add
-                (i32.add (local.get $p) (i32.const 1))
-                (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/"))))
-            (if
-              (i32.and
-                (i32.lt_u (local.get $q) (global.get $end))
-                (call $lexIsIdentStart (i32.load8_u (local.get $q))))
-              (then
-                (call $vueHtmlRange (local.get $from) (local.get $p))
-                (global.set $ptr (local.get $p))
-                (call $vueTag)
-                (br $resync)))))
-        (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const "{"))
-            (i32.and
-              (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-              (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "{"))))
-          (then
-            ;; one pass: the TSX lexer stops at the closing `}}` itself, and
-            ;; an expression still open at a chunk end streams as region 6
-            (call $vueHtmlRange (local.get $from) (local.get $p))
+            (if (i32.or (i32.eq (local.get $q) (i32.const "!")) (i32.eq (local.get $q) (i32.const "?")))
+              (then (call $htmlBang (local.get $q)))
+              (else (call $vueTag))))
+          (else
+            ;; `{{`, one pass: the TSX lexer stops at the closing `}}` itself,
+            ;; and an expression still open at a chunk end streams as region 6
             (call $emitTok
               (enum.get $Token.punctuation.special)
               (local.get $p)
@@ -333,12 +328,8 @@
                   (enum.get $Token.punctuation.special)
                   (global.get $ptr)
                   (i32.add (global.get $ptr) (i32.const 2)))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
-            (br $resync)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $scan))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))))
         (local.set $from (global.get $ptr))
-        (local.set $p (global.get $ptr))
         (br $scan)))
     (call $vueHtmlRange (local.get $from) (global.get $end))
     (global.set $ptr (global.get $end)))

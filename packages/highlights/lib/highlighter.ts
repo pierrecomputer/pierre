@@ -637,15 +637,13 @@ function buildHighlighter(
   let nextLanguageId = 256;
   for (let i = 0; i < languages.length; i++) {
     const localIds = new Map<number, number>();
+    const exports = WebAssembly.Module.exports(compiled[i]);
     // A lexer built before the 6-byte record format writes 8-byte records.
-    if (
-      !WebAssembly.Module.exports(compiled[i]).some(
-        ({ name }) => name === 'recordBytes'
-      )
-    )
+    if (!exports.some(({ name }) => name === 'recordBytes'))
       throw new TypeError(
         `${languages[i].name}: unsupported token record format; rebuild the lexer with buildHighlightsLexer`
       );
+    const builtin = exports.some(({ name }) => name === 'reserve');
     for (const [alias, id] of Object.entries(languages[i].aliases)) {
       const name = alias.toLowerCase();
       if (!Number.isInteger(id) || id < 0 || id > 255) {
@@ -653,10 +651,10 @@ function buildHighlighter(
       }
       if (name === 'ansi') throw new RangeError('reserved language name: ansi');
       // A built-in ID also routes embedded languages. Only a built-in module
-      // keeps it; any other lexer gets a new ID, so its alias cannot reroute
-      // embedded code.
+      // (it exports `reserve`) keeps it; any other lexer gets a new ID, so its
+      // alias cannot reroute embedded code.
       let externalId: number | undefined;
-      if (id > 0 && id === LANGS[name]) {
+      if (builtin && id > 0 && id === LANGS[name]) {
         registrations.set(id, { module: compiled[i], id });
         externalId = id;
       } else {

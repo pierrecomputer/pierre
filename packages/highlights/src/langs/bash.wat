@@ -458,8 +458,8 @@
     (local $group i32)
     ;; a here-document opened on the current line: its delimiter bytes, their
     ;; count, and whether `<<-` allows leading tabs; the body is consumed at
-    ;; the line break. Chunks end at line breaks, so the delimiter pointer is
-    ;; always used within the chunk that produced it. A negative $hdLen
+    ;; the line break. A chunk that ends before the body moves the delimiter
+    ;; to $mem.streamDelimiter (see the end). A negative $hdLen
     ;; carries a second heredoc into the next chunk (see $bashHeredocBody).
     (local $hdDelim i32)
     (local $hdLen i32)
@@ -493,6 +493,10 @@
         (local.set $cmd
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))))
     (call $lexEmitLeadingContinuation)
+    ;; WARNING: another lexer can use $mem.lexLowerScratch between chunks, so
+    ;; a second heredoc on a line that crossed a chunk end is dropped
+    (if (i32.gt_s (local.get $hdLen) (i32.const 0))
+      (then (i32.store offset=4 (i32.const $mem.lexLowerScratch) (i32.const 0))))
     (if (i32.lt_s (local.get $hdLen) (i32.const 0))
       (then
         (local.set $hdLen (call $bashHeredocBody (i32.const 0) (local.get $hdLen) (i32.const 0)))))
@@ -970,7 +974,16 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))
         (local.set $cmd (i32.const 0))
-        (br $next))))
+        (br $next)))
+    ;; a quoted word can end the chunk before a pending heredoc body starts:
+    ;; keep its delimiter (up to 32 bytes) where the next chunk can read it
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and (i32.gt_s (local.get $hdLen) (i32.const 0)) (i32.le_u (local.get $hdLen) (i32.const 32))))
+      (then
+        (memory.copy (i32.const $mem.streamDelimiter) (local.get $hdDelim) (local.get $hdLen))
+        (local.set $hdDelim (i32.const $mem.streamDelimiter)))))
 
   ;; Resume bash-owned stream mode 12: a double-quoted string body left open
   ;; at the previous chunk end. An expansion the chunk ended inside - a `$(`

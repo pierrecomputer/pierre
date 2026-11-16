@@ -534,8 +534,10 @@
     ;; hand [from,to) to the embedded language over an $end swap
     (local.set $to (global.get $ptr))
     (local.set $save (global.get $end))
+    ;; a body that a host cut before the chunk end is complete (see
+    ;; $streamSetRegion)
     (local.set $continued
-      (i32.and (global.get $streaming) (i32.eq (local.get $to) (local.get $save))))
+      (i32.and (global.get $streaming) (i32.eq (local.get $to) (global.get $eof))))
     (if (local.get $continued)
       (then (call $streamSetRegion (local.get $kind))))
     (if (global.get $externalEmbedding)
@@ -755,6 +757,7 @@
     (global.set $ptr (local.get $to)))
 
   ;; 1 for `<script`, 2 for `<style`, 0 otherwise. $p sits on a proven `<`.
+  ;; The name ends as in $htmlNameEnd, so the html lexer agrees on the tag.
   (func $braceRawKind (param $p i32) (result i32)
     (local $kind i32)
     (local $q i32)
@@ -780,16 +783,11 @@
           (i32.add
             (local.get $q)
             (select (i32.const 6) (i32.const 5) (i32.eq (local.get $kind) (i32.const 1)))))
-        (if
-          (i32.and
-            (i32.lt_u (local.get $q) (global.get $end))
-            (i32.eqz
-              (i32.or
-                (call $lexIsSpace (i32.load8_u (local.get $q)))
-                (i32.or
-                  (i32.eq (i32.load8_u (local.get $q)) (i32.const ">"))
-                  (i32.eq (i32.load8_u (local.get $q)) (i32.const "/"))))))
-          (then (return (i32.const 0))))))
+        (if (i32.lt_u (local.get $q) (global.get $end))
+          (then
+            (local.set $q (i32.load8_u (local.get $q)))
+            (if (i32.eqz (byteset.get "\09\0a\0b\0c\0d \22'/<=>" (local.get $q)))
+              (then (return (i32.const 0))))))))
     (local.get $kind))
 
   ;; Svelte and Astro: a script/style tag's attributes from $p ($quote: the
