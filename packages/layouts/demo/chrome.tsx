@@ -7,7 +7,14 @@
 //   so `Root` warns in development.
 // - `?messages=fr`: the strings of the layout in French.
 // - `?start=hidden`: the notes pane starts hidden.
-import { type JSX, useCallback, useState, useSyncExternalStore } from 'react';
+import {
+  type JSX,
+  StrictMode,
+  useCallback,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -75,13 +82,19 @@ const page = {
 };
 Object.assign(window, { __chrome: page });
 
-// Count a render of a component of a pane.
-function countRender(counts: Record<string, number>, id: string): void {
-  counts[id] = (counts[id] ?? 0) + 1;
+// Count each committed render of a component of a pane. StrictMode calls a
+// render twice, and an effect with no dependencies once for each commit.
+function useCountRender(
+  counter: 'renders' | 'statusRenders',
+  id: string
+): void {
+  useLayoutEffect(() => {
+    page[counter][id] = (page[counter][id] ?? 0) + 1;
+  });
 }
 
 function Lines({ pane }: { pane: PaneNode }): JSX.Element {
-  countRender(page.renders, pane.id);
+  useCountRender('renders', pane.id);
   return (
     <>
       {Array.from({ length: 40 }, (_, line) => (
@@ -108,7 +121,7 @@ function PaneStatus(): JSX.Element {
   );
   const edges = Layout.usePane((pane) => pane.edges);
   const tabs = Layout.usePane((pane) => pane.tabs.map((tab) => tab.id));
-  countRender(page.statusRenders, id);
+  useCountRender('statusRenders', id);
   return (
     <span
       className="app-status"
@@ -204,4 +217,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

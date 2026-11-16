@@ -5,7 +5,7 @@
 // frame callback, and a message from it that runs after the paint of that
 // frame. Each event records whether the frame callback and the paint came
 // before it.
-import { type JSX, useEffect } from 'react';
+import { type JSX, StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { LayoutNode, PaneNode } from '../src';
@@ -119,14 +119,18 @@ function renderPane(pane: PaneNode): JSX.Element {
 
 function App(): JSX.Element {
   useEffect(() => {
+    const controller = new AbortController();
     for (const host of document.querySelectorAll<HTMLElement>(
       '[data-layout-pane]'
     )) {
       const pane = host.dataset.layoutPane ?? '';
-      host.addEventListener(PANE_VISIBILITY_EVENT, (event) =>
-        record(pane, event as PaneVisibilityEvent)
+      host.addEventListener(
+        PANE_VISIBILITY_EVENT,
+        (event) => record(pane, event as PaneVisibilityEvent),
+        { signal: controller.signal }
       );
     }
+    return () => controller.abort();
   }, []);
   return (
     <main style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -142,4 +146,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

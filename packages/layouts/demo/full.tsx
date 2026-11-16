@@ -1,6 +1,6 @@
 // `allFeatures()` with every part in the header of each pane. The e2e tests
 // use it.
-import { type JSX, useState } from 'react';
+import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import * as Layout from '../src/react';
@@ -66,4 +66,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

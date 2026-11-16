@@ -5,7 +5,7 @@
 // - `?features=nostacks`: no `stacks()`, so the tab lists warn.
 // - `?tablist=none`: no tab list in the panes of the tools stack, so
 //   `stacks()` warns. The lone files pane shows its title.
-import { type JSX, useState } from 'react';
+import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -125,4 +125,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

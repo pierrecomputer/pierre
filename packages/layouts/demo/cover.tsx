@@ -1,7 +1,7 @@
 // The cover API with the app's own overlays (the e2e tests use it): a native
 // `<dialog>` with `showModal()` and `Layout.useCover`, and a popover of the
 // page with `coverLayout`, over a row of four panes.
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { coverLayout, type OverlayCover, type PaneNode } from '../src';
@@ -62,16 +62,22 @@ function App(): JSX.Element {
     else element.close();
   }, [open]);
   useEffect(() => {
+    const controller = new AbortController();
     for (const host of document.querySelectorAll<HTMLElement>(
       '[data-layout-pane]'
     )) {
       const id = host.dataset.layoutPane ?? '';
-      host.addEventListener(PANE_VISIBILITY_EVENT, (event) => {
-        (page.visibility[id] ??= []).push(
-          (event as PaneVisibilityEvent).detail.hidden
-        );
-      });
+      host.addEventListener(
+        PANE_VISIBILITY_EVENT,
+        (event) => {
+          (page.visibility[id] ??= []).push(
+            (event as PaneVisibilityEvent).detail.hidden
+          );
+        },
+        { signal: controller.signal }
+      );
     }
+    return () => controller.abort();
   }, []);
   return (
     <>
@@ -104,4 +110,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

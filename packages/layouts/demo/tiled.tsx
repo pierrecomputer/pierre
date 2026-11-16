@@ -4,7 +4,7 @@
 //
 // - `?features=noedits`: `paneDrag()` without `edits()`, so it warns.
 // - `?features=nodrag`: no `paneDrag()`, so the move handles warn.
-import { type JSX, useState } from 'react';
+import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -98,4 +98,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
