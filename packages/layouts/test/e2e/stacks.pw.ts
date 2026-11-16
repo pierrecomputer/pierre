@@ -648,3 +648,49 @@ test('a tab that is not closable keeps Delete and its close button from closing 
   await page.keyboard.press('Delete');
   await expect(host(page, 'main')).toHaveCount(0);
 });
+
+test('with manual activation, the arrows move the focus only, and Enter or Space selects', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?activation=manual');
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __stacks: { layout: { subscribe(listener: () => void): () => void } };
+      __changes: number;
+    };
+    target.__changes = 0;
+    target.__stacks.layout.subscribe(() => {
+      target.__changes += 1;
+    });
+  });
+  const changes = () =>
+    page.evaluate(() => (window as unknown as { __changes: number }).__changes);
+  const tabs = tabsOf(page, 'main');
+  const tab = (name: string) => tabs.getByRole('tab', { name });
+  await tab('main.ts').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(tab('util.ts')).toBeFocused();
+  await expect(tab('main.ts')).toHaveAttribute('aria-selected', 'true');
+  await expect(tab('main.ts')).toHaveAttribute('tabindex', '0');
+  await page.keyboard.press('End');
+  await expect(tab('README.md')).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(tab('main.ts')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(tab('README.md')).toBeFocused();
+  expect(await changes()).toBe(0);
+  // Tab leaves the list, and Shift+Tab comes back to the selected tab.
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(tab('main.ts')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  const util = tabsOf(page, 'util').getByRole('tab', { name: 'util.ts' });
+  await expect(util).toHaveAttribute('aria-selected', 'true');
+  await expect(util).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press(' ');
+  const test = tabsOf(page, 'test').getByRole('tab', { name: 'test.ts' });
+  await expect(test).toHaveAttribute('aria-selected', 'true');
+  await expect(test).toBeFocused();
+});

@@ -360,6 +360,8 @@ export const PaneContext: Context<PaneContextValue | null> =
 export interface TabContextValue {
   readonly tab: PaneNode;
   readonly tabs: readonly PaneNode[];
+  /** The arrows move the focus only, and Enter or Space selects. */
+  readonly manual: boolean;
 }
 
 export const TabContext: Context<TabContextValue | null> =

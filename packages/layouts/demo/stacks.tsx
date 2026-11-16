@@ -13,6 +13,8 @@
 //   Delete on every tab, for a click on test.ts, and for a press on types.ts.
 // - `?pinned=1`: main.ts and util.ts are pinned, README.md is
 //   `closable: false`, and each header has `Layout.CloseButton`.
+// - `?activation=manual`: the arrows move the focus only, and Enter or Space
+//   selects.
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -36,6 +38,8 @@ const nestedControls = params.get('nested') === '1';
 const withoutHeader = params.get('header') === 'none';
 const guarded = params.get('guard') === '1';
 const pinned = params.get('pinned') === '1';
+const activation =
+  params.get('activation') === 'manual' ? 'manual' : 'automatic';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -144,7 +148,7 @@ function renderPane(pane: PaneNode): JSX.Element {
     toolsWithoutTabList && (pane.id === 'terminal' || pane.id === 'output') ? (
       <Layout.Title />
     ) : (
-      <Layout.TabList>{tabOf}</Layout.TabList>
+      <Layout.TabList activation={activation}>{tabOf}</Layout.TabList>
     );
   return (
     <>

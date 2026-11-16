@@ -59,6 +59,13 @@ export interface TabListItemState {
 export interface TabListProps extends Omit<PartProps<object>, 'children'> {
   /** The content of each tab, `<Layout.Tab />` by default. */
   children?: (tab: PaneNode, state: TabListItemState) => ReactNode;
+  /**
+   * `'automatic'` (the default): the arrows, Home, and End select the tab
+   * that they focus. `'manual'`: they move the focus only, and Enter or Space
+   * selects the focused tab, as the APG tabs pattern advises when a panel
+   * does not show at once, or when its content takes the focus.
+   */
+  activation?: 'automatic' | 'manual';
 }
 
 const defaultTab = (): ReactNode => <Tab />;
@@ -103,6 +110,7 @@ function useTabPanel(
 export function TabList({
   render,
   children = defaultTab,
+  activation,
   ...props
 }: TabListProps): JSX.Element {
   const value = usePaneContext('Layout.TabList');
@@ -133,7 +141,10 @@ export function TabList({
           className: 'pierre-layout-tabs',
           'data-layout-tablist': '',
           children: shown.map((tab, index) => (
-            <TabContext key={tab.id} value={{ tab, tabs: shown }}>
+            <TabContext
+              key={tab.id}
+              value={{ tab, tabs: shown, manual: activation === 'manual' }}
+            >
               {children(tab, { active: own && tab.id === value.id, index })}
             </TabContext>
           )),
@@ -155,7 +166,8 @@ export interface TabState {
  * One tab of `Layout.TabList`: `role=tab`, the selection, the link to the
  * host of its pane, a roving tab stop, and the start of a drag with
  * `tabDrag()`. The arrows, Home, and End move the
- * focus to another tab, which shows. Delete closes the tab. Ctrl+Shift with
+ * focus to another tab, which shows; with `activation="manual"` on the tab
+ * list, Enter or Space shows it. Delete closes the tab. Ctrl+Shift with
  * PageUp or PageDown moves the tab before the previous tab or after the next,
  * inside the pinned run or after it. A pinned tab has `data-pinned` and the
  * description "Pinned".
@@ -173,7 +185,7 @@ export function Tab({
   if (tabValue === null)
     throw new Error('Layout.Tab must be in Layout.TabList');
   const { id: host, context } = value;
-  const { tab, tabs }: TabContextValue = tabValue;
+  const { tab, tabs, manual }: TabContextValue = tabValue;
   const active = usePaneState(value, (state) => state.activeTab === tab.id);
   const dragging = useDrag(
     context,
@@ -224,7 +236,15 @@ export function Tab({
               : null;
     if (next !== null) {
       event.preventDefault();
-      if (next.id !== tab.id) select(next.id);
+      if (!manual) {
+        if (next.id !== tab.id) select(next.id);
+      } else
+        document
+          .getElementById(tabIdOf(context.prefix, host, next.id))
+          ?.focus();
+    } else if (manual && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      if (!active) select(tab.id);
     } else if (event.key === 'Delete' && closable) {
       event.preventDefault();
       closePane(context, tab.id);
