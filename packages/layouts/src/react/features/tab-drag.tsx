@@ -21,6 +21,7 @@ import type {
   EdgeMessageValues,
   Feature,
   FeatureHooks,
+  FeatureModule,
   TargetMessageValues,
   ViewContext,
   ViewRender,
@@ -339,7 +340,7 @@ function useTabDrag(
  * places that the app does not allow.
  */
 export function tabDrag(options: TabDragOptions = {}): Feature {
-  return {
+  const feature: FeatureModule = {
     name: 'tab-drag',
     requires: ['stacks'],
     use: (context, render) => useTabDrag(context, render, options),
@@ -348,4 +349,5 @@ export function tabDrag(options: TabDragOptions = {}): Feature {
       ['tab-drag', tabDragCss],
     ],
   };
+  return feature;
 }

@@ -23,6 +23,7 @@ import { cell } from '../cell';
 import type {
   Feature,
   FeatureHooks,
+  FeatureModule,
   PaneMessageValues,
   ViewContext,
   ViewRender,
@@ -169,7 +170,7 @@ function useZoom(
  * `Layout.ZoomButton`. Escape restores the layout.
  */
 export function zoom(): Feature<ZoomCommands> {
-  return {
+  const feature: FeatureModule<ZoomCommands> = {
     name: 'zoom',
     store: zoomStore,
     announce(operation, { previous, pane, messages }) {
@@ -183,4 +184,5 @@ export function zoom(): Feature<ZoomCommands> {
     use: useZoom,
     stylesheets: [['zoom', zoomCss]],
   };
+  return feature;
 }

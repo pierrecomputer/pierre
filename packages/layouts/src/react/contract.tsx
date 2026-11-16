@@ -186,7 +186,7 @@ export interface LayoutMessages {
 
 /** A layout object: the store, with the features of the layout. */
 export type ViewStore = CoreLayoutStore & {
-  readonly features: readonly Feature[];
+  readonly features: readonly FeatureModule[];
 };
 
 /** What features and parts use. It is stable for the life of `Root`. */
@@ -327,12 +327,27 @@ export interface AnnounceContext {
   readonly messages: LayoutMessages;
 }
 
+// The brand of a feature, which carries the type of the commands that it adds
+// to a layout object. No value has it at run time.
+declare const featureCommands: unique symbol;
+
 /**
- * A feature of a layout: its store part (commands), its view part (a hook
- * that runs on each render of `Root`), and its sheets. `Commands` types the
- * commands of the layout object.
+ * A feature of a layout, for `createLayout`: a value that a function of
+ * `@pierre/layouts/react` returns, such as `edits(naryTree)` or `zoom()`.
+ * `Commands` types the commands that it adds to the layout object. Its members
+ * are internal to the library, so an app does not write a feature.
  */
 export interface Feature<Commands extends object = object> {
+  readonly [featureCommands]?: Commands;
+}
+
+/**
+ * A feature with its members, inside the library: its store part (commands),
+ * its view part (a hook that runs on each render of `Root`), and its sheets.
+ */
+export interface FeatureModule<
+  Commands extends object = object,
+> extends Feature<Commands> {
   readonly name: string;
   /**
    * The names of the features that this feature needs in the same layout.

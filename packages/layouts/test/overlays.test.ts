@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { coverOf } from '../src';
+import { coverOf } from '../src/overlays/cover';
 
 // A 2 by 2 grid of 100 px panes with an 8 px gap, from (0, 0) to (208, 208).
 const grid = [

@@ -4,7 +4,7 @@
 import { type RefObject, useLayoutEffect, useRef } from 'react';
 
 import { coverLayout, type CoverOptions } from '../overlays/cover';
-import type { ViewStore } from './contract';
+import type { LayoutObject } from './create-layout';
 import { layoutElementOf } from './layout-elements';
 
 /**
@@ -15,7 +15,7 @@ import { layoutElementOf } from './layout-elements';
  * layout object of `Layout.Root`, or a ref of the layout element.
  */
 export function useCover(
-  layout: ViewStore | RefObject<HTMLElement | null>,
+  layout: LayoutObject | RefObject<HTMLElement | null>,
   overlay: RefObject<HTMLElement | null>,
   open: boolean,
   options?: CoverOptions

@@ -10,7 +10,6 @@ export {
   pixelCorners,
 } from './corners';
 export { type EditCommands, edits } from './edits';
-export { swapPanes } from './edits-model';
 export { computeLayout } from './geometry';
 export { type HiddenPaneCommands, hiddenPanes } from './hidden-panes';
 export {
@@ -22,29 +21,15 @@ export {
   LayoutOperationError,
   type LayoutOperationErrorCode,
 } from './layout-operation';
-export {
-  canClose,
-  getPanes,
-  replaceNode,
-  setPaneHidden,
-  shownPanes,
-  stackOf,
-  visibleTree,
-} from './model';
-export { hasVisiblePane, validateLayout } from './validate';
+export { canClose, getPanes, stackOf } from './model';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
-export { type Presentation, presentation } from './presentation';
 export { type StackCommands, stacks } from './stacks';
 export {
   type CommandsOf,
   type CoreLayoutStore,
   createLayoutStore,
   type CreateLayoutStoreOptions,
-  type Fold,
-  type FoldContext,
-  type Folds,
-  type StoreContext,
   type StoreFeature,
   type StoreWith,
 } from './store';
@@ -79,11 +64,10 @@ export type {
   CSSSeparator,
   PaneEdges,
 } from './css-layout';
-export { getExitEdge, zoom, type ZoomCommands } from './zoom';
+export { zoom, type ZoomCommands } from './zoom';
 export {
   type CoverOptions,
   coverLayout,
-  coverOf,
   OVERLAY_COVER_EVENT,
   type OverlayCover,
   type OverlayCoverEvent,

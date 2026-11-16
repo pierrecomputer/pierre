@@ -13,12 +13,12 @@ import * as Layout from '../src/react';
 import {
   createLayout,
   edits,
-  type Feature,
   hiddenPanes,
   naryTree,
   PANE_VISIBILITY_EVENT,
   type PaneVisibilityEvent,
 } from '../src/react';
+import type { FeatureModule } from '../src/react/contract';
 import { type StackCommands, stacks } from '../src/stacks';
 
 const tree: LayoutNode = {
@@ -72,7 +72,7 @@ function startMark(trigger: string): void {
 
 document.addEventListener('click', () => startMark('click'), true);
 
-const stackCommands: Feature<StackCommands> = {
+const stackCommands: FeatureModule<StackCommands> = {
   name: 'stacks',
   store: stacks(),
 };

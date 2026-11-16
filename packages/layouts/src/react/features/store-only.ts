@@ -6,6 +6,7 @@ import type { TreeModel } from '../../types';
 import type {
   EdgeMessageValues,
   Feature,
+  FeatureModule,
   PaneMessageValues,
 } from '../contract';
 
@@ -26,7 +27,7 @@ const shownText = ({ paneTitle }: PaneMessageValues): string =>
  * shape of the model.
  */
 export function edits(model: TreeModel): Feature<EditCommands> {
-  return {
+  const feature: FeatureModule<EditCommands> = {
     name: 'edits',
     store: editsStore(model),
     announce(operation, { pane, target, messages }) {
@@ -47,11 +48,12 @@ export function edits(model: TreeModel): Feature<EditCommands> {
       return null;
     },
   };
+  return feature;
 }
 
 /** Hide a pane and show it again: `layout.setHidden`. */
 export function hiddenPanes(): Feature<HiddenPaneCommands> {
-  return {
+  const feature: FeatureModule<HiddenPaneCommands> = {
     name: 'hidden-panes',
     store: hiddenPanesStore,
     announce: (operation, { pane, messages }) =>
@@ -61,9 +63,14 @@ export function hiddenPanes(): Feature<HiddenPaneCommands> {
             ? (messages.hidden ?? hiddenText)
             : (messages.shown ?? shownText))(pane(operation.pane)),
   };
+  return feature;
 }
 
 /** The saved form of a layout: `layout.toStoredTree` and `layout.setStoredTree`. */
 export function persistence(): Feature<PersistenceCommands> {
-  return { name: 'persistence', store: persistenceStore };
+  const feature: FeatureModule<PersistenceCommands> = {
+    name: 'persistence',
+    store: persistenceStore,
+  };
+  return feature;
 }

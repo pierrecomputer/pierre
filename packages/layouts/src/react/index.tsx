@@ -17,24 +17,15 @@ export {
 export type { PaneEdges } from '../css-layout';
 export type { DropPlace } from '../drop';
 export { naryTree } from '../models/n-ary';
-export { type Presentation, presentation } from '../presentation';
 export type { ZoomCommands } from '../zoom';
 export type {
   Feature,
-  FeatureHooks,
-  Gesture,
-  HostPatch,
   EdgeMessageValues,
   LayoutMessages,
   PaneMessageValues,
   SeparatorMessageValues,
   TargetMessageValues,
-  PaneContextValue,
   StylesheetsSetting,
-  ViewContext,
-  ViewRender,
-  ViewState,
-  ViewStore,
 } from './contract';
 export {
   createLayout,

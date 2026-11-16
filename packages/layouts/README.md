@@ -105,7 +105,9 @@ behavior, its commands, and its CSS:
 | `allFeatures()` | Every feature above, with `{ model, animate }` options                                                       |
 
 A feature that needs another one gives a development warning when it is missing,
-for example `stacks()` for `Layout.TabList`.
+for example `stacks()` for `Layout.TabList`. A feature is a value of the type
+`Feature`, which an app names and passes; its members are internal, so an app
+does not write its own feature yet.
 
 The props of `Layout.Root` are `layout`, `renderPane`, `getPaneTitle`,
 `onResize`, `onPaneClose`, `getPaneProps`, `getSeparatorProps`, `stylesheets`,
@@ -566,8 +568,10 @@ place with the tree model, so it needs `edits`.
 Read with `layout.getSnapshot()`. Snapshots are immutable. Invalid tree updates
 throw before changing state. A close or a hide of the last pane that is not
 hidden throws `last_pane`: `canClose(root, id)` gives the rule. Closing a
-focused or zoomed pane repairs the selection. Persistence is caller-owned; the
-playground uses local storage.
+focused or zoomed pane repairs the selection. `getPanes(root)` lists the panes
+of a tree in the order of the tree, hidden panes and the tabs of each stack
+included, and `stackOf(root, id)` gives the stack of a pane, or null.
+Persistence is caller-owned; the playground uses local storage.
 
 ### Operations
 

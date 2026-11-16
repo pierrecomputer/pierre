@@ -8,7 +8,7 @@ import type { CSSLayout } from '../../css-layout';
 import cornersCss from '../../css/corners.css?inline';
 import { separatorIdsAt } from '../../dom/panes';
 import { presentation } from '../../presentation';
-import type { Feature } from '../contract';
+import type { Feature, FeatureModule } from '../contract';
 import { CORNER_GESTURE_STYLE } from '../gesture-styles';
 
 const cornerLists = new WeakMap<CSSLayout, CSSCorner[]>();
@@ -25,7 +25,7 @@ export function cornersOf(layout: CSSLayout): CSSCorner[] {
 
 /** Show a resize handle at each corner where two separators meet. */
 export function corners(): Feature {
-  return {
+  const feature: FeatureModule = {
     name: 'corners',
     stylesheets: [['corners', cornersCss]],
     use(context, { state, geometry }) {
@@ -72,4 +72,5 @@ export function corners(): Feature {
       };
     },
   };
+  return feature;
 }

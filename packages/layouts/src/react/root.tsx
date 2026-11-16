@@ -55,8 +55,8 @@ import type {
 } from '../types';
 import {
   type AnnounceContext,
-  type Feature,
   type FeatureHooks,
+  type FeatureModule,
   type Gesture,
   type LayoutMessages,
   PaneContext,
@@ -191,7 +191,7 @@ function announcementOf(
   change: LayoutChange,
   previous: LayoutState,
   next: LayoutState,
-  features: readonly Feature[],
+  features: readonly FeatureModule[],
   latest: LatestProps
 ): string | null {
   const messages = latest.messages ?? NO_MESSAGES;
@@ -453,7 +453,7 @@ interface ViewInternals {
 function createViewInternals(
   store: ViewStore,
   prefix: string,
-  features: readonly Feature[],
+  features: readonly FeatureModule[],
   initial: LatestProps,
   setResizing: (resizing: boolean) => void,
   announce: (text: string) => void
@@ -646,7 +646,8 @@ export function Root(props: RootProps): JSX.Element {
     style,
     gap = 8,
   } = props;
-  const store: ViewStore = props.layout;
+  // The layout object of `createLayout`, whose features carry their members.
+  const store = props.layout as unknown as ViewStore;
   // The features of the first render, in the order of their names: the view
   // part of each is a hook, and a slot that one feature fills goes to the
   // same feature in any order of the list.

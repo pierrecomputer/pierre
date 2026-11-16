@@ -20,7 +20,12 @@ import { presentation } from '../../presentation';
 import type { LayoutState, Rect } from '../../types';
 import { boxesBeforeChange } from '../boxes';
 import { cell } from '../cell';
-import type { Feature, FeatureHooks, ViewContext } from '../contract';
+import type {
+  Feature,
+  FeatureHooks,
+  FeatureModule,
+  ViewContext,
+} from '../contract';
 
 /** Which changes `flip()` animates. */
 export interface FlipOptions {
@@ -155,5 +160,10 @@ export function flip(options: FlipOptions = {}): Feature {
   function useFlipView(context: ViewContext): FeatureHooks {
     return useFlip(context, options);
   }
-  return { name: 'flip', use: useFlipView, stylesheets: [['flip', flipCss]] };
+  const feature: FeatureModule = {
+    name: 'flip',
+    use: useFlipView,
+    stylesheets: [['flip', flipCss]],
+  };
+  return feature;
 }

@@ -32,7 +32,11 @@ import {
   type PaneVisibilityEvent,
   zoom,
 } from '../src/react';
-import { PaneContext, type ViewContext } from '../src/react/contract';
+import {
+  type FeatureModule,
+  PaneContext,
+  type ViewContext,
+} from '../src/react/contract';
 import { paneContextIds } from '../src/react/root';
 import { stacks } from '../src/stacks';
 
@@ -41,7 +45,7 @@ const featuresParam = params.get('features');
 
 // A React feature with the tab commands of the store only: `stacks()` with its
 // view part comes later.
-const stackCommands: Feature = { name: 'stacks', store: stacks() };
+const stackCommands: FeatureModule = { name: 'stacks', store: stacks() };
 
 let features: Feature[] = [
   edits(naryTree),
@@ -53,14 +57,20 @@ let features: Feature[] = [
 ];
 const duration = params.get('duration');
 if (featuresParam === 'reversed') features = features.toReversed();
-if (params.get('requires') === 'missing')
-  features.push({ name: 'needs-drag', requires: ['pane-drag'] });
+// Features of the tests, with the members of the library's own features.
+const needsDrag: FeatureModule = {
+  name: 'needs-drag',
+  requires: ['pane-drag'],
+};
+if (params.get('requires') === 'missing') features.push(needsDrag);
 if (params.get('slots') === 'conflict')
-  for (const name of ['first-style', 'second-style'])
-    features.push({
+  for (const name of ['first-style', 'second-style']) {
+    const slot: FeatureModule = {
       name,
       use: () => ({ host: ({ rect }) => ({ style: rect }) }),
-    });
+    };
+    features.push(slot);
+  }
 
 // What the tests read: the layout object, and the visibility events of each
 // pane.

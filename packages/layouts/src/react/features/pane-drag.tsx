@@ -12,6 +12,7 @@ import type {
   EdgeMessageValues,
   Feature,
   FeatureHooks,
+  FeatureModule,
   ViewContext,
   ViewRender,
 } from '../contract';
@@ -99,10 +100,11 @@ function usePaneDrag(
  * allow.
  */
 export function paneDrag(options: PaneDragOptions = {}): Feature {
-  return {
+  const feature: FeatureModule = {
     name: 'pane-drag',
     requires: ['edits'],
     use: (context, render) => usePaneDrag(context, render, options),
     stylesheets: [['drop', dropCss]],
   };
+  return feature;
 }

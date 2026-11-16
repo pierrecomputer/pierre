@@ -7,7 +7,7 @@ import type { CSSProperties } from 'react';
 
 import focusRingCss from '../../css/focus-ring.css?inline';
 import { presentation } from '../../presentation';
-import type { Feature } from '../contract';
+import type { Feature, FeatureModule } from '../contract';
 
 const FULL_SIZE: CSSProperties = {
   left: 0,
@@ -18,7 +18,7 @@ const FULL_SIZE: CSSProperties = {
 
 /** Show a ring around the pane that has the focus of the layout. */
 export function focusRing(): Feature {
-  return {
+  const feature: FeatureModule = {
     name: 'focus-ring',
     use: (_context, { state, geometry }) => {
       const id = presentation(state).filled ?? state.focusedPane;
@@ -41,4 +41,5 @@ export function focusRing(): Feature {
     },
     stylesheets: [['focus-ring', focusRingCss]],
   };
+  return feature;
 }

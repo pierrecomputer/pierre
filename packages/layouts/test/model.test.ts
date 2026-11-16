@@ -6,21 +6,20 @@ import {
   computeLayout,
   cssCorners,
   type Direction,
-  getExitEdge,
   getPanes,
   type LayoutNode,
   naryTree,
   type PaneNode,
   parseStoredLayoutTree,
   pixelCorners,
-  setPaneHidden,
   type SplitNode,
   type StackNode,
-  swapPanes,
-  validateLayout,
-  visibleTree,
 } from '../src';
+import { swapPanes } from '../src/edits-model';
 import { shareSpace } from '../src/geometry';
+import { setPaneHidden, visibleTree } from '../src/model';
+import { validateLayout } from '../src/validate';
+import { getExitEdge } from '../src/zoom';
 import { evaluateCSS } from './evaluate-css';
 import { saveAndLoad, testStore } from './helpers/store';
 

@@ -13,6 +13,7 @@ import { cell } from '../cell';
 import type {
   Feature,
   FeatureHooks,
+  FeatureModule,
   TargetMessageValues,
   ViewContext,
 } from '../contract';
@@ -82,7 +83,7 @@ function useStacks(context: ViewContext): FeatureHooks {
  * stack can show its own tab with one too, or a `Layout.Title`.
  */
 export function stacks(): Feature<StackCommands> {
-  return {
+  const feature: FeatureModule<StackCommands> = {
     name: 'stacks',
     requires: ['edits'],
     store: stacksStore,
@@ -100,4 +101,5 @@ export function stacks(): Feature<StackCommands> {
     },
     use: useStacks,
   };
+  return feature;
 }

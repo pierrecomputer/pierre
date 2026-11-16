@@ -5,7 +5,13 @@
 import { useState } from 'react';
 
 import { createResizeWork, type ResizeStrategy } from '../../dom/resize-work';
-import type { Feature, FeatureHooks, Sizes, ViewContext } from '../contract';
+import type {
+  Feature,
+  FeatureHooks,
+  FeatureModule,
+  Sizes,
+  ViewContext,
+} from '../contract';
 import { cornersOf } from './corners';
 
 /**
@@ -45,5 +51,9 @@ export function resizeStrategy(
       },
     };
   }
-  return { name: 'resize-strategy', use: useResizeStrategy };
+  const feature: FeatureModule = {
+    name: 'resize-strategy',
+    use: useResizeStrategy,
+  };
+  return feature;
 }

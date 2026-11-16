@@ -6,7 +6,7 @@ import {
   type StoreFeature,
 } from '../store';
 import type { LayoutNode } from '../types';
-import type { Feature } from './contract';
+import type { Feature, FeatureModule } from './contract';
 
 type UnionToIntersection<U> = (
   U extends unknown ? (value: U) => void : never
@@ -39,10 +39,12 @@ export function createLayout<const F extends readonly Feature[] = []>(
   root: LayoutNode,
   features?: F
 ): LayoutObject<F> {
-  const list = features ?? ([] as unknown as F);
+  // The features of the library carry their members.
+  const modules = (features ??
+    []) as readonly Feature[] as readonly FeatureModule[];
   if (process.env.NODE_ENV !== 'production') {
-    const names = new Set(list.map((feature) => feature.name));
-    for (const feature of list)
+    const names = new Set(modules.map((feature) => feature.name));
+    for (const feature of modules)
       for (const name of feature.requires ?? [])
         if (!names.has(name))
           console.warn(
@@ -50,9 +52,9 @@ export function createLayout<const F extends readonly Feature[] = []>(
           );
   }
   const stores: StoreFeature[] = [];
-  for (const feature of list)
+  for (const feature of modules)
     if (feature.store !== undefined) stores.push(feature.store);
   return Object.assign(createLayoutStore(root, stores), {
-    features: list,
+    features: modules,
   }) as unknown as LayoutObject<F>;
 }

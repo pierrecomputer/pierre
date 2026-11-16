@@ -8,12 +8,8 @@
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import {
-  type ChildSize,
-  type LayoutNode,
-  type PaneNode,
-  replaceNode,
-} from '../src';
+import type { ChildSize, LayoutNode, PaneNode } from '../src';
+import { replaceNode } from '../src/model';
 import * as Layout from '../src/react';
 import { createLayout, useControlledLayout } from '../src/react';
 import { resizeStrategy } from '../src/react/features/resize-strategy';
