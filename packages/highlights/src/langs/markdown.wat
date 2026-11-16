@@ -111,6 +111,12 @@
             (i32.const -2)))
         (global.set $ptr (local.get $to))
         (return)))
+    ;; IDs from 256 are lexers that the host registered
+    (if (i32.gt_u (local.get $lang) (i32.const 255))
+      (then
+        (call $embedFence (local.get $lang) (local.get $from) (local.get $to) (local.get $resume))
+        (global.set $ptr (local.get $to))
+        (return)))
     (global.set $markdownDepth (i32.add (global.get $markdownDepth) (i32.const 1)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
@@ -505,6 +511,7 @@
     (global.set $streamRegionStarted (i32.const 0))
     (if (global.get $externalEmbedding)
       (then (return)))
+    (global.set $fenceState (i32.const 0))
     (call $streamClearEmbedded)
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))

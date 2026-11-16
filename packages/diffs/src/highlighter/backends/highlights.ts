@@ -94,14 +94,22 @@ export class HighlightsHighlighter extends DiffsHighlighter {
     const lexers = [];
     for (const { name, highlights } of languages) {
       if (highlights == null || this.attachedLanguages.has(name)) continue;
-      const lower = name.toLowerCase();
-      if (
-        !Object.keys(highlights.aliases).some(
-          (alias) => alias.toLowerCase() === lower
-        )
-      ) {
+      const aliases = Object.keys(highlights.aliases).map((alias) =>
+        alias.toLowerCase()
+      );
+      if (!aliases.includes(name.toLowerCase())) {
         throw new Error(
           `attachResolvedLanguages: The Highlights lexer "${highlights.name}" does not declare "${name}" as an alias.`
+        );
+      }
+      // WARNING: unsupported languages render as 'text', so a lexer with a
+      // plain-text alias would highlight every one of them.
+      const plain = aliases.find((alias) =>
+        ['plain', 'plaintext', 'text', 'txt'].includes(alias)
+      );
+      if (plain !== undefined) {
+        throw new Error(
+          `attachResolvedLanguages: The Highlights lexer "${highlights.name}" declares the reserved alias "${plain}".`
         );
       }
       names.push(name);

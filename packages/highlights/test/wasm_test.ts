@@ -142,6 +142,8 @@ void test('live state hashing and comparison ignore bytes beyond the state', () 
         is_id_start: assert.fail,
         is_id_continue: assert.fail,
         lex_line: assert.fail,
+        fence_language: assert.fail,
+        fence_lex: assert.fail,
       },
     });
     const { memory, hash, equal } = instance.exports as {

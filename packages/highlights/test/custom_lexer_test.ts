@@ -2,6 +2,7 @@ import {
   codeToHtml,
   codeToTokens,
   createHighlighter,
+  init,
   isRegisteredLanguage,
   isSupportedLanguage,
   type Language,
@@ -308,6 +309,30 @@ test('registerLanguages adds lexers to the shared functions of the main entry', 
   expect(codeToTokens('hello', { ...options, lang: 'go' })).toEqual(builtIn);
 });
 
+test('registerLanguages keeps its lexers after a rejected call and a new init()', () => {
+  const options = { lang: 'example', theme: cssVariables } as const;
+  registerLanguages([custom]);
+  const before = codeToTokens('hello', options);
+  // One bad lexer rejects the whole call.
+  const late = { ...custom, name: 'example-late', aliases: { late: 0 } };
+  expect(() =>
+    registerLanguages([late, { ...custom, aliases: { bad: 256 } }])
+  ).toThrow(/invalid lexer entry/);
+  expect(isRegisteredLanguage('late')).toBe(false);
+  expect(isRegisteredLanguage('bad')).toBe(false);
+  expect(codeToTokens('hello', options)).toEqual(before);
+  init(
+    new WebAssembly.Module(
+      readFileSync(new URL('../dist/highlights.wasm', import.meta.url))
+    )
+  );
+  expect(isRegisteredLanguage('example')).toBe(true);
+  expect(codeToTokens('hello', options)).toEqual(before);
+  expect(codeToHtml('hello', options)).toEqual(
+    codeToHtml('hello', { ...options, lang: 'EXAMPLE-LANGUAGE' })
+  );
+});
+
 test('a registered built-in module still embeds the other built-in languages', () => {
   const options = { lang: 'html', theme: cssVariables } as const;
   const code =
@@ -479,6 +504,90 @@ test('StreamTokenizer and LiveTokenizer keep the built-in lexer for a registered
   });
   expect(aliasLive.getLineTokens(0).tokens[0].color).toBe(expected[0][0].color);
   aliasLive.dispose();
+});
+
+test('StreamTokenizer and LiveTokenizer run registered lexers in the fences of a registered module', () => {
+  // Earlier tests registered `example`, `example-state`, and the Go module.
+  registerLanguages([markdown]);
+  const options = { lang: 'markdown', theme: cssVariables } as const;
+  const colors = (lines: { content: string; color?: string }[][]) =>
+    lines.map((line) => line.map(({ content, color }) => [content, color]));
+  const whole = (code: string) => colors(codeToTokens(code, options).tokens);
+  const code = [
+    '# Title',
+    '```example-state',
+    'a # b /* open',
+    '# still */ c',
+    'd # e 🙂',
+    '```',
+    'text',
+    '> ```example',
+    '> 你好 <&>',
+    '> ```',
+    '- item',
+    '  ```EXAMPLE-STATE',
+    '  a # b',
+    '  c',
+    '  ```',
+    '```go',
+    'func main() {}',
+    '```',
+    '```js',
+    'let a = `x${1}`',
+    '```',
+    '',
+  ].join('\n');
+  const expected = whole(code);
+  expect(expected[2]).toContainEqual(['# b ', 'var(--hls-keyword)']);
+  expect(expected[8]).toContainEqual(['你好 <&>', 'var(--hls-keyword)']);
+  expect(expected[12]).toContainEqual(['# b', 'var(--hls-keyword)']);
+  for (const size of [1, 7, code.length]) {
+    const stream = new StreamTokenizer(options);
+    const lines = [];
+    for (let i = 0; i < code.length; i += size)
+      lines.push(...stream.pushCode(code.slice(i, i + size)));
+    expect(colors([...lines, ...stream.end()])).toEqual(expected);
+  }
+  const live = new LiveTokenizer({ ...options, code });
+  const lines = () => {
+    live.flush();
+    return Array.from({ length: live.lineCount }, (_, line) =>
+      live
+        .getLineTokens(line)
+        .tokens.map(({ content, color }) => [content, color])
+    );
+  };
+  expect(lines()).toEqual(expected);
+  // Each edit starts the fence lexer again from the state before its line.
+  for (const [line, character, newText] of [
+    [3, 0, '# '],
+    [2, 0, '#'],
+    [4, 1, ' /* '],
+    [1, 3, 'x'],
+    [1, 3, ''],
+    [12, 2, '# # #'],
+    [8, 2, 'more '],
+    [5, 0, '\n```example-state\n# z\n'],
+  ] as const) {
+    const position = { line, character };
+    live.applyEdits([
+      {
+        range: {
+          start: position,
+          end: newText === '' ? { line, character: character + 1 } : position,
+        },
+        newText,
+      },
+    ]);
+    expect(lines()).toEqual(whole(live.getText()));
+  }
+  live.dispose();
+  // Without the registered module, the tokenizers use the built-in lexers.
+  const mdx = new LiveTokenizer({ ...options, lang: 'mdx', code });
+  expect(mdx.getLineTokens(2).tokens.map(({ content }) => content)).toEqual([
+    'a # b /* open',
+  ]);
+  mdx.dispose();
 });
 
 test('a lexer that cannot save its state works in streams and throws in LiveTokenizer', () => {

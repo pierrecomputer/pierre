@@ -96,6 +96,19 @@ test('Highlights attaches lexers registered with the highlights type', async () 
     )
   );
   expect(highlighter.hasLoadedLanguages(['bad-json'])).toBe(false);
+  const { default: json } = await import('@pierre/highlights/langs/json');
+  expect(() =>
+    highlighter.attachLanguages([
+      {
+        name: 'json',
+        data: [],
+        highlights: { ...json, aliases: { ...json.aliases, Text: 0 } },
+      },
+    ])
+  ).toThrow(
+    'attachResolvedLanguages: The Highlights lexer "json" declares the reserved alias "text".'
+  );
+  expect(tokens('text')).not.toEqual(tokens('json'));
 });
 
 test('Shiki renders a name with only a Highlights lexer as plain text', async () => {

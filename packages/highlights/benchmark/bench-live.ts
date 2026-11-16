@@ -376,6 +376,8 @@ const env = {
   is_id_start: () => 1,
   is_id_continue: () => 1,
   lex_line: () => 0,
+  fence_language: () => 0,
+  fence_lex: () => 0,
 };
 const raw = new WebAssembly.Instance(wasmModule, { env })
   .exports as unknown as RawLive;

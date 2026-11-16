@@ -63,8 +63,8 @@ the lexer to the shared `codeToHtml()` and `codeToTokens()` functions. Its names
 override built-in names there. `StreamTokenizer` and `LiveTokenizer` use it too.
 A Markdown fence uses a custom lexer only when the
 `@pierre/highlights/langs/markdown` module is in the same `langs` list or is
-registered too. The two tokenizers run a built-in language module with the
-built-in lexers, so they leave such a fence plain.
+registered too. The two tokenizers follow the same rule. In `LiveTokenizer`,
+such a fence stays plain if its lexer cannot save its state.
 
 In `@pierre/diffs`, use
 `registerCustomLanguage(name, loader, files, 'highlights')`. The loader returns
@@ -80,7 +80,9 @@ shared scanners.
 - `$ptr` is the current input pointer. `$end` is the exclusive input end.
 - `$emitTok(type, start, end)` emits a token. Emit contiguous input spans in
   order: a token also takes the bytes skipped before it. Bytes after the last
-  token become plain text.
+  token become plain text. Skip only whitespace: a stream and `LiveTokenizer`
+  end a run at each line, so bytes skipped at the end of a line are plain text
+  there, but take the type of the next token in `codeToTokens`.
 - `$emitGap(start, end)` emits whitespace that inherits the previous token.
 - `(enum.get $Token.number)` selects a token type. See
   `@pierre/wat-tools/token.wat` for the available types. Do not emit

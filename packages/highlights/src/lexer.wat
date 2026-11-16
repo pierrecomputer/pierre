@@ -39,36 +39,6 @@
     (call $ensureCap (i32.add (local.get $bytes) (i32.const 16)))
     (global.get $out))
 
-  ;; Append the $bytes of child records at $out for the body [$from, $to).
-  ;; Their ends are relative to $from. Type 0xffff is a leading gap: it
-  ;; extends the previous record.
-  ;; The records are read in place. A write lands at or before the
-  ;; record just read, because appending never adds records.
-  ;; A custom lexer can stop early or pass the body end. Clamp each
-  ;; end and cover the rest, or the next token takes those bytes.
-  (func $embedAppend (param $bytes i32) (param $from i32) (param $to i32)
-    (local $record i32)
-    (local $stop i32)
-    (local $end i32)
-    (local $type i32)
-    (local.set $record (global.get $out))
-    (local.set $stop (i32.add (local.get $record) (local.get $bytes)))
-    (local.set $end (local.get $from))
-    (block $done
-      (loop $records
-        (br_if $done (i32.ge_u (local.get $record) (local.get $stop)))
-        (local.set $end (i32.add (local.get $from) (i32.load (local.get $record))))
-        (local.set $type (i32.load16_u offset=4 (local.get $record)))
-        (local.set $record (i32.add (local.get $record) (i32.const 6)))
-        (if (i32.gt_u (local.get $end) (local.get $to))
-          (then (local.set $end (local.get $to))))
-        (if (i32.eq (local.get $type) (i32.const 0xffff))
-          (then (call $emitGap (global.get $srcBase) (local.get $end)))
-          (else (call $recTok (local.get $type) (local.get $end))))
-        (br $records)))
-    (if (i32.lt_u (local.get $end) (local.get $to))
-      (then (call $recTok (enum.get $Token.none) (local.get $to)))))
-
   ;; Lex the body [$from, $to) in a child lexer of the host and append its
   ;; records. The host gets $out and $cap, copies the records to $out when
   ;; they fit (or calls `reserve`), and writes their byte length to control
