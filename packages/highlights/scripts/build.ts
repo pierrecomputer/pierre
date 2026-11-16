@@ -138,7 +138,8 @@ export function transformLexer(
   ]);
   const flattened = flattenWat(url, readFileSync(url, 'utf-8'), { overrides });
   const selected = names === undefined ? undefined : new Set(names);
-  const exported = /\(export "(?:inputPtr|lex|lexStream|reserve)"\)/;
+  const exported =
+    /\(export "(?:inputPtr|lex|lexStream|recordBytes|reserve)"\)/;
   const forms = splitTopLevelForms(
     flattened.code
       .replace(/^\s*\(module/, '')

@@ -368,9 +368,9 @@ export class LiveTokenizer {
             reset !== 0
           );
           const bytes = lexer.dv.getUint32(10, true);
-          // A leading gap (255) has no previous token at the document root.
-          if (bytes > 0 && lexer.dv.getUint32(at + 4, true) === 255)
-            lexer.dv.setUint32(at + 4, 0, true);
+          // A leading gap (0xffff) has no previous token at the document root.
+          if (bytes > 0 && lexer.dv.getUint16(at + 4, true) === 0xffff)
+            lexer.dv.setUint16(at + 4, 0, true);
           const stateBytes = saveState();
           lexer.bindMemory();
           const out = (ptr + length + 47) & ~15;

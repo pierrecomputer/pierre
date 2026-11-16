@@ -74,7 +74,7 @@ test('lexer input follows its own reserved memory without emitter tables', () =>
     const length = view.getUint32(10, true);
     expect(start).toBeGreaterThan(ptr + input.length);
     expect(length).toBeGreaterThan(0);
-    expect(length % 8).toBe(0);
-    expect(view.getUint32(start + length - 8, true)).toBe(input.length);
+    expect(length % 6).toBe(0);
+    expect(view.getUint32(start + length - 6, true)).toBe(input.length);
   }
 });

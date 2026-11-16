@@ -39,7 +39,7 @@
       (i32.add
         (global.get $srcBase)
         (if (result i32) (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-          (then (i32.load (i32.sub (global.get $out) (i32.const 8))))
+          (then (i32.load (i32.sub (global.get $out) (i32.const 6))))
           (else (i32.const 0))))
       (global.get $eof))
     (call $recStreamEnd)

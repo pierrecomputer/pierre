@@ -1104,7 +1104,8 @@
         (if (global.get $lvRecordEnd)
           (then
             (global.set $lvTokenPtr
-              (call $lvAlloc (i32.shr_u (local.get $recLen) (i32.eqz (local.get $wide)))))))
+              (call $lvAlloc
+                (i32.shl (i32.div_u (local.get $recLen) (i32.const 6)) (i32.add (local.get $wide) (i32.const 2)))))))
         (global.set $lvLinePhase (i32.const 2))
         (if (local.get $work) (then (return (i32.const -1))))))
     (local.set $remaining (select (local.get $work) (i32.const 0x7fffffff) (local.get $work)))
@@ -1114,7 +1115,7 @@
         (if (i32.le_s (local.get $remaining) (i32.const 0)) (then (return (i32.const -1))))
         (local.set $w (i32.add (global.get $lvTransLo) (global.get $lvRecord)))
         (local.set $end (i32.load (local.get $w)))
-        (local.set $hl (i32.load offset=4 (local.get $w)))
+        (local.set $hl (i32.load16_u offset=4 (local.get $w)))
         (if (i32.gt_u (local.get $end) (local.get $byteLen))
           (then (local.set $end (local.get $byteLen))))
         (if (i32.gt_u (local.get $end) (global.get $lvByte))
@@ -1163,7 +1164,7 @@
               (else
                 (i32.store (local.get $w) (i32.or (global.get $lvChar) (i32.shl (local.get $hl) (i32.const 24))))))
             (global.set $lvTokenCount (i32.add (global.get $lvTokenCount) (i32.const 1)))))
-        (global.set $lvRecord (i32.add (global.get $lvRecord) (i32.const 8)))
+        (global.set $lvRecord (i32.add (global.get $lvRecord) (i32.const 6)))
         (local.set $remaining (i32.sub (local.get $remaining) (i32.const 1)))
         (br $records)))
     (global.set $lvTransLo (i32.const 0))
