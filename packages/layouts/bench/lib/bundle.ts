@@ -52,12 +52,14 @@ const CONSUMERS: Record<string, string> = {
 // so the CSS file is empty. The apps match the examples of the modular entry
 // points proposal: A is a fixed two-pane split with collapse, B a tiled grid
 // with move and zoom, C the full set of features with `allFeatures()` and
-// every part, and D the side panel of an agent app.
+// every part, and D the side panel of an agent app. E is an editor with stacks
+// of tabs that the user drags, with `Layout.TabList` and `tabDrag()`.
 const APPS: Record<string, string> = {
   'app A: two-pane split': 'bench/apps/two-pane.tsx',
   'app B: tiled grid': 'bench/apps/tiled.tsx',
   'app C: full set': 'bench/apps/full.tsx',
   'app D: side panel': 'bench/apps/side-panel.tsx',
+  'app E: tab stacks': 'bench/apps/tabs.tsx',
 };
 
 const MODES: readonly BundleMode[] = ['app', 'library'];

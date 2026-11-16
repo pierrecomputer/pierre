@@ -244,9 +244,10 @@ minifier, Lightning CSS for the stylesheets). There are three kinds of bundle:
 - An example app: a module in `apps/` that renders a layout as an app does, with
   the stylesheets that it loads. Its size is the JavaScript file plus the CSS
   file, each compressed alone. `app A` is a fixed two-pane split with collapse,
-  `app B` a tiled grid with move and zoom, `app C` the full set of features, and
-  `app D` the side panel of an agent app. To add an app, add its module to
-  `apps/` and to `APPS` in `lib/bundle.ts`.
+  `app B` a tiled grid with move and zoom, `app C` the full set of features,
+  `app D` the side panel of an agent app, and `app E` an editor with stacks of
+  tabs that the user drags. To add an app, add its module to `apps/` and to
+  `APPS` in `lib/bundle.ts`.
 
 The run builds each bundle in two modes:
 
