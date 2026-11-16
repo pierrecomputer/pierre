@@ -993,3 +993,40 @@ test('only a tab list with stickyPinned adds the sheet of sticky pinned tabs', a
   await page.goto('/stacks.html?pinned=1&sticky=1');
   await expect(sheet).toHaveCount(1);
 });
+
+test("tabDrag's preview false shows no image, and a move that keeps its target changes nothing in the page", async ({
+  page,
+}) => {
+  // The count of DOM changes while the pointer moves between the same two
+  // tabs: each change of the page needs a new frame.
+  const changesOf = async (query: string) => {
+    await page.goto(`/stacks.html${query}`);
+    const target = await tabBox(page, 'main', 'types.ts');
+    const y = target.y + target.height / 2;
+    await dragTab(page, 'main', 'util.ts', { x: target.x + 6, y });
+    await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
+    await page.evaluate(() => {
+      const target = window as unknown as { __changes: number };
+      target.__changes = 0;
+      new MutationObserver((records) => {
+        target.__changes += records.length;
+      }).observe(document.body, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+      });
+    });
+    for (let step = 1; step <= 6; step += 1)
+      await page.mouse.move(target.x + 6 + step, y + (step % 2));
+    const changes = await page.evaluate(
+      () => (window as unknown as { __changes: number }).__changes
+    );
+    const images = await page.locator('.pierre-layouts-drag-image').count();
+    await page.mouse.up();
+    return { changes, images };
+  };
+  expect(await changesOf('?preview=none')).toEqual({ changes: 0, images: 0 });
+  const withImage = await changesOf('');
+  expect(withImage.images).toBe(1);
+  expect(withImage.changes).toBeGreaterThan(0);
+});

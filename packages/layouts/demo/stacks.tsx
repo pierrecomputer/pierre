@@ -16,7 +16,8 @@
 //   `Layout.MoveHandle`, with `paneDrag()`.
 // - `?refuse=edges`: the `canDrop` of `tabDrag()` refuses the edges of the
 //   panes, and keeps the targets that it gets in `__stacks.asked`.
-// - `?preview=1`: the app's element follows the pointer during a tab drag.
+// - `?preview=1`: the app's element follows the pointer during a tab drag;
+//   `?preview=none`: no image follows it.
 // - `?activation=manual`: the arrows move the focus only, and Enter or Space
 //   selects.
 // - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`).
@@ -79,6 +80,7 @@ const features: Feature[] = [
               return target.place === 'center';
             },
           }),
+          ...(params.get('preview') === 'none' && { preview: false }),
           ...(params.get('preview') === '1' && {
             preview: (tab: PaneNode) => (
               <span className="stacks-preview">Moving {TITLES[tab.id]}</span>

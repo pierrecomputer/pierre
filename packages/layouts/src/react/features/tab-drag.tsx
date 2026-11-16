@@ -50,9 +50,11 @@ export interface TabDragOptions {
   readonly touchDelay?: number;
   /**
    * The app's element beside the pointer during a drag of a tab. By default, a
-   * copy of the tab follows the pointer.
+   * copy of the tab follows the pointer. With `false`, no image follows the
+   * pointer: the drag adds no layer, and a pointer move that keeps its target
+   * changes nothing in the page, so it presents no frame.
    */
-  readonly preview?: (tab: PaneNode) => ReactNode;
+  readonly preview?: ((tab: PaneNode) => ReactNode) | false;
 }
 
 // The image of the drag that runs: the pressed tab, its size and styles at
@@ -101,7 +103,7 @@ function DragImage({
 }: {
   context: ViewContext;
   image: Cell<DragImageState>;
-  preview: TabDragOptions['preview'];
+  preview: ((tab: PaneNode) => ReactNode) | undefined;
 }): ReactNode {
   const id = useDrag(context, (drag) =>
     drag?.source.kind === TAB ? drag.source.id : null
@@ -253,22 +255,24 @@ function useTabDrag(
       // The size and the styles of the tab for its copy, read at the press,
       // while the layout is clean. The exact width: a rounded one can cut
       // the title.
-      const pressed = event.currentTarget;
-      const style = getComputedStyle(pressed);
-      const { width, height } = pressed.getBoundingClientRect();
-      const look: Partial<CSSStyleDeclaration> = {
-        width: `${width}px`,
-        height: `${height}px`,
-      };
-      for (const key of COPIED) look[key] = style[key];
-      const layout = context.element()?.getBoundingClientRect();
-      image.set({
-        ...image.get(),
-        source: pressed,
-        look,
-        x: event.clientX - (layout?.left ?? 0),
-        y: event.clientY - (layout?.top ?? 0),
-      });
+      if (preview !== false) {
+        const pressed = event.currentTarget;
+        const style = getComputedStyle(pressed);
+        const { width, height } = pressed.getBoundingClientRect();
+        const look: Partial<CSSStyleDeclaration> = {
+          width: `${width}px`,
+          height: `${height}px`,
+        };
+        for (const key of COPIED) look[key] = style[key];
+        const layout = context.element()?.getBoundingClientRect();
+        image.set({
+          ...image.get(),
+          source: pressed,
+          look,
+          x: event.clientX - (layout?.left ?? 0),
+          y: event.clientY - (layout?.top ?? 0),
+        });
+      }
       startDrag(context, event, {
         source,
         center: true,
@@ -277,11 +281,13 @@ function useTabDrag(
           .map((other) => other.id) ?? [tab.id],
         rearrange: presentation(current).rearrangeable,
         wait: touchHold(touchDelay),
-        follow(x, y) {
-          const next = { ...image.get(), x, y };
-          image.set(next);
-          placeImage(next);
-        },
+        ...(preview !== false && {
+          follow(x: number, y: number) {
+            const next = { ...image.get(), x, y };
+            image.set(next);
+            placeImage(next);
+          },
+        }),
         accept(target) {
           const place = pinned(target);
           return place === null ||
@@ -302,7 +308,9 @@ function useTabDrag(
     layers: () => (
       <>
         <DropPreview context={context} kind={TAB} />
-        <DragImage context={context} image={image} preview={preview} />
+        {preview !== false && (
+          <DragImage context={context} image={image} preview={preview} />
+        )}
       </>
     ),
     status:
