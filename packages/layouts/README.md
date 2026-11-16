@@ -510,6 +510,15 @@ const saved = JSON.stringify(layout.toStoredTree());
 layout.setStoredTree(parseStoredLayoutTree(JSON.parse(saved)));
 ```
 
+The target of `split` and `move` is a pane, a stack, or a split. A pane of a
+stack puts the pane beside the stack. A split of the direction of the edge takes
+the pane as its first or last child, with the mean weight of its children, and a
+split across it is wrapped:
+`layout.move('chat', layout.getSnapshot().root.id, 'left')` gives the chat a new
+column at the left of the layout. A target that a move takes apart gives its
+place to what remains of it. The announcement says "Chat moved to a new column
+at the left" (`messages.movedToEdge` and `messages.openedAtEdge`).
+
 The library has one saved form, `{ version: 3, root }`, from `persistence()`. It
 holds the tree with its stacks, sizes in pixels, maximum sizes, and hidden and
 collapsed panes, and not the focus or the zoom, which are the state of one

@@ -152,6 +152,20 @@ export interface LayoutMessages {
    */
   readonly moved?: (values: EdgeMessageValues) => string;
   /**
+   * The announcement of a new pane at an edge of a split, such as the root.
+   * Default: "Terminal opened in a new row at the bottom".
+   */
+  readonly openedAtEdge?: (
+    values: PaneMessageValues & { readonly edge: Edge }
+  ) => string;
+  /**
+   * The announcement of a move to an edge of a split, such as the root.
+   * Default: "Editor moved to a new column at the left".
+   */
+  readonly movedToEdge?: (
+    values: PaneMessageValues & { readonly edge: Edge }
+  ) => string;
+  /**
    * The announcement of a move into another stack. Default: "Editor moved
    * into the group of Files".
    */

@@ -15,6 +15,7 @@ import type {
   Edge,
   LayoutNode,
   PaneNode,
+  SplitNode,
   StackNode,
 } from './types';
 import { hasVisiblePane } from './validate';
@@ -22,6 +23,65 @@ import { hasVisiblePane } from './validate';
 /** The direction of a split that puts a pane at an edge of another. */
 export const directionOf = (edge: Edge): Direction =>
   edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical';
+
+/**
+ * The lowest node of a tree that holds every pane of a list: the node that
+ * takes the place of a target after a move takes a pane out of it.
+ */
+export function holderOf(node: LayoutNode, ids: readonly string[]): LayoutNode {
+  if (node.type !== 'pane')
+    for (const child of node.children)
+      if (ids.every((id) => findNode(child, id) !== null))
+        return holderOf(child, ids);
+  return node;
+}
+
+/**
+ * Put a pane at one edge of a split that holds the panes of `ids`. A split
+ * of the direction of the edge takes the pane before or after the run of its
+ * children that hold them, with the mean weight of its weighted children. A
+ * split across the edge is wrapped in a new split with `splitId`, half and
+ * half. The caller gives the result the shape of its model.
+ */
+export function besideSplit(
+  root: LayoutNode,
+  split: SplitNode,
+  ids: readonly string[],
+  pane: PaneNode,
+  edge: Edge,
+  splitId: () => string
+): LayoutNode {
+  const before = edge === 'left' || edge === 'top';
+  const direction = directionOf(edge);
+  if (split.direction !== direction)
+    return replaceNode(root, split.id, (node) => ({
+      type: 'split',
+      id: splitId(),
+      direction,
+      children: before ? [pane, node] : [node, pane],
+      sizes: [0.5, 0.5],
+    }));
+  const run = split.children
+    .map((child, index) =>
+      ids.some((id) => findNode(child, id) !== null) ? index : -1
+    )
+    .filter((index) => index !== -1);
+  const at = before ? run[0] : (run.at(-1) ?? split.children.length - 1) + 1;
+  const weights = split.sizes.filter((size) => !isFixed(size)) as number[];
+  const size =
+    weights.length === 0
+      ? 1
+      : weights.reduce((sum, weight) => sum + weight, 0) / weights.length;
+  return replaceNode(root, split.id, () => ({
+    ...split,
+    children: [
+      ...split.children.slice(0, at),
+      pane,
+      ...split.children.slice(at),
+    ],
+    sizes: [...split.sizes.slice(0, at), size, ...split.sizes.slice(at)],
+  }));
+}
 
 /** Throw unless a tree holds the pane. */
 export function requirePane(root: LayoutNode, id: string): void {

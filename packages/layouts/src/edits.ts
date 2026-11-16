@@ -1,17 +1,29 @@
 // Tree edits: the store commands that split, close, move, and swap panes, and
 // the folds of their operations. The tree model is an argument, so an app
 // loads only the model that it uses.
-import { swapPanes } from './edits-model';
+import { besideSplit, holderOf, swapPanes } from './edits-model';
 import { randomIds } from './ids';
 import { LayoutOperationError } from './layout-operation';
-import { canClose, paneIn, requireNewPane, slotOf, stackOf } from './model';
+import {
+  canClose,
+  findNode,
+  getPanes,
+  paneIn,
+  requireNewPane,
+  slotOf,
+  stackOf,
+} from './model';
 import { focusAfterLeaving, type StoreFeature } from './store';
-import type { Edge, PaneNode, TreeModel } from './types';
+import type { Edge, LayoutNode, PaneNode, TreeModel } from './types';
 
 export interface EditCommands {
   /**
-   * Put a new pane at one edge of a target pane. A split of a pane in a stack
-   * puts the new pane beside the stack. The new pane takes the focus.
+   * Put a new pane at one edge of a target: a pane, a stack, or a split. A
+   * pane in a stack puts the new pane beside the stack. A split of the
+   * direction of the edge takes the new pane as its first or last child,
+   * with the mean weight of its children; a split across it is wrapped. The
+   * root as the target gives a new column or row at an edge of the layout.
+   * The new pane takes the focus.
    */
   split(targetId: string, pane: PaneNode, edge?: Edge): void;
   /**
@@ -20,9 +32,12 @@ export interface EditCommands {
    */
   close(id: string): void;
   /**
-   * Move a pane to one edge of another pane. A target in a stack takes the
-   * pane beside the whole stack. A pane of a stack leaves its stack; a
-   * pinned one does not, and the move throws `pane_pinned`.
+   * Move a pane to one edge of a target: a pane, a stack, or a split, as for
+   * `split`. A target in a stack takes the pane beside the whole stack. A
+   * target that the move takes apart, such as a split of the pane and one
+   * other child, gives its place to what remains of it. A pane of a stack
+   * leaves its stack; a pinned one does not, and the move throws
+   * `pane_pinned`.
    */
   move(sourceId: string, targetId: string, edge: Edge): void;
   /**
@@ -37,16 +52,39 @@ export interface EditCommands {
  * `naryTree`. The store also gives its trees the shape of the model.
  */
 export function edits(model: TreeModel): StoreFeature<EditCommands> {
+  // Put a pane at an edge of the node that holds the panes of `ids`: the
+  // model splits a pane or a stack; a split takes it as `besideSplit` says.
+  const besideNode = (
+    root: LayoutNode,
+    ids: readonly string[],
+    pane: PaneNode,
+    edge: Edge,
+    splitId: () => string
+  ): LayoutNode => {
+    const node = holderOf(root, ids);
+    return node.type === 'split'
+      ? model.normalize(
+          besideSplit(root, node, ids, pane, edge, splitId),
+          splitId
+        )
+      : model.split(root, slotOf(root, node.id), pane, edge, splitId);
+  };
+  // The panes of a target node, or `pane_not_found`.
+  const panesOf = (root: LayoutNode, target: string): string[] => {
+    const node = findNode(root, target);
+    if (node === null) throw new LayoutOperationError('pane_not_found', target);
+    return getPanes(node).map(({ id }) => id);
+  };
   return {
     model,
     ids: randomIds,
     folds: {
       split(root, { target, pane, edge, id }, { newId }) {
-        paneIn(root, target);
+        const ids = panesOf(root, target);
         requireNewPane(root, pane);
-        return model.split(
+        return besideNode(
           root,
-          slotOf(root, target),
+          ids,
           { ...pane },
           edge,
           () => id ?? newId('split')
@@ -60,20 +98,18 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
       },
       move(root, { pane, target, edge, id }, { newId }) {
         const source = paneIn(root, pane);
-        paneIn(root, target);
+        // The other panes of the target: none when it holds only the pane.
+        const others = panesOf(root, target).filter((each) => each !== pane);
+        if (others.length === 0) return root;
         // A pinned pane of a stack stays in its stack.
-        if (
-          pane !== target &&
-          source.pinned === true &&
-          stackOf(root, pane) !== null
-        )
+        if (source.pinned === true && stackOf(root, pane) !== null)
           throw new LayoutOperationError('pane_pinned', pane);
-        const remaining = pane === target ? null : model.remove(root, pane);
+        const remaining = model.remove(root, pane);
         return remaining === null
           ? root
-          : model.split(
+          : besideNode(
               remaining,
-              slotOf(remaining, target),
+              others,
               source,
               edge,
               () => id ?? newId('split')

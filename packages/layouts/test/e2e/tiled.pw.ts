@@ -188,3 +188,43 @@ test('canDrop refuses a place: no preview, no status, and no move', async ({
     .poll(async () => (await box(page, '[data-layouts-pane="a"]')).x)
     .toBeGreaterThan(before.x + 10);
 });
+
+test('a move or a new pane at an edge of the layout says where it went', async ({
+  page,
+}) => {
+  await page.goto('/tiled.html');
+  const status = page.locator('.pierre-layouts > [role="status"]');
+  const run = (name: string, ...args: unknown[]) =>
+    page.evaluate(
+      ([name, args]) => {
+        const layout = (
+          window as unknown as {
+            __tiled: {
+              layout: Record<string, (...args: unknown[]) => void>;
+            };
+          }
+        ).__tiled.layout;
+        layout[name as string](...(args as unknown[]));
+      },
+      [name, args]
+    );
+  await run('move', 'd', 'rows', 'left');
+  await expect(status).toHaveText('Delta moved to a new column at the left');
+  await expect(host(page, 'd')).toHaveAttribute(
+    'data-edges',
+    'top bottom left'
+  );
+  const root = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __tiled: { layout: { getSnapshot(): { root: { id: string } } } };
+        }
+      ).__tiled.layout.getSnapshot().root.id
+  );
+  await run('split', root, { type: 'pane', id: 'e' }, 'bottom');
+  await expect(status).toHaveText('e opened in a new row at the bottom');
+  // Beside a stack, or a pane, the announcement names the pane.
+  await run('move', 'a', 'b', 'right');
+  await expect(status).toHaveText('Alpha moved to the right of Beta');
+});

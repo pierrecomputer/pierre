@@ -1,9 +1,11 @@
 // Features with a store part only: their commands need no view.
 import { type EditCommands, edits as editsStore } from '../../edits';
 import { type HiddenPaneCommands, hiddenPanesStore } from '../../hidden-panes';
+import { findNode } from '../../model';
 import { type PersistenceCommands, persistenceStore } from '../../persistence';
-import type { TreeModel } from '../../types';
+import type { Edge, TreeModel } from '../../types';
 import type {
+  AnnounceContext,
   EdgeMessageValues,
   Feature,
   FeatureModule,
@@ -16,6 +18,47 @@ const openedText = ({ paneTitle, targetTitle, edge }: EdgeMessageValues) =>
   `${paneTitle} opened to the ${edge} of ${targetTitle}`;
 const movedText = ({ paneTitle, targetTitle, edge }: EdgeMessageValues) =>
   `${paneTitle} moved to the ${edge} of ${targetTitle}`;
+// "a new column at the left", or "a new row at the top".
+const lineAt = (edge: Edge): string =>
+  `a new ${edge === 'left' || edge === 'right' ? 'column' : 'row'} at the ${edge}`;
+const openedAtEdgeText = ({
+  paneTitle,
+  edge,
+}: PaneMessageValues & { edge: Edge }): string =>
+  `${paneTitle} opened in ${lineAt(edge)}`;
+const movedToEdgeText = ({
+  paneTitle,
+  edge,
+}: PaneMessageValues & { edge: Edge }): string =>
+  `${paneTitle} moved to ${lineAt(edge)}`;
+
+/**
+ * The announcement of a split or a move: beside a pane, or beside a stack,
+ * named by the tab that shows, or at an edge of a split.
+ */
+function besideText(
+  { pane, target, messages, previous }: AnnounceContext,
+  id: string,
+  targetId: string,
+  edge: Edge,
+  moved: boolean
+): string {
+  const node = findNode(previous.root, targetId);
+  if (node?.type === 'split')
+    return (
+      (moved ? messages.movedToEdge : messages.openedAtEdge) ??
+      (moved ? movedToEdgeText : openedAtEdgeText)
+    )({ ...pane(id), edge });
+  return (
+    (moved ? messages.moved : messages.opened) ??
+    (moved ? movedText : openedText)
+  )({
+    ...pane(id),
+    ...target(node?.type === 'stack' ? node.active : targetId),
+    edge,
+  });
+}
+
 const hiddenText = ({ paneTitle }: PaneMessageValues): string =>
   `${paneTitle} hidden`;
 const shownText = ({ paneTitle }: PaneMessageValues): string =>
@@ -30,21 +73,19 @@ export function edits(model: TreeModel): Feature<EditCommands> {
   const feature: FeatureModule<EditCommands> = {
     name: 'edits',
     store: editsStore(model),
-    announce(operation, { pane, target, messages }) {
+    announce(operation, context) {
       if (operation.type === 'close')
-        return (messages.closed ?? closedText)(pane(operation.pane));
-      if (operation.type === 'split')
-        return (messages.opened ?? openedText)({
-          ...pane(operation.pane.id),
-          ...target(operation.target),
-          edge: operation.edge,
-        });
-      if (operation.type === 'move')
-        return (messages.moved ?? movedText)({
-          ...pane(operation.pane),
-          ...target(operation.target),
-          edge: operation.edge,
-        });
+        return (context.messages.closed ?? closedText)(
+          context.pane(operation.pane)
+        );
+      if (operation.type === 'split' || operation.type === 'move')
+        return besideText(
+          context,
+          operation.type === 'split' ? operation.pane.id : operation.pane,
+          operation.target,
+          operation.edge,
+          operation.type === 'move'
+        );
       return null;
     },
   };
