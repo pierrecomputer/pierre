@@ -27,6 +27,19 @@ const BUDGET = {
   'two-pane esbuild': { minified: 29_032, brotli: 10_277 },
 } as const;
 
+// The budgets of the full set (app C, `allFeatures()` and every part) and of
+// the app with tab stacks and `tabDrag()` (app E), from the source, as the
+// bundle step measures them, a few bytes apart from the bundle step's own
+// values (`DEC-layouts-modular-size-budget`). The owner
+// accepted the full set at 72,104 / 21,812 after the tab gaps; app E was
+// 57,711 / 18,052 then. The review fixes of 2026-11-16 add the titles in the
+// pane state, the remote announcement, the sheet of sticky pinned tabs, and
+// the drag with no image; their results name the cost of each.
+const APP_BUDGET = {
+  'full set source': { minified: 72_606, brotli: 21_924 },
+  'tab stacks source': { minified: 58_206, brotli: 18_163 },
+} as const;
+
 interface Output {
   code: string;
   minified: number;
@@ -201,6 +214,13 @@ beforeAll(async () => {
         )
       )
     );
+    // The full set and the app with tab stacks, as the bundle step builds
+    // them from the source.
+    for (const [name, file] of [
+      ['full set source', 'bench/apps/full.tsx'],
+      ['tab stacks source', 'bench/apps/tabs.tsx'],
+    ] as const)
+      outputs.set(name, measure(await rolldown(join(PACKAGE, file))));
   } finally {
     process.env.NODE_ENV = nodeEnv;
   }
@@ -291,7 +311,7 @@ test('the sizes of the apps', () => {
     ])
   );
   console.log(JSON.stringify(sizes, null, 1));
-  expect(Object.keys(sizes)).toHaveLength(5);
+  expect(Object.keys(sizes)).toHaveLength(7);
 });
 
 // The dist joins modules into a few files, so a bundler can drop only the
@@ -308,6 +328,16 @@ test('app A from the dist costs no more than app A from the source', () => {
 
 test.each(Object.entries(BUDGET))(
   '%s is within the budget of app A',
+  (name, budget) => {
+    const output = outputs.get(name);
+    if (output === undefined) throw new Error('Missing output');
+    expect(output.minified).toBeLessThanOrEqual(budget.minified);
+    expect(output.brotli).toBeLessThanOrEqual(budget.brotli);
+  }
+);
+
+test.each(Object.entries(APP_BUDGET))(
+  '%s is within its budget',
   (name, budget) => {
     const output = outputs.get(name);
     if (output === undefined) throw new Error('Missing output');
