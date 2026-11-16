@@ -21,6 +21,7 @@
     width: 100%;
     height: 0;
     box-sizing: border-box;
+    contain: layout size style;
   }
 
   :host([data-search-panel-overlay]) {
@@ -226,6 +227,7 @@
   }
 
   [data-matches] {
+    contain: layout paint style;
     font-variant-numeric: tabular-nums;
     grid-area: matches;
     flex-shrink: 0;

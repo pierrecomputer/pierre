@@ -1666,6 +1666,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private resetSearchState(): void {
+    dequeueRender(this.flushSearchMatches);
     dequeueRender(this.paintSearchHighlights);
     this.searchHighlighter?.clear();
     this.searchState.scope = undefined;
@@ -1938,7 +1939,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (needsRefresh) this.render();
   }
 
-  private flushSearchMatches(): void {
+  private flushSearchMatches = (): void => {
+    dequeueRender(this.flushSearchMatches);
     if (!this.searchMatchesDirty) {
       return;
     }
@@ -1949,26 +1951,25 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
 
     this.searchPanel.updateMatches({ skipNavigation: true });
-  }
+  };
 
   private setSearchResults(
     matches: CodeViewSearchMatch[],
     current: CodeViewSearchMatch | undefined
   ): void {
-    const matchesChanged = this.searchState.matches !== matches;
     const currentChanged = !areOptionalCodeViewSearchMatchesEqual(
       this.searchState.current,
       current
     );
 
-    if (matchesChanged) {
-      this.searchState.matches = matches;
-    }
+    this.searchState.matches = matches;
     this.searchState.current = current;
     if (current == null) this.searchState.pendingHorizontalReveal = false;
     if (currentChanged) this.searchState.currentPosition = undefined;
 
-    if (matchesChanged || currentChanged) {
+    // The current highlight moves with the current match. New matches are
+    // repainted by whatever put them on screen.
+    if (currentChanged) {
       this.render();
     }
   }
@@ -2160,17 +2161,28 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   // Searches for one more slice in the background, and has the panel read the
-  // matches again when there are new ones.
+  // matches again when there are new ones. Only a slice that could have
+  // searched an item on screen asks for a render.
   private advanceSearchScan = (): void => {
-    const { scan } = this.searchState;
+    const { searchState, renderState } = this;
+    const { scan, scope } = searchState;
     if (scan == null) {
       throw new Error('CodeView.advanceSearchScan: queued scan is missing');
     }
+    const { firstIndex, lastIndex } = renderState;
+    const renderedItemsPending =
+      scope == null
+        ? scan.hasPendingItems(firstIndex, lastIndex + 1)
+        : scan.isItemPending(0);
     const changed = scan.advance(BACKGROUND_TASK_BUDGET_MS);
     if (!scan.finished) queueBackgroundTask(this.advanceSearchScan);
     if (changed) {
       this.searchMatchesDirty = true;
-      this.render();
+      if (renderedItemsPending) {
+        this.render();
+      } else {
+        queueRender(this.flushSearchMatches);
+      }
     }
   };
 
@@ -2196,6 +2208,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       );
       searchState.scan = scan;
       scan.advance(BACKGROUND_TASK_BUDGET_MS);
+      this.render();
     } else if (scan.hasChangedItems) {
       scan.advance(BACKGROUND_TASK_BUDGET_MS);
     }
