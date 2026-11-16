@@ -51,7 +51,7 @@ describe('buildHighlightsLexer', () => {
   beforeAll(() => {
     language = buildHighlightsLexer({
       name: 'numbers',
-      alias: { nums: 0 },
+      alias: ['nums'],
       wat,
     });
     compiledModule = new WebAssembly.Module(
@@ -206,8 +206,8 @@ describe('buildHighlightsLexer', () => {
       'Invalid language name'
     );
     expect(() =>
-      buildHighlightsLexer({ name: 'good', alias: { bad: 1 }, wat })
-    ).toThrow('entry 0');
+      buildHighlightsLexer({ name: 'good', alias: ['Bad Alias'], wat })
+    ).toThrow('Invalid language alias');
     expect(() =>
       buildHighlightsLexer({ name: 'good', wat: '(module)' })
     ).toThrow('$highlight');
