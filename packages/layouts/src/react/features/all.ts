@@ -9,6 +9,7 @@ import type { TreeModel } from '../../types';
 import type { ZoomCommands } from '../../zoom';
 import type { Feature } from '../contract';
 import type { CanDrop } from '../drag';
+import { arrange, type ArrangeCommands } from './arrange';
 import { corners } from './corners';
 import { flip, type FlipOptions } from './flip';
 import { focusRing } from './focus-ring';
@@ -34,13 +35,14 @@ export type AllFeatures = readonly (
   | Feature<HiddenPaneCommands>
   | Feature<PersistenceCommands>
   | Feature<ZoomCommands>
+  | Feature<ArrangeCommands>
   | Feature
 )[];
 
 /**
  * Every feature: `edits(model)`, `stacks()`, `hiddenPanes()`,
- * `persistence()`, `zoom()`, `paneDrag()`, `tabDrag()`, `corners()`,
- * `focusRing()`, and `flip()` unless `animate` is false.
+ * `persistence()`, `zoom()`, `arrange()`, `paneDrag()`, `tabDrag()`,
+ * `corners()`, `focusRing()`, and `flip()` unless `animate` is false.
  */
 export function allFeatures({
   model = naryTree,
@@ -53,6 +55,7 @@ export function allFeatures({
     hiddenPanes(),
     persistence(),
     zoom(),
+    arrange(),
     paneDrag({ canDrop }),
     tabDrag({ canDrop }),
     corners(),

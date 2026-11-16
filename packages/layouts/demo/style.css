@@ -221,3 +221,39 @@ h1 {
   color: #6b7480;
   font-size: 12px;
 }
+
+/* The reference pane menu (demo/pane-menu.tsx). */
+.demo-menu {
+  position: fixed;
+  z-index: 10;
+  min-width: 220px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid #dce1e8;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 8px 24px rgb(41 49 61 / 16%);
+  font-size: 13px;
+}
+
+.demo-menu [role='menuitem'] {
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.demo-menu [role='menuitem']:focus {
+  outline: 2px solid #5489ed;
+  outline-offset: -2px;
+  background: #edf2ff;
+}
+
+.demo-menu [role='menuitem'][aria-disabled='true'] {
+  opacity: 0.45;
+}
+
+.demo-menu [role='separator'] {
+  margin: 4px 6px;
+  border-top: 1px solid #dce1e8;
+}

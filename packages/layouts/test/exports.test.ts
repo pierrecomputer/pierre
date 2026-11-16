@@ -115,6 +115,7 @@ const ROOT_TYPES = sorted([
 
 const REACT_VALUES = sorted([
   'allFeatures',
+  'arrange',
   'CloseButton',
   'CollapseButton',
   'Content',
@@ -145,6 +146,7 @@ const REACT_VALUES = sorted([
   'Title',
   'useCover',
   'usePane',
+  'usePaneMenu',
   'visualOrder',
   'zoom',
   'ZoomButton',
@@ -153,6 +155,8 @@ const REACT_VALUES = sorted([
 const REACT_TYPES = sorted([
   'AllFeatures',
   'AllFeaturesOptions',
+  'ArrangeCommands',
+  'Axis',
   'CanDrop',
   'CloseButtonState',
   'CollapseButtonState',
@@ -174,6 +178,7 @@ const REACT_TYPES = sorted([
   'OverlayCoverEvent',
   'PaneDragOptions',
   'PaneEdges',
+  'PaneMenuItem',
   'PaneMessageValues',
   'PaneState',
   'PaneVisibilityEvent',

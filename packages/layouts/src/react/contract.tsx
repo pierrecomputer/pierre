@@ -205,6 +205,63 @@ export interface LayoutMessages {
    * the target stack. Default: "Move Editor into the group of Files".
    */
   readonly moveInto?: (values: TargetMessageValues) => string;
+  /**
+   * The name of the pane menu's trigger, `Layout.MoveHandle` with
+   * `arrange()`. Default: "Arrange Editor".
+   */
+  readonly paneMenu?: (values: PaneMessageValues) => string;
+  /**
+   * A pane menu item: a move to an edge of the pane across that edge.
+   * Default: "Move left of Files", "Move above Files".
+   */
+  readonly moveBeside?: (values: EdgeMessageValues) => string;
+  /**
+   * A pane menu item: a move to an edge of the layout. Default: "Move to a
+   * new column at the left", "Move to a new row at the top".
+   */
+  readonly moveToEdge?: (
+    values: PaneMessageValues & { readonly edge: Edge }
+  ) => string;
+  /** A pane menu item: a move into the tabs of a pane. Default: "Move to the tabs of Files". */
+  readonly moveToTabs?: (values: TargetMessageValues) => string;
+  /** A pane menu item: `mergeStack` into a pane. Default: "Merge tabs into Files". */
+  readonly mergeInto?: (values: TargetMessageValues) => string;
+  /** The pane menu item that holds a place beside each pane. Default: "Move to…". */
+  readonly moveToMenu?: (values: PaneMessageValues) => string;
+  /**
+   * An item of "Move to…": an edge of a pane, or its tabs (`edge` is
+   * `tabs`). Default: "Left of Files", "Above Files", "Tabs of Files".
+   */
+  readonly place?: (
+    values: TargetMessageValues & { readonly edge: Edge | 'tabs' }
+  ) => string;
+  /**
+   * The pane menu items that grow and shrink a pane by 10% of its split.
+   * Default: "Wider", "Narrower", "Taller", "Shorter".
+   */
+  readonly resize?: (
+    values: PaneMessageValues & {
+      readonly axis: 'horizontal' | 'vertical';
+      readonly grow: boolean;
+    }
+  ) => string;
+  /**
+   * The announcement of a Grow or a Shrink: the share of the pane in its
+   * split. Default: "Editor width 45%".
+   */
+  readonly resized?: (
+    values: PaneMessageValues & {
+      readonly axis: 'horizontal' | 'vertical';
+      readonly percent: number;
+    }
+  ) => string;
+  /**
+   * The pane menu item of `zoom()`, for a pane that is zoomed or not.
+   * Default: "Maximize", or "Restore" while the pane is zoomed.
+   */
+  readonly maximize?: (
+    values: PaneMessageValues & { readonly zoomed: boolean }
+  ) => string;
 }
 
 /** A layout object: the store, with the features of the layout. */

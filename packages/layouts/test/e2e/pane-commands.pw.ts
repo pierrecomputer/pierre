@@ -182,3 +182,133 @@ test('Escape restores the zoom outside a text field only', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(host).not.toHaveAttribute('data-zoomed');
 });
+
+const handle = (page: Page, id: string) =>
+  page.locator(`[data-layouts-pane="${id}"] .pierre-layouts-grip`);
+const status = (page: Page) =>
+  page.locator('.pierre-layouts > [role="status"]');
+const box = async (page: Page, id: string) => {
+  const value = await page.locator(`[data-layouts-pane="${id}"]`).boundingBox();
+  if (value === null) throw new Error(`No box: ${id}`);
+  return value;
+};
+const item = (page: Page, name: string) =>
+  page.getByRole('menuitem', { name, exact: true });
+
+test('A7: single clicks move a pane to each edge of another pane, with no drag', async ({
+  page,
+}) => {
+  const places: [
+    string,
+    string,
+    (one: { x: number; y: number }, three: { x: number; y: number }) => boolean,
+  ][] = [
+    ['left of', 'Left of', (one, three) => one.x < three.x],
+    ['right of', 'Right of', (one, three) => one.x > three.x],
+    ['above', 'Above', (one, three) => one.y < three.y],
+    ['below', 'Below', (one, three) => one.y > three.y],
+  ];
+  for (const [phrase, place, check] of places) {
+    // A press and release with no move between them opens the menu. A place
+    // beside a neighbor is a top-level item; "Move to…" holds the others,
+    // each once.
+    await handle(page, '1').click();
+    const near = item(page, `Move ${phrase} Pane 3`);
+    if ((await near.count()) > 0) await near.click();
+    else {
+      await item(page, 'Move to…').click();
+      await item(page, `${place} Pane 3`).click();
+    }
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(status(page)).toContainText('Pane 1 moved to the');
+    expect(check(await box(page, '1'), await box(page, '3'))).toBe(true);
+    // The focus goes back to the trigger.
+    await expect(handle(page, '1')).toBeFocused();
+  }
+});
+
+test('B4: the keyboard alone moves a pane beside another, to a new column, and into tabs', async ({
+  page,
+}) => {
+  await handle(page, '1').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menu')).toBeVisible();
+  // The first item has the focus; the arrows move to "Move below Pane 7".
+  await expect(item(page, 'Move right of Pane 2')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(item(page, 'Move below Pane 7')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(status(page)).toHaveText('Pane 1 moved to the bottom of Pane 7');
+  await expect(handle(page, '1')).toBeFocused();
+  expect((await box(page, '1')).y).toBeGreaterThan((await box(page, '7')).y);
+  // A new column at the right of the layout.
+  await page.keyboard.press('ArrowDown');
+  await item(page, 'Move to a new column at the right').focus();
+  await page.keyboard.press('Enter');
+  await expect(status(page)).toHaveText(
+    'Pane 1 moved to a new column at the right'
+  );
+  await expect(page.locator('[data-layouts-pane="1"]')).toHaveAttribute(
+    'data-edges',
+    'top right bottom'
+  );
+  // Into the tabs of a neighbor, from "Move to…" with Arrow Right.
+  await page.keyboard.press('Enter');
+  await item(page, 'Move to…').focus();
+  await page.keyboard.press('ArrowRight');
+  await item(page, 'Tabs of Pane 2').focus();
+  await page.keyboard.press('Enter');
+  await expect(status(page)).toHaveText(
+    'Pane 1 moved into the group of Pane 2'
+  );
+  await expect(page.locator('[data-layouts-pane="2"]')).toHaveAttribute(
+    'role',
+    'tabpanel'
+  );
+  // Escape closes the menu and gives the focus back.
+  await handle(page, '1').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(handle(page, '1')).toBeFocused();
+});
+
+test('Grow and Shrink step a pane by 10% of its split, and stop at a limit', async ({
+  page,
+}) => {
+  const width = async () => (await box(page, '1')).width;
+  const before = await width();
+  await handle(page, '1').click();
+  await item(page, 'Wider').click();
+  await expect(status(page)).toHaveText(/^Pane 1 width \d+%$/);
+  const after = await width();
+  const space =
+    (await page.locator('.pierre-layouts').boundingBox())?.width ?? 0;
+  expect(after - before).toBeGreaterThan(space * 0.08);
+  await handle(page, '1').click();
+  await item(page, 'Narrower').click();
+  expect(Math.abs((await width()) - before)).toBeLessThan(2);
+  // Narrower until the pane has its minimum size: the item is disabled.
+  for (let step = 0; step < 8; step++) {
+    await handle(page, '1').click();
+    const narrower = item(page, 'Narrower');
+    if ((await narrower.getAttribute('aria-disabled')) === 'true') break;
+    await narrower.click();
+  }
+  await expect(item(page, 'Narrower')).toHaveAttribute('aria-disabled', 'true');
+  await expect(item(page, 'Wider')).not.toHaveAttribute('aria-disabled');
+});
+
+test('directional focus and Grow run from keys that the keymap binds', async ({
+  page,
+}) => {
+  await page.goto('/?keymap=rebound');
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
+  await page.locator('[data-layouts-pane="1"] .pierre-layouts-content').focus();
+  await page.keyboard.press('Alt+Shift+ArrowDown');
+  expect(await focusedPane(page)).toBe('7');
+  const before = (await box(page, '7')).width;
+  await page.keyboard.press('Alt+Shift+W');
+  expect((await box(page, '7')).width).toBeGreaterThan(before);
+});

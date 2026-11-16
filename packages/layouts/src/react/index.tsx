@@ -41,6 +41,13 @@ export {
   allFeatures,
   type AllFeaturesOptions,
 } from './features/all';
+export {
+  arrange,
+  type ArrangeCommands,
+  type Axis,
+  type PaneMenuItem,
+  usePaneMenu,
+} from './features/arrange';
 export { corners } from './features/corners';
 export { flip, type FlipOptions } from './features/flip';
 export { focusRing } from './features/focus-ring';

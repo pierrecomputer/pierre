@@ -19,6 +19,7 @@ import {
 import * as Layout from '../src/react';
 import { allFeatures, createLayout, naryTree } from '../src/react';
 import { resizeStrategy } from '../src/react/features/resize-strategy';
+import { PaneMenu } from './pane-menu';
 import { ResizeSelect, type ResizeStrategy } from './resize-select';
 import './style.css';
 
@@ -211,7 +212,7 @@ function TabsOrTitle({
 const renderPane = (node: PaneNode): JSX.Element => (
   <>
     <Layout.Header>
-      <Layout.MoveHandle title="Drag to move this pane beside another" />
+      <PaneMenu />
       <TabsOrTitle />
       <Layout.ZoomButton />
       <Layout.CloseButton />
@@ -238,6 +239,8 @@ const KEYMAP =
     ? {
         'focus.next': ['Alt+Shift+ArrowRight'],
         'focus.previous': null,
+        'focus.down': ['Alt+Shift+ArrowDown'],
+        'pane.wider': ['Alt+Shift+W'],
         'zoom.toggle': ['Mod+Shift+Z'],
       }
     : undefined;

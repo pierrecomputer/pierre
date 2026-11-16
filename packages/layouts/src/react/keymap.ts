@@ -13,6 +13,15 @@ export const defaultKeys: Readonly<Record<string, readonly string[]>> = {
   'focus.previous': ['Shift+F6'],
   'zoom.restore': ['Escape'],
   'zoom.toggle': [],
+  'focus.left': [],
+  'focus.right': [],
+  'focus.up': [],
+  'focus.down': [],
+  'pane.wider': [],
+  'pane.narrower': [],
+  'pane.taller': [],
+  'pane.shorter': [],
+  'pane.menu': [],
 };
 
 /**

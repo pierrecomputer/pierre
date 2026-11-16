@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import { createLayoutStore, edits, moveTo, naryTree, openAt } from '../src';
 import { applyLayoutOperations } from '../src/apply-operations';
+import type { FeatureModule } from '../src/react/contract';
+import { arrange, type ArrangeCommands } from '../src/react/features/arrange';
+import type { StoreFeature } from '../src/store';
 import type { LayoutNode, PaneNode } from '../src/types';
 import { testStore } from './helpers/store';
 
@@ -227,5 +230,36 @@ describe('moveTo and openAt', () => {
         edge: 'left',
       })
     ).toThrow('edits()');
+  });
+});
+
+describe('the store part of arrange()', () => {
+  const store = () => {
+    const feature = arrange() as unknown as FeatureModule<ArrangeCommands>;
+    return createLayoutStore(tabs, [
+      edits(naryTree),
+      feature.store as StoreFeature<ArrangeCommands>,
+    ]);
+  };
+
+  test('focusToward moves the focus across an edge, with reveal, and stops at an edge of the layout', () => {
+    const layout = store();
+    const operations: unknown[] = [];
+    layout.subscribe((change) => operations.push(...change.operations));
+    expect(layout.focusToward('right')).toBe(true);
+    expect(layout.getSnapshot().focusedPane).toBe('chat');
+    expect(layout.focusToward('right')).toBe(true);
+    expect(layout.focusToward('right')).toBe(false);
+    expect(layout.getSnapshot().focusedPane).toBe('notes');
+    expect(operations).toEqual([
+      { type: 'focus', pane: 'chat', reveal: true },
+      { type: 'focus', pane: 'notes', reveal: true },
+    ]);
+  });
+
+  test('grow and shrink need the boxes of a view', () => {
+    const layout = store();
+    expect(layout.grow('files', 'horizontal')).toBe(false);
+    expect(layout.shrink('files', 'vertical')).toBe(false);
   });
 });

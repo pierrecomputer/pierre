@@ -146,6 +146,42 @@ export function keySizes(
 }
 
 /**
+ * A step of one child of a split, for Grow and Shrink: the separator after
+ * the child, or before it when it is the last child that shows, moves by
+ * `fraction` of the space of the split, so that the child grows (a positive
+ * fraction) or shrinks. It gives the sizes of the split and the new share of
+ * the child in percent, or null when the child is at a limit.
+ */
+export function stepChild(
+  separators: readonly SeparatorGeometry[],
+  splitId: string,
+  index: number,
+  fraction: number
+): { sizes: ChildSize[]; percent: number } | null {
+  const list = separators.filter(({ split }) => split.id === splitId);
+  const after = list.find(
+    (each) => each.children[orderOf(each) - 1]?.index === index
+  );
+  const separator =
+    after ?? list.find((each) => each.children[orderOf(each)]?.index === index);
+  if (separator === undefined) return null;
+  const { children } = separator;
+  const order = orderOf(separator);
+  const at = after === undefined ? order : order - 1;
+  const space = sum(children.map(({ size }) => size));
+  const pixels = moveSeparator(
+    children,
+    order,
+    (after === undefined ? -fraction : fraction) * space
+  );
+  if (Math.abs(pixels[at] - children[at].size) < 0.5) return null;
+  return {
+    sizes: toWeights(separator, pixels),
+    percent: Math.round((pixels[at] / space) * 100),
+  };
+}
+
+/**
  * The place of a separator in its split, in percent of the space of its
  * children: `now`, and `min` and `max`, the places where the children before
  * it, then the children after it, have their minimum sizes, as a drag that
