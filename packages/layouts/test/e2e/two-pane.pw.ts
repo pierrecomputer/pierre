@@ -195,3 +195,21 @@ test('the internal preview strategy moves the separator, and applies the sizes a
   await expect(separator).not.toHaveAttribute('data-preview');
   expect(await sidebarWidth(page)).toBeGreaterThan(before + 60);
 });
+
+test('Root warns in development when its layout prop changes', async ({
+  page,
+}) => {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning') warnings.push(message.text());
+  });
+  await page.goto('/two-pane.html');
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(2);
+  expect(warnings).toEqual([]);
+  await page.getByRole('button', { name: 'Use another layout' }).click();
+  await expect
+    .poll(() => warnings)
+    .toEqual([
+      expect.stringContaining('the layout prop of Layout.Root changed'),
+    ]);
+});

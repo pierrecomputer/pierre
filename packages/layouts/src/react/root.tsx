@@ -95,7 +95,10 @@ export interface LayoutSeparator {
 export interface RootProps {
   /**
    * The layout: a layout object from `createLayout`, or from
-   * `useControlledLayout` for a tree that the app owns.
+   * `useControlledLayout` for a tree that the app owns. It keeps its identity
+   * for the life of `Root`: `Root` takes its features at the first render. To
+   * show another layout object, mount a new `Root`, for example with a `key`.
+   * In development, `Root` warns when this prop changes.
    */
   layout: LayoutObject;
   /**
@@ -239,6 +242,7 @@ function stateReasons(
 }
 
 let warnedRenderPane = false;
+let warnedLayout = false;
 
 const warnedSlots = new Set<string>();
 
@@ -255,15 +259,18 @@ function warnSlot(slot: string): void {
 /**
  * In development, warn once when `renderPane` changes while the tree does
  * not: the content of each pane then renders again for no change of its own.
+ * Warn once too when the `layout` prop changes: `Root` keeps the features of
+ * its first layout object, so a new one would run with the old features.
  */
 function useRenderPaneCheck(
   renderPane: RootProps['renderPane'],
-  root: LayoutNode
+  root: LayoutNode,
+  layout: LayoutObject
 ): void {
-  const last = useRef({ renderPane, root });
+  const last = useRef({ renderPane, root, layout });
   useEffect(() => {
     const before = last.current;
-    last.current = { renderPane, root };
+    last.current = { renderPane, root, layout: before.layout };
     if (
       !warnedRenderPane &&
       before.renderPane !== renderPane &&
@@ -272,6 +279,12 @@ function useRenderPaneCheck(
       warnedRenderPane = true;
       console.warn(
         '@pierre/layouts: renderPane changed while the tree did not, so the content of each pane rendered again. Keep the identity of renderPane, and read the state of a pane with Layout.usePane.'
+      );
+    }
+    if (!warnedLayout && before.layout !== layout) {
+      warnedLayout = true;
+      console.warn(
+        '@pierre/layouts: the layout prop of Layout.Root changed, but Root keeps the features of its first layout. Mount a new Root for another layout, for example with a key.'
       );
     }
   });
@@ -704,7 +717,7 @@ export function Root(props: RootProps): JSX.Element {
   // The condition is the same for each render of a build.
   if (process.env.NODE_ENV !== 'production')
     // oxlint-disable-next-line react-hooks/rules-of-hooks
-    useRenderPaneCheck(renderPane, state.root);
+    useRenderPaneCheck(renderPane, state.root, props.layout);
   const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
   const render: ViewRender = { state, geometry, gap, visibleCount };
   const hooks: FeatureHooks[] = [];

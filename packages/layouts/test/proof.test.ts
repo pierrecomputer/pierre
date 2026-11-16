@@ -16,12 +16,14 @@ const PACKAGE = join(import.meta.dir, '..');
 // (`DEC-layouts-modular-size-budget`). Bytes, minified and brotli. The owner
 // accepted 28,515 / 9,651 from the source after step 16 of
 // `refactor-entries-feature-modules`; the review fixes of 2026-11-16 add the
-// title of each pane to its state (`DEC-layouts-pane-state-hook`), and the
-// results of the review fixes name each change.
+// title of each pane to its state (`DEC-layouts-pane-state-hook`); a check
+// for development only of the `layout` prop leaves the esbuild build 4 brotli
+// bytes larger with the same minified size. The results of the review fixes
+// name each change.
 const BUDGET = {
   'two-pane source': { minified: 28_608, brotli: 9_664 },
   'two-pane rolldown': { minified: 28_607, brotli: 9_676 },
-  'two-pane esbuild': { minified: 29_017, brotli: 10_247 },
+  'two-pane esbuild': { minified: 29_017, brotli: 10_251 },
 } as const;
 
 interface Output {

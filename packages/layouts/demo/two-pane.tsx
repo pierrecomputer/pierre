@@ -4,6 +4,7 @@
 // form, `stylesheets=nonce` for sheets with a nonce, and `stylesheets=none`
 // for no sheets and the linked `styles.css`, and `resize=preview` for the
 // internal resize strategy that moves only the separator until the release.
+// "Use another layout" gives `Root` a new layout object, so that it warns.
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -110,6 +111,7 @@ function Controlled(): JSX.Element {
 
 function App(): JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
+  const [layout, setLayout] = useState(page.layout);
   return (
     <main style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <button
@@ -122,12 +124,15 @@ function App(): JSX.Element {
       >
         {collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
       </button>
+      <button type="button" onClick={() => setLayout(createLayout(initial))}>
+        Use another layout
+      </button>
       <div style={{ flex: 1, minHeight: 0 }}>
         {controlledForm ? (
           <Controlled />
         ) : (
           <Layout.Root
-            layout={page.layout}
+            layout={layout}
             renderPane={renderPane}
             messages={MESSAGES}
             stylesheets={stylesheets}
