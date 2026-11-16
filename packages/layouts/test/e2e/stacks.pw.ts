@@ -978,3 +978,18 @@ test("tabDrag's preview puts the app's element beside the pointer", async ({
   await page.mouse.up();
   await expect(image).toHaveCount(0);
 });
+
+test('only a tab list with stickyPinned adds the sheet of sticky pinned tabs', async ({
+  page,
+}) => {
+  const sheet = page.locator(
+    'head style[data-href="pierre-layouts-sticky-pinned"]'
+  );
+  await page.goto('/stacks.html?pinned=1');
+  await expect(
+    page.locator('head style[data-href="pierre-layouts-tabs"]')
+  ).toHaveCount(1);
+  await expect(sheet).toHaveCount(0);
+  await page.goto('/stacks.html?pinned=1&sticky=1');
+  await expect(sheet).toHaveCount(1);
+});

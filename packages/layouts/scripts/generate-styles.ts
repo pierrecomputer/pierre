@@ -17,6 +17,7 @@ export const STYLE_SHEETS: readonly string[] = [
   'drop',
   'headers',
   'tabs',
+  'sticky-pinned',
   'tab-drag',
   'corners',
 ];

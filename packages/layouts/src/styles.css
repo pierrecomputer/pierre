@@ -293,27 +293,6 @@
     outline-offset: -2px;
   }
 
-  /* `stickyPinned`: each pinned tab sticks at the place that the tab list
-     measures, over an opaque layer, and a tab that scrolls into view stops
-     beside the pinned tabs. */
-  .pierre-layouts-tabs[data-sticky-pinned] {
-    scroll-padding-inline-start: var(--layouts-pinned-width);
-  }
-
-  .pierre-layouts-tabs > [data-sticky] {
-    position: sticky;
-    left: var(--layouts-pinned-left);
-    z-index: 1;
-  }
-
-  .pierre-layouts-tabs > [data-sticky]::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: var(--layouts-pane-background, #fff);
-  }
-
   .pierre-layouts-tab-title {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -341,6 +320,29 @@
 
   .pierre-layouts-tab-close:hover {
     background: var(--layouts-tab-close-hover-background, rgb(41 49 61 / 10%));
+  }
+}
+
+@layer pierre-layouts {
+  /* `stickyPinned` of `Layout.TabList`, which alone adds this sheet: each
+     pinned tab sticks at the place that the tab list measures, over an opaque
+     layer, and a tab that scrolls into view stops beside the pinned tabs. */
+  .pierre-layouts-tabs[data-sticky-pinned] {
+    scroll-padding-inline-start: var(--layouts-pinned-width);
+  }
+
+  .pierre-layouts-tabs > [data-sticky] {
+    position: sticky;
+    left: var(--layouts-pinned-left);
+    z-index: 1;
+  }
+
+  .pierre-layouts-tabs > [data-sticky]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--layouts-pane-background, #fff);
   }
 }
 

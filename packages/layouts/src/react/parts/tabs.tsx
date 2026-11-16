@@ -15,6 +15,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import stickyPinnedCss from '../../css/sticky-pinned.css?inline';
 import tabsCss from '../../css/tabs.css?inline';
 import { tabMoveIndex } from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
@@ -72,7 +73,8 @@ export interface TabListProps extends Omit<PartProps<object>, 'children'> {
    * sticks at its own place, and the list holds the width of the pinned tabs
    * in `--layouts-pinned-width`, for the app's fade or scroll padding. It turns
    * itself off while less than 120 px of the list is left for the other tabs.
-   * The tab list needs to be the element that scrolls.
+   * The tab list needs to be the element that scrolls. Only a tab list with
+   * this option adds its sheet, `pierre-layouts-sticky-pinned`.
    */
   stickyPinned?: boolean;
 }
@@ -193,6 +195,13 @@ export function TabList({
   return (
     <>
       <Style name="tabs" css={tabsCss} settings={context.stylesheets()} />
+      {stickyPinned && (
+        <Style
+          name="sticky-pinned"
+          css={stickyPinnedCss}
+          settings={context.stylesheets()}
+        />
+      )}
       {renderPart(
         'div',
         render,
