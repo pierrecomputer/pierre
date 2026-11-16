@@ -22,6 +22,7 @@ export {
   type LayoutOperationErrorCode,
 } from './layout-operation';
 export { canClose, getPanes, stackOf } from './model';
+export { neighbor, neighbors, visualOrder } from './spatial';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
 export { type StackCommands, stacks } from './stacks';
@@ -43,6 +44,7 @@ export type {
   LayoutState,
   PaneGeometry,
   PaneNode,
+  Place,
   Rect,
   SeparatorGeometry,
   SplitNode,

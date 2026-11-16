@@ -533,6 +533,22 @@ store gives each tree that it receives the shape of the model, for example by
 joining a split into a parent of the same direction. A pane keeps its node, so
 its content does not render again.
 
+### Spatial queries
+
+`visualOrder(root)` gives the panes that show, in the order of the tree: depth
+first, the children of a row from left to right and of a column from top to
+bottom, so a column finishes before the next one starts. A stack gives the tab
+that shows; `visualOrder(root, { tabs: true })` gives each tab that is not
+hidden. `neighbors(root, id, edge)` gives the panes that show and touch one edge
+of a pane, and `neighbor(root, id, edge, recent)` picks one of them: the panes
+whose span across the axis overlaps the pane, then the first of `recent` (the
+most recently focused pane IDs, most recent first), else the first in tree
+order. At an edge of the layout, it gives null. Both read the tree only, with no
+pixel size, so a server and a test can call them; a child with a size in pixels
+counts as the mean weight of its split. A `Place` says where a pane goes:
+`{ beside, edge }`, beside a pane, a stack, or a split (the root for an edge of
+the layout), or `{ into, index }`, into the tabs of the stack of a pane.
+
 ### Stores without a view
 
 `createLayoutStore(root, features)` from `@pierre/layouts` creates a store

@@ -1,6 +1,16 @@
 export type Direction = 'horizontal' | 'vertical';
 export type Edge = 'left' | 'right' | 'top' | 'bottom';
 
+/**
+ * Where a pane goes: beside a node at one of its edges (a pane, a stack, or a
+ * split; the root for an edge of the layout), or into the tabs of the stack
+ * of a pane, at `index` among its tabs. Menus, keys, and drops give a place,
+ * and `moveTo` and `openAt` take it.
+ */
+export type Place =
+  | { readonly beside: string; readonly edge: Edge }
+  | { readonly into: string; readonly index?: number };
+
 export interface PaneNode {
   readonly type: 'pane';
   readonly id: string;
