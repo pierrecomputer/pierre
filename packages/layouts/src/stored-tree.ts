@@ -36,6 +36,8 @@ const PANE_KEYS = new Set([
   'hidden',
   'collapsed',
   'collapsedSize',
+  'pinned',
+  'closable',
 ]);
 const STACK_KEYS = new Set([
   'type',
@@ -121,6 +123,10 @@ function parsePane(value: unknown, path: string): PaneNode {
     hidden: optionalBoolean(fields, 'hidden', path),
     collapsed: optionalBoolean(fields, 'collapsed', path),
     collapsedSize: optionalNumber(fields, 'collapsedSize', path),
+    // The defaults, `pinned: false` and `closable: true`, leave no field.
+    pinned: optionalBoolean(fields, 'pinned', path) === true || undefined,
+    closable:
+      optionalBoolean(fields, 'closable', path) === false ? false : undefined,
   });
 }
 
@@ -236,6 +242,7 @@ const OPERATION_KEYS: Readonly<Record<LayoutTreeOperation['type'], string>> = {
   addTab: 'target pane index activate id',
   moveToStack: 'pane target index activate id',
   moveTab: 'pane index',
+  setPinned: 'pane pinned',
   hide: 'pane hidden',
 };
 
@@ -390,6 +397,12 @@ function parseOperation(value: unknown, path: string): LayoutTreeOperation {
         type: name,
         pane: pane(),
         hidden: booleanAt(fields, 'hidden', path),
+      };
+    case 'setPinned':
+      return {
+        type: name,
+        pane: pane(),
+        pinned: booleanAt(fields, 'pinned', path),
       };
     default:
       return { type: name, pane: pane() };

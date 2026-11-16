@@ -11,6 +11,8 @@
 //   app's own header.
 // - `?guard=1`: the app's handlers on the tabs call `preventDefault()`: for
 //   Delete on every tab, for a click on test.ts, and for a press on types.ts.
+// - `?pinned=1`: main.ts and util.ts are pinned, README.md is
+//   `closable: false`, and each header has `Layout.CloseButton`.
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -33,6 +35,7 @@ const toolsWithoutTabList = params.get('tablist') === 'none';
 const nestedControls = params.get('nested') === '1';
 const withoutHeader = params.get('header') === 'none';
 const guarded = params.get('guard') === '1';
+const pinned = params.get('pinned') === '1';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -65,11 +68,11 @@ const page = {
           id: 'editors',
           active: 'main',
           children: [
-            { type: 'pane', id: 'main' },
-            { type: 'pane', id: 'util' },
+            { type: 'pane', id: 'main', ...(pinned && { pinned: true }) },
+            { type: 'pane', id: 'util', ...(pinned && { pinned: true }) },
             { type: 'pane', id: 'test' },
             { type: 'pane', id: 'types' },
-            { type: 'pane', id: 'docs' },
+            { type: 'pane', id: 'docs', ...(pinned && { closable: false }) },
           ],
         },
         { type: 'pane', id: 'files' },
@@ -148,7 +151,10 @@ function renderPane(pane: PaneNode): JSX.Element {
       {withoutHeader ? (
         <div className="stacks-own-header">{chrome}</div>
       ) : (
-        <Layout.Header>{chrome}</Layout.Header>
+        <Layout.Header>
+          {chrome}
+          {pinned && <Layout.CloseButton />}
+        </Layout.Header>
       )}
       <Layout.Content>
         <Body id={pane.id} />

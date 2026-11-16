@@ -176,6 +176,11 @@ const COMMANDS: readonly [
     [{ type: 'hide', pane: 'b', hidden: true }],
   ],
   [
+    'setPinned',
+    (store) => store.setPinned('d', true),
+    [{ type: 'setPinned', pane: 'd', pinned: true }],
+  ],
+  [
     'toggleZoom of a tab that does not show',
     (store) => store.toggleZoom('d'),
     [

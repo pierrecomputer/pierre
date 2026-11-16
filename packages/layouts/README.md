@@ -93,7 +93,7 @@ behavior, its commands, and its CSS:
 | Feature         | What it adds                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------ |
 | `edits(model)`  | `split`, `close`, `move`, `swap`, with the rules of a tree model such as `naryTree`                          |
-| `stacks()`      | Tabs: `activate`, `addTab`, `moveToStack`, `moveTab`, and the keys of `Layout.TabList`                       |
+| `stacks()`      | Tabs: `activate`, `addTab`, `moveToStack`, `moveTab`, `setPinned`, and the keys of `Layout.TabList`          |
 | `zoom()`        | `toggleZoom`, `setZoom`, `Layout.ZoomButton`, and Escape to restore                                          |
 | `hiddenPanes()` | `setHidden`                                                                                                  |
 | `persistence()` | `toStoredTree`, `setStoredTree`                                                                              |
@@ -366,6 +366,34 @@ stack, and a change of tab keeps the zoom.
 inside a tab with `data-layout-tab-close`, so that a press on it does not start
 a drag; the class `pierre-layout-tab-close` gives it the close mark's style.
 
+### Pinned tabs, and tabs that do not close
+
+Two flags of a pane node hold the rules of an app's fixed tabs, in the tree, the
+saved form, and the folds of the operations, so a server applies the same rules:
+
+- `pinned: true`: the tab comes before the tabs that are not pinned, and stays
+  in its stack. A key move, a drag, `moveTab`, `moveToStack`, and `addTab` clamp
+  a place to the run of pinned tabs: a pinned tab goes at or before the end of
+  the run, and another tab at or after it. A move of a pinned tab out of its
+  stack (`move`, `moveToStack` into another stack, or `swap` with a pane that is
+  not a pinned tab of the same stack) throws `pane_pinned`, and `tabDrag()`
+  offers no such place. `layout.setPinned(id, pinned)` changes the flag and puts
+  the tab at the end of the pinned run. A pinned tab has `data-pinned` and the
+  description "Pinned" (`messages.pinned`).
+- `closable: false`: the person cannot close the pane. Delete on its tab does
+  nothing, and `Layout.CloseButton` is disabled. `layout.close(id)` from the
+  app's code still closes it.
+
+```ts
+layout.addTab('files', {
+  type: 'pane',
+  id: 'diff',
+  pinned: true,
+  closable: false,
+});
+layout.setPinned('notes', true); // After the last pinned tab.
+```
+
 ## Collapsed panes
 
 `layout.setCollapsed(id, true)` collapses a pane to its `collapsedSize` along
@@ -471,7 +499,7 @@ the shape of each tree that it receives. Each store feature adds its commands:
 | Feature        | Commands                                                        |
 | -------------- | --------------------------------------------------------------- |
 | `edits(model)` | `split`, `close`, `move`, `swap`; the store gets the tree model |
-| `stacks`       | `activate`, `addTab`, `moveToStack`, `moveTab`                  |
+| `stacks`       | `activate`, `addTab`, `moveToStack`, `moveTab`, `setPinned`     |
 | `zoom`         | `toggleZoom`, `setZoom`                                         |
 | `hiddenPanes`  | `setHidden`                                                     |
 | `persistence`  | `toStoredTree`, `setStoredTree`                                 |
@@ -493,9 +521,9 @@ playground uses local storage.
 Each change reaches `layout.subscribe` with its operations and its origin. An
 operation is plain JSON: a tree operation (`setRoot`, `resize`, `collapse`,
 `split`, `close`, `move`, `swap`, `activate`, `addTab`, `moveToStack`,
-`moveTab`, `hide`) changes the saved tree, and a window operation (`focus`,
-`zoom`) changes the state of one window. A command that changes nothing gives no
-change.
+`moveTab`, `setPinned`, `hide`) changes the saved tree, and a window operation
+(`focus`, `zoom`) changes the state of one window. A command that changes
+nothing gives no change.
 
 ```ts
 import { applyOperations, isTreeOperation } from '@pierre/layouts';
@@ -530,7 +558,7 @@ applyOperations(layout, [{ type: 'setRoot', root: response.tree.root }]);
   `applyLayoutOperations(root, operations)` folds them on the stored tree, with
   the same IDs as the client. A refused operation throws `LayoutOperationError`
   with a code: `pane_not_found`, `node_not_found`, `last_pane`, `invalid_sizes`,
-  `id_in_use`, or `unknown_operation`.
+  `id_in_use`, `pane_pinned`, or `unknown_operation`.
 - Undo keeps the settled states: a listener that skips transient and remote
   changes pushes the state before each local change, and an undo sets that tree
   again with `setRoot`.

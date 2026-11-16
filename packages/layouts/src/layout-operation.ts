@@ -54,6 +54,11 @@ export type LayoutTreeOperation =
       readonly id?: string;
     }
   | { readonly type: 'moveTab'; readonly pane: string; readonly index: number }
+  | {
+      readonly type: 'setPinned';
+      readonly pane: string;
+      readonly pinned: boolean;
+    }
   | { readonly type: 'hide'; readonly pane: string; readonly hidden: boolean };
 
 /**
@@ -90,6 +95,7 @@ export type LayoutOperationErrorCode =
   | 'last_pane'
   | 'invalid_sizes'
   | 'id_in_use'
+  | 'pane_pinned'
   | 'unknown_operation';
 
 /**

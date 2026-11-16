@@ -5,7 +5,7 @@
 import { randomIds } from './ids';
 import { LayoutOperationError } from './layout-operation';
 import { foldActivate, paneIn, requireNewPane, stackOf } from './model';
-import { addToStack, moveTabTo } from './stacks-model';
+import { addToStack, moveTabTo, pinPane } from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
 import type { PaneNode, TabOptions } from './types';
 
@@ -31,7 +31,8 @@ export interface StackCommands {
   /**
    * Move a pane into the stack of a target pane, at `index` among its tabs, or
    * after the target. A move inside one stack changes the order of its tabs.
-   * With `activate: false`, the destination keeps its active tab.
+   * With `activate: false`, the destination keeps its active tab. A pinned
+   * pane of a stack does not leave it: the move throws `pane_pinned`.
    */
   moveToStack(
     sourceId: string,
@@ -45,6 +46,12 @@ export interface StackCommands {
    * The pane shows and keeps the focus, and the zoom of its stack.
    */
   moveTab(id: string, index: number): void;
+  /**
+   * Pin a pane, or unpin it. A pinned tab comes before the other tabs of its
+   * stack and stays in it. The pane goes to the end of the pinned run: the
+   * last pinned tab, or the first tab after the pinned ones.
+   */
+  setPinned(id: string, pinned: boolean): void;
 }
 
 /** The tab commands of a store. */
@@ -79,6 +86,8 @@ export const stacks: StoreFeature<StackCommands> = {
           activate
         );
       }
+      if (source.pinned === true && stack !== null)
+        throw new LayoutOperationError('pane_pinned', pane);
       if (model === null)
         throw new LayoutOperationError(
           'unknown_operation',
@@ -99,6 +108,10 @@ export const stacks: StoreFeature<StackCommands> = {
     moveTab(root, { pane, index }) {
       paneIn(root, pane);
       return moveTabTo(root, pane, index);
+    },
+    setPinned(root, { pane, pinned }) {
+      paneIn(root, pane);
+      return pinPane(root, pane, pinned);
     },
   },
   commands: ({ get, fold, commit, newId }) => ({
@@ -160,6 +173,12 @@ export const stacks: StoreFeature<StackCommands> = {
       const root = fold(operation);
       if (root === state.root) return;
       commit({ ...state, root, focusedPane: id }, [operation]);
+    },
+    setPinned(id, pinned) {
+      const state = get();
+      const operation = { type: 'setPinned', pane: id, pinned } as const;
+      const root = fold(operation);
+      if (root !== state.root) commit({ ...state, root }, [operation]);
     },
   }),
 };

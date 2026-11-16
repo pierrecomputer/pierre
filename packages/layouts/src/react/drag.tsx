@@ -70,6 +70,12 @@ export interface DragOptions {
    * a drop.
    */
   readonly rearrange?: boolean;
+  /**
+   * The target to use for a target under the pointer: the same target, a
+   * target with another boundary in its tab list, or null to refuse it. A
+   * refused target shows no marker and no preview, and takes no drop.
+   */
+  accept?(target: DropTarget): DropTarget | null;
   /** Apply the drop. */
   drop(target: DropTarget): void;
 }
@@ -129,22 +135,34 @@ function tabListTargetAt(
   const tablist = host === undefined ? null : tablistAt(host, clientX, clientY);
   if (tablist === null) return null;
   const edges = readTabEdges(tablist);
-  const boundary = tabBoundaryAt(
-    edges,
-    clientX - tablist.getBoundingClientRect().left
-  );
-  return {
-    target: {
-      paneId: hit.pane.id,
-      place: 'center',
-      rect: null,
-      boundary,
-      tabs: tabsOf(tablist).map((tab) => tab.dataset.layoutTab ?? ''),
-    },
-    tablist,
-    offset: boundaryOffset(edges, boundary),
+  const under: DropTarget = {
+    paneId: hit.pane.id,
+    place: 'center',
+    rect: null,
+    boundary: tabBoundaryAt(
+      edges,
+      clientX - tablist.getBoundingClientRect().left
+    ),
+    tabs: tabsOf(tablist).map((tab) => tab.dataset.layoutTab ?? ''),
   };
+  const target = accepted(options, under);
+  return target === null
+    ? null
+    : {
+        target,
+        tablist,
+        offset: boundaryOffset(edges, target.boundary ?? 0),
+      };
 }
+
+// The target that a source takes for a target under the pointer, or null.
+const accepted = (
+  options: DragOptions,
+  target: DropTarget | null
+): DropTarget | null =>
+  target === null || options.accept === undefined
+    ? target
+    : options.accept(target);
 
 const sameTarget = (a: DropTarget | null, b: DropTarget | null): boolean =>
   a === b ||
@@ -226,7 +244,7 @@ export function startDrag(
         list?.target ??
         (options.rearrange === false
           ? null
-          : dropTargetAt(geometry, x, y, options));
+          : accepted(options, dropTargetAt(geometry, x, y, options)));
       if (started && sameTarget(next, target)) return;
       started = true;
       target = next;

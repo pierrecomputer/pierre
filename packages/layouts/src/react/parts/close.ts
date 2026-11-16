@@ -14,14 +14,18 @@ export const closes = (context: ViewContext): boolean =>
   (context.store as Closing).close !== undefined;
 
 /**
- * True when a pane can close: the layout closes panes, and the one rule of
- * the core holds (another pane that is not hidden stays).
+ * True when the person can close a pane: the layout closes panes, the pane is
+ * not `closable: false`, and the one rule of the core holds (another pane
+ * that is not hidden stays).
  */
 export const canClose = (
   context: ViewContext,
   state: LayoutState,
   id: string
-): boolean => closes(context) && treeCanClose(state.root, id);
+): boolean =>
+  closes(context) &&
+  treeIndex(state.root).panes.get(id)?.pane.closable !== false &&
+  treeCanClose(state.root, id);
 
 /**
  * Close a pane. A tab that closes from its tab list gives the focus to the tab

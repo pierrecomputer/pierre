@@ -170,6 +170,8 @@ export interface LayoutMessages {
   readonly corner?: string;
   /** The name of `Layout.TabList`. Default: "Tabs of Editor". */
   readonly tabs?: (values: PaneMessageValues) => string;
+  /** The description of a pinned tab. Default: "Pinned". */
+  readonly pinned?: string;
   /**
    * The status message during a tab drag into a stack: the tab and a pane of
    * the target stack. Default: "Move Editor into the group of Files".

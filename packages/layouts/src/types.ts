@@ -27,6 +27,19 @@ export interface PaneNode {
   readonly collapsed?: boolean;
   /** The size of the pane along its split when it is collapsed. 0 by default. */
   readonly collapsedSize?: number;
+  /**
+   * A pinned pane is a tab that stays in its stack, before the tabs that are
+   * not pinned: a move of a tab clamps to the run of pinned tabs, and a move
+   * of a pinned tab out of its stack throws `pane_pinned`. `setPinned` of
+   * `stacks()` changes it.
+   */
+  readonly pinned?: true;
+  /**
+   * With `false`, the person cannot close the pane: Delete on its tab does
+   * nothing, and `Layout.CloseButton` is disabled. `layout.close` from the
+   * app's code still closes it.
+   */
+  readonly closable?: false;
 }
 
 /**

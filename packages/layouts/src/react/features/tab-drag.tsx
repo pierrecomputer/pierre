@@ -4,13 +4,14 @@
 // list to change the order of the tabs, into another tab list or the center
 // of another pane to join its stack, or to an edge of a pane to leave the
 // stack. While a pane fills the layout, only the tab list of the tab's own
-// stack takes a drop.
+// stack takes a drop. A pinned tab of a stack drops only in its own tab list,
+// and a place in a tab list clamps to the run of pinned tabs.
 import dropCss from '../../css/drop.css?inline';
 import tabDragCss from '../../css/tab-drag.css?inline';
 import type { EditCommands } from '../../edits';
 import { presentation } from '../../presentation';
 import type { StackCommands } from '../../stacks';
-import { tabInsertIndex, tabMoveIndex } from '../../stacks-model';
+import { pinnedRun, tabInsertIndex, tabMoveIndex } from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
 import type { LayoutState } from '../../types';
 import type {
@@ -88,6 +89,31 @@ function dropTab(context: ViewContext, id: string, target: DropTarget): void {
   else store.move?.(id, target.paneId, target.place);
 }
 
+/**
+ * The pinned rule of a tab drag, as the folds of `stacks()` apply it: a pinned
+ * tab of a stack takes only a place in the tab list of its own stack, and a
+ * place in a tab list moves to the end of the pinned run when the tab is
+ * pinned and is past it, or when the tab is not pinned and is before it.
+ */
+function pinnedRule(
+  context: ViewContext,
+  id: string
+): (target: DropTarget) => DropTarget | null {
+  return (target) => {
+    const { panes } = treeIndex(context.store.getSnapshot().root);
+    const stack = panes.get(id)?.stack ?? null;
+    const pinned = panes.get(id)?.pane.pinned === true;
+    const { boundary, tabs } = target;
+    if (boundary === undefined || tabs === undefined)
+      return pinned && stack !== null ? null : target;
+    if (pinned && stack !== null && panes.get(target.paneId)?.stack !== stack)
+      return null;
+    const run = pinnedRun(tabs.map((tab) => panes.get(tab)?.pane ?? {}));
+    const place = pinned ? Math.min(boundary, run) : Math.max(boundary, run);
+    return place === boundary ? target : { ...target, boundary: place };
+  };
+}
+
 function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
   const drag = useDrag(context, (value: Drag | null) =>
     value?.source.kind === TAB ? value : null
@@ -114,6 +140,7 @@ function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
           .filter((other) => other.hidden !== true)
           .map((other) => other.id) ?? [tab.id],
         rearrange: presentation(current).rearrangeable,
+        accept: pinnedRule(context, tab.id),
         drop: (to) => dropTab(context, tab.id, to),
       });
     },

@@ -1,12 +1,30 @@
-// Stacks of panes with tabs: the functions that add and move tabs, and the tab
-// indexes of a tab drag.
+// Stacks of panes with tabs: the functions that add, move, and pin tabs, and
+// the tab indexes of a tab drag.
 import { findNode, replaceNode, sameNodes, stackOf } from './model';
 import type { LayoutNode, PaneNode } from './types';
+
+/** The number of pinned tabs at the start of a list of tabs: the pinned run. */
+export function pinnedRun(tabs: readonly { pinned?: boolean }[]): number {
+  const index = tabs.findIndex((tab) => tab.pinned !== true);
+  return index === -1 ? tabs.length : index;
+}
+
+// The index of a tab among the other tabs of its stack, clamped to the pinned
+// run: a pinned tab goes at or before the end of the run, another tab at or
+// after it.
+const runIndex = (
+  others: readonly PaneNode[],
+  pane: PaneNode,
+  index: number
+): number => {
+  const run = pinnedRun(others);
+  return pane.pinned === true ? Math.min(index, run) : Math.max(index, run);
+};
 
 /**
  * Move a pane of a stack to `index` among the panes of its stack: the index
  * in the order of the other panes, hidden ones included, from 0 to their
- * number. The pane becomes the active pane.
+ * number, clamped to the pinned run. The pane becomes the active pane.
  */
 export function moveTabTo(
   root: LayoutNode,
@@ -18,7 +36,11 @@ export function moveTabTo(
   if (stack === null) throw new Error(`Pane not in a stack: ${id}`);
   const tabs = stack.children.filter((child) => child.id !== id);
   const pane = stack.children.find((child) => child.id === id) as PaneNode;
-  tabs.splice(clampIndex(index, tabs.length, tabs.length), 0, pane);
+  tabs.splice(
+    runIndex(tabs, pane, clampIndex(index, tabs.length, tabs.length)),
+    0,
+    pane
+  );
   const active = activate ? id : stack.active;
   if (sameNodes(tabs, stack.children) && stack.active === active) return root;
   return replaceNode(root, stack.id, () => ({
@@ -30,8 +52,9 @@ export function moveTabTo(
 
 /**
  * Add a pane to the stack of a target pane, at `index` among its tabs, or
- * after the target. A target that is not in a stack gets a new stack with
- * `stackId`, in its place. The new pane is the active pane.
+ * after the target, clamped to the pinned run. A target that is not in a
+ * stack gets a new stack with `stackId`, in its place. The new pane is the
+ * active pane.
  */
 export function addToStack(
   root: LayoutNode,
@@ -49,7 +72,7 @@ export function addToStack(
     // A collapsed target gives its collapse to the new stack.
     const { collapsed, collapsedSize, ...shown } = target as PaneNode;
     const tabs: PaneNode[] = [shown];
-    tabs.splice(clampIndex(index, 1, 1), 0, pane);
+    tabs.splice(runIndex(tabs, pane, clampIndex(index, 1, 1)), 0, pane);
     return replaceNode(root, targetId, () => ({
       type: 'stack',
       id: stackId,
@@ -64,12 +87,37 @@ export function addToStack(
       ? stack.children.length
       : stack.children.findIndex(({ id }) => id === targetId) + 1;
   const tabs = [...stack.children];
-  tabs.splice(clampIndex(index, after, tabs.length), 0, pane);
+  tabs.splice(
+    runIndex(tabs, pane, clampIndex(index, after, tabs.length)),
+    0,
+    pane
+  );
   return replaceNode(root, stack.id, () => ({
     ...stack,
     children: tabs,
     active: activate ? pane.id : stack.active,
   }));
+}
+
+/**
+ * Pin a pane, or unpin it. In a stack, the pane goes to the end of the pinned
+ * run: the last pinned tab, or the first tab after the pinned ones. The
+ * active pane stays.
+ */
+export function pinPane(
+  root: LayoutNode,
+  id: string,
+  pinned: boolean
+): LayoutNode {
+  const pane = findNode(root, id) as PaneNode;
+  if ((pane.pinned === true) === pinned) return root;
+  const { pinned: _pinned, ...rest } = pane;
+  const next: PaneNode = pinned ? { ...rest, pinned: true } : rest;
+  const stack = stackOf(root, id);
+  if (stack === null) return replaceNode(root, id, () => next);
+  const tabs = stack.children.filter((child) => child.id !== id);
+  tabs.splice(pinnedRun(tabs), 0, next);
+  return replaceNode(root, stack.id, () => ({ ...stack, children: tabs }));
 }
 
 const clampIndex = (

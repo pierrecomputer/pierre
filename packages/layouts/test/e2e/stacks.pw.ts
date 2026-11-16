@@ -563,3 +563,88 @@ test("an app's handler that calls preventDefault() stops the tab's own handler",
     .poll(() => editorsOrder(page))
     .toEqual(['docs', 'main', 'util', 'test', 'types']);
 });
+
+test('pinned tabs stay first and in their stack: key moves and drags clamp at the end of the run', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1');
+  const tabs = tabsOf(page, 'main');
+  const tab = (name: string) => tabs.getByRole('tab', { name });
+  await expect(tab('main.ts')).toHaveAttribute('data-pinned', 'true');
+  await expect(tab('main.ts')).toHaveAccessibleDescription('Pinned');
+  await expect(tab('test.ts')).not.toHaveAttribute('data-pinned');
+  const start = ['main', 'util', 'test', 'types', 'docs'];
+  // Ctrl+Shift+PageUp on the first tab after the run, and PageDown on the
+  // last pinned tab, move nothing.
+  await tab('test.ts').click();
+  await page.keyboard.press('Control+Shift+PageUp');
+  await tabsOf(page, 'test').getByRole('tab', { name: 'util.ts' }).focus();
+  await page.keyboard.press('Control+Shift+PageDown');
+  expect(await editorsOrder(page)).toEqual(start);
+  // Inside the run, a key move works.
+  await page.keyboard.press('Control+Shift+PageUp');
+  await expect
+    .poll(() => editorsOrder(page))
+    .toEqual(['util', 'main', 'test', 'types', 'docs']);
+  // A drag of a tab before the pinned tabs shows the marker at the end of
+  // the run, and drops there.
+  await tabsOf(page, 'util').getByRole('tab', { name: 'test.ts' }).click();
+  const list = tabsOf(page, 'test');
+  const first = await tabBox(page, 'test', 'util.ts');
+  const after = await list.getByRole('tab', { name: 'test.ts' }).boundingBox();
+  if (after === null) throw new Error('No box for test.ts');
+  await dragTab(page, 'test', 'types.ts', {
+    x: first.x + 4,
+    y: first.y + first.height / 2,
+  });
+  const marker = page.locator('.pierre-layout-tab-drop');
+  await expect(marker).toHaveCount(1);
+  const mark = await marker.boundingBox();
+  expect(Math.abs((mark?.x ?? 0) - after.x)).toBeLessThan(4);
+  await page.mouse.up();
+  await expect
+    .poll(() => editorsOrder(page))
+    .toEqual(['util', 'main', 'types', 'test', 'docs']);
+  // A pinned tab takes no place in another tab list or another pane.
+  const tools = await tabBox(page, 'terminal', 'Output');
+  // The dropped tab shows: its host holds the tab list now.
+  await dragTab(page, 'types', 'main.ts', {
+    x: tools.x + tools.width / 2,
+    y: tools.y + tools.height / 2,
+  });
+  await expect(marker).toHaveCount(0);
+  const files = await host(page, 'files').boundingBox();
+  if (files === null) throw new Error('No box for files');
+  await page.mouse.move(files.x + files.width / 2, files.y + files.height / 2, {
+    steps: 4,
+  });
+  await page.mouse.move(files.x + 4, files.y + files.height / 2, { steps: 4 });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await editorsOrder(page)).toEqual([
+    'util',
+    'main',
+    'types',
+    'test',
+    'docs',
+  ]);
+});
+
+test('a tab that is not closable keeps Delete and its close button from closing it, and the app still closes it', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1');
+  const docs = tabsOf(page, 'main').getByRole('tab', { name: 'README.md' });
+  await docs.click();
+  await page.keyboard.press('Delete');
+  await expect(host(page, 'docs')).toHaveCount(1);
+  await expect(
+    host(page, 'docs').getByRole('button', { name: 'Close README.md' })
+  ).toBeDisabled();
+  await command(page, 'close', 'docs');
+  await expect(host(page, 'docs')).toHaveCount(0);
+  // A pinned tab closes as any tab does.
+  await tabsOf(page, 'types').getByRole('tab', { name: 'main.ts' }).click();
+  await page.keyboard.press('Delete');
+  await expect(host(page, 'main')).toHaveCount(0);
+});
