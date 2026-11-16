@@ -43,11 +43,11 @@ export function buildHighlightsLexer({
   wat,
   alias = [],
 }: HighlightsLexerOptions): Language {
-  if (!/^[a-z][a-z0-9_.+-]*$/.test(name))
+  if (!/^[a-z][a-z0-9_.+-]*$/.test(name) || name === 'ansi')
     throw new TypeError(`Invalid language name: ${name}`);
   const aliases: Record<string, number> = { [name]: 0 };
   for (const key of alias) {
-    if (!/^[a-z][a-z0-9_.+#-]*$/.test(key))
+    if (!/^[a-z][a-z0-9_.+#-]*$/.test(key) || key === 'ansi')
       throw new TypeError(`Invalid language alias: ${key}`);
     aliases[key] = 0;
   }

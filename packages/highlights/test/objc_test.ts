@@ -504,3 +504,17 @@ void t.test('objc: C comment, directive, and number fixes apply', () => {
   ]);
   assertLineFedParity('objc', code);
 });
+
+void t.test(
+  'objc: a method at the start of a fence body is a definition',
+  () => {
+    for (const code of ['```objc\n-(void)t:(int)x;\n```\n', '```objc\n-()t:']) {
+      assert.ok(
+        tokenKinds('markdown', code).some(
+          ([text, kind]) => text === 't' && kind === 'function.definition'
+        )
+      );
+      assertLineFedParity('markdown', code);
+    }
+  }
+);

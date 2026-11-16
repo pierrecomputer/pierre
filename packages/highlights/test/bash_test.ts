@@ -955,3 +955,12 @@ void t.test('bash: an embedded body starts at a command position', () => {
     ]
   );
 });
+
+void t.test(
+  'bash: a quoted word on a heredoc line can cross a chunk end',
+  () => {
+    for (const code of ['<<E "\n"\nE', 'cat <<-E "a\nb"\n\tbody\n\tE\nls\n']) {
+      assertLineFedParity('bash', code);
+    }
+  }
+);

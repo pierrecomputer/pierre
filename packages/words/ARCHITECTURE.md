@@ -269,10 +269,10 @@ can update single lines and add line numbers as they arrive.
 
 The Highlights plugin uses `codeToHtml` for completed fences. An open fence
 keeps one live tokenizer until its fence leaves the pending output. Completed
-output moves forward without a lookup cache for previously rendered code.
-The live tokenizer keeps escape sequences as text and does not use a registered
-built-in language module. So an open fence in `ansi` or in a language from
-`registerLanguages` renders again with `codeToHtml` on each update.
+output moves forward without a lookup cache for previously rendered code. A
+language from `registerLanguages` uses it too. The live tokenizer keeps escape
+sequences as text, so an open `ansi` fence renders again with `codeToHtml` on
+each update.
 
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.

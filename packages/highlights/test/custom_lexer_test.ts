@@ -247,6 +247,13 @@ test('a custom alias takes only its own name from a built-in language', async ()
       })
       .tokens[0].find((token) => token.content.includes('let'))?.color
   ).not.toBe('var(--hls-keyword)');
+  // Declaring the built-in ID of a name does not take the built-in language.
+  const claimed = await createHighlighter({
+    langs: [c, { ...header, aliases: { h: c.aliases.h } }],
+    themes: [cssVariables],
+  });
+  expect(tokens(claimed, 'h').tokens[0]).toEqual(custom);
+  expect(tokens(claimed, 'c')).toEqual(builtIn);
   const reserved = await createHighlighter({
     langs: [{ ...header, aliases: { ansi: 0 } }],
     themes: [cssVariables],

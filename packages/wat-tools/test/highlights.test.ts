@@ -2,9 +2,11 @@ import {
   allocateMemory,
   buildHighlightsLexer,
   flattenWat,
+  optimizeWasm,
   resolveConsts,
   splitTopLevelForms,
   transformWat,
+  wasmToText,
   wat2wasm,
 } from '@pierre/wat-tools';
 import { beforeAll, describe, expect, test } from 'bun:test';
@@ -208,7 +210,57 @@ describe('buildHighlightsLexer', () => {
     expect(() =>
       buildHighlightsLexer({ name: 'good', wat: '(module)' })
     ).toThrow('$highlight');
+    expect(() => buildHighlightsLexer({ name: 'ansi', wat })).toThrow(
+      'Invalid language name'
+    );
+    expect(() =>
+      buildHighlightsLexer({ name: 'good', alias: ['ansi'], wat })
+    ).toThrow('Invalid language alias');
   });
+
+  test('reports a type error in the lexer with its position', () => {
+    expect(() =>
+      buildHighlightsLexer({
+        name: 'broken',
+        wat: `(func $highlight
+          (call $emitTok (enum.get $Token.keyword) (global.get $ptr)))`,
+      })
+    ).toThrow('type mismatch');
+  });
+});
+
+test('wat2wasm rejects an invalid module', () => {
+  expect(() => wat2wasm('bad.wat', '(module (func (result i32)))')).toThrow(
+    'type mismatch'
+  );
+});
+
+test('wasmToText reads a view inside a larger buffer', () => {
+  const bytes = wat2wasm('view.wat', '(module (func (export "f")))');
+  const padded = new Uint8Array(bytes.length + 16);
+  padded.set(bytes, 8);
+  expect(wasmToText(padded.subarray(8, 8 + bytes.length))).toBe(
+    wasmToText(bytes)
+  );
+});
+
+test('optimizeWasm does not keep the inlining limits of an earlier call', () => {
+  let body = '';
+  for (let i = 0; i < 12; i++)
+    body += `(local.set $x (i32.add (i32.mul (local.get $x) (i32.const ${i * 7 + 3})) (i32.load offset=${i * 4} (local.get $x))))`;
+  const bytes = wat2wasm(
+    'inline.wat',
+    `(module
+      (memory 1)
+      (func $h (param $x i32) (result i32) ${body} (local.get $x))
+      (func (export "a") (param i32) (result i32) (call $h (local.get 0)))
+      (func (export "b") (param i32) (result i32) (call $h (i32.add (local.get 0) (i32.const 1))))
+      (func (export "c") (param i32) (result i32) (call $h (i32.add (local.get 0) (i32.const 2)))))`
+  );
+  const options = { filename: 'inline.wat', shrinkLevel: 0 };
+  const before = optimizeWasm(bytes, options);
+  optimizeWasm(bytes, { ...options, flexibleInlineMaxSize: 500 });
+  expect(optimizeWasm(bytes, options)).toEqual(before);
 });
 
 test('memory regions reserve their own aligned storage and leave input last', () => {

@@ -553,13 +553,21 @@
       (then
         (call $highlightLang (local.get $lang))
         (return (i32.const 1))))
-    ;; PHP: an open HTML tag or body ends at the next `<?php`/`<?=`, as in a whole buffer
+    ;; PHP: an open HTML tag or body ends at the next `<?php`/`<?=`, and a Vue
+    ;; HTML range at the next Vue construct, as in a whole buffer
     (if
-      (i32.and
-        (i32.eq (local.get $lang) (enum.get $Language.php))
-        (i32.ne (global.get $streamRegionKind) (i32.const 0)))
+      (i32.or
+        (i32.and
+          (i32.eq (local.get $lang) (enum.get $Language.php))
+          (i32.ne (global.get $streamRegionKind) (i32.const 0)))
+        (i32.and
+          (i32.eq (local.get $lang) (enum.get $Language.vue))
+          (i32.eq (global.get $streamRegionKind) (i32.const 9))))
       (then
-        (local.set $open (call $phpFindOpen (global.get $ptr)))
+        (local.set $open
+          (if (result i32) (i32.eq (local.get $lang) (enum.get $Language.php))
+            (then (call $phpFindOpen (global.get $ptr)))
+            (else (call $vueRangeEnd (global.get $ptr)))))
         (if (i32.lt_u (local.get $open) (global.get $end))
           (then
             (local.set $saveEnd (global.get $end))

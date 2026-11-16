@@ -696,6 +696,7 @@ export function wat2wasm(filename: string, text: string): Uint8Array {
     simd: true,
   });
   try {
+    wasmModule.validate();
     return wasmModule.toBinary({}).buffer;
   } finally {
     wasmModule.destroy();
@@ -704,7 +705,13 @@ export function wat2wasm(filename: string, text: string): Uint8Array {
 
 /** Folded WAT text of a WebAssembly binary, for build-invariant tests. */
 export function wasmToText(wasmBytes: Uint8Array): string {
-  const wasmModule = readWasm(wasmBytes, { readDebugNames: false });
+  // wabt reads the whole underlying buffer, not the view.
+  const wasmModule = readWasm(
+    wasmBytes.byteLength === wasmBytes.buffer.byteLength
+      ? wasmBytes
+      : wasmBytes.slice(),
+    { readDebugNames: false }
+  );
   try {
     return wasmModule.toText({ foldExprs: true, inlineExport: false });
   } finally {
@@ -722,10 +729,9 @@ export function optimizeWasm(
 ): Uint8Array {
   binaryen.setOptimizeLevel(3);
   binaryen.setShrinkLevel(options.shrinkLevel);
-  if (options.flexibleInlineMaxSize !== undefined)
-    binaryen.setFlexibleInlineMaxSize(options.flexibleInlineMaxSize);
-  if (options.oneCallerInlineMaxSize !== undefined)
-    binaryen.setOneCallerInlineMaxSize(options.oneCallerInlineMaxSize);
+  // Binaryen keeps these settings between calls, so restore its defaults.
+  binaryen.setFlexibleInlineMaxSize(options.flexibleInlineMaxSize ?? 20);
+  binaryen.setOneCallerInlineMaxSize(options.oneCallerInlineMaxSize ?? -1);
   binaryen.setGenerateStackIR(true);
   binaryen.setOptimizeStackIR(true);
   for (let pass = 0; pass < 3; pass++) {

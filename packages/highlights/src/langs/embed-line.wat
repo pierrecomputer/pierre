@@ -42,10 +42,10 @@
           (i32.const 0)))))
 
   ;; Lex [$ptr, $to), at most one line, as CSS that a template embeds: $state
-  ;; is the packed CSS state ($hlCssImpl, block depth from bit 9), 0 starts a
-  ;; declaration block, and 256 a body that opens with its own `{`. Bits 28+
-  ;; select the dialect: 0 css, 1 less, 2 scss. Returns the state for the
-  ;; next line, as $emitCssTemplateBody does.
+  ;; is the packed CSS state ($hlCssImpl, block depth from bit 9), 256 starts a
+  ;; body that opens with its own `{`. Bits 28+ select the dialect: 0 css,
+  ;; 1 less, 2 scss. Returns the state for the next line, as
+  ;; $emitCssTemplateBody does.
   (func $embedCssLine (param $to i32) (param $state i32) (result i32)
     (local $c i32)
     (local $dialect i32)
@@ -68,53 +68,64 @@
               (i32.eq (local.get $dialect) (i32.const 1)))
             (local.get $p) (local.get $to)
             (i32.le_u (local.get $state) (i32.const 256)) (i32.const -8)))
-        ;; the host keeps the CSS state; count the braces for the depth, bit 6
-        ;; marks a comment open at the line end
-        (local.set $state (select (local.get $state) (i32.const 768) (local.get $state)))
+        ;; the host keeps the CSS state; count the braces for the depth. Bits
+        ;; 6-7 mark what is open at the range end: 1 a comment, 2 a `"` string,
+        ;; 3 a `'` string. The child lexer resumes the same.
         (block $done
           (loop $scan
-            (if (i32.and (local.get $state) (i32.const 64))
-              (then
-                (local.set $p (call $lexFindByte (local.get $p) (i32.const "*")))
-                (br_if $done (i32.ge_u (local.get $p) (local.get $to)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (if (i32.eq (call $templateByte (local.get $p)) (i32.const "/"))
-                  (then
-                    (local.set $state (i32.xor (local.get $state) (i32.const 64)))
-                    (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-                (br $scan)))
-            (br_if $done (i32.ge_u (local.get $p) (local.get $to)))
-            (local.set $c (i32.load8_u (local.get $p)))
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (if (i32.eq (local.get $c) (i32.const 92))
-              (then
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $scan)))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
-              (then
-                (loop $quote
-                  (local.set $p (call $scanFindSpecial (local.get $p) (local.get $to) (local.get $c) (i32.const 1) (i32.const 1)))
-                  (if (i32.eq (call $templateByte (local.get $p)) (i32.const 92))
+            (block $quoted
+              (if (i32.and (local.get $state) (i32.const 192))
+                (then
+                  (if (i32.eq (i32.and (local.get $state) (i32.const 192)) (i32.const 64))
                     (then
-                      (local.set $p (i32.add (local.get $p) (i32.const 2)))
-                      (br $quote))))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $scan)))
-            (if (i32.eq (local.get $c) (i32.const "/"))
+                      (local.set $p (call $lexFindByte (local.get $p) (i32.const "*")))
+                      (br_if $done (i32.ge_u (local.get $p) (local.get $to)))
+                      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                      (if (i32.eq (call $templateByte (local.get $p)) (i32.const "/"))
+                        (then
+                          (local.set $state (i32.xor (local.get $state) (i32.const 64)))
+                          (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                      (br $scan)))
+                  (local.set $c
+                    (select (i32.const 34) (i32.const 39) (i32.eq (i32.and (local.get $state) (i32.const 192)) (i32.const 128))))
+                  (local.set $state (i32.and (local.get $state) (i32.const -193)))
+                  (br $quoted)))
+              (br_if $done (i32.ge_u (local.get $p) (local.get $to)))
+              (local.set $c (i32.load8_u (local.get $p)))
+              (local.set $p (i32.add (local.get $p) (i32.const 1)))
+              (if (i32.eq (local.get $c) (i32.const 92))
+                (then
+                  (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                  (br $scan)))
+              (br_if $quoted (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39))))
+              (if (i32.eq (local.get $c) (i32.const "/"))
+                (then
+                  (if (i32.eq (call $templateByte (local.get $p)) (i32.const "*"))
+                    (then
+                      (local.set $state (i32.or (local.get $state) (i32.const 64)))
+                      (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                  (br_if $done
+                    (i32.and
+                      (i32.ne (local.get $dialect) (i32.const 0))
+                      (i32.eq (call $templateByte (local.get $p)) (i32.const "/"))))
+                  (br $scan)))
+              (if (i32.eq (local.get $c) (i32.const "{"))
+                (then (local.set $state (i32.add (local.get $state) (i32.const 512)))))
+              (if (i32.and (i32.eq (local.get $c) (i32.const "}")) (i32.ge_u (local.get $state) (i32.const 512)))
+                (then (local.set $state (i32.sub (local.get $state) (i32.const 512)))))
+              (br $scan))
+            (loop $quote
+              (local.set $p (call $scanFindSpecial (local.get $p) (local.get $to) (local.get $c) (i32.const 1) (i32.const 1)))
+              (if (i32.eq (call $templateByte (local.get $p)) (i32.const 92))
+                (then
+                  (local.set $p (i32.add (local.get $p) (i32.const 2)))
+                  (br $quote))))
+            (if (i32.ge_u (local.get $p) (local.get $to))
               (then
-                (if (i32.eq (call $templateByte (local.get $p)) (i32.const "*"))
-                  (then
-                    (local.set $state (i32.or (local.get $state) (i32.const 64)))
-                    (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-                (br_if $done
-                  (i32.and
-                    (i32.ne (local.get $dialect) (i32.const 0))
-                    (i32.eq (call $templateByte (local.get $p)) (i32.const "/"))))
-                (br $scan)))
-            (if (i32.eq (local.get $c) (i32.const "{"))
-              (then (local.set $state (i32.add (local.get $state) (i32.const 512)))))
-            (if (i32.and (i32.eq (local.get $c) (i32.const "}")) (i32.ge_u (local.get $state) (i32.const 512)))
-              (then (local.set $state (i32.sub (local.get $state) (i32.const 512)))))
+                (local.set $state
+                  (i32.or (local.get $state) (select (i32.const 128) (i32.const 192) (i32.eq (local.get $c) (i32.const 34)))))
+                (br $done)))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $scan)))
         (global.set $ptr (local.get $to))
         (global.set $end (local.get $saveEnd))
@@ -123,8 +134,7 @@
     (local.set $saveDialect (global.get $cssDialect))
     (global.set $streaming (i32.const 0))
     (global.set $cssDialect (local.get $dialect))
-    ;; a declaration block: CSS, depth 1, at a statement start
-    (local.set $state (call $hlCssImpl (select (local.get $state) (i32.const 772) (local.get $state))))
+    (local.set $state (call $hlCssImpl (local.get $state)))
     (global.set $cssDialect (local.get $saveDialect))
     (global.set $streaming (local.get $saveStreaming))
     (global.set $end (local.get $saveEnd))

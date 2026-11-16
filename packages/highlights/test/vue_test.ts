@@ -314,3 +314,16 @@ void t.test('vue: an unclosed declaration runs to its > in every path', () => {
     assertLineFedParity('vue', code);
   }
 });
+
+void t.test(
+  'vue: a quote in a stray end tag ends at the next tag line-fed',
+  () => {
+    for (const code of [
+      '</"\n<s',
+      '<p></"\n<b>{{ a }}</b></p>\n',
+      '</ "a\n{{ b }}"\n',
+    ]) {
+      assertLineFedParity('vue', code);
+    }
+  }
+);
