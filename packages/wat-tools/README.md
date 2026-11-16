@@ -15,7 +15,7 @@ import { writeFileSync } from 'node:fs';
 
 const language = buildHighlightsLexer({
   name: 'example',
-  alias: { ex: 0 },
+  alias: ['ex'],
   wat: `(module
     (func $highlight
       (call $emitTok
@@ -50,8 +50,8 @@ highlighter.codeToHtml('example code', {
 the Highlights `Language` type. `wasm` contains the compiled module as base64.
 Cloudflare Workers cannot compile WebAssembly from bytes. There, write the
 decoded bytes to a `.wasm` file, import it, and pass the module as `wasm`. Each
-descriptor has one lexer entry, so every alias maps to `0`. The canonical name
-is added automatically.
+descriptor has one lexer entry, so `aliases` maps the canonical name and every
+alias to `0`.
 
 A name starts with a lowercase letter and can contain `a-z`, `0-9`, `_`, `.`,
 `+`, and `-`. An alias can also contain `#`. Highlights reserves the name

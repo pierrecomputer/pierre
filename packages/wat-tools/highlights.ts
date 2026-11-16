@@ -35,22 +35,20 @@ export interface Language {
 export interface HighlightsLexerOptions {
   name: string;
   wat: string;
-  alias?: Readonly<Record<string, number>>;
+  alias?: readonly string[];
 }
 
 export function buildHighlightsLexer({
   name,
   wat,
-  alias = {},
+  alias = [],
 }: HighlightsLexerOptions): Language {
   if (!/^[a-z][a-z0-9_.+-]*$/.test(name))
     throw new TypeError(`Invalid language name: ${name}`);
   const aliases: Record<string, number> = { [name]: 0 };
-  for (const [key, value] of Object.entries(alias)) {
-    if (!/^[a-z][a-z0-9_.+#-]*$/.test(key) || value !== 0)
-      throw new TypeError(
-        `Invalid language alias: ${key}; aliases must select entry 0`
-      );
+  for (const key of alias) {
+    if (!/^[a-z][a-z0-9_.+#-]*$/.test(key))
+      throw new TypeError(`Invalid language alias: ${key}`);
     aliases[key] = 0;
   }
   const url = new URL(`./${name}.wat`, import.meta.url);

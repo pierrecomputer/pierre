@@ -26,7 +26,7 @@ import { HighlightsHighlighter } from '../lib/highlighter';
 
 const custom: Language = buildHighlightsLexer({
   name: 'example-language',
-  alias: { example: 0 },
+  alias: ['example'],
   wat: `(module
     (memory-region $mem.exampleStack 131072)
     (func $highlight
@@ -199,7 +199,7 @@ test.each([80, 200, 100000])(
 test('a custom alias takes only its own name from a built-in language', async () => {
   const header = buildHighlightsLexer({
     name: 'header-language',
-    alias: { h: 0, text: 0 },
+    alias: ['h', 'text'],
     wat: `(module
       (func $highlight
         (call $emitTok (enum.get $Token.keyword) (global.get $ptr) (global.get $end))))`,
@@ -258,7 +258,7 @@ test('a custom alias takes only its own name from a built-in language', async ()
 test('registerLanguages adds lexers to the shared functions of the main entry', async () => {
   const override = buildHighlightsLexer({
     name: 'shared-override',
-    alias: { go: 0 },
+    alias: ['go'],
     wat: `(module
       (func $highlight
         (call $emitTok
