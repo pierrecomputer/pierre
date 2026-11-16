@@ -65,7 +65,7 @@
   .pierre-layouts-tab-close {
     position: absolute;
     top: 50%;
-    right: 4px;
+    right: 5px;
     width: 16px;
     height: 16px;
     margin-top: -8px;
@@ -73,6 +73,14 @@
     line-height: 16px;
     text-align: center;
     visibility: hidden;
+  }
+
+  /* The pointer target of the close mark is 24 px, with no change to the
+     mark. It ends 1 px inside the tab, so the next tab does not cover it. */
+  .pierre-layouts-tab-close::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
   }
 
   .pierre-layouts-tab:hover > .pierre-layouts-tab-close,

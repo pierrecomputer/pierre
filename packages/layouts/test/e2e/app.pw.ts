@@ -262,3 +262,26 @@ test('a new title from getPaneTitle reaches the tab, the tab list, and the names
     1
   );
 });
+
+test('the close mark of a tab is a pointer target of 24 CSS pixels', async ({
+  page,
+}) => {
+  const mark = page
+    .locator('[role="tab"][aria-selected="true"] .pierre-layouts-tab-close')
+    .first();
+  await expect(mark).toBeVisible();
+  // The mark shows 16 px; a press up to 12 px from its middle reaches it.
+  const hits = await mark.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    return [
+      [-11.5, 0],
+      [11.5, 0],
+      [0, -11.5],
+      [0, 11.5],
+    ].map(([dx, dy]) => document.elementFromPoint(x + dx, y + dy) === element);
+  });
+  expect(hits).toEqual([true, true, true, true]);
+  expect((await mark.boundingBox())?.width).toBe(16);
+});

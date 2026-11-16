@@ -99,7 +99,7 @@ const page = {
           sizes: [1, 1],
           children: [
             { type: 'pane', id: 'files' },
-            { type: 'pane', id: 'terminal', collapsedSize: 36 },
+            { type: 'pane', id: 'terminal', collapsedSize: 40 },
           ],
         },
       ],

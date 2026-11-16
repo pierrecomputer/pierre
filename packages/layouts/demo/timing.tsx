@@ -37,7 +37,7 @@ const tree: LayoutNode = {
         { type: 'pane', id: 'output' },
       ],
     },
-    { type: 'pane', id: 'terminal', collapsedSize: 36 },
+    { type: 'pane', id: 'terminal', collapsedSize: 40 },
   ],
 };
 

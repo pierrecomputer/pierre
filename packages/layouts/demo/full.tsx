@@ -30,7 +30,7 @@ const page = {
           sizes: [1, 1],
           children: [
             { type: 'pane', id: 'c' },
-            { type: 'pane', id: 'd', collapsedSize: 36 },
+            { type: 'pane', id: 'd', collapsedSize: 40 },
           ],
         },
       ],

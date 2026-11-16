@@ -640,10 +640,14 @@ minimum sizes. A separator's pointer target is at least 24 px across, with no
 change to the visible gap, and a focused separator keeps its focus visible in
 forced colors mode. A corner of `corners()` is a pointer shortcut only: it has a
 24 px target, takes no focus, and is hidden from assistive technology, because
-the keyboard resizes each of its two separators. Escape cancels an active
-gesture, and restores a zoomed layout with `zoom()`, unless pane content handled
-it with `preventDefault()`. Hidden panes remain mounted but are inert and
-excluded from the accessibility tree. Motion respects `prefers-reduced-motion`.
+the keyboard resizes each of its two separators. Each control in `Layout.Header`
+is a pointer target of at least 24 px, and the header is 40 px high, so the
+target of a separator above the pane does not cover a control. The close mark of
+a tab (`pierre-layouts-tab-close`) has a target of 24 px. Escape cancels an
+active gesture, and restores a zoomed layout with `zoom()`, unless pane content
+handled it with `preventDefault()`. Hidden panes remain mounted but are inert
+and excluded from the accessibility tree. Motion respects
+`prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer

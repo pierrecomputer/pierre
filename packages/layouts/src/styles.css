@@ -216,7 +216,9 @@
   .pierre-layouts-header {
     display: flex;
     align-items: center;
-    flex: 0 0 36px;
+    /* At 40 px, a control of 24 px starts 8.5 px below the edge of the pane,
+       out of the pointer target of a separator above the pane. */
+    flex: 0 0 40px;
     gap: 6px;
     min-width: 0;
     padding: 4px 8px;
@@ -234,7 +236,10 @@
     white-space: nowrap;
   }
 
+  /* Each control is a pointer target of at least 24 px. */
   .pierre-layouts-header button {
+    min-width: 24px;
+    min-height: 24px;
     padding: 2px 5px;
     border: 0;
     border-radius: 4px;
@@ -323,7 +328,7 @@
   .pierre-layouts-tab-close {
     position: absolute;
     top: 50%;
-    right: 4px;
+    right: 5px;
     width: 16px;
     height: 16px;
     margin-top: -8px;
@@ -331,6 +336,14 @@
     line-height: 16px;
     text-align: center;
     visibility: hidden;
+  }
+
+  /* The pointer target of the close mark is 24 px, with no change to the
+     mark. It ends 1 px inside the tab, so the next tab does not cover it. */
+  .pierre-layouts-tab-close::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
   }
 
   .pierre-layouts-tab:hover > .pierre-layouts-tab-close,

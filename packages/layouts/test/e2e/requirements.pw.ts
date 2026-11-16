@@ -164,6 +164,45 @@ test('A16: a corner is a pointer shortcut of 24 CSS pixels with a resting contra
   expect(result.contrast).toBeGreaterThanOrEqual(3);
 });
 
+test('A19: each control in a pane header is at least 24 by 24 CSS pixels', async ({
+  page,
+}) => {
+  // Add a tab, so that the headers also hold a tab list.
+  await page.locator('[data-layouts-pane="1"] .pierre-layouts-title').click();
+  await page.getByRole('button', { name: 'Add tab', exact: true }).click();
+  // A press up to 12 px from the middle of a control, on each axis, reaches
+  // the control: no separator or corner target covers it.
+  const misses = await page
+    .locator('.pierre-layouts-header')
+    .locator('button, [role="tab"]')
+    .evaluateAll((controls) =>
+      controls
+        .filter((control) => control.checkVisibility())
+        .map((control) => {
+          const box = control.getBoundingClientRect();
+          const x = box.left + box.width / 2;
+          const y = box.top + box.height / 2;
+          const reached = [
+            [-11.5, 0],
+            [11.5, 0],
+            [0, -11.5],
+            [0, 11.5],
+          ].filter(([dx, dy]) =>
+            control.contains(document.elementFromPoint(x + dx, y + dy))
+          ).length;
+          return {
+            name: control.getAttribute('aria-label') ?? control.textContent,
+            size: Math.min(box.width, box.height),
+            reached,
+          };
+        })
+    );
+  expect(misses.length).toBeGreaterThan(20);
+  expect(
+    misses.filter(({ size, reached }) => size < 24 || reached < 4)
+  ).toEqual([]);
+});
+
 test('A15: Escape that pane content handles does not restore the zoom', async ({
   page,
 }) => {

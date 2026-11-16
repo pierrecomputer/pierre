@@ -96,7 +96,7 @@ test('a collapse keeps the header and hides the content, with no render of the c
   await expect(terminal).toHaveAttribute('data-collapsed', 'true');
   expect(
     await terminal.evaluate((element) => element.getBoundingClientRect().height)
-  ).toBe(36);
+  ).toBe(40);
   await expect(terminal.locator('.pierre-layouts-header')).toBeVisible();
   const content = terminal.locator('.pierre-layouts-content');
   await expect(content).toHaveAttribute('data-collapsed', 'true');
