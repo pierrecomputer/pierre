@@ -230,6 +230,18 @@ const renderPane = (node: PaneNode): JSX.Element => (
 
 const MESSAGES = { layout: 'Layout playground' };
 
+// `?keymap=rebound` binds pane focus to Alt+Shift+Arrow keys in place of F6,
+// removes Shift+F6, and binds the zoom of the focused pane, as an app with
+// its own shortcuts does.
+const KEYMAP =
+  new URLSearchParams(location.search).get('keymap') === 'rebound'
+    ? {
+        'focus.next': ['Alt+Shift+ArrowRight'],
+        'focus.previous': null,
+        'zoom.toggle': ['Mod+Shift+Z'],
+      }
+    : undefined;
+
 function Playground(): JSX.Element {
   const state = useSyncExternalStore(
     store.subscribe,
@@ -357,6 +369,7 @@ function Playground(): JSX.Element {
           renderPane={renderPane}
           getPaneTitle={title}
           messages={MESSAGES}
+          keymap={KEYMAP}
           style={{ '--layouts-pane-background': '#fbfcfd' } as CSSProperties}
         />
       </div>

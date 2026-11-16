@@ -136,3 +136,49 @@ test('an app command moves the focus to the next pane, with its DOM focus', asyn
   await page.getByRole('button', { name: 'Next pane', exact: true }).click();
   expect(await focusedPane(page)).toBe('7');
 });
+
+test('a keymap rebinds a command, removes a binding, and binds a command with no default key', async ({
+  page,
+}) => {
+  await page.goto('/?keymap=rebound');
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
+  // F6 now reaches the content.
+  await note(page, '1').evaluate((input) => {
+    (window as unknown as { f6: number }).f6 = 0;
+    input.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'F6')
+        (window as unknown as { f6: number }).f6 += 1;
+    });
+  });
+  await note(page, '1').focus();
+  await page.keyboard.press('F6');
+  await expect(note(page, '1')).toBeFocused();
+  expect(
+    await page.evaluate(() => (window as unknown as { f6: number }).f6)
+  ).toBe(1);
+  await page.keyboard.press('Alt+Shift+ArrowRight');
+  expect(await focusedPane(page)).toBe('7');
+  // `focus.previous` has no key.
+  await page.keyboard.press('Shift+F6');
+  expect(await focusedPane(page)).toBe('7');
+  // `zoom.toggle` zooms the focused pane, outside a text field.
+  await page.locator('[data-layouts-pane="7"] .pierre-layouts-content').focus();
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
+  await expect(page.locator('[data-layouts-pane="7"]')).toHaveAttribute(
+    'data-zoomed',
+    'true'
+  );
+});
+
+test('Escape restores the zoom outside a text field only', async ({ page }) => {
+  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
+  const host = page.locator('[data-layouts-pane="1"]');
+  await note(page, '1').focus();
+  await page.keyboard.press('Escape');
+  await expect(host).toHaveAttribute('data-zoomed', 'true');
+  await page
+    .getByRole('button', { name: 'Count in Pane 1', exact: true })
+    .focus();
+  await page.keyboard.press('Escape');
+  await expect(host).not.toHaveAttribute('data-zoomed');
+});

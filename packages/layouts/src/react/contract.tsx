@@ -268,8 +268,8 @@ export interface FeatureHooks {
     next: LayoutState,
     element: HTMLElement
   ): void;
-  /** Keys on the layout that pane content did not handle. */
-  keys?: Readonly<Record<string, (event: KeyboardEvent<HTMLElement>) => void>>;
+  /** The key commands of the feature, with their default keys. */
+  keys?: readonly KeyCommand[];
   host?(host: CSSPane): HostPatch | undefined;
   /** Elements after the separators, such as the focus ring or the corners. */
   layers?(): ReactNode;
@@ -309,6 +309,27 @@ export interface FeatureHooks {
   moveTab?(id: string, index: number): void;
   /** Focus the tab of a pane after the next change, in the host that shows it. */
   focusTab?(id: string): void;
+}
+
+/**
+ * A named key command (`DEC-layouts-pane-commands`). `Root` runs it for a key
+ * of `keys`, or for the keys that its `keymap` prop gives the ID. A command
+ * in the capture phase runs before pane content; the others run on a key
+ * that pane content did not handle, outside a text field and outside a
+ * composition.
+ */
+export interface KeyCommand {
+  /** The ID of the command, for example `zoom.restore`. */
+  readonly id: string;
+  /** The default keys, for example `Escape` or `Mod+Shift+ArrowLeft`. */
+  readonly keys: readonly string[];
+  /** Run before pane content gets the key: pane focus only. */
+  readonly capture?: boolean;
+  /**
+   * Run the command. False when it does nothing, so that the key goes on;
+   * true stops the key.
+   */
+  run(event: globalThis.KeyboardEvent): boolean;
 }
 
 /** What the announcement of an operation reads. */

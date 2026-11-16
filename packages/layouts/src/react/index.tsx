@@ -71,6 +71,7 @@ export {
   type TabListProps,
   type TabState,
 } from './parts/tabs';
+export { defaultKeys } from './keymap';
 export { type LayoutSeparator, Root, type RootProps } from './root';
 export { useCover } from './use-cover';
 export {

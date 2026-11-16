@@ -60,6 +60,7 @@ import {
   type FeatureHooks,
   type FeatureModule,
   type Gesture,
+  type KeyCommand,
   type LayoutMessages,
   PaneContext,
   type PaneContextValue,
@@ -75,6 +76,7 @@ import {
 } from './contract';
 import type { LayoutObject } from './create-layout';
 import { separatorGestureStyle } from './gesture-styles';
+import { matchesKey } from './keymap';
 import { registerLayoutElement } from './layout-elements';
 import { paneLayers } from './pane-layers';
 
@@ -160,6 +162,13 @@ export interface RootProps {
   stylesheets?: { nonce?: string } | null;
   /** The strings of the layout, its controls, and its announcements. */
   messages?: LayoutMessages;
+  /**
+   * The keys of the layout's commands, by command ID: a list replaces the
+   * default keys of a command (`defaultKeys`), and `null` or `[]` removes
+   * them, for example `{ 'focus.next': ['Alt+Shift+ArrowRight'],
+   * 'focus.previous': null }`. Keep its identity.
+   */
+  keymap?: Readonly<Record<string, readonly string[] | null>>;
   className?: string;
   style?: CSSProperties;
   gap?: number;
@@ -391,6 +400,7 @@ interface LatestProps {
   onPaneClose: RootProps['onPaneClose'];
   stylesheets: StylesheetsSetting;
   messages: LayoutMessages | undefined;
+  keymap: RootProps['keymap'];
 }
 
 // In development, the pane contexts of each view, for the tests of
@@ -436,8 +446,13 @@ interface ViewInternals {
   focusIn(id: string, event: FocusEvent<HTMLElement>): void;
   /** Move the DOM focus into the pane of a focus change with `reveal`. */
   revealFocus(): void;
-  /** F6 and Shift+F6, before pane content gets them. */
-  paneKey(event: KeyboardEvent): void;
+  /**
+   * Run the key commands of one phase for a key: the capture phase, before
+   * pane content, or the bubble phase, after it.
+   */
+  runKeys(event: KeyboardEvent, capture: boolean): void;
+  /** The key listener of the capture phase. */
+  captureKey(event: KeyboardEvent): void;
   /**
    * The context of a pane, the same object while the pane is in the tree, so
    * that the content of a pane does not render again for a new context.
@@ -497,6 +512,84 @@ function createViewInternals(
     // no gesture to cancel.
     gesture = null;
     active.end(cancel);
+  };
+  // F6 and Shift+F6: the next or the previous pane that shows, without the
+  // panes that an overlay covers, around the ends.
+  const paneStep = (event: KeyboardEvent, forward: boolean): boolean => {
+    const state = store.getSnapshot();
+    const order = presentation(state).rearrangeable
+      ? shownPanes(state.root).filter(
+          ({ id }) => (context.visibility.reasons(id) & HOST_HIDDEN) === 0
+        )
+      : [];
+    // With one pane, or in a modal dialog, the key goes on to the content
+    // and the browser.
+    if (
+      element === null ||
+      order.length < 2 ||
+      (event.target as Element).closest('dialog[open],[aria-modal="true"]') !==
+        null
+    )
+      return false;
+    const at = order.findIndex(({ id }) => id === state.focusedPane);
+    // At an end, an app can cancel the wrap.
+    const next =
+      (forward ? at === order.length - 1 : at === 0) &&
+      !element.dispatchEvent(
+        new CustomEvent(FOCUS_EDGE_EVENT, {
+          cancelable: true,
+          detail: { direction: forward ? 'next' : 'previous' },
+        })
+      )
+        ? undefined
+        : order.at(forward ? (at + 1) % order.length : at - 1);
+    if (next !== undefined) store.focusPane(next.id, { reveal: true });
+    return true;
+  };
+  const core: readonly KeyCommand[] = [
+    {
+      id: 'focus.next',
+      keys: ['F6'],
+      capture: true,
+      run: (event) => paneStep(event, true),
+    },
+    {
+      id: 'focus.previous',
+      keys: ['Shift+F6'],
+      capture: true,
+      run: (event) => paneStep(event, false),
+    },
+  ];
+  const commands = (): KeyCommand[] => [
+    ...core,
+    ...hooks.flatMap((hook) => hook.keys ?? []),
+  ];
+  const runKeys = (event: KeyboardEvent, capture: boolean): void => {
+    // A key in a text field edits the text; a composition owns its keys.
+    if (
+      event.isComposing ||
+      (!capture &&
+        (event.target as Element).closest(
+          'input,textarea,select,[contenteditable]:not([contenteditable="false"])'
+        ) !== null)
+    )
+      return;
+    const keymap = latest.keymap;
+    for (const command of commands()) {
+      const keys =
+        keymap?.[command.id] === undefined
+          ? command.keys
+          : (keymap[command.id] ?? []);
+      if (
+        (command.capture === true) === capture &&
+        keys.some((key) => matchesKey(key, event)) &&
+        command.run(event)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
   };
   const names = new Set(features.map((feature) => feature.name));
   const context: ViewContext = {
@@ -629,6 +722,8 @@ function createViewInternals(
     },
     finish,
     gesturing: () => gesture !== null,
+    runKeys,
+    captureKey: (event) => runKeys(event, true),
     focusIn(id, event) {
       lastFocus.set(event.currentTarget, event.target);
       store.focusPane(id);
@@ -647,46 +742,6 @@ function createViewInternals(
       const content = context.visibility.content(id);
       (usable(last) ? last : usable(content) ? content : host).focus();
     },
-    paneKey(event) {
-      if (
-        event.key !== 'F6' ||
-        event.isComposing ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        element === null ||
-        (event.target as Element).closest(
-          'dialog[open],[aria-modal="true"]'
-        ) !== null
-      )
-        return;
-      const state = store.getSnapshot();
-      // The panes that show, without the panes that an overlay covers.
-      const order = presentation(state).rearrangeable
-        ? shownPanes(state.root).filter(
-            ({ id }) => (context.visibility.reasons(id) & HOST_HIDDEN) === 0
-          )
-        : [];
-      // With one pane, F6 goes on to the content and the browser.
-      if (order.length < 2) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const forward = !event.shiftKey;
-      const at = order.findIndex(({ id }) => id === state.focusedPane);
-      // At an end, an app can cancel the wrap.
-      if (
-        (forward ? at === order.length - 1 : at === 0) &&
-        !element.dispatchEvent(
-          new CustomEvent(FOCUS_EDGE_EVENT, {
-            cancelable: true,
-            detail: { direction: forward ? 'next' : 'previous' },
-          })
-        )
-      )
-        return;
-      const next = order.at(forward ? (at + 1) % order.length : at - 1);
-      if (next !== undefined) store.focusPane(next.id, { reveal: true });
-    },
     paneContext(id) {
       let value = paneContexts.get(id);
       if (value === undefined) {
@@ -703,6 +758,30 @@ function createViewInternals(
   };
 }
 
+/**
+ * In development, warn about a command ID of the `keymap` prop that no
+ * command of the layout has, such as a misspelt ID or the ID of a command of
+ * a feature that the layout does not have.
+ */
+function useKeymapCheck(
+  keymap: RootProps['keymap'],
+  hooks: readonly FeatureHooks[]
+): void {
+  const ids = [
+    'focus.next',
+    'focus.previous',
+    ...hooks.flatMap((hook) => (hook.keys ?? []).map(({ id }) => id)),
+  ].join(' ');
+  useEffect(() => {
+    const known = new Set(ids.split(' '));
+    for (const id of Object.keys(keymap ?? {}))
+      if (!known.has(id))
+        console.warn(
+          `@pierre/layouts: the keymap of Layout.Root names ${id}, which no command of the layout has.`
+        );
+  }, [keymap, ids]);
+}
+
 /** The layout, with flat pane hosts that keep their content while the tree changes. */
 export function Root(props: RootProps): JSX.Element {
   const {
@@ -714,6 +793,7 @@ export function Root(props: RootProps): JSX.Element {
     getSeparatorProps,
     stylesheets,
     messages,
+    keymap,
     className,
     style,
     gap = 8,
@@ -744,6 +824,7 @@ export function Root(props: RootProps): JSX.Element {
     onPaneClose,
     stylesheets,
     messages,
+    keymap,
   };
   const internals = useMemo(
     () =>
@@ -809,6 +890,10 @@ export function Root(props: RootProps): JSX.Element {
   useLayoutEffect(() => {
     internals.setHooks(hooks);
   });
+  // The condition is the same for each render of a build.
+  if (process.env.NODE_ENV !== 'production')
+    // oxlint-disable-next-line react-hooks/rules-of-hooks
+    useKeymapCheck(keymap, hooks);
 
   const { filled } = presentation(state);
   // The visibility of each host in the first render, which a server renders
@@ -882,10 +967,10 @@ export function Root(props: RootProps): JSX.Element {
     element.addEventListener('selectstart', preventSelection);
     // F6 runs in the capture phase, before pane content, so that a terminal
     // or an editor that takes every key still has an exit.
-    element.addEventListener('keydown', internals.paneKey, true);
+    element.addEventListener('keydown', internals.captureKey, true);
     return () => {
       element.removeEventListener('selectstart', preventSelection);
-      element.removeEventListener('keydown', internals.paneKey, true);
+      element.removeEventListener('keydown', internals.captureKey, true);
     };
   }, [context, internals]);
 
@@ -968,7 +1053,7 @@ export function Root(props: RootProps): JSX.Element {
         // prevents its default, and the layout then leaves the key alone.
         if (event.defaultPrevented) return;
         if (event.key === 'Escape') finish(true);
-        for (const hook of hooks) hook.keys?.[event.key]?.(event);
+        internals.runKeys(event.nativeEvent, false);
       }}
     >
       {[...sheets].map(([name, css]) => (

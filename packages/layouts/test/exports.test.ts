@@ -117,6 +117,7 @@ const REACT_VALUES = sorted([
   'Content',
   'corners',
   'createLayout',
+  'defaultKeys',
   'edits',
   'flip',
   'FOCUS_EDGE_EVENT',

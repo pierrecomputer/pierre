@@ -657,6 +657,24 @@ panes. A read-only pane that scrolls gives its `Layout.Content` `tabIndex={0}`.
 An app moves the focus with `layout.focusNext()`, `layout.focusPrevious()`, or
 `layout.focusPane(id, { reveal: true })`, which move the DOM focus too.
 
+The keys of the layout run named commands. `defaultKeys` lists them with their
+default keys: `focus.next` (F6) and `focus.previous` (Shift+F6), and with
+`zoom()`, `zoom.restore` (Escape) and `zoom.toggle` (no key). Only these keys
+have defaults, as every other cross-platform key conflicts with a screen reader,
+text editing, or the browser. `Root`'s `keymap` prop changes the keys of a
+command by its ID: a list replaces the defaults, and `null` removes them, for
+example
+`keymap={{ 'focus.next': ['Alt+Shift+ArrowRight'], 'focus.previous': null, 'zoom.toggle': ['Mod+Shift+Z'] }}`.
+A key string is modifiers and a key joined with `+`: `Ctrl`, `Alt`, `Shift`,
+`Meta`, and `Mod` (Meta on Apple platforms, Ctrl elsewhere), then a
+`KeyboardEvent.key` value; a letter or a digit compares by its key code. A
+command runs on a key that pane content did not handle with `preventDefault()`,
+outside a text field and outside a composition; only `focus.next` and
+`focus.previous` run before pane content. An app whose content needs F6 moves
+these two commands to other keys. In development, `Root` warns about a keymap ID
+that no command of the layout has. The keys of a separator and of a tab list
+belong to their widgets, and the keymap does not change them.
+
 A drag of a separator changes the two children of its split beside it. When one
 of them reaches its minimum size, the next child on that side gives the space,
 and so on. Resize separators with arrow keys; hold Shift for larger steps. Home

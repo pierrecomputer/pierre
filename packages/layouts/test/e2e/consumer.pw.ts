@@ -218,6 +218,9 @@ test('a key that pane content handles does not reach the layout', async ({
   await input.press('Escape');
   await expect(input).toHaveValue('');
   await expect(host(page, 'terminal')).toHaveAttribute('data-zoomed', 'true');
+  // A text field keeps Escape, also when it does not handle it.
   await input.press('Escape');
+  await expect(host(page, 'terminal')).toHaveAttribute('data-zoomed', 'true');
+  await page.getByRole('button', { name: 'Zoom terminal' }).press('Escape');
   await expect(host(page, 'terminal')).not.toHaveAttribute('data-zoomed');
 });

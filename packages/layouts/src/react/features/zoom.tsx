@@ -154,13 +154,25 @@ function useZoom(
         };
       return undefined;
     },
-    keys:
-      filled === null
-        ? undefined
-        : {
-            Escape: () =>
-              (context.store as unknown as ZoomCommands).setZoom(null),
-          },
+    keys: [
+      {
+        id: 'zoom.restore',
+        keys: ['Escape'],
+        run: () => {
+          if (filled === null) return false;
+          (context.store as unknown as ZoomCommands).setZoom(null);
+          return true;
+        },
+      },
+      {
+        id: 'zoom.toggle',
+        keys: [],
+        run: () => {
+          (context.store as unknown as ZoomCommands).toggleZoom();
+          return true;
+        },
+      },
+    ],
     separators: filled === null,
   };
 }
