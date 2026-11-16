@@ -136,24 +136,6 @@ test('a collapse to 0 pixels hides and inerts the whole pane, with no render of 
   );
 });
 
-test('the controlled form reports a resize and follows the tree of the app', async ({
-  page,
-}) => {
-  await page.goto('/two-pane.html?form=controlled');
-  const before = await sidebarWidth(page);
-  await page.getByRole('separator').focus();
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('ArrowRight');
-  expect(await sidebarWidth(page)).toBeGreaterThan(before);
-  expect(
-    await page.evaluate(
-      () =>
-        (window as unknown as { __twoPane: TwoPanePage }).__twoPane.resizes
-          .length
-    )
-  ).toBe(2);
-});
-
 test('stylesheets with a nonce give each sheet the nonce', async ({ page }) => {
   await page.goto('/two-pane.html?stylesheets=nonce');
   expect(await sheets(page)).toEqual(['pierre-layouts-split']);

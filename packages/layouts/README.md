@@ -154,12 +154,6 @@ function PaneBar() {
 }
 ```
 
-### Controlled form
-
-`Layout.useControlledLayout(tree, features)` gives a layout object that follows
-a tree that the app owns. It applies each new tree before the browser paints.
-The app takes the sizes of a resize from `onResize` and keeps them in its tree.
-
 ### Stylesheets
 
 An app imports no CSS. Each module holds its CSS as a string, and the view

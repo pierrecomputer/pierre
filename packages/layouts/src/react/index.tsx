@@ -69,7 +69,6 @@ export {
   type TabState,
 } from './parts/tabs';
 export { type LayoutSeparator, Root, type RootProps } from './root';
-export { useControlledLayout } from './use-controlled-layout';
 export { useCover } from './use-cover';
 export {
   type CoverOptions,

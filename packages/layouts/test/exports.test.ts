@@ -130,7 +130,6 @@ const REACT_VALUES = sorted([
   'tabDrag',
   'TabList',
   'Title',
-  'useControlledLayout',
   'useCover',
   'usePane',
   'zoom',

@@ -227,7 +227,6 @@ const MARKS = {
   moveHandle: 'pierre-layouts-grip',
   tab: 'pierre-layouts-tab-title',
   usePane: 'must be in the output of renderPane',
-  controlledLayout: 'useControlledLayout',
   developmentChecks: 'renderPane changed',
 } as const;
 

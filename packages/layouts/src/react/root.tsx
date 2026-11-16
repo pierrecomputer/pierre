@@ -94,8 +94,7 @@ export interface LayoutSeparator {
 /** Props of `Root`. */
 export interface RootProps {
   /**
-   * The layout: a layout object from `createLayout`, or from
-   * `useControlledLayout` for a tree that the app owns. It keeps its identity
+   * The layout: a layout object from `createLayout`. It keeps its identity
    * for the life of `Root`: `Root` takes its features at the first render. To
    * show another layout object, mount a new `Root`, for example with a `key`.
    * In development, `Root` warns when this prop changes.
