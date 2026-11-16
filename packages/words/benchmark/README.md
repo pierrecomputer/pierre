@@ -1,10 +1,8 @@
 # Words benchmarks
 
 These benchmarks compare HTML output, React stream updates, memory use, and
-browser rendering. The Node modes use the five Markdown files in
-[`fixtures`](./fixtures). The browser mode uses the repeated document from
-[`fixtures/index.ts`](./fixtures/index.ts), which the `/words` demo also uses.
-Recorded measurement dates use UTC.
+browser rendering. Every mode uses the five Markdown files in
+[`fixtures`](./fixtures). Recorded measurement dates use UTC.
 
 ## Run
 
@@ -162,31 +160,38 @@ allocation count.
 
 ## Browser
 
-Median of each run's 95th percentile, from three runs in fresh Chromium
-processes. Update and frame times are in ms, and heap growth is in MB. Lower is
-better.
+Median of three runs in fresh Chromium processes. Total is the sum of all update
+times while the document streams in, and median is the typical single update,
+both in ms. Heap growth is in MB. Lower is better. Total and median are fair
+across document sizes; the p95 of a few updates is only the slowest one. Each
+run's update p95 and frame p95 are in the raw results.
 
-| Document           | Words update | Streamdown update | Words frame | Streamdown frame | Words heap | Streamdown heap |
-| ------------------ | -----------: | ----------------: | ----------: | ---------------: | ---------: | --------------: |
-| 1× plain           |          1.0 |               3.4 |        17.6 |             17.6 |        0.6 |             3.1 |
-| 1× highlighting    |          1.1 |               3.1 |        17.6 |             17.6 |        0.7 |             3.9 |
-| 1× fades           |          1.2 |               3.5 |        17.6 |             17.6 |        0.9 |             6.0 |
-| 100× plain         |          1.1 |              24.7 |        17.5 |             17.4 |        4.1 |           126.0 |
-| 100× highlighting  |          2.0 |              26.9 |        17.6 |             17.6 |        5.7 |           142.9 |
-| 100× fades         |          6.8 |              41.9 |        17.6 |             83.4 |        7.6 |           236.6 |
-| 1000× highlighting |          3.4 |             226.2 |       133.4 |            283.5 |       36.0 |          1397.2 |
-| 1000× fades        |        172.7 |         timed out |       200.1 |                — |       53.9 |               — |
+| Document                            | Updates | Words total | Streamdown total | Words median | Streamdown median | Words heap | Streamdown heap |
+| ----------------------------------- | ------: | ----------: | ---------------: | -----------: | ----------------: | ---------: | --------------: |
+| `tiny.md` plain                     |       6 |         5.3 |             28.9 |          0.8 |               4.0 |        0.4 |             2.1 |
+| `tiny.md` highlighting              |       6 |         5.7 |             28.7 |          0.9 |               3.9 |        0.4 |             8.7 |
+| `tiny.md` fades                     |       6 |         6.4 |             34.4 |          0.9 |               4.7 |        0.5 |             9.1 |
+| `assistant-review.md` plain         |      22 |         8.7 |             69.9 |          0.3 |               2.8 |        0.5 |             2.5 |
+| `assistant-review.md` highlighting  |      22 |        11.6 |             70.2 |          0.4 |               2.9 |        0.5 |            11.0 |
+| `assistant-review.md` fades         |      22 |        13.6 |             97.8 |          0.5 |               4.0 |        0.6 |            11.5 |
+| `assistant-explain.md` plain        |      24 |         9.7 |             39.2 |          0.4 |               1.4 |        0.5 |             2.5 |
+| `assistant-explain.md` highlighting |      24 |        13.8 |             42.3 |          0.5 |               1.6 |        0.7 |            18.3 |
+| `assistant-explain.md` fades        |      24 |        15.9 |             57.6 |          0.6 |               2.0 |        0.8 |            19.1 |
+| `simd.md` plain                     |     156 |        37.5 |            282.3 |          0.2 |               1.8 |        0.6 |             6.8 |
+| `simd.md` highlighting              |     156 |        55.6 |            283.8 |          0.3 |               1.8 |        0.9 |             8.0 |
+| `simd.md` fades                     |     156 |        66.5 |            389.9 |          0.4 |               2.2 |        1.1 |            12.6 |
+| `gfm-spec.md` plain                 |     844 |       174.2 |           4593.6 |          0.2 |               5.5 |        1.3 |            26.2 |
+| `gfm-spec.md` highlighting          |     844 |       237.0 |           4726.5 |          0.3 |               5.7 |        1.6 |            30.5 |
+| `gfm-spec.md` fades                 |     844 |       258.9 |           5132.2 |          0.3 |               5.8 |        1.9 |            44.6 |
 
-The 1× document has 8,524 characters: 100 prose paragraphs, one final Done
-paragraph, and one TypeScript code block with 40 lines. Larger documents repeat
-it. Fades include highlighting. The 1000× rows are single runs, stopped after
-180 seconds.
+Fades include highlighting.
 
 Each library gets a production page built with `Bun.build`. Each run opens a new
 browser with a 1280 × 960 viewport. The page first renders a short warmup
-document, so startup and the first grammar load are not measured. It then mounts
-an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
-267 updates.
+document with one code block for each language the fixture uses, so startup and
+grammar loading are not measured. It then mounts an empty renderer and adds the
+next 256 UTF-16 code units 40 ms after each commit, using the same chunks as
+`bench-stream`.
 
 - Update time runs from the state update to the parent's layout effect, after
   both renderers have written the DOM. It does not include paint.
@@ -199,12 +204,15 @@ an empty renderer and adds `32 × scale` characters 40 ms after each commit, for
 - Words uses `@pierre/words/highlights` with the Pierre themes. Streamdown uses
   `@streamdown/code` with its default themes. Fades last 180 ms. Words fades
   each delivered chunk, including code. Streamdown fades prose words.
-- A run counts only if the page has no errors, every update commits, the
-  paragraph and code block counts are correct, every code block is highlighted,
-  and both libraries show the same text.
+- A run counts only if the page has no errors, every update commits, and the
+  paragraph count, code block count, highlighted code block count, and text
+  match the library's other runs of that fixture. Highlighting runs must
+  highlight at least one code block. Libraries are not compared with each other,
+  because they split paragraphs and support languages differently.
 
-> Browser timing and heap measured on **2026-11-10** at commit `8b0ad8f3` with
-> Bun 1.4.0 and Chromium 134.0.6998.35 on Apple M4 Max with 128 GiB RAM.
+> Browser timing and heap measured on **2026-11-16** at commit `f318c354` with
+> uncommitted changes, with Bun 1.4.0 and Chromium 134.0.6998.35 on Apple M4 Pro
+> with 48 GiB RAM.
 
 | Download, gzip KB                   | @pierre/words | streamdown |
 | ----------------------------------- | ------------: | ---------: |

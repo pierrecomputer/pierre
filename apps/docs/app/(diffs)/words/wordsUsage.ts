@@ -24,28 +24,40 @@ export function getWordsUsage({
   lineNumbers,
   repair,
 }: WordsUsageOptions): string {
-  return [
-    "import { Markdown } from '@pierre/words/react';",
-    "import '@pierre/words/styles.css';",
-    highlight
-      ? "import { createHighlightsPlugin } from '@pierre/words/highlights';\nimport light from '@pierre/highlights/themes/pierre-light';\nimport dark from '@pierre/highlights/themes/pierre-dark';\n\nconst plugins = {\n  code: createHighlightsPlugin({ themes: { light, dark }, defaultColor: 'light-dark()' }),\n};"
-      : '',
-    '',
-    '<Markdown',
-    '  isAnimating={isStreaming}',
-    !repair ? '  parseIncompleteMarkdown={false}' : '',
-    "  animated={{ animation: 'fadeIn', duration: " + fadeDuration + ' }}',
-    highlight ? '  plugins={plugins}' : '',
-    lineNumbers ? '' : '  lineNumbers={false}',
+  const props = [
+    'isAnimating={isStreaming}',
+    repair ? '' : 'parseIncompleteMarkdown={false}',
+    "animated={{ animation: 'fadeIn', duration: " + fadeDuration + ' }}',
+    highlight ? 'plugins={plugins}' : '',
+    lineNumbers ? '' : 'lineNumbers={false}',
     custom
-      ? "  components={{\n    a: (html) => html.replace('<a ', '<a class=\"your-link\" '),\n  }}"
+      ? "components={{\n  a: (html) => html.replace('<a ', '<a class=\"your-link\" '),\n}}"
       : '',
-    '>',
-    '  {text}',
-    '</Markdown>',
   ]
-    .filter((line) => line !== '')
-    .join('\n');
+    .filter((prop) => prop !== '')
+    .map((prop) => '      ' + prop.replaceAll('\n', '\n      '));
+  return [
+    "import { Markdown } from '@pierre/words/react';\nimport '@pierre/words/styles.css';" +
+      (highlight
+        ? "\nimport { createHighlightsPlugin } from '@pierre/words/highlights';\nimport light from '@pierre/highlights/themes/pierre-light';\nimport dark from '@pierre/highlights/themes/pierre-dark';"
+        : ''),
+    highlight
+      ? "const plugins = {\n  code: createHighlightsPlugin({ themes: { light, dark }, defaultColor: 'light-dark()' }),\n};"
+      : '',
+    [
+      'export function Message({ text, isStreaming }) {',
+      '  return (',
+      '    <Markdown',
+      ...props,
+      '    >',
+      '      {text}',
+      '    </Markdown>',
+      '  );',
+      '}',
+    ].join('\n'),
+  ]
+    .filter((block) => block !== '')
+    .join('\n\n');
 }
 
 export function getInitialWordsUsage(kind: WordsExampleKind): string {

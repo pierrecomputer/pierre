@@ -29,17 +29,12 @@ export interface ReplayResult {
 }
 
 const params = new URLSearchParams(location.search);
+const fixture = params.get('fixture');
 const scale = Number(params.get('scale'));
 const mode = params.get('mode');
 const interval = Number(params.get('interval'));
 const highlight = mode !== 'plain';
 const animated = mode === 'animated';
-const source = createStressFixture(scale);
-const chunk = 32 * scale;
-// Distinct from the fixture, so grammar and lazy modules load without seeding code caches.
-const warmupSource =
-  'Warmup **formatting**, *emphasis*, and [navigation](/warmup).\n\n' +
-  '```typescript\nconst warmup: number = 1;\n```\n';
 const errors: string[] = [];
 window.addEventListener('error', (event) => errors.push(event.message));
 window.addEventListener('unhandledrejection', (event) =>
@@ -57,10 +52,39 @@ Object.assign(window, {
     run: () => new Promise<ReplayResult>((resolve) => play(resolve)),
   },
 });
+// `?fixture=` streams a real document; `?scale=` keeps the generated one for bench-incremental.
+const source =
+  fixture === null
+    ? createStressFixture(scale)
+    : await (await fetch(`/fixtures/${fixture}`)).text();
+const chunk = fixture === null ? 32 * scale : Number(params.get('chunk'));
+// Chunk ends, never splitting a surrogate pair (same as chunkEnds in ../stream.ts).
+const ends: number[] = [];
+for (let end = 0; end < source.length; ) {
+  end = Math.min(end + chunk, source.length);
+  const code = source.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff && end < source.length) end++;
+  ends.push(end);
+}
+// Distinct from the fixture, with one fence per fixture language, so grammars and
+// lazy modules load before the replay without seeding code caches.
+const warmupSource =
+  'Warmup **formatting**, *emphasis*, and [navigation](/warmup).\n\n' +
+  [
+    ...new Set([
+      'typescript',
+      ...Array.from(
+        source.matchAll(/^ {0,3}(?:`{3,}|~{3,})([\w+-]+)/gm),
+        (m) => m[1]
+      ),
+    ]),
+  ]
+    .map((lang) => '```' + lang + '\nwarmup\n```\n')
+    .join('\n');
 
 /**
  * Commit-paced replay: warm up on a different document, remount an empty
- * renderer, then deliver `32 × scale` characters `interval` ms after each
+ * renderer, then deliver `chunk` characters `interval` ms after each
  * commit. Update latency runs from the state request to this parent's layout
  * effect, after both renderers have written their DOM.
  */
@@ -71,7 +95,8 @@ export function mount(
   let done: (result: ReplayResult) => void;
   function App() {
     const [stage, setStage] = useState<'warmup' | 'idle' | 'playing'>('warmup');
-    const [cursor, setCursor] = useState(0);
+    const [step, setStep] = useState(0);
+    const cursor = step === 0 ? 0 : ends[step - 1];
     useEffect(() => {
       play = (resolve) => {
         done = resolve;
@@ -97,17 +122,17 @@ export function mount(
     useLayoutEffect(() => {
       if (stage === 'idle')
         requestAnimationFrame(() => requestAnimationFrame(markReady));
-      if (stage !== 'playing' || cursor === 0) return;
+      if (stage !== 'playing' || step === 0) return;
       // Chrome coarsens performance.now() to 0.1 ms without cross-origin isolation.
       updates.push(Math.round((performance.now() - requested) * 10) / 10);
-      if (cursor === source.length) completed = performance.now();
-    }, [stage, cursor]);
+      if (step === ends.length) completed = performance.now();
+    }, [stage, step]);
     useEffect(() => {
       if (stage !== 'playing') return;
-      if (cursor < source.length) {
+      if (step < ends.length) {
         const timer = setTimeout(() => {
           requested = performance.now();
-          setCursor(Math.min(source.length, cursor + chunk));
+          setStep(step + 1);
         }, interval);
         return () => clearTimeout(timer);
       }
@@ -147,14 +172,14 @@ export function mount(
         );
       }, 30);
       return () => clearInterval(timer);
-    }, [stage, cursor]);
+    }, [stage, step]);
     return createElement(
       'main',
       { id: 'preview' },
       createElement(Renderer, {
         key: stage === 'warmup' ? 0 : 1,
         value: stage === 'warmup' ? warmupSource : source.slice(0, cursor),
-        active: stage === 'playing' && cursor < source.length,
+        active: stage === 'playing' && step < ends.length,
         highlight,
         animated,
       })

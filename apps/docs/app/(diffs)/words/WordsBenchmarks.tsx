@@ -1,6 +1,6 @@
 'use client';
 
-import { IconArrow, IconCheck, IconChevronSm } from '@pierre/icons';
+import { IconCheck, IconChevronSm } from '@pierre/icons';
 import { type ReactNode, useState } from 'react';
 
 import { BenchmarkBar } from '../highlights/BenchmarkBar';
@@ -27,26 +27,23 @@ const modes = [
 const documents: Record<string, { label: string; description: string }> = {
   'tiny.md': {
     label: 'Markdown showcase · 1.3 KiB',
-    description: 'A short document with lists, links, a table, and code.',
+    description: 'Lists, links, a table, and code.',
   },
   'assistant-review.md': {
     label: 'AI code review · 5.4 KiB',
-    description:
-      'A code review response with suggested diffs and TypeScript examples.',
+    description: 'Review with diffs and TypeScript.',
   },
   'assistant-explain.md': {
     label: 'AI explanation · 6.0 KiB',
-    description: 'A technical explanation with a TypeScript implementation.',
+    description: 'Explanation with TypeScript code.',
   },
   'simd.md': {
     label: 'Technical specification · 39.0 KiB',
-    description:
-      'The WebAssembly SIMD specification, with detailed instructions and code.',
+    description: 'The WebAssembly SIMD spec.',
   },
   'gfm-spec.md': {
     label: 'GitHub Markdown specification · 211.3 KiB',
-    description:
-      'The full GitHub Flavored Markdown specification and its examples.',
+    description: 'The full GFM spec with examples.',
   },
 };
 
@@ -236,11 +233,10 @@ function BrowserBenchmarkCard({
 
 export function WordsBenchmarks() {
   const [metricIndex, setMetricIndex] = useState(0);
-  const [scale, setScale] = useState(100);
+  const [browserFixture, setBrowserFixture] = useState('assistant-review.md');
   const [mode, setMode] = useState('highlight');
   const [memoryMode, setMemoryMode] = useState('highlight');
   const [footprintId, setFootprintId] = useState('shared');
-  const [methodOpen, setMethodOpen] = useState(false);
   const [fixture, setFixture] = useState('assistant-review.md');
   const suite = benchmark.packageRun;
   const metric = suite.metrics[metricIndex];
@@ -256,10 +252,10 @@ export function WordsBenchmarks() {
   const maximum = Math.max(...results.map(({ value }) => value));
   const run = benchmark.browser;
   const browser = run.rows.find(
-    (row) => row.scale === scale && row.mode === mode
+    (row) => row.fixture === browserFixture && row.mode === mode
   )!;
   const memory = run.rows.find(
-    (row) => row.scale === 100 && row.mode === memoryMode
+    (row) => row.fixture === browserFixture && row.mode === memoryMode
   )!;
   const footprint = run.download[footprintId === 'base' ? 'base' : 'shared'];
   const coverage = run.downloadCoverage;
@@ -278,31 +274,18 @@ export function WordsBenchmarks() {
       aria-labelledby="words-benchmarks"
       className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div className="max-w-2xl">
-          <h2
-            id="words-benchmarks"
-            className="text-2xl font-semibold tracking-tight"
-          >
-            Markdown rendering benchmarks
-          </h2>
-          <p className="text-muted-foreground text-sm text-pretty">
-            From everyday AI replies to full specifications, compare rendering
-            speed, streaming work, memory use, and download size from Markdown
-            to HTML and React.
-          </p>
-        </div>
-        <a
-          href="#words-benchmark-method"
-          className="styled-link inline-flex items-center gap-1 text-sm"
-          onClick={() => setMethodOpen(true)}
+      <div className="max-w-2xl">
+        <h2
+          id="words-benchmarks"
+          className="text-2xl font-semibold tracking-tight"
         >
-          How we measure
-          <IconArrow
-            aria-hidden="true"
-            className="text-muted-foreground size-4 rotate-90"
-          />
-        </a>
+          Markdown rendering benchmarks
+        </h2>
+        <p className="text-muted-foreground text-sm text-pretty">
+          From everyday AI replies to full specifications, compare rendering
+          speed, streaming work, memory use, and download size from Markdown to
+          HTML and React.
+        </p>
       </div>
 
       <figure
@@ -326,22 +309,13 @@ export function WordsBenchmarks() {
             options={metric.rows.map((row) => ({
               value: row.fixture,
               label: documents[row.fixture].label,
+              description: documents[row.fixture].description,
             }))}
             onValueChange={setFixture}
           />
         </div>
-        <p
-          id="words-package-caption"
-          className="text-muted-foreground mb-5 text-sm"
-        >
-          <strong className="text-foreground">
-            {documents[fixture].label}
-          </strong>
-          {' · '}
-          {documents[fixture].description}
-        </p>
         <dl
-          aria-labelledby="words-package-caption"
+          aria-label={documents[fixture].label}
           aria-live="polite"
           className="space-y-5 tabular-nums sm:space-y-6"
         >
@@ -386,29 +360,30 @@ export function WordsBenchmarks() {
           Streaming in the browser
         </h3>
         <p className="text-muted-foreground max-w-2xl text-pretty">
-          A long response with paragraphs and TypeScript code, tested on its own
-          and repeated 100 times to show how each renderer scales.
+          The same five documents, streamed through React in Chromium.
         </p>
       </div>
       <div className="grid min-w-0 gap-8 lg:grid-cols-3 lg:gap-y-0">
         <BrowserBenchmarkCard
           id="words-update-chart"
-          title="Streaming updates"
-          description="Time for incoming text to reach the DOM, before paint. 95% of updates finish within this time. Lower is better."
+          title="Streaming work"
+          description="Total time for every update to reach the DOM, before paint, while the whole document streams in. Lower is better."
           controlsClassName="grid grid-cols-2 gap-2"
-          words={browser.words.updateP95Ms}
-          streamdown={browser.streamdown.updateP95Ms}
+          words={browser.words.updateTotalMs}
+          streamdown={browser.streamdown.updateTotalMs}
           unit="ms"
           controls={
             <>
               <ChartMenu
                 label="Document"
-                value={String(scale)}
-                options={[
-                  { value: '1', label: 'Long response · 8.5 KB' },
-                  { value: '100', label: 'Repeated response · 853 KB' },
-                ]}
-                onValueChange={(value) => setScale(Number(value))}
+                value={browserFixture}
+                options={run.rows
+                  .filter((row) => row.mode === mode)
+                  .map((row) => ({
+                    value: row.fixture,
+                    label: documents[row.fixture].label,
+                  }))}
+                onValueChange={setBrowserFixture}
               />
               <ChartMenu
                 label="Rendering"
@@ -433,7 +408,7 @@ export function WordsBenchmarks() {
           unit="MB"
           controls={
             <ChartMenu
-              label="Repeated response · 853 KB"
+              label={documents[browserFixture].label}
               value={memoryMode}
               options={modes.map((option) => ({
                 value: option.id,
@@ -471,8 +446,6 @@ export function WordsBenchmarks() {
 
       <WordsDisclosure
         id="words-benchmark-method"
-        open={methodOpen}
-        onToggle={(event) => setMethodOpen(event.currentTarget.open)}
         className="scroll-mt-20 rounded-lg border px-5 py-4 sm:px-7"
         summary="How we measure"
         summaryClassName="text-sm font-medium"
@@ -508,23 +481,21 @@ export function WordsBenchmarks() {
               Browser streaming and memory
             </h3>
             <p>
-              The 8.5 KB document has 100 paragraphs and a 40-line TypeScript
-              block; the 853 KB document repeats it 100 times. Both libraries
-              use their native streaming paths, with {browser.updates} updates
-              spaced {run.settings.intervalMs} ms after each commit. Results are
-              the median of {run.settings.runs} fresh-browser runs, after
-              warming startup and grammar loading, in a{' '}
+              The browser uses the same five documents, delivered in chunks of{' '}
+              {run.settings.charactersPerUpdate} UTF-16 code units. Both
+              libraries use their native streaming paths, with the next chunk{' '}
+              {run.settings.intervalMs} ms after each commit. Streaming work is
+              the sum of all update times, from the state update until both
+              renderers have written the DOM. Results are the median of{' '}
+              {run.settings.runs} fresh-browser runs, after warming startup and
+              every grammar the document uses, in a{' '}
               {run.settings.viewport.width} × {run.settings.viewport.height}{' '}
               viewport. Auto-scrolling, code controls, and line numbers are off.
             </p>
             <p>
               Memory is settled V8 heap growth after forced garbage collection;
-              it excludes native DOM, Wasm, and graphics memory. Repeated code
-              blocks are identical; unique code and other languages may differ.
-              Small documents stay near the display frame interval for both
-              renderers. Words fades delivered chunks, including code;
-              Streamdown fades prose words. Single 8.53 MB diagnostic runs
-              stutter in both libraries and are excluded from the charts.
+              it excludes native DOM, Wasm, and graphics memory. Words fades
+              delivered chunks, including code; Streamdown fades prose words.
             </p>
             <p>
               {measuredDate} · {run.cpu} ·{' '}
@@ -563,7 +534,7 @@ export function WordsBenchmarks() {
             <p>
               The benchmark source includes setup instructions, commands, and
               the Markdown documents used here. Raw results include frame
-              timings and the larger capacity diagnostics.
+              timings for every run.
             </p>
             <ul className="space-y-2">
               <li>

@@ -4,8 +4,8 @@ import { basename, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 
-import { createStressFixture } from '../fixtures/index.ts';
-import { environment, median, p95 } from '../shared.ts';
+import { environment, loadFixtures, median, p95 } from '../shared.ts';
+import { chunkEnds } from '../stream.ts';
 import type { ReplayResult } from './app.ts';
 import { measureDownload, printDownload } from './download.ts';
 
@@ -15,30 +15,34 @@ const { values: flags } = parseArgs({
     runs: { type: 'string', default: '3' },
     json: { type: 'string' },
     docs: { type: 'boolean', default: false },
+    fixture: { type: 'string' },
   },
 });
-assert.ok(!(flags.quick && flags.docs), 'Do not publish --quick results');
+assert.ok(
+  !(flags.docs && (flags.quick || flags.fixture != null)),
+  'Do not publish --quick or --fixture results'
+);
 const runs = flags.quick ? 1 : Number(flags.runs);
 assert.ok(Number.isSafeInteger(runs) && runs > 0, '--runs must be positive');
 const settings = {
   intervalMs: flags.quick ? 4 : 40,
-  charactersPerUpdate: '32 × scale',
+  charactersPerUpdate: 256,
   viewport: { width: 1280, height: 960 },
   runs,
-  stressTimeoutMs: 180000,
 };
 const libraries = ['words', 'streamdown'] as const;
 const modes = ['plain', 'highlight', 'animated'];
-const cases = [
-  ...(flags.quick ? [1] : [1, 100]).flatMap((scale) =>
-    modes.map((mode) => ({ scale, mode, stress: false }))
-  ),
-  ...(flags.quick ? [] : modes.slice(1)).map((mode) => ({
-    scale: 1000,
-    mode,
-    stress: true,
-  })),
-];
+// The same documents as the Node suite, so browser and JSDOM numbers describe the same input.
+const fixtures = loadFixtures(
+  flags.fixture ?? (flags.quick ? 'assistant-review.md' : undefined)
+);
+const cases = fixtures.flatMap((fixture) => {
+  const updates = chunkEnds(
+    fixture.source,
+    settings.charactersPerUpdate
+  ).length;
+  return modes.map((mode) => ({ fixture, mode, updates }));
+});
 const directory = import.meta.dir;
 const commit = (await Bun.$`git rev-parse HEAD`.cwd(directory).text()).trim();
 const dirty =
@@ -76,6 +80,11 @@ for (const library of libraries) {
     type: 'text/html',
   });
 }
+for (const { name, source } of fixtures)
+  pages.set(`/fixtures/${name}`, {
+    body: Buffer.from(source),
+    type: 'text/markdown; charset=utf-8',
+  });
 
 let chrome = '';
 // Resolve with undefined when the promise does not settle in time.
@@ -95,12 +104,7 @@ async function within<T>(promise: Promise<T>, ms: number) {
  * One replay in a fresh browser. Heap is V8's used size after two forced GCs,
  * from the warmed empty renderer to the settled document.
  */
-async function replay(
-  library: string,
-  scale: number,
-  mode: string,
-  timeout: number
-) {
+async function replay(library: string, fixture: string, mode: string) {
   const browser = await chromium.launch({ channel: 'chromium' });
   try {
     chrome = browser.version();
@@ -118,7 +122,7 @@ async function replay(
       return (await cdp.send('Runtime.getHeapUsage')).usedSize;
     };
     await page.goto(
-      `http://localhost/${library}/?scale=${scale}&mode=${mode}&interval=${settings.intervalMs}`
+      `http://localhost/${library}/?fixture=${fixture}&chunk=${settings.charactersPerUpdate}&mode=${mode}&interval=${settings.intervalMs}`
     );
     assert.equal(
       await within(page.evaluate('bench.ready.then(() => true)'), 30000),
@@ -128,11 +132,15 @@ async function replay(
     const baseline = await heap();
     const result = await within(
       page.evaluate<ReplayResult>('bench.run()'),
-      timeout
+      600000
     );
-    if (result === undefined) return { status: 'timed-out' as const };
+    assert.ok(result !== undefined, `${library} ${fixture} ${mode}: timed out`);
     return {
-      status: 'completed' as const,
+      // Total work is fair across document sizes; p95 of a few updates is just the slowest one.
+      updateTotalMs:
+        Math.round(result.updates.reduce((sum, value) => sum + value, 0) * 10) /
+        10,
+      updateMedianMs: median(result.updates),
       updateP95Ms: p95(result.updates),
       frameP95Ms: p95(result.frames),
       heapBytes: (await heap()) - baseline,
@@ -145,81 +153,77 @@ async function replay(
 
 const records: (Awaited<ReturnType<typeof replay>> & {
   library: string;
-  scale: number;
+  fixture: string;
   mode: string;
   run: number;
 })[] = [];
-const hashes = new Map<number, string>();
-for (const { scale, mode, stress } of cases) {
-  const characters = createStressFixture(scale).length;
-  for (let run = 0; run < (stress ? 1 : runs); run++) {
+// Engines split paragraphs and know languages differently, so each library is only checked against itself.
+const expected = new Map<string, ReplayResult>();
+for (const { fixture, mode, updates } of cases) {
+  for (let run = 0; run < runs; run++) {
     // Alternate the first library to spread order and thermal bias.
     for (const library of run % 2 === 0
       ? libraries
       : [...libraries].reverse()) {
-      const label = `${library} ${scale}× ${mode} #${run + 1}`;
-      const result = await replay(
-        library,
-        scale,
-        mode,
-        stress ? settings.stressTimeoutMs : 600000
+      const label = `${library} ${fixture.name} ${mode} #${run + 1}`;
+      const result = await replay(library, fixture.name, mode);
+      assert.deepEqual(result.errors, [], label);
+      assert.equal(result.updates.length, updates, `${label}: update count`);
+      assert.ok(
+        mode === 'plain'
+          ? result.highlightedFences === 0
+          : result.highlightedFences > 0 || result.fences === 0,
+        `${label}: highlighted code blocks`
       );
-      if (result.status === 'completed') {
-        assert.deepEqual(result.errors, [], label);
-        assert.equal(
-          result.updates.length,
-          Math.ceil(characters / (32 * scale)),
-          `${label}: update count`
-        );
-        assert.equal(result.paragraphs, 101 * scale, `${label}: paragraphs`);
-        assert.equal(result.fences, scale, `${label}: code blocks`);
+      const key = `${library} ${fixture.name}`;
+      const first = expected.get(key) ?? result;
+      expected.set(key, first);
+      assert.equal(result.paragraphs, first.paragraphs, `${label}: paragraphs`);
+      assert.equal(result.fences, first.fences, `${label}: code blocks`);
+      assert.equal(result.textHash, first.textHash, `${label}: text`);
+      if (mode !== 'plain') {
+        const highlighted = expected.get(`${key} highlight`) ?? result;
+        expected.set(`${key} highlight`, highlighted);
         assert.equal(
           result.highlightedFences,
-          mode === 'plain' ? 0 : scale,
+          highlighted.highlightedFences,
           `${label}: highlighted code blocks`
         );
-        if (!hashes.has(scale)) hashes.set(scale, result.textHash);
-        assert.equal(result.textHash, hashes.get(scale), `${label}: text`);
-        console.log(
-          `${label}: update p95 ${result.updateP95Ms} ms, frame p95 ${result.frameP95Ms} ms, heap +${(result.heapBytes / 1e6).toFixed(1)} MB`
-        );
-      } else {
-        assert.ok(stress, `${label}: timed out`);
-        console.log(`${label}: timed out`);
       }
-      records.push({ library, scale, mode, run, ...result });
+      console.log(
+        `${label}: update total ${result.updateTotalMs} ms, median ${result.updateMedianMs} ms, p95 ${result.updateP95Ms} ms, frame p95 ${result.frameP95Ms} ms, heap +${(result.heapBytes / 1e6).toFixed(1)} MB`
+      );
+      records.push({ library, fixture: fixture.name, mode, run, ...result });
     }
   }
 }
 
-// Median of each run's own p95, not a pooled percentile.
-const summarize = ({ scale, mode }: { scale: number; mode: string }) => {
-  const characters = createStressFixture(scale).length;
+// Median across runs of each run's own total, median, and p95, not pooled samples.
+const summarize = ({ fixture, mode, updates }: (typeof cases)[number]) => {
   const pick = (library: string) => {
-    const done = records.flatMap((record) =>
-      record.library === library &&
-      record.scale === scale &&
-      record.mode === mode &&
-      record.status === 'completed'
-        ? [record]
-        : []
+    const done = records.filter(
+      (record) =>
+        record.library === library &&
+        record.fixture === fixture.name &&
+        record.mode === mode
     );
-    return done.length === 0
-      ? { status: 'timed-out' }
-      : {
-          status: 'completed',
-          runs: done.length,
-          updateP95Ms: median(done.map((record) => record.updateP95Ms)),
-          frameP95Ms: median(done.map((record) => record.frameP95Ms)),
-          heapBytes: median(done.map((record) => record.heapBytes)),
-          elements: done[0].elements,
-        };
+    return {
+      runs: done.length,
+      updateTotalMs: median(done.map((record) => record.updateTotalMs)),
+      updateMedianMs: median(done.map((record) => record.updateMedianMs)),
+      updateP95Ms: median(done.map((record) => record.updateP95Ms)),
+      frameP95Ms: median(done.map((record) => record.frameP95Ms)),
+      heapBytes: median(done.map((record) => record.heapBytes)),
+      elements: done[0].elements,
+      highlightedFences: done[0].highlightedFences,
+    };
   };
   return {
-    scale,
+    fixture: fixture.name,
     mode,
-    characters,
-    updates: Math.ceil(characters / (32 * scale)),
+    characters: fixture.source.length,
+    bytes: fixture.bytes,
+    updates,
     words: pick('words'),
     streamdown: pick('streamdown'),
   };
@@ -238,26 +242,25 @@ const report = {
   chrome,
   versions: system.versions,
   settings,
-  rows: cases.filter((entry) => !entry.stress).map(summarize),
-  stress: cases.filter((entry) => entry.stress).map(summarize),
+  rows: cases.map(summarize),
   download,
   downloadRun,
   downloadCoverage,
 };
-console.log(`\nChromium ${chrome}: median of per-run p95 (lower is better)`);
+console.log(`\nChromium ${chrome}: median across runs (lower is better)`);
 console.table(
-  [...report.rows, ...report.stress].map((row) => ({
-    Case: `${row.scale}× ${row.mode}`,
+  report.rows.map((row) => ({
+    Case: `${row.fixture} ${row.mode}`,
     ...Object.fromEntries(
       libraries.flatMap((library) => {
         const value = row[library];
-        return value.updateP95Ms === undefined
-          ? [[`${library} update ms`, 'timed out']]
-          : [
-              [`${library} update ms`, value.updateP95Ms.toFixed(1)],
-              [`${library} frame ms`, value.frameP95Ms.toFixed(1)],
-              [`${library} heap MB`, (value.heapBytes / 1e6).toFixed(1)],
-            ];
+        return [
+          [`${library} total ms`, value.updateTotalMs.toFixed(0)],
+          [`${library} median ms`, value.updateMedianMs.toFixed(1)],
+          [`${library} p95 ms`, value.updateP95Ms.toFixed(1)],
+          [`${library} frame ms`, value.frameP95Ms.toFixed(1)],
+          [`${library} heap MB`, (value.heapBytes / 1e6).toFixed(1)],
+        ];
       })
     ),
   }))
@@ -282,11 +285,11 @@ if (flags.docs) {
     JSON.stringify(
       {
         ...report,
-        runs: records.map((record) =>
-          record.status === 'completed'
-            ? { ...record, updates: undefined, frames: undefined }
-            : record
-        ),
+        runs: records.map((record) => ({
+          ...record,
+          updates: undefined,
+          frames: undefined,
+        })),
       },
       null,
       2

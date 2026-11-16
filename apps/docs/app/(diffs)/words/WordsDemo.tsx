@@ -24,7 +24,6 @@ import {
 import {
   createStressFixture,
   STRESS_BASE_CHARACTERS,
-  STRESS_SCALES,
 } from '../../../../../packages/words/benchmark/fixtures';
 import { getBenchmarkGradientStyle } from '../highlights/BenchmarkBar';
 import rainbowStyles from '../highlights/HighlightsRainbow.module.css';
@@ -86,22 +85,19 @@ const speeds = [
   { label: 'Normal', value: 8 },
   { label: 'Fast', value: 32 },
 ];
-const exampleScales = STRESS_SCALES.filter((scale) => scale !== 1000);
+// Large samples stream this many times faster than the chosen speed.
+const largeSamples: Record<string, number> = { long: 1, 'gfm-spec': 32 };
 const sampleOptions = [
   { value: 'conversation', label: 'A conversation' },
   { value: 'code', label: 'A little code' },
   { value: 'references', label: 'Late-arriving references' },
-  ...exampleScales.map((scale) => ({
-    value: 'stress-' + scale,
-    label:
-      (scale === 1 ? 'Long response' : 'Large sample') +
-      ' · ' +
-      scale +
-      '× (' +
-      ((STRESS_BASE_CHARACTERS * scale + 2 * (scale - 1)) / 1000).toFixed(1) +
-      ' KB)',
-  })),
+  {
+    value: 'long',
+    label: `Long response (${(STRESS_BASE_CHARACTERS / 1000).toFixed(1)} KB)`,
+  },
+  { value: 'gfm-spec', label: 'Large sample · GFM spec (216.4 KB)' },
 ];
+let gfmSpec: Promise<string> | undefined;
 
 function ExampleSwitch({
   label,
@@ -167,7 +163,9 @@ function WordsExample({
   const [sample, setSample] = useState(
     kind === 'streaming' ? 'streaming' : 'conversation'
   );
-  const [stressScale, setStressScale] = useState<1 | 100 | 1000 | undefined>();
+  const [stressScale, setStressScale] = useState<number>();
+  // Bumped on every source change, so a late GFM spec fetch does not replace a newer choice.
+  const sourceRequest = useRef(0);
   const [source, setSource] = useState<string>(initialSource);
   const [playback, setPlayback] = useState<Playback>({ status: 'ready' });
   const [speed, setSpeed] = useState(8);
@@ -218,19 +216,28 @@ function WordsExample({
   }, [isStreaming, cursor, source.length, charactersPerStep]);
 
   const selectSample = (value: string): void => {
-    const scale = exampleScales.find((scale) => value === 'stress-' + scale);
-    const nextSource =
-      scale === undefined
-        ? value === 'streaming'
-          ? streamingSample
-          : samples[value as keyof typeof samples]
-        : createStressFixture(scale);
+    const request = ++sourceRequest.current;
+    const scale = largeSamples[value];
     setSample(value);
     setStressScale(scale);
     setSpeed(scale === undefined ? 8 : 32);
-    setSource(nextSource);
     // Large documents wait for playback instead of building their entire preview on selection.
     setPlayback({ status: scale === undefined ? 'ready' : 'waiting' });
+    if (value !== 'gfm-spec') {
+      setSource(
+        value === 'long'
+          ? createStressFixture(1)
+          : value === 'streaming'
+            ? streamingSample
+            : samples[value as keyof typeof samples]
+      );
+      return;
+    }
+    setSource('');
+    gfmSpec ??= fetch('/words/gfm-spec.md').then((response) => response.text());
+    void gfmSpec.then((text) => {
+      if (sourceRequest.current === request) setSource(text);
+    });
   };
   const replay = (): void => {
     setPlayback({ status: 'streaming', cursor: 0 });
@@ -419,6 +426,7 @@ function WordsExample({
                 value={source}
                 spellCheck={false}
                 onChange={(event) => {
+                  sourceRequest.current++;
                   setSample('custom');
                   setSource(event.target.value);
                   setPlayback({
@@ -482,10 +490,7 @@ function WordsExample({
           <span>
             {stressScale === undefined
               ? 'Edit the source or replay the response.'
-              : stressScale +
-                '× sample · ' +
-                charactersPerStep.toLocaleString() +
-                ' characters per step'}
+              : charactersPerStep.toLocaleString() + ' characters per step'}
           </span>
         </div>
       </div>
