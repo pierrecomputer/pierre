@@ -972,7 +972,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
 
 for (const kind of ['file', 'split', 'unified'] as const) {
   for (const edit of [false, true]) {
-    test(`initial search moves after the mounted range before wrapping in ${kind} ${edit ? 'edit' : 'readonly'}`, async ({
+    test(`initial search moves after the visible area before wrapping in ${kind} ${edit ? 'edit' : 'readonly'}`, async ({
       page,
     }) => {
       await page.goto(
@@ -1023,15 +1023,15 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       await expect(root.locator('[data-matches]')).toHaveText('2 of 3');
       await expect(row(1000)).toBeInViewport();
       await input.press('Escape');
-      // A mounted overscan hit wins over the later unmounted hit.
+      // A hit mounted above the viewport loses to the next hit below it.
       await prepare(1002);
       await expect(row(1000)).toHaveCount(1);
       await expect(row(1000)).not.toBeInViewport();
       await page.keyboard.press('ControlOrMeta+f');
       input = root.getByRole('textbox', { name: 'Search' });
       await input.fill('target');
-      await expect(root.locator('[data-matches]')).toHaveText('2 of 3');
-      await expect(row(1000)).toBeInViewport();
+      await expect(root.locator('[data-matches]')).toHaveText('3 of 3');
+      await expect(row(1800)).toBeInViewport();
       await input.press('Escape');
       await prepare(2800);
       await expect(row(1800)).toHaveCount(0);

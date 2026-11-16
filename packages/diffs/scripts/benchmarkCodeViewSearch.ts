@@ -39,6 +39,8 @@ interface BenchmarkSummary {
   collect: TimingSummary | null;
   match: TimingSummary | null;
   total: TimingSummary;
+  completion?: TimingSummary;
+  blocked?: TimingSummary;
 }
 
 interface BenchmarkCase {
@@ -174,14 +176,9 @@ function searchItem(
   params: SearchParams
 ): BenchmarkSample {
   const start = performance.now();
-  const scan = new CodeViewSearchScan(
-    params,
-    ['item'],
-    getItem,
-    MAX_SEARCH_MATCHES
-  );
+  const scan = new CodeViewSearchScan(params, 1, getItem, MAX_SEARCH_MATCHES);
   scan.advance();
-  const matches = scan.getItemMatches('item');
+  const matches = scan.getItemMatches(0);
   const elapsed = performance.now() - start;
   return {
     collectMs: 0,
@@ -213,7 +210,11 @@ function createCases(lines: number): BenchmarkCase[] {
         ({ contents }) =>
         (params) =>
           searchItem(
-            () => ({ type: 'file', contents: contents.after }),
+            () => ({
+              type: 'file',
+              itemId: 'item',
+              contents: contents.after,
+            }),
             params
           ),
     },
@@ -229,7 +230,13 @@ function createCases(lines: number): BenchmarkCase[] {
         ({ fileDiff }) =>
         (params) =>
           searchItem(
-            () => ({ type: 'diff', fileDiff, diffStyle, additionsOnly: false }),
+            () => ({
+              type: 'diff',
+              itemId: 'item',
+              fileDiff,
+              diffStyle,
+              additionsOnly: false,
+            }),
             params
           ),
     });
@@ -242,7 +249,11 @@ function createCases(lines: number): BenchmarkCase[] {
         const document = createEditedDocument(contents.after, lines, inserts);
         return (params) =>
           searchItem(
-            () => ({ type: 'file', contents: document.getText() }),
+            () => ({
+              type: 'file',
+              itemId: 'item',
+              contents: document.getText(),
+            }),
             params
           );
       },
@@ -264,6 +275,7 @@ function createCases(lines: number): BenchmarkCase[] {
             searchItem(
               () => ({
                 type: 'diff',
+                itemId: 'item',
                 fileDiff,
                 diffStyle,
                 additionsOnly: false,
@@ -335,11 +347,12 @@ function measureCase(
 // Build exact-size collections of files or real split diffs for the public API.
 function createCodeViewItems(
   kind: 'files' | 'diffs',
-  lines: number
+  lines: number,
+  itemLines = 1000
 ): CodeViewItem<undefined>[] {
   const items: CodeViewItem<undefined>[] = [];
-  for (let startLine = 0; startLine < lines; startLine += 1000) {
-    const contents = createContents(Math.min(1000, lines - startLine));
+  for (let startLine = 0; startLine < lines; startLine += itemLines) {
+    const contents = createContents(Math.min(itemLines, lines - startLine));
     const id = `item-${items.length}`;
     const name = `${id}.txt`;
     if (kind === 'files') {
@@ -371,25 +384,37 @@ function hasExpectedSearchState(
   query: (typeof QUERIES)[number],
   expectedCount: number
 ): boolean {
-  return state?.text === query.text && state.matchCount === expectedCount;
+  return (
+    state?.text === query.text &&
+    state.matchCount === expectedCount &&
+    !state.searching
+  );
 }
 
-// Time the public query update across the requested items. Setup and waiting for
-// the final query and count stay outside the timer, measuring synchronous work.
+// The command measures a query update or a navigation key, leaving setup
+// outside the timer. Query cases also measure later render callbacks and completion.
 async function measureCodeViewCase(
   kind: 'files' | 'diffs',
   query: (typeof QUERIES)[number],
   lines: number,
-  config: BenchmarkConfig
+  config: BenchmarkConfig,
+  layout:
+    | 'top'
+    | 'dense-middle-single'
+    | 'dense-middle-many'
+    | 'small-items' = 'top',
+  navigation?: 'next' | 'previous'
 ): Promise<BenchmarkSummary> {
   const [
     { CodeView },
     { disposeHighlighter, getSharedHighlighter },
     { createRoot, installDom, renderItems, wait, waitFor },
+    { fillSearch, getSearchInput },
   ] = await Promise.all([
     import('../src/components/CodeView'),
     import('../src/highlighter/shared_highlighter'),
     import('../test/domHarness'),
+    import('../test/codeViewSearchHarness'),
   ]);
   await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
@@ -398,39 +423,152 @@ async function measureCodeViewCase(
   });
   const dom = installDom();
   let searchState: SearchPanelState | undefined;
+  let completedAt = 0;
+  let measuringQuery = false;
+  let longestRenderMs = 0;
+  const requestFrame = globalThis.requestAnimationFrame;
+  // Include deferred result selection in the longest query/render callback.
+  globalThis.requestAnimationFrame = (callback) =>
+    requestFrame((time) => {
+      if (!measuringQuery) {
+        callback(time);
+        return;
+      }
+      const startedAt = performance.now();
+      try {
+        callback(time);
+      } finally {
+        longestRenderMs = Math.max(
+          longestRenderMs,
+          performance.now() - startedAt
+        );
+      }
+    });
   const viewer = new CodeView({
+    expandUnchanged: navigation != null ? true : undefined,
     searchOptions: { defaults: { regex: query.regex, caseSensitive: false } },
     onSearchStateChange: (state) => {
       searchState = state;
+      if (state?.text === query.text && !state.searching) {
+        completedAt = performance.now();
+      }
     },
   });
-  const name = `code-view/${kind}/${query.name}`;
+  const name =
+    navigation != null
+      ? layout === 'small-items'
+        ? `code-view/small-items/${kind}/${navigation}`
+        : layout === 'dense-middle-single'
+          ? `code-view/navigation-single/${kind}/${navigation}`
+          : `code-view/navigation/${kind}/${navigation}`
+      : layout === 'top'
+        ? `code-view/${kind}/${query.name}`
+        : `code-view/${layout}/${kind}/${query.name}`;
   const expectedCount =
     query.name === 'rare-literal'
       ? 0
       : Math.min(lines * (kind === 'diffs' ? 2 : 1), MAX_SEARCH_MATCHES);
   try {
     const root = createRoot();
+    // The benchmark presses the same keys as a user in the find input.
+    const navigateSearch = (previous: boolean) => {
+      getSearchInput(root).dispatchEvent(
+        new window.KeyboardEvent('keydown', {
+          key: 'Enter',
+          shiftKey: previous,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    };
     viewer.setup(root);
-    const items = createCodeViewItems(kind, lines);
+    const itemLines =
+      layout === 'dense-middle-single'
+        ? lines
+        : layout === 'small-items'
+          ? 4
+          : 1000;
+    const items = createCodeViewItems(kind, lines, itemLines);
     await renderItems(viewer, items);
     const samples: number[] = [];
+    const completionSamples: number[] = [];
+    const blockedSamples: number[] = [];
     for (let index = 0; index < config.warmupRuns + config.runs; index++) {
       viewer.openSearch({ query: '', scope: 'all', mode: 'find' });
       await wait(0);
+      if (layout !== 'top') {
+        const middleLine = Math.min(Math.floor(lines / 2), 40_000);
+        const item = items[Math.floor(middleLine / itemLines)];
+        if (item == null) throw new Error(`${name}: middle item is missing`);
+        viewer.scrollTo({
+          type: 'line',
+          id: item.id,
+          lineNumber: (middleLine % itemLines) + 1,
+          side: 'additions',
+          align: 'center',
+          behavior: 'instant',
+        });
+        viewer.render(true);
+        await wait(0);
+      }
+      if (navigation != null) {
+        if (layout === 'small-items') {
+          viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
+          await waitFor(() =>
+            hasExpectedSearchState(searchState, query, expectedCount)
+          );
+        }
+        viewer.scrollTo({ type: 'position', position: 0, behavior: 'instant' });
+        viewer.render(true);
+        if (layout === 'small-items') fillSearch(root, query.text);
+        else
+          viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
+        await waitFor(() =>
+          hasExpectedSearchState(searchState, query, expectedCount)
+        );
+        if (searchState?.currentMatchIndex !== 0) {
+          throw new Error(
+            `${name}: expected the first match before navigation`
+          );
+        }
+        navigateSearch(true);
+        navigateSearch(true);
+        if (searchState?.currentMatchIndex !== expectedCount - 2) {
+          throw new Error(
+            `${name}: could not prepare navigation near the end: ${searchState?.currentMatchIndex} of ${expectedCount}`
+          );
+        }
+      }
       Bun.gc(true);
+      completedAt = 0;
+      longestRenderMs = 0;
+      measuringQuery = true;
       const start = performance.now();
-      viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
+      if (navigation != null) {
+        navigateSearch(navigation === 'previous');
+        const expectedIndex = expectedCount - (navigation === 'next' ? 1 : 3);
+        if (searchState?.currentMatchIndex !== expectedIndex) {
+          throw new Error(`${name}: expected current index ${expectedIndex}`);
+        }
+        completedAt = performance.now();
+      } else {
+        viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
+      }
       const elapsed = performance.now() - start;
       await waitFor(() =>
         hasExpectedSearchState(searchState, query, expectedCount)
       );
+      measuringQuery = false;
       if (!hasExpectedSearchState(searchState, query, expectedCount)) {
         throw new Error(
           `${name}: expected query "${query.text}" with ${expectedCount} matches, got query "${searchState?.text}" with ${searchState?.matchCount}`
         );
       }
-      if (index >= config.warmupRuns) samples.push(elapsed);
+      if (index >= config.warmupRuns) {
+        samples.push(elapsed);
+        completionSamples.push(completedAt - start);
+        blockedSamples.push(Math.max(elapsed, longestRenderMs));
+      }
       viewer.closeSearch();
     }
     return {
@@ -441,9 +579,12 @@ async function measureCodeViewCase(
       collect: null,
       match: null,
       total: summarize(samples),
+      completion: summarize(completionSamples),
+      blocked: summarize(blockedSamples),
     };
   } finally {
     viewer.cleanUp();
+    globalThis.requestAnimationFrame = requestFrame;
     dom.cleanup();
     await disposeHighlighter();
   }
@@ -482,6 +623,94 @@ for (const lines of config.lines) {
       }
     }
   }
+  if (lines === 100_000) {
+    for (const kind of codeViewKinds) {
+      for (const query of QUERIES) {
+        if (query.name === 'regex') continue;
+        if (
+          config.only == null ||
+          `code-view/small-items/${kind}/${query.name}`.includes(config.only)
+        ) {
+          results.push(
+            await measureCodeViewCase(kind, query, lines, config, 'small-items')
+          );
+        }
+      }
+      if (
+        config.only == null ||
+        `code-view/small-items/${kind}/next`.includes(config.only)
+      ) {
+        results.push(
+          await measureCodeViewCase(
+            kind,
+            QUERIES[1],
+            lines,
+            config,
+            'small-items',
+            'next'
+          )
+        );
+      }
+    }
+  }
+  if (lines === 100_000) {
+    const directions: ('next' | 'previous')[] = ['next', 'previous'];
+    for (const direction of directions) {
+      if (
+        config.only == null ||
+        `code-view/navigation-single/files/${direction}`.includes(config.only)
+      ) {
+        results.push(
+          await measureCodeViewCase(
+            'files',
+            QUERIES[1],
+            lines,
+            config,
+            'dense-middle-single',
+            direction
+          )
+        );
+      }
+    }
+    for (const kind of codeViewKinds) {
+      for (const direction of directions) {
+        if (
+          config.only == null ||
+          `code-view/navigation/${kind}/${direction}`.includes(config.only)
+        ) {
+          results.push(
+            await measureCodeViewCase(
+              kind,
+              QUERIES[1],
+              lines,
+              config,
+              'top',
+              direction
+            )
+          );
+        }
+      }
+    }
+  }
+  const middleLayouts: ('dense-middle-single' | 'dense-middle-many')[] = [
+    'dense-middle-single',
+    'dense-middle-many',
+  ];
+  for (const layout of middleLayouts) {
+    for (const kind of codeViewKinds) {
+      for (const query of QUERIES) {
+        if (query.name !== 'common-literal') continue;
+        if (
+          config.only == null ||
+          `code-view/${layout}/${kind}/${query.name}`.includes(config.only)
+        ) {
+          results.push(
+            await measureCodeViewCase(kind, query, lines, config, layout)
+          );
+        }
+      }
+    }
+  }
 }
 if (results.length === 0)
   throw new Error(`No cases match --only "${config.only}"`);
@@ -493,11 +722,19 @@ if (config.outputJson) {
         config,
         maxSearchMatches: MAX_SEARCH_MATCHES,
         measurement: {
+          blocked:
+            'Maximum synchronous query call or requestAnimationFrame callback duration during that query in jsdom; JavaScript callbacks, not browser tasks',
+          navigation:
+            'Synchronous Enter or Shift+Enter near the end of a completed 100000-match list; query setup and two previous steps are excluded',
+          smallItems:
+            '25000 items of four lines each, searched from the middle; navigation reuses the finished scan and positions near its last match before timing Next',
+          denseMiddle:
+            'Public scrolling to a middle line in one large item or a collection of 1000-line items, before the query timer starts',
           fixturePreparationExcluded: true,
           forcedGcBeforeTiming: true,
           perItemMatchingIncludesPreparation: true,
           codeView:
-            'Synchronous public query update in jsdom at every configured size and query, for files and split diffs in items of up to 1000 lines; final-query/count waiting excluded',
+            'Synchronous public query update in jsdom at every configured size and query, for files and split diffs in items of up to 1000 lines; completion records the final state callback separately',
         },
         results,
       },
@@ -513,7 +750,7 @@ if (config.outputJson) {
     'Times are best/median ms. Per-item scans include preparation and matching; collection is zero. Fixture preparation and forced GC are excluded.'
   );
   console.log(
-    'CodeView cases search files and split diffs at every configured size and query, in items of up to 1000 lines. Total is the synchronous public query update in jsdom; final-query/count waiting is excluded.'
+    'Blocked is the maximum synchronous query call or render callback duration in jsdom, not a browser task. Navigation cases time Enter or Shift+Enter near the end of 100000 matches. Other CodeView cases time the public query update; completion measures the final state callback separately.'
   );
   console.table(
     results.map((result) => ({
@@ -529,6 +766,14 @@ if (config.outputJson) {
           ? 'N/A'
           : `${result.match.bestMs.toFixed(3)}/${result.match.medianMs.toFixed(3)}`,
       total: `${result.total.bestMs.toFixed(3)}/${result.total.medianMs.toFixed(3)}`,
+      blocked:
+        result.blocked == null
+          ? 'N/A'
+          : `${result.blocked.bestMs.toFixed(3)}/${result.blocked.medianMs.toFixed(3)}`,
+      completion:
+        result.completion == null
+          ? 'N/A'
+          : `${result.completion.bestMs.toFixed(3)}/${result.completion.medianMs.toFixed(3)}`,
     }))
   );
 }

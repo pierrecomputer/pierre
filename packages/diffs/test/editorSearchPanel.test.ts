@@ -116,8 +116,6 @@ function createWidget(
     defaultQuery,
     mode,
     search: (searchParams) => ({ matches: textDocument.search(searchParams) }),
-    isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
-      aStart === bStart && aEnd === bEnd,
     scrollToMatch: (nextMatch) => scrolled.push([...nextMatch]),
     replace: {
       replaceMatch: (match, searchParams): MatchRange => {
@@ -134,7 +132,7 @@ function createWidget(
     },
     onUpdate: ({ matches }) => {
       updates.push(matches.map((match) => [...match] as MatchRange));
-      return selectCurrent ? matches[0] : undefined;
+      return selectCurrent && matches.length > 0 ? 0 : undefined;
     },
     onClose: () => {
       closed = true;
@@ -258,7 +256,9 @@ describe('SearchPanelWidget', () => {
           scrollToMatch: () => {},
           onUpdate: (result) => {
             updates.push(result.matches);
-            return result.preferredMatch;
+            return result.preferredMatch != null
+              ? result.matches.indexOf(result.preferredMatch)
+              : undefined;
           },
           onClose: () => {},
         });
@@ -694,8 +694,6 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     defaultQuery: '',
     mode: 'replace',
     search: (searchParams) => ({ matches: textDocument.search(searchParams) }),
-    isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
-      aStart === bStart && aEnd === bEnd,
     scrollToMatch,
     replace: {
       replaceMatch: (match, searchParams): MatchRange => {
@@ -711,10 +709,10 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
       },
     },
     onUpdate: ({ matches }) => {
-      for (const match of matches) {
+      for (const [index, match] of matches.entries()) {
         if (match[0] >= selection[0]) {
           scrollToMatch(match);
-          return match;
+          return index;
         }
       }
       return undefined;
@@ -1302,7 +1300,9 @@ describe('SearchPanelWidget', () => {
         scrollToMatch: () => {},
         onUpdate: (result) => {
           updates.push(result);
-          return result.preferredMatch;
+          return result.preferredMatch != null
+            ? result.matches.indexOf(result.preferredMatch)
+            : undefined;
         },
         onClose: () => {},
       });
@@ -1341,7 +1341,7 @@ describe('SearchPanelWidget', () => {
         mode: 'replace',
         search: () => ({ matches: [[0, 3]] }),
         scrollToMatch: () => {},
-        onUpdate: ({ matches }) => matches[0],
+        onUpdate: ({ matches }) => (matches.length > 0 ? 0 : undefined),
         onClose: () => {},
       });
       widget.mount();
@@ -1418,7 +1418,7 @@ describe('SearchPanelWidget', () => {
         scrollToMatch: () => {},
         onUpdate: ({ matches }) => {
           updates.push(matches);
-          return matches[0];
+          return matches.length > 0 ? 0 : undefined;
         },
         onClose: () => {},
       });
@@ -1477,8 +1477,6 @@ describe('SearchPanelWidget', () => {
         defaultQuery: 'foo',
         mode: 'replace',
         search: () => ({ matches }),
-        isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
-          aStart === bStart && aEnd === bEnd,
         scrollToMatch: (match, retainFocus) => {
           scrolledMatches.push([match, retainFocus]);
         },
@@ -1491,7 +1489,8 @@ describe('SearchPanelWidget', () => {
             replaceAllCalls.push([allMatches, params]);
           },
         },
-        onUpdate: ({ matches: allMatches }) => allMatches[0],
+        onUpdate: ({ matches: allMatches }) =>
+          allMatches.length > 0 ? 0 : undefined,
         onClose: () => {},
       });
       widget.mount();

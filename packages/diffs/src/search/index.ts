@@ -26,6 +26,8 @@ export interface SearchPanelState extends SearchParams {
   mode: SearchPanelMode;
   /** Whether the host bound replacement for the current scope. */
   canReplace: boolean;
+  /** True while the search is still running and more matches may arrive. */
+  searching: boolean;
   matchCount: number;
   /** Zero-based index of the current match, or undefined when none is current. */
   currentMatchIndex: number | undefined;

@@ -87,6 +87,8 @@ export const DEFAULT_MESSAGES = {
   replacePlaceholder: 'Replace',
   /** Search panel status when the query is empty or matches nothing. */
   noSearchResults: 'No results',
+  /** Search panel status while scanning without any completed matches yet. */
+  searching: 'Searching…',
   /** Search panel status when no match is selected. Receives `count`. */
   searchResultCount: '{count, plural, one {# result} other {# results}}',
   /**

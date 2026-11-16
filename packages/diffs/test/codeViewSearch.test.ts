@@ -163,6 +163,7 @@ describe('CodeView search walkers', () => {
       new CodeViewSearchTextCursor('line'),
       new CodeViewSearchDiffCursor({
         type: 'diff',
+        itemId: 'a',
         fileDiff,
         diffStyle: 'split',
         additionsOnly: false,
@@ -198,6 +199,7 @@ describe('CodeView search walkers', () => {
     const document = new TextDocument('file:///short', 'line edited');
     const cursor = new CodeViewSearchDiffCursor({
       type: 'diff',
+      itemId: 'a',
       fileDiff: createLargeDiff(),
       diffStyle: 'split',
       additionsOnly: false,
@@ -219,6 +221,7 @@ describe('CodeView search walkers', () => {
           for (let stopAt = 0; stopAt < expected.length; stopAt++) {
             const cursor = new CodeViewSearchDiffCursor({
               type: 'diff',
+              itemId: 'a',
               fileDiff: diff,
               diffStyle,
               additionsOnly: scoped,
@@ -236,6 +239,7 @@ describe('CodeView search walkers', () => {
           }
           const cursor = new CodeViewSearchDiffCursor({
             type: 'diff',
+            itemId: 'a',
             fileDiff: diff,
             diffStyle,
             additionsOnly: scoped,
@@ -305,8 +309,8 @@ describe('CodeViewSearchScan', () => {
       false
     );
     const items: CodeViewSearchItem[] = [
-      { type: 'file', contents },
-      { type: 'file', contents: document.getText() },
+      { type: 'file', itemId: 'a', contents },
+      { type: 'file', itemId: 'a', contents: document.getText() },
     ];
     for (const fileDiff of [full, partial]) {
       for (const diffStyle of ['split', 'unified'] satisfies (
@@ -316,12 +320,14 @@ describe('CodeViewSearchScan', () => {
         for (const scoped of [false, true]) {
           items.push({
             type: 'diff',
+            itemId: 'a',
             fileDiff,
             diffStyle,
             additionsOnly: scoped,
           });
           items.push({
             type: 'diff',
+            itemId: 'a',
             fileDiff,
             diffStyle,
             additionsOnly: scoped,
@@ -333,7 +339,7 @@ describe('CodeViewSearchScan', () => {
     for (const item of items) {
       const full = new CodeViewSearchScan(
         params,
-        ['a'],
+        1,
         () => item,
         MAX_SEARCH_MATCHES
       );
@@ -341,7 +347,7 @@ describe('CodeViewSearchScan', () => {
       withClock(() => {
         const sliced = new CodeViewSearchScan(
           params,
-          ['a'],
+          1,
           () => item,
           MAX_SEARCH_MATCHES
         );
@@ -356,7 +362,7 @@ describe('CodeViewSearchScan', () => {
     }
   });
 
-  test('publishes complete items, prepares lazily once, and joins a requested order', () => {
+  test('publishes complete items, prepares lazily once, and joins constructor item order', () => {
     const contents = `line${' '.repeat(65_536)}\nline${' '.repeat(65_536)}`;
     const documents = new Map([
       ['a', new TextDocument('file:///a', contents)],
@@ -366,39 +372,98 @@ describe('CodeViewSearchScan', () => {
     withClock(() => {
       const scan = new CodeViewSearchScan(
         params,
-        ['a', 'b'],
-        (id) => {
+        2,
+        (position) => {
+          const id = position === 0 ? 'b' : 'a';
           prepared.push(id);
           const document = documents.get(id);
           if (document == null) throw new Error(`Missing test document ${id}`);
-          return { type: 'file', contents: document.getText() };
+          return { itemId: id, type: 'file', contents: document.getText() };
         },
-        MAX_SEARCH_MATCHES
+        MAX_SEARCH_MATCHES,
+        1
       );
       expect(prepared).toEqual([]);
       scan.advance(1);
       expect(prepared).toEqual(['a']);
       expect(scan.finished).toBe(false);
-      expect(scan.getItemMatches('a')).toBeUndefined();
-      expect(scan.getLineMatches('a', 1)).toBeUndefined();
+      expect(scan.getItemMatches(1)).toBeUndefined();
+      expect(scan.getLineMatches(1, 1)).toBeUndefined();
       expect(scan.getMatches()).toEqual([]);
       while (!scan.finished) scan.advance(1);
       expect(prepared).toEqual(['a', 'b']);
-      expect(scan.getMatches().map(({ itemId }) => itemId)).toEqual([
-        'a',
-        'a',
-        'b',
-      ]);
-      expect(scan.getMatches(['b', 'a']).map(({ itemId }) => itemId)).toEqual([
-        'b',
-        'a',
-        'a',
-      ]);
-      const lines = scan.getLineMatches('a', 1);
-      expect(lines).toEqual(scan.getItemMatches('a')?.slice(0, 1));
-      expect(scan.getLineMatches('a', 1)).toBe(lines);
+      const matches = scan.getMatches();
+      expect(matches.map(({ itemId }) => itemId)).toEqual(['b', 'a', 'a']);
+      expect(scan.getMatches()).toBe(matches);
+      const lines = scan.getLineMatches(1, 1);
+      expect(lines).toEqual({ lineNumber: 1, startIndex: 0, endIndex: 1 });
+      const itemMatches = scan.getItemMatches(1);
+      if (lines == null || itemMatches == null)
+        throw new Error('Expected the completed first line');
+      const lineMatches = [];
+      for (let index = lines.startIndex; index < lines.endIndex; index++)
+        lineMatches.push(itemMatches[index]);
+      expect(lineMatches).toEqual(itemMatches.slice(0, 1));
+      expect(scan.getLineMatches(1, 1)).toBe(lines);
       scan.advance(1);
       expect(prepared).toEqual(['a', 'b']);
+    });
+  });
+
+  test('joins matched items across the wrap and adjusts indices after earlier matches arrive', () => {
+    const contents = [
+      'line before first',
+      'missing',
+      'line before second',
+      'missing',
+      'line after first',
+      'missing',
+      'missing',
+      'line after second',
+    ];
+    const padding = ' '.repeat(65_536);
+    withClock(() => {
+      const scan = new CodeViewSearchScan(
+        params,
+        contents.length,
+        (position) => ({
+          itemId: `item-${position}`,
+          type: 'file',
+          contents: `${contents[position]}${padding}`,
+        }),
+        MAX_SEARCH_MATCHES,
+        4
+      );
+      while (scan.getItemMatches(7) == null) scan.advance(1);
+      const later = scan.getItemMatches(7)?.[0];
+      if (later == null) throw new Error('Expected later match');
+      expect(scan.getMatches().map(({ itemId }) => itemId)).toEqual([
+        'item-4',
+        'item-7',
+      ]);
+      expect(scan.getMatchIndex(7, later)).toBe(1);
+      expect(scan.getFirstMatchedEntryAtOrAfter(0)?.position).toBe(4);
+      expect(scan.hasPendingItems(0, 8)).toBe(true);
+      expect(scan.hasPendingItems(4, 8)).toBe(false);
+      while (!scan.finished) scan.advance(1);
+      expect(scan.getMatches().map(({ itemId }) => itemId)).toEqual([
+        'item-0',
+        'item-2',
+        'item-4',
+        'item-7',
+      ]);
+      expect(scan.getMatchIndex(7, later)).toBe(3);
+      expect(scan.getMatchIndex(7, { ...later })).toBe(3);
+      expect(scan.getFirstMatchedEntryAtOrAfter(0)?.position).toBe(0);
+      expect(scan.getFirstMatchedEntryAtOrAfter(1)?.position).toBe(2);
+      expect(scan.getFirstMatchedEntryAtOrAfter(3)?.position).toBe(4);
+      expect(scan.getFirstMatchedEntryAtOrAfter(5)?.position).toBe(7);
+      expect(scan.getFirstMatchedEntryAtOrAfter(8)).toBeUndefined();
+      expect(scan.hasPendingItems(0, 8)).toBe(false);
+      expect(scan.getItemMatches(1)).toBeUndefined();
+      expect(scan.getItemMatches(3)).toBeUndefined();
+      expect(scan.getItemMatches(5)).toBeUndefined();
+      expect(scan.getItemMatches(6)).toBeUndefined();
     });
   });
 
@@ -406,10 +471,11 @@ describe('CodeViewSearchScan', () => {
     const prepared: string[] = [];
     const scan = new CodeViewSearchScan(
       params,
-      ['a', 'b'],
-      (id) => {
+      2,
+      (position) => {
+        const id = position === 0 ? 'a' : 'b';
         prepared.push(id);
-        return { type: 'file', contents: 'line line\nline line' };
+        return { itemId: id, type: 'file', contents: 'line line\nline line' };
       },
       3
     );
@@ -418,19 +484,23 @@ describe('CodeViewSearchScan', () => {
     expect(prepared).toEqual(['a']);
     expect(
       scan
-        .getItemMatches('a')
+        .getItemMatches(0)
         ?.map(({ lineNumber, startCharacter }) => [lineNumber, startCharacter])
     ).toEqual([
       [1, 0],
       [1, 5],
       [2, 0],
     ]);
-    expect(scan.getItemMatches('b')).toBeUndefined();
+    expect(scan.getItemMatches(1)).toBeUndefined();
   });
 
   test('empty and invalid queries, empty item lists and zero caps never prepare items', () => {
     const prepare = mock(
-      (): CodeViewSearchItem => ({ type: 'file', contents: 'line' })
+      (): CodeViewSearchItem => ({
+        itemId: 'a',
+        type: 'file',
+        contents: 'line',
+      })
     );
     for (const searchParams of [
       { ...params, text: '' },
@@ -438,7 +508,7 @@ describe('CodeViewSearchScan', () => {
     ]) {
       const scan = new CodeViewSearchScan(
         searchParams,
-        ['a'],
+        1,
         prepare,
         MAX_SEARCH_MATCHES
       );
@@ -447,8 +517,8 @@ describe('CodeViewSearchScan', () => {
       expect(scan.getMatches()).toEqual([]);
     }
     for (const scan of [
-      new CodeViewSearchScan(params, [], prepare, MAX_SEARCH_MATCHES),
-      new CodeViewSearchScan(params, ['a'], prepare, 0),
+      new CodeViewSearchScan(params, 0, prepare, MAX_SEARCH_MATCHES),
+      new CodeViewSearchScan(params, 1, prepare, 0),
     ]) {
       scan.advance(1);
       expect(scan.finished).toBe(true);
@@ -462,26 +532,22 @@ describe('CodeViewSearchScan', () => {
       '\n'.repeat(131_072)
     );
     const getItem = (): CodeViewSearchItem => ({
+      itemId: 'a',
       type: 'file',
       contents: document.getText(),
     });
-    const full = new CodeViewSearchScan(
-      params,
-      ['a'],
-      getItem,
-      MAX_SEARCH_MATCHES
-    );
+    const full = new CodeViewSearchScan(params, 1, getItem, MAX_SEARCH_MATCHES);
     full.advance();
     withClock(() => {
       const scan = new CodeViewSearchScan(
         params,
-        ['a'],
+        1,
         getItem,
         MAX_SEARCH_MATCHES
       );
       scan.advance(1);
       expect(scan.finished).toBe(false);
-      expect(scan.getItemMatches('a')).toBeUndefined();
+      expect(scan.getItemMatches(0)).toBeUndefined();
       while (!scan.finished) scan.advance(1);
       expect(scan.getMatches()).toEqual(full.getMatches());
     });
@@ -501,6 +567,7 @@ describe('CodeViewSearchScan edited diffs', () => {
     );
     const provide = mock(
       (): CodeViewSearchItem => ({
+        itemId: 'a',
         type: 'diff',
         fileDiff,
         additionContents: document.getText(),
@@ -508,12 +575,7 @@ describe('CodeViewSearchScan edited diffs', () => {
         additionsOnly: false,
       })
     );
-    const scan = new CodeViewSearchScan(
-      params,
-      ['a'],
-      provide,
-      MAX_SEARCH_MATCHES
-    );
+    const scan = new CodeViewSearchScan(params, 1, provide, MAX_SEARCH_MATCHES);
     expect(provide).not.toHaveBeenCalled();
     scan.advance();
     expect(provide).toHaveBeenCalledTimes(1);
@@ -562,10 +624,15 @@ test('file and scoped edited matches preserve every source field', () => {
     { disableLineMatching: true }
   );
   const fixtures: CodeViewSearchItem[] = [
-    { type: 'file', contents: 'target first\r\nlast target' },
-    { type: 'file', contents: document.getText() },
+    {
+      type: 'file',
+      itemId: 'coordinates',
+      contents: 'target first\r\nlast target',
+    },
+    { type: 'file', itemId: 'coordinates', contents: document.getText() },
     {
       type: 'diff',
+      itemId: 'coordinates',
       fileDiff,
       diffStyle: 'split',
       additionsOnly: true,
@@ -573,6 +640,7 @@ test('file and scoped edited matches preserve every source field', () => {
     },
     {
       type: 'diff',
+      itemId: 'coordinates',
       fileDiff,
       diffStyle: 'unified',
       additionsOnly: true,
@@ -582,7 +650,7 @@ test('file and scoped edited matches preserve every source field', () => {
   for (const [index, item] of fixtures.entries()) {
     const scan = new CodeViewSearchScan(
       { ...params, text: 'target' },
-      ['coordinates'],
+      1,
       () => item,
       MAX_SEARCH_MATCHES
     );

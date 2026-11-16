@@ -196,8 +196,12 @@ describe('searchDocument', () => {
   test('matches whole words at CodeView line edges after trimming CRLF', () => {
     const scan = new CodeViewSearchScan(
       searchParams({ text: 'foo', wholeWord: true }),
-      ['word-boundaries'],
-      () => ({ type: 'file', contents: 'foo foo\nfoo foo\r\nfoo foo' }),
+      1,
+      () => ({
+        itemId: 'word-boundaries',
+        type: 'file',
+        contents: 'foo foo\nfoo foo\r\nfoo foo',
+      }),
       100
     );
     scan.advance();

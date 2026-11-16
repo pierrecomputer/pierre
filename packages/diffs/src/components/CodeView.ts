@@ -25,6 +25,11 @@ import {
   HighlighterDisposedError,
   preloadHighlighter,
 } from '../highlighter/shared_highlighter';
+import {
+  BACKGROUND_TASK_BUDGET_MS,
+  dequeueBackgroundTask,
+  queueBackgroundTask,
+} from '../managers/BackgroundTaskQueue';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -41,7 +46,6 @@ import {
   type SearchParams,
 } from '../search';
 import {
-  areCodeViewSearchMatchArraysEqual,
   areCodeViewSearchMatchesEqual,
   areOptionalCodeViewSearchMatchesEqual,
   type CodeViewSearchItem,
@@ -49,7 +53,10 @@ import {
   CodeViewSearchScan,
 } from '../search/codeViewSearch';
 import { revealMatchHorizontally } from '../search/revealMatchHorizontally';
-import { SearchHighlighter } from '../search/SearchHighlighter';
+import {
+  SearchHighlighter,
+  type SearchHighlightRange,
+} from '../search/SearchHighlighter';
 import {
   type SearchPanelReplaceHandlers,
   SearchPanelWidget,
@@ -67,6 +74,7 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffsThemeNames,
+  FileDiffMetadata,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   ScrollRequestResult,
@@ -86,6 +94,7 @@ import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHe
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
 import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
+import { getLineIndexForDiff } from '../utils/getLineIndexForDiff';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isUserScrollInput } from '../utils/isUserScrollInput';
@@ -213,6 +222,8 @@ interface CodeViewSearchState {
   scope: { itemId: string } | undefined;
   matches: CodeViewSearchMatch[];
   scan: CodeViewSearchScan | undefined;
+  // Whether a new query still has to scroll to its first match.
+  pendingQueryNavigation: boolean;
   current: CodeViewSearchMatch | undefined;
   // Once a result requires scrolling, center subsequent navigation until the
   // query or scope changes. Background match refreshes preserve this choice.
@@ -672,8 +683,9 @@ export interface CodeViewOptions<LAnnotation, Caret>
   /** Find/replace behavior for the CodeView-owned search panel. */
   searchOptions?: CodeViewSearchOptions;
   /**
-   * Called with the search state when the panel opens and after every
-   * change, and with undefined when it closes.
+   * Called with the search state when the panel opens and after every change,
+   * and with undefined when it closes. While `searching` is true the search is
+   * still running and the match count can still grow.
    */
   onSearchStateChange?(state: SearchPanelState | undefined): void;
   /**
@@ -980,6 +992,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     scope: undefined,
     matches: [],
     scan: undefined,
+    pendingQueryNavigation: false,
     current: undefined,
     centerNavigation: false,
     pendingHorizontalReveal: false,
@@ -1542,6 +1555,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     this.searchState.scope = scope;
+    this.searchState.pendingQueryNavigation = false;
     this.searchState.centerNavigation = false;
     this.markSearchMatchesDirty();
   }
@@ -1655,7 +1669,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchHighlighter?.clear();
     this.searchState.scope = undefined;
     this.searchState.matches = [];
-    this.searchState.scan = undefined;
+    this.invalidateSearchScan();
+    this.searchState.pendingQueryNavigation = false;
     this.searchState.current = undefined;
     this.searchState.centerNavigation = false;
     this.searchMatchesDirty = false;
@@ -1888,6 +1903,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private markSearchMatchesDirty(): void {
+    this.invalidateSearchScan();
     const scopedItem =
       this.searchState.scope != null
         ? this.idToItem.get(this.searchState.scope.itemId)
@@ -1903,6 +1919,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       (scopedItem?.item.edit !== true || scopedItem.item.collapsed === true)
     ) {
       this.searchState.scope = undefined;
+      this.searchState.pendingQueryNavigation = false;
       this.searchState.centerNavigation = false;
     }
     // Flag the refresh before rebinding so the rebind's state report waits
@@ -1934,10 +1951,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     matches: CodeViewSearchMatch[],
     current: CodeViewSearchMatch | undefined
   ): void {
-    const matchesChanged = !areCodeViewSearchMatchArraysEqual(
-      this.searchState.matches,
-      matches
-    );
+    const matchesChanged = this.searchState.matches !== matches;
     const currentChanged = !areOptionalCodeViewSearchMatchesEqual(
       this.searchState.current,
       current
@@ -1954,6 +1968,61 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.render();
     }
   }
+
+  // Takes each new list of matches from the find panel, scrolls to a match
+  // when a new query asks for it, and returns the index of the current match.
+  private updateSearchResults = (
+    result: SearchResult<CodeViewSearchMatch>,
+    options?: { skipNavigation?: boolean }
+  ): number | undefined => {
+    const { matches, searching } = result;
+    const { searchState } = this;
+    const { current, scan, scope, pendingQueryNavigation } = searchState;
+    const owesNavigation =
+      options?.skipNavigation !== true || pendingQueryNavigation;
+    // A replace leaves an empty match at the end of the inserted text. The
+    // next match is the first one after it.
+    const replacementEnd =
+      current != null &&
+      current.itemId === scope?.itemId &&
+      current.startCharacter === current.endCharacter
+        ? current
+        : undefined;
+    let jumpTarget: CodeViewSearchMatch | undefined;
+    if (owesNavigation && scan != null) {
+      if (replacementEnd != null) {
+        const position = this.getSearchItemPosition(replacementEnd.itemId);
+        if (position != null && !scan.isItemPending(position)) {
+          jumpTarget = scan.getFirstMatchAtOrAfter(
+            position,
+            replacementEnd.lineNumber,
+            replacementEnd.endCharacter
+          );
+        }
+      } else {
+        jumpTarget = this.getStartingSearchMatch(matches, scan);
+      }
+    }
+
+    searchState.pendingQueryNavigation =
+      owesNavigation && jumpTarget == null && searching === true;
+
+    const target = jumpTarget ?? current;
+    const position =
+      target != null ? this.getSearchItemPosition(target.itemId) : undefined;
+    const nextIndex =
+      target != null && position != null
+        ? scan?.getMatchIndex(position, target)
+        : undefined;
+    const nextCurrent = nextIndex != null ? matches[nextIndex] : undefined;
+    const currentItemPending =
+      jumpTarget == null &&
+      position != null &&
+      scan?.isItemPending(position) === true;
+    this.setSearchResults(matches, currentItemPending ? current : nextCurrent);
+    if (jumpTarget != null) this.scrollToSearchMatch(jumpTarget);
+    return nextIndex;
+  };
 
   private queueSearchHighlightPaint = (): void => {
     if (this.searchPanel != null) {
@@ -1987,126 +2056,231 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     for (let index = firstIndex; index >= 0 && index <= lastIndex; index++) {
       const item = this.items[index];
       const root = item.element?.shadowRoot;
-      if (root != null && scan != null) {
-        highlighter.paint(root, (lineNumber, side) =>
-          scan.getLineMatches(item.item.id, lineNumber, side)?.map((match) => ({
-            startCharacter: match.startCharacter,
-            endCharacter: match.endCharacter,
-            current:
-              this.searchState.current != null &&
-              areCodeViewSearchMatchesEqual(match, this.searchState.current),
-          }))
-        );
+      const position = this.getSearchItemPosition(item.item.id);
+      const itemMatches =
+        position != null ? scan?.getItemMatches(position) : undefined;
+      if (
+        root != null &&
+        scan != null &&
+        position != null &&
+        itemMatches != null
+      ) {
+        highlighter.paint(root, (lineNumber, side) => {
+          const span = scan.getLineMatches(position, lineNumber, side);
+          if (span == null) return undefined;
+          const ranges: SearchHighlightRange[] = [];
+          const { current } = this.searchState;
+          for (
+            let matchIndex = span.startIndex;
+            matchIndex < span.endIndex;
+            matchIndex++
+          ) {
+            const match = itemMatches[matchIndex];
+            ranges.push({
+              startCharacter: match.startCharacter,
+              endCharacter: match.endCharacter,
+              current:
+                current != null &&
+                areCodeViewSearchMatchesEqual(match, current),
+            });
+          }
+          return ranges;
+        });
       }
     }
   }
 
-  // Resolves an item's current searchable text and diff when the scan reaches it.
-  private getSearchItem = (itemId: string): CodeViewSearchItem => {
-    const { idToItem, itemEditors, options, searchState } = this;
+  // The scan position of an item in the current scope.
+  private getSearchItemPosition(itemId: string): number | undefined {
+    const { idToItem, searchState } = this;
+    const { scope } = searchState;
     const item = idToItem.get(itemId);
-    if (item == null) {
+    return item != null && (scope == null || scope.itemId === itemId)
+      ? scope != null
+        ? 0
+        : item.index
+      : undefined;
+  }
+
+  // An item's current searchable text and diff.
+  private getSearchItem = (position: number): CodeViewSearchItem => {
+    const { items, idToItem, itemEditors, options, searchState } = this;
+    const { scope } = searchState;
+    const item = scope != null ? idToItem.get(scope.itemId) : items[position];
+    if (item == null)
       throw new Error(
-        `CodeView.getSearchItem: item "${itemId}" does not exist`
+        `CodeView.getSearchItem: position ${position} does not exist`
       );
-    }
+    const { id: itemId } = item.item;
     const document = itemEditors.get(itemId)?.editor.getEditState()?.document;
     const contents = document?.getText();
     return item.type === 'file'
-      ? { type: 'file', contents: contents ?? item.item.file.contents }
+      ? { itemId, type: 'file', contents: contents ?? item.item.file.contents }
       : {
+          itemId,
           type: 'diff',
-          fileDiff:
-            document != null
-              ? (item.instance.getDiffForSearch() ?? item.item.fileDiff)
-              : item.item.fileDiff,
+          fileDiff: this.getSearchDiff(item),
           additionContents: contents,
           diffStyle: options.diffStyle ?? 'split',
-          additionsOnly: searchState.scope?.itemId === itemId,
+          additionsOnly: scope?.itemId === itemId,
         };
   };
 
+  // The diff to search for an item: the editor's while it is being edited.
+  private getSearchDiff(
+    item: CodeViewDiffItemContext<LAnnotation, Caret>
+  ): FileDiffMetadata {
+    const { itemEditors } = this;
+    const { id, fileDiff } = item.item;
+    const document = itemEditors.get(id)?.editor.getEditState()?.document;
+    return document != null
+      ? (item.instance.getDiffForSearch() ?? fileDiff)
+      : fileDiff;
+  }
+
+  // Drops the current search and stops its background work.
+  private invalidateSearchScan(): void {
+    dequeueBackgroundTask(this.advanceSearchScan);
+    const { searchState } = this;
+    searchState.scan = undefined;
+  }
+
+  // Searches for one more slice in the background, and has the panel read the
+  // matches again when there are new ones.
+  private advanceSearchScan = (): void => {
+    const { scan } = this.searchState;
+    if (scan == null) {
+      throw new Error('CodeView.advanceSearchScan: queued scan is missing');
+    }
+    const changed = scan.advance(BACKGROUND_TASK_BUDGET_MS);
+    if (!scan.finished) queueBackgroundTask(this.advanceSearchScan);
+    if (changed) {
+      this.searchMatchesDirty = true;
+      this.render();
+    }
+  };
+
+  // Returns the matches found so far for the panel's query. Starts the search
+  // at the items on screen when there is none running.
   private searchCodeView(
     searchParams: SearchParams
   ): SearchResult<CodeViewSearchMatch> {
-    const matches: CodeViewSearchMatch[] = [];
-    let firstVisible: number | undefined;
-    let firstRendered: number | undefined;
-    let firstAfterRendered: number | undefined;
-    const lastRenderedItem = this.items[this.renderState.lastIndex];
-    const lastRenderedBounds = lastRenderedItem?.instance.getRenderedBounds();
-    const { scope } = this.searchState;
-    const scopedItem =
-      scope != null ? this.idToItem.get(scope.itemId) : undefined;
-    const items =
-      scope == null ? this.items : scopedItem == null ? [] : [scopedItem];
-    const { getSearchItem } = this;
-    const scan = new CodeViewSearchScan(
-      searchParams,
-      items.map(({ item }) => item.id),
-      getSearchItem,
-      MAX_SEARCH_MATCHES
-    );
-    this.searchState.scan = scan;
-    scan.advance();
-    for (const item of items) {
-      const nextMatches = scan.getItemMatches(item.item.id);
-      if (nextMatches == null) break;
-      // A collapsed file renders no lines, so its header stands in for all
-      // of its matches.
-      const collapsed = item.item.collapsed === true;
-      const bounds =
-        item.element == null || collapsed
-          ? undefined
-          : item.instance.getRenderedBounds();
-      for (const match of nextMatches) {
-        const canBeRendered =
-          firstVisible == null &&
-          (collapsed ? item.element != null : bounds != null);
-        const canBeAfter =
-          firstAfterRendered == null &&
-          lastRenderedItem != null &&
-          item.index >= lastRenderedItem.index;
-        const position =
-          !collapsed &&
-          (canBeRendered || (canBeAfter && item === lastRenderedItem))
-            ? this.getLineScrollPosition(item, {
-                type: 'line',
-                id: match.itemId,
-                lineNumber: match.lineNumber,
-                side: match.side,
-              })
-            : undefined;
-        // A line in collapsed context resolves to the separator that hides
-        // it, so a hidden match counts as rendered while that row is.
-        if (
-          canBeRendered &&
-          (collapsed ||
-            (position != null &&
-              bounds != null &&
-              position.height > 0 &&
-              position.top >= bounds.top &&
-              position.top < bounds.bottom))
-        ) {
-          firstRendered ??= matches.length;
-          if (this.isSearchMatchInView(match)) firstVisible = matches.length;
-        }
-        if (
-          canBeAfter &&
-          (item !== lastRenderedItem ||
-            lastRenderedBounds == null ||
-            (position != null && position.top >= lastRenderedBounds.bottom))
-        ) {
-          firstAfterRendered = matches.length;
-        }
-        matches.push(match);
-      }
+    const { searchState, items, idToItem, renderState, getSearchItem } = this;
+    const { scope } = searchState;
+    const itemCount =
+      scope != null ? (idToItem.has(scope.itemId) ? 1 : 0) : items.length;
+    let { scan } = searchState;
+    if (scan == null) {
+      const { firstIndex } = renderState;
+      scan = new CodeViewSearchScan(
+        searchParams,
+        itemCount,
+        getSearchItem,
+        MAX_SEARCH_MATCHES,
+        scope == null ? Math.max(0, firstIndex) : 0
+      );
+      searchState.scan = scan;
+      scan.advance(BACKGROUND_TASK_BUDGET_MS);
+      if (!scan.finished) queueBackgroundTask(this.advanceSearchScan);
     }
     return {
-      matches,
-      preferredMatch:
-        matches[firstVisible ?? firstRendered ?? firstAfterRendered ?? 0],
+      matches: scan.getMatches(),
+      searching: !scan.finished,
     };
+  }
+
+  // The first fully visible match, then the first below, then the first overall.
+  private getStartingSearchMatch(
+    matches: CodeViewSearchMatch[],
+    scan: CodeViewSearchScan
+  ): CodeViewSearchMatch | undefined {
+    const { idToItem, searchState } = this;
+    const { scope } = searchState;
+    const anchor = this.getScrollAnchor(this.getScrollTop());
+    const anchoredItem = anchor != null ? idToItem.get(anchor.id) : undefined;
+    const scopedItem = scope != null ? idToItem.get(scope.itemId) : undefined;
+    const position =
+      scopedItem != null
+        ? anchoredItem != null && anchoredItem.index > scopedItem.index
+          ? 1
+          : 0
+        : (anchoredItem?.index ?? 0);
+    const first = scan.getFirstMatchedEntryAtOrAfter(position);
+    if (first == null) {
+      return scan.finished ? matches[0] : undefined;
+    }
+    if (scan.hasPendingItems(position, first.position + 1)) {
+      return undefined;
+    }
+    if (
+      anchor?.type === 'line' &&
+      anchoredItem != null &&
+      first.matches[0].itemId === anchor.id
+    ) {
+      const candidate = this.findSearchMatchAtAnchor(
+        anchoredItem,
+        first.matches,
+        anchor
+      );
+      if (candidate != null) {
+        return candidate;
+      }
+      const next = scan.getFirstMatchedEntryAtOrAfter(first.position + 1);
+      if (next == null) {
+        return scan.finished ? matches[0] : undefined;
+      }
+      return scan.hasPendingItems(first.position + 1, next.position + 1)
+        ? undefined
+        : next.matches[0];
+    }
+    return first.matches[0];
+  }
+
+  // The first match in an item on or after the line at the top of the
+  // viewport. Relies on an item's matches being in row order.
+  private findSearchMatchAtAnchor(
+    item: CodeViewContextItem<LAnnotation, Caret>,
+    matches: readonly CodeViewSearchMatch[],
+    anchor: LineAnchor
+  ): CodeViewSearchMatch | undefined {
+    const { options } = this;
+    const diff = item.type === 'diff' ? this.getSearchDiff(item) : undefined;
+    const rowIndex = options.diffStyle === 'unified' ? 0 : 1;
+    let anchorRow = anchor.lineNumber;
+    if (diff != null) {
+      const indexes = getLineIndexForDiff(
+        diff,
+        anchor.lineNumber,
+        anchor.side ?? 'additions'
+      );
+      if (indexes == null)
+        throw new Error(
+          'CodeView.findSearchMatchAtAnchor: anchor row is missing'
+        );
+      anchorRow = indexes[rowIndex];
+    }
+    let start = 0;
+    let end = matches.length;
+    while (start < end) {
+      const middle = Math.floor((start + end) / 2);
+      const match = matches[middle];
+      let row = match.lineNumber;
+      if (diff != null) {
+        const indexes = getLineIndexForDiff(
+          diff,
+          match.lineNumber,
+          match.side ?? 'additions'
+        );
+        if (indexes == null)
+          throw new Error(
+            'CodeView.findSearchMatchAtAnchor: matched row is missing'
+          );
+        row = indexes[rowIndex];
+      }
+      if (row < anchorRow) start = middle + 1;
+      else end = middle;
+    }
+    return matches[start];
   }
 
   private cleanAllRenderedItems() {
@@ -2539,50 +2713,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         onSearchStateChange?.(state);
       },
       onQueryChange: () => {
-        this.searchState.scan = undefined;
+        this.invalidateSearchScan();
+        // The current match belongs to the old query.
+        this.setSearchResults(this.searchState.matches, undefined);
         this.searchState.centerNavigation = false;
       },
       search: (searchParams) => this.searchCodeView(searchParams),
-      isSameMatch: areCodeViewSearchMatchesEqual,
       scrollToMatch: (match) => {
+        this.searchState.pendingQueryNavigation = false;
         this.scrollToSearchMatch(match);
       },
-      onUpdate: ({ matches, preferredMatch }, options) => {
-        const current = this.searchState.current;
-        if (matches.length === 0 || options?.skipNavigation === true) {
-          const nextCurrent =
-            current == null
-              ? undefined
-              : matches.find((match) =>
-                  areCodeViewSearchMatchesEqual(match, current)
-                );
-          this.setSearchResults(matches, nextCurrent);
-          return nextCurrent;
-        }
-
-        // Replacement returns a collapsed match at the insertion end. Advance
-        // from that position rather than revisiting text just inserted.
-        const replacementEnd =
-          current != null &&
-          current.itemId === this.searchState.scope?.itemId &&
-          current.startCharacter === current.endCharacter
-            ? current
-            : undefined;
-        const nextCurrent =
-          replacementEnd != null
-            ? matches.find(
-                (match) =>
-                  match.lineIndex > replacementEnd.lineIndex ||
-                  (match.lineIndex === replacementEnd.lineIndex &&
-                    match.startCharacter >= replacementEnd.endCharacter)
-              )
-            : preferredMatch;
-        this.setSearchResults(matches, nextCurrent);
-        if (nextCurrent != null) {
-          this.scrollToSearchMatch(nextCurrent);
-        }
-        return nextCurrent;
-      },
+      onUpdate: this.updateSearchResults,
       onClose: () => {
         this.closeSearch();
       },

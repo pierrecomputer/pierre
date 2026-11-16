@@ -27,6 +27,7 @@ import searchPanelCSS from './SearchPanelWidget.css?inline';
 export interface SearchResult<TMatch> {
   matches: TMatch[];
   preferredMatch?: TMatch;
+  searching?: boolean;
 }
 
 export interface SearchPanelReplaceHandlers<TMatch> {
@@ -44,15 +45,18 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
   defaults?: SearchOptionDefaults;
   mode?: SearchPanelMode;
   search: (searchParams: SearchParams) => SearchResult<TMatch>;
-  isSameMatch?: (a: TMatch, b: TMatch) => boolean;
   scrollToMatch: (nextMatch: TMatch, retainFocus: boolean) => void;
   replace?: SearchPanelReplaceHandlers<TMatch>;
   /** Query text or matching options changed; excludes replacement text and refreshes. */
   onQueryChange?: () => void;
+  /**
+   * Called with every new list of matches. Returns the index of the current
+   * match in that list, or undefined when no match is current.
+   */
   onUpdate: (
     result: SearchResult<TMatch>,
     options?: { skipNavigation?: boolean }
-  ) => TMatch | undefined;
+  ) => number | undefined;
   /** Reports the panel state on open and after every change. */
   onStateChange?: (state: SearchPanelState) => void;
   onClose: () => void;
@@ -83,7 +87,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       defaults,
       mode = 'find',
       search,
-      isSameMatch = Object.is,
       scrollToMatch,
       replace,
       onQueryChange,
@@ -105,27 +108,24 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       regex: defaults?.regex === true,
     };
 
-    const matches = {
-      all: [] as TMatch[],
-      current: undefined as TMatch | undefined,
+    const matches: { all: TMatch[]; currentIndex: number | undefined } = {
+      all: [],
+      currentIndex: undefined,
     };
 
     const getSearchParamsSnapshot = (): SearchParams => ({ ...searchParams });
-    const getMatchIndex = (match: TMatch): number =>
-      matches.all.findIndex((candidate) => isSameMatch(candidate, match));
 
     const emitState = () => {
       if (onStateChange == null || this.#closed) {
         return;
       }
-      const { current } = matches;
-      const index = current !== undefined ? getMatchIndex(current) : -1;
       onStateChange({
         ...getSearchParamsSnapshot(),
         mode: normalizeMode(requestedMode),
         canReplace: replaceHandlers != null,
         matchCount: matches.all.length,
-        currentMatchIndex: index === -1 ? undefined : index,
+        searching,
+        currentMatchIndex: matches.currentIndex,
       });
     };
 
@@ -136,21 +136,18 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       textContent: i18n.t('noSearchResults'),
     });
 
-    const updateCurrentMatch = (currentMatch: TMatch | undefined) => {
-      if (currentMatch === undefined) {
-        matchResultElement.textContent = i18n.t('searchResultCount', {
-          count: matches.all.length,
-        });
-      } else {
-        const index = getMatchIndex(currentMatch);
-        matchResultElement.textContent = i18n.t('searchResultPosition', {
-          index: index + 1,
-          count: matches.all.length,
-        });
-      }
-      matches.current = currentMatch;
+    const updateCurrentMatch = (currentIndex: number | undefined) => {
+      matchResultElement.textContent =
+        currentIndex != null
+          ? i18n.t('searchResultPosition', {
+              index: currentIndex + 1,
+              count: matches.all.length,
+            })
+          : i18n.t('searchResultCount', { count: matches.all.length });
+      matches.currentIndex = currentIndex;
     };
 
+    let searching = false;
     let matchesUpdated = false;
     const updateMatches = (options?: { skipNavigation?: boolean }) => {
       matchesUpdated = true;
@@ -159,6 +156,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
           ? search(getSearchParamsSnapshot())
           : { matches: [] };
       matches.all = result.matches;
+      searching = result.searching === true;
+      replaceButton.disabled = searching;
+      replaceAllButton.disabled = searching;
       const noMatches = matches.all.length === 0;
       prevButton.disabled = noMatches;
       nextButton.disabled = noMatches;
@@ -167,10 +167,12 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       // state. Both push an empty match set through onUpdate so the editor
       // drops #matches and clears the painted highlights.
       if (noMatches) {
-        matchResultElement.textContent = i18n.t('noSearchResults');
-        matchResultElement.dataset.noMatches = '';
-        matches.current = undefined;
-        onUpdate(result);
+        matchResultElement.textContent = i18n.t(
+          searching ? 'searching' : 'noSearchResults'
+        );
+        matchResultElement.toggleAttribute('data-no-matches', !searching);
+        matches.currentIndex = undefined;
+        onUpdate(result, options);
       } else {
         delete matchResultElement.dataset.noMatches;
         updateCurrentMatch(onUpdate(result, options));
@@ -196,27 +198,19 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       findPrevious: boolean = false,
       retainFocus: boolean = false
     ) => {
-      const allMatches = matches.all;
-      let nextMatch: TMatch | undefined = allMatches[0];
-      if (allMatches.length > 0) {
-        const currentIndex =
-          matches.current !== undefined ? getMatchIndex(matches.current) : -1;
-        if (findPrevious && currentIndex === -1) {
-          nextMatch = allMatches.at(-1);
-        } else if (findPrevious) {
-          nextMatch = allMatches.at(currentIndex - 1);
-          nextMatch ??= allMatches.at(-1);
-        } else if (currentIndex === -1) {
-          nextMatch = allMatches[0];
-        } else {
-          nextMatch = allMatches[currentIndex + 1] ?? allMatches[0];
-        }
+      const { all, currentIndex } = matches;
+      if (all.length > 0) {
+        const nextIndex =
+          currentIndex != null
+            ? (currentIndex + (findPrevious ? -1 : 1) + all.length) % all.length
+            : findPrevious
+              ? all.length - 1
+              : 0;
+        updateCurrentMatch(nextIndex);
+        scrollToMatch(all[nextIndex], retainFocus);
+      } else {
+        matches.currentIndex = undefined;
       }
-      if (nextMatch !== undefined) {
-        updateCurrentMatch(nextMatch);
-        scrollToMatch(nextMatch, retainFocus);
-      }
-      matches.current = nextMatch;
       emitState();
     };
     // Keep focus in the panel when stepping through matches from the inputs.
@@ -226,6 +220,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     const replaceCurrentMatch = () => {
       const replace = replaceHandlers;
       if (
+        searching ||
         replace === undefined ||
         searchParams.text === '' ||
         matches.all.length === 0
@@ -233,14 +228,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         return;
       }
 
-      let currentMatch = matches.current;
-      if (currentMatch === undefined) {
-        findNextMatch(false, true);
-        currentMatch = matches.current;
-        if (currentMatch === undefined) {
-          return;
-        }
-      }
+      const currentIndex = matches.currentIndex ?? 0;
+      if (matches.currentIndex == null) findNextMatch(false, true);
+      const currentMatch = matches.all[currentIndex];
 
       const nextMatch = replace.replaceMatch(
         currentMatch,
@@ -251,13 +241,14 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       if (nextMatch !== undefined) {
         scrollToMatch(nextMatch, true);
       }
-      matches.current = undefined;
+      matches.currentIndex = undefined;
       updateMatches();
     };
 
     const replaceAllMatches = () => {
       const replace = replaceHandlers;
       if (
+        searching ||
         replace === undefined ||
         searchParams.text === '' ||
         matches.all.length === 0
@@ -266,7 +257,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       }
 
       replace.replaceAll(matches.all.slice(), getSearchParamsSnapshot());
-      matches.current = undefined;
+      matches.currentIndex = undefined;
       updateMatches();
     };
 
@@ -343,7 +334,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       dataset: 'search',
       value: defaultQuery,
       oninput: (e: Event) => {
-        matches.current = undefined;
+        matches.currentIndex = undefined;
         updateSearchParam('text', (e.target as HTMLInputElement).value);
       },
       onkeydown: (e: KeyboardEvent) => {
@@ -378,7 +369,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         return;
       }
       this.#inputElement.value = text;
-      matches.current = undefined;
+      matches.currentIndex = undefined;
       updateSearchParam('text', text);
     };
 
@@ -458,20 +449,19 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       children: [replaceInputElement],
     });
 
+    const replaceButton = iconButton({
+      icon: 'replace',
+      label: i18n.t('replaceMatch'),
+      onClick: replaceCurrentMatch,
+    });
+    const replaceAllButton = iconButton({
+      icon: 'replace-all',
+      label: i18n.t('replaceAllMatches'),
+      onClick: replaceAllMatches,
+    });
     const replaceActionsElement = h('div', {
       dataset: { replaceActions: '', replaceCell: '' },
-      children: [
-        iconButton({
-          icon: 'replace',
-          label: i18n.t('replaceMatch'),
-          onClick: replaceCurrentMatch,
-        }),
-        iconButton({
-          icon: 'replace-all',
-          label: i18n.t('replaceAllMatches'),
-          onClick: replaceAllMatches,
-        }),
-      ],
+      children: [replaceButton, replaceAllButton],
     });
 
     // Keep the replace row reachable without its keyboard shortcut.
