@@ -15,8 +15,11 @@
     font-size: 12px;
   }
 
+  /* The title is a heading: it takes the font of the header. */
   .pierre-layouts-title {
     flex: 1;
+    margin: 0;
+    font: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

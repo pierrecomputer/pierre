@@ -18,6 +18,38 @@ test('A3: each pane is a named region', async ({ page }) => {
   }
 });
 
+test('A21: a pane region takes its name from the heading of its title', async ({
+  page,
+}) => {
+  const region = page.getByRole('region', { name: 'Pane 1', exact: true });
+  const heading = region.getByRole('heading', { name: 'Pane 1', exact: true });
+  await expect(heading).toBeVisible();
+  const headingId =
+    (await heading.getAttribute('id')) ?? 'a heading with an id';
+  await expect(region).toHaveAttribute('aria-labelledby', headingId);
+  // In a stack, the host is a tab panel that its tab names. When the stack
+  // has one tab again, the demo shows the title, and the heading names the
+  // region again.
+  const host = page.locator('[data-layouts-pane="1"]');
+  await heading.click();
+  await page.getByRole('button', { name: 'Add tab', exact: true }).click();
+  await expect(host).toHaveAttribute('role', 'tabpanel');
+  await expect(host).not.toHaveAttribute('aria-labelledby', headingId);
+  const ids = await page
+    .locator('[data-layouts-pane]')
+    .evaluateAll((panes) =>
+      panes.map((pane) => (pane as HTMLElement).dataset.layoutsPane)
+    );
+  const added = ids.find(
+    (id) => !['1', '2', '3', '4', '5', '6', '7'].includes(id ?? '')
+  );
+  await page
+    .getByRole('button', { name: `Close Pane ${added}`, exact: true })
+    .click();
+  await expect(host).not.toHaveAttribute('role');
+  await expect(region).toHaveAttribute('aria-labelledby', headingId);
+});
+
 test('A5: the DOM order of panes follows their visual order', async ({
   page,
 }) => {

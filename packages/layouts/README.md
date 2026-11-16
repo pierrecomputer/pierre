@@ -129,7 +129,10 @@ The parts of a pane read their pane from the context that `Root` gives the
 output of `renderPane`, so they take no pane prop:
 
 - `Layout.Header`: the bar of a pane. `Layout.Title`: its title, from
-  `getPaneTitle`.
+  `getPaneTitle`, as an `h2` heading (`render={<h3 />}` gives another level).
+  The pane's region takes its name from this heading with `aria-labelledby`; a
+  pane without a title keeps an `aria-label`, and a tab panel takes the name of
+  its tab.
 - `Layout.Content`: the area that scrolls, and the target of a collapse.
 - `Layout.CollapseButton`, `Layout.CloseButton`, and `Layout.ZoomButton`.
 - `Layout.MoveHandle`: the handle of `paneDrag()`.
