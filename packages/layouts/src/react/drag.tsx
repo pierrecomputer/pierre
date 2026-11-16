@@ -87,12 +87,32 @@ export interface DragOptions {
    * refused target shows no marker and no preview, and takes no drop.
    */
   accept?(target: DropTarget): DropTarget | null;
+  /**
+   * A wait before the drag starts, such as the still press of a touch drag:
+   * it gets the press and a function that starts the drag, and returns the
+   * wait, or undefined for no wait.
+   */
+  readonly wait?: (
+    press: PointerEvent<HTMLElement>,
+    begin: () => void
+  ) => DragWait | undefined;
   /** Apply the drop. */
   drop(target: DropTarget): void;
 }
 
 // The key of the drag in the view state.
 const DRAG = 'drag';
+
+/** A wait before a drag starts. */
+export interface DragWait {
+  /**
+   * The pointer moved this far from the press: true when the drag takes the
+   * move, false while the drag waits or after the wait gave up.
+   */
+  move(distance: number): boolean;
+  /** The press ends. */
+  end(): void;
+}
 
 // A press becomes a drag after the pointer moves this far.
 const DRAG_THRESHOLD_PX = 4;
@@ -196,9 +216,10 @@ function swallowNextClick(): void {
 
 /**
  * Start a drag from a pointer press. The drag starts when the pointer moves
- * 4 pixels; a press without a move stays a click. The view state holds the
- * drag while it runs, and changes only when the drop target changes. A
- * release drops; Escape, a cancel, or an unmount ends the drag with no drop.
+ * 4 pixels, or when a `wait` starts it; a press without a move stays a click.
+ * The view state holds the drag while it runs, and changes only when the drop
+ * target changes. A release drops; Escape, a cancel, or an unmount ends the
+ * drag with no drop.
  */
 export function startDrag(
   context: ViewContext,
@@ -227,6 +248,18 @@ export function startDrag(
   const { pointerId, clientX, clientY } = event;
   let started = false;
   let target: DropTarget | null = null;
+  const capture = (): void => {
+    try {
+      handle.setPointerCapture(pointerId);
+    } catch {
+      // The pointer is no longer active; the next event ends the gesture.
+    }
+  };
+  const wait = options.wait?.(event, () => {
+    started = true;
+    capture();
+    context.view.set({ [DRAG]: { source: options.source, target } });
+  });
   // The tab list that shows the drop marker, or null.
   let marked: HTMLElement | null = null;
   const mark = (tablist: HTMLElement | null, offset: number): void => {
@@ -237,20 +270,18 @@ export function startDrag(
   context.startGesture({
     pointerId,
     move(move) {
+      const distance = Math.hypot(
+        move.clientX - clientX,
+        move.clientY - clientY
+      );
       if (
-        !started &&
-        Math.hypot(move.clientX - clientX, move.clientY - clientY) <
-          DRAG_THRESHOLD_PX
+        wait?.move(distance) === false ||
+        (!started && distance < DRAG_THRESHOLD_PX)
       )
         return;
       const element = context.element();
       if (element === null) return;
-      if (!started)
-        try {
-          handle.setPointerCapture(pointerId);
-        } catch {
-          // The pointer is no longer active; the next event ends the gesture.
-        }
+      if (!started) capture();
       const bounds = element.getBoundingClientRect();
       const x = move.clientX - bounds.left;
       const y = move.clientY - bounds.top;
@@ -279,6 +310,7 @@ export function startDrag(
       context.view.set({ [DRAG]: { source: options.source, target } });
     },
     end(cancel) {
+      wait?.end();
       if (handle.hasPointerCapture?.(pointerId))
         handle.releasePointerCapture(pointerId);
       mark(null, 0);

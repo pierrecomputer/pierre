@@ -364,6 +364,11 @@
     pointer-events: none;
   }
 
+  /* A long press on a tab starts a drag: no callout of the system. */
+  .pierre-layout-tab {
+    -webkit-touch-callout: none;
+  }
+
   .pierre-layout-tab[data-dragging='true'] {
     opacity: 0.6;
   }

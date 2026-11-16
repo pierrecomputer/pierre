@@ -19,6 +19,8 @@
 // - `?activation=manual`: the arrows move the focus only, and Enter or Space
 //   selects.
 // - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`).
+// - `?scroll=1`: the tab lists scroll (`overflow-x: auto`), as an app's own
+//   strip does, so a swipe scrolls them.
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -46,6 +48,8 @@ const pinned = params.get('pinned') === '1';
 const activation =
   params.get('activation') === 'manual' ? 'manual' : 'automatic';
 const sticky = params.get('sticky') === '1';
+const scrollStyle =
+  params.get('scroll') === '1' ? { overflowX: 'auto' as const } : undefined;
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -173,7 +177,11 @@ function renderPane(pane: PaneNode): JSX.Element {
     toolsWithoutTabList && (pane.id === 'terminal' || pane.id === 'output') ? (
       <Layout.Title />
     ) : (
-      <Layout.TabList activation={activation} stickyPinned={sticky}>
+      <Layout.TabList
+        activation={activation}
+        stickyPinned={sticky}
+        style={scrollStyle}
+      >
         {tabOf}
       </Layout.TabList>
     );

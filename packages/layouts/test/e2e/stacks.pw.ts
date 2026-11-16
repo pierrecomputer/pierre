@@ -837,3 +837,82 @@ test('the move handle of a pinned tab of a stack is disabled', async ({
     'docs',
   ]);
 });
+
+test.describe('a touch drag of a tab', () => {
+  test.use({ hasTouch: true });
+
+  // A finger: it sends touch events with one CDP session, which keeps the
+  // touch between its events.
+  async function fingerOf(page: Page) {
+    const cdp = await page.context().newCDPSession(page);
+    return (
+      type: 'touchStart' | 'touchMove' | 'touchEnd',
+      point: { x: number; y: number } = { x: 0, y: 0 }
+    ) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [point],
+      });
+  }
+
+  async function center(page: Page, name: string, hostId = 'main') {
+    const value = await tabBox(page, hostId, name);
+    return { x: value.x + value.width / 2, y: value.y + value.height / 2 };
+  }
+
+  test('a swipe on a tab list scrolls it and moves no tab', async ({
+    page,
+  }) => {
+    await page.goto('/stacks.html?scroll=1');
+    for (let index = 0; index < 10; index += 1)
+      await command(
+        page,
+        'addTab',
+        'docs',
+        { type: 'pane', id: `extra${index}` },
+        undefined,
+        { activate: false }
+      );
+    const before = await editorsOrder(page);
+    const from = await center(page, 'test.ts');
+    const touch = await fingerOf(page);
+    await touch('touchStart', from);
+    for (let step = 1; step <= 8; step += 1)
+      await touch('touchMove', { x: from.x - step * 25, y: from.y });
+    await touch('touchEnd');
+    await expect
+      .poll(() => tabsOf(page, 'main').evaluate((list) => list.scrollLeft))
+      .toBeGreaterThan(20);
+    await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+    expect(await editorsOrder(page)).toEqual(before);
+  });
+
+  test('a still press of 250 ms starts the drag, and a quick tap selects the tab', async ({
+    page,
+  }) => {
+    await page.goto('/stacks.html?scroll=1');
+    const from = await center(page, 'types.ts');
+    const util = await tabBox(page, 'main', 'util.ts');
+    const touch = await fingerOf(page);
+    await touch('touchStart', from);
+    await page.waitForTimeout(350);
+    for (let step = 1; step <= 6; step += 1)
+      await touch('touchMove', {
+        x: from.x + ((util.x + 4 - from.x) * step) / 6,
+        y: from.y,
+      });
+    await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+    await touch('touchEnd');
+    await expect
+      .poll(() => editorsOrder(page))
+      .toEqual(['main', 'types', 'util', 'test', 'docs']);
+    // The dropped tab shows: its host holds the tab list now.
+    const tab = await center(page, 'test.ts', 'types');
+    await touch('touchStart', tab);
+    await page.waitForTimeout(50);
+    await touch('touchEnd');
+    await expect(
+      tabsOf(page, 'test').getByRole('tab', { name: 'test.ts' })
+    ).toHaveAttribute('aria-selected', 'true');
+  });
+});

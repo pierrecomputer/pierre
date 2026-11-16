@@ -30,6 +30,7 @@ import {
   startDrag,
   useDrag,
 } from '../drag';
+import { touchHold } from '../touch-hold';
 
 /** The options of `tabDrag()`. */
 export interface TabDragOptions {
@@ -38,6 +39,12 @@ export interface TabDragOptions {
    * after the rule of pinned tabs.
    */
   readonly canDrop?: CanDrop;
+  /**
+   * The still press in milliseconds that starts a touch drag of a tab, 250 by
+   * default, so a swipe on a tab list scrolls it. A mouse or a pen starts a
+   * drag after a move of 4 pixels.
+   */
+  readonly touchDelay?: number;
 }
 
 const TAB = 'tab';
@@ -127,7 +134,7 @@ function pinnedRule(
 function useTabDrag(
   context: ViewContext,
   { state }: ViewRender,
-  { canDrop }: TabDragOptions
+  { canDrop, touchDelay = 250 }: TabDragOptions
 ): FeatureHooks {
   const drag = useDrag(context, (value: Drag | null) =>
     value?.source.kind === TAB ? value : null
@@ -156,6 +163,7 @@ function useTabDrag(
           .filter((other) => other.hidden !== true)
           .map((other) => other.id) ?? [tab.id],
         rearrange: presentation(current).rearrangeable,
+        wait: touchHold(touchDelay),
         accept(target) {
           const place = pinned(target);
           return place === null ||
