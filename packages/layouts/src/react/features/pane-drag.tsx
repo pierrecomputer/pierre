@@ -15,7 +15,19 @@ import type {
   ViewContext,
   ViewRender,
 } from '../contract';
-import { type Drag, DropPreview, startDrag, useDrag } from '../drag';
+import {
+  type CanDrop,
+  type Drag,
+  DropPreview,
+  startDrag,
+  useDrag,
+} from '../drag';
+
+/** The options of `paneDrag()`. */
+export interface PaneDragOptions {
+  /** The app's rule for the places of a pane: false refuses a target. */
+  readonly canDrop?: CanDrop;
+}
 
 const PANE = 'pane';
 
@@ -34,7 +46,8 @@ function titleOf(context: ViewContext, state: LayoutState, id: string): string {
 
 function usePaneDrag(
   context: ViewContext,
-  { state }: ViewRender
+  { state }: ViewRender,
+  { canDrop }: PaneDragOptions
 ): FeatureHooks {
   const drag = useDrag(context, (value: Drag | null) =>
     value?.source.kind === PANE ? value : null
@@ -43,8 +56,13 @@ function usePaneDrag(
   return {
     startMove(id, event) {
       if (!presentation(context.store.getSnapshot()).rearrangeable) return;
+      const source = { kind: PANE, id };
       startDrag(context, event, {
-        source: { kind: PANE, id },
+        source,
+        accept: (target) =>
+          canDrop?.(source, target, context.store.getSnapshot()) === false
+            ? null
+            : target,
         drop: ({ paneId, place }) =>
           (context.store as Partial<EditCommands>).move?.(
             id,
@@ -76,13 +94,15 @@ function usePaneDrag(
 
 /**
  * Move a pane with a pointer drag from `Layout.MoveHandle`, to an edge of
- * another pane. No drag starts while a pane fills the layout.
+ * another pane. No drag starts while a pane fills the layout, or from a
+ * pinned tab of a stack. `canDrop` refuses the places that the app does not
+ * allow.
  */
-export function paneDrag(): Feature {
+export function paneDrag(options: PaneDragOptions = {}): Feature {
   return {
     name: 'pane-drag',
     requires: ['edits'],
-    use: usePaneDrag,
+    use: (context, render) => usePaneDrag(context, render, options),
     stylesheets: [['drop', dropCss]],
   };
 }

@@ -741,3 +741,99 @@ test('stickyPinned keeps the pinned tabs in view while the others scroll, and tu
   await expect(list).not.toHaveAttribute('data-sticky-pinned');
   await expect(list.locator('[data-layout-sticky]')).toHaveCount(0);
 });
+
+test('canDrop of tabDrag() refuses a place once for each target, and allows the others', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?refuse=edges');
+  const files = await host(page, 'files').boundingBox();
+  if (files === null) throw new Error('No box for files');
+  await dragTab(page, 'main', 'util.ts', {
+    x: files.x + files.width - 6,
+    y: files.y + files.height / 2,
+  });
+  await page.mouse.move(files.x + files.width - 4, files.y + files.height / 2, {
+    steps: 6,
+  });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.getByRole('status')).not.toHaveText(/^Move /);
+  await page.mouse.up();
+  await expect(host(page, 'files')).toHaveCount(1);
+  expect(await editorsOrder(page)).toEqual([
+    'main',
+    'util',
+    'test',
+    'types',
+    'docs',
+  ]);
+  const asked = () =>
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __stacks: {
+              asked: {
+                source: { kind: string; id: string };
+                paneId: string;
+                place: string;
+                boundary?: number;
+                tabs?: string[];
+              }[];
+            };
+          }
+        ).__stacks.asked
+    );
+  // The pointer moves over the edge of Files many times, and the drag asks
+  // about that target once.
+  const edges = (await asked()).filter(
+    (target) => target.paneId === 'files' && target.place === 'right'
+  );
+  expect(edges).toHaveLength(1);
+  expect(edges[0]).toMatchObject({
+    source: { kind: 'tab', id: 'util' },
+    paneId: 'files',
+  });
+  // A place in another tab list is allowed, with its boundary and its tabs.
+  const output = await tabBox(page, 'terminal', 'Output');
+  await dragTab(page, 'main', 'util.ts', {
+    x: output.x + output.width - 4,
+    y: output.y + output.height / 2,
+  });
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(3);
+  expect((await asked()).at(-1)).toMatchObject({
+    paneId: 'terminal',
+    place: 'center',
+    boundary: 2,
+    tabs: ['terminal', 'output'],
+  });
+});
+
+test('the move handle of a pinned tab of a stack is disabled', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1');
+  const handle = host(page, 'main').getByRole('button', {
+    name: 'Drag main.ts',
+  });
+  await expect(handle).toHaveAttribute('aria-disabled', 'true');
+  await expect(
+    host(page, 'files').getByRole('button', { name: 'Drag Files' })
+  ).not.toHaveAttribute('aria-disabled');
+  const from = await handle.boundingBox();
+  const files = await host(page, 'files').boundingBox();
+  if (from === null || files === null) throw new Error('No box');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(files.x + 10, files.y + files.height / 2, { steps: 6 });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await editorsOrder(page)).toEqual([
+    'main',
+    'util',
+    'test',
+    'types',
+    'docs',
+  ]);
+});

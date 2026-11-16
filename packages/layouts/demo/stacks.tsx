@@ -12,7 +12,10 @@
 // - `?guard=1`: the app's handlers on the tabs call `preventDefault()`: for
 //   Delete on every tab, for a click on test.ts, and for a press on types.ts.
 // - `?pinned=1`: main.ts and util.ts are pinned, README.md is
-//   `closable: false`, and each header has `Layout.CloseButton`.
+//   `closable: false`, and each header has `Layout.CloseButton` and
+//   `Layout.MoveHandle`, with `paneDrag()`.
+// - `?refuse=edges`: the `canDrop` of `tabDrag()` refuses the edges of the
+//   panes, and keeps the targets that it gets in `__stacks.asked`.
 // - `?activation=manual`: the arrows move the focus only, and Enter or Space
 //   selects.
 // - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`).
@@ -27,6 +30,7 @@ import {
   type Feature,
   hiddenPanes,
   naryTree,
+  paneDrag,
   stacks,
   tabDrag,
   zoom,
@@ -54,9 +58,27 @@ const TITLES: Record<string, string> = {
   output: 'Output',
 };
 
+// The targets that the `canDrop` of `?refuse=edges` gets.
+const asked: unknown[] = [];
+
 const features: Feature[] = [
   edits(naryTree),
-  ...(withoutStacks ? [] : [stacks(), tabDrag()]),
+  ...(withoutStacks
+    ? []
+    : [
+        stacks(),
+        tabDrag(
+          params.get('refuse') === 'edges'
+            ? {
+                canDrop: (source, target) => {
+                  asked.push({ source, ...target, rect: undefined });
+                  return target.place === 'center';
+                },
+              }
+            : {}
+        ),
+      ]),
+  ...(pinned ? [paneDrag()] : []),
   hiddenPanes(),
   zoom(),
 ];
@@ -96,6 +118,7 @@ const page = {
     features
   ),
   renders: {} as Record<string, number>,
+  asked,
 };
 Object.assign(window, { __stacks: page });
 
@@ -160,6 +183,7 @@ function renderPane(pane: PaneNode): JSX.Element {
         <div className="stacks-own-header">{chrome}</div>
       ) : (
         <Layout.Header>
+          {pinned && <Layout.MoveHandle />}
           {chrome}
           {pinned && <Layout.CloseButton />}
         </Layout.Header>

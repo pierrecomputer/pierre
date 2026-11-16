@@ -164,3 +164,27 @@ test('a move handle without paneDrag() and paneDrag() without edits() warn', asy
     )
   ).toHaveLength(1);
 });
+
+test('canDrop refuses a place: no preview, no status, and no move', async ({
+  page,
+}) => {
+  await page.goto('/tiled.html?refuse=left');
+  const before = await box(page, '[data-layout-pane="a"]');
+  const beta = await box(page, '[data-layout-pane="b"]');
+  await dragHandle(page, 'a', { x: beta.x + 10, y: beta.y + beta.height / 2 });
+  await expect(host(page, 'a')).toHaveAttribute('data-moving', 'true');
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.getByRole('status')).not.toHaveText(/^Move /);
+  await page.mouse.up();
+  expect(await box(page, '[data-layout-pane="a"]')).toEqual(before);
+  // An allowed place still drops.
+  await dragHandle(page, 'a', {
+    x: beta.x + beta.width - 10,
+    y: beta.y + beta.height / 2,
+  });
+  await expect(page.locator('.pierre-layout-drop')).toHaveCount(1);
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await box(page, '[data-layout-pane="a"]')).x)
+    .toBeGreaterThan(before.x + 10);
+});

@@ -23,12 +23,22 @@ import type {
   ViewRender,
 } from '../contract';
 import {
+  type CanDrop,
   type Drag,
   DropPreview,
   type DropTarget,
   startDrag,
   useDrag,
 } from '../drag';
+
+/** The options of `tabDrag()`. */
+export interface TabDragOptions {
+  /**
+   * The app's rule for the places of a tab: false refuses a target. It runs
+   * after the rule of pinned tabs.
+   */
+  readonly canDrop?: CanDrop;
+}
 
 const TAB = 'tab';
 
@@ -114,7 +124,11 @@ function pinnedRule(
   };
 }
 
-function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
+function useTabDrag(
+  context: ViewContext,
+  { state }: ViewRender,
+  { canDrop }: TabDragOptions
+): FeatureHooks {
   const drag = useDrag(context, (value: Drag | null) =>
     value?.source.kind === TAB ? value : null
   );
@@ -133,14 +147,22 @@ function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
     startTabDrag(tab, _tabs, event) {
       const current = context.store.getSnapshot();
       const stack = treeIndex(current.root).panes.get(tab.id)?.stack;
+      const source = { kind: TAB, id: tab.id };
+      const pinned = pinnedRule(context, tab.id);
       startDrag(context, event, {
-        source: { kind: TAB, id: tab.id },
+        source,
         center: true,
         group: stack?.children
           .filter((other) => other.hidden !== true)
           .map((other) => other.id) ?? [tab.id],
         rearrange: presentation(current).rearrangeable,
-        accept: pinnedRule(context, tab.id),
+        accept(target) {
+          const place = pinned(target);
+          return place === null ||
+            canDrop?.(source, place, context.store.getSnapshot()) === false
+            ? null
+            : place;
+        },
         drop: (to) => dropTab(context, tab.id, to),
       });
     },
@@ -174,13 +196,14 @@ function useTabDrag(context: ViewContext, { state }: ViewRender): FeatureHooks {
 
 /**
  * Drag a tab: within its tab list to change the order, into another stack,
- * or to an edge of a pane. It requires `stacks()`.
+ * or to an edge of a pane. It requires `stacks()`. `canDrop` refuses the
+ * places that the app does not allow.
  */
-export function tabDrag(): Feature {
+export function tabDrag(options: TabDragOptions = {}): Feature {
   return {
     name: 'tab-drag',
     requires: ['stacks'],
-    use: useTabDrag,
+    use: (context, render) => useTabDrag(context, render, options),
     stylesheets: [
       ['drop', dropCss],
       ['tab-drag', tabDragCss],

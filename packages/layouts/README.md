@@ -365,6 +365,20 @@ close or a hide of the active tab shows the nearest tab. A stack of one pane
 gives way to that pane. A zoom of a tab zooms its stack, and a change of tab
 keeps the zoom.
 
+`tabDrag()` and `paneDrag()` take `canDrop(source, target, state)`, the app's
+rule for the places of a drag. A target that it refuses shows no marker and no
+preview, and takes no drop; the drag goes on. The drag asks once for each target
+under the pointer. `target.place` is an edge or `center`, and a place in a tab
+list also has its `boundary` among the `tabs` of the list. The pinned rule runs
+first. For example, at most 8 groups:
+
+```ts
+tabDrag({
+  canDrop: (source, target, state) =>
+    target.place === 'center' || groupCount(state.root) < 8,
+});
+```
+
 `Layout.Tab` takes a `render` prop for the app's own tab. Mark a close control
 inside a tab with `data-layout-tab-close`, so that a press on it does not start
 a drag; the class `pierre-layout-tab-close` gives it the close mark's style.

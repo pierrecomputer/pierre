@@ -25,7 +25,7 @@ import {
   placeRect,
 } from '../drop';
 import { tabBoundaryAt } from '../stacks-model';
-import type { LayoutGeometry, Rect } from '../types';
+import type { LayoutGeometry, LayoutState, Rect } from '../types';
 import type { ViewContext } from './contract';
 
 /** What a drag moves. */
@@ -47,6 +47,17 @@ export interface DropTarget {
   /** For a place in a tab list: the IDs of the panes of its tabs, in order. */
   readonly tabs?: readonly string[];
 }
+
+/**
+ * The app's rule for the places of a drag: false refuses a target, which then
+ * shows no marker and no preview, and takes no drop. The drag asks once for
+ * each target under the pointer, with the state of the layout.
+ */
+export type CanDrop = (
+  source: DragSource,
+  target: DropTarget,
+  state: LayoutState
+) => boolean;
 
 /** A drag that runs: its source, and its drop target, or null. */
 export interface Drag {
@@ -195,6 +206,23 @@ export function startDrag(
   options: DragOptions
 ): void {
   if (event.button !== 0) return;
+  // The source's rule runs once for each target under the pointer.
+  const accept = options.accept;
+  let asked: DropTarget | null = null;
+  let answer: DropTarget | null = null;
+  const rules: DragOptions =
+    accept === undefined
+      ? options
+      : {
+          ...options,
+          accept(next) {
+            if (!sameTarget(next, asked)) {
+              asked = next;
+              answer = accept(next);
+            }
+            return answer;
+          },
+        };
   const handle = event.currentTarget;
   const { pointerId, clientX, clientY } = event;
   let started = false;
@@ -236,7 +264,7 @@ export function startDrag(
               y,
               move.clientX,
               move.clientY,
-              options
+              rules
             )
           : null;
       mark(list?.tablist ?? null, list?.offset ?? 0);
@@ -244,7 +272,7 @@ export function startDrag(
         list?.target ??
         (options.rearrange === false
           ? null
-          : accepted(options, dropTargetAt(geometry, x, y, options)));
+          : accepted(rules, dropTargetAt(geometry, x, y, rules)));
       if (started && sameTarget(next, target)) return;
       started = true;
       target = next;

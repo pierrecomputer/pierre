@@ -8,6 +8,7 @@ import type { JSX, PointerEvent } from 'react';
 import contentCss from '../../css/content.css?inline';
 import headersCss from '../../css/headers.css?inline';
 import { presentation } from '../../presentation';
+import { treeIndex } from '../../tree-index';
 import type { ZoomCommands } from '../../zoom';
 import { type PaneMessageValues, Style } from '../contract';
 import { useDrag } from '../drag';
@@ -243,8 +244,9 @@ const dragName = ({ paneTitle }: PaneMessageValues): string =>
  * `paneDrag()`. While its pane fills the layout, it is `aria-disabled`. No
  * drag starts while any pane fills the layout; the handles of the covered
  * panes do not change, so a zoom lays no other pane out, and the covered
- * panes are out of the accessibility tree. An app's `onPointerDown` that calls
- * `preventDefault()` starts no drag.
+ * panes are out of the accessibility tree. A pinned tab of a stack has a
+ * disabled handle too. An app's `onPointerDown` that calls `preventDefault()`
+ * starts no drag.
  */
 export function MoveHandle({
   render,
@@ -255,10 +257,14 @@ export function MoveHandle({
   const { id, context } = value;
   warnMissing(context.has('pane-drag'), 'Layout.MoveHandle', 'paneDrag()');
   const pane = usePaneState(value, (state) => state.pane);
-  const disabled = useLayoutState(
-    context.store,
-    (state) => presentation(state).filled === id
-  );
+  // A pinned tab of a stack stays in its stack.
+  const disabled = useLayoutState(context.store, (state) => {
+    const entry = treeIndex(state.root).panes.get(id);
+    return (
+      presentation(state).filled === id ||
+      (entry?.pane.pinned === true && entry.stack !== null)
+    );
+  });
   const dragging = useDrag(
     context,
     (drag) => drag?.source.kind === 'pane' && drag.source.id === id
