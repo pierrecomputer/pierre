@@ -157,6 +157,9 @@ export interface TabState {
  * `tabDrag()`. The arrows, Home, and End move the
  * focus to another tab, which shows. Delete closes the tab. Ctrl+Shift with
  * PageUp or PageDown moves the tab before the previous tab or after the next.
+ * An app's handler that calls `preventDefault()` stops the tab's own handler
+ * for that event: a prevented key does nothing, a prevented click selects
+ * nothing, and a prevented `pointerdown` starts no drag.
  */
 export function Tab({
   render,

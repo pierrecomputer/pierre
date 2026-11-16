@@ -60,6 +60,22 @@ The tab list makes the pane host the tab panel of its tab:
 </Layout.Header>
 ```
 
+An app's handler on a part runs before the part's own handler. When the app's
+handler calls `preventDefault()`, the part does nothing for that event. For
+example, an app asks before Delete closes a tab:
+
+```tsx
+<Layout.Tab
+  onKeyDown={(event) => {
+    if (event.key === 'Delete' && !confirm('Close the tab?'))
+      event.preventDefault();
+  }}
+/>
+```
+
+`preventDefault()` in `onPointerDown` of `Layout.Tab` or `Layout.MoveHandle`
+also stops the drag, so call it there only to stop the drag.
+
 Mark a close control inside a tab with `data-layout-tab-close`, so that a press
 on it does not start a drag. An app that keeps its own tab strip, with no
 `Layout.TabList`, gets one development warning from `stacks()`; each pane host

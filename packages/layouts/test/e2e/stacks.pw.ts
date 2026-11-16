@@ -295,6 +295,20 @@ async function dragTab(
 const names = (page: Page, hostId: string) =>
   tabsOf(page, hostId).getByRole('tab').allTextContents();
 
+// The order of the editors stack, from the store: the host that shows can
+// change at a drop.
+const editorsOrder = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    type Node = { id: string; children?: Node[] };
+    const root = (
+      window as unknown as {
+        __stacks: { layout: { getSnapshot(): { root: Node } } };
+      }
+    ).__stacks.layout.getSnapshot().root;
+    const editors = root.children?.find((node) => node.id === 'editors');
+    return editors?.children?.map((node) => node.id) ?? [];
+  });
+
 test('a tab drag inside its tab list changes the order of the tabs, and the tab keeps the focus', async ({
   page,
 }) => {
@@ -509,4 +523,43 @@ test('a tab that a stack gets after the first render shows only when it is activ
     () => new Promise((resolve) => requestAnimationFrame(resolve))
   );
   expect(await shown()).toEqual(['files', 'later', 'terminal']);
+});
+
+test("an app's handler that calls preventDefault() stops the tab's own handler", async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?guard=1');
+  const tabs = tabsOf(page, 'main');
+  const main = tabs.getByRole('tab', { name: 'main.ts' });
+  await main.focus();
+  await page.keyboard.press('Delete');
+  await expect(tabs.getByRole('tab')).toHaveCount(5);
+  await expect(host(page, 'main')).toHaveCount(1);
+  // The arrows have no app handler: the tab still moves the focus.
+  await page.keyboard.press('ArrowRight');
+  const util = tabsOf(page, 'util').getByRole('tab', { name: 'util.ts' });
+  await expect(util).toBeFocused();
+  await expect(util).toHaveAttribute('aria-selected', 'true');
+  // A prevented click selects nothing.
+  await tabsOf(page, 'util').getByRole('tab', { name: 'test.ts' }).click();
+  await expect(util).toHaveAttribute('aria-selected', 'true');
+  // A prevented press starts no drag; a press on another tab does.
+  const target = await tabBox(page, 'util', 'main.ts');
+  const to = { x: target.x + 4, y: target.y + target.height / 2 };
+  await dragTab(page, 'util', 'types.ts', to);
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await editorsOrder(page)).toEqual([
+    'main',
+    'util',
+    'test',
+    'types',
+    'docs',
+  ]);
+  await dragTab(page, 'util', 'README.md', to);
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await page.mouse.up();
+  await expect
+    .poll(() => editorsOrder(page))
+    .toEqual(['docs', 'main', 'util', 'test', 'types']);
 });

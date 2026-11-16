@@ -53,11 +53,14 @@ function attach(ref: unknown, element: unknown): () => void {
 }
 
 /**
- * The app's props, then the part's own. Both event handlers run, the app's
- * first; the classes join; both refs get the element; the styles join, with
- * the part's values last. For any other prop, the part's value wins.
+ * The app's props, then the part's own. The app's event handler runs first,
+ * and the part's handler runs after it unless the app's handler called
+ * `preventDefault()`: the app handled the event, and the layout does nothing
+ * (with `yieldToApp` false, both always run). The classes join; both refs get
+ * the element; the styles join, with the part's values last. For any other
+ * prop, the part's value wins.
  */
-export function mergeProps(app: Props, own: Props): Props {
+export function mergeProps(app: Props, own: Props, yieldToApp = true): Props {
   const merged: Props = { ...app, ...own };
   for (const key of Object.keys(app)) {
     const appValue = app[key];
@@ -82,13 +85,22 @@ export function mergeProps(app: Props, own: Props): Props {
     )
       merged[key] = (...args: unknown[]) => {
         (appValue as (...args: unknown[]) => void)(...args);
-        (ownValue as (...args: unknown[]) => void)(...args);
+        if (
+          !yieldToApp ||
+          (args[0] as { defaultPrevented?: boolean } | null)
+            ?.defaultPrevented !== true
+        )
+          (ownValue as (...args: unknown[]) => void)(...args);
       };
   }
   return merged;
 }
 
-/** Render a part: with the app's `render`, or as an element of `tag`. */
+/**
+ * Render a part: with the app's `render`, or as an element of `tag`. The
+ * handlers of a `render` element run before the part's props, and all of them
+ * run: the part's own handler in `props` checks `preventDefault()` last.
+ */
 export function renderPart<State>(
   tag: string,
   render: RenderProp<State> | undefined,
@@ -97,7 +109,7 @@ export function renderPart<State>(
 ): ReactElement {
   if (typeof render === 'function') return render(props, state);
   if (render !== undefined)
-    return cloneElement(render, mergeProps(render.props, props));
+    return cloneElement(render, mergeProps(render.props, props, false));
   return createElement(tag, props);
 }
 

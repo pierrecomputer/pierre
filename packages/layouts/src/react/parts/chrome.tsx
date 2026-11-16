@@ -243,7 +243,8 @@ const dragName = ({ paneTitle }: PaneMessageValues): string =>
  * `paneDrag()`. While its pane fills the layout, it is `aria-disabled`. No
  * drag starts while any pane fills the layout; the handles of the covered
  * panes do not change, so a zoom lays no other pane out, and the covered
- * panes are out of the accessibility tree.
+ * panes are out of the accessibility tree. An app's `onPointerDown` that calls
+ * `preventDefault()` starts no drag.
  */
 export function MoveHandle({
   render,

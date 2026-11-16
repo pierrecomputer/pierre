@@ -135,10 +135,14 @@ output of `renderPane`, so they take no pane prop:
 
 Each part takes a `render` prop, an element or a function of the part's props
 and state, so an app gives a part its own markup and keeps the part's roles,
-keys, and handlers. `Layout.usePane(select)` reads the state of the pane of a
-component: its `pane` node, `shown`, `focused`, `zoomed`, `collapsed`, `edges`,
-`tabs`, and `activeTab`. The component renders again only when the value that
-`select` returns changes.
+keys, and handlers. An app's handler on a part runs before the part's own
+handler for the same event. When the app's handler calls `preventDefault()`, the
+part does nothing for that event: for example, an `onKeyDown` that prevents
+Delete keeps a tab open, and an `onPointerDown` that prevents the default on
+`Layout.Tab` or `Layout.MoveHandle` starts no drag. `Layout.usePane(select)`
+reads the state of the pane of a component: its `pane` node, `shown`, `focused`,
+`zoomed`, `collapsed`, `edges`, `tabs`, and `activeTab`. The component renders
+again only when the value that `select` returns changes.
 
 ```tsx
 function PaneBar() {

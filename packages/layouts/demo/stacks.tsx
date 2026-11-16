@@ -9,6 +9,8 @@
 //   own, as a tab with a rename field or a focusable control does.
 // - `?header=none`: the tab lists render without `Layout.Header`, as in an
 //   app's own header.
+// - `?guard=1`: the app's handlers on the tabs call `preventDefault()`: for
+//   Delete on every tab, for a click on test.ts, and for a press on types.ts.
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -30,6 +32,7 @@ const withoutStacks = params.get('features') === 'nostacks';
 const toolsWithoutTabList = params.get('tablist') === 'none';
 const nestedControls = params.get('nested') === '1';
 const withoutHeader = params.get('header') === 'none';
+const guarded = params.get('guard') === '1';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -107,8 +110,31 @@ function NestedTab(): JSX.Element {
   );
 }
 
+/** A tab whose app handlers prevent the tab's own handlers (`?guard=1`). */
+function GuardedTab({ id }: { id: string }): JSX.Element {
+  return (
+    <Layout.Tab
+      onKeyDown={(event) => {
+        if (event.key === 'Delete') event.preventDefault();
+      }}
+      onClick={(event) => {
+        if (id === 'test') event.preventDefault();
+      }}
+      onPointerDown={(event) => {
+        if (id === 'types') event.preventDefault();
+      }}
+    />
+  );
+}
+
 const tabOf = (tab: PaneNode): JSX.Element =>
-  nestedControls && tab.id === 'docs' ? <NestedTab /> : <Layout.Tab />;
+  nestedControls && tab.id === 'docs' ? (
+    <NestedTab />
+  ) : guarded ? (
+    <GuardedTab id={tab.id} />
+  ) : (
+    <Layout.Tab />
+  );
 
 function renderPane(pane: PaneNode): JSX.Element {
   const chrome =
