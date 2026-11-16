@@ -259,7 +259,7 @@ test('pointer rearrangement retains pane content and repairs focus after close',
 }) => {
   await page.getByLabel('Note in Pane 1', { exact: true }).fill('Drag me');
   const source = await page
-    .getByRole('button', { name: 'Drag Pane 1', exact: true })
+    .getByRole('button', { name: 'Arrange Pane 1', exact: true })
     .boundingBox();
   const target = await page.locator('[data-layouts-pane="3"]').boundingBox();
   if (source === null || target === null) throw new Error('Missing panes');

@@ -262,21 +262,31 @@ export function ZoomButton({
 export interface MoveHandleState {
   /** The pane moves in a drag. */
   dragging: boolean;
-  /** No drag starts: the pane fills the layout. */
+  /**
+   * The handle does nothing: no drag starts, as the pane fills the layout or
+   * is a pinned tab, and the layout has no `arrange()` for a menu.
+   */
   disabled: boolean;
 }
 
 const dragName = ({ paneTitle }: PaneMessageValues): string =>
   `Drag ${paneTitle}`;
 
+const menuName = ({ paneTitle }: PaneMessageValues): string =>
+  `Arrange ${paneTitle}`;
+
 /**
- * Move the pane with a pointer drag, beside another pane. It needs
- * `paneDrag()`. While its pane fills the layout, it is `aria-disabled`. No
- * drag starts while any pane fills the layout; the handles of the covered
- * panes do not change, so a zoom lays no other pane out, and the covered
- * panes are out of the accessibility tree. A pinned tab of a stack has a
- * disabled handle too. An app's `onPointerDown` that calls `preventDefault()`
- * starts no drag.
+ * Move the pane with a pointer drag, beside another pane, with `paneDrag()`.
+ * With `arrange()`, it is also the trigger of the app's pane menu
+ * (`Layout.usePaneMenu()`): a press and release with no move is a click,
+ * its name is "Arrange Editor" (`messages.paneMenu`), and it has
+ * `aria-haspopup="menu"`; the app's menu sets `aria-expanded`. No drag
+ * starts while any pane fills the layout, or from a pinned tab of a stack.
+ * Without `arrange()`, the handle is then `aria-disabled`, and a development
+ * build warns that the handle gives no path with no drag (WCAG 2.5.7). The
+ * handles of the covered panes do not change, so a zoom lays no other pane
+ * out, and the covered panes are out of the accessibility tree. An app's
+ * `onPointerDown` that calls `preventDefault()` starts no drag.
  */
 export function MoveHandle({
   render,
@@ -285,11 +295,18 @@ export function MoveHandle({
 }: PartProps<MoveHandleState>): JSX.Element {
   const value = usePaneContext('Layout.MoveHandle');
   const { id, context } = value;
-  warnMissing(context.has('pane-drag'), 'Layout.MoveHandle', 'paneDrag()');
+  const menu = context.has('arrange');
+  warnMissing(
+    menu || context.has('pane-drag'),
+    'Layout.MoveHandle',
+    'paneDrag()'
+  );
+  warnMissing(menu, 'Layout.MoveHandle', 'arrange() for a move with no drag');
   const pane = usePaneState(value, (state) => state.pane);
   const title = usePaneState(value, (state) => state.title);
-  // A pinned tab of a stack stays in its stack.
-  const disabled = useLayoutState(context.store, (state) => {
+  // No drag: a pane fills the layout, or a pinned tab of a stack stays in
+  // its stack.
+  const blocked = useLayoutState(context.store, (state) => {
     const entry = treeIndex(state.root).panes.get(id);
     return (
       presentation(state).filled === id ||
@@ -300,22 +317,28 @@ export function MoveHandle({
     context,
     (drag) => drag?.source.kind === 'pane' && drag.source.id === id
   );
+  const disabled = blocked && !menu;
+  const messages = context.messages();
   return renderPart(
     'button',
     render,
     mergeProps(props, {
       type: 'button',
       className: 'pierre-layouts-grip',
-      'aria-label': (context.messages().drag ?? dragName)({
+      'aria-label': (
+        (menu ? messages.paneMenu : messages.drag) ??
+        (menu ? menuName : dragName)
+      )({
         paneTitle: title,
         paneId: pane.id,
       }),
+      'aria-haspopup': menu ? 'menu' : undefined,
       // Not `disabled`: the handle keeps its place in the tab order.
       'aria-disabled': disabled || undefined,
       'data-dragging': dragging || undefined,
-      style: disabled ? DISABLED_GRIP_STYLE : GRIP_STYLE,
+      style: blocked ? DISABLED_GRIP_STYLE : GRIP_STYLE,
       onPointerDown: (event: PointerEvent<HTMLElement>) => {
-        if (disabled) return;
+        if (blocked) return;
         context
           .hooks()
           .find((hook) => hook.startMove !== undefined)

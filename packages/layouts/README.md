@@ -136,7 +136,12 @@ output of `renderPane`, so they take no pane prop:
   its tab.
 - `Layout.Content`: the area that scrolls, and the target of a collapse.
 - `Layout.CollapseButton`, `Layout.CloseButton`, and `Layout.ZoomButton`.
-- `Layout.MoveHandle`: the handle of `paneDrag()`.
+- `Layout.MoveHandle`: the handle of `paneDrag()`, and with `arrange()` the
+  trigger of the app's pane menu: a press and release with no move is a click,
+  its name is "Arrange Editor" (`messages.paneMenu`), it has
+  `aria-haspopup="menu"`, and it stays enabled while a pane fills the layout, so
+  that "Restore" stays in reach. Without `arrange()`, it is a drag handle only,
+  and a development build warns, as WCAG 2.5.7 asks for a path with no drag.
 - `Layout.TabList` and `Layout.Tab`: the tabs of a stack (see "Tabs").
 
 Each part takes a `render` prop, an element or a function of the part's props

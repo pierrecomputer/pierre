@@ -114,6 +114,7 @@ test('the move handle and the corners set their gesture styles inline', async ({
   await page.goto('/tiled.html');
   const grip = host(page, 'a').locator('.pierre-layouts-grip');
   await expect(grip).toHaveAccessibleName('Drag Alpha');
+  await expect(grip).not.toHaveAttribute('aria-haspopup');
   await expect(grip).toHaveCSS('cursor', 'grab');
   await expect(grip).toHaveCSS('touch-action', 'none');
   const corner = page.locator('.pierre-layouts-corner').first();
@@ -154,6 +155,12 @@ test('a move handle without paneDrag() and paneDrag() without edits() warn', asy
   expect(
     warnings.filter((text) =>
       text.includes('Layout.MoveHandle needs paneDrag()')
+    )
+  ).toHaveLength(1);
+  // Without arrange(), a handle is a drag handle only: no path with no drag.
+  expect(
+    warnings.filter((text) =>
+      text.includes('Layout.MoveHandle needs arrange()')
     )
   ).toHaveLength(1);
   await page.goto('/tiled.html?features=noedits');

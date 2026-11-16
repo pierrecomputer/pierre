@@ -39,7 +39,7 @@ const BUDGET = {
 // pane state, the remote announcement, the sheet of sticky pinned tabs, and
 // the drag with no image; their results name the cost of each.
 const APP_BUDGET = {
-  'full set source': { minified: 82_109, brotli: 24_750 },
+  'full set source': { minified: 82_232, brotli: 24_756 },
   'tab stacks source': { minified: 63_698, brotli: 19_821 },
 } as const;
 

@@ -130,8 +130,12 @@ export function warnMissing(
   part: string,
   feature: string
 ): void {
-  if (process.env.NODE_ENV !== 'production' && !present && !warned.has(part)) {
-    warned.add(part);
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    !present &&
+    !warned.has(`${part} ${feature}`)
+  ) {
+    warned.add(`${part} ${feature}`);
     console.warn(
       `@pierre/layouts: ${part} needs ${feature} in the features of the layout.`
     );

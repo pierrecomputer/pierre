@@ -312,3 +312,45 @@ test('directional focus and Grow run from keys that the keymap binds', async ({
   await page.keyboard.press('Alt+Shift+W');
   expect((await box(page, '7')).width).toBeGreaterThan(before);
 });
+
+test('while a pane is zoomed, the move and size items are disabled and Restore stays', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
+  await handle(page, '1').click();
+  await expect(item(page, 'Move below Pane 7')).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  );
+  await expect(item(page, 'Wider')).toHaveAttribute('aria-disabled', 'true');
+  await item(page, 'Restore').click();
+  await expect(page.locator('[data-layouts-pane="1"]')).not.toHaveAttribute(
+    'data-zoomed'
+  );
+});
+
+test('with arrange(), the move handle is the trigger of the pane menu', async ({
+  page,
+}) => {
+  const trigger = page
+    .locator('[data-layouts-pane="1"]')
+    .getByRole('button', { name: 'Arrange Pane 1', exact: true });
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('menu')).toHaveAccessibleName('Arrange Pane 1');
+  // A drag of the same handle still moves the pane.
+  await page.keyboard.press('Escape');
+  const from = await trigger.boundingBox();
+  const to = await box(page, '3');
+  if (from === null) throw new Error('No box');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width - 8, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  expect((await box(page, '1')).x).toBeGreaterThan(to.x);
+});

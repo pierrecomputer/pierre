@@ -113,7 +113,7 @@ test('the close button of a tool hides it, and each pane has its own buttons', a
     host(page, 'agent').getByRole('button', { name: /^Close / })
   ).toHaveCount(0);
   await expect(
-    host(page, 'agent').getByRole('button', { name: /^Drag / })
+    host(page, 'agent').getByRole('button', { name: /^Arrange / })
   ).toHaveCount(1);
   for (const id of ['editor', 'files'])
     await expect(host(page, id).locator('header > button')).toHaveCount(3);
@@ -258,9 +258,9 @@ test('a new title from getPaneTitle reaches the tab, the tab list, and the names
   await expect(agent.getByRole('button', { name: `Zoom ${next}` })).toHaveCount(
     1
   );
-  await expect(agent.getByRole('button', { name: `Drag ${next}` })).toHaveCount(
-    1
-  );
+  await expect(
+    agent.getByRole('button', { name: `Arrange ${next}` })
+  ).toHaveCount(1);
 });
 
 test('the close mark of a tab is a pointer target of 24 CSS pixels', async ({
