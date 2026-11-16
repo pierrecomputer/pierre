@@ -2,8 +2,8 @@
 name: highlights
 description:
   Use when an app uses @pierre/highlights to generate syntax-highlighted HTML or
-  tokens, stream code, incrementally tokenize edits, or apply Zed-compatible
-  themes and CSS variables.
+  tokens, stream code, incrementally tokenize edits, apply Zed-compatible themes
+  and CSS variables, or write a custom language lexer in WAT.
 ---
 
 # `@pierre/highlights`
@@ -36,11 +36,12 @@ languages are in `langs`; see [Rendering](references/rendering.md).
 
 ## Select a reference
 
-| Task                                                                       | Reference                                 |
-| -------------------------------------------------------------------------- | ----------------------------------------- |
-| Generate HTML or tokens, select or add languages, or manage a Wasm module  | [Rendering](references/rendering.md)      |
-| Load or customize themes, switch CSS variables, or render multiple schemes | [Themes](references/themes.md)            |
-| Tokenize streamed strings or bytes                                         | [Streaming](references/streaming.md)      |
-| Apply edits, prioritize a viewport, or read packed token records           | [Incremental editing](references/live.md) |
+| Task                                                                       | Reference                                    |
+| -------------------------------------------------------------------------- | -------------------------------------------- |
+| Generate HTML or tokens, select or add languages, or manage a Wasm module  | [Rendering](references/rendering.md)         |
+| Load or customize themes, switch CSS variables, or render multiple schemes | [Themes](references/themes.md)               |
+| Tokenize streamed strings or bytes                                         | [Streaming](references/streaming.md)         |
+| Apply edits, prioritize a viewport, or read packed token records           | [Incremental editing](references/live.md)    |
+| Write a lexer for a new language in WAT with `@pierre/wat-tools`           | [Custom lexers](references/custom-lexers.md) |
 
 For file, diff, or editor components, read the [diffs skill](../diffs/SKILL.md).
