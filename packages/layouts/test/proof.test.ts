@@ -20,7 +20,9 @@ const PACKAGE = join(import.meta.dir, '..');
 // opt-in announcement of remote changes (`DEC-layouts-messages-option`), and
 // the accessibility fixes that follow add the separator's pointer target and
 // focus style and the pane header's names and sizes
-// (`DEC-layouts-accessibility-bar`); their results name the cost of each. The brotli size of the
+// (`DEC-layouts-accessibility-bar`). The pane commands give the two-pane
+// budget its new value (`DEC-layouts-pane-commands`): F6, the keymap, and the
+// step buttons of a separator. Their results name the cost of each. The brotli size of the
 // esbuild build moves by up to 50 bytes when the files of the dist change,
 // with the same minified size, so its budget is 50 bytes above the measured
 // size.
