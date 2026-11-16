@@ -134,6 +134,55 @@ test('Ctrl+Shift+PageDown and PageUp move the focused tab, which keeps the focus
     .toEqual(['main.ts', 'util.ts', 'test.ts', 'types.ts', 'README.md']);
 });
 
+test('a field or a button inside a tab keeps its own keys', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?nested=1');
+  const tabs = tabsOf(page, 'main');
+  const order = () =>
+    tabs
+      .getByRole('tab')
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-layout-tab'))
+      );
+  const before = await order();
+  const keys = [
+    'ArrowLeft',
+    'ArrowRight',
+    'Home',
+    'End',
+    'Delete',
+    'Control+Shift+PageUp',
+  ];
+  // A tab's children are presentational, so the controls are found by their
+  // elements, as an app would render them.
+  const field = tabs.locator('input[aria-label="Name of README.md"]');
+  const button = tabs.locator('button', { hasText: 'Pin README.md' });
+  for (const control of [field, button]) {
+    await control.focus();
+    for (const key of keys) await page.keyboard.press(key);
+    await expect(control).toBeFocused();
+    await expect(tabs.getByRole('tab', { name: 'main.ts' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(host(page, 'docs')).toHaveCount(1);
+    expect(await order()).toEqual(before);
+  }
+  // Delete removed a character of the field: the field got its keys.
+  await expect(field).not.toHaveValue('README.md');
+  await field.fill('README.md');
+  await page.keyboard.press('End');
+  await page.keyboard.type('.bak');
+  await expect(field).toHaveValue('README.md.bak');
+  // The tab element itself keeps the keys of the tabs pattern.
+  await tabs.getByRole('tab', { name: 'main.ts' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    tabsOf(page, 'util').getByRole('tab', { name: 'util.ts' })
+  ).toBeFocused();
+});
+
 test('a host of a tab that does not show holds only its own tab', async ({
   page,
 }) => {

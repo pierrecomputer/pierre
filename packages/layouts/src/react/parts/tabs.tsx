@@ -175,6 +175,9 @@ export function Tab({
     context.hooks().find((hooks) => hooks[key] !== undefined)?.[key];
   const select = (id: string): void => hook('selectTab')?.(id);
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    // Only the keys of the tab element itself: a field or a button inside the
+    // tab keeps its own arrows and Delete.
+    if (event.target !== event.currentTarget) return;
     const at = tabs.indexOf(tab);
     if (
       event.ctrlKey &&

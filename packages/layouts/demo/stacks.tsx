@@ -5,6 +5,8 @@
 // - `?features=nostacks`: no `stacks()`, so the tab lists warn.
 // - `?tablist=none`: no tab list in the panes of the tools stack, so
 //   `stacks()` warns. The lone files pane shows its title.
+// - `?nested=1`: the README.md tab holds a text field and a button of its
+//   own, as a tab with a rename field or a focusable control does.
 import { type JSX, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -24,6 +26,7 @@ import {
 const params = new URLSearchParams(location.search);
 const withoutStacks = params.get('features') === 'nostacks';
 const toolsWithoutTabList = params.get('tablist') === 'none';
+const nestedControls = params.get('nested') === '1';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -90,6 +93,20 @@ function Body({ id }: { id: string }): JSX.Element {
   return <textarea aria-label={`Text of ${TITLES[id]}`} />;
 }
 
+/** A tab with a text field and a button of its own (`?nested=1`). */
+function NestedTab(): JSX.Element {
+  return (
+    <Layout.Tab render={<div />}>
+      <span>README.md</span>
+      <input aria-label="Name of README.md" defaultValue="README.md" />
+      <button type="button">Pin README.md</button>
+    </Layout.Tab>
+  );
+}
+
+const tabOf = (tab: PaneNode): JSX.Element =>
+  nestedControls && tab.id === 'docs' ? <NestedTab /> : <Layout.Tab />;
+
 function renderPane(pane: PaneNode): JSX.Element {
   return (
     <>
@@ -98,7 +115,7 @@ function renderPane(pane: PaneNode): JSX.Element {
         (pane.id === 'terminal' || pane.id === 'output') ? (
           <Layout.Title />
         ) : (
-          <Layout.TabList />
+          <Layout.TabList>{tabOf}</Layout.TabList>
         )}
       </Layout.Header>
       <Layout.Content>
