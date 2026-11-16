@@ -212,6 +212,10 @@ export interface ViewContext {
   resizing(): boolean;
   /** The title of a pane, from `getPaneTitle`. */
   title(pane: PaneNode): string;
+  /** A number that grows by one each time `getPaneTitle` changes. */
+  titles(): number;
+  /** Call `listener` after `getPaneTitle` changes. */
+  onTitles(listener: () => void): () => void;
   onPaneClose(): ((pane: PaneNode) => void) | undefined;
   /** The hooks of every feature, from the last render. */
   hooks(): readonly FeatureHooks[];

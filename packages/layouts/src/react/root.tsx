@@ -112,6 +112,12 @@ export interface RootProps {
    * function changes while the tree does not.
    */
   renderPane: (pane: PaneNode) => ReactNode;
+  /**
+   * The title of a pane, for the name of its region, its tab, `Layout.Title`,
+   * the names of its buttons, and the announcements. It can read app state: a
+   * new function gives the parts their new titles, and renders only the parts
+   * whose title changed. The ID of the pane by default.
+   */
   getPaneTitle?: (pane: PaneNode) => string;
   /**
    * Report the sizes of each local `resize` operation: a pointer release, a
@@ -443,6 +449,10 @@ function createViewInternals(
 ): ViewInternals {
   let element: HTMLDivElement | null = null;
   let latest = initial;
+  // The version of `getPaneTitle`: a new function makes the pane stores and
+  // the tabs read their titles again.
+  let titles = 0;
+  const titleListeners = new Set<() => void>();
   let hooks: readonly FeatureHooks[] = [];
   let gesture: Gesture | null = null;
   let resizing = false;
@@ -534,6 +544,13 @@ function createViewInternals(
       store.setSizes(proposed);
     },
     title: (pane) => latest.getPaneTitle(pane),
+    titles: () => titles,
+    onTitles(listener) {
+      titleListeners.add(listener);
+      return () => {
+        titleListeners.delete(listener);
+      };
+    },
     onPaneClose: () => latest.onPaneClose,
     hooks: () => hooks,
     has: (name) => names.has(name),
@@ -551,7 +568,12 @@ function createViewInternals(
       registerLayoutElement(store, element);
     },
     setLatest(next) {
+      const renamed = next.getPaneTitle !== latest.getPaneTitle;
       latest = next;
+      if (renamed) {
+        titles += 1;
+        for (const listener of [...titleListeners]) listener();
+      }
     },
     setHooks(next) {
       hooks = next;

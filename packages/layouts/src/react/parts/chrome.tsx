@@ -68,13 +68,13 @@ export function Title({
   ...props
 }: PartProps<object>): JSX.Element {
   const value = usePaneContext('Layout.Title');
-  const pane = usePaneState(value, (state) => state.pane);
+  const title = usePaneState(value, (state) => state.title);
   return renderPart(
     'span',
     render,
     mergeProps(props, {
       className: 'pierre-layouts-title',
-      children: children ?? value.context.title(pane),
+      children: children ?? title,
     }),
     {}
   );
@@ -119,6 +119,7 @@ export function CollapseButton({
   const value = usePaneContext('Layout.CollapseButton');
   const { id, context } = value;
   const pane = usePaneState(value, (state) => state.pane);
+  const title = usePaneState(value, (state) => state.title);
   const collapsed = usePaneState(value, (state) => state.collapsed);
   return renderPart(
     'button',
@@ -126,7 +127,7 @@ export function CollapseButton({
     mergeProps(props, {
       type: 'button',
       'aria-label': (context.messages().collapse ?? collapseName)({
-        paneTitle: context.title(pane),
+        paneTitle: title,
         paneId: pane.id,
       }),
       'aria-pressed': collapsed,
@@ -166,6 +167,7 @@ export function CloseButton({
     'edits() or the onPaneClose prop'
   );
   const pane = usePaneState(value, (state) => state.pane);
+  const title = usePaneState(value, (state) => state.title);
   const disabled = !useLayoutState(context.store, (state) =>
     canClose(context, state, id)
   );
@@ -175,7 +177,7 @@ export function CloseButton({
     mergeProps(props, {
       type: 'button',
       'aria-label': (context.messages().close ?? closeName)({
-        paneTitle: context.title(pane),
+        paneTitle: title,
         paneId: pane.id,
       }),
       disabled,
@@ -209,6 +211,7 @@ export function ZoomButton({
   const { id, context } = value;
   warnMissing(context.has('zoom'), 'Layout.ZoomButton', 'zoom()');
   const pane = usePaneState(value, (state) => state.pane);
+  const title = usePaneState(value, (state) => state.title);
   const zoomed = usePaneState(value, (state) => state.zoomed);
   return renderPart(
     'button',
@@ -216,7 +219,7 @@ export function ZoomButton({
     mergeProps(props, {
       type: 'button',
       'aria-label': (context.messages().zoom ?? zoomName)({
-        paneTitle: context.title(pane),
+        paneTitle: title,
         paneId: pane.id,
         zoomed,
       }),
@@ -257,6 +260,7 @@ export function MoveHandle({
   const { id, context } = value;
   warnMissing(context.has('pane-drag'), 'Layout.MoveHandle', 'paneDrag()');
   const pane = usePaneState(value, (state) => state.pane);
+  const title = usePaneState(value, (state) => state.title);
   // A pinned tab of a stack stays in its stack.
   const disabled = useLayoutState(context.store, (state) => {
     const entry = treeIndex(state.root).panes.get(id);
@@ -276,7 +280,7 @@ export function MoveHandle({
       type: 'button',
       className: 'pierre-layouts-grip',
       'aria-label': (context.messages().drag ?? dragName)({
-        paneTitle: context.title(pane),
+        paneTitle: title,
         paneId: pane.id,
       }),
       // Not `disabled`: the handle keeps its place in the tab order.

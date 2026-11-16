@@ -12,6 +12,7 @@ import {
   useContext,
   useLayoutEffect,
   useRef,
+  useSyncExternalStore,
 } from 'react';
 
 import tabsCss from '../../css/tabs.css?inline';
@@ -180,6 +181,7 @@ export function TabList({
   warnMissing(context.has('stacks'), 'Layout.TabList', 'stacks()');
   const tablist = useTabPanel(context, value.id);
   const pane = usePaneState(value, (state) => state.pane);
+  const title = usePaneState(value, (state) => state.title);
   const tabs = usePaneState(value, (state) => state.tabs);
   // The pane of the host is the tab that shows in its stack. Only this value
   // changes for a change of tab, so only two tab lists render for it.
@@ -198,7 +200,7 @@ export function TabList({
           ref: tablist,
           role: 'tablist',
           'aria-label': (context.messages().tabs ?? tabsName)({
-            paneTitle: context.title(pane),
+            paneTitle: title,
             paneId: pane.id,
           }),
           className: 'pierre-layouts-tabs',
@@ -249,6 +251,10 @@ export function Tab({
     throw new Error('Layout.Tab must be in Layout.TabList');
   const { id: host, context } = value;
   const { tab, tabs, manual }: TabContextValue = tabValue;
+  // The tab of another pane of the stack: its title follows `getPaneTitle`,
+  // and the tab renders only when its own title changes.
+  const titleOf = (): string => context.title(tab);
+  const title = useSyncExternalStore(context.onTitles, titleOf, titleOf);
   const active = usePaneState(value, (state) => state.activeTab === tab.id);
   const dragging = useDrag(
     context,
@@ -350,7 +356,7 @@ export function Tab({
       },
       onKeyDown,
       children: children ?? (
-        <span className="pierre-layouts-tab-title">{context.title(tab)}</span>
+        <span className="pierre-layouts-tab-title">{title}</span>
       ),
     }),
     { active, dragging }

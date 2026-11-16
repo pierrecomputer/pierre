@@ -239,3 +239,28 @@ test('a separator drag changes only the panes beside it in the n-ary model', asy
   expect(await width('editor')).toBeCloseTo(editor, 0);
   expect(await width('files')).toBeCloseTo(files, 0);
 });
+
+test('a new title from getPaneTitle reaches the tab, the tab list, and the names of the buttons', async ({
+  page,
+}) => {
+  const agent = host(page, 'agent');
+  const first = 'Resize drags with heavy content';
+  const next = 'Hide panes under a zoomed pane';
+  await expect(agent.getByRole('tab', { name: first })).toHaveCount(1);
+  await page
+    .getByRole('navigation', { name: 'Sessions' })
+    .getByRole('button', { name: next })
+    .click();
+  await expect(agent).toHaveAccessibleName(next);
+  await expect(agent.getByRole('tab', { name: next })).toHaveCount(1);
+  await expect(agent.getByRole('tab', { name: first })).toHaveCount(0);
+  await expect(agent.getByRole('tablist')).toHaveAccessibleName(
+    `Tabs of ${next}`
+  );
+  await expect(agent.getByRole('button', { name: `Zoom ${next}` })).toHaveCount(
+    1
+  );
+  await expect(agent.getByRole('button', { name: `Drag ${next}` })).toHaveCount(
+    1
+  );
+});

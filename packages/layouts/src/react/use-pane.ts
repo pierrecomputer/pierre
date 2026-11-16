@@ -22,6 +22,8 @@ export interface PaneState {
   /** The ID of the pane. */
   readonly id: string;
   readonly pane: PaneNode;
+  /** The title of the pane, from `getPaneTitle` of `Root`. */
+  readonly title: string;
   /**
    * The pane shows: it is not hidden, an inactive tab, or covered, and it does
    * not collapse to 0 pixels.
@@ -65,6 +67,7 @@ const sameTabs = (a: readonly PaneNode[], b: readonly PaneNode[]): boolean =>
 // values do not change, so they compare by identity.
 const samePaneState = (a: PaneState, b: PaneState): boolean =>
   a.pane === b.pane &&
+  a.title === b.title &&
   a.shown === b.shown &&
   a.focused === b.focused &&
   a.zoomed === b.zoomed &&
@@ -88,9 +91,10 @@ function cssPaneOf(layout: CSSLayout, id: string): CSSPane | undefined {
 const paneStores = new WeakMap<PaneContextValue, PaneStore>();
 
 /**
- * The store of the state of a pane. It subscribes to the layout and to the
- * visibility of the pane while a component reads it, and it keeps its state
- * object while the values do not change, so a change in another pane
+ * The store of the state of a pane. It subscribes to the layout, to the
+ * visibility of the pane, and to the titles while a component reads it, and it
+ * keeps its state object while the values do not change, so a change in
+ * another pane, or a new `getPaneTitle` that gives this pane the same title,
  * notifies no component of this pane.
  */
 function paneStoreOf(value: PaneContextValue): PaneStore {
@@ -102,14 +106,22 @@ function paneStoreOf(value: PaneContextValue): PaneStore {
   let current: PaneState | null = null;
   let state: LayoutState | null = null;
   let reasons = 0;
+  let titles = 0;
   let stop: (() => void) | undefined;
   const get = (): PaneState => {
     const nextState = store.getSnapshot();
     const nextReasons = visibility.reasons(id);
-    if (current !== null && nextState === state && nextReasons === reasons)
+    const nextTitles = context.titles();
+    if (
+      current !== null &&
+      nextState === state &&
+      nextReasons === reasons &&
+      nextTitles === titles
+    )
       return current;
     state = nextState;
     reasons = nextReasons;
+    titles = nextTitles;
     const entry = treeIndex(nextState.root).panes.get(id);
     // A pane that leaves the tree keeps its last state until it unmounts.
     if (entry === undefined && current !== null) return current;
@@ -123,6 +135,7 @@ function paneStoreOf(value: PaneContextValue): PaneStore {
     const next: PaneState = {
       id,
       pane,
+      title: context.title(pane),
       shown: (nextReasons & HOST_HIDDEN) === 0,
       focused: nextState.focusedPane === id,
       zoomed,
@@ -149,9 +162,11 @@ function paneStoreOf(value: PaneContextValue): PaneStore {
         get();
         const stopStore = store.subscribe(check);
         const stopVisibility = visibility.subscribe(check);
+        const stopTitles = context.onTitles(check);
         stop = () => {
           stopStore();
           stopVisibility();
+          stopTitles();
         };
       }
       listeners.add(listener);
