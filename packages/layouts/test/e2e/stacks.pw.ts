@@ -320,7 +320,7 @@ test('a tab drag inside its tab list changes the order of the tabs, and the tab 
   });
   await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
   await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
-  await expect(page.getByRole('status')).toHaveText('3 panes');
+  await expect(page.getByRole('status')).toHaveText('');
   await page.mouse.up();
   await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
   await expect

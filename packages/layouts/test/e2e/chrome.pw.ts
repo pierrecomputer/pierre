@@ -313,7 +313,8 @@ test('the default strings name panes by their titles', async ({ page }) => {
     'aria-valuetext',
     '33% preferred position'
   );
-  await expect(page.getByRole('status')).toHaveText('3 panes');
+  // The live region has no text of its own.
+  await expect(page.getByRole('status')).toHaveText('');
 });
 
 test('messages replace each string of the layout', async ({ page }) => {
@@ -330,7 +331,6 @@ test('messages replace each string of the layout', async ({ page }) => {
     'aria-valuetext',
     '33 % de la position préférée'
   );
-  await expect(page.getByRole('status')).toHaveText('3 panneaux');
   await expect(
     page.getByRole('button', { name: 'Replier terminal' })
   ).toHaveCount(1);
@@ -375,4 +375,31 @@ test('getSeparatorProps gets the public separator, and getPaneProps adds data at
   );
   await expect(host(page, 'editor')).toHaveAttribute('data-app-pane', 'editor');
   await expect(host(page, 'editor')).toHaveAttribute('tabindex', '0');
+});
+
+// Hide a pane with a remote change, as a server or an agent does.
+const remoteHide = (page: Page, id: string) =>
+  page.evaluate(
+    (pane) =>
+      (
+        window as unknown as {
+          __chrome: { remote(operations: unknown[]): void };
+        }
+      ).__chrome.remote([{ type: 'hide', pane, hidden: true }]),
+    id
+  );
+
+test('a remote change leaves the live region silent, and messages.remote makes it speak', async ({
+  page,
+}) => {
+  await page.goto('/chrome.html');
+  await remoteHide(page, 'notes');
+  await expect(host(page, 'notes')).toHaveAttribute('data-hidden', 'true');
+  await expect(page.getByRole('status')).toHaveText('');
+  await page.goto('/chrome.html?messages=remote');
+  await remoteHide(page, 'notes');
+  await expect(page.getByRole('status')).toHaveText('Agent: notes hidden');
+  // A local change speaks as before.
+  await page.getByRole('button', { name: 'Collapse terminal' }).click();
+  await expect(page.getByRole('status')).toHaveText('terminal collapsed');
 });

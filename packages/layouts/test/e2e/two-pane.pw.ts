@@ -43,7 +43,7 @@ test('the two-pane app renders its hosts, a separator, and the split sheet only'
     .locator('head style[data-href="pierre-layouts-split"]')
     .textContent();
   expect(text?.trimStart().startsWith('@layer pierre-layouts')).toBe(true);
-  await expect(page.getByRole('status')).toHaveText('2 panes');
+  await expect(page.getByRole('status')).toHaveText('');
 });
 
 test('an app rule without a layer wins over the split sheet', async ({

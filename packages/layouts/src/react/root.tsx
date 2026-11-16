@@ -177,17 +177,15 @@ const separatorName = ({
 const separatorValue = ({ percent }: { percent: number }): string =>
   `${percent}% preferred position`;
 
-const paneCount = ({ count }: { count: number }): string => `${count} panes`;
-
 const collapsedText = ({ paneTitle }: PaneMessageValues): string =>
   `${paneTitle} collapsed`;
 const expandedText = ({ paneTitle }: PaneMessageValues): string =>
   `${paneTitle} expanded`;
 
 /**
- * The announcement of a local change: the text of its last operation that has
- * one. `Root` gives the collapse and the expand; each feature gives the text
- * of its own operations.
+ * The announcement of a change: the text of its last operation that has one.
+ * `Root` gives the collapse and the expand; each feature gives the text of its
+ * own operations.
  */
 function announcementOf(
   change: LayoutChange,
@@ -597,14 +595,19 @@ function createViewInternals(
         for (const hook of hooks)
           hook.beforeChange?.(previous, next, element, change);
       // A remote change ends a gesture with no operation: the store applied
-      // it to the state from before the gesture.
-      if (change.origin === 'remote') finish(true);
-      else {
+      // it to the state from before the gesture. It speaks only when the app
+      // gives `messages.remote`.
+      const remote = change.origin === 'remote';
+      if (remote) finish(true);
+      else
         for (const operation of change.operations)
           if (operation.type === 'resize') latest.onResize?.(operation.sizes);
-        const text = announcementOf(change, previous, next, features, latest);
-        if (text !== null) announce(text);
-      }
+      const speak = remote
+        ? latest.messages?.remote
+        : (values: { text: string }) => values.text;
+      if (speak === undefined) return;
+      const text = announcementOf(change, previous, next, features, latest);
+      if (text !== null) announce(speak({ text }));
     },
     move(event) {
       if (gesture !== null && gesture.pointerId === event.pointerId)
@@ -826,10 +829,10 @@ export function Root(props: RootProps): JSX.Element {
   const layers = paneLayers();
   const layered =
     typeof layers === 'boolean' ? layers : visibleCount >= layers.minPanes;
+  // The live region has no text of its own: a change that announces nothing
+  // leaves it as it is.
   const status =
-    hooks.find((hook) => hook.status != null)?.status ??
-    message?.text ??
-    (messages?.paneCount ?? paneCount)({ count: visibleCount });
+    hooks.find((hook) => hook.status != null)?.status ?? message?.text;
   const sheets = new Map<string, string>([['split', splitCss]]);
   for (const feature of features)
     for (const [name, css] of feature.stylesheets ?? []) sheets.set(name, css);

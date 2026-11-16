@@ -6,6 +6,7 @@
 // - `?render=unstable`: the app makes a new `renderPane` on each store change,
 //   so `Root` warns in development.
 // - `?messages=fr`: the strings of the layout in French.
+// - `?messages=remote`: a remote change speaks, as "Agent: <text>".
 // - `?start=hidden`: the notes pane starts hidden.
 import {
   type JSX,
@@ -17,7 +18,7 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import type { PaneNode } from '../src';
+import { applyOperations, type LayoutOperation, type PaneNode } from '../src';
 import * as Layout from '../src/react';
 import {
   createLayout,
@@ -45,7 +46,6 @@ const FRENCH_NAMES: Readonly<Record<string, string>> = {
 };
 const FRENCH: LayoutMessages = {
   layout: 'Espace de travail',
-  paneCount: ({ count }) => `${count} panneaux`,
   separator: ({ beforeTitles, afterTitles }) =>
     `Redimensionner ${beforeTitles} et ${afterTitles}`,
   separatorValue: ({ percent }) => `${percent} % de la position préférée`,
@@ -53,7 +53,13 @@ const FRENCH: LayoutMessages = {
   close: ({ paneId, paneTitle }) =>
     `Fermer ${FRENCH_NAMES[paneId] ?? paneTitle}`,
 };
-const messages = params.get('messages') === 'fr' ? FRENCH : undefined;
+const REMOTE: LayoutMessages = { remote: ({ text }) => `Agent: ${text}` };
+const messages =
+  params.get('messages') === 'fr'
+    ? FRENCH
+    : params.get('messages') === 'remote'
+      ? REMOTE
+      : undefined;
 
 // What the tests read: the layout object, the renders of each pane's content
 // and of each pane's status line, the visibility events of each pane, the
@@ -74,6 +80,10 @@ const page = {
     },
     withoutFeatures ? [] : [edits(naryTree), hiddenPanes()]
   ),
+  /** Apply operations from elsewhere, as a server's change. */
+  remote(operations: LayoutOperation[]): void {
+    applyOperations(page.layout, operations);
+  },
   renders: {} as Record<string, number>,
   statusRenders: {} as Record<string, number>,
   visibility: {} as Record<string, boolean[]>,

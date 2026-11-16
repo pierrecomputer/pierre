@@ -213,7 +213,6 @@ catalog takes as it is:
 | Key                                                                        | Values                                                                                                                                    | Default                                                    |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `layout`                                                                   | (a string)                                                                                                                                | Workspace                                                  |
-| `paneCount`                                                                | `count`                                                                                                                                   | 2 panes                                                    |
 | `separator`                                                                | `beforeTitles`, `afterTitles` (titles joined with ", "), `beforeCount`, `afterCount`, `beforeId`, `afterId` (the first pane on each side) | Resize Files and Editor                                    |
 | `separatorValue`                                                           | `percent`                                                                                                                                 | 50% preferred position                                     |
 | `collapse`, `close`, `drag`, `tabs`                                        | `paneTitle`, `paneId`                                                                                                                     | Collapse Editor, Close Editor, Drag Editor, Tabs of Editor |
@@ -222,12 +221,16 @@ catalog takes as it is:
 | `opened`, `moved`, `move`                                                  | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Terminal opened to the bottom of Editor, …                 |
 | `movedToTabs`, `moveInto`                                                  | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Editor moved into the group of Files, …                    |
 | `corner`                                                                   | (a string)                                                                                                                                | Resize both axes                                           |
+| `remote`                                                                   | `text` (what the same change from this window announces)                                                                                  | none: a remote change is silent                            |
 
 The titles come from `getPaneTitle`, and the IDs are the `PaneNode.id` strings
 of the tree, so a translation in a language that inflects names can find the
 form of a name that its sentence needs. Announcements name panes by their
-titles. `Root` announces the changes of its own window, not the changes that
-`applyOperations` applies from elsewhere.
+titles. `Root` announces the changes of its own window. A change that
+`applyOperations` applies from elsewhere, such as an agent's move, speaks only
+with `messages.remote`, which gets the text that the same change from this
+window announces: ``remote: ({ text }) => `Agent: ${text}` ``. The live region
+has no other text, so a change that announces nothing leaves it as it is.
 
 ```tsx
 const messages: LayoutMessages = {

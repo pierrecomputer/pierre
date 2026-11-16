@@ -107,8 +107,13 @@ export interface SeparatorMessageValues {
 export interface LayoutMessages {
   /** The name of the layout. Default: "Workspace". */
   readonly layout?: string;
-  /** The status message with the count of panes that show. Default: "2 panes". */
-  readonly paneCount?: (values: { readonly count: number }) => string;
+  /**
+   * The announcement of a change from elsewhere, such as the operations of a
+   * server or an agent that `applyOperations` applies: `text` is what the same
+   * change from this window announces, for example "Editor moved to the right
+   * of Files". Default: none, so a remote change is silent.
+   */
+  readonly remote?: (values: { readonly text: string }) => string;
   /**
    * The name of a separator, from the titles of the panes that show on each
    * side of it. Default: "Resize Files and Editor".
