@@ -132,7 +132,19 @@ function expectedDiffLines(
 
 describe('CodeView search walkers', () => {
   test('text resumes after every line and trims LF, CRLF, CR and trailing empty text', () => {
-    for (const contents of ['', 'line\n', 'line\r\nnext\rlast', 'line\n\n']) {
+    for (const contents of [
+      '',
+      'line\n',
+      'line\r\nnext\rlast',
+      'line\n\n',
+      '\n',
+      '\r',
+      '\r\n',
+      '\r\r\n',
+      'line\r',
+      'one\r\n\r\ntwo',
+      'one\n\rtwo\r',
+    ]) {
       const expected = new TextDocument('file:///text', contents);
       const cursor = new CodeViewSearchTextCursor(contents);
       const lines: VisitedLine[] = [];
@@ -150,6 +162,64 @@ describe('CodeView search walkers', () => {
           index,
         ])
       );
+    }
+  });
+
+  test('a text much longer than one block keeps every kind of line ending in step', () => {
+    for (const endings of [['\n'], ['\r\n'], ['\r'], ['\n', '\r\n', '\r']]) {
+      let contents = '';
+      for (let line = 0; line < 4000; line++) {
+        contents += `line ${line} ${'x'.repeat(line % 97)}${endings[line % endings.length]}`;
+      }
+      const expected = new TextDocument('file:///text', contents);
+      const cursor = new CodeViewSearchTextCursor(contents);
+      const lines: string[] = [];
+      cursor.walk((text) => {
+        lines.push(text);
+        return false;
+      });
+      expect(contents.length).toBeGreaterThan(131_072);
+      expect(lines).toEqual(
+        Array.from({ length: expected.lineCount }, (_, index) =>
+          expected.getLineText(index)
+        )
+      );
+    }
+  });
+
+  test('a text with only \\r line endings is walked about as fast as one with \\n', () => {
+    // The best of three walks over 200,000 short lines.
+    const time = (ending: string): number => {
+      const contents = `blank abcdefghijklmnopqrstuvwxyz${ending}`.repeat(
+        200_000
+      );
+      let best = Infinity;
+      for (let run = 0; run < 3; run++) {
+        const cursor = new CodeViewSearchTextCursor(contents);
+        const start = performance.now();
+        cursor.walk(() => false);
+        best = Math.min(best, performance.now() - start);
+      }
+      return best;
+    };
+    expect(time('\r')).toBeLessThan(time('\n') * 10 + 10);
+  });
+
+  test('text lines can be read in any order, and a line past the end is rejected', () => {
+    const contents = 'zero\r\none\rtwo\n\nfour';
+    const expected = new TextDocument('file:///text', contents);
+    for (const order of [
+      [4, 0, 2, 1, 3],
+      [2, 2, 0, 4],
+      [0, 1, 2, 3, 4],
+    ]) {
+      const cursor = new CodeViewSearchTextCursor(contents);
+      for (const lineIndex of order) {
+        expect(cursor.readLine(lineIndex)).toBe(
+          expected.getLineText(lineIndex)
+        );
+      }
+      expect(() => cursor.readLine(5)).toThrow('out of range');
     }
   });
 

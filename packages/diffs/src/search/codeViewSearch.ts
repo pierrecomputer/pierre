@@ -1,5 +1,4 @@
 import type { CodeViewItem, FileDiffMetadata, SelectionSide } from '../types';
-import { computeLineOffsets } from '../utils/computeFileOffsets';
 import {
   type DiffLineMetadata,
   iterateOverDiff,
@@ -9,6 +8,9 @@ import { compileSearchQuery, matchSearchLine } from './lineSearch';
 
 // Amortize clock reads over enough text that they cost less than line matching.
 export const CODE_VIEW_SEARCH_CLOCK_CHECK_CHARACTERS = 65_536;
+
+// How far ahead a walk looks for `\r` in one go.
+export const CODE_VIEW_SEARCH_CARRIAGE_RETURN_LOOKAHEAD = 65_536;
 
 export interface CodeViewSearchLineMetadata {
   itemId: string;
@@ -51,26 +53,41 @@ export type CodeViewSearchLineVisitor = (
   lineIndex: number
 ) => boolean;
 
-// Retains text and its line offsets while walking one item's source lines.
+// Walks one text line by line. Lines are found as they are read, so starting
+// on a very large text costs nothing up front.
 export class CodeViewSearchTextCursor {
-  private readonly offsets: number[];
+  // Where each line found so far starts.
+  private readonly offsets: number[] = [0];
+  // Whether the last line found is the last line of the text.
+  private ended = false;
+  // The next `\n` ahead of the lines read so far. -1 when there is none
+  // left, and undefined before it has been looked for.
+  private lineFeed: number | undefined;
+  // The next `\r` found ahead of the lines read so far, or -1.
+  private carriageReturn = -1;
+  // Text before this index has been checked for `\r`.
+  private checkedTo = 0;
   private nextLine = 0;
 
   constructor(
     private readonly contents: string,
     private readonly side?: SelectionSide
-  ) {
-    this.offsets = computeLineOffsets(contents);
-  }
+  ) {}
 
   // Reads one line without its ending and rejects an index outside the text.
   readLine(lineIndex: number): string {
     const { contents, offsets } = this;
+    while (lineIndex >= offsets.length && !this.ended) {
+      this.readNewLine();
+    }
     const start = offsets[lineIndex];
     if (start == null) {
       throw new Error(
         `CodeViewSearchTextCursor.readLine: line index ${lineIndex} is out of range`
       );
+    }
+    if (lineIndex === offsets.length - 1 && !this.ended) {
+      return this.readNewLine();
     }
     let end = offsets[lineIndex + 1] ?? contents.length;
     while (end > start) {
@@ -87,11 +104,67 @@ export class CodeViewSearchTextCursor {
     const { offsets, side } = this;
     while (this.nextLine < offsets.length) {
       const lineIndex = this.nextLine++;
-      if (visitLine(this.readLine(lineIndex), side, lineIndex + 1, lineIndex)) {
+      // A walk is nearly always at the last line found, so it reads that one
+      // directly.
+      const text =
+        lineIndex === offsets.length - 1 && !this.ended
+          ? this.readNewLine()
+          : this.readLine(lineIndex);
+      if (visitLine(text, side, lineIndex + 1, lineIndex)) {
         return false;
       }
     }
     return true;
+  }
+
+  // Reads the last line found so far, and finds where the next one starts.
+  // A line ends at `\n`, `\r\n` or a lone `\r`, as in `computeLineOffsets`.
+  private readNewLine(): string {
+    const { contents, offsets } = this;
+    const start = offsets[offsets.length - 1];
+    // Looked for again only once the walk has passed the last one found, so
+    // no part of the text is searched for `\n` twice.
+    let { lineFeed } = this;
+    if (lineFeed == null || (lineFeed !== -1 && lineFeed < start)) {
+      lineFeed = contents.indexOf('\n', start);
+      this.lineFeed = lineFeed;
+    }
+    const end = lineFeed === -1 ? contents.length : lineFeed;
+    const carriageReturn = this.findCarriageReturn(start, end);
+    if (carriageReturn === -1) {
+      if (lineFeed === -1) this.ended = true;
+      else offsets.push(lineFeed + 1);
+      return contents.slice(start, end);
+    }
+    // The `\r` of a `\r\n` pair ends the line with it. Any other `\r` ends
+    // the line by itself, and what follows it is the next line.
+    offsets.push(
+      lineFeed !== -1 && carriageReturn === end - 1
+        ? lineFeed + 1
+        : carriageReturn + 1
+    );
+    return contents.slice(start, carriageReturn);
+  }
+
+  // The first `\r` from `start` up to `end`, or -1. It looks well ahead of
+  // the line in one go, so a text with no `\r` in it is not checked line by
+  // line.
+  private findCarriageReturn(start: number, end: number): number {
+    const { contents, checkedTo } = this;
+    if (this.carriageReturn < start && checkedTo < end) {
+      const from = Math.max(checkedTo, start);
+      const to = Math.min(
+        contents.length,
+        Math.max(end, from + CODE_VIEW_SEARCH_CARRIAGE_RETURN_LOOKAHEAD)
+      );
+      const index = contents.slice(from, to).indexOf('\r');
+      this.carriageReturn = index === -1 ? -1 : from + index;
+      this.checkedTo = index === -1 ? to : from + index + 1;
+    }
+    const { carriageReturn } = this;
+    return carriageReturn >= start && carriageReturn < end
+      ? carriageReturn
+      : -1;
   }
 }
 

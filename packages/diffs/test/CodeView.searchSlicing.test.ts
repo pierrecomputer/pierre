@@ -544,9 +544,216 @@ describe('CodeView sliced find', () => {
         viewer.render(true);
         await finish();
         expect(getSearchState(viewer).current?.lineNumber).toBe(1001);
+        // The match is on screen, so the next step moves on from it.
+        viewer.navigateSearch('next');
+        expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       }
     );
   });
+
+  for (const scroll of ['scrollTo', 'wheel']) {
+    test(`a ${scroll} right after find opens with a query keeps the view and still selects the match`, async () => {
+      const dom = installDom();
+      const states: SearchPanelState[] = [];
+      const viewer = new CodeView({
+        useTokenTransformer: true,
+        onSearchStateChange: (state) => {
+          if (state != null) states.push(state);
+        },
+      });
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        const blank = `blank ${'x'.repeat(80)}\n`.repeat(4000);
+        await renderItems(viewer, [fileItem('file', `target\n${blank}`)]);
+        viewer.scrollTo({
+          type: 'line',
+          id: 'file',
+          lineNumber: 1000,
+          align: 'center',
+          behavior: 'instant',
+        });
+        viewer.render(true);
+        const scrollTop = viewer.getScrollTop();
+        expect(scrollTop).toBeGreaterThan(0);
+
+        // The first search runs a frame after find opens. The scroll lands
+        // in between.
+        viewer.openSearch({ query: 'target', scope: 'all' });
+        if (scroll === 'wheel') {
+          root.dispatchEvent(new Event('wheel', { bubbles: true }));
+        } else {
+          viewer.scrollTo({
+            type: 'position',
+            position: scrollTop,
+            behavior: 'instant',
+          });
+        }
+        await waitFor(
+          () =>
+            states.at(-1)?.matchCount === 1 &&
+            states.at(-1)?.searching === false
+        );
+        await wait(20);
+        expect(states.at(-1)?.currentMatchIndex).toBe(0);
+        expect(label(root)).toBe('1 of 1');
+        expect(viewer.getScrollTop()).toBe(scrollTop);
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    });
+  }
+
+  test('a pointer press in the find panel lets a smooth find scroll finish', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      useTokenTransformer: true,
+      searchOptions: { scrollBehavior: 'smooth' },
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      const blank = `blank ${'x'.repeat(80)}\n`.repeat(2000);
+      await renderItems(viewer, [
+        fileItem('one', `target\n${blank}`),
+        fileItem('two', `target\n${blank}`),
+      ]);
+      viewer.openSearch({ query: 'target', scope: 'all' });
+      await wait(20);
+      viewer.navigateSearch('next');
+      await wait(10);
+      getSearchPanelRoot(root)
+        .querySelector('input[data-search]')
+        ?.dispatchEvent(
+          new Event('pointerdown', { bubbles: true, composed: true })
+        );
+      viewer.render(true);
+      await waitFor(() =>
+        viewer.getRenderedItems().some(({ id }) => id === 'two')
+      );
+      expect(viewer.getRenderedItems().map(({ id }) => id)).toContain('two');
+      expect(label(root)).toBe('2 of 2');
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  for (const scroll of ['wheel', 'scrollTo', 'panel click']) {
+    test(`a ${scroll} during a step ${scroll === 'panel click' ? 'does not interrupt it' : 'leaves its match selected, and the next step goes to it'}`, async () => {
+      const blank = `blank ${'x'.repeat(80)}\n`.repeat(2000);
+      await withViewer(
+        [
+          fileItem('one', `target\n${blank}`),
+          fileItem('two', `target\n${blank}`),
+          fileItem('three', 'target'),
+        ],
+        async ({ viewer, root, finish }) => {
+          fillSearch(root, 'target');
+          await finish();
+          expect(label(root)).toBe('1 of 3');
+
+          // The step selects the match in `two` and starts scrolling to it.
+          viewer.navigateSearch('next');
+          expect(getSearchState(viewer).current?.itemId).toBe('two');
+          if (scroll === 'wheel') {
+            root.dispatchEvent(new Event('wheel', { bubbles: true }));
+          } else if (scroll === 'scrollTo') {
+            viewer.scrollTo({
+              type: 'item',
+              id: 'one',
+              align: 'start',
+              behavior: 'instant',
+            });
+          } else {
+            getSearchPanelRoot(root)
+              .querySelector('[data-matches]')
+              ?.dispatchEvent(
+                new Event('pointerdown', { bubbles: true, composed: true })
+              );
+          }
+          viewer.render(true);
+          expect(label(root)).toBe('2 of 3');
+          if (scroll === 'panel click') {
+            // The view reached the match, so the next step moves on.
+            expect(viewer.getRenderedItems().map(({ id }) => id)).toContain(
+              'two'
+            );
+            viewer.navigateSearch('next');
+            expect(getSearchState(viewer).current?.itemId).toBe('three');
+            expect(label(root)).toBe('3 of 3');
+            return;
+          }
+          expect(viewer.getRenderedItems().map(({ id }) => id)).not.toContain(
+            'two'
+          );
+
+          viewer.navigateSearch('next');
+          viewer.render(true);
+          expect(getSearchState(viewer).current?.itemId).toBe('two');
+          expect(label(root)).toBe('2 of 3');
+          expect(viewer.getRenderedItems().map(({ id }) => id)).toContain(
+            'two'
+          );
+
+          viewer.navigateSearch('next');
+          expect(getSearchState(viewer).current?.itemId).toBe('three');
+          expect(label(root)).toBe('3 of 3');
+        }
+      );
+    });
+  }
+
+  for (const scroll of ['wheel', 'scrollTo']) {
+    test(`a ${scroll} after a query keeps the view, still selects the match, and the next step goes to it`, async () => {
+      const blank = `blank ${'x'.repeat(80)}\n`.repeat(2000);
+      await withViewer(
+        [
+          fileItem('first', blank),
+          fileItem('second', blank),
+          fileItem('third', 'target\ntarget'),
+        ],
+        async ({ viewer, root, states, finish }) => {
+          fillSearch(root, 'target');
+          expect(getSearchState(viewer).current).toBeUndefined();
+          if (scroll === 'wheel') {
+            root.dispatchEvent(new Event('wheel', { bubbles: true }));
+          } else {
+            viewer.scrollTo({
+              type: 'item',
+              id: 'second',
+              align: 'start',
+              behavior: 'instant',
+            });
+          }
+          viewer.render(true);
+          const scrollTop = viewer.getScrollTop();
+          await finish();
+          expect(getSearchState(viewer).current?.itemId).toBe('third');
+          expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+          expect(states.at(-1)?.currentMatchIndex).toBe(0);
+          expect(label(root)).toBe('1 of 2');
+          expect(viewer.getScrollTop()).toBe(scrollTop);
+          expect(viewer.getRenderedItems().map(({ id }) => id)).not.toContain(
+            'third'
+          );
+
+          viewer.navigateSearch('next');
+          viewer.render(true);
+          expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+          expect(label(root)).toBe('1 of 2');
+          expect(viewer.getRenderedItems().map(({ id }) => id)).toContain(
+            'third'
+          );
+
+          viewer.navigateSearch('next');
+          expect(getSearchState(viewer).current?.lineNumber).toBe(2);
+          expect(label(root)).toBe('2 of 2');
+        }
+      );
+    });
+  }
 
   for (const stage of ['finished', 'current', 'unreached']) {
     test(`editing the ${stage} item during a scan searches its current document text`, async () => {

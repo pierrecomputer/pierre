@@ -222,8 +222,14 @@ interface CodeViewSearchState {
   scope: { itemId: string } | undefined;
   matches: CodeViewSearchMatch[];
   scan: CodeViewSearchScan | undefined;
-  // Whether a new query still has to scroll to its first match.
-  pendingQueryNavigation: boolean;
+  // Tracks navigation that find state.
+  // `jump`: a new query's first match is not known yet. Select it and scroll
+  // to it when it is.
+  // `select`: the same, but the user or the host scrolled after the query, so
+  // select it without scrolling.
+  // `reveal`: the current match is selected but the view never reached it.
+  // The next find step scrolls to it.
+  pendingNavigation: 'jump' | 'select' | 'reveal' | undefined;
   current: CodeViewSearchMatch | undefined;
   // Once a result requires scrolling, center subsequent navigation until the
   // query or scope changes. Background match refreshes preserve this choice.
@@ -992,7 +998,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     scope: undefined,
     matches: [],
     scan: undefined,
-    pendingQueryNavigation: false,
+    pendingNavigation: undefined,
     current: undefined,
     centerNavigation: false,
     pendingHorizontalReveal: false,
@@ -1556,7 +1562,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     this.invalidateSearchScan();
     this.searchState.scope = scope;
-    this.searchState.pendingQueryNavigation = false;
+    this.searchState.pendingNavigation = undefined;
     this.searchState.centerNavigation = false;
     this.markSearchMatchesDirty();
   }
@@ -1672,7 +1678,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchState.scope = undefined;
     this.searchState.matches = [];
     this.invalidateSearchScan();
-    this.searchState.pendingQueryNavigation = false;
+    this.searchState.pendingNavigation = undefined;
     this.searchState.current = undefined;
     this.searchState.centerNavigation = false;
     this.searchMatchesDirty = false;
@@ -1744,6 +1750,21 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       searchMatch: true,
     };
     this.requestScroll(target);
+  }
+
+  // The user or the host has scrolled, so find leaves the view where it was
+  // put. A first match still to come is selected without scrolling, and a
+  // match find was scrolling to is left for the next find step.
+  private keepViewForPendingSearch(): void {
+    const { searchState, pendingScrollTarget } = this;
+    if (searchState.pendingNavigation === 'jump') {
+      searchState.pendingNavigation = 'select';
+    } else if (
+      pendingScrollTarget?.type === 'line' &&
+      pendingScrollTarget.searchMatch === true
+    ) {
+      searchState.pendingNavigation = 'reveal';
+    }
   }
 
   private isSearchMatchHidden(
@@ -1929,7 +1950,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     ) {
       this.invalidateSearchScan();
       searchState.scope = undefined;
-      searchState.pendingQueryNavigation = false;
+      searchState.pendingNavigation = undefined;
       searchState.centerNavigation = false;
     }
     // Flag the refresh before rebinding so its state report waits for the read.
@@ -1982,9 +2003,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   ): number | undefined => {
     const { matches, searching } = result;
     const { searchState } = this;
-    const { current, scan, scope, pendingQueryNavigation } = searchState;
-    const owesNavigation =
-      options?.skipNavigation !== true || pendingQueryNavigation;
+    const { current, scan, scope, pendingNavigation } = searchState;
+    // A refresh carries on with what is left from the last query. A new query
+    // starts with `jump`, unless a scroll has already come after it.
+    const pending =
+      options?.skipNavigation === true || pendingNavigation === 'select'
+        ? pendingNavigation
+        : 'jump';
+    const picksMatch = pending === 'jump' || pending === 'select';
     // A replace leaves an empty match at the end of the inserted text. The
     // next match is the first one after it.
     const replacementEnd =
@@ -1994,7 +2020,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         ? current
         : undefined;
     let jumpTarget: CodeViewSearchMatch | undefined;
-    if (owesNavigation && scan != null) {
+    if (picksMatch && scan != null) {
       if (replacementEnd != null) {
         const position = this.getSearchItemPosition(replacementEnd.itemId);
         if (position != null && !scan.isItemPending(position)) {
@@ -2009,8 +2035,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       }
     }
 
-    searchState.pendingQueryNavigation =
-      owesNavigation && jumpTarget == null && searching === true;
+    if (picksMatch) {
+      searchState.pendingNavigation =
+        jumpTarget != null
+          ? pending === 'select'
+            ? 'reveal'
+            : undefined
+          : searching === true
+            ? pending
+            : undefined;
+    }
 
     const target = jumpTarget ?? current;
     const position =
@@ -2025,7 +2059,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       position != null &&
       scan?.isItemPending(position) === true;
     this.setSearchResults(matches, currentItemPending ? current : nextCurrent);
-    if (jumpTarget != null) this.scrollToSearchMatch(jumpTarget);
+    if (jumpTarget != null && pending === 'jump') {
+      this.scrollToSearchMatch(jumpTarget);
+    }
     return nextIndex;
   };
 
@@ -2614,6 +2650,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public scrollTo(target: CodeViewScrollTarget): void {
+    this.keepViewForPendingSearch();
     this.requestScroll(target);
   }
 
@@ -2759,14 +2796,22 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       },
       onQueryChange: () => {
         this.invalidateSearchScan();
-        // The current match belongs to the old query.
         this.setSearchResults(this.searchState.matches, undefined);
+        this.searchState.pendingNavigation = undefined;
         this.searchState.centerNavigation = false;
       },
       search: (searchParams) => this.searchCodeView(searchParams),
       scrollToMatch: (match) => {
-        this.searchState.pendingQueryNavigation = false;
+        this.searchState.pendingNavigation = undefined;
         this.scrollToSearchMatch(match);
+      },
+      currentMatchNeedsReveal: () => {
+        const { current, pendingNavigation } = this.searchState;
+        return (
+          pendingNavigation === 'reveal' &&
+          current != null &&
+          !this.isSearchMatchInView(current)
+        );
       },
       onUpdate: this.updateSearchResults,
       onClose: () => {
@@ -2774,6 +2819,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       },
     });
     this.searchPanel = searchPanel;
+    // The panel runs its first search a frame from now. A scroll before then
+    // still comes after the query.
+    if (searchPanel.hasQuery()) {
+      this.searchState.pendingNavigation = 'jump';
+    }
     searchPanel.mount();
     // The state callback may close the panel while it mounts.
     if (this.searchPanel !== searchPanel) {
@@ -5250,10 +5300,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // Attached to root as a passive listener for wheel / touchstart /
   // pointerdown / keydown; we never mutate the event, just drop our state.
   private clearPendingScroll = (event?: Event): void => {
-    if (event != null && !isUserScrollInput(event)) {
-      return;
+    if (event != null) {
+      // Input in the find panel is not the user scrolling the view.
+      const panel = this.searchPanel?.getHostElement();
+      if (
+        !isUserScrollInput(event) ||
+        (panel != null && event.composedPath().includes(panel))
+      ) {
+        return;
+      }
+      this.searchState.pendingHorizontalReveal = false;
+      this.keepViewForPendingSearch();
     }
-    if (event != null) this.searchState.pendingHorizontalReveal = false;
     this.pendingLayoutAnchor = undefined;
     this.cancelScroll();
   };

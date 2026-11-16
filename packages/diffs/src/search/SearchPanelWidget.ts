@@ -46,6 +46,11 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
   mode?: SearchPanelMode;
   search: (searchParams: SearchParams) => SearchResult<TMatch>;
   scrollToMatch: (nextMatch: TMatch, retainFocus: boolean) => void;
+  /**
+   * Whether the current match was made current without being scrolled to. The
+   * next find step then goes to it instead of the match after it.
+   */
+  currentMatchNeedsReveal?: () => boolean;
   replace?: SearchPanelReplaceHandlers<TMatch>;
   /** Query text or matching options changed; excludes replacement text and refreshes. */
   onQueryChange?: () => void;
@@ -88,6 +93,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       mode = 'find',
       search,
       scrollToMatch,
+      currentMatchNeedsReveal,
       replace,
       onQueryChange,
       onUpdate,
@@ -200,12 +206,15 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     ) => {
       const { all, currentIndex } = matches;
       if (all.length > 0) {
-        const nextIndex =
-          currentIndex != null
-            ? (currentIndex + (findPrevious ? -1 : 1) + all.length) % all.length
-            : findPrevious
-              ? all.length - 1
-              : 0;
+        let nextIndex: number;
+        if (currentIndex == null) {
+          nextIndex = findPrevious ? all.length - 1 : 0;
+        } else if (currentMatchNeedsReveal?.() === true) {
+          nextIndex = currentIndex;
+        } else {
+          nextIndex =
+            (currentIndex + (findPrevious ? -1 : 1) + all.length) % all.length;
+        }
         updateCurrentMatch(nextIndex);
         scrollToMatch(all[nextIndex], retainFocus);
       } else {
