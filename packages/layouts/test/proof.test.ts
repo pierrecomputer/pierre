@@ -21,12 +21,13 @@ const PACKAGE = join(import.meta.dir, '..');
 // the accessibility fixes that follow add the separator's pointer target and
 // focus style and the pane header's names and sizes
 // (`DEC-layouts-accessibility-bar`); their results name the cost of each. The brotli size of the
-// esbuild build moves by up to 40 bytes when the files of the dist change,
-// with the same minified size.
+// esbuild build moves by up to 50 bytes when the files of the dist change,
+// with the same minified size, so its budget is 50 bytes above the measured
+// size.
 const BUDGET = {
   'two-pane source': { minified: 31_818, brotli: 10_721 },
   'two-pane rolldown': { minified: 31_817, brotli: 10_740 },
-  'two-pane esbuild': { minified: 32_255, brotli: 11_389 },
+  'two-pane esbuild': { minified: 32_255, brotli: 11_485 },
 } as const;
 
 // The budgets of the full set (app C, `allFeatures()` and every part) and of

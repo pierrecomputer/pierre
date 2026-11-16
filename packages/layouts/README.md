@@ -567,6 +567,11 @@ pixel size, so a server and a test can call them; a child with a size in pixels
 counts as the mean weight of its split. A `Place` says where a pane goes:
 `{ beside, edge }`, beside a pane, a stack, or a split (the root for an edge of
 the layout), or `{ into, index }`, into the tabs of the stack of a pane.
+`moveTo(layout, id, place)` moves a pane to a place, with `move` of `edits()` or
+`moveToStack` of `stacks()`, and `openAt(layout, pane, place)` opens a new pane
+there, with `split` or `addTab`. Each throws an error that names the feature
+when the layout does not have it. The pane menu, the keys, and a drop give a
+place, so they share these two functions and their announcements.
 
 ### Stores without a view
 

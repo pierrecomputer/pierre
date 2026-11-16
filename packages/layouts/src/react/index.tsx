@@ -18,6 +18,7 @@ export {
 export type { PaneEdges } from '../css-layout';
 export type { DropPlace } from '../drop';
 export { naryTree } from '../models/n-ary';
+export { moveTo, openAt, type PlaceCommands } from '../place';
 export { neighbor, neighbors, visualOrder } from '../spatial';
 export type { Place } from '../types';
 export type { ZoomCommands } from '../zoom';

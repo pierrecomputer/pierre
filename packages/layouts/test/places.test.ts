@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { createLayoutStore, edits, moveTo, naryTree, openAt } from '../src';
 import { applyLayoutOperations } from '../src/apply-operations';
 import type { LayoutNode, PaneNode } from '../src/types';
 import { testStore } from './helpers/store';
@@ -189,5 +190,42 @@ describe('mergeStack', () => {
     expect(shape(store.getSnapshot().root)).toEqual({
       horizontal: ['a', { tabs: ['d', 'b', 'c'] }],
     });
+  });
+});
+
+describe('moveTo and openAt', () => {
+  test('take a pane to each kind of place', () => {
+    const store = testStore(tabs);
+    moveTo(store, 'files', { beside: 'notes', edge: 'bottom' });
+    expect(shape(store.getSnapshot().root)).toEqual({
+      horizontal: [
+        { tabs: ['diff', 'chat'] },
+        { vertical: ['notes', 'files'] },
+      ],
+    });
+    moveTo(store, 'files', { into: 'diff', index: 0 });
+    expect(shape(store.getSnapshot().root)).toEqual({
+      horizontal: [{ tabs: ['files', 'diff', 'chat'] }, 'notes'],
+    });
+    openAt(store, pane('log'), { beside: 'row', edge: 'left' });
+    openAt(store, pane('help'), { into: 'notes' });
+    expect(shape(store.getSnapshot().root)).toEqual({
+      horizontal: [
+        'log',
+        { tabs: ['files', 'diff', 'chat'] },
+        { tabs: ['notes', 'help'] },
+      ],
+    });
+  });
+
+  test('name the feature that a place needs', () => {
+    const store = createLayoutStore(tabs, [edits(naryTree)]);
+    expect(() => moveTo(store, 'files', { into: 'notes' })).toThrow('stacks()');
+    expect(() =>
+      openAt(createLayoutStore(tabs), pane('log'), {
+        beside: 'files',
+        edge: 'left',
+      })
+    ).toThrow('edits()');
   });
 });

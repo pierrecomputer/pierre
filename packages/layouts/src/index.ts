@@ -25,6 +25,7 @@ export { canClose, getPanes, stackOf } from './model';
 export { neighbor, neighbors, visualOrder } from './spatial';
 export { naryTree } from './models/n-ary';
 export { persistence, type PersistenceCommands } from './persistence';
+export { moveTo, openAt, type PlaceCommands } from './place';
 export { type StackCommands, stacks } from './stacks';
 export {
   type CommandsOf,
