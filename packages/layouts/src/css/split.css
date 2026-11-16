@@ -120,6 +120,12 @@
     background: var(--layouts-accent, #5489ed);
   }
 
+  /* Forced colors mode removes the background, and shows this outline in a
+     system color, so the focus stays visible. */
+  .pierre-layouts-separator:focus-visible {
+    outline: 2px solid transparent;
+  }
+
   .pierre-layouts-sr {
     position: absolute;
     width: 1px;

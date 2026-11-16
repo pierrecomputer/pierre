@@ -72,7 +72,6 @@ test('A8: the zoom button keeps its name when it is pressed', async ({
 test('A10: a focused separator shows an outline in forced colors mode', async ({
   page,
 }) => {
-  test.fail(true, 'The focus style uses only a background color.');
   await page.emulateMedia({ forcedColors: 'active' });
   const separator = page.getByRole('separator').first();
   await separator.focus();

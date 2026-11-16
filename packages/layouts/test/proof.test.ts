@@ -24,9 +24,9 @@ const PACKAGE = join(import.meta.dir, '..');
 // esbuild build moves by up to 40 bytes when the files of the dist change,
 // with the same minified size.
 const BUDGET = {
-  'two-pane source': { minified: 28_708, brotli: 9_695 },
-  'two-pane rolldown': { minified: 28_707, brotli: 9_693 },
-  'two-pane esbuild': { minified: 29_119, brotli: 10_295 },
+  'two-pane source': { minified: 28_772, brotli: 9_703 },
+  'two-pane rolldown': { minified: 28_771, brotli: 9_704 },
+  'two-pane esbuild': { minified: 29_183, brotli: 10_324 },
 } as const;
 
 // The budgets of the full set (app C, `allFeatures()` and every part) and of
@@ -38,8 +38,8 @@ const BUDGET = {
 // pane state, the remote announcement, the sheet of sticky pinned tabs, and
 // the drag with no image; their results name the cost of each.
 const APP_BUDGET = {
-  'full set source': { minified: 72_693, brotli: 21_950 },
-  'tab stacks source': { minified: 58_293, brotli: 18_194 },
+  'full set source': { minified: 72_757, brotli: 21_966 },
+  'tab stacks source': { minified: 58_357, brotli: 18_207 },
 } as const;
 
 interface Output {
