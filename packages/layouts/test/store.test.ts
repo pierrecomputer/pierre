@@ -30,7 +30,9 @@ describe('createLayoutStore', () => {
   test('a store without features has the core commands only', () => {
     const store = createLayoutStore(row);
     expect(Object.keys(store).sort()).toEqual([
+      'focusNext',
       'focusPane',
+      'focusPrevious',
       'getSnapshot',
       'revert',
       'setCollapsed',
@@ -223,5 +225,45 @@ describe('the store features of the root entry', () => {
       expect(typeof feature).toBe('function');
       expect(typeof feature().commands).toBe('function');
     }
+  });
+});
+
+describe('focusNext and focusPrevious', () => {
+  test('move the focus in tree order around the ends, with reveal', () => {
+    const store = createLayoutStore(row);
+    const operations: unknown[] = [];
+    store.subscribe((change) => operations.push(...change.operations));
+    expect(store.focusNext()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('b');
+    expect(store.focusPrevious()).toBe(true);
+    expect(store.focusPrevious()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('c');
+    expect(store.focusNext()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('a');
+    expect(operations).toEqual([
+      { type: 'focus', pane: 'b', reveal: true },
+      { type: 'focus', pane: 'a', reveal: true },
+      { type: 'focus', pane: 'c', reveal: true },
+      { type: 'focus', pane: 'a', reveal: true },
+    ]);
+  });
+
+  test('do nothing while a pane fills the layout, or with one pane', () => {
+    const store = createLayoutStore(row, [zoom()]);
+    store.setZoom('b');
+    expect(store.focusNext()).toBe(false);
+    expect(store.getSnapshot().focusedPane).toBe('b');
+    const single = createLayoutStore(pane('a'));
+    expect(single.focusNext()).toBe(false);
+    expect(single.focusPrevious()).toBe(false);
+  });
+
+  test('a focus with reveal on the focused pane is still a change', () => {
+    const store = createLayoutStore(row);
+    const operations: unknown[] = [];
+    store.subscribe((change) => operations.push(...change.operations));
+    store.focusPane('a');
+    store.focusPane('a', { reveal: true });
+    expect(operations).toEqual([{ type: 'focus', pane: 'a', reveal: true }]);
   });
 });

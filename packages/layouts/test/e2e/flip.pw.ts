@@ -93,7 +93,6 @@ test('at the end of the zoom animation, the covered panes stop rendering, and th
   await page.keyboard.press('Escape');
   await expect(files).not.toHaveAttribute('data-covered');
   await expect(files).not.toHaveAttribute('aria-hidden');
-  await expect(files).toHaveAttribute('tabindex', '0');
   expect((await visibility(page)).files).toEqual([true, false]);
 });
 

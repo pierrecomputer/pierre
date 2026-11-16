@@ -301,6 +301,9 @@ function Playground(): JSX.Element {
           <button type="button" onClick={() => store.toggleZoom()}>
             {state.zoomedPane === null ? 'Zoom focused' : 'Restore layout'}
           </button>
+          <button type="button" onClick={() => store.focusNext()}>
+            Next pane
+          </button>
         </div>
         <div className="demo-controls">
           <button type="button" onClick={() => store.setRoot(mosaic)}>

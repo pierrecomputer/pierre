@@ -642,6 +642,21 @@ dimensions or overflow. Preferred sizes survive temporary viewport constraints.
 
 ## Keyboard and motion
 
+F6 moves the focus to the next pane that shows in `visualOrder`, and Shift+F6 to
+the previous one. The pane gets the element that had the focus in it last, else
+its `Layout.Content`, which is focusable from script so that the arrow keys
+scroll it, else its host. `Root` takes F6 in the capture phase, before pane
+content, so a terminal or an editor that takes every other key, Tab and Escape
+too, still has an exit. With one pane, or while a pane fills the layout, F6 goes
+on to the content and the browser. At the last pane, F6 sends a cancelable
+`FOCUS_EDGE_EVENT` (`pierre-layouts-focus-edge`, with `detail.direction` `next`
+or `previous`) to the layout element before it wraps to the first pane: an app
+with other regions, such as a sidebar, cancels it and moves the focus there. No
+pane host is a tab stop: Tab moves through the chrome and the content of the
+panes. A read-only pane that scrolls gives its `Layout.Content` `tabIndex={0}`.
+An app moves the focus with `layout.focusNext()`, `layout.focusPrevious()`, or
+`layout.focusPane(id, { reveal: true })`, which move the DOM focus too.
+
 A drag of a separator changes the two children of its split beside it. When one
 of them reaches its minimum size, the next child on that side gives the space,
 and so on. Resize separators with arrow keys; hold Shift for larger steps. Home

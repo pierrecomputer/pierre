@@ -20,7 +20,7 @@ export const ZOOM = 16;
 export const OVERLAY = 32;
 /**
  * A zoom covers the pane, and its animation still runs. The pane leaves the
- * accessibility tree and the tab order at once (`aria-hidden`, no tab stop),
+ * accessibility tree at once (`aria-hidden`; no host is a tab stop),
  * and its content still renders: it changes no style, so it costs no layout
  * of the content. The content stops rendering with `ZOOM`, at the end of the
  * animation.
@@ -41,7 +41,7 @@ export const STATE_REASONS: number =
  * attributes: `data-hidden` (hidden, an inactive tab, or a collapse to 0
  * pixels: the host does not show), `data-covered` (`zoom` under a zoom, else
  * `overlay` under an overlay: the host keeps its box and skips its
- * rendering), `data-collapsed`, `aria-hidden`, and the tab stop of a covered
+ * rendering), `data-collapsed`, and `aria-hidden` of a covered
  * host, and `data-collapsed` on the content. A host
  * receives `PANE_VISIBILITY_EVENT` only when its content starts or stops
  * rendering: `COVERED` alone does not stop it.
@@ -51,6 +51,9 @@ export interface PaneVisibility {
   hostRef(id: string): (element: HTMLElement | null) => void;
   /** The callback ref of the content of a pane (`Layout.Content`). It keeps its identity. */
   contentRef(id: string): (element: HTMLElement | null) => void;
+  /** The host of a pane, and its content (`Layout.Content`), while they are mounted. */
+  host(id: string): HTMLElement | undefined;
+  content(id: string): HTMLElement | undefined;
   /** The reasons of a pane, as bits. */
   reasons(id: string): number;
   /** Set the reasons of `mask` for a pane to those in `reasons`. */
@@ -121,9 +124,6 @@ export function createPaneVisibility(): PaneVisibility {
       );
       mark(host, 'data-collapsed', collapsed && 'true');
       mark(host, 'aria-hidden', covered && 'true');
-      // `Root` renders each host as a tab stop.
-      if (host.tabIndex !== (covered ? -1 : 0))
-        host.tabIndex = covered ? -1 : 0;
     }
     const content = contents.get(id);
     if (content !== undefined) {
@@ -159,6 +159,8 @@ export function createPaneVisibility(): PaneVisibility {
   const visibility: PaneVisibility = {
     hostRef: (id) => refOf(hostRefs, hosts, id),
     contentRef: (id) => refOf(contentRefs, contents, id),
+    host: (id) => hosts.get(id),
+    content: (id) => contents.get(id),
     reasons: (id) => reasons.get(id) ?? 0,
     set(id, mask, value) {
       const before = reasons.get(id);

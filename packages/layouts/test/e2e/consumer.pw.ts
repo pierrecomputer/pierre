@@ -183,7 +183,8 @@ test('separator and pane host props add app classes, children, labels, and attri
     'data-drop-target',
     'editor'
   );
-  await expect(host(page, 'editor')).toHaveAttribute('tabindex', '0');
+  // No host is a tab stop, whatever the props of the app.
+  await expect(host(page, 'editor')).toHaveAttribute('tabindex', '-1');
   // A host with no drop target.
   await expect(host(page, 'terminal')).not.toHaveAttribute('data-drop-target');
   // A hidden tab is never a tab stop: its host is inert.

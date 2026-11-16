@@ -66,7 +66,12 @@ export type LayoutTreeOperation =
  * these; the saved tree and the server do not.
  */
 export type LayoutWindowOperation =
-  | { readonly type: 'focus'; readonly pane: string }
+  | {
+      readonly type: 'focus';
+      readonly pane: string;
+      /** The view moves the DOM focus into the pane. */
+      readonly reveal?: true;
+    }
   | { readonly type: 'zoom'; readonly pane: string | null };
 
 export type LayoutOperation = LayoutTreeOperation | LayoutWindowOperation;

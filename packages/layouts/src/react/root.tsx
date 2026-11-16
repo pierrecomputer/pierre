@@ -7,6 +7,7 @@
 // render the pane chrome.
 import {
   type CSSProperties,
+  type FocusEvent,
   type HTMLAttributes,
   type JSX,
   memo,
@@ -28,6 +29,7 @@ import {
   type PaneEdges,
 } from '../css-layout';
 import splitCss from '../css/split.css?inline';
+import { FOCUS_EDGE_EVENT } from '../dom/focus-edge-event';
 import { readPixelGeometry } from '../dom/panes';
 import {
   COLLAPSED,
@@ -430,6 +432,12 @@ interface ViewInternals {
   finish(cancel: boolean, pointerId?: number): void;
   /** True during a gesture. */
   gesturing(): boolean;
+  /** The focus enters the host of a pane: keep the element, and focus the pane. */
+  focusIn(id: string, event: FocusEvent<HTMLElement>): void;
+  /** Move the DOM focus into the pane of a focus change with `reveal`. */
+  revealFocus(): void;
+  /** F6 and Shift+F6, before pane content gets them. */
+  paneKey(event: KeyboardEvent): void;
   /**
    * The context of a pane, the same object while the pane is in the tree, so
    * that the content of a pane does not render again for a new context.
@@ -468,6 +476,10 @@ function createViewInternals(
   let resizing = false;
   let changes = 0;
   const paneContexts = new Map<string, PaneContextValue>();
+  // The element of each pane host that had the focus last, and the pane
+  // whose DOM focus moves after the next commit.
+  const lastFocus = new WeakMap<HTMLElement, EventTarget>();
+  let reveal: string | null = null;
   const readGeometry = (): LayoutGeometry =>
     element === null
       ? { panes: [], separators: [] }
@@ -590,6 +602,9 @@ function createViewInternals(
     },
     beforeChange(previous, next, change) {
       changes += 1;
+      for (const operation of change.operations)
+        if (operation.type === 'focus' && operation.reveal === true)
+          reveal = operation.pane;
       if (element !== null)
         for (const hook of hooks)
           hook.beforeChange?.(previous, next, element, change);
@@ -614,6 +629,64 @@ function createViewInternals(
     },
     finish,
     gesturing: () => gesture !== null,
+    focusIn(id, event) {
+      lastFocus.set(event.currentTarget, event.target);
+      store.focusPane(id);
+    },
+    revealFocus() {
+      const id = reveal;
+      reveal = null;
+      const host = id === null ? undefined : context.visibility.host(id);
+      if (id === null || host === undefined) return;
+      // The element that had the focus, else the content area, else the host.
+      const usable = (target: unknown): target is HTMLElement =>
+        target instanceof HTMLElement &&
+        host.contains(target) &&
+        target.closest('[inert]') === null;
+      const last = lastFocus.get(host);
+      const content = context.visibility.content(id);
+      (usable(last) ? last : usable(content) ? content : host).focus();
+    },
+    paneKey(event) {
+      if (
+        event.key !== 'F6' ||
+        event.isComposing ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        element === null ||
+        (event.target as Element).closest(
+          'dialog[open],[aria-modal="true"]'
+        ) !== null
+      )
+        return;
+      const state = store.getSnapshot();
+      // The panes that show, without the panes that an overlay covers.
+      const order = presentation(state).rearrangeable
+        ? shownPanes(state.root).filter(
+            ({ id }) => (context.visibility.reasons(id) & HOST_HIDDEN) === 0
+          )
+        : [];
+      // With one pane, F6 goes on to the content and the browser.
+      if (order.length < 2) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const forward = !event.shiftKey;
+      const at = order.findIndex(({ id }) => id === state.focusedPane);
+      // At an end, an app can cancel the wrap.
+      if (
+        (forward ? at === order.length - 1 : at === 0) &&
+        !element.dispatchEvent(
+          new CustomEvent(FOCUS_EDGE_EVENT, {
+            cancelable: true,
+            detail: { direction: forward ? 'next' : 'previous' },
+          })
+        )
+      )
+        return;
+      const next = order.at(forward ? (at + 1) % order.length : at - 1);
+      if (next !== undefined) store.focusPane(next.id, { reveal: true });
+    },
     paneContext(id) {
       let value = paneContexts.get(id);
       if (value === undefined) {
@@ -781,7 +854,8 @@ export function Root(props: RootProps): JSX.Element {
     if (element !== null)
       for (const hook of context.hooks())
         hook.afterChange?.(previous, state, element);
-  }, [state, context]);
+    internals.revealFocus();
+  }, [state, context, internals]);
 
   // A window that loses the focus during a pointer resize, for example to
   // another app, may never send the pointer release. The resize then applies
@@ -806,7 +880,13 @@ export function Root(props: RootProps): JSX.Element {
       if (internals.gesturing()) event.preventDefault();
     };
     element.addEventListener('selectstart', preventSelection);
-    return () => element.removeEventListener('selectstart', preventSelection);
+    // F6 runs in the capture phase, before pane content, so that a terminal
+    // or an editor that takes every key still has an exit.
+    element.addEventListener('keydown', internals.paneKey, true);
+    return () => {
+      element.removeEventListener('selectstart', preventSelection);
+      element.removeEventListener('keydown', internals.paneKey, true);
+    };
   }, [context, internals]);
 
   // Keep the DOM order independent of the tree: a detach and reinsert can
@@ -928,14 +1008,15 @@ export function Root(props: RootProps): JSX.Element {
             data-layouts-pane={pane.id}
             data-layouts-flip={`pane:${pane.id}`}
             className={withClasses('pierre-layouts-pane', custom?.className)}
-            // An inert host, which does not show, is not in the tab order.
-            tabIndex={0}
+            // No host is a tab stop: F6 moves the focus from pane to pane, and
+            // Tab through the chrome and the content.
+            tabIndex={-1}
             inert={(first & HOST_HIDDEN) !== 0}
             data-hidden={(first & HOST_HIDDEN) !== 0 || undefined}
             data-collapsed={(first & COLLAPSED) !== 0 || undefined}
             data-focused={state.focusedPane === pane.id}
             style={hostStyle ?? host.rect}
-            onFocusCapture={() => store.focusPane(pane.id)}
+            onFocusCapture={(event) => internals.focusIn(pane.id, event)}
             onPointerDown={() => store.focusPane(pane.id)}
           >
             {/* The inner wrapper counters the host's FLIP scale to preserve the content's shape. */}

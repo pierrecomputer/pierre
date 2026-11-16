@@ -108,6 +108,11 @@ export function Title({
  * and becomes inert and skips its style, layout, and paint, while
  * `Layout.Header` stays as the collapsed strip. The view sets
  * `data-collapsed` on it; the content does not render for a collapse.
+ *
+ * F6 focuses it when its pane has no element that had the focus, so it is
+ * focusable from script (`tabIndex` -1), and the arrow keys scroll it. A
+ * read-only pane that scrolls gives it `tabIndex={0}`, as Safari does not
+ * make a scroll container a tab stop.
  */
 export function Content({ render, ...props }: PartProps<object>): JSX.Element {
   const { id, context } = usePaneContext('Layout.Content');
@@ -120,6 +125,7 @@ export function Content({ render, ...props }: PartProps<object>): JSX.Element {
         mergeProps(props, {
           className: 'pierre-layouts-content',
           ref: context.visibility.contentRef(id),
+          tabIndex: props.tabIndex ?? -1,
         }),
         {}
       )}

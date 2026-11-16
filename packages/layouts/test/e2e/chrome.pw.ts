@@ -365,7 +365,7 @@ test('getSeparatorProps gets the public separator, and getPaneProps adds data at
     new Set(['id', 'splitId', 'index', 'direction', 'before', 'after'])
   );
   await expect(host(page, 'editor')).toHaveAttribute('data-app-pane', 'editor');
-  await expect(host(page, 'editor')).toHaveAttribute('tabindex', '0');
+  await expect(host(page, 'editor')).toHaveAttribute('tabindex', '-1');
 });
 
 // Hide a pane with a remote change, as a server or an agent does.

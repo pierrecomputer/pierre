@@ -10,6 +10,7 @@
 //
 // Each feature carries its store part, its view part, and its sheets. A
 // bundler keeps only the parts and features that an app uses.
+export { FOCUS_EDGE_EVENT, type FocusEdgeEvent } from '../dom/focus-edge-event';
 export {
   PANE_VISIBILITY_EVENT,
   type PaneVisibilityEvent,

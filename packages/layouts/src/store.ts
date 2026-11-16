@@ -49,7 +49,20 @@ export interface CoreLayoutStore {
    * pane at the root fills the layout, so it does not collapse.
    */
   setCollapsed(id: string, collapsed: boolean): void;
-  focusPane(id: string): void;
+  /**
+   * Give a pane the focus of the layout. With `reveal`, the view also moves
+   * the DOM focus into the pane: to the element that had it last, else to its
+   * `Layout.Content`, else to its host.
+   */
+  focusPane(id: string, options?: { readonly reveal?: boolean }): void;
+  /**
+   * Move the focus, with the DOM focus, to the next pane that shows in
+   * `visualOrder`, from the last to the first. False when no other pane can
+   * take it: one pane shows, or a pane fills the layout.
+   */
+  focusNext(): boolean;
+  /** As `focusNext`, to the previous pane, from the first to the last. */
+  focusPrevious(): boolean;
   /**
    * Run commands whose changes are transient: the listeners get them with no
    * operations, and the store keeps the settled state from before them. A
@@ -318,8 +331,12 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       ? next.focusedPane
       : panes[0].id;
     const zoomedPane = shows(zoomed) ? zoomed : null;
+    // `focusPane` with `reveal` gives its focus operation: a change, also on
+    // the focused pane, as the view moves the DOM focus.
+    const reveal = operations.find((operation) => operation.type === 'focus');
     if (
       sameTree &&
+      reveal === undefined &&
       focusedPane === state.focusedPane &&
       zoomedPane === state.zoomedPane
     )
@@ -327,8 +344,8 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     let list = sameTree
       ? operations.filter((operation) => operation.type === 'zoom')
       : operations;
-    if (sameTree && focusedPane !== state.focusedPane)
-      list = [{ type: 'focus', pane: focusedPane }, ...list];
+    if (sameTree && (reveal !== undefined || focusedPane !== state.focusedPane))
+      list = [reveal ?? { type: 'focus', pane: focusedPane }, ...list];
     state = Object.freeze({
       root: sameTree ? next.root : freezeNew(next.root),
       focusedPane,
@@ -340,6 +357,18 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   };
   const requirePane = (id: string): void => {
     paneIn(state.root, id);
+  };
+  // The pane `by` places from the focused pane in the order of the panes
+  // that show, around the ends, with the DOM focus. No step while a pane
+  // fills the layout.
+  const focusStep = (by: number): boolean => {
+    const order = shownPanes(state.root);
+    if (state.zoomedPane !== null || order.length < 2) return false;
+    const at = order.findIndex(({ id }) => id === state.focusedPane);
+    store.focusPane(order[(at + by + order.length) % order.length].id, {
+      reveal: true,
+    });
+    return true;
   };
   const context: StoreContext = {
     get,
@@ -381,10 +410,17 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       };
       commit({ ...state, root: fold(operation) }, [operation]);
     },
-    focusPane(id) {
+    focusPane(id, options) {
       requirePane(id);
-      commit({ ...state, focusedPane: id }, []);
+      commit(
+        { ...state, focusedPane: id },
+        options?.reveal === true
+          ? [{ type: 'focus', pane: id, reveal: true }]
+          : []
+      );
     },
+    focusNext: () => focusStep(1),
+    focusPrevious: () => focusStep(-1),
     transient(run) {
       transientDepth += 1;
       try {
