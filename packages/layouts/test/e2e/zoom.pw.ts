@@ -153,6 +153,56 @@ test('a zoomed stack follows its shown tab, and a split ends the zoom', async ({
   await expect(page.getByRole('separator')).toHaveCount(4);
 });
 
+// The demo renders under StrictMode, which detaches the ref of a new host and
+// attaches it again after the effects of its commit.
+test('a pane that a zoomed layout gets is covered like the other panes', async ({
+  page,
+}) => {
+  await page.goto('/zoom.html');
+  await command(page, 'setZoom', 'editor');
+  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
+  // A new tree keeps the zoom; a local edit that shows a new pane ends it.
+  await page.evaluate(() => {
+    const { layout } = (
+      window as unknown as {
+        __zoom: {
+          layout: {
+            getSnapshot(): { root: { children: unknown[] } };
+            setRoot(root: unknown): void;
+          };
+        };
+      }
+    ).__zoom;
+    const { root } = layout.getSnapshot();
+    const column = root.children[2] as { children: unknown[] };
+    layout.setRoot({
+      ...root,
+      children: [
+        root.children[0],
+        root.children[1],
+        {
+          ...column,
+          sizes: [1, 1, 1],
+          children: [...column.children, { type: 'pane', id: 'late' }],
+        },
+      ],
+    });
+  });
+  await expect(host(page, 'late')).toHaveCount(1);
+  await expect(host(page, 'editor')).toHaveAttribute('data-zoomed', 'true');
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(resolve))
+  );
+  for (const id of ['files', 'late']) {
+    await expect(host(page, id)).toHaveAttribute('aria-hidden', 'true');
+    await expect(host(page, id)).toHaveAttribute('data-hidden', 'true');
+    await expect(host(page, id)).toHaveAttribute('tabindex', '-1');
+  }
+  await command(page, 'setZoom', null);
+  await expect(host(page, 'late')).not.toHaveAttribute('data-hidden');
+  await expect(host(page, 'late')).not.toHaveAttribute('aria-hidden');
+});
+
 test('the focus ring follows the focused pane', async ({ page }) => {
   await page.goto('/zoom.html');
   await page.getByLabel('Note in files').click();
