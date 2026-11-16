@@ -55,7 +55,7 @@ describe('pane visibility', () => {
     const { visibility, host } = mounted();
     visibility.set('a', STATE_REASONS, HIDDEN);
     expect(host.inert).toBe(true);
-    expect(host.getAttribute('data-pane-hidden')).toBe('true');
+    expect(host.getAttribute('data-hidden')).toBe('true');
     expect(host.events).toEqual([]);
   });
 
@@ -64,7 +64,7 @@ describe('pane visibility', () => {
     visibility.set('a', STATE_REASONS, 0);
     visibility.set('a', STATE_REASONS, COLLAPSED);
     expect(host.inert).toBe(false);
-    expect(host.getAttribute('data-pane-hidden')).toBeNull();
+    expect(host.getAttribute('data-hidden')).toBeNull();
     expect(host.getAttribute('data-collapsed')).toBe('true');
     expect(content.inert).toBe(true);
     expect(content.getAttribute('data-collapsed')).toBe('true');
@@ -79,7 +79,7 @@ describe('pane visibility', () => {
     const { visibility, host } = mounted();
     visibility.set('a', STATE_REASONS, COLLAPSED | COLLAPSED_WHOLE);
     expect(host.inert).toBe(true);
-    expect(host.getAttribute('data-pane-hidden')).toBe('true');
+    expect(host.getAttribute('data-hidden')).toBe('true');
   });
 
   test('an event goes out only when the content starts or stops rendering', () => {
@@ -94,6 +94,20 @@ describe('pane visibility', () => {
     expect(host.events).toEqual([true]);
     visibility.set('a', STATE_REASONS, 0);
     expect(host.events).toEqual([true, false]);
+  });
+
+  test('a covered host names what covers it: a zoom, else an overlay', () => {
+    const { visibility, host } = mounted();
+    visibility.set('a', STATE_REASONS, 0);
+    visibility.set('a', OVERLAY, OVERLAY);
+    expect(host.getAttribute('data-covered')).toBe('overlay');
+    visibility.set('a', ZOOM, ZOOM);
+    expect(host.getAttribute('data-covered')).toBe('zoom');
+    visibility.set('a', ZOOM, 0);
+    expect(host.getAttribute('data-covered')).toBe('overlay');
+    visibility.set('a', OVERLAY, 0);
+    expect(host.getAttribute('data-covered')).toBeNull();
+    expect(host.getAttribute('data-hidden')).toBeNull();
   });
 
   test('a mask keeps the reasons outside it', () => {
@@ -115,14 +129,13 @@ describe('pane visibility', () => {
     visibility.hostRef('a')(host);
     expect(visibility.reasons('a')).toBe(INACTIVE | ZOOM | OVERLAY);
     expect(host.inert).toBe(true);
-    expect(host.getAttribute('data-pane-hidden')).toBe('true');
     expect(host.getAttribute('data-hidden')).toBe('true');
-    expect(host.getAttribute('data-overlay-covered')).toBe('true');
+    expect(host.getAttribute('data-covered')).toBe('zoom');
     const next = element();
     visibility.hostRef('a')(null);
     visibility.hostRef('a')(next);
     expect(next.inert).toBe(true);
-    expect(next.getAttribute('data-pane-hidden')).toBe('true');
+    expect(next.getAttribute('data-hidden')).toBe('true');
   });
 
   test('a host that mounts again hears the next change of its rendering', () => {

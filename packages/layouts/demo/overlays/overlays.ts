@@ -55,7 +55,7 @@ export interface OverlayHandle {
 }
 
 interface OverlayOptions {
-  /** The layout root (`.pierre-layout`), or an element that contains it. */
+  /** The layout root (`.pierre-layouts`), or an element that contains it. */
   layout: HTMLElement;
   /**
    * Called when the overlay starts to close: by Escape, or by `close()`. Set
@@ -98,13 +98,13 @@ export interface DrawerOptions extends OverlayOptions {
   trigger?: HTMLElement | null;
 }
 
-/** The layout element: the element itself, or the first `.pierre-layout` inside it. */
+/** The layout element: the element itself, or the first `.pierre-layouts` inside it. */
 function layoutRootOf(element: HTMLElement): HTMLElement {
-  if (element.classList.contains('pierre-layout')) return element;
-  return element.querySelector<HTMLElement>('.pierre-layout') ?? element;
+  if (element.classList.contains('pierre-layouts')) return element;
+  return element.querySelector<HTMLElement>('.pierre-layouts') ?? element;
 }
 
-const ANIMATION_ID = 'pierre-layout-overlay';
+const ANIMATION_ID = 'pierre-layouts-overlay';
 const DEFAULT_DURATION_MS = 240;
 // The ease-out curve of the layout's own animations, as cubic-bezier: Safari
 // runs `linear()` easing on the main thread.
@@ -114,7 +114,7 @@ const TABBABLE =
   'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, [contenteditable]:not([contenteditable="false"]), [tabindex]:not([tabindex="-1"])';
 
 function durationOf(root: HTMLElement): number {
-  const value = getComputedStyle(root).getPropertyValue('--layout-duration');
+  const value = getComputedStyle(root).getPropertyValue('--layouts-duration');
   const parsed = Number.parseFloat(value);
   if (Number.isNaN(parsed)) return DEFAULT_DURATION_MS;
   return value.trim().endsWith('ms') ? parsed : parsed * 1000;
@@ -128,7 +128,7 @@ function viewportSize(): { width: number; height: number } {
 /**
  * Give an overlay the workspace's box as its containing block: fixed insets
  * from the edges of the viewport. The overlay's own size comes from CSS, and
- * `--layout-workspace-width` and `--layout-workspace-height` let that CSS fill
+ * `--layouts-workspace-width` and `--layouts-workspace-height` let that CSS fill
  * the workspace or stay inside it. These custom properties change on the
  * overlay only, so no pane gets a new style.
  */
@@ -145,8 +145,8 @@ function placeOverWorkspace(
   style.bottom =
     edge === 'top' ? 'auto' : `${viewport.height - workspace.bottom}px`;
   style.left = edge === 'right' ? 'auto' : `${workspace.left}px`;
-  style.setProperty('--layout-workspace-width', `${workspace.width}px`);
-  style.setProperty('--layout-workspace-height', `${workspace.height}px`);
+  style.setProperty('--layouts-workspace-width', `${workspace.width}px`);
+  style.setProperty('--layouts-workspace-height', `${workspace.height}px`);
 }
 
 function tabbablesOf(element: HTMLElement): HTMLElement[] {

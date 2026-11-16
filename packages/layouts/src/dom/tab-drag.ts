@@ -11,11 +11,11 @@ export interface TabEdges {
   readonly right: number;
 }
 
-const MARKER_CLASS = 'pierre-layout-tab-drop';
+const MARKER_CLASS = 'pierre-layouts-tab-drop';
 
-export const TABLIST_ATTRIBUTE = 'data-layout-tablist';
-export const TAB_ATTRIBUTE = 'data-layout-tab';
-export const TAB_CLOSE_ATTRIBUTE = 'data-layout-tab-close';
+export const TABLIST_ATTRIBUTE = 'data-layouts-tablist';
+export const TAB_ATTRIBUTE = 'data-layouts-tab';
+export const TAB_CLOSE_ATTRIBUTE = 'data-layouts-tab-close';
 
 export function tabsOf(tablist: HTMLElement): HTMLElement[] {
   return Array.from(

@@ -1,9 +1,8 @@
 @layer pierre-layouts {
-  .pierre-layout {
-    --layout-accent: #5489ed;
-    --layout-border: #dce1e8;
-    --layout-duration: 240ms;
-
+  /* The library declares no custom property on its own elements: each use
+     has its default, so an app's value on any ancestor reaches the layout,
+     and pane content does not inherit the library's values. */
+  .pierre-layouts {
     container-type: size;
     position: relative;
     width: 100%;
@@ -14,13 +13,13 @@
   }
 
   /* Style the layout's own elements only; pane content belongs to the app. */
-  .pierre-layout-pane,
-  .pierre-layout-pane-inner,
-  .pierre-layout-separator {
+  .pierre-layouts-pane,
+  .pierre-layouts-pane-inner,
+  .pierre-layouts-separator {
     box-sizing: border-box;
   }
 
-  .pierre-layout-pane {
+  .pierre-layouts-pane {
     position: absolute;
     /* An identity transform makes the host a containing block at all times, so
        the transform that moves a covered pane out does not lay the host out
@@ -31,9 +30,9 @@
     /* Clip content at the rounded border with no scroll container, so that a
        scroll into view never moves the header. The content area scrolls. */
     overflow: clip;
-    border: 1px solid var(--layout-border);
+    border: 1px solid var(--layouts-border, #dce1e8);
     border-radius: 10px;
-    background: var(--layout-pane-background, #fff);
+    background: var(--layouts-pane-background, #fff);
     /* `content-visibility: hidden` includes style containment. A change of style
        containment makes Chromium update the style of the whole document, so a
        host always has it. It scopes CSS counters and quotes to the pane. */
@@ -50,8 +49,8 @@
      a covered host is not a layer and keeps no tiles. A host that does not show,
      such as a tab that is not active, is not a layer either, so a stack has one
      layer whatever the number of its tabs. */
-  .pierre-layout[data-pane-layers='true']
-    > .pierre-layout-pane:not([data-pane-hidden='true']) {
+  .pierre-layouts[data-pane-layers='true']
+    > .pierre-layouts-pane:not([data-hidden='true']) {
     transform: translateZ(0);
   }
 
@@ -59,7 +58,7 @@
      inverse of the host's scale, so text keeps its shape. It always has an
      identity transform: a transform that starts with the animation would change
      the containing block of the content and force a layout. */
-  .pierre-layout-pane-inner {
+  .pierre-layouts-pane-inner {
     transform: scale(1);
     display: flex;
     flex-direction: column;
@@ -69,8 +68,8 @@
     min-height: 0;
   }
 
-  .pierre-layout-pane[data-focused='true'] {
-    border-color: var(--layout-accent);
+  .pierre-layouts-pane[data-focused='true'] {
+    border-color: var(--layouts-accent, #5489ed);
   }
 
   /* A hidden pane (store.setHidden) and a tab that is not active keep their
@@ -78,37 +77,39 @@
      view gives each the box that it would have, and it does not render or take
      input. In `Root`, a pane that collapses to 0 pixels is hidden in the
      same way. */
-  .pierre-layout-pane[data-pane-hidden='true'] {
+  .pierre-layouts-pane[data-hidden='true'] {
     content-visibility: hidden;
     visibility: hidden;
     pointer-events: none;
   }
 
-  /* A pane that an overlay covers completely (`coverLayout`) skips its
-     style, layout, and paint. It keeps its box. */
-  .pierre-layout-pane[data-overlay-covered='true'] {
+  /* A pane that a zoomed pane or an overlay covers (`data-covered` is `zoom`
+     or `overlay`) skips the style, layout, and paint of its content. It keeps
+     its box, its DOM, its state, and its scroll position. The property is on
+     the host: a scroller with it reads scrollTop 0 while hidden. */
+  .pierre-layouts-pane[data-covered] {
     content-visibility: hidden;
   }
 
-  .pierre-layout-pane:focus-visible {
-    outline: 2px solid var(--layout-accent);
+  .pierre-layouts-pane:focus-visible {
+    outline: 2px solid var(--layouts-accent, #5489ed);
     outline-offset: -3px;
   }
 
-  .pierre-layout-separator {
+  .pierre-layouts-separator {
     position: absolute;
     z-index: 3;
     border-radius: 4px;
   }
 
-  .pierre-layout-separator:hover,
-  .pierre-layout-separator:focus-visible,
-  .pierre-layout-separator[data-preview='true'] {
+  .pierre-layouts-separator:hover,
+  .pierre-layouts-separator:focus-visible,
+  .pierre-layouts-separator[data-preview='true'] {
     outline: none;
-    background: var(--layout-accent);
+    background: var(--layouts-accent, #5489ed);
   }
 
-  .pierre-layout-sr {
+  .pierre-layouts-sr {
     position: absolute;
     width: 1px;
     height: 1px;

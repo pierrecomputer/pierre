@@ -2,7 +2,7 @@
   /* A tab list lays out its tabs in a row. Outside `Layout.Header`, the app
      places it: the geometry below applies only in the header of the
      library. */
-  .pierre-layout-tabs {
+  .pierre-layouts-tabs {
     position: relative;
     display: flex;
     min-width: 0;
@@ -12,15 +12,15 @@
      fill the height of the header, so the underline of the selected tab meets
      the border of the pane, and their text is centered as the title's is. A
      selection changes colors only, so nothing moves. Themes set the
-     `--layout-tab-*` colors. */
-  .pierre-layout-header .pierre-layout-tabs {
+     `--layouts-tab-*` colors. */
+  .pierre-layouts-header .pierre-layouts-tabs {
     flex: 1;
     align-self: stretch;
     margin: -4px 0;
     overflow: hidden;
   }
 
-  .pierre-layout-header .pierre-layout-tab {
+  .pierre-layouts-header .pierre-layouts-tab {
     position: relative;
     display: flex;
     align-items: center;
@@ -31,58 +31,59 @@
     padding: 0 22px 0 10px;
     border-radius: 0;
     background: transparent;
-    color: var(--layout-tab-color, #6b7586);
+    color: var(--layouts-tab-color, #6b7586);
   }
 
-  .pierre-layout-header .pierre-layout-tab:hover {
-    background: var(--layout-tab-hover-background, rgb(41 49 61 / 5%));
-    color: var(--layout-tab-hover-color, #29313d);
+  .pierre-layouts-header .pierre-layouts-tab:hover {
+    background: var(--layouts-tab-hover-background, rgb(41 49 61 / 5%));
+    color: var(--layouts-tab-hover-color, #29313d);
   }
 
-  .pierre-layout-header .pierre-layout-tab[aria-selected='true'] {
+  .pierre-layouts-header .pierre-layouts-tab[aria-selected='true'] {
     background: transparent;
-    box-shadow: inset 0 -2px 0 var(--layout-tab-accent, var(--layout-accent));
-    color: var(--layout-tab-selected-color, #29313d);
+    box-shadow: inset 0 -2px 0
+      var(--layouts-tab-accent, var(--layouts-accent, #5489ed));
+    color: var(--layouts-tab-selected-color, #29313d);
   }
 
-  .pierre-layout-header .pierre-layout-tab:focus {
+  .pierre-layouts-header .pierre-layouts-tab:focus {
     outline: none;
   }
 
-  .pierre-layout-header .pierre-layout-tab:focus-visible {
-    outline: 2px solid var(--layout-accent);
+  .pierre-layouts-header .pierre-layouts-tab:focus-visible {
+    outline: 2px solid var(--layouts-accent, #5489ed);
     outline-offset: -2px;
   }
 
   /* `stickyPinned`: each pinned tab sticks at the place that the tab list
      measures, over an opaque layer, and a tab that scrolls into view stops
      beside the pinned tabs. */
-  .pierre-layout-tabs[data-sticky-pinned] {
-    scroll-padding-inline-start: var(--layout-pinned-width);
+  .pierre-layouts-tabs[data-sticky-pinned] {
+    scroll-padding-inline-start: var(--layouts-pinned-width);
   }
 
-  .pierre-layout-tabs > [data-layout-sticky] {
+  .pierre-layouts-tabs > [data-sticky] {
     position: sticky;
-    left: var(--layout-pinned-left);
+    left: var(--layouts-pinned-left);
     z-index: 1;
   }
 
-  .pierre-layout-tabs > [data-layout-sticky]::before {
+  .pierre-layouts-tabs > [data-sticky]::before {
     content: '';
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: var(--layout-pane-background, #fff);
+    background: var(--layouts-pane-background, #fff);
   }
 
-  .pierre-layout-tab-title {
+  .pierre-layouts-tab-title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   /* The close mark shows on the selected tab and on the tab under the pointer. */
-  .pierre-layout-tab-close {
+  .pierre-layouts-tab-close {
     position: absolute;
     top: 50%;
     right: 4px;
@@ -95,12 +96,12 @@
     visibility: hidden;
   }
 
-  .pierre-layout-tab:hover > .pierre-layout-tab-close,
-  .pierre-layout-tab[aria-selected='true'] > .pierre-layout-tab-close {
+  .pierre-layouts-tab:hover > .pierre-layouts-tab-close,
+  .pierre-layouts-tab[aria-selected='true'] > .pierre-layouts-tab-close {
     visibility: visible;
   }
 
-  .pierre-layout-tab-close:hover {
-    background: var(--layout-tab-close-hover-background, rgb(41 49 61 / 10%));
+  .pierre-layouts-tab-close:hover {
+    background: var(--layouts-tab-close-hover-background, rgb(41 49 61 / 10%));
   }
 }

@@ -7,7 +7,7 @@ test('allFeatures() gives every command, and the parts render every sheet', asyn
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/full.html');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(4);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(4);
   const commands = await page.evaluate(() => {
     const layout = (
       window as unknown as { __full: { layout: Record<string, unknown> } }
@@ -52,7 +52,7 @@ test('allFeatures() gives every command, and the parts render every sheet', asyn
       'zoom',
     ].map((name) => `pierre-layouts-${name}`)
   );
-  await expect(page.locator('.pierre-layout-focus')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-focus')).toHaveCount(1);
   // The separator of the column meets the separator of the row.
-  await expect(page.locator('.pierre-layout-corner')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-corner')).toHaveCount(1);
 });

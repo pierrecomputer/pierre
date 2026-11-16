@@ -39,15 +39,15 @@ export function corners(): Feature {
             <button
               key={corner.id}
               type="button"
-              className="pierre-layout-corner"
+              className="pierre-layouts-corner"
               aria-label={context.messages().corner ?? 'Resize both axes'}
               style={{
                 left: corner.left,
                 top: corner.top,
                 ...CORNER_GESTURE_STYLE,
               }}
-              data-layout-corner={corner.id}
-              data-layout-flip={`corner:${corner.id}`}
+              data-layouts-corner={corner.id}
+              data-layouts-flip={`corner:${corner.id}`}
               onPointerDown={(event) => {
                 const element = context.element();
                 context.startResize(

@@ -189,7 +189,7 @@ export const SCENARIOS: Scenario[] = [
     description: 'Click the zoom button of the first pane.',
     target: 'p0',
     setup: (page) =>
-      center(page, '[data-layout-pane="p0"] button[aria-pressed]'),
+      center(page, '[data-layouts-pane="p0"] button[aria-pressed]'),
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
@@ -201,7 +201,7 @@ export const SCENARIOS: Scenario[] = [
     target: 'p0',
     async setup(page) {
       await zoomFirstPane(page);
-      return center(page, '[data-layout-pane="p0"] button[aria-pressed]');
+      return center(page, '[data-layouts-pane="p0"] button[aria-pressed]');
     },
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
@@ -223,7 +223,7 @@ export const SCENARIOS: Scenario[] = [
     description: 'Click the content of the second pane to move the focus.',
     target: 'p1',
     setup: (page) =>
-      center(page, '[data-layout-pane="p1"] .pierre-layout-content'),
+      center(page, '[data-layouts-pane="p1"] .pierre-layouts-content'),
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
       await page.waitForTimeout(IDLE_SETTLE_MS);
@@ -233,7 +233,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'resize',
     description: `Drag the root separator 160 px in ${RESIZE_STEPS} pointer moves, one per frame.`,
     steps: RESIZE_STEPS,
-    setup: (page) => center(page, '.pierre-layout-separator'),
+    setup: (page) => center(page, '.pierre-layouts-separator'),
     async run(page, params, point) {
       await page.mouse.move(point!.x, point!.y);
       await page.mouse.down();
@@ -259,7 +259,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'close',
     description: 'Click the close button of the second pane.',
     setup: (page) =>
-      center(page, '[data-layout-pane="p1"] button[aria-label^="Close"]'),
+      center(page, '[data-layouts-pane="p1"] button[aria-label^="Close"]'),
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
@@ -316,7 +316,7 @@ export const SCENARIOS: Scenario[] = [
     target: 'p1',
     async setup(page, params) {
       await addTab(page, params, 'p1', 't1');
-      return center(page, '[data-layout-pane="t1"] [data-layout-tab="p1"]');
+      return center(page, '[data-layouts-pane="t1"] [data-layouts-tab="p1"]');
     },
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
@@ -332,10 +332,10 @@ export const SCENARIOS: Scenario[] = [
       await addTab(page, params, 'p1', 't1');
       const from = await center(
         page,
-        '[data-layout-pane="t1"] [data-layout-tab="t1"]'
+        '[data-layouts-pane="t1"] [data-layouts-tab="t1"]'
       );
       const to = await page
-        .locator('[data-layout-pane="t1"] [data-layout-tab="p1"]')
+        .locator('[data-layouts-pane="t1"] [data-layouts-tab="p1"]')
         .boundingBox();
       if (to === null) throw new Error('Missing tab');
       return { ...from, toX: to.x + 4 };

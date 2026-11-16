@@ -1,7 +1,7 @@
 @layer pierre-layouts {
   /* Layout changes animate with transforms from each element's old box (FLIP). */
-  .pierre-layout [data-layout-flip],
-  .pierre-layout-pane-inner {
+  .pierre-layouts [data-layouts-flip],
+  .pierre-layouts-pane-inner {
     transform-origin: 0 0;
   }
 }

@@ -51,7 +51,7 @@ export function Header({
         'header',
         render,
         mergeProps(props, {
-          className: 'pierre-layout-header',
+          className: 'pierre-layouts-header',
           'data-focused': focused || undefined,
           'data-zoomed': zoomed || undefined,
         }),
@@ -73,7 +73,7 @@ export function Title({
     'span',
     render,
     mergeProps(props, {
-      className: 'pierre-layout-title',
+      className: 'pierre-layouts-title',
       children: children ?? value.context.title(pane),
     }),
     {}
@@ -96,7 +96,7 @@ export function Content({ render, ...props }: PartProps<object>): JSX.Element {
         'div',
         render,
         mergeProps(props, {
-          className: 'pierre-layout-content',
+          className: 'pierre-layouts-content',
           ref: context.visibility.contentRef(id),
         }),
         {}
@@ -274,7 +274,7 @@ export function MoveHandle({
     render,
     mergeProps(props, {
       type: 'button',
-      className: 'pierre-layout-grip',
+      className: 'pierre-layouts-grip',
       'aria-label': (context.messages().drag ?? dragName)({
         paneTitle: context.title(pane),
         paneId: pane.id,

@@ -126,7 +126,7 @@ function DragImage({
   if (id === null) return null;
   const pane = treeIndex(context.store.getSnapshot().root).panes.get(id)?.pane;
   return (
-    <div className="pierre-layout-drag-image" aria-hidden inert ref={ref}>
+    <div className="pierre-layouts-drag-image" aria-hidden inert ref={ref}>
       {preview !== undefined && pane !== undefined && preview(pane)}
     </div>
   );

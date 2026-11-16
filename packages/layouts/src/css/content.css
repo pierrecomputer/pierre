@@ -1,7 +1,7 @@
 @layer pierre-layouts {
   /* The scroll area of a pane (`Layout.Content`). The host clips at its
      rounded border and never scrolls. */
-  .pierre-layout-content {
+  .pierre-layouts-content {
     box-sizing: border-box;
     flex: 1;
     min-width: 0;
@@ -13,10 +13,10 @@
      keeps its DOM, its state, and its scroll position, and skips its style,
      layout, and paint. `Layout.Content` marks itself; the `Layout`
      component marks the pane host. */
-  .pierre-layout-content[data-collapsed='true'],
-  .pierre-layout-pane[data-collapsed='true']
-    > .pierre-layout-pane-inner
-    > .pierre-layout-content {
+  .pierre-layouts-content[data-collapsed='true'],
+  .pierre-layouts-pane[data-collapsed='true']
+    > .pierre-layouts-pane-inner
+    > .pierre-layouts-content {
     content-visibility: hidden;
   }
 }

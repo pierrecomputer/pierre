@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 });
 
 test('A3: each pane is a named region', async ({ page }) => {
@@ -23,9 +23,9 @@ test('A5: the DOM order of panes follows their visual order', async ({
 }) => {
   test.fail(true, 'Pane hosts are sorted by ID to keep their DOM stable.');
   const order = await page
-    .locator('[data-layout-pane]')
+    .locator('[data-layouts-pane]')
     .evaluateAll((panes) =>
-      panes.map((pane) => (pane as HTMLElement).dataset.layoutPane)
+      panes.map((pane) => (pane as HTMLElement).dataset.layoutsPane)
     );
   // Depth-first order of the mosaic split tree, which is its reading order.
   expect(order).toEqual(['1', '7', '2', '5', '6', '4', '3']);
@@ -44,7 +44,7 @@ test('A8: the zoom button keeps its name when it is pressed', async ({
   page,
 }) => {
   test.fail(true, 'The name changes from "Zoom" to "Restore".');
-  const pane = page.locator('[data-layout-pane="1"]');
+  const pane = page.locator('[data-layouts-pane="1"]');
   const button = pane.locator('header button[aria-pressed]');
   const before = await button.getAttribute('aria-label');
   await button.click();
@@ -78,7 +78,7 @@ test('A15: Escape that pane content handles does not restore the zoom', async ({
   );
   await note.focus();
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-layout-pane="1"]')).toHaveAttribute(
+  await expect(page.locator('[data-layouts-pane="1"]')).toHaveAttribute(
     'data-zoomed',
     'true'
   );
@@ -88,7 +88,7 @@ test('A18: the status message announces a zoom, a close, and a move with the tit
   page,
 }) => {
   // The live region of the layout; the page has a status region of its own.
-  const status = page.locator('.pierre-layout > [role="status"]');
+  const status = page.locator('.pierre-layouts > [role="status"]');
   await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
   await expect(status).toHaveText('Pane 1 zoomed');
   await page
@@ -99,10 +99,10 @@ test('A18: the status message announces a zoom, a close, and a move with the tit
   await expect(status).toHaveText('Pane 3 closed');
   // Drag pane 2 by its move handle to the right edge of pane 4.
   const handle = page
-    .locator('[data-layout-pane="2"]')
-    .locator('.pierre-layout-grip');
+    .locator('[data-layouts-pane="2"]')
+    .locator('.pierre-layouts-grip');
   const from = await handle.boundingBox();
-  const to = await page.locator('[data-layout-pane="4"]').boundingBox();
+  const to = await page.locator('[data-layouts-pane="4"]').boundingBox();
   if (from === null || to === null) throw new Error('Missing boxes');
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();

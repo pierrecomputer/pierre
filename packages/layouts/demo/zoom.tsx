@@ -132,7 +132,7 @@ function renderPane(pane: PaneNode): JSX.Element {
       </Layout.Header>
       <Layout.Content
         ref={(element) => {
-          const host = element?.closest('[data-layout-pane]');
+          const host = element?.closest('[data-layouts-pane]');
           if (host == null) return;
           const listener = (event: Event) => {
             (page.visibility[pane.id] ??= []).push(
@@ -165,7 +165,7 @@ function App(): JSX.Element {
         style={
           duration === null
             ? undefined
-            : ({ '--layout-duration': `${duration}ms` } as CSSProperties)
+            : ({ '--layouts-duration': `${duration}ms` } as CSSProperties)
         }
       />
     </div>

@@ -187,11 +187,20 @@ its sheets after the app's stylesheet, and it wins over the utilities.
 Outside `Layout.Header`, `Layout.TabList` is a plain row of tabs: the app sets
 its size, its overflow, and its scroll. In `Layout.Header`, it fills the header.
 
-Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
-`--layout-duration`. The tabs take their colors from `--layout-tab-color`,
-`--layout-tab-hover-color`, `--layout-tab-hover-background`,
-`--layout-tab-selected-color`, `--layout-tab-accent` (the underline of the
-selected tab), and `--layout-tab-close-hover-background`.
+Style with `--layouts-accent`, `--layouts-border`, `--layouts-pane-background`,
+and `--layouts-duration`. The tabs take their colors from `--layouts-tab-color`,
+`--layouts-tab-hover-color`, `--layouts-tab-hover-background`,
+`--layouts-tab-selected-color`, `--layouts-tab-accent` (the underline of the
+selected tab), and `--layouts-tab-close-hover-background`. Each property has its
+default where the library uses it, and the library declares none on its own
+elements, so a value on any ancestor, such as `:root`, reaches the layout, and
+pane content does not inherit a value of the library.
+
+Each name that the library puts into the page starts with the package name:
+`--layouts-*` for custom properties, `pierre-layouts-*` for classes, events, and
+sheets, and `data-layouts-*` for the attributes that mark its elements, such as
+`data-layouts-pane`. A state attribute, such as `data-focused` or `data-hidden`,
+has no prefix and describes only the element that it is on.
 
 ### Messages
 
@@ -277,7 +286,7 @@ units and CSS size containment.
 ## Hidden panes
 
 While a pane is zoomed, the other panes stay mounted. When the zoom animation
-ends, each covered pane host gets `data-hidden="true"` and
+ends, each covered pane host gets `data-covered="zoom"` and
 `content-visibility: hidden`, so the browser skips the style, layout, and paint
 of its content. The content keeps its DOM, its React state, and its scroll
 position. The covered panes leave the accessibility tree and the tab order at
@@ -289,9 +298,9 @@ place in the tree, its content, its state, and its scroll position, but takes no
 space, and its sibling takes its box. `layout.setHidden(id, false)` shows it
 again in its place, also after other panes moved, and focuses it. The last
 visible pane stays visible. The hidden flag is part of the pane node, so the
-saved form keeps it. A hidden pane host has `data-pane-hidden="true"`.
-`onPaneClose` of `Root` replaces the close of `Layout.CloseButton`, for example
-to hide the pane:
+saved form keeps it. A hidden pane host has `data-hidden="true"`. `onPaneClose`
+of `Root` replaces the close of `Layout.CloseButton`, for example to hide the
+pane:
 
 ```tsx
 <Layout.Root
@@ -321,7 +330,7 @@ import {
 } from '@pierre/layouts/react';
 
 useEffect(() => {
-  const host = ref.current?.closest('[data-layout-pane]');
+  const host = ref.current?.closest('[data-layouts-pane]');
   if (host == null) return;
   const onVisibility = (event: Event) => {
     setPaused((event as PaneVisibilityEvent).detail.hidden);
@@ -387,8 +396,8 @@ tabDrag({
 ```
 
 `Layout.Tab` takes a `render` prop for the app's own tab. Mark a close control
-inside a tab with `data-layout-tab-close`, so that a press on it does not start
-a drag; the class `pierre-layout-tab-close` gives it the close mark's style.
+inside a tab with `data-layouts-tab-close`, so that a press on it does not start
+a drag; the class `pierre-layouts-tab-close` gives it the close mark's style.
 
 ### Pinned tabs, and tabs that do not close
 
@@ -422,7 +431,7 @@ layout.setPinned('notes', true); // After the last pinned tab.
 tabs scroll, as browsers and editors keep pinned tabs. Each pinned tab sticks at
 its own place, and a tab that takes the focus scrolls into view beside the
 pinned tabs. The list holds the width of the pinned tabs in
-`--layout-pinned-width`, for the app's fade. The option turns itself off while
+`--layouts-pinned-width`, for the app's fade. The option turns itself off while
 less than 120 px of the list is left for the other tabs. It is off by default.
 The tab list must be the element that scrolls, as in `Layout.Header`, and each
 pinned tab a child of the list, as `Layout.Tab` and its `render` element are.
@@ -469,7 +478,7 @@ Layout.useCover(layout, dialog, open, { onCover: setCovered });
 ```
 
 - A pane inside the overlay's box stops rendering until the release: its host
-  gets `data-overlay-covered`, `content-visibility: hidden`, and `inert`, and
+  gets `data-covered="overlay"`, `content-visibility: hidden`, and `inert`, and
   receives `PANE_VISIBILITY_EVENT`. A pane under two overlays renders again
   after both release it.
 - `area: 'all'` covers every pane at once, for an opaque backdrop or a modal
@@ -619,7 +628,7 @@ Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer
 (`transform: translateZ(0)`): an update in one pane then costs Blink less
 compositing work. With fewer panes, the layers cost tile memory and save no
-measured time. Keep `--layout-pane-background` opaque, so that text in a layer
+measured time. Keep `--layouts-pane-background` opaque, so that text in a layer
 keeps subpixel antialiasing. The host never scrolls; `Layout.Content` scrolls.
 Put a menu or a tooltip that must extend past its pane in the top layer, with
 `popover` or `<dialog>`. The content of a pane sits in a wrapper with an

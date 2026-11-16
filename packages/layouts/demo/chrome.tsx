@@ -166,7 +166,7 @@ function renderPane(pane: PaneNode): JSX.Element {
       <Layout.Content
         ref={(element) => {
           // Count the visibility events that the content of each pane gets.
-          const host = element?.closest('[data-layout-pane]');
+          const host = element?.closest('[data-layouts-pane]');
           if (host == null) return;
           const listener = (event: Event) => {
             (page.visibility[pane.id] ??= []).push(

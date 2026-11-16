@@ -29,8 +29,8 @@ export function focusRing(): Feature {
             // A focus change replaces the ring, so it never moves to another pane.
             <div
               key={id}
-              className="pierre-layout-focus"
-              data-layout-flip={`pane:${id}`}
+              className="pierre-layouts-focus"
+              data-layouts-flip={`pane:${id}`}
               aria-hidden="true"
               style={
                 presentation(state).filled === null ? host.rect : FULL_SIZE

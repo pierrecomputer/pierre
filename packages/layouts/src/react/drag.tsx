@@ -176,7 +176,7 @@ function tabListTargetAt(
       edges,
       clientX - tablist.getBoundingClientRect().left
     ),
-    tabs: tabsOf(tablist).map((tab) => tab.dataset.layoutTab ?? ''),
+    tabs: tabsOf(tablist).map((tab) => tab.dataset.layoutsTab ?? ''),
   };
   const target = accepted(options, under);
   return target === null
@@ -348,7 +348,7 @@ export function DropPreview({
   );
   return rect === null ? null : (
     <div
-      className="pierre-layout-drop"
+      className="pierre-layouts-drop"
       style={{
         left: rect.x,
         top: rect.y,

@@ -4,7 +4,7 @@ import { expect, type Page, test } from '@playwright/test';
 // tabs pattern, the keys, the focus, and the tab of a pane outside a stack.
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 /** The tab list in the header of the host of a pane. */
 const tabsOf = (page: Page, id: string) => host(page, id).getByRole('tablist');
@@ -75,8 +75,8 @@ test('the arrows, Home, and End move the focus to a tab that shows, with no rend
   const util = tabsOf(page, 'util').getByRole('tab', { name: 'util.ts' });
   await expect(util).toBeFocused();
   await expect(util).toHaveAttribute('aria-selected', 'true');
-  await expect(host(page, 'util')).not.toHaveAttribute('data-pane-hidden');
-  await expect(host(page, 'main')).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host(page, 'util')).not.toHaveAttribute('data-hidden');
+  await expect(host(page, 'main')).toHaveAttribute('data-hidden', 'true');
   await page.keyboard.press('End');
   await expect(
     tabsOf(page, 'docs').getByRole('tab', { name: 'README.md' })
@@ -143,7 +143,7 @@ test('a field or a button inside a tab keeps its own keys', async ({
     tabs
       .getByRole('tab')
       .evaluateAll((elements) =>
-        elements.map((element) => element.getAttribute('data-layout-tab'))
+        elements.map((element) => element.getAttribute('data-layouts-tab'))
       );
   const before = await order();
   const keys = [
@@ -191,21 +191,21 @@ test('a host of a tab that does not show holds only its own tab', async ({
   const count = () =>
     page.evaluate(
       (ids) =>
-        [...document.querySelectorAll<HTMLElement>('[data-layout-tab]')].filter(
-          (tab) => ids.includes(tab.dataset.layoutTab ?? '')
-        ).length,
+        [
+          ...document.querySelectorAll<HTMLElement>('[data-layouts-tab]'),
+        ].filter((tab) => ids.includes(tab.dataset.layoutsTab ?? '')).length,
       editors
     );
   // Five tabs in the host that shows, and one in each of the four others.
   expect(await count()).toBe(9);
   for (const id of editors.slice(1))
-    await expect(host(page, id).locator('[data-layout-tab]')).toHaveCount(1);
+    await expect(host(page, id).locator('[data-layouts-tab]')).toHaveCount(1);
   await tabsOf(page, 'main').getByRole('tab', { name: 'types.ts' }).click();
   await expect(
     tabsOf(page, 'types').getByRole('tab', { name: 'types.ts' })
   ).toBeFocused();
   await expect(tabsOf(page, 'types').getByRole('tab')).toHaveCount(5);
-  await expect(host(page, 'main').locator('[data-layout-tab]')).toHaveCount(1);
+  await expect(host(page, 'main').locator('[data-layouts-tab]')).toHaveCount(1);
   expect(await count()).toBe(9);
 });
 
@@ -246,12 +246,12 @@ test('a tab list without stacks(), and stacks() without a tab list in a pane, wa
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/stacks.html?features=nostacks');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(8);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(8);
   expect(
     warnings.filter((text) => text.includes('Layout.TabList needs stacks()'))
   ).toHaveLength(1);
   await page.goto('/stacks.html?tablist=none');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(8);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(8);
   await expect
     .poll(
       () =>
@@ -318,11 +318,11 @@ test('a tab drag inside its tab list changes the order of the tabs, and the tab 
     x: target.x + target.width - 4,
     y: target.y + target.height / 2,
   });
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await expect(page.getByRole('status')).toHaveText('3 panes');
   await page.mouse.up();
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
   await expect
     .poll(() => names(page, 'main'))
     .toEqual(['util.ts', 'test.ts', 'main.ts', 'types.ts', 'README.md']);
@@ -361,18 +361,18 @@ test('a press in a field or a button inside a tab drags no tab, and a press on t
     await page.mouse.move(box.x + 4, box.y + box.height / 2);
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 8 });
-    await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+    await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
     await page.mouse.up();
     expect(await order()).toEqual(['main', 'util', 'test', 'types', 'docs']);
   }
   // A press on the text of the tab is the tab's own: it drags the tab.
-  const label = tabs.locator('[data-layout-tab="docs"] > span');
+  const label = tabs.locator('[data-layouts-tab="docs"] > span');
   const box = await label.boundingBox();
   if (box === null) throw new Error('No box for the label');
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 });
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
   await page.mouse.up();
   await expect.poll(order).toEqual(['main', 'docs', 'util', 'test', 'types']);
 });
@@ -422,14 +422,14 @@ test('a tab drag to an edge of a pane takes the tab out of its stack', async ({
     x: files.x + files.width - 8,
     y: files.y + files.height / 2,
   });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
   await expect(host(page, 'main')).not.toHaveAttribute('data-moving');
   await expect(host(page, 'util')).toHaveAttribute('data-moving', 'true');
   await expect(page.getByRole('status')).toHaveText(
     'Move util.ts to the right of Files'
   );
   await page.mouse.up();
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(1);
   const util = await paneBox(page, 'util');
   expect(util.x).toBeGreaterThan(files.x);
@@ -442,7 +442,7 @@ test('the center of its own stack takes no drop', async ({ page }) => {
     x: main.x + main.width / 2,
     y: main.y + main.height / 2,
   });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await page.mouse.up();
   await expect
     .poll(() => names(page, 'main'))
@@ -460,7 +460,7 @@ test('a drag that ends where it started is not a click', async ({ page }) => {
   await expect(
     tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' })
   ).toHaveAttribute('aria-selected', 'true');
-  await expect(host(page, 'util')).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host(page, 'util')).toHaveAttribute('data-hidden', 'true');
 });
 
 test('while a pane is zoomed, a tab moves only inside its own tab list', async ({
@@ -474,7 +474,7 @@ test('while a pane is zoomed, a tab moves only inside its own tab list', async (
     x: box.x + box.width - 8,
     y: box.y + box.height / 2,
   });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await page.mouse.up();
   await expect.poll(() => names(page, 'main')).toHaveLength(5);
   const test = await tabBox(page, 'main', 'test.ts');
@@ -501,11 +501,11 @@ test('a tab that a stack gets after the first render shows only when it is activ
     page.evaluate(() =>
       [
         ...document.querySelectorAll<HTMLElement>(
-          '[data-layout-pane]:not([data-pane-hidden])'
+          '[data-layouts-pane]:not([data-hidden])'
         ),
       ]
         .filter((element) => !element.inert)
-        .map((element) => element.dataset.layoutPane ?? '')
+        .map((element) => element.dataset.layoutsPane ?? '')
         .sort((a, b) => a.localeCompare(b))
     );
   await command(page, 'addTab', 'main', { type: 'pane', id: 'late' }, 5, {
@@ -515,7 +515,7 @@ test('a tab that a stack gets after the first render shows only when it is activ
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(resolve))
   );
-  await expect(host(page, 'late')).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host(page, 'late')).toHaveAttribute('data-hidden', 'true');
   expect(await shown()).toEqual(['files', 'main', 'terminal']);
   await command(page, 'addTab', 'main', { type: 'pane', id: 'later' });
   await expect(host(page, 'later')).toHaveAttribute('role', 'tabpanel');
@@ -547,7 +547,7 @@ test("an app's handler that calls preventDefault() stops the tab's own handler",
   const target = await tabBox(page, 'util', 'main.ts');
   const to = { x: target.x + 4, y: target.y + target.height / 2 };
   await dragTab(page, 'util', 'types.ts', to);
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
   await page.mouse.up();
   expect(await editorsOrder(page)).toEqual([
     'main',
@@ -557,7 +557,7 @@ test("an app's handler that calls preventDefault() stops the tab's own handler",
     'docs',
   ]);
   await dragTab(page, 'util', 'README.md', to);
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
   await page.mouse.up();
   await expect
     .poll(() => editorsOrder(page))
@@ -597,7 +597,7 @@ test('pinned tabs stay first and in their stack: key moves and drags clamp at th
     x: first.x + 4,
     y: first.y + first.height / 2,
   });
-  const marker = page.locator('.pierre-layout-tab-drop');
+  const marker = page.locator('.pierre-layouts-tab-drop');
   await expect(marker).toHaveCount(1);
   const mark = await marker.boundingBox();
   expect(Math.abs((mark?.x ?? 0) - after.x)).toBeLessThan(4);
@@ -619,7 +619,7 @@ test('pinned tabs stay first and in their stack: key moves and drags clamp at th
     steps: 4,
   });
   await page.mouse.move(files.x + 4, files.y + files.height / 2, { steps: 4 });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await page.mouse.up();
   expect(await editorsOrder(page)).toEqual([
     'util',
@@ -721,7 +721,7 @@ test('stickyPinned keeps the pinned tabs in view while the others scroll, and tu
   const before = await box('test.ts');
   const pinnedWidth = await list.evaluate((element) =>
     Number.parseFloat(
-      getComputedStyle(element).getPropertyValue('--layout-pinned-width')
+      getComputedStyle(element).getPropertyValue('--layouts-pinned-width')
     )
   );
   expect(Math.abs(pinnedWidth - (util.x + util.width - main.x))).toBeLessThan(
@@ -739,7 +739,7 @@ test('stickyPinned keeps the pinned tabs in view while the others scroll, and tu
   // A list with less than 120 px left for the other tabs scrolls them all.
   await page.setViewportSize({ width: 420, height: 900 });
   await expect(list).not.toHaveAttribute('data-sticky-pinned');
-  await expect(list.locator('[data-layout-sticky]')).toHaveCount(0);
+  await expect(list.locator('[data-sticky]')).toHaveCount(0);
 });
 
 test('canDrop of tabDrag() refuses a place once for each target, and allows the others', async ({
@@ -755,7 +755,7 @@ test('canDrop of tabDrag() refuses a place once for each target, and allows the 
   await page.mouse.move(files.x + files.width - 4, files.y + files.height / 2, {
     steps: 6,
   });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await expect(page.getByRole('status')).not.toHaveText(/^Move /);
   await page.mouse.up();
   await expect(host(page, 'files')).toHaveCount(1);
@@ -799,7 +799,7 @@ test('canDrop of tabDrag() refuses a place once for each target, and allows the 
     x: output.x + output.width - 4,
     y: output.y + output.height / 2,
   });
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
   await page.mouse.up();
   await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(3);
   expect((await asked()).at(-1)).toMatchObject({
@@ -827,7 +827,7 @@ test('the move handle of a pinned tab of a stack is disabled', async ({
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(files.x + 10, files.y + files.height / 2, { steps: 6 });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await page.mouse.up();
   expect(await editorsOrder(page)).toEqual([
     'main',
@@ -883,7 +883,7 @@ test.describe('a touch drag of a tab', () => {
     await expect
       .poll(() => tabsOf(page, 'main').evaluate((list) => list.scrollLeft))
       .toBeGreaterThan(20);
-    await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+    await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
     expect(await editorsOrder(page)).toEqual(before);
   });
 
@@ -901,7 +901,7 @@ test.describe('a touch drag of a tab', () => {
         x: from.x + ((util.x + 4 - from.x) * step) / 6,
         y: from.y,
       });
-    await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+    await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
     await touch('touchEnd');
     await expect
       .poll(() => editorsOrder(page))
@@ -921,7 +921,7 @@ test('a copy of the tab follows the pointer during a drag, and leaves at the dro
   page,
 }) => {
   await page.goto('/stacks.html');
-  const image = page.locator('.pierre-layout-drag-image');
+  const image = page.locator('.pierre-layouts-drag-image');
   const source = await tabBox(page, 'main', 'util.ts');
   const target = await tabBox(page, 'main', 'types.ts');
   await dragTab(page, 'main', 'util.ts', {
@@ -935,7 +935,7 @@ test('a copy of the tab follows the pointer during a drag, and leaves at the dro
   await expect(
     tabsOf(page, 'main').getByRole('tab', { name: 'util.ts' })
   ).toHaveAttribute('data-dragging', 'true');
-  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
   // The copy has the size of the tab, below and after the pointer, so the
   // drop marker at the pointer stays in view.
   const first = await image.boundingBox();
@@ -972,7 +972,7 @@ test("tabDrag's preview puts the app's element beside the pointer", async ({
     x: target.x + target.width / 2,
     y: target.y + target.height / 2,
   });
-  const image = page.locator('.pierre-layout-drag-image');
+  const image = page.locator('.pierre-layouts-drag-image');
   await expect(image).toHaveText('Moving util.ts');
   await expect(image.locator('.stacks-preview')).toHaveCount(1);
   await page.mouse.up();

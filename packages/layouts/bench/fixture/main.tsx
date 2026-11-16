@@ -76,10 +76,10 @@ const resize =
 // `layers=off`, it is that layer alone.
 const isolate = params.get('isolate');
 const ISOLATION: Record<string, string> = {
-  contain: '.pierre-layout-content { contain: strict; }',
-  layer: '.pierre-layout-pane { will-change: transform; }',
+  contain: '.pierre-layouts-content { contain: strict; }',
+  layer: '.pierre-layouts-pane { will-change: transform; }',
   'content-layer':
-    '.pierre-layout-content { contain: strict; will-change: transform; }',
+    '.pierre-layouts-content { contain: strict; will-change: transform; }',
 };
 if (isolate !== null && isolate in ISOLATION) {
   const sheet = document.createElement('style');

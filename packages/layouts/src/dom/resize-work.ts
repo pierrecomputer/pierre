@@ -68,7 +68,7 @@ export function createResizeWork(
     const offsets = new Map<string, number>();
     for (const separator of separators) {
       const element = host.querySelector<HTMLElement>(
-        `:scope > [data-layout-flip="separator:${CSS.escape(separator.id)}"]`
+        `:scope > [data-layouts-flip="separator:${CSS.escape(separator.id)}"]`
       );
       if (element === null) continue;
       const horizontal = separator.split.direction === 'horizontal';
@@ -83,7 +83,7 @@ export function createResizeWork(
       const [horizontal, vertical] = corner.separatorIds;
       if (!offsets.has(horizontal) && !offsets.has(vertical)) continue;
       const element = host.querySelector<HTMLElement>(
-        `:scope > [data-layout-corner="${CSS.escape(corner.id)}"]`
+        `:scope > [data-layouts-corner="${CSS.escape(corner.id)}"]`
       );
       if (element === null) continue;
       move(element, offsets.get(horizontal) ?? 0, offsets.get(vertical) ?? 0);
@@ -108,10 +108,10 @@ export function createResizeWork(
       separators.flatMap(({ split }) => getPanes(split).map(({ id }) => id))
     );
     const contents = paneHosts(root)
-      .filter((host) => ids.has(host.dataset.layoutPane ?? ''))
+      .filter((host) => ids.has(host.dataset.layoutsPane ?? ''))
       .map((host) =>
         host.querySelector<HTMLElement>(
-          ':scope > .pierre-layout-pane-inner > .pierre-layout-content'
+          ':scope > .pierre-layouts-pane-inner > .pierre-layouts-content'
         )
       )
       .filter((content) => content !== null);

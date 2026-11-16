@@ -41,7 +41,7 @@ const command = (page: Page, name: string, ...args: unknown[]) =>
   );
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 // The console warnings of the page, from its load on.
 function warningsOf(page: Page): string[] {
@@ -60,10 +60,10 @@ test('the parts render the chrome, and only their sheets are in the head', async
   page,
 }) => {
   await page.goto('/chrome.html');
-  await expect(page.locator('.pierre-layout-header')).toHaveCount(3);
-  await expect(host(page, 'editor').locator('.pierre-layout-title')).toHaveText(
-    'editor'
-  );
+  await expect(page.locator('.pierre-layouts-header')).toHaveCount(3);
+  await expect(
+    host(page, 'editor').locator('.pierre-layouts-title')
+  ).toHaveText('editor');
   const sheets = await page.evaluate(() =>
     [
       ...document.head.querySelectorAll<HTMLStyleElement>(
@@ -97,8 +97,8 @@ test('a collapse keeps the header and hides the content, with no render of the c
   expect(
     await terminal.evaluate((element) => element.getBoundingClientRect().height)
   ).toBe(36);
-  await expect(terminal.locator('.pierre-layout-header')).toBeVisible();
-  const content = terminal.locator('.pierre-layout-content');
+  await expect(terminal.locator('.pierre-layouts-header')).toBeVisible();
+  const content = terminal.locator('.pierre-layouts-content');
   await expect(content).toHaveAttribute('data-collapsed', 'true');
   await expect(content).toHaveCSS('content-visibility', 'hidden');
   expect(await content.evaluate((element: HTMLElement) => element.inert)).toBe(
@@ -109,7 +109,7 @@ test('a collapse keeps the header and hides the content, with no render of the c
   expect(await terminal.evaluate((element: HTMLElement) => element.inert)).toBe(
     false
   );
-  await expect(terminal).not.toHaveAttribute('data-pane-hidden');
+  await expect(terminal).not.toHaveAttribute('data-hidden');
   const after = await read(page);
   expect(after.renders).toEqual(before.renders);
   expect(after.visibility).toEqual({ terminal: [true] });
@@ -129,7 +129,7 @@ test('a pane that does not render gets no event when a second reason starts or e
   await page.getByRole('button', { name: 'Collapse terminal' }).click();
   await command(page, 'setHidden', 'terminal', true);
   const terminal = host(page, 'terminal');
-  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(terminal).toHaveAttribute('data-hidden', 'true');
   expect(await terminal.evaluate((element: HTMLElement) => element.inert)).toBe(
     true
   );
@@ -138,7 +138,7 @@ test('a pane that does not render gets no event when a second reason starts or e
     'collapsed not-shown'
   );
   await command(page, 'setHidden', 'terminal', false);
-  await expect(terminal).not.toHaveAttribute('data-pane-hidden');
+  await expect(terminal).not.toHaveAttribute('data-hidden');
   // The content still does not render: the pane is still collapsed.
   expect((await read(page)).visibility).toEqual({ terminal: [true] });
   await page.getByRole('button', { name: 'Collapse terminal' }).click();
@@ -151,7 +151,7 @@ test('a pane that starts hidden is hidden in the first render, and shows with an
 }) => {
   await page.goto('/chrome.html?start=hidden');
   const notes = host(page, 'notes');
-  await expect(notes).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(notes).toHaveAttribute('data-hidden', 'true');
   expect(await notes.evaluate((element: HTMLElement) => element.inert)).toBe(
     true
   );
@@ -160,7 +160,7 @@ test('a pane that starts hidden is hidden in the first render, and shows with an
     'not-shown'
   );
   await command(page, 'setHidden', 'notes', false);
-  await expect(notes).not.toHaveAttribute('data-pane-hidden');
+  await expect(notes).not.toHaveAttribute('data-hidden');
   expect(await notes.evaluate((element: HTMLElement) => element.inert)).toBe(
     false
   );
@@ -173,7 +173,7 @@ test('a pane that starts hidden is hidden in the first render, and shows with an
 
 test('the content area scrolls', async ({ page }) => {
   await page.goto('/chrome.html');
-  const content = host(page, 'editor').locator('.pierre-layout-content');
+  const content = host(page, 'editor').locator('.pierre-layouts-content');
   await expect(content).toHaveCSS('overflow-y', 'auto');
   expect(
     await content.evaluate((element) => {
@@ -205,7 +205,7 @@ test('a render prop keeps the app element and its classes', async ({
 }) => {
   await page.goto('/chrome.html');
   const header = host(page, 'notes').locator('header');
-  await expect(header).toHaveClass('pierre-layout-header app-header');
+  await expect(header).toHaveClass('pierre-layouts-header app-header');
   const close = page.getByRole('button', { name: 'Close notes' });
   await expect(close).toHaveClass('app-close');
   await expect(close).toHaveAttribute('data-app-disabled', 'false');
@@ -213,12 +213,12 @@ test('a render prop keeps the app element and its classes', async ({
 
 test('the header shows the focus of its pane', async ({ page }) => {
   await page.goto('/chrome.html');
-  const header = host(page, 'notes').locator('.pierre-layout-header');
+  const header = host(page, 'notes').locator('.pierre-layouts-header');
   await expect(header).not.toHaveAttribute('data-focused');
-  await host(page, 'notes').locator('.pierre-layout-content').click();
+  await host(page, 'notes').locator('.pierre-layouts-content').click();
   await expect(header).toHaveAttribute('data-focused', 'true');
   await expect(
-    host(page, 'editor').locator('.pierre-layout-header')
+    host(page, 'editor').locator('.pierre-layouts-header')
   ).not.toHaveAttribute('data-focused');
 });
 
@@ -232,7 +232,7 @@ test('a focus change renders no pane content, and only the components that read 
     'focused'
   );
   const before = await read(page);
-  await host(page, 'notes').locator('.pierre-layout-content').click();
+  await host(page, 'notes').locator('.pierre-layouts-content').click();
   await expect(host(page, 'notes').locator('.app-status')).toHaveAttribute(
     'data-status',
     'focused'
@@ -279,8 +279,8 @@ test('a new renderPane for the same tree warns once in development', async ({
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/chrome.html?render=unstable');
-  await host(page, 'notes').locator('.pierre-layout-content').click();
-  await host(page, 'editor').locator('.pierre-layout-content').click();
+  await host(page, 'notes').locator('.pierre-layouts-content').click();
+  await host(page, 'editor').locator('.pierre-layouts-content').click();
   await expect
     .poll(() => warnings.filter((text) => text.includes('renderPane')).length)
     .toBe(1);
@@ -291,7 +291,7 @@ test('a close button without edits() warns once in development', async ({
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/chrome.html?features=none');
-  await expect(page.locator('.pierre-layout-header')).toHaveCount(3);
+  await expect(page.locator('.pierre-layouts-header')).toHaveCount(3);
   const closeWarnings = warnings.filter((text) =>
     text.includes('Layout.CloseButton needs edits()')
   );

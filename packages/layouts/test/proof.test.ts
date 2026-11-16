@@ -207,19 +207,19 @@ afterAll(() => {
 // A mark of each part, feature, and sheet in an output. A sheet is a minified
 // string, so its mark is one of its rules.
 const MARKS = {
-  splitSheet: '.pierre-layout-separator{',
-  headersSheet: '.pierre-layout-title{',
-  contentSheet: '.pierre-layout-content{',
-  tabsSheet: '.pierre-layout-tabs{',
+  splitSheet: '.pierre-layouts-separator{',
+  headersSheet: '.pierre-layouts-title{',
+  contentSheet: '.pierre-layouts-content{',
+  tabsSheet: '.pierre-layouts-tabs{',
   zoomSheet: '[data-zoomed=true]',
-  cornersSheet: '.pierre-layout-corner{',
-  dropSheet: '.pierre-layout-drop{',
+  cornersSheet: '.pierre-layouts-corner{',
+  dropSheet: '.pierre-layouts-drop{',
   flipSheet: 'transform-origin:0 0',
-  focusRingSheet: '.pierre-layout-focus{',
+  focusRingSheet: '.pierre-layouts-focus{',
   overlaysSheet: '.pierre-overlay{',
-  tabDragSheet: '.pierre-layout-tab-drop{',
-  moveHandle: 'pierre-layout-grip',
-  tab: 'pierre-layout-tab-title',
+  tabDragSheet: '.pierre-layouts-tab-drop{',
+  moveHandle: 'pierre-layouts-grip',
+  tab: 'pierre-layouts-tab-title',
   usePane: 'must be in the output of renderPane',
   controlledLayout: 'useControlledLayout',
   developmentChecks: 'renderPane changed',
@@ -331,7 +331,7 @@ test('an eager import of the root entry takes none of the lazy view into the eag
     .join('');
   expect(code).toContain('must be 3');
   for (const mark of [
-    '.pierre-layout-separator{',
+    '.pierre-layouts-separator{',
     'must be in the output of renderPane',
     'moved into the group of',
     'zoomed',
@@ -339,6 +339,6 @@ test('an eager import of the root entry takes none of the lazy view into the eag
     'id_in_use',
   ])
     expect([mark, code.includes(mark)]).toEqual([mark, false]);
-  expect(lazy).toContain('.pierre-layout-separator{');
+  expect(lazy).toContain('.pierre-layouts-separator{');
   expect(code.length).toBeLessThan(8_000);
 });

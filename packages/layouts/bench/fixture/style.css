@@ -136,7 +136,7 @@ body {
 }
 
 .bench-drawer {
-  --layout-drawer-size: 360px;
+  --layouts-drawer-size: 360px;
 
   padding: 16px;
 }

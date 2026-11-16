@@ -4,7 +4,7 @@ import { expect, type Page, test } from '@playwright/test';
 // name, and the caches of the view (demo/zoom.tsx).
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 const visibility = (page: Page): Promise<Record<string, boolean[]>> =>
   page.evaluate(
@@ -61,20 +61,17 @@ test('the zoom button zooms a pane over the layout and restores it', async ({
   await expect(restore).toHaveAttribute('data-zoomed', 'true');
   const editor = host(page, 'editor');
   await expect(editor).toHaveAttribute('data-zoomed', 'true');
-  await expect(editor).toHaveAttribute(
-    'data-layout-edges',
-    'top right bottom left'
-  );
-  await expect(editor.locator('.pierre-layout-header')).toHaveAttribute(
+  await expect(editor).toHaveAttribute('data-edges', 'top right bottom left');
+  await expect(editor.locator('.pierre-layouts-header')).toHaveAttribute(
     'data-zoomed',
     'true'
   );
-  expect(await box(page, '[data-layout-pane="editor"]')).toEqual(
-    await box(page, '.pierre-layout')
+  expect(await box(page, '[data-layouts-pane="editor"]')).toEqual(
+    await box(page, '.pierre-layouts')
   );
   // The covered panes skip their rendering and leave the tab order.
   for (const id of ['notes', 'files', 'terminal']) {
-    await expect(host(page, id)).toHaveAttribute('data-hidden', 'true');
+    await expect(host(page, id)).toHaveAttribute('data-covered', 'zoom');
     expect(
       await host(page, id).evaluate((element: HTMLElement) => element.inert)
     ).toBe(true);
@@ -82,14 +79,14 @@ test('the zoom button zooms a pane over the layout and restores it', async ({
   await expect(page.getByRole('separator')).toHaveCount(0);
   await expect(page.getByRole('status')).toHaveText('editor zoomed');
   // The focus ring surrounds the layout.
-  expect(await box(page, '.pierre-layout-focus')).toEqual(
-    await box(page, '.pierre-layout')
+  expect(await box(page, '.pierre-layouts-focus')).toEqual(
+    await box(page, '.pierre-layouts')
   );
   await restore.click();
   await expect(editor).not.toHaveAttribute('data-zoomed');
   await expect(page.getByRole('separator')).toHaveCount(3);
   for (const id of ['notes', 'files', 'terminal'])
-    await expect(host(page, id)).not.toHaveAttribute('data-hidden');
+    await expect(host(page, id)).not.toHaveAttribute('data-covered');
   expect(await visibility(page)).toEqual({
     notes: [true, false],
     files: [true, false],
@@ -104,10 +101,10 @@ test('Escape restores the zoom, and the focus moves into the zoomed pane', async
   await page.getByLabel('Note in files').focus();
   await command(page, 'setZoom', 'editor');
   await expect(host(page, 'editor')).toBeFocused();
-  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-covered', 'zoom');
   await page.keyboard.press('Escape');
   await expect(host(page, 'editor')).not.toHaveAttribute('data-zoomed');
-  await expect(host(page, 'files')).not.toHaveAttribute('data-hidden');
+  await expect(host(page, 'files')).not.toHaveAttribute('data-covered');
 });
 
 test('a collapsed pane under a zoom gets no visibility event at the zoom, after it, or at the restore', async ({
@@ -121,14 +118,14 @@ test('a collapsed pane under a zoom gets no visibility event at the zoom, after 
   );
   expect((await visibility(page)).terminal).toEqual([true]);
   await page.getByRole('button', { name: 'Zoom editor' }).click();
-  await expect(host(page, 'terminal')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'terminal')).toHaveAttribute('data-covered', 'zoom');
   // The hide of the covered panes waits for the animations of the zoom.
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(resolve))
   );
   expect((await visibility(page)).terminal).toEqual([true]);
   await page.getByRole('button', { name: 'Restore editor' }).click();
-  await expect(host(page, 'terminal')).not.toHaveAttribute('data-hidden');
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-covered');
   await expect(host(page, 'terminal')).toHaveAttribute(
     'data-collapsed',
     'true'
@@ -160,7 +157,7 @@ test('a pane that a zoomed layout gets is covered like the other panes', async (
 }) => {
   await page.goto('/zoom.html');
   await command(page, 'setZoom', 'editor');
-  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-covered', 'zoom');
   // A new tree keeps the zoom; a local edit that shows a new pane ends it.
   await page.evaluate(() => {
     const { layout } = (
@@ -195,19 +192,49 @@ test('a pane that a zoomed layout gets is covered like the other panes', async (
   );
   for (const id of ['files', 'late']) {
     await expect(host(page, id)).toHaveAttribute('aria-hidden', 'true');
-    await expect(host(page, id)).toHaveAttribute('data-hidden', 'true');
+    await expect(host(page, id)).toHaveAttribute('data-covered', 'zoom');
     await expect(host(page, id)).toHaveAttribute('tabindex', '-1');
   }
   await command(page, 'setZoom', null);
-  await expect(host(page, 'late')).not.toHaveAttribute('data-hidden');
+  await expect(host(page, 'late')).not.toHaveAttribute('data-covered');
   await expect(host(page, 'late')).not.toHaveAttribute('aria-hidden');
+});
+
+test('a theme on an ancestor reaches the layout, and pane content inherits no value of the library', async ({
+  page,
+}) => {
+  await page.goto('/zoom.html');
+  await page.addStyleTag({
+    content:
+      ':root { --layouts-accent: rgb(255, 0, 0); --layouts-pane-background: rgb(0, 128, 0); }',
+  });
+  const note = page.getByLabel('Note in files');
+  await note.click();
+  const files = host(page, 'files');
+  await expect(files).toHaveAttribute('data-focused', 'true');
+  const style = (name: string) =>
+    files.evaluate(
+      (element, property) =>
+        getComputedStyle(element).getPropertyValue(property),
+      name
+    );
+  expect(await style('border-top-color')).toBe('rgb(255, 0, 0)');
+  expect(await style('background-color')).toBe('rgb(0, 128, 0)');
+  const inside = (name: string) =>
+    note.evaluate(
+      (element, property) =>
+        getComputedStyle(element).getPropertyValue(property).trim(),
+      name
+    );
+  expect(await inside('--layouts-accent')).toBe('rgb(255, 0, 0)');
+  expect(await inside('--layouts-border')).toBe('');
 });
 
 test('the focus ring follows the focused pane', async ({ page }) => {
   await page.goto('/zoom.html');
   await page.getByLabel('Note in files').click();
-  expect(await box(page, '.pierre-layout-focus')).toEqual(
-    await box(page, '[data-layout-pane="files"]')
+  expect(await box(page, '.pierre-layouts-focus')).toEqual(
+    await box(page, '[data-layouts-pane="files"]')
   );
 });
 
@@ -216,7 +243,7 @@ test('the full set without zoom() has no zoom, and its zoom buttons warn', async
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/zoom.html?features=nozoom');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(5);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(5);
   expect(
     warnings.filter((text) => text.includes('Layout.ZoomButton needs zoom()'))
   ).toHaveLength(1);
@@ -246,8 +273,8 @@ test('the order of the feature list does not change the zoom', async ({
 }) => {
   await page.goto('/zoom.html?features=reversed');
   await page.getByRole('button', { name: 'Zoom editor' }).click();
-  expect(await box(page, '[data-layout-pane="editor"]')).toEqual(
-    await box(page, '.pierre-layout')
+  expect(await box(page, '[data-layouts-pane="editor"]')).toEqual(
+    await box(page, '.pierre-layouts')
   );
 });
 
@@ -256,7 +283,7 @@ test('a feature without a feature that it requires warns in development', async 
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/zoom.html?requires=missing');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(5);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(5);
   expect(
     warnings.filter((text) =>
       text.includes('the feature needs-drag needs the feature pane-drag')
@@ -269,7 +296,7 @@ test('two features that give the style of a host warn in development', async ({
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/zoom.html?slots=conflict');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(5);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(5);
   await expect
     .poll(
       () =>
@@ -333,9 +360,9 @@ test('the caches of the view keep only the panes of the tree', async ({
       },
       [round, original.root] as const
     );
-    await expect(page.locator('[data-layout-pane]')).toHaveCount(105);
+    await expect(page.locator('[data-layouts-pane]')).toHaveCount(105);
     await command(page, 'setRoot', original.root);
-    await expect(page.locator('[data-layout-pane]')).toHaveCount(5);
+    await expect(page.locator('[data-layouts-pane]')).toHaveCount(5);
   }
   expect(await cached()).toEqual({ contexts: panes, visibility: panes });
 });

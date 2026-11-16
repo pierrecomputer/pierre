@@ -76,7 +76,7 @@ example, an app asks before Delete closes a tab:
 `preventDefault()` in `onPointerDown` of `Layout.Tab` or `Layout.MoveHandle`
 also stops the drag, so call it there only to stop the drag.
 
-Mark a close control inside a tab with `data-layout-tab-close`, so that a press
+Mark a close control inside a tab with `data-layouts-tab-close`, so that a press
 on it does not start a drag.
 
 An app that keeps its own tab strip, with no `Layout.TabList`, gets one
@@ -100,13 +100,15 @@ app keeps one, it can check what the parts give:
 
 ## Pane host attributes
 
-Each pane host has `data-layout-pane` with the ID of its pane, and
-`data-layout-edges`, a space-separated list of `top`, `right`, `bottom`, and
-`left`: the edges of the layout that the pane touches. `Layout.usePane` gives
-the same `edges`, and `computeCSSLayout` returns the same edge flags. A zoomed
-pane touches every edge. The host also has `data-focused`, and, when they apply,
-`data-zoomed`, `data-pane-hidden`, `data-collapsed`, `data-hidden` (under a
-zoom), and `data-overlay-covered`.
+Each pane host has `data-layouts-pane` with the ID of its pane, and
+`data-edges`, a space-separated list of `top`, `right`, `bottom`, and `left`:
+the edges of the layout that the pane touches. `Layout.usePane` gives the same
+`edges`, and `computeCSSLayout` returns the same edge flags. A zoomed pane
+touches every edge. The host also has `data-focused`, and, when they apply,
+`data-zoomed`, `data-collapsed`, `data-hidden` (the host does not show: a hidden
+pane, a tab that is not active, or a collapse to 0 pixels), and `data-covered`
+(`zoom` while a zoomed pane covers the host, else `overlay` while an overlay
+covers it).
 
 Layout and zoom changes animate only with `flip()`. Without it, each change
 applies at once.
@@ -172,7 +174,7 @@ host. An app can mark its own drop targets with a data attribute:
 />
 ```
 
-The view's own attributes, such as `data-layout-pane` and `data-focused`, take
+The view's own attributes, such as `data-layouts-pane` and `data-focused`, take
 precedence. A key that pane content handles with `preventDefault()`, for example
 Escape in a menu, does not cancel a gesture or restore a zoom.
 

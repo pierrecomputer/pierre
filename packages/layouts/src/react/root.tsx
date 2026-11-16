@@ -802,7 +802,7 @@ export function Root(props: RootProps): JSX.Element {
   return (
     <div
       ref={internals.setElement}
-      className={withClasses('pierre-layout', className)}
+      className={withClasses('pierre-layouts', className)}
       style={style}
       role="group"
       aria-label={messages?.layout ?? 'Workspace'}
@@ -829,7 +829,7 @@ export function Root(props: RootProps): JSX.Element {
         let hostStyle: CSSProperties | undefined;
         const attributes: Record<string, string | boolean | undefined> = {
           'aria-label': getPaneTitle(pane),
-          'data-layout-edges': edgeList(edges),
+          'data-edges': edgeList(edges),
         };
         for (const hook of hooks) {
           const patch = hook.host?.(host);
@@ -854,13 +854,13 @@ export function Root(props: RootProps): JSX.Element {
             {...attributes}
             ref={context.visibility.hostRef(pane.id)}
             id={paneIdOf(prefix, pane.id)}
-            data-layout-pane={pane.id}
-            data-layout-flip={`pane:${pane.id}`}
-            className={withClasses('pierre-layout-pane', custom?.className)}
+            data-layouts-pane={pane.id}
+            data-layouts-flip={`pane:${pane.id}`}
+            className={withClasses('pierre-layouts-pane', custom?.className)}
             // An inert host, which does not show, is not in the tab order.
             tabIndex={0}
             inert={(first & HOST_HIDDEN) !== 0}
-            data-pane-hidden={(first & HOST_HIDDEN) !== 0 || undefined}
+            data-hidden={(first & HOST_HIDDEN) !== 0 || undefined}
             data-collapsed={(first & COLLAPSED) !== 0 || undefined}
             data-focused={state.focusedPane === pane.id}
             style={hostStyle ?? host.rect}
@@ -868,7 +868,7 @@ export function Root(props: RootProps): JSX.Element {
             onPointerDown={() => store.focusPane(pane.id)}
           >
             {/* The inner wrapper counters the host's FLIP scale to preserve the content's shape. */}
-            <div className="pierre-layout-pane-inner">
+            <div className="pierre-layouts-pane-inner">
               <PaneBody
                 pane={pane}
                 renderPane={renderPane}
@@ -898,7 +898,7 @@ export function Root(props: RootProps): JSX.Element {
               key={id}
               {...custom}
               className={withClasses(
-                'pierre-layout-separator',
+                'pierre-layouts-separator',
                 custom?.className
               )}
               role="separator"
@@ -927,7 +927,7 @@ export function Root(props: RootProps): JSX.Element {
                 percent: value,
               })}
               data-direction={split.direction}
-              data-layout-flip={`separator:${id}`}
+              data-layouts-flip={`separator:${id}`}
               style={separatorStyles.get(id)}
               onPointerDown={(event) => context.startResize(event, [id])}
               onKeyDown={(event) => context.resizeKey(event, [id])}
@@ -937,7 +937,7 @@ export function Root(props: RootProps): JSX.Element {
       {hooks.map((hook, index) =>
         hook.layers === undefined ? null : <Layers key={index} hook={hook} />
       )}
-      <span className="pierre-layout-sr" role="status" aria-live="polite">
+      <span className="pierre-layouts-sr" role="status" aria-live="polite">
         <span key={message?.key}>{status}</span>
       </span>
     </div>

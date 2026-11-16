@@ -2,11 +2,10 @@
    a sheet, then run "moon run layouts:generate-styles". */
 
 @layer pierre-layouts {
-  .pierre-layout {
-    --layout-accent: #5489ed;
-    --layout-border: #dce1e8;
-    --layout-duration: 240ms;
-
+  /* The library declares no custom property on its own elements: each use
+     has its default, so an app's value on any ancestor reaches the layout,
+     and pane content does not inherit the library's values. */
+  .pierre-layouts {
     container-type: size;
     position: relative;
     width: 100%;
@@ -17,13 +16,13 @@
   }
 
   /* Style the layout's own elements only; pane content belongs to the app. */
-  .pierre-layout-pane,
-  .pierre-layout-pane-inner,
-  .pierre-layout-separator {
+  .pierre-layouts-pane,
+  .pierre-layouts-pane-inner,
+  .pierre-layouts-separator {
     box-sizing: border-box;
   }
 
-  .pierre-layout-pane {
+  .pierre-layouts-pane {
     position: absolute;
     /* An identity transform makes the host a containing block at all times, so
        the transform that moves a covered pane out does not lay the host out
@@ -34,9 +33,9 @@
     /* Clip content at the rounded border with no scroll container, so that a
        scroll into view never moves the header. The content area scrolls. */
     overflow: clip;
-    border: 1px solid var(--layout-border);
+    border: 1px solid var(--layouts-border, #dce1e8);
     border-radius: 10px;
-    background: var(--layout-pane-background, #fff);
+    background: var(--layouts-pane-background, #fff);
     /* `content-visibility: hidden` includes style containment. A change of style
        containment makes Chromium update the style of the whole document, so a
        host always has it. It scopes CSS counters and quotes to the pane. */
@@ -53,8 +52,8 @@
      a covered host is not a layer and keeps no tiles. A host that does not show,
      such as a tab that is not active, is not a layer either, so a stack has one
      layer whatever the number of its tabs. */
-  .pierre-layout[data-pane-layers='true']
-    > .pierre-layout-pane:not([data-pane-hidden='true']) {
+  .pierre-layouts[data-pane-layers='true']
+    > .pierre-layouts-pane:not([data-hidden='true']) {
     transform: translateZ(0);
   }
 
@@ -62,7 +61,7 @@
      inverse of the host's scale, so text keeps its shape. It always has an
      identity transform: a transform that starts with the animation would change
      the containing block of the content and force a layout. */
-  .pierre-layout-pane-inner {
+  .pierre-layouts-pane-inner {
     transform: scale(1);
     display: flex;
     flex-direction: column;
@@ -72,8 +71,8 @@
     min-height: 0;
   }
 
-  .pierre-layout-pane[data-focused='true'] {
-    border-color: var(--layout-accent);
+  .pierre-layouts-pane[data-focused='true'] {
+    border-color: var(--layouts-accent, #5489ed);
   }
 
   /* A hidden pane (store.setHidden) and a tab that is not active keep their
@@ -81,37 +80,39 @@
      view gives each the box that it would have, and it does not render or take
      input. In `Root`, a pane that collapses to 0 pixels is hidden in the
      same way. */
-  .pierre-layout-pane[data-pane-hidden='true'] {
+  .pierre-layouts-pane[data-hidden='true'] {
     content-visibility: hidden;
     visibility: hidden;
     pointer-events: none;
   }
 
-  /* A pane that an overlay covers completely (`coverLayout`) skips its
-     style, layout, and paint. It keeps its box. */
-  .pierre-layout-pane[data-overlay-covered='true'] {
+  /* A pane that a zoomed pane or an overlay covers (`data-covered` is `zoom`
+     or `overlay`) skips the style, layout, and paint of its content. It keeps
+     its box, its DOM, its state, and its scroll position. The property is on
+     the host: a scroller with it reads scrollTop 0 while hidden. */
+  .pierre-layouts-pane[data-covered] {
     content-visibility: hidden;
   }
 
-  .pierre-layout-pane:focus-visible {
-    outline: 2px solid var(--layout-accent);
+  .pierre-layouts-pane:focus-visible {
+    outline: 2px solid var(--layouts-accent, #5489ed);
     outline-offset: -3px;
   }
 
-  .pierre-layout-separator {
+  .pierre-layouts-separator {
     position: absolute;
     z-index: 3;
     border-radius: 4px;
   }
 
-  .pierre-layout-separator:hover,
-  .pierre-layout-separator:focus-visible,
-  .pierre-layout-separator[data-preview='true'] {
+  .pierre-layouts-separator:hover,
+  .pierre-layouts-separator:focus-visible,
+  .pierre-layouts-separator[data-preview='true'] {
     outline: none;
-    background: var(--layout-accent);
+    background: var(--layouts-accent, #5489ed);
   }
 
-  .pierre-layout-sr {
+  .pierre-layouts-sr {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -124,7 +125,7 @@
 @layer pierre-layouts {
   /* The scroll area of a pane (`Layout.Content`). The host clips at its
      rounded border and never scrolls. */
-  .pierre-layout-content {
+  .pierre-layouts-content {
     box-sizing: border-box;
     flex: 1;
     min-width: 0;
@@ -136,87 +137,84 @@
      keeps its DOM, its state, and its scroll position, and skips its style,
      layout, and paint. `Layout.Content` marks itself; the `Layout`
      component marks the pane host. */
-  .pierre-layout-content[data-collapsed='true'],
-  .pierre-layout-pane[data-collapsed='true']
-    > .pierre-layout-pane-inner
-    > .pierre-layout-content {
+  .pierre-layouts-content[data-collapsed='true'],
+  .pierre-layouts-pane[data-collapsed='true']
+    > .pierre-layouts-pane-inner
+    > .pierre-layouts-content {
     content-visibility: hidden;
   }
 }
 
 @layer pierre-layouts {
   /* Layout changes animate with transforms from each element's old box (FLIP). */
-  .pierre-layout [data-layout-flip],
-  .pierre-layout-pane-inner {
+  .pierre-layouts [data-layouts-flip],
+  .pierre-layouts-pane-inner {
     transform-origin: 0 0;
   }
 }
 
 @layer pierre-layouts {
-  .pierre-layout-focus {
+  .pierre-layouts-focus {
     box-sizing: border-box;
     position: absolute;
     z-index: 2;
-    border: 2px solid var(--layout-accent);
+    border: 2px solid var(--layouts-accent, #5489ed);
     border-radius: 10px;
     pointer-events: none;
   }
 }
 
 @layer pierre-layouts {
-  .pierre-layout-pane[data-zoomed='true'] {
+  .pierre-layouts-pane[data-zoomed='true'] {
     z-index: 2;
-  }
-
-  /* A pane under a zoomed pane skips the style, layout, and paint of its
-     content. The content keeps its DOM, its state, and its scroll position. The
-     property is on the host: a scroller with it reads scrollTop 0 while hidden. */
-  .pierre-layout-pane[data-hidden='true'] {
-    content-visibility: hidden;
   }
 }
 
 @layer pierre-layouts {
-  .pierre-layout-pane[data-moving='true'] {
+  .pierre-layouts-pane[data-moving='true'] {
     opacity: 0.6;
   }
 
-  .pierre-layout-drop {
+  .pierre-layouts-drop {
     box-sizing: border-box;
     position: absolute;
     z-index: 5;
-    border: 2px solid var(--layout-accent);
+    border: 2px solid var(--layouts-accent, #5489ed);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--layout-accent) 20%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--layouts-accent, #5489ed) 20%,
+      transparent
+    );
     pointer-events: none;
   }
 }
 
 @layer pierre-layouts {
-  .pierre-layout-header,
-  .pierre-layout-header * {
+  .pierre-layouts-header,
+  .pierre-layouts-header * {
     box-sizing: border-box;
   }
 
-  .pierre-layout-header {
+  .pierre-layouts-header {
     display: flex;
     align-items: center;
     flex: 0 0 36px;
     gap: 6px;
     min-width: 0;
     padding: 4px 8px;
-    border-bottom: 1px solid var(--layout-border);
+    border-bottom: 1px solid var(--layouts-border, #dce1e8);
     font-size: 12px;
   }
 
-  .pierre-layout-title {
+  .pierre-layouts-title {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .pierre-layout-header button {
+  .pierre-layouts-header button {
     padding: 2px 5px;
     border: 0;
     border-radius: 4px;
@@ -226,13 +224,13 @@
     cursor: pointer;
   }
 
-  .pierre-layout-header button:hover,
-  .pierre-layout-header button:focus-visible {
-    background: var(--layout-border);
+  .pierre-layouts-header button:hover,
+  .pierre-layouts-header button:focus-visible {
+    background: var(--layouts-border, #dce1e8);
   }
 
-  .pierre-layout-header button:disabled,
-  .pierre-layout-header button[aria-disabled='true'] {
+  .pierre-layouts-header button:disabled,
+  .pierre-layouts-header button[aria-disabled='true'] {
     opacity: 0.35;
     cursor: default;
   }
@@ -242,7 +240,7 @@
   /* A tab list lays out its tabs in a row. Outside `Layout.Header`, the app
      places it: the geometry below applies only in the header of the
      library. */
-  .pierre-layout-tabs {
+  .pierre-layouts-tabs {
     position: relative;
     display: flex;
     min-width: 0;
@@ -252,15 +250,15 @@
      fill the height of the header, so the underline of the selected tab meets
      the border of the pane, and their text is centered as the title's is. A
      selection changes colors only, so nothing moves. Themes set the
-     `--layout-tab-*` colors. */
-  .pierre-layout-header .pierre-layout-tabs {
+     `--layouts-tab-*` colors. */
+  .pierre-layouts-header .pierre-layouts-tabs {
     flex: 1;
     align-self: stretch;
     margin: -4px 0;
     overflow: hidden;
   }
 
-  .pierre-layout-header .pierre-layout-tab {
+  .pierre-layouts-header .pierre-layouts-tab {
     position: relative;
     display: flex;
     align-items: center;
@@ -271,58 +269,59 @@
     padding: 0 22px 0 10px;
     border-radius: 0;
     background: transparent;
-    color: var(--layout-tab-color, #6b7586);
+    color: var(--layouts-tab-color, #6b7586);
   }
 
-  .pierre-layout-header .pierre-layout-tab:hover {
-    background: var(--layout-tab-hover-background, rgb(41 49 61 / 5%));
-    color: var(--layout-tab-hover-color, #29313d);
+  .pierre-layouts-header .pierre-layouts-tab:hover {
+    background: var(--layouts-tab-hover-background, rgb(41 49 61 / 5%));
+    color: var(--layouts-tab-hover-color, #29313d);
   }
 
-  .pierre-layout-header .pierre-layout-tab[aria-selected='true'] {
+  .pierre-layouts-header .pierre-layouts-tab[aria-selected='true'] {
     background: transparent;
-    box-shadow: inset 0 -2px 0 var(--layout-tab-accent, var(--layout-accent));
-    color: var(--layout-tab-selected-color, #29313d);
+    box-shadow: inset 0 -2px 0
+      var(--layouts-tab-accent, var(--layouts-accent, #5489ed));
+    color: var(--layouts-tab-selected-color, #29313d);
   }
 
-  .pierre-layout-header .pierre-layout-tab:focus {
+  .pierre-layouts-header .pierre-layouts-tab:focus {
     outline: none;
   }
 
-  .pierre-layout-header .pierre-layout-tab:focus-visible {
-    outline: 2px solid var(--layout-accent);
+  .pierre-layouts-header .pierre-layouts-tab:focus-visible {
+    outline: 2px solid var(--layouts-accent, #5489ed);
     outline-offset: -2px;
   }
 
   /* `stickyPinned`: each pinned tab sticks at the place that the tab list
      measures, over an opaque layer, and a tab that scrolls into view stops
      beside the pinned tabs. */
-  .pierre-layout-tabs[data-sticky-pinned] {
-    scroll-padding-inline-start: var(--layout-pinned-width);
+  .pierre-layouts-tabs[data-sticky-pinned] {
+    scroll-padding-inline-start: var(--layouts-pinned-width);
   }
 
-  .pierre-layout-tabs > [data-layout-sticky] {
+  .pierre-layouts-tabs > [data-sticky] {
     position: sticky;
-    left: var(--layout-pinned-left);
+    left: var(--layouts-pinned-left);
     z-index: 1;
   }
 
-  .pierre-layout-tabs > [data-layout-sticky]::before {
+  .pierre-layouts-tabs > [data-sticky]::before {
     content: '';
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: var(--layout-pane-background, #fff);
+    background: var(--layouts-pane-background, #fff);
   }
 
-  .pierre-layout-tab-title {
+  .pierre-layouts-tab-title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   /* The close mark shows on the selected tab and on the tab under the pointer. */
-  .pierre-layout-tab-close {
+  .pierre-layouts-tab-close {
     position: absolute;
     top: 50%;
     right: 4px;
@@ -335,24 +334,24 @@
     visibility: hidden;
   }
 
-  .pierre-layout-tab:hover > .pierre-layout-tab-close,
-  .pierre-layout-tab[aria-selected='true'] > .pierre-layout-tab-close {
+  .pierre-layouts-tab:hover > .pierre-layouts-tab-close,
+  .pierre-layouts-tab[aria-selected='true'] > .pierre-layouts-tab-close {
     visibility: visible;
   }
 
-  .pierre-layout-tab-close:hover {
-    background: var(--layout-tab-close-hover-background, rgb(41 49 61 / 10%));
+  .pierre-layouts-tab-close:hover {
+    background: var(--layouts-tab-close-hover-background, rgb(41 49 61 / 10%));
   }
 }
 
 @layer pierre-layouts {
   /* Where a tab that the pointer drags goes. The view moves it with a
      transform from the left edge of the tab list. */
-  :where(.pierre-layout [data-layout-tablist]) {
+  :where(.pierre-layouts [data-layouts-tablist]) {
     position: relative;
   }
 
-  .pierre-layout-tab-drop {
+  .pierre-layouts-tab-drop {
     position: absolute;
     top: 6px;
     bottom: 6px;
@@ -360,22 +359,22 @@
     width: 2px;
     margin-left: -1px;
     border-radius: 1px;
-    background: var(--layout-accent);
+    background: var(--layouts-accent, #5489ed);
     pointer-events: none;
   }
 
   /* A long press on a tab starts a drag: no callout of the system. */
-  .pierre-layout-tab {
+  .pierre-layouts-tab {
     -webkit-touch-callout: none;
   }
 
-  .pierre-layout-tab[data-dragging='true'] {
+  .pierre-layouts-tab[data-dragging='true'] {
     opacity: 0.6;
   }
 
   /* The image of a tab drag, which the drag moves with a transform. Its own
      compositor layer takes each move with no paint of the layout. */
-  .pierre-layout-drag-image {
+  .pierre-layouts-drag-image {
     position: absolute;
     contain: layout paint;
     will-change: transform;
@@ -384,14 +383,14 @@
     z-index: 6;
     display: flex;
     border-radius: 4px;
-    background: var(--layout-pane-background, #fff);
+    background: var(--layouts-pane-background, #fff);
     box-shadow: 0 2px 8px rgb(41 49 61 / 20%);
     pointer-events: none;
   }
 }
 
 @layer pierre-layouts {
-  .pierre-layout-corner {
+  .pierre-layouts-corner {
     box-sizing: border-box;
     position: absolute;
     z-index: 4;
@@ -400,13 +399,13 @@
     padding: 0;
     border: 0;
     border-radius: 50%;
-    background: var(--layout-border);
+    background: var(--layouts-border, #dce1e8);
   }
 
-  .pierre-layout-corner:hover,
-  .pierre-layout-corner:focus-visible {
-    background: var(--layout-accent);
-    outline: 2px solid var(--layout-accent);
+  .pierre-layouts-corner:hover,
+  .pierre-layouts-corner:focus-visible {
+    background: var(--layouts-accent, #5489ed);
+    outline: 2px solid var(--layouts-accent, #5489ed);
     outline-offset: 2px;
   }
 }

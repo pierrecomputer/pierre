@@ -81,7 +81,7 @@ function useZoom(
     const element = context.element();
     if (element === null) return;
     const guard = (event: FocusEvent): void => {
-      const host = (event.target as Element).closest('[data-layout-pane]');
+      const host = (event.target as Element).closest('[data-layouts-pane]');
       const zoomed = presentation(context.store.getSnapshot()).filled;
       if (
         zoomed !== null &&
@@ -141,7 +141,7 @@ function useZoom(
     host({ pane, rect }) {
       if (pane.id === filled)
         return {
-          attributes: { 'data-zoomed': true, 'data-layout-edges': ALL_EDGES },
+          attributes: { 'data-zoomed': true, 'data-edges': ALL_EDGES },
           style: FULL_SIZE,
         };
       if (covered.has(pane.id))

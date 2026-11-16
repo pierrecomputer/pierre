@@ -163,8 +163,8 @@ const PANE_OF_NODE = `function () {
   let node = this;
   let inner = false;
   while (node) {
-    if (node.nodeType === 1 && node.hasAttribute('data-layout-pane'))
-      return node.getAttribute('data-layout-pane') + (inner ? ' inner' : '');
+    if (node.nodeType === 1 && node.hasAttribute('data-layouts-pane'))
+      return node.getAttribute('data-layouts-pane') + (inner ? ' inner' : '');
     node = node.parentNode;
     if (node && node.nodeType === 11) node = node.host;
     inner = true;

@@ -58,7 +58,7 @@ window.__selftest = {
     for (let index = 0; index < count; index++) {
       const pane = document.createElement('div');
       pane.className = 'layer';
-      pane.dataset.layoutPane = `m${index}`;
+      pane.dataset.layoutsPane = `m${index}`;
       pane.style.left = `${20 + index * 280}px`;
       layers.append(pane);
     }

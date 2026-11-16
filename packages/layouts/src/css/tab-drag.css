@@ -1,11 +1,11 @@
 @layer pierre-layouts {
   /* Where a tab that the pointer drags goes. The view moves it with a
      transform from the left edge of the tab list. */
-  :where(.pierre-layout [data-layout-tablist]) {
+  :where(.pierre-layouts [data-layouts-tablist]) {
     position: relative;
   }
 
-  .pierre-layout-tab-drop {
+  .pierre-layouts-tab-drop {
     position: absolute;
     top: 6px;
     bottom: 6px;
@@ -13,22 +13,22 @@
     width: 2px;
     margin-left: -1px;
     border-radius: 1px;
-    background: var(--layout-accent);
+    background: var(--layouts-accent, #5489ed);
     pointer-events: none;
   }
 
   /* A long press on a tab starts a drag: no callout of the system. */
-  .pierre-layout-tab {
+  .pierre-layouts-tab {
     -webkit-touch-callout: none;
   }
 
-  .pierre-layout-tab[data-dragging='true'] {
+  .pierre-layouts-tab[data-dragging='true'] {
     opacity: 0.6;
   }
 
   /* The image of a tab drag, which the drag moves with a transform. Its own
      compositor layer takes each move with no paint of the layout. */
-  .pierre-layout-drag-image {
+  .pierre-layouts-drag-image {
     position: absolute;
     contain: layout paint;
     will-change: transform;
@@ -37,7 +37,7 @@
     z-index: 6;
     display: flex;
     border-radius: 4px;
-    background: var(--layout-pane-background, #fff);
+    background: var(--layouts-pane-background, #fff);
     box-shadow: 0 2px 8px rgb(41 49 61 / 20%);
     pointer-events: none;
   }

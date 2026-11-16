@@ -18,7 +18,7 @@ export interface OverlayCover {
  * overlay change: when the cover starts, when the workspace or the overlay
  * changes size, and at the release (with no panes).
  */
-export const OVERLAY_COVER_EVENT = 'pierre-layout-cover';
+export const OVERLAY_COVER_EVENT = 'pierre-layouts-cover';
 export type OverlayCoverEvent = CustomEvent<
   OverlayCover & { overlay: HTMLElement }
 >;
@@ -71,26 +71,26 @@ export function coverOf(
   return { covered, overlapped };
 }
 
-/** The layout element: the element itself, or the first `.pierre-layout` inside it. */
+/** The layout element: the element itself, or the first `.pierre-layouts` inside it. */
 function layoutRootOf(element: HTMLElement): HTMLElement {
-  if (element.classList.contains('pierre-layout')) return element;
-  return element.querySelector<HTMLElement>('.pierre-layout') ?? element;
+  if (element.classList.contains('pierre-layouts')) return element;
+  return element.querySelector<HTMLElement>('.pierre-layouts') ?? element;
 }
 
 /** The pane hosts: children of the root, so no query walks pane content. */
 function paneHostsOf(root: HTMLElement): HTMLElement[] {
   return Array.from(root.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.dataset.layoutPane !== undefined
+      child instanceof HTMLElement && child.dataset.layoutsPane !== undefined
   );
 }
 
-const paneIdOf = (host: HTMLElement): string => host.dataset.layoutPane ?? '';
+const paneIdOf = (host: HTMLElement): string => host.dataset.layoutsPane ?? '';
 
 // A pane host that shows: not hidden, not an inactive tab, and not under a
 // zoom. An overlay covers only these, and reports only these.
 const shows = (host: HTMLElement): boolean =>
-  host.dataset.paneHidden !== 'true' && host.dataset.hidden !== 'true';
+  host.dataset.hidden !== 'true' && host.dataset.covered !== 'zoom';
 
 // The count of the overlays that cover each pane of a view. A pane renders
 // again when the last of them releases it.
@@ -138,12 +138,12 @@ function coverPane(
     if (overlays.has(token)) return;
     overlays.add(token);
     if (overlays.size > 1) return;
-    host.dataset.overlayCovered = 'true';
+    host.dataset.covered = 'overlay';
     host.inert = true;
     notify(host, true);
   } else {
     if (!overlays.delete(token) || overlays.size > 0) return;
-    delete host.dataset.overlayCovered;
+    delete host.dataset.covered;
     // A zoom or a hidden pane keeps its own `inert`.
     if (shows(host)) host.inert = false;
     notify(host, false);

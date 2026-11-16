@@ -1,5 +1,5 @@
 @layer pierre-layouts {
-  .pierre-layout-corner {
+  .pierre-layouts-corner {
     box-sizing: border-box;
     position: absolute;
     z-index: 4;
@@ -8,13 +8,13 @@
     padding: 0;
     border: 0;
     border-radius: 50%;
-    background: var(--layout-border);
+    background: var(--layouts-border, #dce1e8);
   }
 
-  .pierre-layout-corner:hover,
-  .pierre-layout-corner:focus-visible {
-    background: var(--layout-accent);
-    outline: 2px solid var(--layout-accent);
+  .pierre-layouts-corner:hover,
+  .pierre-layouts-corner:focus-visible {
+    background: var(--layouts-accent, #5489ed);
+    outline: 2px solid var(--layouts-accent, #5489ed);
     outline-offset: 2px;
   }
 }

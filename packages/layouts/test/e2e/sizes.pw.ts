@@ -6,16 +6,16 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/app');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 });
 
 const width = async (page: Page, id: string): Promise<number> =>
-  (await page.locator(`[data-layout-pane="${id}"]`).boundingBox())?.width ?? 0;
+  (await page.locator(`[data-layouts-pane="${id}"]`).boundingBox())?.width ?? 0;
 
 /** Drag the separator before a pane by a distance along x. */
 async function dragBefore(page: Page, index: number, distance: number) {
   const box = await page
-    .locator('.pierre-layout-separator')
+    .locator('.pierre-layouts-separator')
     .nth(index)
     .boundingBox();
   if (box === null) throw new Error('Missing separator');
@@ -56,7 +56,7 @@ test('a drag stops where a pane reaches its maximum size', async ({ page }) => {
   // The last separator of the row is before the files; a drag to the left
   // grows the files to 360 px at most.
   const separators = page.locator(
-    '.pierre-layout-separator[data-direction="horizontal"]'
+    '.pierre-layouts-separator[data-direction="horizontal"]'
   );
   await dragBefore(page, (await separators.count()) - 1, -300);
   expect(await width(page, 'files')).toBeCloseTo(360, 0);
@@ -65,14 +65,14 @@ test('a drag stops where a pane reaches its maximum size', async ({ page }) => {
 test('the terminal collapses to its header and expands with its content', async ({
   page,
 }) => {
-  const terminal = page.locator('[data-layout-pane="terminal"]');
-  const content = terminal.locator('.pierre-layout-content');
+  const terminal = page.locator('[data-layouts-pane="terminal"]');
+  const content = terminal.locator('.pierre-layouts-content');
   await terminal
     .locator('.agent-terminal')
     .evaluate((element) => element.setAttribute('data-kept', 'yes'));
   const before = await terminal.boundingBox();
   const editor = await page
-    .locator('[data-layout-pane="editor"]')
+    .locator('[data-layouts-pane="editor"]')
     .boundingBox();
 
   const collapse = terminal.getByRole('button', { name: 'Collapse Terminal' });
@@ -82,7 +82,7 @@ test('the terminal collapses to its header and expands with its content', async 
   expect((await terminal.boundingBox())?.height).toBeCloseTo(38, 0);
   // The editor takes the space; the content of the terminal stops rendering.
   expect(
-    (await page.locator('[data-layout-pane="editor"]').boundingBox())?.height
+    (await page.locator('[data-layouts-pane="editor"]').boundingBox())?.height
   ).toBeGreaterThan((editor?.height ?? 0) + 100);
   expect(
     await content.evaluate(
@@ -93,10 +93,10 @@ test('the terminal collapses to its header and expands with its content', async 
   // The tabs of the collapsed stack still change.
   await terminal.getByRole('tab', { name: 'Dev server' }).click();
   await expect(
-    page.locator('[data-layout-pane="terminal-server"]')
+    page.locator('[data-layouts-pane="terminal-server"]')
   ).toHaveAttribute('data-collapsed', 'true');
   await page
-    .locator('[data-layout-pane="terminal-server"]')
+    .locator('[data-layouts-pane="terminal-server"]')
     .getByRole('tab', { name: 'Terminal' })
     .click();
 

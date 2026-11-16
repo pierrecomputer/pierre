@@ -32,7 +32,7 @@ const page = {
   release: null as (() => void) | null,
   openPopover(): void {
     const popover = document.getElementById('popover');
-    const layout = document.querySelector<HTMLElement>('.pierre-layout');
+    const layout = document.querySelector<HTMLElement>('.pierre-layouts');
     if (popover === null || layout === null) return;
     popover.showPopover();
     page.release = coverLayout(layout, popover, {
@@ -64,9 +64,9 @@ function App(): JSX.Element {
   useEffect(() => {
     const controller = new AbortController();
     for (const host of document.querySelectorAll<HTMLElement>(
-      '[data-layout-pane]'
+      '[data-layouts-pane]'
     )) {
-      const id = host.dataset.layoutPane ?? '';
+      const id = host.dataset.layoutsPane ?? '';
       host.addEventListener(
         PANE_VISIBILITY_EVENT,
         (event) => {

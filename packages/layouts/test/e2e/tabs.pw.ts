@@ -5,11 +5,11 @@ import { expect, type Page, test } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/app');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 });
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 /** The tab list in the header of the host that shows a pane of a stack. */
 const tabsOf = (page: Page, id: string) => host(page, id).getByRole('tablist');
@@ -43,13 +43,10 @@ test('the tabs of a stack follow the APG tabs pattern', async ({ page }) => {
   });
   await expect(server).toBeFocused();
   await expect(server).toHaveAttribute('aria-selected', 'true');
-  await expect(host(page, 'terminal')).toHaveAttribute(
-    'data-pane-hidden',
-    'true'
-  );
+  await expect(host(page, 'terminal')).toHaveAttribute('data-hidden', 'true');
   await expect(host(page, 'terminal')).toHaveAttribute('inert', '');
   await expect(host(page, 'terminal-server')).not.toHaveAttribute(
-    'data-pane-hidden'
+    'data-hidden'
   );
   // The arrows wrap; Home and End go to the first and the last tab.
   await page.keyboard.press('ArrowRight');
@@ -84,7 +81,7 @@ test('a change of tab keeps content state and moves no other pane', async ({
     events.push(hidden)
   );
   await host(page, 'terminal').evaluate((element) =>
-    element.addEventListener('pierre-layout-visibility', (event) =>
+    element.addEventListener('pierre-layouts-visibility', (event) =>
       (
         window as unknown as { recordVisibility(hidden: boolean): void }
       ).recordVisibility(
@@ -97,7 +94,7 @@ test('a change of tab keeps content state and moves no other pane', async ({
     .getByRole('tab', { name: 'Dev server' })
     .click();
   await expect(host(page, 'terminal-server')).not.toHaveAttribute(
-    'data-pane-hidden'
+    'data-hidden'
   );
   // Each pane of the stack has the box of the stack.
   expect(await host(page, 'terminal-server').boundingBox()).toEqual(terminal);
@@ -107,9 +104,9 @@ test('a change of tab keeps content state and moves no other pane', async ({
     await page.evaluate(
       () =>
         document
-          .querySelector('.pierre-layout')
+          .querySelector('.pierre-layouts')
           ?.getAnimations({ subtree: true })
-          .filter((animation) => animation.id === 'pierre-layout-flip').length
+          .filter((animation) => animation.id === 'pierre-layouts-flip').length
     )
   ).toBe(0);
 
@@ -133,14 +130,14 @@ test('a tab closes from its close mark or with Delete, and new tabs show', async
   await expect(
     tabsOf(page, 'terminal')
       .getByRole('tab', { name: 'Terminal' })
-      .locator('.pierre-layout-tab-close')
+      .locator('.pierre-layouts-tab-close')
   ).toBeVisible();
-  await expect(server.locator('.pierre-layout-tab-close')).toBeHidden();
+  await expect(server.locator('.pierre-layouts-tab-close')).toBeHidden();
   await server.hover();
   // The app hides a tab that closes, so it can show again.
-  await server.locator('.pierre-layout-tab-close').click();
+  await server.locator('.pierre-layouts-tab-close').click();
   await expect(host(page, 'terminal-server')).toHaveAttribute(
-    'data-pane-hidden',
+    'data-hidden',
     'true'
   );
   // The hidden tab leaves the tab list.
@@ -151,17 +148,11 @@ test('a tab closes from its close mark or with Delete, and new tabs show', async
     name: 'Terminal 2',
   });
   await expect(added).toHaveAttribute('aria-selected', 'true');
-  await expect(host(page, 'terminal')).toHaveAttribute(
-    'data-pane-hidden',
-    'true'
-  );
+  await expect(host(page, 'terminal')).toHaveAttribute('data-hidden', 'true');
   await added.focus();
   await page.keyboard.press('Delete');
-  await expect(host(page, 'terminal-1')).toHaveAttribute(
-    'data-pane-hidden',
-    'true'
-  );
-  await expect(host(page, 'terminal')).not.toHaveAttribute('data-pane-hidden');
+  await expect(host(page, 'terminal-1')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-hidden');
   // The focus goes to the tab that shows next.
   await expect(
     tabsOf(page, 'terminal').getByRole('tab', { name: 'Terminal' })
@@ -173,7 +164,7 @@ test('a zoomed stack stays zoomed when its tab changes', async ({ page }) => {
     .getByRole('button', { name: 'Zoom Terminal', exact: true })
     .click();
   await expect(host(page, 'terminal')).toHaveAttribute('data-zoomed', 'true');
-  await expect(host(page, 'editor')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'editor')).toHaveAttribute('data-covered', 'zoom');
 
   await tabsOf(page, 'terminal')
     .getByRole('tab', { name: 'Dev server' })
@@ -186,10 +177,10 @@ test('a zoomed stack stays zoomed when its tab changes', async ({ page }) => {
     tabsOf(page, 'terminal-server').getByRole('tab', { name: 'Dev server' })
   ).toBeFocused();
   // The other panes stay covered: they did not show again.
-  await expect(host(page, 'editor')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'editor')).toHaveAttribute('data-covered', 'zoom');
   await expect(host(page, 'terminal-server')).not.toHaveAttribute(
-    'data-hidden',
-    'true'
+    'data-covered',
+    'zoom'
   );
   await page.keyboard.press('Escape');
   await expect(host(page, 'terminal-server')).not.toHaveAttribute(
@@ -220,7 +211,7 @@ const tabNames = (page: Page, id: string) =>
     .evaluateAll((tabs) =>
       tabs.map(
         (tab) =>
-          tab.querySelector('.pierre-layout-tab-title')?.textContent ?? ''
+          tab.querySelector('.pierre-layouts-tab-title')?.textContent ?? ''
       )
     );
 
@@ -238,7 +229,7 @@ test('a pointer drag in the tab bar reorders the tabs and shows the drop place',
   await page.mouse.down();
   await page.mouse.move(to.x + 4, y, { steps: 6 });
   // The marker shows at the left edge of the first tab.
-  const marker = tabs.locator('.pierre-layout-tab-drop');
+  const marker = tabs.locator('.pierre-layouts-tab-drop');
   await expect(marker).toHaveCount(1);
   const box = await marker.boundingBox();
   expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - to.x)).toBeLessThan(
@@ -251,7 +242,7 @@ test('a pointer drag in the tab bar reorders the tabs and shows the drop place',
     'Terminal',
   ]);
   await expect(host(page, 'terminal-server')).not.toHaveAttribute(
-    'data-pane-hidden'
+    'data-hidden'
   );
   await expect(
     tabsOf(page, 'terminal-server').getByRole('tab', { name: 'Dev server' })
@@ -272,7 +263,7 @@ test('a drag that ends in place, or that Escape cancels, keeps the order', async
   await page.keyboard.press('Escape');
   await page.mouse.up();
   expect(await tabNames(page, 'terminal')).toEqual(['Terminal', 'Dev server']);
-  await expect(tabs.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+  await expect(tabs.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
 });
 
 test('Ctrl+Shift+PageUp and PageDown move the focused tab, which keeps the focus', async ({

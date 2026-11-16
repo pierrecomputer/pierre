@@ -354,7 +354,7 @@ function Playground(): JSX.Element {
           renderPane={renderPane}
           getPaneTitle={title}
           messages={MESSAGES}
-          style={{ '--layout-pane-background': '#fbfcfd' } as CSSProperties}
+          style={{ '--layouts-pane-background': '#fbfcfd' } as CSSProperties}
         />
       </div>
       <footer className="demo-footer">

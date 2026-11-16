@@ -9,7 +9,7 @@ import {
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 });
 
 test('container resizing resolves synchronously in CSS while zoom animates with transforms', async ({
@@ -26,7 +26,7 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
   const updates = await workspace.evaluate((element) => {
     const container = element as HTMLElement;
     const panes = [
-      ...container.querySelectorAll<HTMLElement>('[data-layout-pane]'),
+      ...container.querySelectorAll<HTMLElement>('[data-layouts-pane]'),
     ];
     const styles = panes.map((pane) => pane.getAttribute('style'));
     // Read in the same JS task: neither ResizeObserver nor React can run between size changes.
@@ -46,7 +46,7 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
         panes: panes.map((pane) => {
           const box = pane.getBoundingClientRect();
           return {
-            id: pane.dataset.layoutPane,
+            id: pane.dataset.layoutsPane,
             x: box.x - bounds.x,
             y: box.y - bounds.y,
             width: box.width,
@@ -79,8 +79,8 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
       );
     }
   }
-  const pane = page.locator('[data-layout-pane="1"]');
-  const covered = page.locator('[data-layout-pane="2"]');
+  const pane = page.locator('[data-layouts-pane="1"]');
+  const covered = page.locator('[data-layouts-pane="2"]');
   const coveredState = () =>
     covered.evaluate((element) => ({
       animating: element.getAnimations().length > 0,
@@ -119,11 +119,11 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
 test('zoom and rearrangement retain pane DOM, notes, counters, and scroll', async ({
   page,
 }) => {
-  const pane = page.locator('[data-layout-pane="1"]');
+  const pane = page.locator('[data-layouts-pane="1"]');
   const original = await pane.elementHandle();
-  const content = pane.locator('.pierre-layout-content');
-  const covered = page.locator('[data-layout-pane="2"]');
-  const coveredContent = covered.locator('.pierre-layout-content');
+  const content = pane.locator('.pierre-layouts-content');
+  const covered = page.locator('[data-layouts-pane="2"]');
+  const coveredContent = covered.locator('.pierre-layouts-content');
   await page
     .getByLabel('Note in Pane 1', { exact: true })
     .fill('Keep this note');
@@ -138,7 +138,7 @@ test('zoom and rearrangement retain pane DOM, notes, counters, and scroll', asyn
     child.style.minHeight = '1500px';
     element.scrollTop = 90;
     const events: boolean[] = [];
-    const host = element.closest('[data-layout-pane]')!;
+    const host = element.closest('[data-layouts-pane]')!;
     Object.assign(host, { visibilityEvents: events });
     host.addEventListener(type, (event) =>
       events.push((event as PaneVisibilityEvent).detail.hidden)
@@ -194,7 +194,7 @@ test('pointer resizing, keyboard limits, and Escape cancellation', async ({
     name: 'Resize Pane 1, Pane 7 and Pane 2, Pane 5, Pane 6, Pane 4, Pane 3',
     exact: true,
   });
-  const pane = page.locator('[data-layout-pane="1"]');
+  const pane = page.locator('[data-layouts-pane="1"]');
   const start = await pane.boundingBox();
   const bounds = await handle.boundingBox();
   if (start === null || bounds === null)
@@ -245,7 +245,7 @@ test('corner dragging adjusts both axes and preserves non-negative geometry', as
   ).toBeGreaterThanOrEqual(2);
   await page.setViewportSize({ width: 320, height: 600 });
   const valid = await page
-    .locator('[data-layout-pane]')
+    .locator('[data-layouts-pane]')
     .evaluateAll((elements) =>
       elements.every((element) => {
         const rect = element.getBoundingClientRect();
@@ -267,7 +267,7 @@ test('pointer rearrangement retains pane content and repairs focus after close',
   const source = await page
     .getByRole('button', { name: 'Drag Pane 1', exact: true })
     .boundingBox();
-  const target = await page.locator('[data-layout-pane="3"]').boundingBox();
+  const target = await page.locator('[data-layouts-pane="3"]').boundingBox();
   if (source === null || target === null) throw new Error('Missing panes');
   await page.mouse.move(
     source.x + source.width / 2,
@@ -279,16 +279,16 @@ test('pointer rearrangement retains pane content and repairs focus after close',
     target.y + target.height / 2,
     { steps: 10 }
   );
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
   await page.mouse.up();
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await expect(page.getByLabel('Note in Pane 1', { exact: true })).toHaveValue(
     'Drag me'
   );
   await page.getByRole('button', { name: 'Close Pane 1', exact: true }).click();
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(6);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(6);
   await expect(
-    page.locator('[data-layout-pane][data-focused="true"]')
+    page.locator('[data-layouts-pane][data-focused="true"]')
   ).toBeFocused();
 });
 
@@ -297,16 +297,16 @@ test('saving and reloading restores the split tree after edits', async ({
 }) => {
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('button', { name: 'Split right', exact: true }).click();
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(8);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(8);
   await page.getByRole('button', { name: 'Load', exact: true }).click();
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 });
 
 test('the focus indicator shows on another pane at once and moves with its pane', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const indicator = page.locator('.pierre-layout-focus');
+  const indicator = page.locator('.pierre-layouts-focus');
   // In the next frame, count the indicator's animations and measure how far
   // its box is from the box of the pane, both with running transforms.
   const nextFrame = (id: string) =>
@@ -314,7 +314,7 @@ test('the focus indicator shows on another pane at once and moves with its pane'
       (element, id) =>
         new Promise<{ animations: number; offset: number }>((resolve) => {
           requestAnimationFrame(() => {
-            const pane = document.querySelector(`[data-layout-pane="${id}"]`);
+            const pane = document.querySelector(`[data-layouts-pane="${id}"]`);
             if (pane === null) throw new Error('Missing pane');
             const a = element.getBoundingClientRect();
             const b = pane.getBoundingClientRect();
@@ -332,7 +332,7 @@ test('the focus indicator shows on another pane at once and moves with its pane'
       id
     );
   // A click into another pane moves the indicator with no animation.
-  await page.locator('[data-layout-pane="7"] .demo-pane-number').click();
+  await page.locator('[data-layouts-pane="7"] .demo-pane-number').click();
   const focus = await nextFrame('7');
   expect(focus.animations).toBe(0);
   expect(focus.offset).toBeLessThan(0.5);
@@ -360,14 +360,14 @@ test('a pane that changes size keeps the shape of its text during the animation'
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   // Sample the width-to-height ratio of a text element on each frame of a zoom.
   const ratios = await page
-    .locator('[data-layout-pane="1"] .demo-pane-number')
+    .locator('[data-layouts-pane="1"] .demo-pane-number')
     .evaluate(
       (element) =>
         new Promise<number[]>((resolve) => {
           const samples: number[] = [];
           document
             .querySelector<HTMLButtonElement>(
-              '[data-layout-pane="1"] button[aria-label^="Zoom"]'
+              '[data-layouts-pane="1"] button[aria-label^="Zoom"]'
             )
             ?.click();
           const start = performance.now();
@@ -389,12 +389,12 @@ test('a pane that changes size keeps the shape of its text during the animation'
 test('an app rule without a layer wins over a layout rule of higher specificity', async ({
   page,
 }) => {
-  // `.pierre-layout-separator:hover` sets the background in the layout's
+  // `.pierre-layouts-separator:hover` sets the background in the layout's
   // layer. The app's rule has a lower specificity and no layer.
   await page.addStyleTag({
-    content: '.pierre-layout-separator { background: rgb(1, 2, 3); }',
+    content: '.pierre-layouts-separator { background: rgb(1, 2, 3); }',
   });
-  const separator = page.locator('.pierre-layout-separator').first();
+  const separator = page.locator('.pierre-layouts-separator').first();
   await separator.hover();
   await expect(separator).toHaveCSS('background-color', 'rgb(1, 2, 3)');
   const layers = await page.evaluate(() =>

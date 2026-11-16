@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 test('custom headers retain keyboard tabs, lone tabs, close controls, and edge metadata', async ({
   page,
@@ -17,11 +17,11 @@ test('custom headers retain keyboard tabs, lone tabs, close controls, and edge m
   // terminal.
   await expect(page.locator('[data-custom-header]:visible')).toHaveCount(2);
   await expect(host(page, 'editor')).toHaveAttribute(
-    'data-layout-edges',
+    'data-edges',
     'top bottom left'
   );
   await expect(host(page, 'terminal')).toHaveAttribute(
-    'data-layout-edges',
+    'data-edges',
     'top right bottom'
   );
   await page.getByRole('tab', { name: 'editor', exact: true }).focus();
@@ -34,14 +34,14 @@ test('custom headers retain keyboard tabs, lone tabs, close controls, and edge m
   ).toBeHidden();
   await page
     .getByRole('tab', { name: 'preview', exact: true })
-    .locator('[data-layout-tab-close]')
+    .locator('[data-layouts-tab-close]')
     .click();
   await expect(host(page, 'preview')).toHaveCount(0);
   await page.getByRole('button', { name: 'Single pane' }).click();
   await expect(
     page.getByRole('tab', { name: 'only', exact: true })
   ).toBeVisible();
-  await expect(page.locator('[data-layout-tab-close]')).toHaveCount(0);
+  await expect(page.locator('[data-layouts-tab-close]')).toHaveCount(0);
 });
 
 test('external zoom keeps focus outside and disables all layout animations', async ({
@@ -50,7 +50,7 @@ test('external zoom keeps focus outside and disables all layout animations', asy
   await page.getByRole('button', { name: 'External zoom' }).click();
   await expect(page.locator('#outside')).toBeFocused();
   await expect(host(page, 'terminal')).toHaveAttribute(
-    'data-layout-edges',
+    'data-edges',
     'top right bottom left'
   );
   expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
@@ -143,7 +143,7 @@ async function startRowDrag(page: Page): Promise<void> {
 test('a window blur applies an active resize', async ({ page }) => {
   await startRowDrag(page);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await expect(page.locator('.pierre-layout')).toHaveAttribute(
+  await expect(page.locator('.pierre-layouts')).toHaveAttribute(
     'data-resizing',
     'false'
   );
@@ -160,7 +160,7 @@ test('an unmount during a resize restores the sizes', async ({ page }) => {
   expect(await rowSizes(page)).not.toEqual([1, 1]);
   // A click from script: the pointer stays down on the separator.
   await page.evaluate(() => document.getElementById('mount')?.click());
-  await expect(page.locator('.pierre-layout')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts')).toHaveCount(0);
   expect(await rowSizes(page)).toEqual([1, 1]);
   await page.mouse.up();
   await expect(page.locator('#resizes')).toHaveText('[]');
@@ -173,11 +173,11 @@ test('separator and pane host props add app classes, children, labels, and attri
     name: 'Resize the row split',
   });
   await expect(separator).toHaveClass(
-    /^pierre-layout-separator consumer-separator$/
+    /^pierre-layouts-separator consumer-separator$/
   );
   await expect(separator.locator('[data-separator-grip]')).toHaveCount(1);
   await expect(host(page, 'editor')).toHaveClass(
-    /^pierre-layout-pane consumer-pane$/
+    /^pierre-layouts-pane consumer-pane$/
   );
   await expect(host(page, 'editor')).toHaveAttribute(
     'data-drop-target',

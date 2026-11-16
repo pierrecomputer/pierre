@@ -73,7 +73,7 @@
 
 .app-toggles button:focus-visible,
 .app-sessions button:focus-visible {
-  outline: 2px solid var(--layout-accent, #5489ed);
+  outline: 2px solid var(--layouts-accent, #5489ed);
   outline-offset: 1px;
 }
 
@@ -91,7 +91,7 @@
 }
 
 .app-action:focus-visible {
-  outline: 2px solid var(--layout-accent, #5489ed);
+  outline: 2px solid var(--layouts-accent, #5489ed);
   outline-offset: 1px;
 }
 
@@ -332,7 +332,7 @@
 .app-overlay-header button:focus-visible,
 .app-overlay-footer button:focus-visible,
 .app-review-message input:focus-visible {
-  outline: 2px solid var(--layout-accent, #5489ed);
+  outline: 2px solid var(--layouts-accent, #5489ed);
   outline-offset: 1px;
 }
 

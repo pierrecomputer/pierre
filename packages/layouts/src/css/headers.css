@@ -1,28 +1,28 @@
 @layer pierre-layouts {
-  .pierre-layout-header,
-  .pierre-layout-header * {
+  .pierre-layouts-header,
+  .pierre-layouts-header * {
     box-sizing: border-box;
   }
 
-  .pierre-layout-header {
+  .pierre-layouts-header {
     display: flex;
     align-items: center;
     flex: 0 0 36px;
     gap: 6px;
     min-width: 0;
     padding: 4px 8px;
-    border-bottom: 1px solid var(--layout-border);
+    border-bottom: 1px solid var(--layouts-border, #dce1e8);
     font-size: 12px;
   }
 
-  .pierre-layout-title {
+  .pierre-layouts-title {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .pierre-layout-header button {
+  .pierre-layouts-header button {
     padding: 2px 5px;
     border: 0;
     border-radius: 4px;
@@ -32,13 +32,13 @@
     cursor: pointer;
   }
 
-  .pierre-layout-header button:hover,
-  .pierre-layout-header button:focus-visible {
-    background: var(--layout-border);
+  .pierre-layouts-header button:hover,
+  .pierre-layouts-header button:focus-visible {
+    background: var(--layouts-border, #dce1e8);
   }
 
-  .pierre-layout-header button:disabled,
-  .pierre-layout-header button[aria-disabled='true'] {
+  .pierre-layouts-header button:disabled,
+  .pierre-layouts-header button[aria-disabled='true'] {
     opacity: 0.35;
     cursor: default;
   }

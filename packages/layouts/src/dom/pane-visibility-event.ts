@@ -14,5 +14,5 @@
  * event. So a listener must stay cheap, and schedule heavy work itself, for
  * example in an idle callback.
  */
-export const PANE_VISIBILITY_EVENT = 'pierre-layout-visibility';
+export const PANE_VISIBILITY_EVENT = 'pierre-layouts-visibility';
 export type PaneVisibilityEvent = CustomEvent<{ hidden: boolean }>;

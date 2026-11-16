@@ -5,12 +5,12 @@ const STRATEGIES = ['popover', 'dialog-hide-covered', 'dialog'] as const;
 const PANES = ['sessions', 'agent', 'editor', 'terminal', 'files'];
 
 const host = (page: Page, id: string): Locator =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 async function load(page: Page, query = ''): Promise<void> {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(`/app${query}`);
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 }
 
 /** Focus a header button and press Enter, as a keyboard user does. */
@@ -155,8 +155,8 @@ test('an opaque modal stops every pane from rendering until it closes', async ({
     const covers: unknown[] = [];
     (window as unknown as { covers: unknown[] }).covers = covers;
     document
-      .querySelector('.pierre-layout')
-      ?.addEventListener('pierre-layout-cover', (event) =>
+      .querySelector('.pierre-layouts')
+      ?.addEventListener('pierre-layouts-cover', (event) =>
         covers.push((event as CustomEvent).detail.covered)
       );
   });
@@ -165,10 +165,7 @@ test('an opaque modal stops every pane from rendering until it closes', async ({
     page.getByRole('dialog', { name: 'Review changes' })
   ).toBeVisible();
   for (const id of PANES) {
-    await expect(host(page, id)).toHaveAttribute(
-      'data-overlay-covered',
-      'true'
-    );
+    await expect(host(page, id)).toHaveAttribute('data-covered', 'overlay');
     await expect(host(page, id)).toHaveAttribute('inert', '');
     expect(
       await host(page, id).evaluate(
@@ -179,7 +176,7 @@ test('an opaque modal stops every pane from rendering until it closes', async ({
 
   await page.keyboard.press('Escape');
   for (const id of PANES) {
-    await expect(host(page, id)).not.toHaveAttribute('data-overlay-covered');
+    await expect(host(page, id)).not.toHaveAttribute('data-covered');
     await expect(host(page, id)).not.toHaveAttribute('inert');
   }
   const covers = await page.evaluate(
@@ -199,14 +196,9 @@ test('the drawer opens from the keyboard, hides the pane that it covers, and ret
   expect(await focusPlace(drawer)).toBe('inside');
 
   // The drawer covers the files pane completely, and the editor in part.
-  await expect(host(page, 'files')).toHaveAttribute(
-    'data-overlay-covered',
-    'true'
-  );
+  await expect(host(page, 'files')).toHaveAttribute('data-covered', 'overlay');
   await expect(host(page, 'files')).toHaveAttribute('inert', '');
-  await expect(host(page, 'editor')).not.toHaveAttribute(
-    'data-overlay-covered'
-  );
+  await expect(host(page, 'editor')).not.toHaveAttribute('data-covered');
   // The drawer is not modal: the other panes keep working.
   await host(page, 'agent')
     .getByRole('button', { name: /^Zoom / })
@@ -220,7 +212,7 @@ test('the drawer opens from the keyboard, hides the pane that it covers, and ret
   await expect(drawer).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  await expect(host(page, 'files')).not.toHaveAttribute('data-overlay-covered');
+  await expect(host(page, 'files')).not.toHaveAttribute('data-covered');
   await expect(host(page, 'files')).not.toHaveAttribute('inert');
 });
 
@@ -235,7 +227,7 @@ test('overlays animate in and out on the compositor', async ({ page }) => {
           requestAnimationFrame(() =>
             resolve(
               (document.querySelector(selector)?.getAnimations() ?? [])
-                .filter(({ id }) => id === 'pierre-layout-overlay')
+                .filter(({ id }) => id === 'pierre-layouts-overlay')
                 .map(({ playState }) => playState)
             )
           );
@@ -299,9 +291,9 @@ test('an overlay keeps the state of tabs that do not show and of a collapsed pan
   await expect(modal).toBeVisible();
   // The collapsed pane renders its header, so the modal covers it. A tab that
   // does not show renders nothing, so the modal leaves it as it is.
-  await expect(terminal).toHaveAttribute('data-overlay-covered', 'true');
+  await expect(terminal).toHaveAttribute('data-covered', 'overlay');
   for (const id of ['agent-review', 'terminal-server'])
-    await expect(host(page, id)).not.toHaveAttribute('data-overlay-covered');
+    await expect(host(page, id)).not.toHaveAttribute('data-covered');
 
   await page.keyboard.press('Escape');
   await expect(modal).toBeHidden();

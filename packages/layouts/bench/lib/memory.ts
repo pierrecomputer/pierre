@@ -313,7 +313,7 @@ function area(rect: Rect): number {
 
 /**
  * Each pane host's box in CSS pixels and its number of nodes, also in open
- * shadow roots. Pane hosts are the elements with `data-layout-pane`.
+ * shadow roots. Pane hosts are the elements with `data-layouts-pane`.
  */
 function readPanes(
   page: Page
@@ -336,11 +336,11 @@ function readPanes(
       return nodes;
     };
     return [
-      ...document.querySelectorAll<HTMLElement>('[data-layout-pane]'),
+      ...document.querySelectorAll<HTMLElement>('[data-layouts-pane]'),
     ].map((host) => {
       const { left, top, right, bottom } = host.getBoundingClientRect();
       return {
-        id: host.dataset.layoutPane ?? '',
+        id: host.dataset.layoutsPane ?? '',
         nodes: count(host),
         left,
         top,

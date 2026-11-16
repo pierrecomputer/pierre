@@ -4,7 +4,7 @@ import { expect, type Page, test } from '@playwright/test';
 // covered panes during and after the zoom animation.
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 const visibility = (page: Page): Promise<Record<string, boolean[]>> =>
   page.evaluate(
@@ -21,9 +21,9 @@ const flipAnimations = (page: Page): Promise<number> =>
   page.evaluate(
     () =>
       document
-        .querySelector('.pierre-layout')
+        .querySelector('.pierre-layouts')
         ?.getAnimations({ subtree: true })
-        .filter((animation) => animation.id === 'pierre-layout-flip').length ??
+        .filter((animation) => animation.id === 'pierre-layouts-flip').length ??
       0
   );
 
@@ -32,8 +32,8 @@ const focusedPane = (page: Page): Promise<string | null> =>
   page.evaluate(
     () =>
       document.activeElement
-        ?.closest<HTMLElement>('[data-layout-pane]')
-        ?.getAttribute('data-layout-pane') ?? null
+        ?.closest<HTMLElement>('[data-layouts-pane]')
+        ?.getAttribute('data-layouts-pane') ?? null
   );
 
 const command = (page: Page, name: string, ...args: unknown[]) =>
@@ -66,7 +66,7 @@ test('during the zoom animation, the covered panes leave the accessibility tree 
   expect(await files.evaluate((element: HTMLElement) => element.inert)).toBe(
     false
   );
-  await expect(files).not.toHaveAttribute('data-hidden');
+  await expect(files).not.toHaveAttribute('data-covered');
   // Its controls are not in the accessibility tree.
   await expect(page.getByRole('button', { name: 'Zoom files' })).toHaveCount(0);
   // Tab does not reach a covered pane.
@@ -84,14 +84,14 @@ test('at the end of the zoom animation, the covered panes stop rendering, and th
   await page.goto('/zoom.html?flip=on&duration=300');
   await page.getByRole('button', { name: 'Zoom editor' }).click();
   const files = host(page, 'files');
-  await expect(files).toHaveAttribute('data-hidden', 'true');
+  await expect(files).toHaveAttribute('data-covered', 'zoom');
   expect(await files.evaluate((element: HTMLElement) => element.inert)).toBe(
     true
   );
   expect(await flipAnimations(page)).toBe(0);
   expect((await visibility(page)).files).toEqual([true]);
   await page.keyboard.press('Escape');
-  await expect(files).not.toHaveAttribute('data-hidden');
+  await expect(files).not.toHaveAttribute('data-covered');
   await expect(files).not.toHaveAttribute('aria-hidden');
   await expect(files).toHaveAttribute('tabindex', '0');
   expect((await visibility(page)).files).toEqual([true, false]);
@@ -110,10 +110,10 @@ test('a collapsed pane under an animated zoom gets no visibility event at the zo
   expect((await visibility(page)).terminal).toEqual([true]);
   await page.getByRole('button', { name: 'Zoom editor' }).click();
   expect((await visibility(page)).terminal).toEqual([true]);
-  await expect(host(page, 'terminal')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'terminal')).toHaveAttribute('data-covered', 'zoom');
   expect((await visibility(page)).terminal).toEqual([true]);
   await page.getByRole('button', { name: 'Restore editor' }).click();
-  await expect(host(page, 'terminal')).not.toHaveAttribute('data-hidden');
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-covered');
   await expect.poll(() => flipAnimations(page)).toBe(0);
   expect((await visibility(page)).terminal).toEqual([true]);
 });
@@ -133,5 +133,5 @@ test('a user who prefers reduced motion gets no animation', async ({
   await page.goto('/zoom.html?flip=on&duration=1000');
   await page.getByRole('button', { name: 'Zoom editor' }).click();
   expect(await flipAnimations(page)).toBe(0);
-  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-covered', 'zoom');
 });

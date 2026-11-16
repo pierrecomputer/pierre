@@ -38,11 +38,11 @@ export const STATE_REASONS: number =
 /**
  * The owner of the visibility of the pane hosts of a view. It keeps the
  * reasons of each pane, and it alone writes `inert` and the visibility
- * attributes: `data-pane-hidden` (hidden, an inactive tab, or a collapse to 0
- * pixels: the host does not show), `data-hidden` (under a zoom: the host
- * keeps its box and skips its rendering), `data-overlay-covered`,
- * `data-collapsed`, `aria-hidden`, and the tab stop of a covered host, and
- * `data-collapsed` on the content. A host
+ * attributes: `data-hidden` (hidden, an inactive tab, or a collapse to 0
+ * pixels: the host does not show), `data-covered` (`zoom` under a zoom, else
+ * `overlay` under an overlay: the host keeps its box and skips its
+ * rendering), `data-collapsed`, `aria-hidden`, and the tab stop of a covered
+ * host, and `data-collapsed` on the content. A host
  * receives `PANE_VISIBILITY_EVENT` only when its content starts or stops
  * rendering: `COVERED` alone does not stop it.
  */
@@ -78,11 +78,11 @@ export function visibilityIds(visibility: PaneVisibility): Set<string> {
   );
 }
 
-/** Set an attribute to `true`, or remove it, only when it changes. */
-function mark(element: HTMLElement, name: string, on: boolean): void {
-  if ((element.getAttribute(name) === 'true') !== on) {
-    if (on) element.setAttribute(name, 'true');
-    else element.removeAttribute(name);
+/** Set an attribute to a value, or remove it with false, only when it changes. */
+function mark(element: HTMLElement, name: string, value: string | false): void {
+  if ((element.getAttribute(name) ?? false) !== value) {
+    if (value === false) element.removeAttribute(name);
+    else element.setAttribute(name, value);
   }
 }
 
@@ -111,13 +111,16 @@ export function createPaneVisibility(): PaneVisibility {
       if (host.inert !== hidden) host.inert = hidden;
       mark(
         host,
-        'data-pane-hidden',
-        (bits & (HIDDEN | INACTIVE | COLLAPSED_WHOLE)) !== 0
+        'data-hidden',
+        (bits & (HIDDEN | INACTIVE | COLLAPSED_WHOLE)) !== 0 && 'true'
       );
-      mark(host, 'data-hidden', (bits & ZOOM) !== 0);
-      mark(host, 'data-overlay-covered', (bits & OVERLAY) !== 0);
-      mark(host, 'data-collapsed', collapsed);
-      mark(host, 'aria-hidden', covered);
+      mark(
+        host,
+        'data-covered',
+        (bits & ZOOM) !== 0 ? 'zoom' : (bits & OVERLAY) !== 0 && 'overlay'
+      );
+      mark(host, 'data-collapsed', collapsed && 'true');
+      mark(host, 'aria-hidden', covered && 'true');
       // `Root` renders each host as a tab stop.
       if (host.tabIndex !== (covered ? -1 : 0))
         host.tabIndex = covered ? -1 : 0;
@@ -125,7 +128,7 @@ export function createPaneVisibility(): PaneVisibility {
     const content = contents.get(id);
     if (content !== undefined) {
       if (content.inert !== collapsed) content.inert = collapsed;
-      mark(content, 'data-collapsed', collapsed);
+      mark(content, 'data-collapsed', collapsed && 'true');
     }
   };
   // A callback ref that keeps its identity, so that React calls it only when

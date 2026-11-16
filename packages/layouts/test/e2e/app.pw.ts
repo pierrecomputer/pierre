@@ -4,11 +4,11 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/app');
   // Five places; the agent chat and the terminal have two tabs each.
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
 });
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 test('a hidden pane keeps its content and shows again in its place', async ({
   page,
@@ -21,7 +21,7 @@ test('a hidden pane keeps its content and shows again in its place', async ({
     .evaluate((element) => element.setAttribute('data-kept', 'yes'));
 
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(terminal).toHaveAttribute('data-hidden', 'true');
   await expect(terminal).toHaveAttribute('inert', '');
   expect(
     await terminal.evaluate(
@@ -33,7 +33,7 @@ test('a hidden pane keeps its content and shows again in its place', async ({
   expect(editor?.height).toBeGreaterThan((before?.height ?? 0) + 100);
 
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).not.toHaveAttribute('data-pane-hidden');
+  await expect(terminal).not.toHaveAttribute('data-hidden');
   await expect(terminal.locator('.agent-terminal')).toHaveAttribute(
     'data-kept',
     'yes'
@@ -53,12 +53,12 @@ test('a pane that shows again grows into its place while the panes beside it mov
       Promise.all(
         document
           .getAnimations()
-          .filter((animation) => animation.id === 'pierre-layout-flip')
+          .filter((animation) => animation.id === 'pierre-layouts-flip')
           .map((animation) => animation.finished)
       )
     );
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(terminal).toHaveAttribute('data-hidden', 'true');
   await finishLayoutAnimations();
 
   // Show the terminal, hold the layout's animations at their middle, and read
@@ -73,7 +73,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     const animations = document
       .getAnimations()
-      .filter((animation) => animation.id === 'pierre-layout-flip');
+      .filter((animation) => animation.id === 'pierre-layouts-flip');
     for (const animation of animations) {
       animation.pause();
       animation.currentTime =
@@ -89,7 +89,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
   // With reduced motion, the pane shows at once.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(terminal).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(terminal).toHaveAttribute('data-hidden', 'true');
   const running = await terminal.evaluate(async (element) => {
     Array.from(
       document.querySelectorAll<HTMLButtonElement>('.app-toggles button')
@@ -100,7 +100,7 @@ test('a pane that shows again grows into its place while the panes beside it mov
     return element.getAnimations().length;
   });
   expect(running).toBe(0);
-  await expect(terminal).not.toHaveAttribute('data-pane-hidden');
+  await expect(terminal).not.toHaveAttribute('data-hidden');
 });
 
 test('the close button of a tool hides it, and each pane has its own buttons', async ({
@@ -123,12 +123,12 @@ test('the close button of a tool hides it, and each pane has its own buttons', a
   );
 
   await page.getByRole('button', { name: 'Close Files', exact: true }).click();
-  await expect(host(page, 'files')).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
   await expect(
     page.getByRole('button', { name: 'Files', exact: true })
   ).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Files', exact: true }).click();
-  await expect(host(page, 'files')).not.toHaveAttribute('data-pane-hidden');
+  await expect(host(page, 'files')).not.toHaveAttribute('data-hidden');
 });
 
 test('panes and the zoom change at once when their animations are off', async ({
@@ -153,20 +153,20 @@ test('panes and the zoom change at once when their animations are off', async ({
       await new Promise((resolve) => setTimeout(resolve, 0));
       return (
         document
-          .querySelector('.pierre-layout')
+          .querySelector('.pierre-layouts')
           ?.getAnimations({ subtree: true })
-          .filter((animation) => animation.id === 'pierre-layout-flip')
+          .filter((animation) => animation.id === 'pierre-layouts-flip')
           .length ?? 0
       );
     }, name);
 
   expect(await clickAndCount('Files')).toBeGreaterThan(0);
-  await expect(host(page, 'files')).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host(page, 'files')).toHaveAttribute('data-hidden', 'true');
 
   await page.getByLabel('Animate panes').uncheck();
   await page.waitForTimeout(400);
   expect(await clickAndCount('Files')).toBe(0);
-  await expect(host(page, 'files')).not.toHaveAttribute('data-pane-hidden');
+  await expect(host(page, 'files')).not.toHaveAttribute('data-hidden');
 
   expect(await clickAndCount('Zoom Editor')).toBeGreaterThan(0);
   await page.waitForTimeout(400);
@@ -201,7 +201,7 @@ test('each pane host is its own compositor layer only when paneLayers asks for i
   expect(await layered('agent')).toBe(true);
   // A covered pane moves out with a 2D transform, so it is not a layer.
   await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
-  await expect(host(page, 'agent')).toHaveAttribute('data-hidden', 'true');
+  await expect(host(page, 'agent')).toHaveAttribute('data-covered', 'zoom');
   expect(await layered('agent')).toBe(false);
   expect(await layered('editor')).toBe(true);
 });
@@ -217,7 +217,7 @@ test('a separator drag changes only the panes beside it in the n-ary model', asy
   // The first separator is the one between the sessions and the agent chat.
   const drag = async (distance: number): Promise<void> => {
     const box = await page
-      .locator('.pierre-layout-separator')
+      .locator('.pierre-layouts-separator')
       .first()
       .boundingBox();
     if (box === null) throw new Error('Missing separator');

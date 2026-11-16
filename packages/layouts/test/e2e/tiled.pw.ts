@@ -4,7 +4,7 @@ import { expect, type Page, test } from '@playwright/test';
 // `Layout.MoveHandle`, the drag engine, and `corners()`.
 
 const host = (page: Page, id: string) =>
-  page.locator(`[data-layout-pane="${id}"]`);
+  page.locator(`[data-layouts-pane="${id}"]`);
 
 const box = async (page: Page, selector: string) => {
   const value = await page.locator(selector).first().boundingBox();
@@ -37,7 +37,7 @@ async function dragHandle(
   to: { x: number; y: number }
 ) {
   const handle = center(
-    await box(page, `[data-layout-pane="${id}"] .pierre-layout-grip`)
+    await box(page, `[data-layouts-pane="${id}"] .pierre-layouts-grip`)
   );
   await page.mouse.move(handle.x, handle.y);
   await page.mouse.down();
@@ -52,16 +52,16 @@ test('a move handle drags a pane to an edge of another pane', async ({
   page,
 }) => {
   await page.goto('/tiled.html');
-  const beta = await box(page, '[data-layout-pane="b"]');
+  const beta = await box(page, '[data-layouts-pane="b"]');
   await dragHandle(page, 'a', {
     x: beta.x + beta.width - 10,
     y: beta.y + beta.height / 2,
   });
   // The drag shows the drop, marks the pane and its handle, and announces.
-  const drop = await box(page, '.pierre-layout-drop');
+  const drop = await box(page, '.pierre-layouts-drop');
   expect(drop.x).toBeGreaterThan(beta.x + beta.width / 2 - 2);
   await expect(host(page, 'a')).toHaveAttribute('data-moving', 'true');
-  await expect(host(page, 'a').locator('.pierre-layout-grip')).toHaveAttribute(
+  await expect(host(page, 'a').locator('.pierre-layouts-grip')).toHaveAttribute(
     'data-dragging',
     'true'
   );
@@ -69,10 +69,10 @@ test('a move handle drags a pane to an edge of another pane', async ({
     'Move Alpha to the right of Beta'
   );
   await page.mouse.up();
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await expect(host(page, 'a')).not.toHaveAttribute('data-moving');
-  const alpha = await box(page, '[data-layout-pane="a"]');
-  const next = await box(page, '[data-layout-pane="b"]');
+  const alpha = await box(page, '[data-layouts-pane="a"]');
+  const next = await box(page, '[data-layouts-pane="b"]');
   expect(alpha.x).toBeGreaterThan(next.x);
   expect(Math.abs(alpha.y - next.y)).toBeLessThan(2);
   // The move operation announces its result with the titles of the panes.
@@ -83,27 +83,27 @@ test('a move handle drags a pane to an edge of another pane', async ({
 
 test('Escape ends a drag with no move', async ({ page }) => {
   await page.goto('/tiled.html');
-  const before = await box(page, '[data-layout-pane="a"]');
-  const delta = await box(page, '[data-layout-pane="d"]');
+  const before = await box(page, '[data-layouts-pane="a"]');
+  const delta = await box(page, '[data-layouts-pane="d"]');
   await dragHandle(page, 'a', {
     x: delta.x + delta.width / 2,
     y: delta.y + delta.height - 10,
   });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await page.mouse.up();
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
-  expect(await box(page, '[data-layout-pane="a"]')).toEqual(before);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
+  expect(await box(page, '[data-layouts-pane="a"]')).toEqual(before);
 });
 
 test('a zoom disables the move handles', async ({ page }) => {
   await page.goto('/tiled.html');
   await page.getByRole('button', { name: 'Zoom Alpha' }).click();
-  const grip = host(page, 'a').locator('.pierre-layout-grip');
+  const grip = host(page, 'a').locator('.pierre-layouts-grip');
   await expect(grip).toHaveAttribute('aria-disabled', 'true');
   await expect(grip).toHaveCSS('cursor', 'default');
   await dragHandle(page, 'a', { x: 20, y: 20 });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await page.mouse.up();
   await expect(host(page, 'a')).toHaveAttribute('data-zoomed', 'true');
 });
@@ -112,26 +112,26 @@ test('the move handle and the corners set their gesture styles inline', async ({
   page,
 }) => {
   await page.goto('/tiled.html');
-  const grip = host(page, 'a').locator('.pierre-layout-grip');
+  const grip = host(page, 'a').locator('.pierre-layouts-grip');
   await expect(grip).toHaveAccessibleName('Drag Alpha');
   await expect(grip).toHaveCSS('cursor', 'grab');
   await expect(grip).toHaveCSS('touch-action', 'none');
-  const corner = page.locator('.pierre-layout-corner').first();
+  const corner = page.locator('.pierre-layouts-corner').first();
   await expect(corner).toHaveAccessibleName('Resize both axes');
   await expect(corner).toHaveCSS('cursor', 'move');
 });
 
 test('a corner resizes the separators that meet at it', async ({ page }) => {
   await page.goto('/tiled.html');
-  const alpha = await box(page, '[data-layout-pane="a"]');
-  const gamma = await box(page, '[data-layout-pane="c"]');
-  const corner = center(await box(page, '.pierre-layout-corner'));
+  const alpha = await box(page, '[data-layouts-pane="a"]');
+  const gamma = await box(page, '[data-layouts-pane="c"]');
+  const corner = center(await box(page, '.pierre-layouts-corner'));
   await page.mouse.move(corner.x, corner.y);
   await page.mouse.down();
   await page.mouse.move(corner.x + 60, corner.y + 40, { steps: 4 });
   await page.mouse.up();
-  const nextAlpha = await box(page, '[data-layout-pane="a"]');
-  const nextGamma = await box(page, '[data-layout-pane="c"]');
+  const nextAlpha = await box(page, '[data-layouts-pane="a"]');
+  const nextGamma = await box(page, '[data-layouts-pane="c"]');
   expect(nextAlpha.width - alpha.width).toBeGreaterThan(50);
   expect(nextAlpha.height - alpha.height).toBeGreaterThan(30);
   // The corner of the bottom row is at the same point, so it moves too.
@@ -140,9 +140,9 @@ test('a corner resizes the separators that meet at it', async ({ page }) => {
 
 test('the corners hide while a pane is zoomed', async ({ page }) => {
   await page.goto('/tiled.html');
-  await expect(page.locator('.pierre-layout-corner')).not.toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-corner')).not.toHaveCount(0);
   await page.getByRole('button', { name: 'Zoom Alpha' }).click();
-  await expect(page.locator('.pierre-layout-corner')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-corner')).toHaveCount(0);
 });
 
 test('a move handle without paneDrag() and paneDrag() without edits() warn', async ({
@@ -150,14 +150,14 @@ test('a move handle without paneDrag() and paneDrag() without edits() warn', asy
 }) => {
   const warnings = warningsOf(page);
   await page.goto('/tiled.html?features=nodrag');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(4);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(4);
   expect(
     warnings.filter((text) =>
       text.includes('Layout.MoveHandle needs paneDrag()')
     )
   ).toHaveLength(1);
   await page.goto('/tiled.html?features=noedits');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(4);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(4);
   expect(
     warnings.filter((text) =>
       text.includes('the feature pane-drag needs the feature edits')
@@ -169,22 +169,22 @@ test('canDrop refuses a place: no preview, no status, and no move', async ({
   page,
 }) => {
   await page.goto('/tiled.html?refuse=left');
-  const before = await box(page, '[data-layout-pane="a"]');
-  const beta = await box(page, '[data-layout-pane="b"]');
+  const before = await box(page, '[data-layouts-pane="a"]');
+  const beta = await box(page, '[data-layouts-pane="b"]');
   await dragHandle(page, 'a', { x: beta.x + 10, y: beta.y + beta.height / 2 });
   await expect(host(page, 'a')).toHaveAttribute('data-moving', 'true');
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
   await expect(page.getByRole('status')).not.toHaveText(/^Move /);
   await page.mouse.up();
-  expect(await box(page, '[data-layout-pane="a"]')).toEqual(before);
+  expect(await box(page, '[data-layouts-pane="a"]')).toEqual(before);
   // An allowed place still drops.
   await dragHandle(page, 'a', {
     x: beta.x + beta.width - 10,
     y: beta.y + beta.height / 2,
   });
-  await expect(page.locator('.pierre-layout-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
   await page.mouse.up();
   await expect
-    .poll(async () => (await box(page, '[data-layout-pane="a"]')).x)
+    .poll(async () => (await box(page, '[data-layouts-pane="a"]')).x)
     .toBeGreaterThan(before.x + 10);
 });

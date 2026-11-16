@@ -150,8 +150,8 @@ function renderTab(tab: PaneNode): JSX.Element {
           {props.children as ReactNode}
           {closable(tab.id) && (
             <span
-              className="pierre-layout-tab-close"
-              data-layout-tab-close=""
+              className="pierre-layouts-tab-close"
+              data-layouts-tab-close=""
               aria-hidden="true"
               title={`Close ${LABELS[tab.id] ?? tab.id}`}
               onClick={(event) => {

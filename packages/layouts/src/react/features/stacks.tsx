@@ -37,7 +37,7 @@ function useStacks(context: ViewContext): FeatureHooks {
       if (element === null || warnedTabList) return;
       const { panes } = treeIndex(context.store.getSnapshot().root);
       for (const host of paneHosts(element)) {
-        const id = host.getAttribute('data-layout-pane') ?? '';
+        const id = host.getAttribute('data-layouts-pane') ?? '';
         if (
           panes.get(id)?.stack != null &&
           host.getAttribute('role') !== 'tabpanel'

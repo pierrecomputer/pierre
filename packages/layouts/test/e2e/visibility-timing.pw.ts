@@ -22,7 +22,7 @@ const records = (page: Page): Promise<EventRecord[]> =>
 
 async function run(page: Page): Promise<EventRecord[]> {
   await page.goto('/timing.html');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(4);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(4);
   await page.getByRole('button', { name: 'Collapse terminal' }).click();
   await expect.poll(async () => (await records(page)).length).toBe(1);
   await page.getByRole('button', { name: 'Show output' }).click();

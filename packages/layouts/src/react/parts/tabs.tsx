@@ -40,10 +40,10 @@ import {
 
 /**
  * The elements inside a tab that keep a press for themselves: a field, a
- * button, a link, editable text, or a close mark (`data-layout-tab-close`).
+ * button, a link, editable text, or a close mark (`data-layouts-tab-close`).
  */
 const TAB_CONTROLS =
-  'input,textarea,select,button,a[href],[contenteditable]:not([contenteditable="false"]),[data-layout-tab-close]';
+  'input,textarea,select,button,a[href],[contenteditable]:not([contenteditable="false"]),[data-layouts-tab-close]';
 
 const tabsName = ({ paneTitle }: PaneMessageValues): string =>
   `Tabs of ${paneTitle}`;
@@ -69,7 +69,7 @@ export interface TabListProps extends Omit<PartProps<object>, 'children'> {
   /**
    * Keep the pinned tabs in view while the other tabs scroll: each pinned tab
    * sticks at its own place, and the list holds the width of the pinned tabs
-   * in `--layout-pinned-width`, for the app's fade or scroll padding. It turns
+   * in `--layouts-pinned-width`, for the app's fade or scroll padding. It turns
    * itself off while less than 120 px of the list is left for the other tabs.
    * The tab list needs to be the element that scrolls.
    */
@@ -98,14 +98,14 @@ function useStickyPinned(
     ];
     const stick = (sticky: boolean, width = 0): void => {
       list.toggleAttribute('data-sticky-pinned', sticky);
-      list.style.setProperty('--layout-pinned-width', `${width}px`);
+      list.style.setProperty('--layouts-pinned-width', `${width}px`);
       for (const item of pinned()) {
         if (sticky)
           item.style.setProperty(
-            '--layout-pinned-left',
+            '--layouts-pinned-left',
             `${item.offsetLeft}px`
           );
-        item.toggleAttribute('data-layout-sticky', sticky);
+        item.toggleAttribute('data-sticky', sticky);
       }
     };
     const place = (): void => {
@@ -144,7 +144,7 @@ function useTabPanel(
   const tablist = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const host = tablist.current?.closest<HTMLElement>(
-      `[data-layout-pane="${CSS.escape(id)}"]`
+      `[data-layouts-pane="${CSS.escape(id)}"]`
     );
     if (host == null) return;
     host.setAttribute('role', 'tabpanel');
@@ -201,8 +201,8 @@ export function TabList({
             paneTitle: context.title(pane),
             paneId: pane.id,
           }),
-          className: 'pierre-layout-tabs',
-          'data-layout-tablist': '',
+          className: 'pierre-layouts-tabs',
+          'data-layouts-tablist': '',
           children: shown.map((tab, index) => (
             <TabContext
               key={tab.id}
@@ -320,11 +320,11 @@ export function Tab({
       type: 'button',
       id: tabIdOf(context.prefix, host, tab.id),
       role: 'tab',
-      className: 'pierre-layout-tab',
+      className: 'pierre-layouts-tab',
       'aria-selected': active,
       'aria-controls': paneIdOf(context.prefix, tab.id),
       tabIndex: active ? 0 : -1,
-      'data-layout-tab': tab.id,
+      'data-layouts-tab': tab.id,
       'data-pinned': tab.pinned,
       'aria-description': tab.pinned && (context.messages().pinned ?? 'Pinned'),
       'data-active': active || undefined,
@@ -350,7 +350,7 @@ export function Tab({
       },
       onKeyDown,
       children: children ?? (
-        <span className="pierre-layout-tab-title">{context.title(tab)}</span>
+        <span className="pierre-layouts-tab-title">{context.title(tab)}</span>
       ),
     }),
     { active, dragging }

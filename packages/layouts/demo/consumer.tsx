@@ -44,7 +44,7 @@ function renderTab(tab: PaneNode): JSX.Element {
           {tab.id}
           {closable(tab.id) && (
             <span
-              data-layout-tab-close=""
+              data-layouts-tab-close=""
               aria-hidden="true"
               onClick={(event) => {
                 event.stopPropagation();

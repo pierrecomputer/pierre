@@ -13,7 +13,7 @@ interface TwoPanePage {
 
 const sidebarWidth = (page: Page): Promise<number> =>
   page
-    .locator('[data-layout-pane="sidebar"]')
+    .locator('[data-layouts-pane="sidebar"]')
     .evaluate((host) => host.getBoundingClientRect().width);
 
 // The `pierre-layouts` sheets in `document.head`, by name.
@@ -34,11 +34,11 @@ test('the two-pane app renders its hosts, a separator, and the split sheet only'
   page,
 }) => {
   await page.goto('/two-pane.html');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(2);
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(2);
   await expect(page.getByRole('separator')).toHaveCount(1);
   expect(await sheets(page)).toEqual(['pierre-layouts-split']);
   // React puts the sheet in the head, not in the layout.
-  await expect(page.locator('.pierre-layout style')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts style')).toHaveCount(0);
   const text = await page
     .locator('head style[data-href="pierre-layouts-split"]')
     .textContent();
@@ -50,10 +50,10 @@ test('an app rule without a layer wins over the split sheet', async ({
   page,
 }) => {
   await page.goto('/two-pane.html');
-  const host = page.locator('[data-layout-pane="main"]');
+  const host = page.locator('[data-layouts-pane="main"]');
   await expect(host).toHaveCSS('border-top-left-radius', '10px');
   await page.addStyleTag({
-    content: '.pierre-layout-pane { border-radius: 3px; }',
+    content: '.pierre-layouts-pane { border-radius: 3px; }',
   });
   await expect(host).toHaveCSS('border-top-left-radius', '3px');
 });
@@ -87,7 +87,7 @@ test('a pointer drag resizes, and Escape restores the sizes with no report', asy
   await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2, {
     steps: 4,
   });
-  await expect(page.locator('.pierre-layout')).toHaveAttribute(
+  await expect(page.locator('.pierre-layouts')).toHaveAttribute(
     'data-resizing',
     'true'
   );
@@ -95,7 +95,7 @@ test('a pointer drag resizes, and Escape restores the sizes with no report', asy
   await page.keyboard.press('Escape');
   await page.mouse.up();
   expect(await sidebarWidth(page)).toBe(before);
-  await expect(page.locator('.pierre-layout')).toHaveAttribute(
+  await expect(page.locator('.pierre-layouts')).toHaveAttribute(
     'data-resizing',
     'false'
   );
@@ -114,9 +114,9 @@ test('a collapse to 0 pixels hides and inerts the whole pane, with no render of 
     () => (window as unknown as { __twoPane: TwoPanePage }).__twoPane.renders
   );
   await page.getByRole('button', { name: 'Collapse the sidebar' }).click();
-  const host = page.locator('[data-layout-pane="sidebar"]');
+  const host = page.locator('[data-layouts-pane="sidebar"]');
   await expect(host).toHaveAttribute('data-collapsed', 'true');
-  await expect(host).toHaveAttribute('data-pane-hidden', 'true');
+  await expect(host).toHaveAttribute('data-hidden', 'true');
   await expect(host).toHaveCSS('content-visibility', 'hidden');
   expect(await host.evaluate((element: HTMLElement) => element.inert)).toBe(
     true
@@ -130,7 +130,7 @@ test('a collapse to 0 pixels hides and inerts the whole pane, with no render of 
   ).toEqual(rendersBefore);
   await page.getByRole('button', { name: 'Expand the sidebar' }).click();
   await expect(host).not.toHaveAttribute('data-collapsed');
-  await expect(host).not.toHaveAttribute('data-pane-hidden');
+  await expect(host).not.toHaveAttribute('data-hidden');
   expect(await host.evaluate((element: HTMLElement) => element.inert)).toBe(
     false
   );
@@ -168,8 +168,8 @@ test('stylesheets null renders no sheet, and the linked stylesheet styles the la
   page,
 }) => {
   await page.goto('/two-pane.html?stylesheets=none');
-  await expect(page.locator('[data-layout-pane]')).toHaveCount(2);
-  await expect(page.locator('[data-layout-pane="main"]')).toHaveCSS(
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(2);
+  await expect(page.locator('[data-layouts-pane="main"]')).toHaveCSS(
     'border-top-left-radius',
     '10px'
   );

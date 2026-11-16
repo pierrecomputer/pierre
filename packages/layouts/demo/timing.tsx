@@ -121,9 +121,9 @@ function App(): JSX.Element {
   useEffect(() => {
     const controller = new AbortController();
     for (const host of document.querySelectorAll<HTMLElement>(
-      '[data-layout-pane]'
+      '[data-layouts-pane]'
     )) {
-      const pane = host.dataset.layoutPane ?? '';
+      const pane = host.dataset.layoutsPane ?? '';
       host.addEventListener(
         PANE_VISIBILITY_EVENT,
         (event) => record(pane, event as PaneVisibilityEvent),

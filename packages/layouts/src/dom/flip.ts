@@ -9,7 +9,7 @@ import type { Rect } from '../types';
  */
 
 // Elements that animate a layout change carry this attribute with a stable key.
-export const FLIP_ATTRIBUTE = 'data-layout-flip';
+export const FLIP_ATTRIBUTE = 'data-layouts-flip';
 /**
  * The elements that animate a layout change. They are children of the root,
  * so this does not walk the pane content, as a query of the subtree would,
@@ -25,7 +25,7 @@ function flipElements(root: HTMLElement): HTMLElement[] {
     if (
       child instanceof HTMLElement &&
       child.hasAttribute(FLIP_ATTRIBUTE) &&
-      child.getAttribute('data-pane-hidden') !== 'true'
+      child.getAttribute('data-hidden') !== 'true'
     )
       elements.push(child);
   }
@@ -33,7 +33,7 @@ function flipElements(root: HTMLElement): HTMLElement[] {
 }
 const DEFAULT_DURATION_MS = 240;
 // The ID of the layout's own animations, so that it never touches animations in pane content.
-const FLIP_ANIMATION_ID = 'pierre-layout-flip';
+const FLIP_ANIMATION_ID = 'pierre-layouts-flip';
 // An ease-out curve, written as cubic-bezier: Safari runs `linear()` easing on the main thread.
 const FLIP_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 // Keyframes of the inverse scale of a pane's content. The inverse of a linear
@@ -90,7 +90,7 @@ export function readBoxes(root: HTMLElement): Map<string, Rect> {
 }
 
 function durationOf(root: HTMLElement): number {
-  const value = getComputedStyle(root).getPropertyValue('--layout-duration');
+  const value = getComputedStyle(root).getPropertyValue('--layouts-duration');
   const parsed = Number.parseFloat(value);
   if (Number.isNaN(parsed)) return DEFAULT_DURATION_MS;
   return value.trim().endsWith('ms') ? parsed : parsed * 1000;
@@ -241,7 +241,9 @@ export function animateFromBoxes(
       timing
     );
     const inner = counterScale
-      ? element.querySelector<HTMLElement>(':scope > .pierre-layout-pane-inner')
+      ? element.querySelector<HTMLElement>(
+          ':scope > .pierre-layouts-pane-inner'
+        )
       : null;
     if (inner === null || (start.a === end.a && start.d === end.d)) continue;
     // Both animations share the timing, so at each eased progress the host's
