@@ -105,6 +105,17 @@
     border-radius: 4px;
   }
 
+  /* The pointer target of a separator is at least 24 px across, with no
+     change to the visible gap: a transparent box over the edges of the panes
+     beside it. Each side grows by half of what the separator lacks; a
+     percentage of the left and the right is of the width, and of the top and
+     the bottom of the height, so only the thin axis grows. */
+  .pierre-layouts-separator::after {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc(50% - 12px));
+  }
+
   .pierre-layouts-separator:hover,
   .pierre-layouts-separator:focus-visible,
   .pierre-layouts-separator[data-preview='true'] {

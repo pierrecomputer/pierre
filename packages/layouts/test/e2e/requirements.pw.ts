@@ -34,10 +34,27 @@ test('A5: the DOM order of panes follows their visual order', async ({
 test('A6: a separator is a pointer target of at least 24 CSS pixels', async ({
   page,
 }) => {
-  test.fail(true, 'The separator is as wide as the 8 px gap.');
+  // The visible gap stays 8 px; a press up to 12 px from the middle of the
+  // separator, on either side, reaches it.
+  const hits = await page
+    .getByRole('separator')
+    .first()
+    .evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const vertical = element.getAttribute('aria-orientation') === 'vertical';
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+      return [-11.5, 11.5].map(
+        (offset) =>
+          document.elementFromPoint(
+            vertical ? x + offset : x,
+            vertical ? y : y + offset
+          ) === element
+      );
+    });
+  expect(hits).toEqual([true, true]);
   const box = await page.getByRole('separator').first().boundingBox();
-  if (box === null) throw new Error('Missing separator');
-  expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(24);
+  expect(Math.min(box?.width ?? 0, box?.height ?? 0)).toBe(8);
 });
 
 test('A8: the zoom button keeps its name when it is pressed', async ({
