@@ -25,20 +25,22 @@
       (then (unreachable)))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16))))
 
+  ;; Lexer records are [end: u32, tokenId: u16], 6 bytes each. The end is a
+  ;; byte offset from $srcBase. Token ID 0xffff is a leading gap.
   (func $recTok (param $hl i32) (param $rhs i32)
     (if
       (i32.and
         (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-        (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
+        (i32.eq (i32.load16_u (i32.sub (global.get $out) (i32.const 2))) (local.get $hl)))
       (then
         (i32.store
-          (i32.sub (global.get $out) (i32.const 8))
+          (i32.sub (global.get $out) (i32.const 6))
           (i32.sub (local.get $rhs) (global.get $srcBase)))
         (return)))
     (call $ensureCap (i32.const 16))
     (i32.store (global.get $out) (i32.sub (local.get $rhs) (global.get $srcBase)))
-    (i32.store offset=4 (global.get $out) (local.get $hl))
-    (global.set $out (i32.add (global.get $out) (i32.const 8))))
+    (i32.store16 offset=4 (global.get $out) (local.get $hl))
+    (global.set $out (i32.add (global.get $out) (i32.const 6))))
 
   (func $recStreamBegin (param $reset i32)
     (if (local.get $reset)
@@ -49,10 +51,10 @@
       (then
         (call $ensureCap (i32.const 16))
         (i32.store (global.get $out) (i32.const 0))
-        (i32.store offset=4 (global.get $out) (global.get $recCarryHl))
-        (global.set $out (i32.add (global.get $out) (i32.const 8))))))
+        (i32.store16 offset=4 (global.get $out) (global.get $recCarryHl))
+        (global.set $out (i32.add (global.get $out) (i32.const 6))))))
 
   (func $recStreamEnd
     (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-      (then (global.set $recCarryHl (i32.load (i32.sub (global.get $out) (i32.const 4)))))))
+      (then (global.set $recCarryHl (i32.load16_u (i32.sub (global.get $out) (i32.const 2)))))))
 )

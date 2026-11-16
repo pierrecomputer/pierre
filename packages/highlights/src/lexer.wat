@@ -40,8 +40,8 @@
     (global.get $out))
 
   ;; Append the $bytes of child records at $out for the body [$from, $to).
-  ;; Their ends are relative to $from. Type 255 is a leading gap: it extends
-  ;; the previous record.
+  ;; Their ends are relative to $from. Type 0xffff is a leading gap: it
+  ;; extends the previous record.
   ;; The records are read in place. A write lands at or before the
   ;; record just read, because appending never adds records.
   ;; A custom lexer can stop early or pass the body end. Clamp each
@@ -58,11 +58,11 @@
       (loop $records
         (br_if $done (i32.ge_u (local.get $record) (local.get $stop)))
         (local.set $end (i32.add (local.get $from) (i32.load (local.get $record))))
-        (local.set $type (i32.load offset=4 (local.get $record)))
-        (local.set $record (i32.add (local.get $record) (i32.const 8)))
+        (local.set $type (i32.load16_u offset=4 (local.get $record)))
+        (local.set $record (i32.add (local.get $record) (i32.const 6)))
         (if (i32.gt_u (local.get $end) (local.get $to))
           (then (local.set $end (local.get $to))))
-        (if (i32.eq (local.get $type) (i32.const 255))
+        (if (i32.eq (local.get $type) (i32.const 0xffff))
           (then (call $emitGap (global.get $srcBase) (local.get $end)))
           (else (call $recTok (local.get $type) (local.get $end))))
         (br $records)))

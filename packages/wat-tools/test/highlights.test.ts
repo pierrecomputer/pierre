@@ -43,6 +43,16 @@ interface LexerExports {
   loadState: () => void;
 }
 
+/** Decode `[end: u32, tokenId: u16]` lexer records into flat pairs. */
+function readRecords(memory: WebAssembly.Memory): number[] {
+  const view = new DataView(memory.buffer);
+  const out = view.getUint32(6, true);
+  const records: number[] = [];
+  for (let at = out; at < out + view.getUint32(10, true); at += 6)
+    records.push(view.getUint32(at, true), view.getUint16(at + 4, true));
+  return records;
+}
+
 describe('buildHighlightsLexer', () => {
   let lexer: LexerExports;
   let compiledModule: WebAssembly.Module;
@@ -75,6 +85,7 @@ describe('buildHighlightsLexer', () => {
       'lexStream',
       'loadState',
       'memory',
+      'recordBytes',
       'saveState',
       'scratchPtr',
     ]);
@@ -90,12 +101,7 @@ describe('buildHighlightsLexer', () => {
     new Uint8Array(lexer.memory.buffer).set(source, input);
     new DataView(lexer.memory.buffer).setUint32(2, source.length, true);
     lexer.lex();
-    const view = new DataView(lexer.memory.buffer);
-    const out = view.getUint32(6, true);
-    const length = view.getUint32(10, true);
-    expect([...new Uint32Array(lexer.memory.buffer, out, length / 4)]).toEqual([
-      2, 0, 4, 24, 10, 0,
-    ]);
+    expect(readRecords(lexer.memory)).toEqual([2, 0, 4, 24, 10, 0]);
     expect(Number(lexer.inputPtr.value)).toBeLessThan(65536);
   });
 
@@ -107,11 +113,7 @@ describe('buildHighlightsLexer', () => {
     );
     new DataView(lexer.memory.buffer).setUint32(2, 1, true);
     lexer.lex();
-    const view = new DataView(lexer.memory.buffer);
-    expect(view.getUint32(10, true)).toBe(8);
-    expect([
-      ...new Uint32Array(lexer.memory.buffer, view.getUint32(6, true), 2),
-    ]).toEqual([1, 24]);
+    expect(readRecords(lexer.memory)).toEqual([1, 24]);
   });
 
   test('accepts a function body without a module', () => {
@@ -141,13 +143,8 @@ describe('buildHighlightsLexer', () => {
     );
     new DataView(lexer.memory.buffer).setUint32(2, 5, true);
     lexer.lex();
-    const view = new DataView(lexer.memory.buffer);
-    const out = view.getUint32(6, true);
     // The byte after the last token is plain text.
-    expect(view.getUint32(10, true)).toBe(24);
-    expect([...new Uint32Array(lexer.memory.buffer, out, 6)]).toEqual([
-      1, 255, 4, 17, 5, 0,
-    ]);
+    expect(readRecords(lexer.memory)).toEqual([1, 0xffff, 4, 17, 5, 0]);
   });
 
   test('saveState and loadState restore the globals and memory regions of a lexer', () => {
@@ -182,8 +179,8 @@ describe('buildHighlightsLexer', () => {
       view.setUint32(2, 1, true);
       lexer.lexStream(reset);
       // The last record: a continued chunk starts with the carried type.
-      return view.getUint32(
-        view.getUint32(6, true) + view.getUint32(10, true) - 4,
+      return view.getUint16(
+        view.getUint32(6, true) + view.getUint32(10, true) - 2,
         true
       );
     };

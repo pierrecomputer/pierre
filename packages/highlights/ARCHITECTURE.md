@@ -51,12 +51,14 @@ Document edits ── liveRun ───────────── per-line s
 ## Runtime and memory
 
 A `createHighlighter()` highlighter owns separate lexer and emitter instances.
-Each lexer returns packed `(endByte: u32, tokenId: u32)` pairs as a
+Each lexer returns 6-byte `(endByte: u32, tokenId: u16)` records as a
 `Uint8Array`. A lexer module writes whitespace at the start of its input as a
-record of type 255. A parent lexer extends its previous record with it, and the
-host changes it to `none` at the document root. Plain text has no lexer module:
-the host writes one record. The host transfers the source and these records to
-the emitter instance.
+record of type 65535. A parent lexer extends its previous record with it, and
+the host changes it to `none` at the document root. A lexer module exports the
+`recordBytes` global. The host rejects a module without it, such as a lexer from
+an older `buildHighlightsLexer` that writes 8-byte records. Plain text has no
+lexer module: the host writes one record. The host transfers the source and
+these records to the emitter instance.
 
 The emitter reads the record address at control byte 22 and the record byte
 length at byte 26. It places its output after these records so HTML expansion
@@ -276,10 +278,10 @@ such as a `#!` line or front matter applies there too.
 
 ## Token records
 
-Mode 3 first emits `(endByte: u32, tokenId: u32)` pairs. Each record starts at
-the previous end, or zero for the first record. After the scan, `$recLinesPost`
-converts the pairs to `(endUtf16: u32, tokenId: u32)` and splits them at LF/CRLF
-boundaries.
+Mode 3 first emits 6-byte `(endByte: u32, tokenId: u16)` records. Each record
+starts at the previous end, or zero for the first record. After the scan,
+`$recLinesPost` converts them to 8-byte `(endUtf16: u32, tokenId: u32)` records
+and splits them at LF/CRLF boundaries.
 
 The conversion scans the input for line breaks and non-ASCII bytes once. A plain
 ASCII record needs one subtraction. ID `0xffffffff` marks a line terminator.

@@ -505,6 +505,32 @@ test('a lexer that cannot save its state works in streams and throws in LiveToke
   }
 });
 
+test('lexers without the 6-byte token record format are rejected', async () => {
+  // A lexer from an older buildHighlightsLexer writes 8-byte records and
+  // does not export `recordBytes`.
+  const old: Language = {
+    name: 'example-old',
+    aliases: { 'example-old': 0 },
+    wasm: Buffer.from(
+      wat2wasm(
+        'example-old.wat',
+        `(module
+          (memory (export "memory") 1)
+          (global (export "inputPtr") i32 (i32.const 64))
+          (func (export "lex"))
+          (func (export "lexStream") (param i32)))`
+      )
+    ).toString('base64'),
+  };
+  expect(() => registerLanguages([old])).toThrow(/token record format/);
+  const error: unknown = await createHighlighter({
+    langs: [old],
+    themes: [cssVariables],
+  }).catch((reason: unknown) => reason);
+  expect(String(error)).toMatch(/token record format/);
+  expect(isRegisteredLanguage('example-old')).toBe(false);
+});
+
 test('the package exports the combined module for init()', () => {
   expect(import.meta.resolve('@pierre/highlights/highlights.wasm')).toBe(
     new URL('../dist/highlights.wasm', import.meta.url).href

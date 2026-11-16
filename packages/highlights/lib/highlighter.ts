@@ -311,8 +311,8 @@ export class HighlightsHighlighter implements Highlighter<
 
   /**
    * Lex this emitter's input with `lexer` and copy the records here. Only the
-   * first record can be a leading gap (255). The document root has no previous
-   * token for it, so it becomes plain text.
+   * first record can be a leading gap (0xffff). The document root has no
+   * previous token for it, so it becomes plain text.
    */
   lexWith(
     lexer: HighlightsHighlighter,
@@ -329,8 +329,8 @@ export class HighlightsHighlighter implements Highlighter<
       reset
     );
     const bytes = lexer.dv.getUint32(10, true);
-    if (bytes > 0 && lexer.dv.getUint32(at + 4, true) === 255)
-      lexer.dv.setUint32(at + 4, 0, true);
+    if (bytes > 0 && lexer.dv.getUint16(at + 4, true) === 0xffff)
+      lexer.dv.setUint16(at + 4, 0, true);
     this.writeRecords(mode, length, lexer.buffer.subarray(at, at + bytes));
   }
 
@@ -637,6 +637,15 @@ function buildHighlighter(
   let nextLanguageId = 256;
   for (let i = 0; i < languages.length; i++) {
     const localIds = new Map<number, number>();
+    // A lexer built before the 6-byte record format writes 8-byte records.
+    if (
+      !WebAssembly.Module.exports(compiled[i]).some(
+        ({ name }) => name === 'recordBytes'
+      )
+    )
+      throw new TypeError(
+        `${languages[i].name}: unsupported token record format; rebuild the lexer with buildHighlightsLexer`
+      );
     for (const [alias, id] of Object.entries(languages[i].aliases)) {
       const name = alias.toLowerCase();
       if (!Number.isInteger(id) || id < 0 || id > 255) {
@@ -837,8 +846,9 @@ function buildHighlighter(
       names = [];
     }
   }
+  // One [end: u32, tokenId: u16] record of plain text.
   const plainRecord = new Uint32Array(2);
-  const plainBytes = new Uint8Array(plainRecord.buffer);
+  const plainBytes = new Uint8Array(plainRecord.buffer, 0, 6);
   const beforeEmit = (id: number, mode: number, length: number): void => {
     if (id === 0) {
       plainRecord[0] = length;
