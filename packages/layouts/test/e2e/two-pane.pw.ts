@@ -195,3 +195,54 @@ test('Root warns in development when its layout prop changes', async ({
       expect.stringContaining('the layout prop of Layout.Root changed'),
     ]);
 });
+
+test('a separator gives the place of its primary pane, its real limits, and Enter collapses that pane', async ({
+  page,
+}) => {
+  await page.goto('/two-pane.html');
+  const separator = page.getByRole('separator');
+  // The primary pane is the pane before the separator.
+  await expect(separator).toHaveAccessibleName('Resize sidebar');
+  await expect(separator).toHaveAttribute(
+    'aria-controls',
+    (await page.locator('[data-layouts-pane="sidebar"]').getAttribute('id')) ??
+      ''
+  );
+  // At the focus, the values come from the boxes: the sidebar's share of the
+  // space of the split, and the places where the sidebar (160 px) and the
+  // main pane (320 px) have their minimum sizes.
+  const width = async (id: string) =>
+    (await page.locator(`[data-layouts-pane="${id}"]`).boundingBox())?.width ??
+    0;
+  const space = (await width('sidebar')) + (await width('main'));
+  const percent = (px: number) => String(Math.round((px / space) * 100));
+  const now = percent(await width('sidebar'));
+  await separator.focus();
+  await expect(separator).toHaveAttribute('aria-valuenow', now);
+  await expect(separator).toHaveAttribute('aria-valuemin', percent(160));
+  await expect(separator).toHaveAttribute(
+    'aria-valuemax',
+    percent(space - 320)
+  );
+  await expect(separator).toHaveAttribute('aria-valuetext', `sidebar ${now}%`);
+  // The values follow each change while the separator has the focus.
+  await page.keyboard.press('End');
+  await expect(separator).toHaveAttribute(
+    'aria-valuenow',
+    percent(space - 320)
+  );
+  await expect(separator).toHaveAttribute(
+    'aria-valuetext',
+    `sidebar ${percent(space - 320)}%`
+  );
+  await page.keyboard.press('Home');
+  await expect(separator).toHaveAttribute('aria-valuenow', percent(160));
+  // Enter collapses the primary pane, and expands it again.
+  const sidebar = page.locator('[data-layouts-pane="sidebar"]');
+  await page.keyboard.press('Enter');
+  await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+  await expect(separator).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(sidebar).not.toHaveAttribute('data-collapsed');
+  await expect(separator).toHaveAttribute('aria-valuenow', percent(160));
+});

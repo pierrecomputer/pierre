@@ -109,9 +109,9 @@ export function dragSizes(
 
 /**
  * The sizes after a key press on a separator or a corner: arrow keys move the
- * separator by 2% of the split (10% with Shift), Home and End move it until
- * the child before or after it has its minimum size, and Enter gives the two
- * children beside it the same size. Null when the key does not resize.
+ * separator by 2% of the split (10% with Shift), and Home and End move it
+ * until the child before or after it has its minimum size. Null when the key
+ * does not resize.
  */
 export function keySizes(
   separators: readonly SeparatorGeometry[],
@@ -135,9 +135,7 @@ export function keySizes(
             ? -Math.max(0, before.size - before.min)
             : key === 'End'
               ? Math.max(0, after.size - after.min)
-              : key === 'Enter'
-                ? (after.size - before.size) / 2
-                : null;
+              : null;
     if (delta !== null)
       sizes[separator.split.id] = toWeights(
         separator,
@@ -145,6 +143,30 @@ export function keySizes(
       );
   }
   return Object.keys(sizes).length > 0 ? sizes : null;
+}
+
+/**
+ * The place of a separator in its split, in percent of the space of its
+ * children: `now`, and `min` and `max`, the places where the children before
+ * it, then the children after it, have their minimum sizes, as a drag that
+ * pushes the nearest child first reaches them.
+ */
+export function separatorPlaces(separator: SeparatorGeometry): {
+  now: number;
+  min: number;
+  max: number;
+} {
+  const order = orderOf(separator);
+  const { children } = separator;
+  const space = Math.max(1, sum(children.map(({ size }) => size)));
+  const percent = (value: number): number => Math.round((value / space) * 100);
+  const before = children.slice(0, order);
+  const after = children.slice(order);
+  return {
+    now: percent(sum(before.map(({ size }) => size))),
+    min: percent(sum(before.map(({ min }) => min))),
+    max: percent(space - sum(after.map(({ min }) => min))),
+  };
 }
 
 /**

@@ -305,14 +305,8 @@ test('the default strings name panes by their titles', async ({ page }) => {
   await page.goto('/chrome.html');
   await expect(page.getByRole('group', { name: 'Workspace' })).toHaveCount(1);
   const separator = page.getByRole('separator').first();
-  await expect(separator).toHaveAttribute(
-    'aria-label',
-    'Resize editor and terminal'
-  );
-  await expect(separator).toHaveAttribute(
-    'aria-valuetext',
-    '33% preferred position'
-  );
+  await expect(separator).toHaveAttribute('aria-label', 'Resize editor');
+  await expect(separator).toHaveAttribute('aria-valuetext', 'editor 33%');
   // The live region has no text of its own.
   await expect(page.getByRole('status')).toHaveText('');
 });
@@ -325,12 +319,9 @@ test('messages replace each string of the layout', async ({ page }) => {
   const separator = page.getByRole('separator').first();
   await expect(separator).toHaveAttribute(
     'aria-label',
-    'Redimensionner editor et terminal'
+    'Redimensionner editor'
   );
-  await expect(separator).toHaveAttribute(
-    'aria-valuetext',
-    '33 % de la position préférée'
-  );
+  await expect(separator).toHaveAttribute('aria-valuetext', 'editor : 33 %');
   await expect(
     page.getByRole('button', { name: 'Replier terminal' })
   ).toHaveCount(1);

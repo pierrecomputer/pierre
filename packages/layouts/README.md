@@ -209,8 +209,8 @@ catalog takes as it is:
 | Key                                                                        | Values                                                                                                                                    | Default                                                    |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `layout`                                                                   | (a string)                                                                                                                                | Workspace                                                  |
-| `separator`                                                                | `beforeTitles`, `afterTitles` (titles joined with ", "), `beforeCount`, `afterCount`, `beforeId`, `afterId` (the first pane on each side) | Resize Files and Editor                                    |
-| `separatorValue`                                                           | `percent`                                                                                                                                 | 50% preferred position                                     |
+| `separator`                                                                | `beforeTitles`, `afterTitles` (titles joined with ", "), `beforeCount`, `afterCount`, `beforeId`, `afterId` (the first pane on each side) | Resize Files                                               |
+| `separatorValue`                                                           | `paneTitle`, `paneId` (the primary pane), `percent`                                                                                       | Files 25%                                                  |
 | `collapse`, `close`, `drag`, `tabs`                                        | `paneTitle`, `paneId`                                                                                                                     | Collapse Editor, Close Editor, Drag Editor, Tabs of Editor |
 | `zoom`                                                                     | `paneTitle`, `paneId`, `zoomed`                                                                                                           | Zoom Editor, or Restore Editor                             |
 | `zoomed`, `restored`, `closed`, `collapsed`, `expanded`, `hidden`, `shown` | `paneTitle`, `paneId`                                                                                                                     | Editor zoomed, Editor restored, …                          |
@@ -627,11 +627,19 @@ A drag of a separator changes the two children of its split beside it. When one
 of them reaches its minimum size, the next child on that side gives the space,
 and so on. Resize separators with arrow keys; hold Shift for larger steps. Home
 and End move a separator until the child before or after it has its minimum
-size; Enter gives the two children beside it the same size. Corner controls
-accept arrows on both axes. Escape cancels an active gesture, and restores a
-zoomed layout with `zoom()`, unless pane content handled it with
-`preventDefault()`. Hidden panes remain mounted but are inert and excluded from
-the accessibility tree. Motion respects `prefers-reduced-motion`.
+size. As in the window splitter pattern, the primary pane of a separator is the
+pane or the stack before it: the separator's name and value text come from its
+title, `aria-controls` names it, and Enter collapses it or expands it again. At
+the focus, and after each change while it has the focus, `aria-valuenow`,
+`aria-valuemin`, and `aria-valuemax` give the real place and limits in percent
+of the split: the limits are the places where the panes on each side have their
+minimum sizes. A separator's pointer target is at least 24 px across, with no
+change to the visible gap, and a focused separator keeps its focus visible in
+forced colors mode. Corner controls accept arrows on both axes. Escape cancels
+an active gesture, and restores a zoomed layout with `zoom()`, unless pane
+content handled it with `preventDefault()`. Hidden panes remain mounted but are
+inert and excluded from the accessibility tree. Motion respects
+`prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer

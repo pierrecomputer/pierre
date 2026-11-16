@@ -115,15 +115,17 @@ export interface LayoutMessages {
    */
   readonly remote?: (values: { readonly text: string }) => string;
   /**
-   * The name of a separator, from the titles of the panes that show on each
-   * side of it. Default: "Resize Files and Editor".
+   * The name of a separator, from its primary pane: the panes that show
+   * before it, whose size its value gives. Default: "Resize Files".
    */
   readonly separator?: (values: SeparatorMessageValues) => string;
   /**
-   * The value of a separator: its preferred place in percent. Default: "50%
-   * preferred position".
+   * The value of a separator: the title of its primary pane and the place of
+   * the separator in percent. Default: "Files 25%".
    */
-  readonly separatorValue?: (values: { readonly percent: number }) => string;
+  readonly separatorValue?: (
+    values: PaneMessageValues & { readonly percent: number }
+  ) => string;
   /** The name of `Layout.CollapseButton`. Default: "Collapse Editor". */
   readonly collapse?: (values: PaneMessageValues) => string;
   /** The name of `Layout.CloseButton`. Default: "Close Editor". */

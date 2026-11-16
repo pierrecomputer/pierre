@@ -96,12 +96,13 @@ describe('gestures', () => {
     near(moveSeparator(beforeC[0].children, 2, 1000), [250, 550, 100, 100]);
   });
 
-  test('keys step, jump to the limits, balance, or do nothing', () => {
+  test('keys step, jump to the limits, or do nothing', () => {
     near(keySizes(outer, 'ArrowRight', false)?.outer, [0.52, 0.48]);
     near(keySizes(outer, 'ArrowLeft', true)?.outer, [0.4, 0.6]);
     near(keySizes(outer, 'Home', false)?.outer, [0.1, 0.9]);
     near(keySizes(outer, 'End', false)?.outer, [0.9, 0.1]);
-    near(keySizes(outer, 'Enter', false)?.outer, [0.5, 0.5]);
+    // Enter belongs to the separator: it collapses the primary pane.
+    expect(keySizes(outer, 'Enter', false)).toBeNull();
     // Up and down do not move a horizontal split.
     expect(keySizes(outer, 'ArrowDown', false)).toBeNull();
     expect(keySizes(outer, 'a', false)).toBeNull();

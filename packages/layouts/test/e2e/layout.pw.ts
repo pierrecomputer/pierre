@@ -191,7 +191,7 @@ test('pointer resizing, keyboard limits, and Escape cancellation', async ({
   page,
 }) => {
   const handle = page.getByRole('separator', {
-    name: 'Resize Pane 1, Pane 7 and Pane 2, Pane 5, Pane 6, Pane 4, Pane 3',
+    name: 'Resize Pane 1, Pane 7',
     exact: true,
   });
   const pane = page.locator('[data-layouts-pane="1"]');

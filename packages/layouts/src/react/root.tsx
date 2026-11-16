@@ -39,7 +39,7 @@ import {
   registerVisibility,
   STATE_REASONS,
 } from '../dom/visibility';
-import { dragSizes, keySizes } from '../gestures';
+import { dragSizes, keySizes, separatorPlaces } from '../gestures';
 import type { LayoutChange, LayoutOperation } from '../layout-operation';
 import { collapsedSizeOf, getPanes, shownPanes } from '../model';
 import { presentation } from '../presentation';
@@ -167,14 +167,14 @@ const defaultTitle = (pane: PaneNode): string => pane.id;
 
 const NO_MESSAGES: LayoutMessages = {};
 
-const separatorName = ({
-  beforeTitles,
-  afterTitles,
-}: SeparatorMessageValues): string =>
-  `Resize ${beforeTitles} and ${afterTitles}`;
+const separatorName = ({ beforeTitles }: SeparatorMessageValues): string =>
+  `Resize ${beforeTitles}`;
 
-const separatorValue = ({ percent }: { percent: number }): string =>
-  `${percent}% preferred position`;
+const separatorValue = ({
+  paneTitle,
+  percent,
+}: PaneMessageValues & { percent: number }): string =>
+  `${paneTitle} ${percent}%`;
 
 const collapsedText = ({ paneTitle }: PaneMessageValues): string =>
   `${paneTitle} collapsed`;
@@ -767,6 +767,13 @@ export function Root(props: RootProps): JSX.Element {
 
   // After React commits a state, before the browser paints.
   const committed = useRef<LayoutState | null>(null);
+  // The separator that has the focus: its ID, its element, and its primary
+  // pane.
+  const focusedSeparator = useRef<{
+    id: string;
+    element: HTMLElement;
+    pane: PaneNode | undefined;
+  } | null>(null);
   useLayoutEffect(() => {
     const element = context.element();
     const previous = committed.current;
@@ -826,6 +833,32 @@ export function Root(props: RootProps): JSX.Element {
     [geometry]
   );
   const showSeparators = hooks.every((hook) => hook.separators !== false);
+  // The value of a separator: the title of its primary pane, and a percent.
+  const valueText = (pane: PaneNode | undefined, percent: number): string =>
+    (messages?.separatorValue ?? separatorValue)({
+      paneTitle: pane === undefined ? '' : getPaneTitle(pane),
+      paneId: pane?.id ?? '',
+      percent,
+    });
+  // The values of the separator that has the focus come from the boxes of the
+  // layout: the real place and the places where the panes on each side have
+  // their minimum sizes. The view reads the boxes for that separator only, at
+  // the focus and after each change while it keeps the focus.
+  const writeSeparatorValues = (): void => {
+    const focused = focusedSeparator.current;
+    const separator =
+      focused === null
+        ? undefined
+        : context.readGeometry().separators.find(({ id }) => id === focused.id);
+    if (focused === null || separator === undefined) return;
+    const { now, min, max } = separatorPlaces(separator);
+    const { element, pane } = focused;
+    element.setAttribute('aria-valuenow', `${now}`);
+    element.setAttribute('aria-valuemin', `${min}`);
+    element.setAttribute('aria-valuemax', `${max}`);
+    element.setAttribute('aria-valuetext', valueText(pane, now));
+  };
+  useLayoutEffect(writeSeparatorValues);
   const layers = paneLayers();
   const layered =
     typeof layers === 'boolean' ? layers : visibleCount >= layers.minPanes;
@@ -955,20 +988,43 @@ export function Root(props: RootProps): JSX.Element {
               aria-orientation={
                 split.direction === 'horizontal' ? 'vertical' : 'horizontal'
               }
-              aria-controls={[...before, ...after]
+              aria-controls={before
                 .map((pane) => paneIdOf(prefix, pane.id))
                 .join(' ')}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={value}
-              aria-valuetext={(messages?.separatorValue ?? separatorValue)({
-                percent: value,
-              })}
+              aria-valuetext={valueText(before[0], value)}
               data-direction={split.direction}
               data-layouts-flip={`separator:${id}`}
               style={separatorStyles.get(id)}
               onPointerDown={(event) => context.startResize(event, [id])}
-              onKeyDown={(event) => context.resizeKey(event, [id])}
+              onKeyDown={(event) => {
+                // Enter collapses the primary pane, the pane or the stack
+                // before the separator, or expands it again, as the window
+                // splitter pattern does.
+                const node = separator.before;
+                if (event.key !== 'Enter') context.resizeKey(event, [id]);
+                else if (node.type !== 'split') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  store.setCollapsed(
+                    node.type === 'stack' ? node.active : node.id,
+                    node.collapsed !== true
+                  );
+                }
+              }}
+              onFocus={(event) => {
+                focusedSeparator.current = {
+                  id,
+                  element: event.currentTarget,
+                  pane: before[0],
+                };
+                writeSeparatorValues();
+              }}
+              onBlur={() => {
+                focusedSeparator.current = null;
+              }}
             />
           );
         })}

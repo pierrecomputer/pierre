@@ -46,9 +46,8 @@ const FRENCH_NAMES: Readonly<Record<string, string>> = {
 };
 const FRENCH: LayoutMessages = {
   layout: 'Espace de travail',
-  separator: ({ beforeTitles, afterTitles }) =>
-    `Redimensionner ${beforeTitles} et ${afterTitles}`,
-  separatorValue: ({ percent }) => `${percent} % de la position préférée`,
+  separator: ({ beforeTitles }) => `Redimensionner ${beforeTitles}`,
+  separatorValue: ({ paneTitle, percent }) => `${paneTitle} : ${percent} %`,
   collapse: ({ paneTitle }) => `Replier ${paneTitle}`,
   close: ({ paneId, paneTitle }) =>
     `Fermer ${FRENCH_NAMES[paneId] ?? paneTitle}`,
