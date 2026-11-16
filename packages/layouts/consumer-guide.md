@@ -77,9 +77,26 @@ example, an app asks before Delete closes a tab:
 also stops the drag, so call it there only to stop the drag.
 
 Mark a close control inside a tab with `data-layout-tab-close`, so that a press
-on it does not start a drag. An app that keeps its own tab strip, with no
-`Layout.TabList`, gets one development warning from `stacks()`; each pane host
-then stays a region named by the title of its pane.
+on it does not start a drag.
+
+An app that keeps its own tab strip, with no `Layout.TabList`, gets one
+development warning from `stacks()`, and each pane host stays a region named by
+the title of its pane. The library has no other API for such a strip. Before an
+app keeps one, it can check what the parts give:
+
+- The tabs pattern: the roles, the link of each tab to its panel, the roving tab
+  stop, and the keys (the arrows, Home, End, Delete, and Ctrl+Shift with PageUp
+  or PageDown). `activation="manual"` on `Layout.TabList` keeps the focus on the
+  tabs when a tab's content takes the focus as it shows, such as a terminal.
+- Fixed tabs: `pinned: true` and `closable: false` on pane nodes, in the tree
+  and in the server's fold, and `stickyPinned` on `Layout.TabList` to keep the
+  pinned tabs in view while the others scroll.
+- Drag: `tabDrag()` with `canDrop` for the app's drop rules, a still press for a
+  touch drag so that a swipe scrolls the tab list, and a drag image, or the
+  app's own element with `preview`.
+- The app's own markup for each tab, in the `render` prop of `Layout.Tab`, and
+  the app's own handlers on the parts. A handler that calls `preventDefault()`
+  stops the part's handler for that event.
 
 ## Pane host attributes
 
