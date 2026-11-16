@@ -68,7 +68,7 @@ export function focusZoomedPane(
 }
 
 /**
- * The separators that a pointer or key on a separator or a corner resizes.
+ * The separators that a pointer on a separator or a corner resizes.
  * Corners that sit at the same point join their separators, so that one drag
  * moves all the separators that meet there.
  */

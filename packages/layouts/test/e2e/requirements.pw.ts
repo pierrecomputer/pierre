@@ -81,6 +81,58 @@ test('A10: a focused separator shows an outline in forced colors mode', async ({
   expect(outline).not.toBe('none');
 });
 
+test('A16: a corner is a pointer shortcut of 24 CSS pixels with a resting contrast of 3:1', async ({
+  page,
+}) => {
+  const corner = page.locator('.pierre-layouts-corner').first();
+  // The two separators give the keyboard path, so the corner is not a control
+  // for the keyboard or for assistive technology.
+  await expect(corner).toHaveAttribute('aria-hidden', 'true');
+  await corner.evaluate((element: HTMLElement) => element.focus());
+  await expect(corner).not.toBeFocused();
+  const result = await corner.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    const hits = [
+      [-11.5, 0],
+      [11.5, 0],
+      [0, -11.5],
+      [0, 11.5],
+    ].map(([dx, dy]) => document.elementFromPoint(x + dx, y + dy) === element);
+    // The color behind the corner is the first opaque background of an
+    // ancestor of the layout.
+    let behind = 'rgb(255, 255, 255)';
+    for (
+      let node = element.parentElement;
+      node !== null;
+      node = node.parentElement
+    ) {
+      const color = getComputedStyle(node).backgroundColor;
+      if (color !== 'rgba(0, 0, 0, 0)') {
+        behind = color;
+        break;
+      }
+    }
+    const luminance = (color: string): number => {
+      const [r, g, b] = (color.match(/[\d.]+/g) ?? []).map((value) => {
+        const channel = Number(value) / 255;
+        return channel <= 0.039_28
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const [light, dark] = [
+      luminance(behind),
+      luminance(getComputedStyle(element).backgroundColor),
+    ].sort((a, b) => b - a);
+    return { hits, contrast: (light + 0.05) / (dark + 0.05) };
+  });
+  expect(result.hits).toEqual([true, true, true, true]);
+  expect(result.contrast).toBeGreaterThanOrEqual(3);
+});
+
 test('A15: Escape that pane content handles does not restore the zoom', async ({
   page,
 }) => {

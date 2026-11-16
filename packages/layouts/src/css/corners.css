@@ -1,20 +1,22 @@
 @layer pierre-layouts {
+  /* A corner is a pointer shortcut: the two separators give the keyboard
+     path. The pointer target is 24 px across, and the visible dot is the
+     14 px content box inside it. The resting color has a contrast of 3:1 on a
+     white background. */
   .pierre-layouts-corner {
     box-sizing: border-box;
     position: absolute;
     z-index: 4;
-    width: 14px;
-    height: 14px;
-    padding: 0;
-    border: 0;
+    width: 24px;
+    height: 24px;
+    padding: 5px;
     border-radius: 50%;
-    background: var(--layouts-border, #dce1e8);
+    background: var(--layouts-corner, #7b8494) content-box;
   }
 
-  .pierre-layouts-corner:hover,
-  .pierre-layouts-corner:focus-visible {
-    background: var(--layouts-accent, #5489ed);
+  .pierre-layouts-corner:hover {
+    background-color: var(--layouts-accent, #5489ed);
     outline: 2px solid var(--layouts-accent, #5489ed);
-    outline-offset: 2px;
+    outline-offset: -3px;
   }
 }

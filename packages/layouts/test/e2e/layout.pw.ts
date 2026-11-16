@@ -216,11 +216,7 @@ test('pointer resizing, keyboard limits, and Escape cancellation', async ({
 test('corner dragging adjusts both axes and preserves non-negative geometry', async ({
   page,
 }) => {
-  const corners = page.getByRole('button', {
-    name: 'Resize both axes',
-    exact: true,
-  });
-  const corner = corners.first();
+  const corner = page.locator('.pierre-layouts-corner').first();
   const bounds = await corner.boundingBox();
   if (bounds === null) throw new Error('Missing corner');
   const values = await page

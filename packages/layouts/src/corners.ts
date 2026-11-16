@@ -86,11 +86,11 @@ export function cssCorners(layout: CSSLayout): CSSCorner[] {
         id,
         separatorIds: [h.id, v.id],
         left: toCSS(
-          add(add(h.box.left, scale(h.box.width, 0.5)), constant(-7)),
+          add(add(h.box.left, scale(h.box.width, 0.5)), constant(-12)),
           '100cqw'
         ),
         top: toCSS(
-          add(add(v.box.top, scale(v.box.height, 0.5)), constant(-7)),
+          add(add(v.box.top, scale(v.box.height, 0.5)), constant(-12)),
           '100cqh'
         ),
       });

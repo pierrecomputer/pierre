@@ -184,7 +184,8 @@ Outside `Layout.Header`, `Layout.TabList` is a plain row of tabs: the app sets
 its size, its overflow, and its scroll. In `Layout.Header`, it fills the header.
 
 Style with `--layouts-accent`, `--layouts-border`, `--layouts-pane-background`,
-and `--layouts-duration`. The tabs take their colors from `--layouts-tab-color`,
+`--layouts-corner` (the resting color of a corner of `corners()`), and
+`--layouts-duration`. The tabs take their colors from `--layouts-tab-color`,
 `--layouts-tab-hover-color`, `--layouts-tab-hover-background`,
 `--layouts-tab-selected-color`, `--layouts-tab-accent` (the underline of the
 selected tab), and `--layouts-tab-close-hover-background`. Each property has its
@@ -216,7 +217,6 @@ catalog takes as it is:
 | `zoomed`, `restored`, `closed`, `collapsed`, `expanded`, `hidden`, `shown` | `paneTitle`, `paneId`                                                                                                                     | Editor zoomed, Editor restored, …                          |
 | `opened`, `moved`, `move`                                                  | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Terminal opened to the bottom of Editor, …                 |
 | `movedToTabs`, `moveInto`                                                  | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Editor moved into the group of Files, …                    |
-| `corner`                                                                   | (a string)                                                                                                                                | Resize both axes                                           |
 | `remote`                                                                   | `text` (what the same change from this window announces)                                                                                  | none: a remote change is silent                            |
 
 The titles come from `getPaneTitle`, and the IDs are the `PaneNode.id` strings
@@ -635,11 +635,12 @@ the focus, and after each change while it has the focus, `aria-valuenow`,
 of the split: the limits are the places where the panes on each side have their
 minimum sizes. A separator's pointer target is at least 24 px across, with no
 change to the visible gap, and a focused separator keeps its focus visible in
-forced colors mode. Corner controls accept arrows on both axes. Escape cancels
-an active gesture, and restores a zoomed layout with `zoom()`, unless pane
-content handled it with `preventDefault()`. Hidden panes remain mounted but are
-inert and excluded from the accessibility tree. Motion respects
-`prefers-reduced-motion`.
+forced colors mode. A corner of `corners()` is a pointer shortcut only: it has a
+24 px target, takes no focus, and is hidden from assistive technology, because
+the keyboard resizes each of its two separators. Escape cancels an active
+gesture, and restores a zoomed layout with `zoom()`, unless pane content handled
+it with `preventDefault()`. Hidden panes remain mounted but are inert and
+excluded from the accessibility tree. Motion respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer

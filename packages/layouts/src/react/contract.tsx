@@ -173,8 +173,6 @@ export interface LayoutMessages {
    * target pane. Default: "Move Editor to the right of Files".
    */
   readonly move?: (values: EdgeMessageValues) => string;
-  /** The name of a corner of `corners()`. Default: "Resize both axes". */
-  readonly corner?: string;
   /** The name of `Layout.TabList`. Default: "Tabs of Editor". */
   readonly tabs?: (values: PaneMessageValues) => string;
   /** The description of a pinned tab. Default: "Pinned". */

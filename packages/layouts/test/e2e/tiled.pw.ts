@@ -117,7 +117,7 @@ test('the move handle and the corners set their gesture styles inline', async ({
   await expect(grip).toHaveCSS('cursor', 'grab');
   await expect(grip).toHaveCSS('touch-action', 'none');
   const corner = page.locator('.pierre-layouts-corner').first();
-  await expect(corner).toHaveAccessibleName('Resize both axes');
+  await expect(corner).toHaveAttribute('aria-hidden', 'true');
   await expect(corner).toHaveCSS('cursor', 'move');
 });
 

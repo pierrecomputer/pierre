@@ -1,8 +1,10 @@
 'use client';
 
 // `corners()`: a handle where a separator of a row meets a separator of a
-// column. A drag or a key on it resizes both separators. Corners at the same
-// point join, so one drag moves every separator that meets there.
+// column. A drag on it resizes both separators. Corners at the same point
+// join, so one drag moves every separator that meets there. A corner is a
+// pointer shortcut only: the keyboard resizes each separator, so the corner
+// takes no focus and assistive technology does not see it.
 import { type CSSCorner, cssCorners } from '../../corners';
 import type { CSSLayout } from '../../css-layout';
 import cornersCss from '../../css/corners.css?inline';
@@ -36,11 +38,10 @@ export function corners(): Feature {
         layers: () =>
           shown &&
           list.map((corner) => (
-            <button
+            <div
               key={corner.id}
-              type="button"
               className="pierre-layouts-corner"
-              aria-label={context.messages().corner ?? 'Resize both axes'}
+              aria-hidden
               style={{
                 left: corner.left,
                 top: corner.top,
@@ -64,9 +65,6 @@ export function corners(): Feature {
                       ]
                 );
               }}
-              onKeyDown={(event) =>
-                context.resizeKey(event, corner.separatorIds)
-              }
             />
           )),
       };

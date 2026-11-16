@@ -108,7 +108,7 @@ export function dragSizes(
 }
 
 /**
- * The sizes after a key press on a separator or a corner: arrow keys move the
+ * The sizes after a key press on a separator: arrow keys move the
  * separator by 2% of the split (10% with Shift), and Home and End move it
  * until the child before or after it has its minimum size. Null when the key
  * does not resize.
