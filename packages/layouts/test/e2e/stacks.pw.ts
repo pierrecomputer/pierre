@@ -475,3 +475,38 @@ test('while a pane is zoomed, a tab moves only inside its own tab list', async (
     .toEqual(['main.ts', 'test.ts', 'util.ts', 'types.ts', 'README.md']);
   await expect(host(page, 'util')).toHaveAttribute('data-zoomed', 'true');
 });
+
+// The demo renders under StrictMode, which detaches the ref of a new host and
+// attaches it again after the effects of its commit.
+test('a tab that a stack gets after the first render shows only when it is active', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  await expect(tabsOf(page, 'main').getByRole('tab')).toHaveCount(5);
+  const shown = () =>
+    page.evaluate(() =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-layout-pane]:not([data-pane-hidden])'
+        ),
+      ]
+        .filter((element) => !element.inert)
+        .map((element) => element.dataset.layoutPane ?? '')
+        .sort((a, b) => a.localeCompare(b))
+    );
+  await command(page, 'addTab', 'main', { type: 'pane', id: 'late' }, 5, {
+    activate: false,
+  });
+  await expect(tabsOf(page, 'main').getByRole('tab')).toHaveCount(6);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(resolve))
+  );
+  await expect(host(page, 'late')).toHaveAttribute('data-pane-hidden', 'true');
+  expect(await shown()).toEqual(['files', 'main', 'terminal']);
+  await command(page, 'addTab', 'main', { type: 'pane', id: 'later' });
+  await expect(host(page, 'later')).toHaveAttribute('role', 'tabpanel');
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(resolve))
+  );
+  expect(await shown()).toEqual(['files', 'later', 'terminal']);
+});

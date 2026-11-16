@@ -8,7 +8,13 @@
 //   layout lacks.
 // - `?slots=conflict`: two more features that both give the style of a host.
 // - `?flip=on`: `flip()` animates the zoom; `&duration=<ms>` sets its length.
-import { type CSSProperties, type JSX, useContext, useState } from 'react';
+import {
+  type CSSProperties,
+  type JSX,
+  StrictMode,
+  useContext,
+  useState,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -168,4 +174,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

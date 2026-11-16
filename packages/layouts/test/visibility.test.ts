@@ -7,6 +7,7 @@ import {
   createPaneVisibility,
   HIDDEN,
   INACTIVE,
+  OVERLAY,
   STATE_REASONS,
   ZOOM,
 } from '../src/dom/visibility';
@@ -104,13 +105,45 @@ describe('pane visibility', () => {
     expect(visibility.reasons('a')).toBe(ZOOM);
   });
 
-  test('a host that mounts again starts with no reasons', () => {
+  // React StrictMode detaches the ref of a new host and attaches it again,
+  // after the effects that write the reasons.
+  test('a host that mounts again keeps the reasons of its pane', () => {
+    const { visibility, host } = mounted();
+    visibility.set('a', STATE_REASONS, INACTIVE);
+    visibility.set('a', ZOOM | OVERLAY, ZOOM | OVERLAY);
+    visibility.hostRef('a')(null);
+    visibility.hostRef('a')(host);
+    expect(visibility.reasons('a')).toBe(INACTIVE | ZOOM | OVERLAY);
+    expect(host.inert).toBe(true);
+    expect(host.getAttribute('data-pane-hidden')).toBe('true');
+    expect(host.getAttribute('data-hidden')).toBe('true');
+    expect(host.getAttribute('data-overlay-covered')).toBe('true');
+    const next = element();
+    visibility.hostRef('a')(null);
+    visibility.hostRef('a')(next);
+    expect(next.inert).toBe(true);
+    expect(next.getAttribute('data-pane-hidden')).toBe('true');
+  });
+
+  test('a host that mounts again hears the next change of its rendering', () => {
     const { visibility, host } = mounted();
     visibility.set('a', STATE_REASONS, 0);
     visibility.hostRef('a')(null);
+    visibility.hostRef('a')(host);
+    visibility.set('a', STATE_REASONS, HIDDEN);
+    visibility.set('a', STATE_REASONS, 0);
+    expect(host.events).toEqual([true, false]);
+  });
+
+  test('a pane that leaves the tree starts again with no reasons', () => {
+    const { visibility, host } = mounted();
+    visibility.set('a', STATE_REASONS, INACTIVE);
+    visibility.hostRef('a')(null);
+    visibility.forget(new Set());
     expect(visibility.reasons('a')).toBe(0);
     const next = element();
     visibility.hostRef('a')(next);
+    expect(next.inert).toBe(false);
     visibility.set('a', STATE_REASONS, HIDDEN);
     expect(next.inert).toBe(true);
     expect(next.events).toEqual([]);

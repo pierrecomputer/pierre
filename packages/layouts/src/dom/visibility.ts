@@ -90,7 +90,7 @@ type ElementRef = (element: HTMLElement | null) => void;
 
 /** The visibility of the pane hosts of one view. */
 export function createPaneVisibility(): PaneVisibility {
-  // The reasons of each pane whose host is in the DOM.
+  // The reasons of each pane of the tree.
   const reasons = new Map<string, number>();
   const hosts = new Map<string, HTMLElement>();
   const contents = new Map<string, HTMLElement>();
@@ -129,7 +129,12 @@ export function createPaneVisibility(): PaneVisibility {
     }
   };
   // A callback ref that keeps its identity, so that React calls it only when
-  // its element mounts and unmounts.
+  // its element mounts and unmounts. An element that mounts gets the reasons
+  // of its pane. A detach keeps them: React StrictMode detaches the ref of a
+  // new host and attaches it again after the effects that wrote them, and
+  // runs none of those effects again. Only `forget` deletes the reasons, when
+  // the pane leaves the tree, so the host of a pane that comes back starts
+  // with no reasons, and its first reasons send no event.
   const refOf = (
     refs: Map<string, ElementRef>,
     elements: Map<string, HTMLElement>,
@@ -141,12 +146,7 @@ export function createPaneVisibility(): PaneVisibility {
         if (element !== null) {
           elements.set(id, element);
           write(id);
-        } else {
-          elements.delete(id);
-          // A host that mounts again starts with no reasons, and its first
-          // reasons send no event.
-          if (elements === hosts) reasons.delete(id);
-        }
+        } else elements.delete(id);
       };
       refs.set(id, ref);
     }

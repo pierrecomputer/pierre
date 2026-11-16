@@ -9,7 +9,7 @@
 //   own, as a tab with a rename field or a focusable control does.
 // - `?header=none`: the tab lists render without `Layout.Header`, as in an
 //   app's own header.
-import { type JSX, useState } from 'react';
+import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -148,4 +148,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

@@ -1,4 +1,4 @@
-import { type JSX, useState, useSyncExternalStore } from 'react';
+import { type JSX, StrictMode, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { type ChildSize, getPanes, type PaneNode } from '../src';
@@ -141,4 +141,8 @@ function Consumer(): JSX.Element {
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('Missing consumer root');
-createRoot(root).render(<Consumer />);
+createRoot(root).render(
+  <StrictMode>
+    <Consumer />
+  </StrictMode>
+);

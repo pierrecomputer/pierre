@@ -4,7 +4,7 @@
 // form, `stylesheets=nonce` for sheets with a nonce, and `stylesheets=none`
 // for no sheets and the linked `styles.css`, and `resize=preview` for the
 // internal resize strategy that moves only the separator until the release.
-import { type JSX, useState } from 'react';
+import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import {
@@ -141,4 +141,8 @@ function App(): JSX.Element {
 
 const element = document.getElementById('root');
 if (element === null) throw new Error('Missing root');
-createRoot(element).render(<App />);
+createRoot(element).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

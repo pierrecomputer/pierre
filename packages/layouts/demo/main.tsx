@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type JSX,
   lazy,
+  StrictMode,
   Suspense,
   useState,
   useSyncExternalStore,
@@ -429,11 +430,13 @@ const AppDemo = lazy(() => import('./app'));
 const root = document.getElementById('root');
 if (root === null) throw new Error('Missing playground root');
 createRoot(root).render(
-  /^\/app\/?$/.test(location.pathname) ? (
-    <Suspense fallback={null}>
-      <AppDemo />
-    </Suspense>
-  ) : (
-    <Playground />
-  )
+  <StrictMode>
+    {/^\/app\/?$/.test(location.pathname) ? (
+      <Suspense fallback={null}>
+        <AppDemo />
+      </Suspense>
+    ) : (
+      <Playground />
+    )}
+  </StrictMode>
 );
