@@ -32,6 +32,39 @@ async function expectSearchHighlights(container: Locator, count: number) {
     .toBe(count);
 }
 
+test('time-sliced find grows the match count, then settles', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?sliced');
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.locator('[data-line="11"]')).toBeInViewport();
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1 of 7,200');
+
+  const states = await page.evaluate(() =>
+    (window.__searchStates ?? []).filter(({ text }) => text === 'target')
+  );
+  const counts = states.map(({ matchCount }) => matchCount);
+  const growing = states.filter(({ searching }) => searching);
+  // The count only goes up, and is reported more than once on the way.
+  expect(counts).toEqual([...counts].sort((a, b) => a - b));
+  expect(
+    new Set(growing.map(({ matchCount }) => matchCount)).size
+  ).toBeGreaterThan(1);
+  // The match on screen is current before the rest of the view is searched.
+  expect(growing.some(({ currentMatchIndex }) => currentMatchIndex === 0)).toBe(
+    true
+  );
+  expect(await getCurrentMatchLine(page)).toBe(10);
+  // Once a report says the search is done, the count is final.
+  expect(states.slice(growing.length)).not.toHaveLength(0);
+  for (const state of states.slice(growing.length)) {
+    expect(state).toMatchObject({ matchCount: 7200, searching: false });
+  }
+});
+
 for (const kind of ['file', 'split', 'unified'] as const) {
   test(`scoped find preserves selections across recycling in ${kind}`, async ({
     page,

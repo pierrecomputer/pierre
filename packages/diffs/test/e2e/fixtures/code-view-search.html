@@ -24,6 +24,8 @@
       const codeViewHeader = document.createElement('div');
       codeViewHeader.style.height = '200px';
       codeViewHeader.textContent = 'CodeView header';
+      // Every state the find panel reports, in order.
+      const searchStates = [];
       const view = new CodeView({
         diffStyle,
         ...(params.has('header')
@@ -44,11 +46,28 @@
             ? true
             : undefined,
         createEditor: (type, options, key) => new Editor(type, options, key),
+        onSearchStateChange: (state) => {
+          if (state != null) searchStates.push(state);
+        },
       });
       window.__codeView = view;
+      window.__searchStates = searchStates;
       view.setup(document.querySelector('[data-code-view-root]'));
       const scopedFixture = params.has('scope');
-      if (params.has('horizontal')) {
+      if (params.has('sliced')) {
+        const contents = Array.from({ length: 1000 }, (_, index) =>
+          index === 9 || index === 10 || index % 100 === 99
+            ? `target ${index + 1}`
+            : `padding ${index + 1} ${'x'.repeat(80)}`
+        ).join('\n');
+        view.setItems(
+          Array.from({ length: 600 }, (_, index) => ({
+            id: `file-${index}`,
+            type: 'file',
+            file: { name: `file-${index}.txt`, contents },
+          }))
+        );
+      } else if (params.has('horizontal')) {
         const file = {
           name: 'horizontal.txt',
           contents: Array.from({ length: 300 }, (_, index) =>

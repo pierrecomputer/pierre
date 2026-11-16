@@ -53,6 +53,7 @@ interface E2EEditor {
 
 interface Window {
   __codeView?: import('../../src/components/CodeView').CodeView;
+  __searchStates?: import('../../src/search').SearchPanelState[];
 
   // Fixture ready flags.
   __diffReady?: boolean;
