@@ -362,10 +362,13 @@ With `tabDrag()`, a pointer drag moves a tab in its tab list, into another
 stack, or beside a pane, and a marker shows where it goes; Escape cancels the
 drag. A touch drag of a tab starts after a still press of 250 ms
 (`tabDrag({ touchDelay })` changes it), so a swipe on a tab list scrolls it; a
-mouse or a pen starts a drag after a move of 4 pixels. A split or a move beside
-a pane of a stack goes beside the whole stack. A close or a hide of the active
-tab shows the nearest tab. A stack of one pane gives way to that pane. A zoom of
-a tab zooms its stack, and a change of tab keeps the zoom.
+mouse or a pen starts a drag after a move of 4 pixels. During a drag, a copy of
+the tab follows the pointer, beside it, and the source dims; the marker shows
+the place, and the other tabs do not move. `tabDrag({ preview })` renders the
+app's element in place of the copy. A split or a move beside a pane of a stack
+goes beside the whole stack. A close or a hide of the active tab shows the
+nearest tab. A stack of one pane gives way to that pane. A zoom of a tab zooms
+its stack, and a change of tab keeps the zoom.
 
 `tabDrag()` and `paneDrag()` take `canDrop(source, target, state)`, the app's
 rule for the places of a drag. A target that it refuses shows no marker and no

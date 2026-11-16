@@ -916,3 +916,65 @@ test.describe('a touch drag of a tab', () => {
     ).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+test('a copy of the tab follows the pointer during a drag, and leaves at the drop and at Escape', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  const image = page.locator('.pierre-layout-drag-image');
+  const source = await tabBox(page, 'main', 'util.ts');
+  const target = await tabBox(page, 'main', 'types.ts');
+  await dragTab(page, 'main', 'util.ts', {
+    x: target.x + target.width / 2,
+    y: target.y + target.height / 2,
+  });
+  await expect(image).toHaveCount(1);
+  await expect(image).toHaveAttribute('aria-hidden', 'true');
+  await expect(image).toHaveText('util.ts');
+  await expect(image.locator('[id]')).toHaveCount(0);
+  await expect(
+    tabsOf(page, 'main').getByRole('tab', { name: 'util.ts' })
+  ).toHaveAttribute('data-dragging', 'true');
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  // The copy has the size of the tab, below and after the pointer, so the
+  // drop marker at the pointer stays in view.
+  const first = await image.boundingBox();
+  expect(
+    Math.abs((first?.x ?? 0) - (target.x + target.width / 2 + 12))
+  ).toBeLessThan(2);
+  expect(Math.abs((first?.width ?? 0) - source.width)).toBeLessThan(2);
+  await page.mouse.move(
+    target.x + target.width / 2 + 30,
+    target.y + target.height / 2 + 3,
+    { steps: 3 }
+  );
+  const moved = await image.boundingBox();
+  expect(Math.round((moved?.x ?? 0) - (first?.x ?? 0))).toBe(30);
+  expect(Math.round((moved?.y ?? 0) - (first?.y ?? 0))).toBe(3);
+  await page.mouse.up();
+  await expect(image).toHaveCount(0);
+  await dragTab(page, 'util', 'test.ts', {
+    x: target.x + 10,
+    y: target.y + target.height / 2,
+  });
+  await expect(image).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(image).toHaveCount(0);
+  await page.mouse.up();
+});
+
+test("tabDrag's preview puts the app's element beside the pointer", async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?preview=1');
+  const target = await tabBox(page, 'main', 'types.ts');
+  await dragTab(page, 'main', 'util.ts', {
+    x: target.x + target.width / 2,
+    y: target.y + target.height / 2,
+  });
+  const image = page.locator('.pierre-layout-drag-image');
+  await expect(image).toHaveText('Moving util.ts');
+  await expect(image.locator('.stacks-preview')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(image).toHaveCount(0);
+});

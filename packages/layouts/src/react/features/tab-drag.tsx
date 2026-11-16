@@ -6,6 +6,8 @@
 // stack. While a pane fills the layout, only the tab list of the tab's own
 // stack takes a drop. A pinned tab of a stack drops only in its own tab list,
 // and a place in a tab list clamps to the run of pinned tabs.
+import { type ReactNode, useCallback, useState } from 'react';
+
 import dropCss from '../../css/drop.css?inline';
 import tabDragCss from '../../css/tab-drag.css?inline';
 import type { EditCommands } from '../../edits';
@@ -13,7 +15,8 @@ import { presentation } from '../../presentation';
 import type { StackCommands } from '../../stacks';
 import { pinnedRun, tabInsertIndex, tabMoveIndex } from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
-import type { LayoutState } from '../../types';
+import type { LayoutState, PaneNode } from '../../types';
+import { type Cell, cell } from '../cell';
 import type {
   EdgeMessageValues,
   Feature,
@@ -45,6 +48,88 @@ export interface TabDragOptions {
    * drag after a move of 4 pixels.
    */
   readonly touchDelay?: number;
+  /**
+   * The app's element beside the pointer during a drag of a tab. By default, a
+   * copy of the tab follows the pointer.
+   */
+  readonly preview?: (tab: PaneNode) => ReactNode;
+}
+
+// The image of the drag that runs: the pressed tab, its size and styles at
+// the press, the pointer in the layout, and the element of the image.
+interface DragImageState {
+  source: HTMLElement | null;
+  look: Partial<CSSStyleDeclaration>;
+  x: number;
+  y: number;
+  element: HTMLElement | null;
+}
+
+// The image sits below and after the pointer, so the drop marker at the
+// pointer stays in view.
+const IMAGE_OFFSET_PX = 12;
+
+// The styles of a tab that its copy keeps outside its tab list.
+const COPIED = [
+  'boxSizing',
+  'display',
+  'alignItems',
+  'gap',
+  'padding',
+  'border',
+  'background',
+  'font',
+  'color',
+  'boxShadow',
+] as const;
+
+const placeImage = ({ element, x, y }: DragImageState): void => {
+  if (element !== null)
+    element.style.transform = `translate(${x + IMAGE_OFFSET_PX}px, ${y + IMAGE_OFFSET_PX}px)`;
+};
+
+/**
+ * The image of a tab drag, beside the pointer: the app's preview, or a copy of
+ * the pressed tab with no IDs, at the size of the tab. The drag moves it with
+ * a transform at each pointer move, with no render. It is inert and hidden
+ * from assistive technology, as the drop marker is.
+ */
+function DragImage({
+  context,
+  image,
+  preview,
+}: {
+  context: ViewContext;
+  image: Cell<DragImageState>;
+  preview: TabDragOptions['preview'];
+}): ReactNode {
+  const id = useDrag(context, (drag) =>
+    drag?.source.kind === TAB ? drag.source.id : null
+  );
+  const ref = useCallback(
+    (element: HTMLDivElement | null) => {
+      const next = { ...image.get(), element };
+      image.set(next);
+      const { source } = next;
+      if (element === null || source === null) return;
+      placeImage(next);
+      if (preview !== undefined) return;
+      const copy = source.cloneNode(true) as HTMLElement;
+      for (const node of [copy, ...copy.querySelectorAll('[id]')])
+        node.removeAttribute('id');
+      copy.removeAttribute('data-dragging');
+      Object.assign(copy.style, next.look);
+      element.replaceChildren(copy);
+    },
+    [image, preview]
+  );
+  if (id === null) return null;
+  const pane = treeIndex(context.store.getSnapshot().root).panes.get(id)?.pane;
+  return (
+    <div className="pierre-layout-drag-image" aria-hidden inert ref={ref}>
+      {preview !== undefined && pane !== undefined && preview(pane)}
+    </div>
+  );
 }
 
 const TAB = 'tab';
@@ -134,8 +219,17 @@ function pinnedRule(
 function useTabDrag(
   context: ViewContext,
   { state }: ViewRender,
-  { canDrop, touchDelay = 250 }: TabDragOptions
+  { canDrop, touchDelay = 250, preview }: TabDragOptions
 ): FeatureHooks {
+  const [image] = useState(() =>
+    cell<DragImageState>({
+      source: null,
+      look: {},
+      x: 0,
+      y: 0,
+      element: null,
+    })
+  );
   const drag = useDrag(context, (value: Drag | null) =>
     value?.source.kind === TAB ? value : null
   );
@@ -156,6 +250,25 @@ function useTabDrag(
       const stack = treeIndex(current.root).panes.get(tab.id)?.stack;
       const source = { kind: TAB, id: tab.id };
       const pinned = pinnedRule(context, tab.id);
+      // The size and the styles of the tab for its copy, read at the press,
+      // while the layout is clean. The exact width: a rounded one can cut
+      // the title.
+      const pressed = event.currentTarget;
+      const style = getComputedStyle(pressed);
+      const { width, height } = pressed.getBoundingClientRect();
+      const look: Partial<CSSStyleDeclaration> = {
+        width: `${width}px`,
+        height: `${height}px`,
+      };
+      for (const key of COPIED) look[key] = style[key];
+      const layout = context.element()?.getBoundingClientRect();
+      image.set({
+        ...image.get(),
+        source: pressed,
+        look,
+        x: event.clientX - (layout?.left ?? 0),
+        y: event.clientY - (layout?.top ?? 0),
+      });
       startDrag(context, event, {
         source,
         center: true,
@@ -164,6 +277,11 @@ function useTabDrag(
           .map((other) => other.id) ?? [tab.id],
         rearrange: presentation(current).rearrangeable,
         wait: touchHold(touchDelay),
+        follow(x, y) {
+          const next = { ...image.get(), x, y };
+          image.set(next);
+          placeImage(next);
+        },
         accept(target) {
           const place = pinned(target);
           return place === null ||
@@ -181,7 +299,12 @@ function useTabDrag(
             pane.id === drag.source.id
               ? { attributes: { 'data-moving': true } }
               : undefined,
-    layers: () => <DropPreview context={context} kind={TAB} />,
+    layers: () => (
+      <>
+        <DropPreview context={context} kind={TAB} />
+        <DragImage context={context} image={image} preview={preview} />
+      </>
+    ),
     status:
       drag === null || target === null
         ? null

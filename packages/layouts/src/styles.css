@@ -372,6 +372,22 @@
   .pierre-layout-tab[data-dragging='true'] {
     opacity: 0.6;
   }
+
+  /* The image of a tab drag, which the drag moves with a transform. Its own
+     compositor layer takes each move with no paint of the layout. */
+  .pierre-layout-drag-image {
+    position: absolute;
+    contain: layout paint;
+    will-change: transform;
+    top: 0;
+    left: 0;
+    z-index: 6;
+    display: flex;
+    border-radius: 4px;
+    background: var(--layout-pane-background, #fff);
+    box-shadow: 0 2px 8px rgb(41 49 61 / 20%);
+    pointer-events: none;
+  }
 }
 
 @layer pierre-layouts {

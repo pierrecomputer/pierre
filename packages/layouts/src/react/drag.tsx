@@ -96,6 +96,8 @@ export interface DragOptions {
     press: PointerEvent<HTMLElement>,
     begin: () => void
   ) => DragWait | undefined;
+  /** The pointer moved to a point of the layout, during the drag. */
+  follow?(x: number, y: number): void;
   /** Apply the drop. */
   drop(target: DropTarget): void;
 }
@@ -285,6 +287,7 @@ export function startDrag(
       const bounds = element.getBoundingClientRect();
       const x = move.clientX - bounds.left;
       const y = move.clientY - bounds.top;
+      options.follow?.(x, y);
       const geometry = context.readGeometry();
       const list =
         options.center === true
