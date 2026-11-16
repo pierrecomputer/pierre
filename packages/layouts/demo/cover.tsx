@@ -1,6 +1,7 @@
 // The cover API with the app's own overlays (the e2e tests use it): a native
-// `<dialog>` with `showModal()` and `Layout.useCover`, and a popover of the
-// page with `coverLayout`, over a row of four panes.
+// `<dialog>` with `showModal()` and `Layout.useCover`, a popover of the page
+// with `coverLayout`, and a drawer inside a positioned container, over a row
+// of four panes.
 import { type JSX, StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -43,6 +44,19 @@ const page = {
     page.release?.();
     page.release = null;
     document.getElementById('popover')?.hidePopover();
+  },
+  /**
+   * Open a drawer inside a positioned container, 150 px from the left edge of
+   * the viewport: its offsets are relative to the container.
+   */
+  openDrawer(): void {
+    const drawer = document.getElementById('drawer');
+    const layout = document.querySelector<HTMLElement>('.pierre-layouts');
+    if (drawer === null || layout === null) return;
+    drawer.hidden = false;
+    page.release = coverLayout(layout, drawer, {
+      onCover: (cover) => page.covers.push(cover),
+    });
   },
 };
 Object.assign(window, { __cover: page });
@@ -101,6 +115,27 @@ function App(): JSX.Element {
           Close the dialog
         </button>
       </dialog>
+      <div
+        style={{
+          position: 'fixed',
+          inset: '0 0 0 150px',
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          id="drawer"
+          hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 140,
+            width: 320,
+            background: '#fff',
+          }}
+        />
+      </div>
       <div id="popover" className="app-popover" popover="manual">
         Popover
       </div>

@@ -150,6 +150,39 @@ function coverPane(
   }
 }
 
+/**
+ * The box of an overlay in viewport coordinates, from its layout offsets, so
+ * that a running transform of the overlay does not move it, as for the panes.
+ * The offsets are relative to the padding edge of the offset parent, which
+ * can scroll; with no offset parent (a fixed overlay, or one in the top
+ * layer), they are relative to the viewport; with the body as offset parent,
+ * they are relative to the document.
+ */
+function overlayBox(overlay: HTMLElement): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} {
+  const parent = overlay.offsetParent;
+  let left = overlay.offsetLeft;
+  let top = overlay.offsetTop;
+  if (parent === document.body) {
+    left -= scrollX;
+    top -= scrollY;
+  } else if (parent instanceof HTMLElement) {
+    const box = parent.getBoundingClientRect();
+    left += box.left + parent.clientLeft - parent.scrollLeft;
+    top += box.top + parent.clientTop - parent.scrollTop;
+  }
+  return {
+    left,
+    top,
+    right: left + overlay.offsetWidth,
+    bottom: top + overlay.offsetHeight,
+  };
+}
+
 const sameList = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
@@ -219,12 +252,7 @@ export function coverLayout(
                 bottom: workspace.top + host.offsetTop + host.offsetHeight,
               },
             })),
-            {
-              left: overlay.offsetLeft,
-              top: overlay.offsetTop,
-              right: overlay.offsetLeft + overlay.offsetWidth,
-              bottom: overlay.offsetTop + overlay.offsetHeight,
-            }
+            overlayBox(overlay)
           );
     hideOnly([...hosts, ...hidden.values()], new Set(next.covered));
     report(next);

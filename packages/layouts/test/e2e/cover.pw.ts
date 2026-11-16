@@ -20,7 +20,10 @@ const read = (page: Page) =>
     return { visibility: value.visibility, covers: value.covers };
   });
 
-const call = (page: Page, name: 'openPopover' | 'closePopover') =>
+const call = (
+  page: Page,
+  name: 'openPopover' | 'closePopover' | 'openDrawer'
+) =>
   page.evaluate(
     (name) =>
       (
@@ -102,4 +105,18 @@ test('a covered pane that is also hidden sends no event for the second reason', 
     await host(page, 'c').evaluate((element: HTMLElement) => element.inert)
   ).toBe(true);
   expect((await read(page)).visibility.c).toEqual([true]);
+});
+
+test('a drawer inside a positioned container covers the panes under it on the screen', async ({
+  page,
+}) => {
+  // The container starts 150 px from the left edge of the viewport, and the
+  // drawer 140 px into it: on the screen it spans 290 to 610 px, over all of
+  // pane b and parts of panes a and c.
+  await call(page, 'openDrawer');
+  await expect(host(page, 'b')).toHaveAttribute('data-covered', 'overlay');
+  const { covers } = await read(page);
+  expect(covers.at(-1)).toEqual({ covered: ['b'], overlapped: ['a', 'c'] });
+  expect(await hidden(page, 'a')).toBe(false);
+  expect(await hidden(page, 'c')).toBe(false);
 });
