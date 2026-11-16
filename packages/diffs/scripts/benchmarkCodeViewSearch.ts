@@ -391,8 +391,8 @@ function hasExpectedSearchState(
   );
 }
 
-// The command measures a query update or a navigation key, leaving setup
-// outside the timer. Query cases also measure later render callbacks and completion.
+// Measures query updates, navigation and item changes after setup.
+// Deferred render callbacks and the final state report complete each sample.
 async function measureCodeViewCase(
   kind: 'files' | 'diffs',
   query: (typeof QUERIES)[number],
@@ -403,18 +403,21 @@ async function measureCodeViewCase(
     | 'dense-middle-single'
     | 'dense-middle-many'
     | 'small-items' = 'top',
-  navigation?: 'next' | 'previous'
+  navigation?: 'next' | 'previous',
+  mutation?: 'edit' | 'editor-edit' | 'add-items'
 ): Promise<BenchmarkSummary> {
   const [
     { CodeView },
     { disposeHighlighter, getSharedHighlighter },
     { createRoot, installDom, renderItems, wait, waitFor },
     { fillSearch, getSearchInput },
+    { Editor },
   ] = await Promise.all([
     import('../src/components/CodeView'),
     import('../src/highlighter/shared_highlighter'),
     import('../test/domHarness'),
     import('../test/codeViewSearchHarness'),
+    import('../src/editor/editor'),
   ]);
   await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
@@ -445,6 +448,8 @@ async function measureCodeViewCase(
       }
     });
   const viewer = new CodeView({
+    useTokenTransformer: mutation === 'editor-edit' ? true : undefined,
+    createEditor: (type, settings, key) => new Editor(type, settings, key),
     expandUnchanged: navigation != null ? true : undefined,
     searchOptions: { defaults: { regex: query.regex, caseSensitive: false } },
     onSearchStateChange: (state) => {
@@ -455,19 +460,28 @@ async function measureCodeViewCase(
     },
   });
   const name =
-    navigation != null
-      ? layout === 'small-items'
-        ? `code-view/small-items/${kind}/${navigation}`
-        : layout === 'dense-middle-single'
-          ? `code-view/navigation-single/${kind}/${navigation}`
-          : `code-view/navigation/${kind}/${navigation}`
-      : layout === 'top'
-        ? `code-view/${kind}/${query.name}`
-        : `code-view/${layout}/${kind}/${query.name}`;
-  const expectedCount =
+    mutation != null
+      ? `code-view/${mutation}/${kind}/${query.name}`
+      : navigation != null
+        ? layout === 'small-items'
+          ? `code-view/small-items/${kind}/${navigation}`
+          : layout === 'dense-middle-single'
+            ? `code-view/navigation-single/${kind}/${navigation}`
+            : `code-view/navigation/${kind}/${navigation}`
+        : layout === 'top'
+          ? `code-view/${kind}/${query.name}`
+          : `code-view/${layout}/${kind}/${query.name}`;
+  const initialCount =
     query.name === 'rare-literal'
       ? 0
       : Math.min(lines * (kind === 'diffs' ? 2 : 1), MAX_SEARCH_MATCHES);
+  const expectedCount =
+    mutation === 'add-items' && query.name !== 'rare-literal'
+      ? Math.min(
+          (lines + 10_000) * (kind === 'diffs' ? 2 : 1),
+          MAX_SEARCH_MATCHES
+        )
+      : initialCount;
   try {
     const root = createRoot();
     // The benchmark presses the same keys as a user in the find input.
@@ -489,11 +503,41 @@ async function measureCodeViewCase(
           ? 4
           : 1000;
     const items = createCodeViewItems(kind, lines, itemLines);
+    const first = items[0];
+    if (first == null) throw new Error(`${name}: first item is missing`);
+    if (mutation === 'editor-edit') first.edit = true;
+    const replacement =
+      mutation === 'edit'
+        ? createCodeViewItems(kind, Math.min(lines, 1000))[0]
+        : undefined;
+    if (replacement != null) replacement.version = 1;
+    if (replacement?.type === 'file') {
+      replacement.file = {
+        ...replacement.file,
+        contents: `// changed\n${replacement.file.contents}`,
+      };
+    } else if (replacement != null) {
+      const contents = createContents(Math.min(lines, 1000));
+      replacement.fileDiff = parseDiffFromFile(
+        { name: 'item-0.txt', contents: contents.before },
+        { name: 'item-0.txt', contents: `// changed\n${contents.after}` },
+        { preferredDiffLib: '@pierre/patches', disableLineMatching: true },
+        true
+      );
+    }
+    const additions =
+      mutation === 'add-items' ? createCodeViewItems(kind, 10_000) : [];
+    for (const item of additions) item.id = `added-${item.id}`;
     await renderItems(viewer, items);
     const samples: number[] = [];
     const completionSamples: number[] = [];
     const blockedSamples: number[] = [];
     for (let index = 0; index < config.warmupRuns + config.runs; index++) {
+      if (mutation != null) {
+        viewer.closeSearch();
+        viewer.setItems([]);
+        await renderItems(viewer, items);
+      }
       viewer.openSearch({ query: '', scope: 'all', mode: 'find' });
       await wait(0);
       if (layout !== 'top') {
@@ -539,12 +583,42 @@ async function measureCodeViewCase(
           );
         }
       }
+      if (mutation != null) {
+        viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
+        await waitFor(
+          () => hasExpectedSearchState(searchState, query, initialCount),
+          { timeout: 15000 }
+        );
+        if (!hasExpectedSearchState(searchState, query, initialCount)) {
+          throw new Error(`${name}: initial search did not finish`);
+        }
+      }
       Bun.gc(true);
       completedAt = 0;
       longestRenderMs = 0;
       measuringQuery = true;
       const start = performance.now();
-      if (navigation != null) {
+      if (mutation != null) {
+        if (mutation === 'add-items') viewer.addItems(additions);
+        else if (mutation === 'edit') {
+          if (replacement == null)
+            throw new Error(`${name}: replacement is missing`);
+          viewer.updateItem(replacement);
+        } else {
+          const editor = viewer.getEditor(first.id);
+          if (editor == null) throw new Error(`${name}: editor is missing`);
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: '// changed ',
+            },
+          ]);
+        }
+        viewer.render(true);
+      } else if (navigation != null) {
         navigateSearch(navigation === 'previous');
         const expectedIndex = expectedCount - (navigation === 'next' ? 1 : 3);
         if (searchState?.currentMatchIndex !== expectedIndex) {
@@ -555,8 +629,11 @@ async function measureCodeViewCase(
         viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
       }
       const elapsed = performance.now() - start;
-      await waitFor(() =>
-        hasExpectedSearchState(searchState, query, expectedCount)
+      await waitFor(
+        () =>
+          completedAt > 0 &&
+          hasExpectedSearchState(searchState, query, expectedCount),
+        { timeout: 15000 }
       );
       measuringQuery = false;
       if (!hasExpectedSearchState(searchState, query, expectedCount)) {
@@ -620,6 +697,34 @@ for (const lines of config.lines) {
         `code-view/${kind}/${query.name}`.includes(config.only)
       ) {
         results.push(await measureCodeViewCase(kind, query, lines, config));
+      }
+    }
+  }
+  const mutations: ('edit' | 'editor-edit' | 'add-items')[] = [
+    'edit',
+    'editor-edit',
+    'add-items',
+  ];
+  for (const mutation of mutations) {
+    for (const kind of codeViewKinds) {
+      for (const query of QUERIES) {
+        if (query.name === 'regex') continue;
+        if (
+          config.only == null ||
+          `code-view/${mutation}/${kind}/${query.name}`.includes(config.only)
+        ) {
+          results.push(
+            await measureCodeViewCase(
+              kind,
+              query,
+              lines,
+              config,
+              'top',
+              undefined,
+              mutation
+            )
+          );
+        }
       }
     }
   }
@@ -730,6 +835,8 @@ if (config.outputJson) {
             '25000 items of four lines each, searched from the middle; navigation reuses the finished scan and positions near its last match before timing Next',
           denseMiddle:
             'Public scrolling to a middle line in one large item or a collection of 1000-line items, before the query timer starts',
+          mutations:
+            'Finished all-items find before updateItem, an editor insertion, or a 10000-line append; blocked includes the immediate render and completion ends at the final state callback',
           fixturePreparationExcluded: true,
           forcedGcBeforeTiming: true,
           perItemMatchingIncludesPreparation: true,

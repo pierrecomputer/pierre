@@ -287,7 +287,7 @@ describe('CodeView sliced find', () => {
   });
 
   for (const mutation of ['add', 'remove', 'update', 'collapse']) {
-    test(`${mutation} during a scan restarts from current items`, async () => {
+    test(`${mutation} during a scan finishes with current items`, async () => {
       await withViewer(
         [fileItem('a'), fileItem('b')],
         async ({ viewer, root, finish }) => {
@@ -544,7 +544,7 @@ describe('CodeView sliced find', () => {
   });
 
   for (const stage of ['finished', 'current', 'unreached']) {
-    test(`editing the ${stage} item during a scan restarts from actual document text`, async () => {
+    test(`editing the ${stage} item during a scan searches its current document text`, async () => {
       const blank = `blank ${'x'.repeat(80)}\n`.repeat(2000);
       const items = [
         fileItem('finished', 'target\n', true),

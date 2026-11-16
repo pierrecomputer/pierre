@@ -147,7 +147,7 @@ describe('CodeView search indices', () => {
     );
   });
 
-  test('earlier arrivals and restarted scans update the index while retaining the chosen match', async () => {
+  test('earlier arrivals and changed items update the index while retaining the chosen match', async () => {
     const before = (count: number): CodeViewItem<undefined> => ({
       id: 'before',
       type: 'file',

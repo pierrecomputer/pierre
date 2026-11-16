@@ -1554,6 +1554,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (this.searchState.scope?.itemId === scope?.itemId) {
       return;
     }
+    this.invalidateSearchScan();
     this.searchState.scope = scope;
     this.searchState.pendingQueryNavigation = false;
     this.searchState.centerNavigation = false;
@@ -1902,36 +1903,39 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     };
   }
 
+  // Has the panel read the matches again on the next render, and holds the
+  // background search until then.
   private markSearchMatchesDirty(): void {
-    this.invalidateSearchScan();
-    const scopedItem =
-      this.searchState.scope != null
-        ? this.idToItem.get(this.searchState.scope.itemId)
-        : undefined;
-    if (this.focusedEditor != null) {
-      const focusedItem = this.idToItem.get(this.focusedEditor.id);
+    const {
+      advanceSearchScan,
+      searchState,
+      idToItem,
+      focusedEditor,
+      searchPanel,
+    } = this;
+    const { scope } = searchState;
+    dequeueBackgroundTask(advanceSearchScan);
+    const scopedItem = scope != null ? idToItem.get(scope.itemId) : undefined;
+    if (focusedEditor != null) {
+      const focusedItem = idToItem.get(focusedEditor.id);
       if (focusedItem == null || !this.isItemInEditMode(focusedItem)) {
         this.focusedEditor = undefined;
       }
     }
     if (
-      this.searchState.scope != null &&
+      scope != null &&
       (scopedItem?.item.edit !== true || scopedItem.item.collapsed === true)
     ) {
-      this.searchState.scope = undefined;
-      this.searchState.pendingQueryNavigation = false;
-      this.searchState.centerNavigation = false;
+      this.invalidateSearchScan();
+      searchState.scope = undefined;
+      searchState.pendingQueryNavigation = false;
+      searchState.centerNavigation = false;
     }
-    // Flag the refresh before rebinding so the rebind's state report waits
-    // for the refreshed matches.
-    const needsRefresh = this.searchPanel?.hasQuery() === true;
-    if (needsRefresh) {
-      this.searchMatchesDirty = true;
-    }
-    this.searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
-    if (needsRefresh) {
-      this.render();
-    }
+    // Flag the refresh before rebinding so its state report waits for the read.
+    const needsRefresh = searchPanel?.hasQuery() === true;
+    if (needsRefresh) this.searchMatchesDirty = true;
+    searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
+    if (needsRefresh) this.render();
   }
 
   private flushSearchMatches(): void {
@@ -2145,6 +2149,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     searchState.scan = undefined;
   }
 
+  // Searches one item again after its text changed.
+  private rescanSearchItem(itemId: string): void {
+    const { scan } = this.searchState;
+    const position = this.getSearchItemPosition(itemId);
+    if (position != null) {
+      scan?.rescanItem(position);
+    }
+    this.markSearchMatchesDirty();
+  }
+
   // Searches for one more slice in the background, and has the panel read the
   // matches again when there are new ones.
   private advanceSearchScan = (): void => {
@@ -2161,7 +2175,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   };
 
   // Returns the matches found so far for the panel's query. Starts the search
-  // at the items on screen when there is none running.
+  // at the items on screen when there is none running, and searches a changed
+  // item again before answering.
   private searchCodeView(
     searchParams: SearchParams
   ): SearchResult<CodeViewSearchMatch> {
@@ -2181,7 +2196,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       );
       searchState.scan = scan;
       scan.advance(BACKGROUND_TASK_BUDGET_MS);
-      if (!scan.finished) queueBackgroundTask(this.advanceSearchScan);
+    } else if (scan.hasChangedItems) {
+      scan.advance(BACKGROUND_TASK_BUDGET_MS);
+    }
+    if (!scan.finished) {
+      queueBackgroundTask(this.advanceSearchScan);
     }
     return {
       matches: scan.getMatches(),
@@ -2818,7 +2837,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.render();
     this.syncItemEditors();
     this.syncSelection();
-    this.markSearchMatchesDirty();
+    this.rescanSearchItem(input.id);
     return true;
   }
 
@@ -2860,6 +2879,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.searchState.scope = { itemId: newId };
     }
     this.renamePendingLayoutAnchor(oldId, newId);
+    this.invalidateSearchScan();
     this.markSearchMatchesDirty();
     this.render();
     return true;
@@ -2873,6 +2893,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.appendItemsInternal(inputs);
     this.syncItemEditors();
     this.syncSelection();
+    const { scan, scope } = this.searchState;
+    if (scope == null) scan?.addItems(inputs.length);
     this.markSearchMatchesDirty();
   }
 
@@ -2889,11 +2911,20 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         nextItems.push(current.item);
       }
     }
-    this.setItems(nextItems);
+    const { scan } = this.searchState;
+    const position = this.getSearchItemPosition(itemId);
+    if (position != null) scan?.removeItem(position);
+    this.replaceItems(nextItems);
     return true;
   }
 
   public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
+    this.invalidateSearchScan();
+    this.replaceItems(items);
+  }
+
+  // Swaps in a new list of items, keeping the records of items that stay.
+  private replaceItems(items: readonly CodeViewItem<LAnnotation>[]): void {
     let removedItemsById:
       | Readonly<CodeViewItemMap<LAnnotation, Caret>>
       | undefined;
@@ -3038,6 +3069,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.render();
     }
     if (hasSearchIndexOptionChanged(prevOptions, options)) {
+      this.invalidateSearchScan();
       this.markSearchMatchesDirty();
     }
   }
@@ -3185,7 +3217,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (!this.itemEditors.has(item.item.id)) {
       this.slotSnapshotStale = true;
     }
-    this.markSearchMatchesDirty();
+    this.rescanSearchItem(item.item.id);
     this.render();
   }
 
@@ -3471,7 +3503,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           if (latest == null) {
             return;
           }
-          this.markSearchMatchesDirty();
+          this.rescanSearchItem(state.id);
           this.options.onItemEditChange?.(event, latest.item);
         };
         const onFocus = () => {
