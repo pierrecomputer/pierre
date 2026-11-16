@@ -310,7 +310,9 @@ Scripts in a hidden pane keep running. The pane host receives a
 `PANE_VISIBILITY_EVENT` event when its content stops and starts rendering, so
 that content such as a terminal or a chat can pause its own work. The event does
 not bubble, and it comes before the paint of the change, so a listener must stay
-cheap. A pane that mounts during a zoom is not hidden.
+cheap. A pane that the layout gets during a zoom is covered as the other panes
+are: it leaves the accessibility tree and the tab order at once, and its content
+stops rendering, with the event, when the animation of the zoom ends.
 
 ```tsx
 import {
