@@ -745,16 +745,20 @@ the focus, and after each change while it has the focus, `aria-valuenow`,
 of the split: the limits are the places where the panes on each side have their
 minimum sizes. A separator's pointer target is at least 24 px across, with no
 change to the visible gap, and a focused separator keeps its focus visible in
-forced colors mode. A corner of `corners()` is a pointer shortcut only: it has a
-24 px target, takes no focus, and is hidden from assistive technology, because
-the keyboard resizes each of its two separators. Each control in `Layout.Header`
-is a pointer target of at least 24 px, and the header is 40 px high, so the
-target of a separator above the pane does not cover a control. The close mark of
-a tab (`pierre-layouts-tab-close`) has a target of 24 px. Escape cancels an
-active gesture, and restores a zoomed layout with `zoom()`, unless pane content
-handled it with `preventDefault()`. Hidden panes remain mounted but are inert
-and excluded from the accessibility tree. Motion respects
-`prefers-reduced-motion`.
+forced colors mode. A press and release on a separator with no move shows two
+step buttons across it, "Move left" and "Move right" (or up and down;
+`messages.separatorStep`), each a step of 10% of the split, as Shift with an
+arrow key: the path with no drag that WCAG 2.5.7 asks for, also in a layout with
+no feature. They stay for the next step, and a press elsewhere or Escape hides
+them. A corner of `corners()` is a pointer shortcut only: it has a 24 px target,
+takes no focus, and is hidden from assistive technology, because the keyboard
+resizes each of its two separators. Each control in `Layout.Header` is a pointer
+target of at least 24 px, and the header is 40 px high, so the target of a
+separator above the pane does not cover a control. The close mark of a tab
+(`pierre-layouts-tab-close`) has a target of 24 px. Escape cancels an active
+gesture, and restores a zoomed layout with `zoom()`, unless pane content handled
+it with `preventDefault()`. Hidden panes remain mounted but are inert and
+excluded from the accessibility tree. Motion respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer

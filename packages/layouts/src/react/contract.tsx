@@ -126,6 +126,15 @@ export interface LayoutMessages {
   readonly separatorValue?: (
     values: PaneMessageValues & { readonly percent: number }
   ) => string;
+  /**
+   * The name of a step button of a separator, which shows after a press and
+   * release on the separator with no move, and moves it by 10% toward
+   * `edge`. `paneTitle` and `paneId` name its primary pane. Default: "Move
+   * left", "Move right", "Move up", "Move down".
+   */
+  readonly separatorStep?: (
+    values: PaneMessageValues & { readonly edge: Edge }
+  ) => string;
   /** The name of `Layout.CollapseButton`. Default: "Collapse Editor". */
   readonly collapse?: (values: PaneMessageValues) => string;
   /** The name of `Layout.CloseButton`. Default: "Close Editor". */
@@ -293,6 +302,8 @@ export interface ViewContext {
   startGesture(gesture: Gesture): void;
   startResize(event: PointerEvent<HTMLElement>, ids: readonly string[]): void;
   resizeKey(event: KeyboardEvent<HTMLElement>, ids: readonly string[]): void;
+  /** Move a separator by 10% of its split, forward or back: a step button. */
+  step(id: string, forward: boolean): void;
   /** True during a pointer resize. */
   resizing(): boolean;
   /** The title of a pane, from `getPaneTitle`. */

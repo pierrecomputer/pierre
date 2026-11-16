@@ -246,3 +246,55 @@ test('a separator gives the place of its primary pane, its real limits, and Ente
   await expect(sidebar).not.toHaveAttribute('data-collapsed');
   await expect(separator).toHaveAttribute('aria-valuenow', percent(160));
 });
+
+test('a press and release on a separator shows two step buttons, each 10% of the split', async ({
+  page,
+}) => {
+  await page.goto('/two-pane.html');
+  const separator = page.getByRole('separator');
+  const box = await separator.boundingBox();
+  if (box === null) throw new Error('Missing separator');
+  // A drag shows no buttons.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  const left = page.getByRole('button', { name: 'Move left', exact: true });
+  const right = page.getByRole('button', { name: 'Move right', exact: true });
+  await expect(right).toHaveCount(0);
+  // A press and release with no move between them.
+  await separator.click();
+  await expect(left).toBeVisible();
+  await expect(right).toBeVisible();
+  for (const button of [left, right]) {
+    const size = await button.boundingBox();
+    expect(
+      Math.min(size?.width ?? 0, size?.height ?? 0)
+    ).toBeGreaterThanOrEqual(24);
+  }
+  const space =
+    (await page.locator('[data-layouts-pane="sidebar"]').boundingBox())!.width +
+    (await page.locator('[data-layouts-pane="main"]').boundingBox())!.width;
+  const before = await sidebarWidth(page);
+  const resizes = () =>
+    page.evaluate(
+      () => (window as unknown as { __twoPane: TwoPanePage }).__twoPane.resizes
+    );
+  const count = (await resizes()).length;
+  await right.click();
+  expect((await sidebarWidth(page)) - before).toBeCloseTo(space * 0.1, 0);
+  expect(await resizes()).toHaveLength(count + 1);
+  // The buttons stay for the next step, and follow the separator.
+  await left.click();
+  expect(Math.abs((await sidebarWidth(page)) - before)).toBeLessThan(2);
+  // A press elsewhere hides them.
+  await page.locator('[data-layouts-pane="main"]').click();
+  await expect(right).toHaveCount(0);
+  // So does Escape.
+  await separator.click();
+  await expect(right).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(right).toHaveCount(0);
+});

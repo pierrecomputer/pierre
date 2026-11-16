@@ -49,6 +49,7 @@ import { startResizeGesture } from '../resize-gesture';
 import type {
   ChildSize,
   Direction,
+  Edge,
   LayoutGeometry,
   LayoutNode,
   LayoutState,
@@ -180,6 +181,9 @@ const NO_MESSAGES: LayoutMessages = {};
 
 const separatorName = ({ beforeTitles }: SeparatorMessageValues): string =>
   `Resize ${beforeTitles}`;
+
+const stepName = ({ edge }: { edge: Edge }): string =>
+  `Move ${edge === 'top' ? 'up' : edge === 'bottom' ? 'down' : edge}`;
 
 const separatorValue = ({
   paneTitle,
@@ -479,7 +483,8 @@ function createViewInternals(
   features: readonly FeatureModule[],
   initial: LatestProps,
   setResizing: (resizing: boolean) => void,
-  announce: (text: string) => void
+  announce: (text: string) => void,
+  showSteps: (separator: string | null) => void
 ): ViewInternals {
   let element: HTMLDivElement | null = null;
   let latest = initial;
@@ -624,9 +629,14 @@ function createViewInternals(
       // A feature can apply the sizes of each move in place of the store.
       const strategy = hooks.findLast((hook) => hook.applySizes !== undefined);
       resizing = true;
+      // A press and release with no move on one separator shows its step
+      // buttons, a path with no drag (WCAG 2.5.7).
+      let moved = false;
+      showSteps(null);
       gesture = {
         pointerId,
         move(move) {
+          moved ||= Math.hypot(move.clientX - x, move.clientY - y) >= 3;
           if (element === null) return;
           const proposed = dragSizes(
             separators,
@@ -646,9 +656,33 @@ function createViewInternals(
           sizes.end(cancel);
           resizing = false;
           setResizing(false);
+          if (
+            !cancel &&
+            !moved &&
+            ids.length === 1 &&
+            target.getAttribute('role') === 'separator'
+          )
+            showSteps(ids[0]);
         },
       };
       setResizing(true);
+    },
+    // A step button of a separator: 10% of its split, as Shift with an arrow.
+    step(id, forward) {
+      const horizontal =
+        separatorsOf([id])[0]?.split.direction === 'horizontal';
+      const proposed = keySizes(
+        separatorsOf([id]),
+        forward
+          ? horizontal
+            ? 'ArrowRight'
+            : 'ArrowDown'
+          : horizontal
+            ? 'ArrowLeft'
+            : 'ArrowUp',
+        true
+      );
+      if (proposed !== null) store.setSizes(proposed);
     },
     // A key press that resizes is a whole resize: one `resize` operation.
     // The key does not reach the app's own key handlers above the layout.
@@ -810,6 +844,8 @@ export function Root(props: RootProps): JSX.Element {
     )
   );
   const [resizing, setResizing] = useState(false);
+  // The separator whose step buttons show, after a press with no move.
+  const [steps, setSteps] = useState<string | null>(null);
   // The announcement of the last local change. A new key gives the live
   // region a new element, so that it speaks the same text again.
   const [message, setMessage] = useState<{ text: string; key: number } | null>(
@@ -835,7 +871,8 @@ export function Root(props: RootProps): JSX.Element {
         features,
         latestProps,
         setResizing,
-        (text) => setMessage((last) => ({ text, key: (last?.key ?? 0) + 1 }))
+        (text) => setMessage((last) => ({ text, key: (last?.key ?? 0) + 1 })),
+        setSteps
       ),
     // The latest props reach the context through `setLatest`.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -953,6 +990,21 @@ export function Root(props: RootProps): JSX.Element {
     return () => window.removeEventListener('blur', end);
   }, [resizing, finish]);
 
+  // A press outside the step buttons and their separator hides the buttons.
+  useEffect(() => {
+    if (steps === null) return;
+    const hide = (event: Event): void => {
+      if (
+        (event.target as Element).closest(
+          '.pierre-layouts-steps,.pierre-layouts-separator'
+        ) === null
+      )
+        setSteps(null);
+    };
+    document.addEventListener('pointerdown', hide, true);
+    return () => document.removeEventListener('pointerdown', hide, true);
+  }, [steps]);
+
   // An unmount during a gesture cancels it: a resize restores the sizes from
   // before it.
   useEffect(() => () => finish(true), [finish]);
@@ -1053,7 +1105,10 @@ export function Root(props: RootProps): JSX.Element {
         // Pane content that handles a key, for example Escape in a menu,
         // prevents its default, and the layout then leaves the key alone.
         if (event.defaultPrevented) return;
-        if (event.key === 'Escape') finish(true);
+        if (event.key === 'Escape') {
+          finish(true);
+          setSteps(null);
+        }
         internals.runKeys(event.nativeEvent, false);
       }}
     >
@@ -1195,6 +1250,46 @@ export function Root(props: RootProps): JSX.Element {
             />
           );
         })}
+      {showSeparators &&
+        geometry.separators
+          .filter(({ id }) => id === steps)
+          .map(({ id, split, before }) => {
+            const horizontal = split.direction === 'horizontal';
+            const pane = shownPanes(before)[0];
+            return (
+              <div
+                key={id}
+                className="pierre-layouts-steps"
+                data-direction={split.direction}
+                style={separatorStyles.get(id)}
+              >
+                {[false, true].map((forward) => {
+                  const edge = horizontal
+                    ? forward
+                      ? 'right'
+                      : 'left'
+                    : forward
+                      ? 'bottom'
+                      : 'top';
+                  return (
+                    <button
+                      key={edge}
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={(messages?.separatorStep ?? stepName)({
+                        paneTitle: pane === undefined ? '' : getPaneTitle(pane),
+                        paneId: pane?.id ?? '',
+                        edge,
+                      })}
+                      onClick={() => context.step(id, forward)}
+                    >
+                      {horizontal ? (forward ? '→' : '←') : forward ? '↓' : '↑'}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
       {hooks.map((hook, index) =>
         hook.layers === undefined ? null : <Layers key={index} hook={hook} />
       )}

@@ -129,6 +129,33 @@
     outline: 2px solid transparent;
   }
 
+  /* The step buttons of a separator, after a press and release on it with no
+     move: two buttons of 24 px across it, each a step of 10% (WCAG 2.5.7). */
+  .pierre-layouts-steps {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    pointer-events: none;
+  }
+
+  .pierre-layouts-steps[data-direction='vertical'] {
+    flex-direction: column;
+  }
+
+  .pierre-layouts-steps > button {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--layouts-corner, #7b8494);
+    border-radius: 50%;
+    background: var(--layouts-pane-background, #fff);
+    pointer-events: auto;
+  }
+
   .pierre-layouts-sr {
     position: absolute;
     width: 1px;
