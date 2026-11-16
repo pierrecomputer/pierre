@@ -109,3 +109,85 @@ describe('a move or a split beside a split or a stack', () => {
     expect(store.getSnapshot().root).toBe(before);
   });
 });
+
+// Files | a stack of Diff and Chat | Notes.
+const tabs: LayoutNode = {
+  type: 'split',
+  id: 'row',
+  direction: 'horizontal',
+  sizes: [1, 1, 1],
+  children: [
+    pane('files'),
+    {
+      type: 'stack',
+      id: 'tabs',
+      active: 'chat',
+      children: [pane('diff'), pane('chat')],
+    },
+    pane('notes'),
+  ],
+};
+
+describe('mergeStack', () => {
+  test('moves every tab of a stack into the previous pane in one change, in order', () => {
+    const store = testStore(tabs);
+    const changes: unknown[][] = [];
+    store.subscribe((change) => changes.push([...change.operations]));
+    store.focusPane('notes');
+    store.mergeStack('diff');
+    const root = store.getSnapshot().root;
+    expect(shape(root)).toEqual({
+      horizontal: [{ tabs: ['files', 'diff', 'chat'] }, 'notes'],
+    });
+    // The target keeps its active tab, as the focus was elsewhere.
+    expect(root.type === 'split' && root.children[0]).toMatchObject({
+      active: 'files',
+    });
+    expect(store.getSnapshot().focusedPane).toBe('notes');
+    expect(
+      changes.at(-1)?.map((operation) => (operation as { type: string }).type)
+    ).toEqual(['moveToStack', 'moveToStack']);
+    // A server folds the same operations.
+    const server = applyLayoutOperations(
+      tabs,
+      changes.at(-1) as Parameters<typeof applyLayoutOperations>[1]
+    );
+    expect(shape(server)).toEqual(shape(root));
+  });
+
+  test('the tab that showed keeps the focus when the merged stack had it', () => {
+    const store = testStore(tabs);
+    store.focusPane('chat');
+    store.mergeStack('chat', 'notes');
+    const root = store.getSnapshot().root;
+    expect(shape(root)).toEqual({
+      horizontal: ['files', { tabs: ['notes', 'diff', 'chat'] }],
+    });
+    expect(root.type === 'split' && root.children[1]).toMatchObject({
+      active: 'chat',
+    });
+    expect(store.getSnapshot().focusedPane).toBe('chat');
+  });
+
+  test('takes the next pane when no pane comes before it, and leaves a pinned tab', () => {
+    const store = testStore({
+      type: 'split',
+      id: 'row',
+      direction: 'horizontal',
+      sizes: [1, 1],
+      children: [
+        {
+          type: 'stack',
+          id: 'tabs',
+          active: 'a',
+          children: [{ ...pane('a'), pinned: true }, pane('b'), pane('c')],
+        },
+        pane('d'),
+      ],
+    });
+    store.mergeStack('b');
+    expect(shape(store.getSnapshot().root)).toEqual({
+      horizontal: ['a', { tabs: ['d', 'b', 'c'] }],
+    });
+  });
+});

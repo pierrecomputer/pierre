@@ -4,7 +4,14 @@
 // `edits`. The store commit moves the zoom of a stack to the tab that shows.
 import { randomIds } from './ids';
 import { LayoutOperationError } from './layout-operation';
-import { foldActivate, paneIn, requireNewPane, stackOf } from './model';
+import {
+  foldActivate,
+  paneIn,
+  requireNewPane,
+  shownPane,
+  stackOf,
+} from './model';
+import { visualOrder } from './spatial';
 import { addToStack, moveTabTo, pinPane } from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
 import type { PaneNode, TabOptions } from './types';
@@ -46,6 +53,16 @@ export interface StackCommands {
    * The pane shows and keeps the focus, and the zoom of its stack.
    */
   moveTab(id: string, index: number): void;
+  /**
+   * Move every tab of the stack of a pane into the stack of a target pane,
+   * after its tabs and in their order, in one change of `moveToStack`
+   * operations. The target is the pane before the stack in `visualOrder`, or
+   * after it when no pane comes before it. A pinned tab stays. The target
+   * keeps its active tab, except when the merged stack had the focus: then
+   * its tab that showed shows, with the focus. A pane outside a stack moves
+   * alone.
+   */
+  mergeStack(id: string, targetId?: string): void;
   /**
    * Pin a pane, or unpin it. A pinned tab comes before the other tabs of its
    * stack and stays in it. The pane goes to the end of the pinned run: the
@@ -166,6 +183,41 @@ export const stacksStore: StoreFeature<StackCommands> = {
         'local',
         sourceId
       );
+    },
+    mergeStack(id, targetId) {
+      const state = get();
+      const stack = stackOf(state.root, id);
+      const tabs = stack?.children ?? [paneIn(state.root, id)];
+      const own = new Set(tabs.map((tab) => tab.id));
+      const order = visualOrder(state.root);
+      const at = order.findIndex((pane) => own.has(pane.id));
+      const target =
+        targetId ??
+        (
+          order.slice(0, Math.max(0, at)).at(-1) ??
+          order.slice(at + 1).find((pane) => !own.has(pane.id))
+        )?.id;
+      if (target === undefined || own.has(target)) return;
+      const shown = stack === null ? id : (shownPane(stack)?.id ?? id);
+      const focused = own.has(state.focusedPane);
+      let root = state.root;
+      let index = stackOf(root, target)?.children.length ?? 1;
+      const operations = [];
+      for (const tab of tabs) {
+        if (tab.pinned === true && stack !== null) continue;
+        const operation = {
+          type: 'moveToStack',
+          pane: tab.id,
+          target,
+          index: index++,
+          activate: focused && tab.id === shown,
+          id: newId('stack'),
+        } as const;
+        root = fold(operation, root);
+        operations.push(operation);
+      }
+      if (operations.length > 0)
+        commit({ ...state, root }, operations, 'local', shown);
     },
     moveTab(id, index) {
       const state = get();

@@ -25,6 +25,13 @@ const movedToTabsText = ({
   targetTitle,
 }: TargetMessageValues): string =>
   `${paneTitle} moved into the group of ${targetTitle}`;
+const mergedText = ({
+  paneTitles,
+  targetTitle,
+}: {
+  paneTitles: string;
+  targetTitle: string;
+}): string => `${paneTitles} moved into the group of ${targetTitle}`;
 
 function useStacks(context: ViewContext): FeatureHooks {
   // The tab to focus after the next change, when its host shows.
@@ -88,8 +95,23 @@ export function stacks(): Feature<StackCommands> {
     requires: ['edits'],
     store: stacksStore,
     // A move into another stack. The tab list shows a move inside one stack.
-    announce(operation, { previous, pane, target, messages }) {
+    announce(operation, { previous, operations, pane, target, messages }) {
       if (operation.type !== 'moveToStack') return null;
+      // A merge: the moves of one change into one stack speak once, at the last.
+      const moves = operations.filter(
+        (each) =>
+          each.type === 'moveToStack' && each.target === operation.target
+      );
+      if (moves.length > 1)
+        return operation === moves.at(-1)
+          ? (messages.merged ?? mergedText)({
+              paneTitles: moves
+                .map((each) => pane((each as typeof operation).pane).paneTitle)
+                .join(', '),
+              count: moves.length,
+              ...target(operation.target),
+            })
+          : null;
       const { panes } = treeIndex(previous.root);
       const stack = panes.get(operation.pane)?.stack;
       return stack != null && stack === panes.get(operation.target)?.stack

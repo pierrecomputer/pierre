@@ -359,7 +359,17 @@ layout.activate('terminal');
 layout.moveToStack('logs', 'terminal'); // Into the stack, after the terminal.
 layout.moveToStack('logs', 'server', 0); // A new place among the tabs.
 layout.moveTab('logs', 2); // Third among the tabs of its stack.
+layout.mergeStack('logs'); // Every tab of its stack into the pane before it.
 ```
+
+`mergeStack(id, targetId?)` moves every tab of the stack of a pane into the
+stack of a target, after its tabs and in their order, in one change: one
+`moveToStack` operation for each tab, which a server folds as it folds any
+other. The target is the pane before the stack in `visualOrder`, or the pane
+after it when none comes before it. A pinned tab stays. The target keeps its
+active tab, except when the merged stack had the focus: then the tab that showed
+shows, with the focus. The change speaks once: "Diff, Chat moved into the group
+of Files" (`messages.merged`).
 
 `Layout.TabList` renders the tabs of the stack of its pane, with the WAI-ARIA
 tabs pattern, and makes the pane host the tab panel of its tab. A pane outside a

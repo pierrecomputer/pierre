@@ -166,6 +166,17 @@ export interface LayoutMessages {
     values: PaneMessageValues & { readonly edge: Edge }
   ) => string;
   /**
+   * The announcement of a merge of the tabs of a stack into another stack:
+   * their titles, joined with ", ", and their number. Default: "Diff, Chat
+   * moved into the group of Files".
+   */
+  readonly merged?: (
+    values: Pick<TargetMessageValues, 'targetTitle' | 'targetId'> & {
+      readonly paneTitles: string;
+      readonly count: number;
+    }
+  ) => string;
+  /**
    * The announcement of a move into another stack. Default: "Editor moved
    * into the group of Files".
    */
@@ -351,6 +362,8 @@ export interface AnnounceContext {
   /** The state before the change and after it. */
   readonly previous: LayoutState;
   readonly next: LayoutState;
+  /** Every operation of the change, such as the moves of a merge. */
+  readonly operations: readonly LayoutOperation[];
   /** The title of a pane, from the state after the change or before it. */
   title(id: string): string;
   /** The values of a message about a pane: its title and its ID. */

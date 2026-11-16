@@ -215,6 +215,7 @@ function announcementOf(
   const context: AnnounceContext = {
     previous,
     next,
+    operations: change.operations,
     messages,
     title,
     pane: (id) => ({ paneTitle: title(id), paneId: id }),

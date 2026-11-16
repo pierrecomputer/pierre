@@ -1030,3 +1030,23 @@ test("tabDrag's preview false shows no image, and a move that keeps its target c
   expect(withImage.images).toBe(1);
   expect(withImage.changes).toBeGreaterThan(0);
 });
+
+test('a merge of a stack into another speaks once, with each tab', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __stacks: { layout: { mergeStack(id: string, target?: string): void } };
+      }
+    ).__stacks.layout.mergeStack('terminal')
+  );
+  await expect(page.locator('.pierre-layouts > [role="status"]')).toHaveText(
+    'Terminal, Output moved into the group of Files'
+  );
+  await expect(page.locator('[data-layouts-pane="files"]')).toHaveAttribute(
+    'role',
+    'tabpanel'
+  );
+});
