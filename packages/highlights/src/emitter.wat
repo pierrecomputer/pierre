@@ -913,7 +913,7 @@
   ;; 0 inline colors, 1 CSS variables, 2 multiple themes, 3 UTF-16 line
   ;; records, 4 prepared HTML openers, 5 byte records.
   ;; Mode 5 ($tokens 2) is the output of a lexer module: byte ends
-  ;; and a leading gap of type 255. The host uses it when this module lexes
+  ;; and a leading gap of type 0xffff. The host uses it when this module lexes
   ;; an embedded body for a registered lexer.
   (func $hlBegin
     (local $offset i32)
@@ -1033,7 +1033,7 @@
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 
   ;; Write the output for the lexer records at control word 22 (byte length
-  ;; in word 26): [end:u32, type:u32], with ends relative to the input.
+  ;; in word 26): [end:u32, type:u16], with ends relative to the input.
   ;; A custom lexer can report ends that go backward, pass the
   ;; input, or stop before it, and types that do not exist. Emit each input
   ;; byte exactly once.

@@ -42,7 +42,14 @@ void t.test(
     );
     const { exports } = new WebAssembly.Instance(
       new WebAssembly.Module(wat2wasm(url.pathname, code)),
-      { env: { is_id_start: () => 0, is_id_continue: () => 0 } }
+      {
+        env: {
+          is_id_start: () => 0,
+          is_id_continue: () => 0,
+          fence_language: () => 0,
+          fence_lex: () => 0,
+        },
+      }
     );
     const memory = new Uint8Array(
       (exports.memory as WebAssembly.Memory).buffer

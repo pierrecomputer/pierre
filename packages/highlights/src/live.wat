@@ -645,7 +645,8 @@
       (i32.const 96))
     (i32.store offset=300 (local.get $dst) (global.get $ecmaImport))
     (i32.store offset=304 (local.get $dst) (global.get $ternaryTop))
-    (local.set $p (i32.add (local.get $dst) (i32.const 308)))
+    (i32.store offset=308 (local.get $dst) (global.get $fenceState))
+    (local.set $p (i32.add (local.get $dst) (i32.const 312)))
     (memory.copy (local.get $p) (local.get $stackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
     (if (i32.ne (local.get $stackBase) (i32.const $mem.jsTemplateBracketStack))
@@ -777,7 +778,8 @@
       (i32.const 96))
     (global.set $ecmaImport (i32.load offset=300 (local.get $src)))
     (global.set $ternaryTop (i32.load offset=304 (local.get $src)))
-    (local.set $p (i32.add (local.get $src) (i32.const 308)))
+    (global.set $fenceState (i32.load offset=308 (local.get $src)))
+    (local.set $p (i32.add (local.get $src) (i32.const 312)))
     (local.set $stackBase (call $lvStackBase))
     (memory.copy (local.get $stackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
@@ -816,6 +818,7 @@
   (func $lvResetCaptured
     (call $streamResetGlobals)
     (call $streamClearEmbedded)
+    (global.set $fenceState (i32.const 0))
     (global.set $recCarryHl (i32.const -1))
     (global.set $markdownDepth (i32.const 0))
     (global.set $bashArith (i32.const 0))
@@ -992,10 +995,10 @@
                     ;; blobs are stored zero-trimmed: rebuild the full image in the
                     ;; scratch area, which the line copy below then overwrites
                     ;; a trimmed blob reads as zeros past its end: pad the head
-                    ;; (308), the stack prefixes at their caps (8192), and the
+                    ;; (312), the stack prefixes at their caps (8192), and the
                     ;; checkpoint offset (2); checkpoint bytes are copied by length
-                    (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $streamStateUsed+8502)))
-                    (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8502))
+                    (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $streamStateUsed+8506)))
+                    (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8506))
                     (memory.copy
                       (local.get $inBase)
                       (i32.add (local.get $node) (i32.const 24))
@@ -1056,10 +1059,10 @@
               (i32.and
                 (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
                 (i32.const -8)))
-            ;; head, globals, delimiter, and fence registers (308) plus the five
+            ;; head, globals, delimiter, and fence registers (312) plus the five
             ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoint
             ;; offset (2) and bytes
-            (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $streamStateUsed+8580)))
+            (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $streamStateUsed+8584)))
             (local.set $blobLen
               (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))))
         (global.set $lvTransLo (local.get $recStart))

@@ -60,8 +60,9 @@ aliases. With the main entry, `registerLanguages([language])` adds it to the
 shared `codeToHtml()` and `codeToTokens()` functions, where its names override
 built-in names. The tokenizer classes use a registered custom lexer too. For a
 registered built-in language module, they use the built-in lexer of that
-language. Built-in lexers do not embed registered languages.
-`isRegisteredLanguage(name)` checks for a registered lexer.
+language, and its code blocks accept registered names too. Other built-in lexers
+do not embed registered languages. `isRegisteredLanguage(name)` checks for a
+registered lexer.
 
 For all languages and themes, use the combined lexer bundle:
 

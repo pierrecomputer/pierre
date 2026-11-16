@@ -24,8 +24,76 @@
     (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
     (i32.const 0))
 
+  ;; The registered lexer of the host for a fence name, from ID 256, or 0.
+  ;; StreamTokenizer and LiveTokenizer supply it for a registered language
+  ;; module; other hosts return 0.
+  (import "env" "fence_language" (func $hostFenceLanguage (param $ptr i32) (param $len i32) (result i32)))
+  ;; Lex the fence body [$from, $to) with the registered lexer $lang. $state is
+  ;; the ID of the lexer state before the body, and $reset starts the lexer
+  ;; again. The host copies the records to $out, growing the memory when
+  ;; they do not fit, and returns their byte length. It writes the ID of the
+  ;; state after the body to control word 10.
+  (import "env" "fence_lex" (func $hostFenceLex (param $lang i32) (param $from i32) (param $to i32) (param $reset i32) (param $state i32) (param $out i32) (result i32)))
+
+  ;; The state ID of the registered lexer in the open fence, or 0. A live
+  ;; line state holds it, so an edit starts that lexer at any line.
+  (global $fenceState (mut i32) (i32.const 0))
+
+  ;; WARNING: the host goes first, so a registered name overrides a built-in
+  ;; name in a fence, as it does in `codeToTokens`.
   (func $embedLanguageByName (param $from i32) (param $to i32) (result i32)
-    (call $languageByName (local.get $from) (local.get $to)))
+    (local $lang i32)
+    (local.set $lang
+      (call $hostFenceLanguage (local.get $from) (i32.sub (local.get $to) (local.get $from))))
+    (if (result i32) (local.get $lang)
+      (then (local.get $lang))
+      (else (call $languageByName (local.get $from) (local.get $to)))))
+
+  ;; Append the $bytes of child records at $out for the body [$from, $to).
+  ;; Their ends are relative to $from. Type 0xffff is a leading gap: it
+  ;; extends the previous record.
+  ;; The records are read in place. A write lands at or before the
+  ;; record just read, because appending never adds records.
+  ;; A custom lexer can stop early or pass the body end. Clamp each
+  ;; end and cover the rest, or the next token takes those bytes.
+  (func $embedAppend (param $bytes i32) (param $from i32) (param $to i32)
+    (local $record i32)
+    (local $stop i32)
+    (local $end i32)
+    (local $type i32)
+    (local.set $record (global.get $out))
+    (local.set $stop (i32.add (local.get $record) (local.get $bytes)))
+    (local.set $end (local.get $from))
+    (block $done
+      (loop $records
+        (br_if $done (i32.ge_u (local.get $record) (local.get $stop)))
+        (local.set $end (i32.add (local.get $from) (i32.load (local.get $record))))
+        (local.set $type (i32.load16_u offset=4 (local.get $record)))
+        (local.set $record (i32.add (local.get $record) (i32.const 6)))
+        (if (i32.gt_u (local.get $end) (local.get $to))
+          (then (local.set $end (local.get $to))))
+        (if (i32.eq (local.get $type) (i32.const 0xffff))
+          (then (call $emitGap (global.get $srcBase) (local.get $end)))
+          (else (call $recTok (local.get $type) (local.get $end))))
+        (br $records)))
+    (if (i32.lt_u (local.get $end) (local.get $to))
+      (then (call $recTok (enum.get $Token.none) (local.get $to)))))
+
+  ;; Lex the fence body [$from, $to) with the registered lexer $lang of the
+  ;; host and append its records. Only record output has a host for it.
+  (func $embedFence (param $lang i32) (param $from i32) (param $to i32) (param $resume i32)
+    (local $bytes i32)
+    (if (i32.eqz (global.get $tokens))
+      (then
+        (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
+        (return)))
+    (local.set $bytes
+      (call $hostFenceLex
+        (local.get $lang) (local.get $from) (local.get $to)
+        (i32.eqz (local.get $resume)) (global.get $fenceState) (global.get $out)))
+    (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
+    (global.set $fenceState (i32.load (i32.const 10)))
+    (call $embedAppend (local.get $bytes) (local.get $from) (local.get $to)))
 
   ;; The host keeps one child lexer for each open stream context.
   ;; End the context when its body closes, or the host cannot reuse the lexer.

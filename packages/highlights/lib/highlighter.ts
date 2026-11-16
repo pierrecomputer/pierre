@@ -20,6 +20,7 @@ import {
   resolveTheme,
   themeTableBytes,
 } from './theme';
+import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';
 import {
   lineRecordsToTokens,
@@ -107,8 +108,11 @@ export class HighlightsHighlighter implements Highlighter<
     this.#languageIds = languageIds;
     this.wasmModule = wasmModule;
     const env = {
-      // The combined module imports it for the documents of registered lexers.
+      // The combined module imports these for registered lexers: `lex_line`
+      // for their documents, the other two for their Markdown fences.
       lex_line: () => 0,
+      fence_language: () => 0,
+      fence_lex: () => 0,
       ...imports,
       is_id_start: (ptr: number, len: number) => this.#idClass(ptr, len, 0),
       is_id_continue: (ptr: number, len: number) => this.#idClass(ptr, len, 2),
@@ -529,6 +533,13 @@ export function assertWasmModule(): WebAssembly.Module {
 export function init(wasm: WebAssembly.Module): Highlighter {
   wasmModule = wasm;
   pooledStreamHighlighter = undefined;
+  // The registered highlighter emits with the combined module.
+  if (registered !== undefined) {
+    const langs = registeredLangs;
+    registered = undefined;
+    registeredLangs = [];
+    registerLanguages(langs);
+  }
   return (shared = new HighlightsHighlighter(wasm));
 }
 
@@ -607,22 +618,30 @@ export async function createHighlighter(
     emitterModule,
     ...languages.map((language) => compileLexer(language, false)),
   ]);
-  return buildHighlighter(emitter, languages, compiled, options.themes, false);
+  const [highlighter, add] = buildHighlighter(emitter, options.themes, false);
+  add(languages, compiled);
+  return highlighter;
 }
 
 /**
- * Register compiled lexers and themes with an emitter. Shared by
- * `createHighlighter` and `registerLanguages`. With `combined`, the emitter
- * is the combined module, and it lexes the embedded built-in languages that
- * have no registered lexer.
+ * Create a highlighter for an emitter and themes, and a function that adds
+ * compiled lexers to it. Shared by `createHighlighter` and
+ * `registerLanguages`. With `combined`, the emitter is the combined module,
+ * and it lexes the embedded built-in languages that have no registered lexer.
+ * The function also records each name in `lexers`; see `registeredLexer`.
  */
 function buildHighlighter(
   emitter: WebAssembly.Module,
-  languages: readonly Language[],
-  compiled: readonly WebAssembly.Module[],
   themeOptions: HighlighterOptions['themes'],
   combined: boolean
-): RegisteredHighlighter {
+): [
+  RegisteredHighlighter,
+  (
+    languages: readonly Language[],
+    compiled: readonly WebAssembly.Module[],
+    lexers?: Map<string, { module?: WebAssembly.Module; id: number }>
+  ) => void,
+] {
   const registrations = new Map<
     number,
     { module: WebAssembly.Module; id: number }
@@ -635,41 +654,57 @@ function buildHighlighter(
     ['ansi', -1],
   ]);
   let nextLanguageId = 256;
-  for (let i = 0; i < languages.length; i++) {
-    const localIds = new Map<number, number>();
-    const exports = WebAssembly.Module.exports(compiled[i]);
-    // A lexer built before the 6-byte record format writes 8-byte records.
-    if (!exports.some(({ name }) => name === 'recordBytes'))
-      throw new TypeError(
-        `${languages[i].name}: unsupported token record format; rebuild the lexer with buildHighlightsLexer`
-      );
-    const builtin = exports.some(({ name }) => name === 'reserve');
-    for (const [alias, id] of Object.entries(languages[i].aliases)) {
-      const name = alias.toLowerCase();
-      if (!Number.isInteger(id) || id < 0 || id > 255) {
-        throw new RangeError(`invalid lexer entry: ${alias}`);
+  const add = (
+    languages: readonly Language[],
+    compiled: readonly WebAssembly.Module[],
+    lexers?: Map<string, { module?: WebAssembly.Module; id: number }>
+  ): void => {
+    // Check every lexer first, so a rejected one adds nothing.
+    const builtins = compiled.map((module, i) => {
+      const exports = WebAssembly.Module.exports(module);
+      // A lexer built before the 6-byte record format writes 8-byte records.
+      if (!exports.some(({ name }) => name === 'recordBytes'))
+        throw new TypeError(
+          `${languages[i].name}: unsupported token record format; rebuild the lexer with buildHighlightsLexer`
+        );
+      for (const [alias, id] of Object.entries(languages[i].aliases)) {
+        if (!Number.isInteger(id) || id < 0 || id > 255)
+          throw new RangeError(`invalid lexer entry: ${alias}`);
+        if (alias.toLowerCase() === 'ansi')
+          throw new RangeError('reserved language name: ansi');
       }
-      if (name === 'ansi') throw new RangeError('reserved language name: ansi');
-      // A built-in ID also routes embedded languages. Only a built-in module
-      // (it exports `reserve`) keeps it; any other lexer gets a new ID, so its
-      // alias cannot reroute embedded code.
-      let externalId: number | undefined;
-      if (builtin && id > 0 && id === LANGS[name]) {
-        registrations.set(id, { module: compiled[i], id });
-        externalId = id;
-      } else {
-        externalId = localIds.get(id);
-        if (externalId === undefined) {
-          externalId = nextLanguageId++;
-          if (externalId > 0x7fff)
-            throw new RangeError('too many registered languages');
-          localIds.set(id, externalId);
-          registrations.set(externalId, { module: compiled[i], id });
+      // Only a built-in language module exports `reserve`.
+      return exports.some(({ name }) => name === 'reserve');
+    });
+    for (let i = 0; i < languages.length; i++) {
+      const localIds = new Map<number, number>();
+      for (const [alias, id] of Object.entries(languages[i].aliases)) {
+        const name = alias.toLowerCase();
+        // A built-in ID also routes embedded languages. Only a built-in module
+        // keeps it; any other lexer gets a new ID, so its alias cannot reroute
+        // embedded code.
+        let externalId: number | undefined;
+        if (builtins[i] && id > 0 && id === LANGS[name]) {
+          registrations.set(id, { module: compiled[i], id });
+          externalId = id;
+        } else {
+          externalId = localIds.get(id);
+          if (externalId === undefined) {
+            externalId = nextLanguageId++;
+            if (externalId > 0x7fff)
+              throw new RangeError('too many registered languages');
+            localIds.set(id, externalId);
+            registrations.set(externalId, { module: compiled[i], id });
+          }
         }
+        languageIds.set(name, externalId);
+        lexers?.set(name, {
+          module: builtins[i] ? undefined : compiled[i],
+          id,
+        });
       }
-      languageIds.set(name, externalId);
     }
-  }
+  };
   const roots = new Map<WebAssembly.Module, HighlightsHighlighter>();
   function createLexer(
     compiledModule: WebAssembly.Module,
@@ -850,7 +885,7 @@ function buildHighlighter(
   const beforeEmit = (id: number, mode: number, length: number): void => {
     if (id === 0) {
       plainRecord[0] = length;
-      highlighter.writeRecords(
+      highlighter!.writeRecords(
         mode,
         length,
         length === 0 ? plainBytes.subarray(0, 0) : plainBytes
@@ -863,15 +898,9 @@ function buildHighlighter(
       lexer = createLexer(registration.module, 0);
       roots.set(registration.module, lexer);
     }
-    highlighter.lexWith(lexer, registration.id, mode, length);
+    highlighter!.lexWith(lexer, registration.id, mode, length);
   };
-  let highlighter = new HighlightsHighlighter(
-    emitter,
-    beforeEmit,
-    undefined,
-    true,
-    languageIds
-  );
+  let highlighter: HighlightsHighlighter | undefined;
   const resolveOptions = (
     input: string | Uint8Array | ArrayBuffer,
     value: CodeToTokensOptions<Theme | ThemeFamily | string, string>
@@ -894,7 +923,7 @@ function buildHighlighter(
         throw new RangeError(`theme is not loaded: ${reference}`);
       resolved[key] = theme;
     }
-    if (oversized(highlighter, input)) {
+    if (highlighter === undefined || oversized(highlighter, input)) {
       highlighter = new HighlightsHighlighter(
         emitter,
         beforeEmit,
@@ -907,21 +936,24 @@ function buildHighlighter(
       ? { ...value, theme: resolved.theme, themes: undefined }
       : { ...value, theme: undefined, themes: resolved };
   };
-  return {
-    // `resolveOptions` can replace `highlighter`. Call it first.
-    codeToHtml: (input, value) => {
-      const resolved = resolveOptions(input, value);
-      return highlighter.codeToHtml(input, resolved);
+  return [
+    {
+      // `resolveOptions` creates or replaces `highlighter`. Call it first.
+      codeToHtml: (input, value) => {
+        const resolved = resolveOptions(input, value);
+        return highlighter!.codeToHtml(input, resolved);
+      },
+      codeToTokens: (input, value) => {
+        const resolved = resolveOptions(input, value);
+        return highlighter!.codeToTokens(input, resolved);
+      },
+      getLoadedLanguages: () => [...languageIds.keys()],
     },
-    codeToTokens: (input, value) => {
-      const resolved = resolveOptions(input, value);
-      return highlighter.codeToTokens(input, resolved);
-    },
-    getLoadedLanguages: () => [...languageIds.keys()],
-  };
+    add,
+  ];
 }
 
-let registered: RegisteredHighlighter | undefined;
+let registered: ReturnType<typeof buildHighlighter> | undefined;
 let registeredLangs: Language[] = [];
 let registeredLexers = new Map<
   string,
@@ -933,6 +965,8 @@ let registeredLexers = new Map<
  * `registerLanguages`. A lexer from `@pierre/wat-tools` has `module`. A
  * built-in language module has none, and `id` selects the built-in lexer:
  * its own lexer calls the host for embedded code and cannot save its state.
+ * The built-in lexer runs the registered lexers in its fences; see
+ * `fenceImports`.
  */
 export function registeredLexer(
   lang: string
@@ -941,43 +975,142 @@ export function registeredLexer(
 }
 
 /**
+ * The `fence_language` and `fence_lex` imports of a combined-module instance
+ * (`hl` returns it) that tokenizes a registered built-in language module.
+ * They run the registered lexers for its Markdown, MDX, Org, and Wikitext
+ * code blocks, as `codeToTokens` does. Each call makes its own lexer
+ * instances. With `live`, the instance tokenizes one line at a time and can
+ * start at any line: every lexer state gets an ID that the line state of the
+ * instance keeps, and the lexer loads it again from that ID.
+ */
+export function fenceImports(
+  hl: () => HighlightsHighlighter,
+  live: boolean
+): Record<string, (...args: number[]) => number> {
+  // Fence language IDs start at 256, after the built-in IDs.
+  const lexers: {
+    module: WebAssembly.Module;
+    id: number;
+    lexer?: HighlightsHighlighter;
+    // the ID of the state that `lexer` holds now
+    state: number;
+  }[] = [];
+  // WARNING: a live document keeps every state that its fences reached,
+  // because old line states refer to them by ID.
+  const states: Uint8Array[] = [];
+  const stateIds = new Map<string, number>();
+  return {
+    fence_language: (ptr, length) => {
+      const host = hl();
+      host.bindMemory();
+      const found = registeredLexers.get(
+        dec.decode(host.buffer.subarray(ptr, ptr + length)).toLowerCase()
+      );
+      if (found === undefined) return 0;
+      const { module, id } = found;
+      if (module === undefined) return id;
+      let index = lexers.findIndex(
+        (entry) => entry.module === module && entry.id === id
+      );
+      if (index < 0) {
+        // A lexer that cannot save its state leaves a live fence plain.
+        if (
+          live &&
+          !WebAssembly.Module.exports(module).some(
+            ({ name }) => name === 'saveState'
+          )
+        )
+          return 0;
+        index = lexers.push({ module, id, state: 0 }) - 1;
+      }
+      return 256 + index;
+    },
+    fence_lex: (lang, from, to, reset, state, out) => {
+      const host = hl();
+      host.bindMemory();
+      const entry = lexers[lang - 256];
+      const lexer = (entry.lexer ??= new HighlightsHighlighter(entry.module));
+      const exports = lexer.instance.exports as unknown as {
+        saveState(): number;
+        loadState(): void;
+      };
+      if (live && reset === 0 && state !== entry.state) {
+        if (state === 0) reset = 1;
+        else {
+          lexer.writeInput(states[state - 1]);
+          exports.loadState();
+        }
+      }
+      const at = lexer.lexRecords(
+        entry.id,
+        lexer.writeInput(host.buffer.subarray(from, to)),
+        reset !== 0
+      );
+      const bytes = lexer.dv.getUint32(10, true);
+      // The combined module does not check token types, as the emitter does.
+      for (let i = at + 4; i < at + bytes; i += 6) {
+        const type = lexer.dv.getUint16(i, true);
+        if (type >= tokenTypes.length && type !== 0xffff)
+          lexer.dv.setUint16(i, 0, true);
+      }
+      if (live) {
+        // The lexer writes its state after its records.
+        const length = exports.saveState();
+        lexer.bindMemory();
+        const saved = lexer.buffer.subarray(at + bytes, at + bytes + length);
+        // One character for each byte, so the state bytes can key a Map.
+        let key = String.fromCharCode(lang);
+        for (let i = 0; i < saved.length; i += 8192)
+          key += String.fromCharCode.apply(
+            null,
+            saved.subarray(i, i + 8192) as unknown as number[]
+          );
+        let id = stateIds.get(key);
+        if (id === undefined) {
+          id = states.push(saved.slice());
+          stateIds.set(key, id);
+        }
+        entry.state = id;
+      }
+      host.grow(out + bytes + 96);
+      host.dv.setUint32(10, entry.state, true);
+      host.buffer.set(lexer.buffer.subarray(at, at + bytes), out);
+      return bytes;
+    },
+  };
+}
+
+/**
  * Add lexers to `codeToHtml` and `codeToTokens`. Their names and aliases
  * override built-in names there. Call `init` first; the combined module emits
  * their HTML, so no other Wasm loads.
  */
 export function registerLanguages(langs: readonly Language[]): void {
-  const list = registeredLangs.slice();
+  const added: Language[] = [];
   for (const language of langs) {
     // A loader can return a new object for the same lexer on each call, so
     // compare the content.
+    const aliases = JSON.stringify(language.aliases);
     if (
-      !list.some(
+      ![...registeredLangs, ...added].some(
         (old) =>
           old === language ||
           (old.name === language.name &&
             old.wasm === language.wasm &&
-            JSON.stringify(old.aliases) === JSON.stringify(language.aliases))
+            JSON.stringify(old.aliases) === aliases)
       )
     )
-      list.push(language);
+      added.push(language);
   }
-  if (registered !== undefined && list.length === registeredLangs.length) {
-    return;
+  if (registered !== undefined && added.length === 0) return;
+  const compiled = added.map((language) => compileLexer(language, true));
+  if (registered === undefined) {
+    registered = buildHighlighter(assertWasmModule(), [], true);
+    registeredLexers = new Map();
   }
-  const compiled = list.map((language) => compileLexer(language, true));
-  registered = buildHighlighter(assertWasmModule(), list, compiled, [], true);
-  registeredLangs = list;
-  registeredLexers = new Map();
-  for (let i = 0; i < list.length; i++) {
-    // Only a built-in language module exports `reserve`.
-    const custom = WebAssembly.Module.exports(compiled[i]).some(
-      ({ name }) => name === 'reserve'
-    )
-      ? undefined
-      : compiled[i];
-    for (const [alias, id] of Object.entries(list[i].aliases))
-      registeredLexers.set(alias.toLowerCase(), { module: custom, id });
-  }
+  // Only the new lexers are added, so the lexer instances stay in use.
+  registered[1](added, compiled, registeredLexers);
+  registeredLangs = [...registeredLangs, ...added];
 }
 
 /**
@@ -993,7 +1126,7 @@ export function codeToHtml(
     registered !== undefined &&
     registeredLexers.has(String(options.lang).toLowerCase())
   ) {
-    return registered.codeToHtml(input, options);
+    return registered[0].codeToHtml(input, options);
   }
   return assertShared(input).codeToHtml(input, options);
 }
@@ -1011,7 +1144,7 @@ export function codeToTokens(
     registered !== undefined &&
     registeredLexers.has(String(options.lang).toLowerCase())
   ) {
-    return registered.codeToTokens(input, options);
+    return registered[0].codeToTokens(input, options);
   }
   return assertShared(input).codeToTokens(input, options);
 }
@@ -1039,6 +1172,7 @@ export class StreamTokenizer extends TransformStream<
   #streamChar = 0;
   #streamStarted = false;
   #lexer: HighlightsHighlighter | undefined;
+  #fences = false;
 
   constructor(
     options: CodeToTokensOptions<Theme | ThemeFamily, Lang | (string & {})>
@@ -1070,12 +1204,21 @@ export class StreamTokenizer extends TransformStream<
       registered?.id ?? (this.#ansi === undefined ? langIdOf(options.lang) : 0);
     this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
-    if (registered?.module === undefined) {
+    if (registered === undefined) {
       this.#hl =
         pooledStreamHighlighter?.wasmModule === compiledWasm
           ? pooledStreamHighlighter
           : new HighlightsHighlighter(compiledWasm);
       pooledStreamHighlighter = undefined;
+    } else if (registered.module === undefined) {
+      // A registered language module runs the registered lexers in its
+      // fences. Its instance keeps their state, so it stays out of the pool.
+      this.#fences = true;
+      this.#hl = new HighlightsHighlighter(
+        compiledWasm,
+        undefined,
+        fenceImports(() => this.#hl!, false)
+      );
     } else {
       this.#lexer =
         idleStreamLexers.get(registered.module) ??
@@ -1192,6 +1335,7 @@ export class StreamTokenizer extends TransformStream<
       if (streamEmitter === hl && hl.pageN > 16) streamEmitter = undefined;
       this.#lexer = undefined;
     } else if (
+      !this.#fences &&
       pooledStreamHighlighter == null &&
       hl.wasmModule === wasmModule &&
       hl.pageN <= 16

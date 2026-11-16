@@ -110,7 +110,8 @@ content; `LiveTokenizer` treats it as `plain`. Custom lexers from
 `registerLanguages(langs)` for the shared `codeToHtml` and `codeToTokens`
 functions. Registered names override built-in names there. The tokenizer classes
 use a registered custom lexer too; for a registered built-in language module,
-they use the built-in lexer. Built-in lexers do not embed registered languages.
+they use the built-in lexer, and its code blocks accept registered names too.
+Other built-in lexers do not embed registered languages.
 
 ## Runtime and types
 

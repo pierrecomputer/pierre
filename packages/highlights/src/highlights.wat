@@ -92,7 +92,9 @@
     (global.set $streamDepth (i32.const 0))
     ;; A pooled instance must reset the same state as a new Wasm instance.
     (if (local.get $reset)
-      (then (call $streamResetGlobals)))
+      (then
+        (call $streamResetGlobals)
+        (global.set $fenceState (i32.const 0))))
     (call $hlBegin)
     ;; Byte records go to a parent lexer, which owns the token before
     ;; a chunk. A carried record would take a leading gap from it.

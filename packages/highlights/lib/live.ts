@@ -8,6 +8,7 @@ import type {
 } from './core';
 import {
   assertWasmModule,
+  fenceImports,
   HighlightsHighlighter,
   langIdOf,
   registeredLexer,
@@ -384,6 +385,9 @@ export class LiveTokenizer {
           return bytes;
         },
       };
+    } else if (custom !== undefined) {
+      // A registered language module runs the registered lexers in its fences.
+      imports = fenceImports(() => hl, true);
     }
     const hl = new HighlightsHighlighter(
       assertWasmModule(),
