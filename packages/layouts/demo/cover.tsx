@@ -46,6 +46,23 @@ const page = {
     document.getElementById('popover')?.hidePopover();
   },
   /**
+   * Cover an element that no `Root` renders, and tell whether the cover wrote
+   * anything on its pane host.
+   */
+  coverBare(): boolean {
+    const bare = document.createElement('div');
+    bare.className = 'pierre-layouts';
+    const host = document.createElement('section');
+    host.dataset.layoutsPane = 'bare';
+    bare.append(host);
+    document.body.append(bare);
+    const release = coverLayout(bare, bare, { area: 'all' });
+    const written = host.inert || host.hasAttribute('data-covered');
+    release();
+    bare.remove();
+    return written;
+  },
+  /**
    * Open a drawer inside a positioned container, 150 px from the left edge of
    * the viewport: its offsets are relative to the container.
    */

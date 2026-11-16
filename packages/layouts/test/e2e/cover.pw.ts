@@ -120,3 +120,21 @@ test('a drawer inside a positioned container covers the panes under it on the sc
   expect(await hidden(page, 'a')).toBe(false);
   expect(await hidden(page, 'c')).toBe(false);
 });
+
+test('an element that Root does not render gets no cover, and a warning in development', async ({
+  page,
+}) => {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'warning') warnings.push(message.text());
+  });
+  const written = await page.evaluate(() =>
+    (
+      window as unknown as { __cover: { coverBare(): boolean } }
+    ).__cover.coverBare()
+  );
+  expect(written).toBe(false);
+  expect(
+    warnings.some((text) => text.includes('coverLayout found no layout'))
+  ).toBe(true);
+});

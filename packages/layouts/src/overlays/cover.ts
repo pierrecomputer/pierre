@@ -2,7 +2,6 @@
 // app. The panes that the overlay covers completely stop rendering until the
 // release, and the layout element reports the covered and the overlapped
 // panes. This module imports nothing from the store or the geometry.
-import { PANE_VISIBILITY_EVENT } from '../dom/pane-visibility-event';
 import { OVERLAY, type PaneVisibility, visibilityOf } from '../dom/visibility';
 
 /** The panes under an overlay. */
@@ -96,59 +95,30 @@ const shows = (host: HTMLElement): boolean =>
 // again when the last of them releases it.
 const counts = new WeakMap<PaneVisibility, Map<string, number>>();
 
-// The old `Layout` component has no visibility module: the overlays that hide
-// each of its hosts, and the writes of the cover on them.
-const legacyOverlays = new WeakMap<HTMLElement, Set<object>>();
-
-function notify(host: HTMLElement, hidden: boolean): void {
-  host.dispatchEvent(
-    new CustomEvent(PANE_VISIBILITY_EVENT, { detail: { hidden } })
-  );
-}
-
-/** Cover one pane, or release it, for one overlay. */
+/**
+ * Cover one pane, or release it, for one overlay. The visibility module of
+ * the view writes the host and sends the events, and only when the content
+ * starts or stops rendering (`DEC-layouts-pane-visibility-owner`).
+ */
 function coverPane(
-  root: HTMLElement,
+  visibility: PaneVisibility,
   host: HTMLElement,
-  token: object,
   cover: boolean
 ): void {
-  const visibility = visibilityOf(root);
   const id = paneIdOf(host);
-  if (visibility !== undefined) {
-    let byId = counts.get(visibility);
-    if (byId === undefined) {
-      byId = new Map();
-      counts.set(visibility, byId);
-    }
-    const count = (byId.get(id) ?? 0) + (cover ? 1 : -1);
-    if (count > 0) byId.set(id, count);
-    else byId.delete(id);
-    // The module sends the events, and only when the content starts or
-    // stops rendering.
-    if (count === (cover ? 1 : 0))
-      visibility.set(id, OVERLAY, cover ? OVERLAY : 0);
-    return;
+  let byId = counts.get(visibility);
+  if (byId === undefined) {
+    byId = new Map();
+    counts.set(visibility, byId);
   }
-  // `inert` changes in the same style update as `content-visibility`, so the
-  // content gets no new style for either change.
-  const overlays = legacyOverlays.get(host) ?? new Set();
-  legacyOverlays.set(host, overlays);
-  if (cover) {
-    if (overlays.has(token)) return;
-    overlays.add(token);
-    if (overlays.size > 1) return;
-    host.dataset.covered = 'overlay';
-    host.inert = true;
-    notify(host, true);
-  } else {
-    if (!overlays.delete(token) || overlays.size > 0) return;
-    delete host.dataset.covered;
-    // A zoom or a hidden pane keeps its own `inert`.
-    if (shows(host)) host.inert = false;
-    notify(host, false);
-  }
+  const count = (byId.get(id) ?? 0) + (cover ? 1 : -1);
+  if (count > 0) byId.set(id, count);
+  else byId.delete(id);
+  if (count === (cover ? 1 : 0))
+    visibility.set(id, OVERLAY, cover ? OVERLAY : 0);
 }
+
+let warnedNoRoot = false;
 
 /**
  * The box of an overlay in viewport coordinates, from its layout offsets, so
@@ -193,7 +163,8 @@ const sameList = (a: readonly string[], b: readonly string[]): boolean =>
  * `OVERLAY_COVER_EVENT` with the covered and the overlapped panes. Call it
  * when the overlay opens, and call the release when its close starts, so that
  * the panes render under its exit. A pane under two overlays renders again
- * after both release it.
+ * after both release it. An element that `Layout.Root` does not render gets
+ * no cover, and a warning in development.
  */
 export function coverLayout(
   layout: HTMLElement,
@@ -201,7 +172,16 @@ export function coverLayout(
   options: CoverOptions = {}
 ): () => void {
   const root = layoutRootOf(layout);
-  const token = {};
+  const visibility = visibilityOf(root);
+  if (visibility === undefined) {
+    if (process.env.NODE_ENV !== 'production' && !warnedNoRoot) {
+      warnedNoRoot = true;
+      console.warn(
+        '@pierre/layouts: coverLayout found no layout that Layout.Root renders, so it covers nothing.'
+      );
+    }
+    return () => {};
+  }
   const hidden = new Map<string, HTMLElement>();
   let cover = NO_COVER;
   const report = (next: OverlayCover): void => {
@@ -225,13 +205,13 @@ export function coverLayout(
       const id = paneIdOf(host);
       if (ids.has(id) && !hidden.has(id)) {
         hidden.set(id, host);
-        coverPane(root, host, token, true);
+        coverPane(visibility, host, true);
       }
     }
     for (const [id, host] of hidden)
       if (!ids.has(id)) {
         hidden.delete(id);
-        coverPane(root, host, token, false);
+        coverPane(visibility, host, false);
       }
   };
   const update = (): void => {
@@ -271,7 +251,7 @@ export function coverLayout(
   observer.observe(overlay);
   return () => {
     observer.disconnect();
-    for (const host of hidden.values()) coverPane(root, host, token, false);
+    for (const host of hidden.values()) coverPane(visibility, host, false);
     hidden.clear();
     report(NO_COVER);
   };
