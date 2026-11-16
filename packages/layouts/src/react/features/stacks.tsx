@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 
 import { focusTab, paneHosts } from '../../dom/panes';
-import { type StackCommands, stacks as stacksStore } from '../../stacks';
+import { type StackCommands, stacksStore } from '../../stacks';
 import { treeIndex } from '../../tree-index';
 import { cell } from '../cell';
 import type {

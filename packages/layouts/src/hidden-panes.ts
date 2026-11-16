@@ -22,7 +22,7 @@ export interface HiddenPaneCommands {
 }
 
 /** The hide command of a store. */
-export const hiddenPanes: StoreFeature<HiddenPaneCommands> = {
+export const hiddenPanesStore: StoreFeature<HiddenPaneCommands> = {
   folds: {
     hide(root, { pane, hidden }) {
       paneIn(root, pane);
@@ -51,3 +51,8 @@ export const hiddenPanes: StoreFeature<HiddenPaneCommands> = {
     },
   }),
 };
+
+/** The hide and show commands of a store, for `createLayoutStore`. */
+export function hiddenPanes(): StoreFeature<HiddenPaneCommands> {
+  return hiddenPanesStore;
+}

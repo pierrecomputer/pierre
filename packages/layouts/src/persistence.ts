@@ -18,7 +18,7 @@ export interface PersistenceCommands {
 }
 
 /** The commands of the saved form of a store. */
-export const persistence: StoreFeature<PersistenceCommands> = {
+export const persistenceStore: StoreFeature<PersistenceCommands> = {
   commands: ({ get, commit, own }) => ({
     toStoredTree: () => Object.freeze({ version: 3, root: get().root }),
     setStoredTree(tree) {
@@ -30,3 +30,8 @@ export const persistence: StoreFeature<PersistenceCommands> = {
     },
   }),
 };
+
+/** The saved form of a store, for `createLayoutStore`. */
+export function persistence(): StoreFeature<PersistenceCommands> {
+  return persistenceStore;
+}

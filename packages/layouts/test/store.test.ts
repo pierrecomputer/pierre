@@ -156,7 +156,7 @@ describe('store features', () => {
   };
 
   test('zoom zooms the focused pane and restores it', () => {
-    const store = createLayoutStore(row, [zoom]);
+    const store = createLayoutStore(row, [zoom()]);
     store.toggleZoom();
     expect(store.getSnapshot().zoomedPane).toBe('a');
     store.toggleZoom('a');
@@ -164,7 +164,7 @@ describe('store features', () => {
   });
 
   test('stacks shows and orders tabs without a tree model', () => {
-    const store = createLayoutStore(tabs, [stacks]);
+    const store = createLayoutStore(tabs, [stacks()]);
     store.activate('b');
     store.moveTab('b', 0);
     const { root, focusedPane } = store.getSnapshot();
@@ -175,7 +175,7 @@ describe('store features', () => {
   });
 
   test('stacks moves a pane into another stack with the tree model of edits', () => {
-    const store = createLayoutStore(tabs, [edits(naryTree), stacks]);
+    const store = createLayoutStore(tabs, [edits(naryTree), stacks()]);
     store.moveToStack('c', 'a', 0);
     const { root, focusedPane } = store.getSnapshot();
     expect(root.type).toBe('stack');
@@ -184,7 +184,7 @@ describe('store features', () => {
   });
 
   test('hiddenPanes hides a pane, and the hide of the last visible pane throws last_pane', () => {
-    const store = createLayoutStore(row, [hiddenPanes]);
+    const store = createLayoutStore(row, [hiddenPanes()]);
     store.setHidden('a', true);
     store.setHidden('b', true);
     expect(() => store.setHidden('c', true)).toThrow(
@@ -198,12 +198,12 @@ describe('store features', () => {
   });
 
   test('persistence gives the saved form and sets a tree from it in one change', () => {
-    const source = createLayoutStore(tabs, [stacks, persistence]);
+    const source = createLayoutStore(tabs, [stacks(), persistence()]);
     source.activate('b');
     const saved = parseStoredLayoutTree(
       JSON.parse(JSON.stringify(source.toStoredTree()))
     );
-    const store = createLayoutStore(row, [persistence]);
+    const store = createLayoutStore(row, [persistence()]);
     let calls = 0;
     store.subscribe(() => calls++);
     store.setStoredTree(saved);
@@ -214,5 +214,14 @@ describe('store features', () => {
       version: 3,
       root: source.getSnapshot().root,
     });
+  });
+});
+
+describe('the store features of the root entry', () => {
+  test('are functions, as the features of the React entry are', () => {
+    for (const feature of [stacks, zoom, hiddenPanes, persistence]) {
+      expect(typeof feature).toBe('function');
+      expect(typeof feature().commands).toBe('function');
+    }
   });
 });

@@ -23,7 +23,7 @@ export interface ZoomCommands {
  * The zoom commands of a store. The zoom of a tab that does not show gives
  * two operations: `activate`, which a server folds, and `zoom`.
  */
-export const zoom: StoreFeature<ZoomCommands> = {
+export const zoomStore: StoreFeature<ZoomCommands> = {
   folds: { activate: foldActivate },
   commands: ({ get, fold, commit, requirePane }) => {
     const zoomTo = (id: string, restore: boolean): void => {
@@ -62,6 +62,11 @@ export const zoom: StoreFeature<ZoomCommands> = {
     };
   },
 };
+
+/** The zoom commands of a store, for `createLayoutStore`. */
+export function zoom(): StoreFeature<ZoomCommands> {
+  return zoomStore;
+}
 
 /** Choose the direction of a zoom exit, preferring an edge the pane already touches. */
 export function getExitEdge(

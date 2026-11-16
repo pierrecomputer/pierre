@@ -72,7 +72,10 @@ function startMark(trigger: string): void {
 
 document.addEventListener('click', () => startMark('click'), true);
 
-const stackCommands: Feature<StackCommands> = { name: 'stacks', store: stacks };
+const stackCommands: Feature<StackCommands> = {
+  name: 'stacks',
+  store: stacks(),
+};
 const layout = createLayout(tree, [
   edits(naryTree),
   stackCommands,

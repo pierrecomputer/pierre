@@ -54,7 +54,13 @@ const column: LayoutNode = {
   children: [pane('top'), { ...pane('bottom'), collapsedSize: 30 }],
 };
 
-const features = [edits(naryTree), stacks, zoom, hiddenPanes, persistence];
+const features = [
+  edits(naryTree),
+  stacks(),
+  zoom(),
+  hiddenPanes(),
+  persistence(),
+];
 
 function storeOf(root: LayoutNode = start) {
   return createLayoutStore(root, features);

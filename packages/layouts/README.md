@@ -542,19 +542,26 @@ store has the core commands only: `getSnapshot`, `subscribe`, `setRoot`,
 `setSizes`, `setCollapsed`, `focusPane`, `transient`, and `revert`, and it keeps
 the shape of each tree that it receives. Each store feature adds its commands:
 
-| Feature        | Commands                                                        |
-| -------------- | --------------------------------------------------------------- |
-| `edits(model)` | `split`, `close`, `move`, `swap`; the store gets the tree model |
-| `stacks`       | `activate`, `addTab`, `moveToStack`, `moveTab`, `setPinned`     |
-| `zoom`         | `toggleZoom`, `setZoom`                                         |
-| `hiddenPanes`  | `setHidden`                                                     |
-| `persistence`  | `toStoredTree`, `setStoredTree`                                 |
+| Feature         | Commands                                                        |
+| --------------- | --------------------------------------------------------------- |
+| `edits(model)`  | `split`, `close`, `move`, `swap`; the store gets the tree model |
+| `stacks()`      | `activate`, `addTab`, `moveToStack`, `moveTab`, `setPinned`     |
+| `zoom()`        | `toggleZoom`, `setZoom`                                         |
+| `hiddenPanes()` | `setHidden`                                                     |
+| `persistence()` | `toStoredTree`, `setStoredTree`                                 |
 
-A bundler keeps only the features that an app imports, so a store with no tree
-edits loads no tree model. A move of a tab into another stack takes the pane out
-of its place with the tree model, so it needs `edits`. A feature is a
-`StoreFeature`: an optional tree model, a function that builds its commands from
-the `StoreContext` of the store, and the folds of its operations.
+```ts
+import { createLayoutStore, edits, naryTree, stacks } from '@pierre/layouts';
+
+const store = createLayoutStore(root, [edits(naryTree), stacks()]);
+```
+
+The two entries give each feature the same name and the same call: in
+`@pierre/layouts` it returns a `StoreFeature` for `createLayoutStore`, and in
+`@pierre/layouts/react` a feature for `createLayout`, with its view. A bundler
+keeps only the features that an app imports, so a store with no tree edits loads
+no tree model. A move of a tab into another stack takes the pane out of its
+place with the tree model, so it needs `edits`.
 
 Read with `layout.getSnapshot()`. Snapshots are immutable. Invalid tree updates
 throw before changing state. A close or a hide of the last pane that is not

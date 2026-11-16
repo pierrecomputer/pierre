@@ -1,13 +1,7 @@
 // Features with a store part only: their commands need no view.
 import { type EditCommands, edits as editsStore } from '../../edits';
-import {
-  type HiddenPaneCommands,
-  hiddenPanes as hiddenPanesStore,
-} from '../../hidden-panes';
-import {
-  type PersistenceCommands,
-  persistence as persistenceStore,
-} from '../../persistence';
+import { type HiddenPaneCommands, hiddenPanesStore } from '../../hidden-panes';
+import { type PersistenceCommands, persistenceStore } from '../../persistence';
 import type { TreeModel } from '../../types';
 import type {
   EdgeMessageValues,

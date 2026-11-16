@@ -35,10 +35,10 @@ export function testStore(
 ): TestStore {
   return createLayoutStore(root, [
     edits(model),
-    stacks,
-    zoom,
-    hiddenPanes,
-    persistence,
+    stacks(),
+    zoom(),
+    hiddenPanes(),
+    persistence(),
   ]);
 }
 

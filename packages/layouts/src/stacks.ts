@@ -55,7 +55,7 @@ export interface StackCommands {
 }
 
 /** The tab commands of a store. */
-export const stacks: StoreFeature<StackCommands> = {
+export const stacksStore: StoreFeature<StackCommands> = {
   ids: randomIds,
   folds: {
     activate: foldActivate,
@@ -182,3 +182,8 @@ export const stacks: StoreFeature<StackCommands> = {
     },
   }),
 };
+
+/** The tab commands of a store, for `createLayoutStore`. */
+export function stacks(): StoreFeature<StackCommands> {
+  return stacksStore;
+}

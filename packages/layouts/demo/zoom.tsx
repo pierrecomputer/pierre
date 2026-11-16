@@ -41,7 +41,7 @@ const featuresParam = params.get('features');
 
 // A React feature with the tab commands of the store only: `stacks()` with its
 // view part comes later.
-const stackCommands: Feature = { name: 'stacks', store: stacks };
+const stackCommands: Feature = { name: 'stacks', store: stacks() };
 
 let features: Feature[] = [
   edits(naryTree),

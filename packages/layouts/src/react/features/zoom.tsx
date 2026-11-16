@@ -17,7 +17,7 @@ import { COVERED, ZOOM } from '../../dom/visibility';
 import { stackOf } from '../../model';
 import { presentation } from '../../presentation';
 import type { Edge, LayoutState } from '../../types';
-import { getExitEdges, type ZoomCommands, zoom as zoomStore } from '../../zoom';
+import { getExitEdges, type ZoomCommands, zoomStore } from '../../zoom';
 import { boxesBeforeChange } from '../boxes';
 import { cell } from '../cell';
 import type {

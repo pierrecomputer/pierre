@@ -2,7 +2,7 @@
 // on a tree on a server. A bundler keeps this module only when an app imports
 // it.
 import { edits } from './edits';
-import { hiddenPanes } from './hidden-panes';
+import { hiddenPanesStore } from './hidden-panes';
 import { keepEqual, nodesById } from './keep-equal';
 import type {
   LayoutChange,
@@ -12,7 +12,7 @@ import type {
 import { LayoutOperationError } from './layout-operation';
 import { findNode, paneIn } from './model';
 import { naryTree } from './models/n-ary';
-import { stacks } from './stacks';
+import { stacksStore } from './stacks';
 import {
   type ContextOfStore,
   type CoreLayoutStore,
@@ -73,7 +73,7 @@ export function applyOperations(
 export interface ApplyLayoutOperationsOptions {
   /**
    * The store features whose operations the tree takes. By default
-   * `edits(naryTree)`, `stacks`, and `hiddenPanes`.
+   * `edits(naryTree)`, `stacks()`, and `hiddenPanes()`.
    */
   readonly features?: readonly StoreFeature[];
   /** The maker of the IDs of new nodes, for operations that carry none. */
@@ -93,7 +93,7 @@ export function applyLayoutOperations(
 ): LayoutNode {
   const store = createLayoutStore(
     root,
-    options.features ?? [edits(naryTree), stacks, hiddenPanes],
+    options.features ?? [edits(naryTree), stacksStore, hiddenPanesStore],
     { newId: options.newId }
   );
   applyOperations(store, operations);

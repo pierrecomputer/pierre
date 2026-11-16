@@ -35,7 +35,7 @@ const tree: LayoutNode = {
 };
 
 const storeOf = () =>
-  createLayoutStore(tree, [edits(naryTree), stacks, zoom, hiddenPanes]);
+  createLayoutStore(tree, [edits(naryTree), stacks(), zoom(), hiddenPanes()]);
 
 const zoomed = (store: ReturnType<typeof storeOf>) =>
   store.getSnapshot().zoomedPane;
