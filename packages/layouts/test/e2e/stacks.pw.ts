@@ -317,6 +317,52 @@ test('a tab drag inside its tab list changes the order of the tabs, and the tab 
   ).toBeFocused();
 });
 
+test('a press in a field or a button inside a tab drags no tab, and a press on the tab drags it', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?nested=1');
+  const tabs = tabsOf(page, 'main');
+  // The order of the editors stack, from the store: the host that shows can
+  // change at the drop.
+  const order = () =>
+    page.evaluate(() => {
+      type Node = { id: string; children?: Node[] };
+      const root = (
+        window as unknown as {
+          __stacks: { layout: { getSnapshot(): { root: Node } } };
+        }
+      ).__stacks.layout.getSnapshot().root;
+      const editors = root.children?.find((node) => node.id === 'editors');
+      return editors?.children?.map((node) => node.id) ?? [];
+    });
+  const target = await tabBox(page, 'main', 'util.ts');
+  const to = { x: target.x + 4, y: target.y + target.height / 2 };
+  const controls = [
+    tabs.locator('input[aria-label="Name of README.md"]'),
+    tabs.locator('button', { hasText: 'Pin README.md' }),
+  ];
+  for (const control of controls) {
+    const box = await control.boundingBox();
+    if (box === null) throw new Error('No box for the control');
+    await page.mouse.move(box.x + 4, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 8 });
+    await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(0);
+    await page.mouse.up();
+    expect(await order()).toEqual(['main', 'util', 'test', 'types', 'docs']);
+  }
+  // A press on the text of the tab is the tab's own: it drags the tab.
+  const label = tabs.locator('[data-layout-tab="docs"] > span');
+  const box = await label.boundingBox();
+  if (box === null) throw new Error('No box for the label');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await expect(page.locator('.pierre-layout-tab-drop')).toHaveCount(1);
+  await page.mouse.up();
+  await expect.poll(order).toEqual(['main', 'docs', 'util', 'test', 'types']);
+});
+
 test('a tab list outside Layout.Header takes none of the header geometry', async ({
   page,
 }) => {

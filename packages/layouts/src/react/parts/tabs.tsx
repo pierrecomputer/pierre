@@ -38,6 +38,13 @@ import {
   warnMissing,
 } from './part';
 
+/**
+ * The elements inside a tab that keep a press for themselves: a field, a
+ * button, a link, editable text, or a close mark (`data-layout-tab-close`).
+ */
+const TAB_CONTROLS =
+  'input,textarea,select,button,a[href],[contenteditable]:not([contenteditable="false"]),[data-layout-tab-close]';
+
 const tabsName = ({ paneTitle }: PaneMessageValues): string =>
   `Tabs of ${paneTitle}`;
 
@@ -235,15 +242,21 @@ export function Tab({
       onClick: () => {
         if (!active) select(tab.id);
       },
-      // A press on a close mark (`data-layout-tab-close`) is a click.
+      // A press on a control inside the tab, such as a field or a close
+      // mark, is the control's own and starts no drag. The tab element is a
+      // button by default, so it does not count as a control of itself.
       onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        const control = (event.target as Element).closest(TAB_CONTROLS);
         if (
-          (event.target as Element).closest('[data-layout-tab-close]') === null
+          control !== null &&
+          control !== event.currentTarget &&
+          event.currentTarget.contains(control)
         )
-          context
-            .hooks()
-            .find((hooks) => hooks.startTabDrag !== undefined)
-            ?.startTabDrag?.(tab, tabs, event);
+          return;
+        context
+          .hooks()
+          .find((hooks) => hooks.startTabDrag !== undefined)
+          ?.startTabDrag?.(tab, tabs, event);
       },
       onKeyDown,
       children: children ?? (
