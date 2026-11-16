@@ -100,16 +100,30 @@ test('A8: the zoom button keeps its name when it is pressed', async ({
   expect(await button.getAttribute('aria-label')).toBe(before);
 });
 
-test('A10: a focused separator shows an outline in forced colors mode', async ({
+test('A10: a focused separator, header button, or tab shows an outline in forced colors mode', async ({
   page,
 }) => {
   await page.emulateMedia({ forcedColors: 'active' });
-  const separator = page.getByRole('separator').first();
-  await separator.focus();
-  const outline = await separator.evaluate(
-    (element) => getComputedStyle(element).outlineStyle
-  );
-  expect(outline).not.toBe('none');
+  // Add a tab, so that a header holds a tab list.
+  await page.locator('[data-layouts-pane="1"] .pierre-layouts-title').click();
+  await page.getByRole('button', { name: 'Add tab', exact: true }).click();
+  // A key press makes the next focus a keyboard focus, as after a click the
+  // browser shows no focus indicator for a focus from script.
+  await page.keyboard.press('Shift');
+  for (const control of [
+    page.getByRole('separator').first(),
+    page.getByRole('button', { name: 'Zoom Pane 2', exact: true }),
+    page.getByRole('tab').first(),
+  ]) {
+    await control.focus();
+    await expect(control).toBeFocused();
+    const outline = await control.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { style: style.outlineStyle, width: style.outlineWidth };
+    });
+    expect(outline.style).not.toBe('none');
+    expect(outline.width).not.toBe('0px');
+  }
 });
 
 test('A16: a corner is a pointer shortcut of 24 CSS pixels with a resting contrast of 3:1', async ({
