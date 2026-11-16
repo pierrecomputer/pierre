@@ -195,13 +195,13 @@ export interface ZoomButtonState {
   zoomed: boolean;
 }
 
-const zoomName = ({
-  paneTitle,
-  zoomed,
-}: PaneMessageValues & { zoomed: boolean }): string =>
-  `${zoomed ? 'Restore' : 'Zoom'} ${paneTitle}`;
+const zoomName = ({ paneTitle }: PaneMessageValues): string =>
+  `Zoom ${paneTitle}`;
 
-/** Zoom the pane, or restore the layout. It needs `zoom()`. */
+/**
+ * Zoom the pane, or restore the layout. It needs `zoom()`. A toggle button:
+ * its name stays the same, and `aria-pressed` and the icon give the state.
+ */
 export function ZoomButton({
   render,
   children,
@@ -221,7 +221,6 @@ export function ZoomButton({
       'aria-label': (context.messages().zoom ?? zoomName)({
         paneTitle: title,
         paneId: pane.id,
-        zoomed,
       }),
       'aria-pressed': zoomed,
       'data-zoomed': zoomed || undefined,

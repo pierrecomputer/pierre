@@ -107,9 +107,7 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
     contentVisibility: 'visible',
   });
   await expect(covered).toHaveCSS('content-visibility', 'hidden');
-  await page
-    .getByRole('button', { name: 'Restore Pane 1', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
   expect(await coveredState()).toEqual({
     animating: true,
     contentVisibility: 'visible',

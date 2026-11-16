@@ -112,7 +112,7 @@ test('a collapsed pane under an animated zoom gets no visibility event at the zo
   expect((await visibility(page)).terminal).toEqual([true]);
   await expect(host(page, 'terminal')).toHaveAttribute('data-covered', 'zoom');
   expect((await visibility(page)).terminal).toEqual([true]);
-  await page.getByRole('button', { name: 'Restore editor' }).click();
+  await page.getByRole('button', { name: 'Zoom editor' }).click();
   await expect(host(page, 'terminal')).not.toHaveAttribute('data-covered');
   await expect.poll(() => flipAnimations(page)).toBe(0);
   expect((await visibility(page)).terminal).toEqual([true]);

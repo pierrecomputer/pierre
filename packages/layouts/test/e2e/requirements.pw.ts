@@ -60,7 +60,6 @@ test('A6: a separator is a pointer target of at least 24 CSS pixels', async ({
 test('A8: the zoom button keeps its name when it is pressed', async ({
   page,
 }) => {
-  test.fail(true, 'The name changes from "Zoom" to "Restore".');
   const pane = page.locator('[data-layouts-pane="1"]');
   const button = pane.locator('header button[aria-pressed]');
   const before = await button.getAttribute('aria-label');
@@ -152,17 +151,18 @@ test('A15: Escape that pane content handles does not restore the zoom', async ({
   );
 });
 
-test('A18: the status message announces a zoom, a close, and a move with the titles of the panes', async ({
+test('A18: the status message announces a zoom, a restore, a split, a close, and a move with the titles of the panes', async ({
   page,
 }) => {
   // The live region of the layout; the page has a status region of its own.
   const status = page.locator('.pierre-layouts > [role="status"]');
   await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
   await expect(status).toHaveText('Pane 1 zoomed');
-  await page
-    .getByRole('button', { name: 'Restore Pane 1', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
   await expect(status).toHaveText('Pane 1 restored');
+  // Pane 1 has the focus, so the new pane opens to its right.
+  await page.getByRole('button', { name: 'Split right', exact: true }).click();
+  await expect(status).toHaveText(/^Pane \d+ opened to the right of Pane 1$/);
   await page.getByRole('button', { name: 'Close Pane 3', exact: true }).click();
   await expect(status).toHaveText('Pane 3 closed');
   // Drag pane 2 by its move handle to the right edge of pane 4.
@@ -184,9 +184,7 @@ test('A18: the status message announces a zoom, a close, and a move with the tit
   // screen reader speaks it again.
   const before = await status.locator('span').elementHandle();
   await page.getByRole('button', { name: 'Zoom Pane 2', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Restore Pane 2', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Zoom Pane 2', exact: true }).click();
   await page.getByRole('button', { name: 'Zoom Pane 2', exact: true }).click();
   await expect(status).toHaveText('Pane 2 zoomed');
   expect(await before?.evaluate((span) => span.isConnected)).toBe(false);

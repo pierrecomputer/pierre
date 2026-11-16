@@ -170,9 +170,7 @@ test('panes and the zoom change at once when their animations are off', async ({
 
   expect(await clickAndCount('Zoom Editor')).toBeGreaterThan(0);
   await page.waitForTimeout(400);
-  await page
-    .getByRole('button', { name: 'Restore Editor', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
   await page.waitForTimeout(400);
 
   await page.getByLabel('Animate zoom').uncheck();

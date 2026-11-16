@@ -131,12 +131,10 @@ export interface LayoutMessages {
   /** The name of `Layout.CloseButton`. Default: "Close Editor". */
   readonly close?: (values: PaneMessageValues) => string;
   /**
-   * The name of `Layout.ZoomButton`, for a pane that is zoomed or not.
-   * Default: "Zoom Editor", or "Restore Editor" while it is zoomed.
+   * The name of `Layout.ZoomButton`. It does not change while the pane is
+   * zoomed: `aria-pressed` gives the state. Default: "Zoom Editor".
    */
-  readonly zoom?: (
-    values: PaneMessageValues & { readonly zoomed: boolean }
-  ) => string;
+  readonly zoom?: (values: PaneMessageValues) => string;
   /** The announcement of a zoom. Default: "Editor zoomed". */
   readonly zoomed?: (values: PaneMessageValues) => string;
   /** The announcement of the end of a zoom. Default: "Editor restored". */

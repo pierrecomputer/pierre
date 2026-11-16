@@ -56,7 +56,7 @@ test('the zoom button zooms a pane over the layout and restores it', async ({
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('separator')).toHaveCount(3);
   await button.click();
-  const restore = page.getByRole('button', { name: 'Restore editor' });
+  const restore = page.getByRole('button', { name: 'Zoom editor' });
   await expect(restore).toHaveAttribute('aria-pressed', 'true');
   await expect(restore).toHaveAttribute('data-zoomed', 'true');
   const editor = host(page, 'editor');
@@ -124,7 +124,7 @@ test('a collapsed pane under a zoom gets no visibility event at the zoom, after 
     () => new Promise((resolve) => requestAnimationFrame(resolve))
   );
   expect((await visibility(page)).terminal).toEqual([true]);
-  await page.getByRole('button', { name: 'Restore editor' }).click();
+  await page.getByRole('button', { name: 'Zoom editor' }).click();
   await expect(host(page, 'terminal')).not.toHaveAttribute('data-covered');
   await expect(host(page, 'terminal')).toHaveAttribute(
     'data-collapsed',
