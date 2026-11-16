@@ -32,6 +32,10 @@
   (const $K.ff $mem.spaces+27)
   (const $K.fffd $mem.spaces+28)
 
+  (const $ansiCellLimit 65536)
+  (global $cellWidths (mut i32) (i32.const 0))
+  (global $cellWidthCount (mut i32) (i32.const 0))
+
   (global $prefixLen (mut i32) (i32.const 0))
   (global $prefixCols (mut i32) (i32.const 0))
   (global $needBlank (mut i32) (i32.const 0))
@@ -501,19 +505,40 @@
       (br_if $l (i32.lt_u (local.get $dst) (local.get $end))))
     (global.set $out (local.get $end)))
 
-  ;; Where column $i keeps its width, or 0: the first 256 columns use
-  ;; $mem.column, the rest the cell-width cache, which then caches no cells.
+  ;; Walk only table records to reserve one bounded workspace after the records.
+  ;; HTML and table-free documents need none; the output never moves over it.
+  (func $ansiTableSpace
+    (local $r i32)
+    (local $cols i32)
+    (local $rows i32)
+    (local $slots i32)
+    (global.set $cellWidths (global.get $out))
+    (global.set $cellWidthCount (i32.const 0))
+    (local.set $r (global.get $tableHead))
+    (block $done
+      (loop $record
+        (br_if $done (i32.eqz (local.get $r)))
+        (local.set $cols (i32.load offset=8 (local.get $r)))
+        (local.set $rows (i32.load offset=$R.nLines (local.get $r)))
+        (local.set $slots
+          (if (result i32) (i32.gt_u (local.get $rows)
+                (i32.div_u (i32.const $ansiCellLimit) (local.get $cols)))
+            (then (i32.const $ansiCellLimit))
+            (else (i32.mul (local.get $rows) (local.get $cols)))))
+        (if (i32.gt_u (local.get $slots) (global.get $cellWidthCount))
+          (then (global.set $cellWidthCount (local.get $slots))))
+        (local.set $r (i32.load offset=12 (local.get $r)))
+        (br $record)))
+    (call $ensureOut (i32.shl (global.get $cellWidthCount) (i32.const 2)))
+    (global.set $out (i32.add (global.get $out)
+      (i32.shl (global.get $cellWidthCount) (i32.const 2)))))
+
+  ;; Block analysis limits tables to 512 columns, all held in this flat array.
   (func $ansiColumn (param $i i32) (result i32)
-    (select
-      (i32.add (i32.shl (local.get $i) (i32.const 2))
-        (select (i32.const $mem.column) (i32.const $mem.cellWidth-1024)
-          (i32.lt_u (local.get $i) (i32.const 256))))
-      (i32.const 0)
-      (i32.lt_u (local.get $i) (i32.const $mem.cellWidthSlots+256))))
+    (i32.add (i32.const $mem.column) (i32.shl (local.get $i) (i32.const 2))))
 
   ;; Two passes over the rows: the first measures every cell, so the columns
-  ;; can be aligned, and the second writes them. The cell-width cache keeps
-  ;; the first pass's widths for the second.
+  ;; can be aligned, and the second writes them using those measurements.
   (func $ansiTable (param $r i32)
     (local $cols i32)
     (local $rows i32)
@@ -570,31 +595,27 @@
               (local.set $p (global.get $cellNext))
               (local.set $beg (global.get $cellBeg))
               (local.set $cellTo (global.get $cellEnd))
-              (local.set $cached (i32.and (i32.le_u (local.get $cols) (i32.const 256))
-                (i32.lt_u (local.get $cell) (i32.const $mem.cellWidthSlots))))
+              (local.set $cached (i32.lt_u (local.get $cell) (global.get $cellWidthCount)))
               (local.set $w (i32.const 0))
               (if (local.get $has)
                 (then
                   (local.set $w
                     (if (result i32) (i32.and (local.get $pass) (local.get $cached))
-                      (then (i32.load offset=$mem.cellWidth (i32.shl (local.get $cell) (i32.const 2))))
+                      (then (i32.load (i32.add (global.get $cellWidths)
+                        (i32.shl (local.get $cell) (i32.const 2)))))
                       (else (call $measureCell (local.get $beg) (local.get $cellTo)
                         (global.get $cellUnescapePipe)))))))
               (local.set $col (call $ansiColumn (local.get $i)))
               (if (i32.eqz (local.get $pass))
                 (then
                   (if (local.get $cached)
-                    (then (i32.store offset=$mem.cellWidth
-                      (i32.shl (local.get $cell) (i32.const 2)) (local.get $w))))
-                  (if (local.get $col)
-                    (then
-                      (if (i32.or (i32.eqz (local.get $row))
-                            (i32.gt_u (local.get $w) (i32.load (local.get $col))))
-                        (then (i32.store (local.get $col) (local.get $w)))))))
+                    (then (i32.store (i32.add (global.get $cellWidths)
+                      (i32.shl (local.get $cell) (i32.const 2))) (local.get $w))))
+                  (if (i32.or (i32.eqz (local.get $row))
+                        (i32.gt_u (local.get $w) (i32.load (local.get $col))))
+                    (then (i32.store (local.get $col) (local.get $w)))))
                 (else
-                  (local.set $pad (i32.sub
-                    (select (i32.load (local.get $col)) (i32.const 0) (local.get $col))
-                    (local.get $w)))
+                  (local.set $pad (i32.sub (i32.load (local.get $col)) (local.get $w)))
                   (if (i32.lt_s (local.get $pad) (i32.const 0)) (then (local.set $pad (i32.const 0))))
                   ;; right alignment pads before the cell, center splits the padding
                   (local.set $lead (i32.load8_u
@@ -691,8 +712,7 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $cols)))
         (if (local.get $i) (then (out.str "\e2\94\bc")))
         (local.set $col (call $ansiColumn (local.get $i)))
-        (call $ansiRule (i32.add
-          (select (i32.load (local.get $col)) (i32.const 0) (local.get $col))
+        (call $ansiRule (i32.add (i32.load (local.get $col))
           (i32.add (i32.ne (local.get $i) (i32.const 0))
             (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $cols)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

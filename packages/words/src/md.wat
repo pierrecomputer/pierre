@@ -9,22 +9,27 @@
                       units and mark an open fence,
                       bit 4 = completion appended a pending link destination,
                       bit 5 = ansi input is bytes and may hold invalid UTF-8,
-                      bit 6 = complete unfinished inline syntax
+                      bit 6 = complete unfinished inline syntax,
+                      bit 7 = completion changed the input (set by render)
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
       [14:18)         frontmatter JSON start (u32 LE, 0 when absent)
       [18:22)         frontmatter JSON length (u32 LE)
       [22:26)         ansi wrap width (u32 LE, 0 = no wrapping)
+      [26]            HTML format flags (u8, see $Fmt in format.wat); 0 = plain HTML
+      [27]            the output has a code block in slots (set by render; the
+                      host clears it)
+      [28:30)         byte length of the id prefix at $mem.idPrefix (u16 LE)
       [30]            document contains global definitions
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch
       [64:80)         hex digits
-      [80:65536)      static tables and fixed work areas, in this order (see
+      [80:$mem.input) static tables and fixed work areas, in this order (see
                       memory.wat for the addresses): pooled output string
                       literals, scanner byte tables, HTML5 named character
-                      references and their lookup cache, Unicode P|S ranges,
+                      references and their immutable index, Unicode P|S ranges,
                       Unicode case folding, HTML block tag names and the GFM
                       tag filter list, Unicode display width ranges, ansi marker
                       fragments and SGR depth counters, the block analysis
@@ -32,12 +37,12 @@
                       stack, then opener bottoms, tick memo, and the bracket
                       stack; completion uses it for its two stacks), table
                       column widths, the ansi line prefix and pending marker,
-                      ansi list state, the packed Unicode range tables, cached
-                      ansi table-cell widths
+                      ansi list state, and the packed Unicode range tables
     [] pages 2..N (text buffer)
-      [65536:EOF)     input, a NUL sentinel, then at least 32 bytes of slack
+      [$mem.input:EOF) input, a NUL sentinel, then at least 32 bytes of slack
       [meta:rec)      frontmatter JSON
-      [rec:out)       block records, the reference hash table, the footnote order
+      [rec:out)       block records, the reference hash table, the footnote order,
+                      and temporary ANSI table measurements when needed
       [out:…)         rendered output
       [scratch:end)   rebuilt block content when needed, and inline marks
   ;;)
@@ -52,8 +57,9 @@
   (import "./render.wat")
   (import "./frontmatter.wat")
   (import "./complete.wat")
+  (import "./format.wat")
 
-  (entity-table $mem.entities $mem.entitiesEnd)
+  (entity-table $mem.entities $mem.entitiesEnd $mem.entitySlots $mem.entityNames)
   (string-pool $mem.strings $mem.stringsEnd)
 
   ;; The first record after the safe append boundary, and the output position
@@ -99,6 +105,8 @@
     (global.set $boundaryRec (i32.const 0))
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
+    (global.set $fmt (i32.load8_u (i32.const 26)))
+    (global.set $tableHead (i32.const 0))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $src (i32.const $mem.input))
     ;; a UTF-8 byte order mark is not content
@@ -163,9 +171,25 @@
                   (call $closeLeaf)
                   (local.set $blockStart (i32.add (local.get $blockStart) (i32.const 1)))
                   (br $boundary)))
-              (if (i32.eqz (i32.or (global.get $mode) (global.get $leaf)))
+              (if (i32.eqz (global.get $leaf))
                 (then
-                  (if (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart))))
+                  (if (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const "#"))
+                    (then
+                      (local.set $blockEnd (call $rootHeading (local.get $blockStart)))
+                      (if (local.get $blockEnd)
+                        (then
+                          (local.set $blockStart (local.get $blockEnd))
+                          (br $blockLine)))))
+                  (if (i32.or (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const "\60"))
+                        (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const "~")))
+                    (then
+                      (local.set $blockEnd (call $rootFence (local.get $blockStart)))
+                      (if (local.get $blockEnd)
+                        (then
+                          (local.set $blockStart (local.get $blockEnd))
+                          (br $blockLine)))))
+                  (if (i32.and (i32.eqz (global.get $mode))
+                        (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart)))))
                     (then
                       (local.set $blockStart (call $startPlainParagraphRun (local.get $blockStart)))
                       (br $blockLine)))))))
@@ -264,8 +288,9 @@
     (i32.store8 (i32.const 30) (i32.ne (global.get $linkHash) (i32.const 0)))
     (local.get $safeEnd))
 
-  ;; Unpack the Unicode range tables once, at instantiation.
+  ;; Expand the immutable lookup tables once, at instantiation.
   (func $init
+    (call $unpackEntities)
     (drop (call $unpackRanges
       (call $unpackRanges
         (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))
@@ -283,10 +308,13 @@
       (then
         (i32.store8 (i32.const 1) (i32.and (i32.load8_u (i32.const 1)) (i32.const 191)))
         (if (call $complete (i32.shr_u (local.get $safeEnd) (i32.const 31)))
-          (then (local.set $safeEnd (call $analyze))))))
+          (then
+            (i32.store8 (i32.const 1) (i32.or (i32.load8_u (i32.const 1)) (i32.const 128)))
+            (local.set $safeEnd (call $analyze))))))
     (global.set $out (i32.and (i32.add (global.get $rec) (i32.const 15)) (i32.const -16)))
-    (global.set $outBase (global.get $out))
     (call $setOutCap)
+    (if (global.get $mode) (then (call $ansiTableSpace)))
+    (global.set $outBase (global.get $out))
     (global.set $boundaryOut (global.get $outBase))
     (call $renderBlocks)
     (i32.store (i32.const 6) (global.get $outBase))

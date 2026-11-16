@@ -200,8 +200,12 @@
       (select (i64.const "<strong>") (i64.const "<del>")
         (i32.eq (local.get $kind) (i32.const $T.strong)))
       (i32.eq (local.get $kind) (i32.const $T.em))))
-    (i32.add (local.get $dst) (i32.and (i32.shr_u (i32.const 0x5840)
-      (i32.shl (local.get $kind) (i32.const 2))) (i32.const 15))))
+    (local.set $kind (i32.and (i32.shr_u (i32.const 0x5840)
+      (i32.shl (local.get $kind) (i32.const 2))) (i32.const 15)))
+    (local.set $dst (i32.add (local.get $dst) (local.get $kind)))
+    (if (global.get $fmt)
+      (then (return (call $markAt (local.get $dst) (i32.sub (local.get $kind) (i32.const 2))))))
+    (local.get $dst))
 
   ;; Batch safe literal gaps and consecutive emphasis marks within at most 256
   ;; source bytes. Six output bytes per source byte cover every emphasis tag.
@@ -223,7 +227,9 @@
     (if (i32.gt_u (local.get $n) (i32.const 256))
       (then (local.set $n (i32.const 256))))
     (local.set $limit (i32.add (local.get $p) (local.get $n)))
-    (call $ensureOut (i32.mul (local.get $n) (i32.const 6)))
+    ;; a formatted tag takes up to 25 bytes for one delimiter
+    (call $ensureOut (i32.mul (local.get $n)
+      (select (i32.const 26) (i32.const 6) (global.get $fmt))))
     (local.set $dst (global.get $out))
     (local.set $base (global.get $contentBase))
     (block $done
@@ -477,7 +483,10 @@
             (else
               (if (global.get $plain)
                 (then (call $outByte (i32.const 32)))
-                (else (out.str "<br />\n")))))
+                (else
+                  (if (global.get $fmt)
+                    (then (out.str "<br data-markdown=\22br\22>\n"))
+                    (else (out.str "<br />\n")))))))
           (return))
          ;; link opener: an image's label becomes plain alt text
          (local.set $close (i32.load offset=$M.data (local.get $m)))
@@ -619,7 +628,7 @@
                   (i32.eq (local.get $kind) (i32.const $T.strong)))
                 (i32.eq (local.get $kind) (i32.const $T.em)))))
               (else
-                (call $ensureOut (i32.const 8))
+                (call $ensureOut (i32.const 48))
                 (global.set $out (call $htmlEmphOpenAt (global.get $out) (local.get $kind)))))))
         (br $l))))
 
@@ -741,8 +750,11 @@
           (else
             (if (i32.eq (local.get $c) (i32.const "'"))
               (then
-                (i64.store (global.get $out) (i64.const "&#x27;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 6))))
+                ;; formatted HTML escapes it as the host's `escapeHtml` does
+                (i64.store (global.get $out)
+                  (select (i64.const "&#39;") (i64.const "&#x27;") (global.get $fmt)))
+                (global.set $out (i32.add (global.get $out)
+                  (i32.sub (i32.const 6) (i32.ne (global.get $fmt) (i32.const 0))))))
               (else (if (i32.eqz (local.get $c))
               (then
                 ;; NUL is U+FFFD, as in text

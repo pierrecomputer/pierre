@@ -77,7 +77,7 @@ normal Markdown.
 | `allowedElements`, `disallowedElements` | Element filters. Use only one of these props.                                                 |
 | `unwrapDisallowed`                      | Keep the children of filtered elements.                                                       |
 | `urlTransform`                          | Change link and image URLs before validation.                                                 |
-| `idPrefix`                              | Prefix for generated ids. Default: a unique React id.                                         |
+| `idPrefix`                              | Prefix for generated ids, up to 4,096 bytes. Default: a unique React id.                      |
 | `onAnimationStart`, `onAnimationEnd`    | Called when the stream starts and ends.                                                       |
 
 Fades and the caret need `styles.css`. Fades run only during a stream. Reduced
@@ -135,8 +135,10 @@ syntax. A link with no destination yet renders as
 `<pre data-markdown-incomplete>`.
 
 Appended text reuses completed blocks. An edit, a changed `incomplete` option,
-or a link or footnote definition can force a full render. A long open paragraph
-is parsed again on each update.
+or a link or footnote definition can force a full render. Single-line paragraphs
+and top-level code fences can append literal content incrementally, including
+paragraphs with completed inline formatting. Syntax changes and more complex
+open blocks return to the parser.
 
 `@pierre/words/html` exports `createHtmlRenderer()` for formatted HTML and
 `createDomRenderer()` for DOM updates without React. See

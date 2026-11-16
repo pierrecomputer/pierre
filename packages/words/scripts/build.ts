@@ -87,20 +87,31 @@ function codePointRanges(
   return ranges;
 }
 
-// HTML5 named character references, read by $entityMatch:
-//   [base+0]   values pointer u16, name count u16
-//   [base+4]   u16 per block of 64 names: where its first name starts
+// HTML5 named references: `(entity-table <start> <end> <slots> <names>)`.
+// [start, slots) holds one u16 displacement seed per hash bucket, and the
+// packed table below starts at `slots`. $unpackEntities expands it at
+// instantiation into u32 name/value records in [slots, names) and the names
+// after them; pairs keep their address.
+//   [slots+0]  u16 offset of the values from `slots`, name count u16
 //   names      sorted by byte and front-coded. Each name is a byte below '0'
-//              with the length it shares with the previous name (0 at a block
-//              start), then its other bytes. A 0 byte and 0x7f end the list.
+//              with the length it shares with the previous name, then its
+//              other bytes. A 0 byte ends the list.
 //   values     two planes of one byte per name: the low and high byte of a
 //              u16. It is a code point, or a surrogate as an escape: 0xD800
 //              plus the offset of a letter from U+1D400, or 0xDC00 plus the
 //              1-based index of a pair.
 //   pairs      two u16 code points each. Pair i ends 4 * (i - 1) bytes before
 //              `end`, so its address needs no pointer.
-table('entity-table', (base, inner) => {
-  const end = Number(inner.match(/^\s*\d+\s+(\d+)/)![1]);
+table('entity-table', (tableBase, inner) => {
+  const [end, base, namesBase] = inner
+    .match(/^\s*\d+\s+(\d+)\s+(\d+)\s+(\d+)/)!
+    .slice(1)
+    .map(Number);
+  const seedCount = (base - tableBase) / 2;
+  const slotCount = (namesBase - base) / 4;
+  // $entitySlot has these sizes as masks and shifts.
+  if (seedCount !== 512 || slotCount !== 4096)
+    throw new Error('entity-table sizes differ from $entitySlot');
   const entities: Record<string, string> = {};
   for (const line of fs
     .readFileSync(new URL('../src/entities.txt', import.meta.url), 'utf-8')
@@ -124,16 +135,13 @@ table('entity-table', (base, inner) => {
   const n = names.length;
   const pairs: string[] = [];
   const stream: number[] = [];
-  const blocks: number[] = [];
-  const blockStart = base + 4 + Math.ceil(n / 64) * 2;
   const values = new Uint8Array(n * 2);
   let prev = '';
   names.forEach((name, i) => {
     if (!/^[a-zA-Z][a-zA-Z0-9]{0,30}$/.test(name))
       throw new Error(`entity name exceeds packed format: ${name}`);
     let shared = 0;
-    if (i % 64 === 0) blocks.push(blockStart + stream.length);
-    else while (name[shared] === prev[shared]) shared++;
+    while (name[shared] === prev[shared]) shared++;
     stream.push(shared);
     for (let j = shared; j < name.length; j++) stream.push(name.charCodeAt(j));
     prev = name;
@@ -154,23 +162,93 @@ table('entity-table', (base, inner) => {
     values[i] = value & 0xff;
     values[n + i] = value >> 8;
   });
-  stream.push(0, 0x7f);
-  const valuesPtr = blockStart + stream.length;
-  if (valuesPtr > 0xffff) throw new Error(`entity-table pointers exceed u16`);
-  if (valuesPtr + values.length > end - pairs.length * 4)
+  stream.push(0);
+  const valuesAt = 4 + stream.length;
+  if (base + valuesAt + values.length > end - pairs.length * 4)
     throw new Error(`entity-table needs more than [${base}:${end})`);
   const bytes = new Uint8Array(end - base);
   const dv = new DataView(bytes.buffer);
-  dv.setUint16(0, valuesPtr, true);
+  dv.setUint16(0, valuesAt, true);
   dv.setUint16(2, n, true);
-  blocks.forEach((at, i) => dv.setUint16(4 + i * 2, at, true));
-  bytes.set(stream, blockStart - base);
-  bytes.set(values, valuesPtr - base);
+  bytes.set(stream, 4);
+  bytes.set(values, valuesAt);
   pairs.forEach((pair, i) => {
     dv.setUint16(bytes.length - (i + 1) * 4, pair.charCodeAt(0), true);
     dv.setUint16(bytes.length - (i + 1) * 4 + 2, pair.charCodeAt(1), true);
   });
-  return bytes;
+  const hashes = names.map((name) => {
+    const word = (at: number): number =>
+      name.charCodeAt(at) |
+      (name.charCodeAt(at + 1) << 8) |
+      (name.charCodeAt(at + 2) << 16) |
+      (name.charCodeAt(at + 3) << 24);
+    let hash = Math.imul(word(0) ^ name.length, 0x9e3779b1);
+    hash = Math.imul(
+      hash ^ (name.length > 4 ? word(name.length - 4) : 0),
+      0x85ebca6b
+    );
+    if (name.length > 8)
+      hash = Math.imul(
+        hash ^ word((name.length >>> 1) - 2) ^ (name.charCodeAt(4) << 24),
+        0xc2b2ae35
+      );
+    return (hash ^ (hash >>> 16)) >>> 0;
+  });
+  if (new Set(hashes).size !== names.length)
+    throw new Error('entity-table name hash collision');
+  const buckets = Array.from({ length: seedCount }, () => [] as number[]);
+  hashes.forEach((hash, at) => buckets[hash & (seedCount - 1)].push(at));
+  const slots = Array<number>(slotCount).fill(-1);
+  const seeds = new Uint16Array(seedCount);
+  const order = buckets
+    .map((_, at) => at)
+    .sort((a, b) => buckets[b].length - buckets[a].length);
+  for (const bucket of order) {
+    const entries = buckets[bucket];
+    if (entries.length < 2) continue;
+    let seed = 0;
+    for (; seed < 32768; seed++) {
+      const targets = entries.map((at) => {
+        const hash = hashes[at];
+        return (
+          (((hash >>> 9) + Math.imul(seed, (hash >>> 16) | 1)) >>> 0) %
+          slots.length
+        );
+      });
+      if (
+        new Set(targets).size !== targets.length ||
+        targets.some((at) => slots[at] >= 0)
+      )
+        continue;
+      targets.forEach((target, at) => {
+        slots[target] = entries[at];
+      });
+      seeds[bucket] = seed;
+      break;
+    }
+    if (seed === 32768) throw new Error('entity-table displacement exhausted');
+  }
+  let free = 0;
+  for (let bucket = 0; bucket < buckets.length; bucket++) {
+    if (buckets[bucket].length !== 1) continue;
+    while (slots[free] >= 0) free++;
+    slots[free] = buckets[bucket][0];
+    seeds[bucket] = 32768 | free;
+  }
+  const expanded =
+    namesBase -
+    tableBase +
+    names.reduce((size, name) => size + name.length + 1, 0) +
+    pairs.length * 4;
+  if (expanded + 16 > end - tableBase)
+    throw new Error('expanded entity table exceeds static memory');
+  if (tableBase + expanded - pairs.length * 4 > 0x10000)
+    throw new Error('expanded entity name pointers exceed u16');
+  const output = new Uint8Array(end - tableBase);
+  const outputView = new DataView(output.buffer);
+  seeds.forEach((seed, at) => outputView.setUint16(at * 2, seed, true));
+  output.set(bytes, base - tableBase);
+  return output;
 });
 
 // (word-table <base> <end> "name" ...): a set of lowercase ASCII words, read by

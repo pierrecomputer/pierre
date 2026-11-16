@@ -14,7 +14,7 @@ import { createDomRenderer } from '../html/dom';
 import { createHtmlRenderer } from '../html/render';
 import type { AnimateOptions, HtmlOptions } from '../html/types';
 
-export { defaultUrlTransform } from '../html/render';
+export { defaultUrlTransform } from '../lib/utils';
 export type * from '../html/types';
 
 export interface MarkdownProps

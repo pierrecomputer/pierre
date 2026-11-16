@@ -9,9 +9,36 @@ import {
   init,
   renderToHtml,
 } from '../dist/index.js';
+import { delta, type InternalHtmlUpdate } from '../lib/internal.ts';
 
 const decoder = new TextDecoder();
-/** Render independently of the append cache, with the same source-HTML policy. */
+
+void test('public session results retain their documented fields', () => {
+  const fields: Record<keyof HtmlUpdate, true> = {
+    html: true,
+    stable: true,
+    addition: true,
+    pending: true,
+    reset: true,
+    revision: true,
+  };
+  for (const source of [
+    'Ordinary words and numbers. '.repeat(8),
+    '```js\n' + 'const value = 1;\n'.repeat(8),
+  ]) {
+    const session = createHtmlSession();
+    for (let end = 7; end < source.length + 7; end += 7) {
+      const update = session.render(source.slice(0, end), { incomplete: true });
+      assert.deepEqual(Object.keys(update).sort(), Object.keys(fields).sort());
+      assert.deepEqual(
+        Object.keys(JSON.parse(JSON.stringify(update))).sort(),
+        Object.keys(fields).sort()
+      );
+    }
+  }
+});
+
+/** Render independently of session state, with the same source-HTML policy. */
 const full = (source: string, options?: HtmlSessionOptions) =>
   decoder.decode(
     renderToHtml(source, {
@@ -89,6 +116,116 @@ void test('only inputs that extend the previous one reuse its prefix', () => {
   }
 });
 
+void test('open fences preserve escaping, line endings, Unicode, and closing boundaries across appends', () => {
+  for (const marker of ['```', '~~~~']) {
+    for (const indent of ['', ' ', '   ', '    ', '\t']) {
+      const source =
+        'Completed **prefix**.\n\n' +
+        marker +
+        'text\n' +
+        '<&>"\'\t é 中 😀\n\0after\rnext\r\nlast\ud800x\udc00\n' +
+        indent +
+        marker +
+        '\n\nAfter **closing**.';
+      const session = createHtmlSession();
+      const retained: [HtmlUpdate, string][] = [];
+      for (let end = 0; end <= source.length; end++) {
+        const prefix = source.slice(0, end);
+        const update = session.render(prefix, { incomplete: true });
+        const expected = full(prefix, { incomplete: true });
+        assert.equal(
+          update.stable + update.pending,
+          expected,
+          JSON.stringify(prefix)
+        );
+        retained.push([update, expected]);
+      }
+      for (const [update, expected] of retained)
+        assert.equal(update.html, expected);
+      assert.equal(
+        session.render(source, { incomplete: false }).html,
+        full(source)
+      );
+    }
+  }
+});
+
+void test('long open fences survive interleaved renders, edits, and incomplete-mode changes', () => {
+  const session = createHtmlSession();
+  const source = '```js\n' + 'const value = "<&>"; // 中\n'.repeat(300);
+  for (let end = 37; end < source.length; end += 37) {
+    const prefix = source.slice(0, end);
+    const update = session.render(prefix, { incomplete: true });
+    renderToHtml('[other][id]\n\n[id]: /elsewhere');
+    assert.equal(update.html, full(prefix, { incomplete: true }));
+  }
+  for (const value of [
+    source,
+    source + '  ```',
+    source + '   ```\nTail',
+    '~~~\nreplacement',
+  ]) {
+    assert.equal(
+      session.render(value, { incomplete: true }).html,
+      full(value, { incomplete: true })
+    );
+    assert.equal(
+      session.render(value, { incomplete: false }).html,
+      full(value)
+    );
+  }
+});
+
+void test('changed fence lines reconstruct escaped code and retained results stay independent', () => {
+  const source = '```js\n' + '\nconst x = "<&>"; // é 中 😀\n'.repeat(90);
+  for (const chunk of [1, 37, 256]) {
+    const session = createHtmlSession();
+    const retained: [HtmlUpdate, string][] = [];
+    let code = '';
+    let changes = 0;
+    for (let end = 6; end < source.length + chunk; end += chunk) {
+      const prefix = source.slice(0, end);
+      const update = session.render(prefix, { incomplete: true });
+      const expected = full(prefix, { incomplete: true });
+      const escaped = expected.slice(
+        expected.indexOf('>', expected.indexOf('<code')) + 1,
+        -14
+      );
+      const change = (update as InternalHtmlUpdate)[delta];
+      const fence = typeof change === 'object' ? change : undefined;
+      if (fence !== undefined) {
+        changes++;
+        const lines = code.split('\n');
+        code =
+          lines
+            .slice(0, fence.firstLine)
+            .map((line) => line + '\n')
+            .join('') + fence.html;
+        assert.equal(fence.lineCount, code.split('\n').length);
+        assert.equal(
+          fence.html.slice(fence.lastLineOffset),
+          code.split('\n').slice(-2).join('\n')
+        );
+      } else code = escaped;
+      assert.equal(code, escaped, JSON.stringify(prefix));
+      retained.push([update, expected]);
+    }
+    assert.ok(changes > 3);
+    for (const [update, expected] of retained.reverse()) {
+      assert.equal(update.html, expected);
+      const change = (update as InternalHtmlUpdate)[delta];
+      if (typeof change === 'object')
+        assert.equal(
+          change.fullHtml,
+          expected.slice(
+            expected.indexOf('>', expected.indexOf('<code')) + 1,
+            -14
+          )
+        );
+    }
+  }
+});
+
 void test('a missing incomplete option and false are the same mode', () => {
   const session = createHtmlSession();
   session.render('one\n\ntw');
@@ -98,6 +235,105 @@ void test('a missing incomplete option and false are the same mode', () => {
   assert.equal(session.render('one\n\ntwo'), update);
   assert.equal(session.render('one\n\ntwo', {}), update);
   assert.equal(session.render('one\n\ntwo!', { incomplete: true }).reset, true);
+});
+
+void test('plain paragraph appends fall back for syntax, links, controls, and block starts', () => {
+  const documents = [
+    'Ordinary prose, with numbers 123. é 中 😀! More words.',
+    'Ordinary   words  \nwith a hard break.\n\nTail   ',
+    'www   .example.com and normal   text',
+    'www.example.com and WWW.example.org',
+    'mail@example.com and https://example.com',
+    'Ordinary prose **bold**, _emphasis_, `code`, &amp; and <tag>.',
+    'First line  \nsecond\n\n# Heading\n\n- item\n\n---\n\n1. list',
+    'Ordinary\0text\r\nnext\tword\ud800after\udc00end',
+    'First [link][id]\n\n[id]: /target\n\nTail',
+    '# heading',
+    '+ item',
+    '---',
+    '123. list',
+  ];
+  for (const incomplete of [false, true]) {
+    let changes = 0;
+    for (const source of documents) {
+      const session = createHtmlSession();
+      const retained: [HtmlUpdate, string][] = [];
+      for (let end = 1; end <= source.length; end++) {
+        const prefix = source.slice(0, end);
+        const update = session.render(prefix, { incomplete });
+        if (typeof (update as InternalHtmlUpdate)[delta] === 'string')
+          changes++;
+        retained.push([update, full(prefix, { incomplete })]);
+      }
+      for (const [update, expected] of retained.reverse()) {
+        assert.equal(update.html, expected);
+        assert.equal(update.stable + update.pending, expected);
+      }
+    }
+    assert.ok(changes > 50);
+  }
+});
+
+void test('paragraph appends wait for the parser while completion hides or holds syntax', () => {
+  for (const [first, chunk] of [
+    ['a cute cat ![a cute cat', ' photo'],
+    ['x ![a][b x', ' y'],
+    ['[a] b x  ```   \u3000  ', 'x'],
+  ]) {
+    const session = createHtmlSession();
+    session.render(first, { incomplete: true });
+    assert.equal(
+      session.render(first + chunk, { incomplete: true }).html,
+      full(first + chunk, { incomplete: true }),
+      first
+    );
+  }
+});
+
+void test('paragraphs append directly once their start cannot become another block', () => {
+  for (const incomplete of [false, true]) {
+    for (const [start, direct] of [
+      ['2024 was', true],
+      ['-x and', true],
+      ['#tag is', true],
+      ['2024', false],
+      ['--', false],
+      ['#', false],
+    ] as const) {
+      const session = createHtmlSession();
+      session.render(start, { incomplete });
+      let source = start;
+      for (const chunk of [' a', '. b', ' -', ' - c']) {
+        source += chunk;
+        const update = session.render(source, { incomplete });
+        if (chunk === ' a')
+          assert.equal(
+            typeof (update as InternalHtmlUpdate)[delta] === 'string',
+            direct,
+            start
+          );
+        assert.equal(update.html, full(source, { incomplete }), source);
+      }
+    }
+  }
+});
+
+void test('fence lines that start with the marker append until one closes the fence', () => {
+  const source =
+    'Before.\n\n````js\n' +
+    '`a` and `b`\n``` is too short\n```\n  ```` x\n`'.repeat(4) +
+    '\n  ````  \n\nAfter.';
+  for (const incomplete of [false, true]) {
+    const session = createHtmlSession();
+    let changes = 0;
+    for (let end = 1; end <= source.length; end++) {
+      const prefix = source.slice(0, end);
+      const update = session.render(prefix, { incomplete });
+      if (typeof (update as InternalHtmlUpdate)[delta] === 'object') changes++;
+      assert.equal(update.html, full(prefix, { incomplete }), prefix);
+    }
+    assert.ok(changes > 100, String(changes));
+  }
 });
 
 void test('ordinary paragraph runs keep append boundaries through table conversion', () => {
@@ -114,6 +350,98 @@ void test('ordinary paragraph runs keep append boundaries through table conversi
         full(prefix),
         JSON.stringify(prefix)
       );
+    }
+  }
+});
+
+void test('formatted paragraphs append literal tails without changing earlier inline markup', () => {
+  for (const incomplete of [false, true]) {
+    for (const prefix of [
+      '**Bold** and _emphasis_, ',
+      '[A link](/target) and ![image](/image.png), ',
+      '`inline code` with &amp; and &#x1f600;, ',
+      'www.example.com and mail@example.com, ',
+      '~~deleted~~ and escaped \\*literal\\*, ',
+    ]) {
+      const session = createHtmlSession();
+      const first = prefix + 'ordinary text';
+      session.render(first, { incomplete });
+      const retained: [HtmlUpdate, string][] = [];
+      let source = first;
+      for (const chunk of [
+        ' continues',
+        ' with 中文 😀',
+        '   ',
+        'more words',
+      ]) {
+        source += chunk;
+        const update = session.render(source, { incomplete });
+        assert.equal(typeof (update as InternalHtmlUpdate)[delta], 'string');
+        retained.push([update, full(source, { incomplete })]);
+      }
+      for (const suffix of [
+        ' **new markup**',
+        '\n\nNext paragraph',
+        ' [link][id]\n\n[id]: /new',
+      ]) {
+        const input = source + suffix;
+        retained.push([
+          session.render(input, { incomplete }),
+          full(input, { incomplete }),
+        ]);
+      }
+      for (const [update, expected] of retained.reverse()) {
+        assert.equal(update.pending, expected.slice(update.stable.length));
+        assert.equal(update.html, expected);
+      }
+    }
+  }
+});
+
+void test('literal appends do not bypass unfinished inline syntax or autolinks', () => {
+  const starts = [
+    '**bold** ordinary *',
+    '**bold** ordinary _',
+    '**bold** ordinary ~~',
+    '**bold** ordinary `code with spaces',
+    '**bold** ordinary [a link](url',
+    '**bold** ordinary &cop',
+    '**bold** ordinary &#x1f6',
+    '**bold** ordinary https://example.com.',
+    '**bold** ordinary www.example.',
+    '**bold** ordinary user@example.',
+    '**bold** ordinary <tag attr',
+    '**bold** ordinary \\',
+    '**bold** ordinary www',
+    '**bold** ordinary \ud800',
+    '**bold** ordinary \udc00',
+  ];
+  for (const incomplete of [false, true]) {
+    for (const start of starts) {
+      for (const append of [
+        ' text',
+        'y;',
+        '00;',
+        'org',
+        ')',
+        '"',
+        '>',
+        '.',
+        '\udc00',
+        '😀',
+      ]) {
+        const source = start + append + ' ordinary continuation';
+        const session = createHtmlSession();
+        session.render(start, { incomplete });
+        for (let end = start.length + 1; end <= source.length; end++) {
+          const prefix = source.slice(0, end);
+          assert.equal(
+            session.render(prefix, { incomplete }).html,
+            full(prefix, { incomplete }),
+            JSON.stringify({ incomplete, prefix })
+          );
+        }
+      }
     }
   }
 });

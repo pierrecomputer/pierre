@@ -140,11 +140,37 @@ void test('wide tables align every column and cell', () => {
     ],
     [301, 301, 301, 301]
   );
-  const cols = 300;
-  const md = `|${'h|'.repeat(cols)}\n|${'-|'.repeat(cols)}\n|${'x|'.repeat(cols)}\n`;
-  const [head, , row] = plain(md).split('\n');
-  assert.equal(head.split('│').length, cols);
-  assert.equal(row, Array(cols).fill('x').join(' │ '));
+  for (const cols of [257, 300, 512]) {
+    const md = `|${'h|'.repeat(cols)}\n|${'-|'.repeat(cols)}\n|${'x|'.repeat(cols)}\n`;
+    const [head, , row] = plain(md).split('\n');
+    assert.equal(head.split('│').length, cols);
+    assert.equal(row, Array(cols).fill('x').join(' │ '));
+  }
+});
+
+void test('table measurements survive workspace growth, reuse, and the cell limit', () => {
+  for (const columns of [20, 512]) {
+    const header =
+      '|' + 'h|'.repeat(columns) + '\n|' + '-|'.repeat(columns) + '\n';
+    const short = '|' + '**cell** 中|'.repeat(columns) + '\n';
+    const long =
+      '|a longer final cell|' + '**cell** 中|'.repeat(columns - 1) + '\n';
+    const reference = ansi(header + short + long).split('\n');
+    assert.equal(reference.length, 5);
+    for (const rows of [2, 291, Math.ceil(65536 / columns) + 1]) {
+      const source = header + short.repeat(rows - 1) + long;
+      const expected =
+        reference.slice(0, 2).join('\n') +
+        '\n' +
+        (reference[2] + '\n').repeat(rows - 1) +
+        reference[3] +
+        '\n';
+      assert.equal(ansi(source), expected);
+      const next = '|a|b|\n|-|-|\n|x|longer|\n';
+      assert.equal(ansi(source + '\n' + next), expected + '\n' + ansi(next));
+      assert.equal(ansi(header + short + long), reference.join('\n'));
+    }
+  }
 });
 
 void test('a cell renders the same when measured and when written', () => {
