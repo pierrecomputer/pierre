@@ -172,7 +172,16 @@ an app without a layer wins over it at any specificity. Element defaults of an
 app, such as `button { cursor: pointer; }`, then also apply to the layout's own
 controls. Put them in a layer that comes before the layout's, and declare the
 order once, before any stylesheet: `@layer reset, pierre-layouts;`. An app that
-puts its own CSS in layers declares `@layer pierre-layouts, app;`.
+puts its own CSS in layers declares `@layer pierre-layouts, app;`. With Tailwind
+CSS 4, whose rules are in the layers `theme`, `base`, `components`, and
+`utilities`, declare
+`@layer theme, base, pierre-layouts, components, utilities;` before the import
+of Tailwind: its reset loses to the layout, and its utilities win over it.
+Without the declaration, the layout's layer comes last, because the view adds
+its sheets after the app's stylesheet, and it wins over the utilities.
+
+Outside `Layout.Header`, `Layout.TabList` is a plain row of tabs: the app sets
+its size, its overflow, and its scroll. In `Layout.Header`, it fills the header.
 
 Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
 `--layout-duration`. The tabs take their colors from `--layout-tab-color`,

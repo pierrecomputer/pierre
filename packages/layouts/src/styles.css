@@ -239,16 +239,23 @@
 }
 
 @layer pierre-layouts {
-  /* The tabs of a stack take the place of the title. They fill the height of
-     the header, so the underline of the selected tab meets the border of the
-     pane, and their text is centered as the title's is. A selection changes
-     colors only, so nothing moves. Themes set the `--layout-tab-*` colors. */
+  /* A tab list lays out its tabs in a row. Outside `Layout.Header`, the app
+     places it: the geometry below applies only in the header of the
+     library. */
   .pierre-layout-tabs {
     position: relative;
     display: flex;
+    min-width: 0;
+  }
+
+  /* In `Layout.Header`, the tabs of a stack take the place of the title. They
+     fill the height of the header, so the underline of the selected tab meets
+     the border of the pane, and their text is centered as the title's is. A
+     selection changes colors only, so nothing moves. Themes set the
+     `--layout-tab-*` colors. */
+  .pierre-layout-header .pierre-layout-tabs {
     flex: 1;
     align-self: stretch;
-    min-width: 0;
     margin: -4px 0;
     overflow: hidden;
   }

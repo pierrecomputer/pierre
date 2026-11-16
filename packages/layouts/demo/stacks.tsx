@@ -7,6 +7,8 @@
 //   `stacks()` warns. The lone files pane shows its title.
 // - `?nested=1`: the README.md tab holds a text field and a button of its
 //   own, as a tab with a rename field or a focusable control does.
+// - `?header=none`: the tab lists render without `Layout.Header`, as in an
+//   app's own header.
 import { type JSX, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -27,6 +29,7 @@ const params = new URLSearchParams(location.search);
 const withoutStacks = params.get('features') === 'nostacks';
 const toolsWithoutTabList = params.get('tablist') === 'none';
 const nestedControls = params.get('nested') === '1';
+const withoutHeader = params.get('header') === 'none';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -108,16 +111,19 @@ const tabOf = (tab: PaneNode): JSX.Element =>
   nestedControls && tab.id === 'docs' ? <NestedTab /> : <Layout.Tab />;
 
 function renderPane(pane: PaneNode): JSX.Element {
+  const chrome =
+    toolsWithoutTabList && (pane.id === 'terminal' || pane.id === 'output') ? (
+      <Layout.Title />
+    ) : (
+      <Layout.TabList>{tabOf}</Layout.TabList>
+    );
   return (
     <>
-      <Layout.Header>
-        {toolsWithoutTabList &&
-        (pane.id === 'terminal' || pane.id === 'output') ? (
-          <Layout.Title />
-        ) : (
-          <Layout.TabList>{tabOf}</Layout.TabList>
-        )}
-      </Layout.Header>
+      {withoutHeader ? (
+        <div className="stacks-own-header">{chrome}</div>
+      ) : (
+        <Layout.Header>{chrome}</Layout.Header>
+      )}
       <Layout.Content>
         <Body id={pane.id} />
       </Layout.Content>

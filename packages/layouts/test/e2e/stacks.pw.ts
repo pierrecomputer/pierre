@@ -317,6 +317,20 @@ test('a tab drag inside its tab list changes the order of the tabs, and the tab 
   ).toBeFocused();
 });
 
+test('a tab list outside Layout.Header takes none of the header geometry', async ({
+  page,
+}) => {
+  const geometry = () =>
+    tabsOf(page, 'main').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.marginTop, style.overflowX, style.flexGrow];
+    });
+  await page.goto('/stacks.html?header=none');
+  expect(await geometry()).toEqual(['0px', 'visible', '0']);
+  await page.goto('/stacks.html');
+  expect(await geometry()).toEqual(['-4px', 'hidden', '1']);
+});
+
 test('a tab drag into another tab list moves the tab into that stack at the place of the drop', async ({
   page,
 }) => {
