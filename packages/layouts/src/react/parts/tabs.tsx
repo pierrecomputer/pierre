@@ -66,6 +66,67 @@ export interface TabListProps extends Omit<PartProps<object>, 'children'> {
    * does not show at once, or when its content takes the focus.
    */
   activation?: 'automatic' | 'manual';
+  /**
+   * Keep the pinned tabs in view while the other tabs scroll: each pinned tab
+   * sticks at its own place, and the list holds the width of the pinned tabs
+   * in `--layout-pinned-width`, for the app's fade or scroll padding. It turns
+   * itself off while less than 120 px of the list is left for the other tabs.
+   * The tab list needs to be the element that scrolls.
+   */
+  stickyPinned?: boolean;
+}
+
+// The space in pixels that sticky pinned tabs leave for the other tabs, at
+// the least.
+const STICKY_ROOM = 120;
+
+/**
+ * Make the pinned tabs of a tab list sticky, at the places that they have
+ * when they do not stick, as each render and each resize of the list
+ * measures them. A stuck tab reports its stuck place, so the measure runs
+ * without the sticky attributes.
+ */
+function useStickyPinned(
+  tablist: RefObject<HTMLElement | null>,
+  on: boolean
+): void {
+  useLayoutEffect(() => {
+    const list = tablist.current;
+    if (!on || list === null) return;
+    const pinned = (): HTMLElement[] => [
+      ...list.querySelectorAll<HTMLElement>(':scope > [data-pinned]'),
+    ];
+    const stick = (sticky: boolean, width = 0): void => {
+      list.toggleAttribute('data-sticky-pinned', sticky);
+      list.style.setProperty('--layout-pinned-width', `${width}px`);
+      for (const item of pinned()) {
+        if (sticky)
+          item.style.setProperty(
+            '--layout-pinned-left',
+            `${item.offsetLeft}px`
+          );
+        item.toggleAttribute('data-layout-sticky', sticky);
+      }
+    };
+    const place = (): void => {
+      stick(false);
+      const tabs = pinned();
+      const last = tabs.at(-1);
+      const width =
+        last === undefined
+          ? 0
+          : last.offsetLeft + last.offsetWidth - tabs[0].offsetLeft;
+      if (width > 0 && list.clientWidth - width >= STICKY_ROOM)
+        stick(true, width);
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(list);
+    return () => {
+      observer.disconnect();
+      stick(false);
+    };
+  });
 }
 
 const defaultTab = (): ReactNode => <Tab />;
@@ -111,6 +172,7 @@ export function TabList({
   render,
   children = defaultTab,
   activation,
+  stickyPinned = false,
   ...props
 }: TabListProps): JSX.Element {
   const value = usePaneContext('Layout.TabList');
@@ -125,6 +187,7 @@ export function TabList({
   const shown = tabs.filter((tab) =>
     own ? tab.hidden !== true : tab.id === value.id
   );
+  useStickyPinned(tablist, stickyPinned && own);
   return (
     <>
       <Style name="tabs" css={tabsCss} settings={context.stylesheets()} />

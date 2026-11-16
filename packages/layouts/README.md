@@ -397,6 +397,15 @@ layout.addTab('files', {
 layout.setPinned('notes', true); // After the last pinned tab.
 ```
 
+`<Layout.TabList stickyPinned />` keeps the pinned tabs in view while the other
+tabs scroll, as browsers and editors keep pinned tabs. Each pinned tab sticks at
+its own place, and a tab that takes the focus scrolls into view beside the
+pinned tabs. The list holds the width of the pinned tabs in
+`--layout-pinned-width`, for the app's fade. The option turns itself off while
+less than 120 px of the list is left for the other tabs. It is off by default.
+The tab list must be the element that scrolls, as in `Layout.Header`, and each
+pinned tab a child of the list, as `Layout.Tab` and its `render` element are.
+
 ## Collapsed panes
 
 `layout.setCollapsed(id, true)` collapses a pane to its `collapsedSize` along

@@ -694,3 +694,50 @@ test('with manual activation, the arrows move the focus only, and Enter or Space
   await expect(test).toHaveAttribute('aria-selected', 'true');
   await expect(test).toBeFocused();
 });
+
+test('stickyPinned keeps the pinned tabs in view while the others scroll, and turns off in a narrow list', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1&sticky=1');
+  for (let index = 0; index < 10; index += 1)
+    await command(
+      page,
+      'addTab',
+      'docs',
+      { type: 'pane', id: `extra${index}` },
+      undefined,
+      { activate: false }
+    );
+  const list = tabsOf(page, 'main');
+  await expect(list.getByRole('tab')).toHaveCount(15);
+  await expect(list).toHaveAttribute('data-sticky-pinned', '');
+  const box = async (name: string) => {
+    const value = await list.getByRole('tab', { name }).boundingBox();
+    if (value === null) throw new Error(`No tab: ${name}`);
+    return value;
+  };
+  const main = await box('main.ts');
+  const util = await box('util.ts');
+  const before = await box('test.ts');
+  const pinnedWidth = await list.evaluate((element) =>
+    Number.parseFloat(
+      getComputedStyle(element).getPropertyValue('--layout-pinned-width')
+    )
+  );
+  expect(Math.abs(pinnedWidth - (util.x + util.width - main.x))).toBeLessThan(
+    1
+  );
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  expect((await box('test.ts')).x).toBeLessThan(before.x - 50);
+  expect(Math.abs((await box('main.ts')).x - main.x)).toBeLessThan(1);
+  expect(Math.abs((await box('util.ts')).x - util.x)).toBeLessThan(1);
+  // A tab that takes the focus scrolls into view beside the pinned tabs.
+  await list.getByRole('tab', { name: 'test.ts' }).focus();
+  expect((await box('test.ts')).x).toBeGreaterThan(util.x + util.width - 1);
+  // A list with less than 120 px left for the other tabs scrolls them all.
+  await page.setViewportSize({ width: 420, height: 900 });
+  await expect(list).not.toHaveAttribute('data-sticky-pinned');
+  await expect(list.locator('[data-layout-sticky]')).toHaveCount(0);
+});

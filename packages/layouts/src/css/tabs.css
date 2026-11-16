@@ -54,6 +54,27 @@
     outline-offset: -2px;
   }
 
+  /* `stickyPinned`: each pinned tab sticks at the place that the tab list
+     measures, over an opaque layer, and a tab that scrolls into view stops
+     beside the pinned tabs. */
+  .pierre-layout-tabs[data-sticky-pinned] {
+    scroll-padding-inline-start: var(--layout-pinned-width);
+  }
+
+  .pierre-layout-tabs > [data-layout-sticky] {
+    position: sticky;
+    left: var(--layout-pinned-left);
+    z-index: 1;
+  }
+
+  .pierre-layout-tabs > [data-layout-sticky]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--layout-pane-background, #fff);
+  }
+
   .pierre-layout-tab-title {
     overflow: hidden;
     text-overflow: ellipsis;

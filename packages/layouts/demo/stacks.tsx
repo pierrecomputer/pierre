@@ -15,6 +15,7 @@
 //   `closable: false`, and each header has `Layout.CloseButton`.
 // - `?activation=manual`: the arrows move the focus only, and Enter or Space
 //   selects.
+// - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`).
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -40,6 +41,7 @@ const guarded = params.get('guard') === '1';
 const pinned = params.get('pinned') === '1';
 const activation =
   params.get('activation') === 'manual' ? 'manual' : 'automatic';
+const sticky = params.get('sticky') === '1';
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -148,7 +150,9 @@ function renderPane(pane: PaneNode): JSX.Element {
     toolsWithoutTabList && (pane.id === 'terminal' || pane.id === 'output') ? (
       <Layout.Title />
     ) : (
-      <Layout.TabList activation={activation}>{tabOf}</Layout.TabList>
+      <Layout.TabList activation={activation} stickyPinned={sticky}>
+        {tabOf}
+      </Layout.TabList>
     );
   return (
     <>
