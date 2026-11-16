@@ -2160,21 +2160,34 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.markSearchMatchesDirty();
   }
 
+  // Whether an item on screen is still waiting to be searched.
+  private hasPendingRenderedSearchItems(scan: CodeViewSearchScan): boolean {
+    const { searchState, renderState } = this;
+    const { firstIndex, lastIndex } = renderState;
+    return searchState.scope == null
+      ? scan.hasPendingItems(firstIndex, lastIndex + 1)
+      : scan.isItemPending(0);
+  }
+
+  // Searches for one slice from the first item on screen.
+  private runSearchSlice(scan: CodeViewSearchScan): boolean {
+    const { searchState, renderState } = this;
+    const { firstIndex } = renderState;
+    return searchState.scope == null
+      ? scan.advance(BACKGROUND_TASK_BUDGET_MS, firstIndex)
+      : scan.advance(BACKGROUND_TASK_BUDGET_MS);
+  }
+
   // Searches for one more slice in the background, and has the panel read the
   // matches again when there are new ones. Only a slice that could have
   // searched an item on screen asks for a render.
   private advanceSearchScan = (): void => {
-    const { searchState, renderState } = this;
-    const { scan, scope } = searchState;
+    const { scan } = this.searchState;
     if (scan == null) {
       throw new Error('CodeView.advanceSearchScan: queued scan is missing');
     }
-    const { firstIndex, lastIndex } = renderState;
-    const renderedItemsPending =
-      scope == null
-        ? scan.hasPendingItems(firstIndex, lastIndex + 1)
-        : scan.isItemPending(0);
-    const changed = scan.advance(BACKGROUND_TASK_BUDGET_MS);
+    const renderedItemsPending = this.hasPendingRenderedSearchItems(scan);
+    const changed = this.runSearchSlice(scan);
     if (!scan.finished) queueBackgroundTask(this.advanceSearchScan);
     if (changed) {
       this.searchMatchesDirty = true;
@@ -2187,8 +2200,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   };
 
   // Returns the matches found so far for the panel's query. Starts the search
-  // at the items on screen when there is none running, and searches a changed
-  // item again before answering.
+  // at the items on screen when there is none running. Searches for one slice
+  // first when an item on screen is waiting, so its highlights are not late.
   private searchCodeView(
     searchParams: SearchParams
   ): SearchResult<CodeViewSearchMatch> {
@@ -2207,10 +2220,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         scope == null ? Math.max(0, firstIndex) : 0
       );
       searchState.scan = scan;
-      scan.advance(BACKGROUND_TASK_BUDGET_MS);
+      this.runSearchSlice(scan);
       this.render();
-    } else if (scan.hasChangedItems) {
-      scan.advance(BACKGROUND_TASK_BUDGET_MS);
+    } else if (this.hasPendingRenderedSearchItems(scan)) {
+      this.runSearchSlice(scan);
     }
     if (!scan.finished) {
       queueBackgroundTask(this.advanceSearchScan);

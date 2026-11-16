@@ -203,8 +203,14 @@ export interface CodeViewSearchMatchEntry {
   deletionLines: CodeViewSearchLineSpan[] | undefined;
 }
 
-// Searches ordered items for one query and keeps each item's matches private
-// until that item is complete or the match limit is reached.
+// A run of positions. `end` is not included.
+export interface CodeViewSearchPositionRange {
+  start: number;
+  end: number;
+}
+
+// Searches ordered items for one query, a slice at a time. An item's matches
+// are shown once that item is complete or the match limit is reached.
 export class CodeViewSearchScan {
   // Finds where an item's matches belong in a sorted run.
   private static findEntryIndex(
@@ -227,11 +233,10 @@ export class CodeViewSearchScan {
   private readonly wholeWord: boolean;
   private readonly beforeStart: CodeViewSearchMatchEntry[] = [];
   private readonly afterStart: CodeViewSearchMatchEntry[] = [];
-  // Positions of changed items that are waiting to be searched again.
-  private changedItems = new Set<number>();
-  private current: CodeViewSearchItemProgress | undefined;
-  private nextAfter: number;
-  private nextBefore = 0;
+  // Where each partly searched item got to, by position.
+  private progress = new Map<number, CodeViewSearchItemProgress>();
+  // The positions that are not finished yet, in order.
+  private readonly unsearched: CodeViewSearchPositionRange[];
   private matchCount = 0;
   private scannedCharacters = 0;
   private deadline: number | undefined;
@@ -246,7 +251,7 @@ export class CodeViewSearchScan {
   ) {
     this.pattern = compileSearchQuery(searchParams);
     this.wholeWord = searchParams.wholeWord;
-    this.nextAfter = startingItemIndex;
+    this.unsearched = itemCount > 0 ? [{ start: 0, end: itemCount }] : [];
   }
 
   // Whether the scan holds as many matches as the limit allows.
@@ -255,123 +260,113 @@ export class CodeViewSearchScan {
     return matchCount >= limit;
   }
 
-  // Whether a changed item is waiting to be searched again.
-  get hasChangedItems(): boolean {
-    const { changedItems } = this;
-    return changedItems.size > 0;
-  }
-
+  // Whether there is nothing left to search, or the limit stopped the scan.
   get finished(): boolean {
-    const {
-      pattern,
-      atLimit,
-      current,
-      changedItems,
-      nextAfter,
-      nextBefore,
-      itemCount,
-      startingItemIndex,
-    } = this;
-    return (
-      pattern == null ||
-      atLimit ||
-      (current == null &&
-        changedItems.size === 0 &&
-        nextAfter >= itemCount &&
-        nextBefore >= startingItemIndex)
-    );
+    const { pattern, atLimit, unsearched } = this;
+    return pattern == null || atLimit || unsearched.length === 0;
   }
 
-  // Searches an item again after its text changed. Its matches are dropped
-  // now. An item the scan has not reached yet needs nothing.
+  // Searches an item again after its text changed. What was found in it so
+  // far is dropped now, and it goes back among the items still to search.
   rescanItem(position: number): void {
-    const { current, changedItems, matchCount } = this;
-    if (current?.position === position) {
-      this.matchCount = matchCount - current.matches.length;
-      this.current = undefined;
-    } else if (this.isUnreached(position)) {
-      return;
-    }
+    this.dropItemProgress(position);
     this.dropItemMatches(position);
-    changedItems.add(position);
+    this.markUnsearched(position);
   }
 
   // Adds items at the end of the view to the search.
   addItems(count: number): void {
-    const { itemCount } = this;
+    const { itemCount, unsearched } = this;
+    const last = unsearched.at(-1);
+    if (last?.end === itemCount) last.end += count;
+    else if (count > 0) {
+      unsearched.push({ start: itemCount, end: itemCount + count });
+    }
     this.itemCount = itemCount + count;
   }
 
   // Takes an item out of the search. Every later item moves down one position.
   removeItem(position: number): void {
     this.dropItemMatches(position);
+    this.dropItemProgress(position);
     const {
-      current,
-      changedItems,
+      progress,
       beforeStart,
       afterStart,
-      matchCount,
-      nextAfter,
-      nextBefore,
+      unsearched,
       startingItemIndex,
       itemCount,
     } = this;
-    if (current?.position === position) {
-      this.matchCount = matchCount - current.matches.length;
-      this.current = undefined;
-    } else if (current != null && current.position > position) {
-      current.position--;
+    const shiftedProgress = new Map<number, CodeViewSearchItemProgress>();
+    for (const [pendingPosition, itemProgress] of progress) {
+      const nextPosition =
+        pendingPosition > position ? pendingPosition - 1 : pendingPosition;
+      itemProgress.position = nextPosition;
+      shiftedProgress.set(nextPosition, itemProgress);
     }
-    const shifted = new Set<number>();
-    for (const changed of changedItems) {
-      if (changed !== position)
-        shifted.add(changed > position ? changed - 1 : changed);
-    }
-    this.changedItems = shifted;
+    this.progress = shiftedProgress;
     for (const entries of [beforeStart, afterStart]) {
       const first = CodeViewSearchScan.findEntryIndex(entries, position + 1);
       for (let index = first; index < entries.length; index++) {
         entries[index].position--;
       }
     }
-    if (position < nextAfter) {
-      this.nextAfter = nextAfter - 1;
+    const firstRange = this.findUnsearchedRangeIndex(position);
+    for (let index = firstRange; index < unsearched.length; index++) {
+      const range = unsearched[index];
+      if (range.start > position) range.start--;
+      range.end--;
     }
-    if (position < nextBefore) {
-      this.nextBefore = nextBefore - 1;
-    }
+    const range = unsearched[firstRange];
+    if (range != null && range.start === range.end)
+      unsearched.splice(firstRange, 1);
     if (position < startingItemIndex) {
       this.startingItemIndex = startingItemIndex - 1;
     }
     this.itemCount = itemCount - 1;
   }
 
-  // Works until all items are done, the limit is reached, or the budget runs out.
+  // Works until all items are done, the limit is reached, or the budget runs
+  // out. It takes the first unfinished item at or after `from`, wrapping
+  // around at the end, and carries on from where that item was left if it was
+  // started before.
   // Returns true when there are new matches to show or the scan finished.
-  // The next call carries on from the next unsearched line of the current item.
-  advance(budgetMs?: number): boolean {
-    const { pattern } = this;
+  advance(budgetMs?: number, from: number = this.startingItemIndex): boolean {
+    const { pattern, progress } = this;
     if (this.finished || pattern == null) return false;
     let changed = false;
     this.deadline = budgetMs == null ? undefined : performance.now() + budgetMs;
     this.scannedCharacters = 0;
     while (!this.finished) {
-      let { current: progress } = this;
-      if (progress == null) {
-        progress = this.prepareItem(pattern);
-        // An item the limit cut short still holds the matches it got to.
-        if (this.dropItemMatches(progress.position)) changed = true;
+      const position = this.getNextPosition(from);
+      let itemProgress = progress.get(position);
+      if (itemProgress == null) {
+        if (this.dropItemMatches(position)) changed = true;
+        itemProgress = this.prepareItem(pattern, position);
       }
-      const { cursor, visitLine } = progress;
+      const { cursor, visitLine } = itemProgress;
       const completed = cursor.walk(visitLine);
-      const { atLimit, changedItems } = this;
+      const { atLimit } = this;
       if (completed || atLimit) {
-        if (this.recordItemMatches(progress)) changed = true;
-        this.current = undefined;
-        // The limit cut this item short. It is searched again once there is room.
-        if (!completed) changedItems.add(progress.position);
+        if (this.recordItemMatches(itemProgress)) changed = true;
+        progress.delete(position);
+        if (completed) {
+          this.markSearched(position);
+        }
+        // Matches of items set aside count toward the limit but are not
+        // shown. They are given back, and those items start over later.
+        if (atLimit) {
+          let { matchCount } = this;
+          for (const pending of progress.values()) {
+            matchCount -= pending.matches.length;
+          }
+          this.matchCount = matchCount;
+          progress.clear();
+        }
+      } else {
+        progress.set(position, itemProgress);
+        return changed;
       }
-      if (!completed) return changed || this.finished;
     }
     return true;
   }
@@ -426,41 +421,14 @@ export class CodeViewSearchScan {
 
   // Whether any item from `start` up to, not including, `end` is unsearched.
   hasPendingItems(start: number, end: number): boolean {
-    const {
-      finished,
-      nextAfter,
-      nextBefore,
-      current,
-      changedItems,
-      startingItemIndex,
-      itemCount,
-    } = this;
-    if (finished) {
-      return false;
-    }
-    if (
-      Math.max(start, nextAfter) < Math.min(end, itemCount) ||
-      Math.max(start, nextBefore) < Math.min(end, startingItemIndex) ||
-      (current != null && current.position >= start && current.position < end)
-    )
-      return true;
-    for (const position of changedItems) {
-      if (position >= start && position < end) {
-        return true;
-      }
-    }
-    return false;
+    const { finished, unsearched } = this;
+    const range = unsearched[this.findUnsearchedRangeIndex(start)];
+    return !finished && range != null && Math.max(start, range.start) < end;
   }
 
   // Whether an item is still unsearched.
   isItemPending(position: number): boolean {
-    const { finished, changedItems, current } = this;
-    return (
-      !finished &&
-      (changedItems.has(position) ||
-        current?.position === position ||
-        this.isUnreached(position))
-    );
+    return !this.finished && this.isUnsearched(position);
   }
 
   getItemMatches(position: number): readonly CodeViewSearchMatch[] | undefined {
@@ -533,10 +501,89 @@ export class CodeViewSearchScan {
     return start < line.endIndex ? start : lines[lineIndex + 1]?.startIndex;
   }
 
-  // Whether the scan has not started on an item yet.
-  private isUnreached(position: number): boolean {
-    const { startingItemIndex, nextBefore, nextAfter } = this;
-    return position >= (position < startingItemIndex ? nextBefore : nextAfter);
+  // Whether an item has not been searched to its end yet.
+  private isUnsearched(position: number): boolean {
+    const range = this.unsearched[this.findUnsearchedRangeIndex(position)];
+    return range != null && range.start <= position;
+  }
+
+  // Finds the first unsearched range that ends after a position.
+  private findUnsearchedRangeIndex(position: number): number {
+    const { unsearched } = this;
+    let start = 0;
+    let end = unsearched.length;
+    while (start < end) {
+      const middle = Math.floor((start + end) / 2);
+      if (unsearched[middle].end <= position) {
+        start = middle + 1;
+      } else {
+        end = middle;
+      }
+    }
+    return start;
+  }
+
+  // The first unfinished position at or after `from`, else the first of all.
+  private getNextPosition(from: number): number {
+    const { unsearched } = this;
+    const index = this.findUnsearchedRangeIndex(from);
+    return index < unsearched.length
+      ? Math.max(unsearched[index].start, from)
+      : unsearched[0].start;
+  }
+
+  // Puts a position back among the ones still to search.
+  private markUnsearched(position: number): void {
+    const { unsearched } = this;
+    const index = this.findUnsearchedRangeIndex(position);
+    const next = unsearched[index];
+    if (next != null && next.start <= position) {
+      return;
+    }
+    const previous = unsearched[index - 1];
+    if (previous != null && previous.end === position) {
+      previous.end++;
+      if (next != null && next.start === previous.end) {
+        previous.end = next.end;
+        unsearched.splice(index, 1);
+      }
+    } else if (next != null && next.start === position + 1) {
+      next.start--;
+    } else {
+      unsearched.splice(index, 0, { start: position, end: position + 1 });
+    }
+  }
+
+  // Takes a finished position out of the unsearched ranges.
+  private markSearched(position: number): void {
+    const { unsearched } = this;
+    const index = this.findUnsearchedRangeIndex(position);
+    const range = unsearched[index];
+    if (position === range.start) {
+      range.start++;
+      if (range.start === range.end) {
+        unsearched.splice(index, 1);
+      }
+    } else if (position + 1 === range.end) {
+      range.end--;
+    } else {
+      unsearched.splice(
+        index,
+        1,
+        { start: range.start, end: position },
+        { start: position + 1, end: range.end }
+      );
+    }
+  }
+
+  // Throws away what a partly searched item has found so far.
+  private dropItemProgress(position: number): void {
+    const { progress, matchCount } = this;
+    const itemProgress = progress.get(position);
+    if (itemProgress != null) {
+      this.matchCount = matchCount - itemProgress.matches.length;
+      progress.delete(position);
+    }
   }
 
   // Finds an item's completed matches.
@@ -581,30 +628,12 @@ export class CodeViewSearchScan {
     return true;
   }
 
-  // Starts on the next item: a changed one first, then the next one from the
-  // starting position to the end, then the next one before it.
-  private prepareItem(pattern: RegExp): CodeViewSearchItemProgress {
-    const {
-      getItem,
-      wholeWord,
-      limit,
-      changedItems,
-      nextAfter,
-      nextBefore,
-      itemCount,
-    } = this;
-    const changed = changedItems.values().next().value;
-    let position: number;
-    if (changed != null) {
-      changedItems.delete(changed);
-      position = changed;
-    } else if (nextAfter < itemCount) {
-      position = nextAfter;
-      this.nextAfter = nextAfter + 1;
-    } else {
-      position = nextBefore;
-      this.nextBefore = nextBefore + 1;
-    }
+  // Starts on an item: reads its text and sets up the walk over its lines.
+  private prepareItem(
+    pattern: RegExp,
+    position: number
+  ): CodeViewSearchItemProgress {
+    const { getItem, wholeWord, limit } = this;
     const item = getItem(position);
     const { type, itemId } = item;
     const cursor =
@@ -670,7 +699,6 @@ export class CodeViewSearchScan {
       deletionLines: undefined,
       visitLine,
     };
-    this.current = progress;
     return progress;
   }
 }

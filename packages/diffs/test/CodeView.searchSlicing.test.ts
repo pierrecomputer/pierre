@@ -476,13 +476,14 @@ describe('CodeView sliced find', () => {
     });
   }
 
-  test('newly rendered pending items keep priority over a known following match', async () => {
+  test('a newly rendered pending item becomes current before the rest finishes', async () => {
     const blank = `blank ${'x'.repeat(80)}\n`.repeat(2000);
     await withViewer(
       [
         fileItem('before', `target\n${blank}`),
         fileItem('middle', blank),
         fileItem('after', 'target'),
+        fileItem('later', blank),
       ],
       async ({ viewer, root, states, finish }) => {
         viewer.scrollTo({
@@ -507,12 +508,16 @@ describe('CodeView sliced find', () => {
         await finish();
         expect(
           states.some(
-            ({ searching, matchCount }) => searching && matchCount === 1
+            ({ searching, matchCount, currentMatchIndex }) =>
+              searching && matchCount > 0 && currentMatchIndex === 0
           )
         ).toBe(true);
         expect(
           states
-            .filter(({ text, searching }) => text === 'target' && searching)
+            .filter(
+              ({ text, searching, matchCount }) =>
+                text === 'target' && searching && matchCount === 0
+            )
             .every(({ currentMatchIndex }) => currentMatchIndex == null)
         ).toBe(true);
         expect(getSearchState(viewer).current?.itemId).toBe('before');

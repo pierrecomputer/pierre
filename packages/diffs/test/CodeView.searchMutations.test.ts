@@ -11,7 +11,11 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
-import { MAX_SEARCH_MATCHES, type SearchPanelState } from '../src/search';
+import {
+  CodeViewSearchScan,
+  MAX_SEARCH_MATCHES,
+  type SearchPanelState,
+} from '../src/search';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
@@ -108,6 +112,150 @@ function label(root: HTMLElement): string | null | undefined {
 }
 
 describe('CodeView incremental find', () => {
+  test('scrolling away from a partial large file paints another item before it finishes', async () => {
+    const destination = `${'blank\n'.repeat(400)}target\n${'blank\n'.repeat(400)}`;
+    await withViewer(
+      [
+        fileItem('large', largeMatches.repeat(10)),
+        fileItem('destination', destination),
+        fileItem('tail', largeBlank),
+      ],
+      async ({ viewer, root, states, slice, finish }) => {
+        slice();
+        fillSearch(root, 'target');
+        expect(states.at(-1)?.searching).toBe(true);
+        expect(getSearchState(viewer).matches).toEqual([]);
+        viewer.scrollTo({
+          type: 'line',
+          id: 'destination',
+          lineNumber: 401,
+          align: 'start',
+          behavior: 'instant',
+        });
+        viewer.render(true);
+        expect(viewer.getRenderedItems().map(({ id }) => id)).toEqual([
+          'destination',
+        ]);
+        await waitFor(() =>
+          getRenderedSearchMatches(root).some(
+            (range) => range.toString() === 'target'
+          )
+        );
+        expect(states.at(-1)?.searching).toBe(true);
+        expect(states.at(-1)?.matchCount).toBe(1);
+        expect(
+          getSearchState(viewer).matches.map(({ itemId }) => itemId)
+        ).toEqual(['destination']);
+        await finish();
+        expect(states.at(-1)?.matchCount).toBe(20_001);
+      }
+    );
+  });
+
+  for (const direction of ['up', 'down']) {
+    for (const diffStyle of ['split', 'unified'] satisfies (
+      | 'split'
+      | 'unified'
+    )[]) {
+      test(`scrolling ${direction} paints newly rendered ${diffStyle} diffs before search finishes`, async () => {
+        const before = `target old ${'x'.repeat(80)}\n`.repeat(1200);
+        const after = before.replaceAll('old', 'new');
+        const fileDiff = parseDiffFromFile(
+          { name: 'search.txt', contents: before },
+          { name: 'search.txt', contents: after }
+        );
+        const items: CodeViewItem<undefined>[] = Array.from(
+          { length: 30 },
+          (_, index) => ({
+            id: `diff-${index}`,
+            type: 'diff',
+            fileDiff,
+          })
+        );
+        await withViewer(
+          items,
+          async ({ viewer, root, states, slice, finish }) => {
+            viewer.scrollTo({
+              type: 'item',
+              id: 'diff-15',
+              align: 'start',
+              behavior: 'instant',
+            });
+            viewer.render(true);
+            await wait(0);
+            expect(
+              viewer.getRenderedItems().some(({ id }) => id === 'diff-15')
+            ).toBe(true);
+            slice();
+            fillSearch(root, 'target');
+            expect(states.at(-1)?.searching).toBe(true);
+            const destination = direction === 'up' ? 'diff-2' : 'diff-27';
+            viewer.scrollTo({
+              type: 'item',
+              id: destination,
+              align: 'start',
+              behavior: 'instant',
+            });
+            viewer.render(true);
+            expect(
+              viewer.getRenderedItems().some(({ id }) => id === destination)
+            ).toBe(true);
+            expect(
+              getSearchState(viewer).matches.some(
+                ({ itemId }) => itemId === destination
+              )
+            ).toBe(false);
+            await waitFor(() => {
+              const item = viewer
+                .getRenderedItems()
+                .find(({ id }) => id === destination);
+              return getRenderedSearchMatches(root).some((range) => {
+                return (
+                  range.startContainer.getRootNode() ===
+                  item?.element.shadowRoot
+                );
+              });
+            });
+            expect(states.at(-1)?.searching).toBe(true);
+            expect(
+              getRenderedSearchMatches(root).every(
+                (range) => range.toString() === 'target'
+              )
+            ).toBe(true);
+            await finish();
+            let previousCount = 0;
+            for (const { matchCount } of states) {
+              expect(matchCount).toBeGreaterThanOrEqual(previousCount);
+              previousCount = matchCount;
+            }
+            const fresh = new CodeViewSearchScan(
+              {
+                text: 'target',
+                replaceText: '',
+                regex: false,
+                wholeWord: false,
+                caseSensitive: false,
+              },
+              items.length,
+              (position) => ({
+                type: 'diff',
+                itemId: items[position].id,
+                fileDiff,
+                diffStyle,
+                additionsOnly: false,
+              }),
+              MAX_SEARCH_MATCHES
+            );
+            fresh.advance();
+            expect(getSearchState(viewer).matches).toEqual(fresh.getMatches());
+            expect(states.at(-1)?.matchCount).toBe(fresh.getMatches().length);
+          },
+          { diffStyle }
+        );
+      });
+    }
+  }
+
   for (const stage of ['running', 'finished']) {
     test(`appending to a ${stage} search retains earlier matches and reports progress`, async () => {
       await withViewer(

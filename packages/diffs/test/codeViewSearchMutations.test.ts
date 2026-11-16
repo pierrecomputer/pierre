@@ -27,6 +27,11 @@ function file(itemId: string, text = 'target'): CodeViewSearchItem {
   };
 }
 
+// Keeps a file unfinished across several slices so other files can pass it.
+function largeFile(itemId: string): CodeViewSearchItem {
+  return { type: 'file', itemId, contents: `target${padding}\n`.repeat(4) };
+}
+
 // Controls time without replacing the documents, walkers, or matching code.
 function withClock(run: () => void): void {
   const original = performance.now;
@@ -77,7 +82,6 @@ function finishAndCompare(
   const matches = scan.getMatches();
   expect(matches).toEqual(fresh.getMatches());
   expect(scan.getMatches()).toBe(matches);
-  expect(scan.hasChangedItems).toBe(false);
   for (let position = 0; position < items.length; position++) {
     const itemMatches = scan.getItemMatches(position);
     expect(itemMatches).toEqual(fresh.getItemMatches(position));
@@ -104,8 +108,252 @@ function finishAndCompare(
   expect(scan.getFirstMatchedEntryAtOrAfter(items.length)).toBeUndefined();
 }
 
+// Checks pending ranges and published lookups while a search is still running.
+function checkProgress(
+  scan: CodeViewSearchScan,
+  items: CodeViewSearchItem[]
+): void {
+  const matches = scan.getMatches();
+  const positions = new Map(
+    items.map(({ itemId }, position) => [itemId, position])
+  );
+  const pendingItems = items.map((_, position) => scan.isItemPending(position));
+  const fresh = new CodeViewSearchScan(
+    params,
+    items.length,
+    (position) => items[position],
+    MAX_SEARCH_MATCHES
+  );
+  fresh.advance();
+  for (let position = 0; position <= items.length; position++) {
+    const pending = scan.isItemPending(position);
+    expect(scan.hasPendingItems(position, position + 1)).toBe(pending);
+    const nextMatch = matches.find(
+      ({ itemId }) => (positions.get(itemId) ?? -1) >= position
+    );
+    expect(scan.getFirstMatchedEntryAtOrAfter(position)?.matches[0]).toBe(
+      nextMatch
+    );
+    if (!pending) {
+      expect(scan.getItemMatches(position)).toEqual(
+        fresh.getItemMatches(position)
+      );
+    }
+    for (const match of scan.getItemMatches(position) ?? []) {
+      expect(scan.getMatchIndex(position, match)).toBe(matches.indexOf(match));
+    }
+    let expected = false;
+    for (let end = position; end <= items.length; end++) {
+      expect(scan.hasPendingItems(position, end)).toBe(expected);
+      expected ||= pendingItems[end] ?? false;
+    }
+  }
+}
+
+describe('CodeViewSearchScan from position', () => {
+  const scenarios = [
+    {
+      name: 'above the start',
+      start: 3,
+      from: [0, 0, 0],
+      order: ['3', '0', '1', '2', '4', '5', '6', '7', '8'],
+    },
+    {
+      name: 'ahead of the scan',
+      start: 2,
+      from: [6, 6, 6],
+      order: ['2', '6', '7', '8', '0', '1', '3', '4', '5'],
+    },
+    {
+      name: 'moving several times',
+      start: 4,
+      from: [1, 8, 3, 6],
+      order: ['4', '1', '8', '3', '6', '7', '0', '2', '5'],
+    },
+    {
+      name: 'already searched there',
+      start: 4,
+      from: [4, 4, 4, 4],
+      order: ['4', '5', '6', '7', '8', '0', '1', '2', '3'],
+    },
+    {
+      name: 'wrapping from the end',
+      start: 4,
+      from: [9, 9],
+      order: ['4', '0', '1', '2', '3', '5', '6', '7', '8'],
+    },
+  ];
+  for (const { name, start, from, order } of scenarios) {
+    test(name, () => {
+      withClock(() => {
+        const items = Array.from({ length: 9 }, (_, position) =>
+          file(String(position))
+        );
+        const { scan, prepared } = createScan(items, start);
+        scan.advance(1);
+        for (const position of from) {
+          scan.advance(1, position);
+          checkProgress(scan, items);
+        }
+        while (!scan.finished) {
+          scan.advance(1, from.at(-1));
+          checkProgress(scan, items);
+        }
+        finishAndCompare(scan, items);
+        expect(prepared).toEqual(order);
+      });
+    });
+  }
+
+  test('several partial files resume without reading their source again', () => {
+    withClock(() => {
+      const items = [largeFile('large-a'), largeFile('large-b'), file('small')];
+      items[2] = { type: 'file', itemId: 'small', contents: 'target' };
+      const { scan, prepared } = createScan(items);
+      scan.advance(1);
+      scan.advance(1, 1);
+      expect(scan.getMatches()).toEqual([]);
+      scan.advance(1, 2);
+      expect(scan.getItemMatches(2)).toHaveLength(1);
+      expect(scan.getItemMatches(0)).toBeUndefined();
+      expect(scan.getItemMatches(1)).toBeUndefined();
+      expect(scan.isItemPending(0)).toBe(true);
+      expect(scan.isItemPending(1)).toBe(true);
+      expect(scan.finished).toBe(false);
+      checkProgress(scan, items);
+      finishAndCompare(scan, items);
+      expect(prepared).toEqual(['large-a', 'large-b', 'small']);
+    });
+  });
+
+  test('the limit refunds other partial files and publishes exactly the limit', () => {
+    withClock(() => {
+      const items = [
+        largeFile('a'),
+        largeFile('b'),
+        {
+          type: 'file',
+          itemId: 'c',
+          contents: 'target '.repeat(10),
+        } satisfies CodeViewSearchItem,
+      ];
+      const prepared: string[] = [];
+      const scan = new CodeViewSearchScan(
+        params,
+        items.length,
+        (position) => {
+          prepared.push(items[position].itemId);
+          return items[position];
+        },
+        10
+      );
+      scan.advance(1);
+      scan.advance(1, 1);
+      scan.advance(undefined, 2);
+      expect(scan.atLimit).toBe(true);
+      expect(scan.getMatches()).toHaveLength(10);
+      expect(scan.getMatches().every(({ itemId }) => itemId === 'c')).toBe(
+        true
+      );
+      expect(prepared).toEqual(['a', 'b', 'c', 'c']);
+      items[2] = file('c', 'absent');
+      scan.rescanItem(2);
+      expect(scan.atLimit).toBe(false);
+      finishAndCompare(scan, items);
+      expect(scan.getMatches()).toHaveLength(8);
+      expect(prepared.filter((id) => id === 'a')).toHaveLength(2);
+      expect(prepared.filter((id) => id === 'b')).toHaveLength(2);
+    });
+  });
+
+  test('a changed item off screen waits while the item at the top of the screen goes first', () => {
+    withClock(() => {
+      const items = [file('changed'), file('large'), file('other')];
+      const { scan, prepared } = createScan(items);
+      scan.advance(1);
+      scan.advance(1);
+      expect(scan.getItemMatches(0)).toHaveLength(2);
+      expect(scan.isItemPending(1)).toBe(true);
+      items[0] = file('changed', 'target changed');
+      scan.rescanItem(0);
+      expect(scan.getItemMatches(0)).toBeUndefined();
+      scan.advance(1, 2);
+      expect(prepared).toEqual(['changed', 'large', 'other']);
+      expect(scan.isItemPending(0)).toBe(true);
+      scan.advance(1, 2);
+      expect(scan.getItemMatches(2)).toHaveLength(2);
+      expect(scan.isItemPending(0)).toBe(true);
+      finishAndCompare(scan, items);
+      expect(prepared).toEqual(['changed', 'large', 'other', 'changed']);
+    });
+  });
+
+  test('rescans before, at and after a partial file discard only the changed progress', () => {
+    for (const changed of [0, 2, 4]) {
+      withClock(() => {
+        const items = Array.from({ length: 5 }, (_, position) =>
+          largeFile(String(position))
+        );
+        const { scan, prepared } = createScan(items, 2);
+        scan.advance(1);
+        scan.advance(1, 4);
+        items[changed] = file(String(changed), 'target updated');
+        scan.rescanItem(changed);
+        checkProgress(scan, items);
+        finishAndCompare(scan, items);
+        for (const position of [2, 4]) {
+          expect(prepared.filter((id) => id === String(position))).toHaveLength(
+            changed === position ? 2 : 1
+          );
+        }
+      });
+    }
+  });
+
+  test('moving from positions preserve lookups through appends, rescans and removals', () => {
+    for (let removed = 0; removed < 9; removed++) {
+      withClock(() => {
+        const items = Array.from({ length: 9 }, (_, position) =>
+          file(String(position))
+        );
+        const { scan, prepared } = createScan(items, 4);
+        for (const from of [4, 1, 7, 0]) {
+          scan.advance(1, from);
+          checkProgress(scan, items);
+        }
+        items.push(file('appended-a'), file('appended-b'));
+        scan.addItems(2);
+        checkProgress(scan, items);
+        items[7] = file('7', 'absent');
+        scan.rescanItem(7);
+        checkProgress(scan, items);
+        items.splice(removed, 1);
+        scan.removeItem(removed);
+        checkProgress(scan, items);
+        scan.advance(1, 8);
+        checkProgress(scan, items);
+        scan.advance(1, 2);
+        checkProgress(scan, items);
+        finishAndCompare(scan, items);
+        for (const itemId of ['0', '1', '4']) {
+          expect(prepared.filter((id) => id === itemId)).toHaveLength(1);
+        }
+        expect(prepared.filter((id) => id === '7')).toHaveLength(
+          removed === 7 ? 1 : 2
+        );
+        items.push(file('new-tail'));
+        scan.addItems(1);
+        checkProgress(scan, items);
+        scan.advance(1, items.length - 1);
+        checkProgress(scan, items);
+        finishAndCompare(scan, items);
+      });
+    }
+  });
+});
+
 describe('CodeViewSearchScan changed items', () => {
-  test('single-item pending checks cover queued, current and unreached positions', () => {
+  test('single-item pending checks cover changed, partial and unsearched positions', () => {
     withClock(() => {
       const items = [
         file('a', 'absent'),
@@ -131,9 +379,8 @@ describe('CodeViewSearchScan changed items', () => {
       expect(scan.isItemPending(2)).toBe(true);
       checkPending();
       scan.advance(1);
-      expect(scan.hasChangedItems).toBe(false);
       expect(scan.isItemPending(2)).toBe(true);
-      expect(scan.isItemPending(3)).toBe(false);
+      expect(scan.isItemPending(3)).toBe(true);
       checkPending();
       while (!scan.finished) {
         scan.advance(1);
@@ -156,7 +403,6 @@ describe('CodeViewSearchScan changed items', () => {
       scan.advance(1);
       items[2] = file('c', 'target updated');
       scan.rescanItem(2);
-      expect(scan.hasChangedItems).toBe(false);
       expect(scan.isItemPending(2)).toBe(true);
       finishAndCompare(scan, items);
       expect(prepared).toEqual(['a', 'b', 'c']);
@@ -181,7 +427,6 @@ describe('CodeViewSearchScan changed items', () => {
       for (const text of ['target second', 'target third', 'target final']) {
         items[0] = file('a', text);
         scan.rescanItem(0);
-        expect(scan.hasChangedItems).toBe(true);
         expect(scan.isItemPending(0)).toBe(true);
         scan.advance(1);
         expect(scan.atLimit).toBe(false);
@@ -191,7 +436,7 @@ describe('CodeViewSearchScan changed items', () => {
     });
   });
 
-  test('searched empty and matching items are queued once and do not reread unaffected items', () => {
+  test('changed items are searched again once and unaffected items are not reread', () => {
     withClock(() => {
       const items = [file('a'), file('empty', 'absent'), file('c')];
       const { scan, prepared } = createScan(items, 1);
@@ -203,7 +448,6 @@ describe('CodeViewSearchScan changed items', () => {
       scan.rescanItem(1);
       scan.rescanItem(1);
       expect(scan.finished).toBe(false);
-      expect(scan.hasChangedItems).toBe(true);
       expect(scan.getItemMatches(0)).toBeUndefined();
       expect(scan.getItemMatches(2)).toBe(current);
       expect(scan.getMatches().map(({ itemId }) => itemId)).toEqual(['c', 'c']);
@@ -211,12 +455,12 @@ describe('CodeViewSearchScan changed items', () => {
       expect(scan.hasPendingItems(1, 2)).toBe(true);
       expect(scan.hasPendingItems(2, 3)).toBe(false);
       finishAndCompare(scan, items);
-      expect(prepared).toEqual(['empty', 'c', 'a', 'a', 'empty']);
+      expect(prepared).toEqual(['empty', 'c', 'a', 'empty', 'a']);
       expect(scan.getItemMatches(2)).toBe(current);
     });
   });
 
-  test('changed items wait for the current item and run before unreached items', () => {
+  test('a changed item above a partly searched one is searched first, and that one carries on after', () => {
     withClock(() => {
       const items = [file('a'), file('b'), file('c'), file('d')];
       const { scan, prepared } = createScan(items);
@@ -228,7 +472,7 @@ describe('CodeViewSearchScan changed items', () => {
       scan.rescanItem(0);
       scan.advance(1);
       expect(prepared).toEqual(['a', 'b', 'a']);
-      expect(scan.isItemPending(1)).toBe(false);
+      expect(scan.isItemPending(1)).toBe(true);
       expect(scan.isItemPending(0)).toBe(true);
       expect(scan.hasPendingItems(0, 1)).toBe(true);
       finishAndCompare(scan, items);
@@ -236,7 +480,7 @@ describe('CodeViewSearchScan changed items', () => {
     });
   });
 
-  test('resuming a completed scan keeps changed queue order across both runs', () => {
+  test('changed items are searched again in the usual order', () => {
     withClock(() => {
       const items = [file('a'), file('b'), file('c'), file('d')];
       const { scan, prepared } = createScan(items, 2);
@@ -246,7 +490,7 @@ describe('CodeViewSearchScan changed items', () => {
         scan.rescanItem(position);
       }
       finishAndCompare(scan, items);
-      expect(prepared).toEqual(['c', 'd', 'a', 'b', 'd', 'a', 'c']);
+      expect(prepared).toEqual(['c', 'd', 'a', 'b', 'c', 'd', 'a']);
     });
   });
 
@@ -438,8 +682,11 @@ describe('CodeViewSearchScan removed items', () => {
             );
             scan.rescanItem(position);
           } else {
-            scan.advance(1);
+            if (next() % 2 === 0) {
+              scan.advance(1, next() % (items.length + 1));
+            } else scan.advance(1);
           }
+          checkProgress(scan, items);
           if (step % 8 === 7) finishAndCompare(scan, items);
         }
         finishAndCompare(scan, items);

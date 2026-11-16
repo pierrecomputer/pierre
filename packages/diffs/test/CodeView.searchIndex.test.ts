@@ -257,7 +257,7 @@ describe('CodeView search indices', () => {
       }
     );
   });
-  test('finds distant matches and waits for unsearched items before choosing one', async () => {
+  test('finds distant matches and chooses a newly rendered earlier match while searching', async () => {
     const pause = `blank ${'x'.repeat(80)}\n`.repeat(2000);
     const items: CodeViewItem<undefined>[] = Array.from(
       { length: 5001 },
@@ -267,7 +267,7 @@ describe('CodeView search indices', () => {
         file: {
           name: `${position}.txt`,
           contents:
-            position === 0 || position === 2500
+            position === 0 || position === 2500 || position === 3500
               ? pause
               : position === 1000 || position === 4000
                 ? 'target\nblank\nblank\nblank'
@@ -319,7 +319,7 @@ describe('CodeView search indices', () => {
         .filter(({ searching, matchCount }) => searching && matchCount === 1);
       expect(partial.length).toBeGreaterThan(0);
       expect(
-        partial.every(({ currentMatchIndex }) => currentMatchIndex == null)
+        partial.every(({ currentMatchIndex }) => currentMatchIndex === 0)
       ).toBe(true);
       expect(getSearchState(viewer).current?.itemId).toBe('item-1000');
       expect(states.at(-1)?.currentMatchIndex).toBe(0);
