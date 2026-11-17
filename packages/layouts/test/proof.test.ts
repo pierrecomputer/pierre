@@ -32,16 +32,21 @@ const BUDGET = {
   'two-pane esbuild': { minified: 34_412, brotli: 12_161 },
 } as const;
 
-// The budgets of the full set (app C, `allFeatures()` and every part) and of
-// the app with tab stacks and `tabDrag()` (app E), from the source, as the
-// bundle step measures them, a few bytes apart from the bundle step's own
-// values (`DEC-layouts-modular-size-budget`). The owner
-// accepted the full set at 72,104 / 21,812 after the tab gaps; app E was
-// 57,711 / 18,052 then. The review fixes of 2026-11-16 add the titles in the
-// pane state, the remote announcement, the sheet of sticky pinned tabs, and
-// the drag with no image; their results name the cost of each.
+// The budgets of the other example apps, from the source, as the bundle step
+// measures them, a few bytes apart from the bundle step's own values
+// (`DEC-layouts-modular-size-budget`): the tiled grid (app B), the full set
+// (app C, `allFeatures()` and every part), the side panel (app D), and the
+// app with tab stacks and `tabDrag()` (app E). The owner accepted the full
+// set at 72,104 / 21,812 after the tab gaps; app E was 57,711 / 18,052 then.
+// The review fixes of 2026-11-16 add the titles in the pane state, the remote
+// announcement, the sheet of sticky pinned tabs, and the drag with no image;
+// their results name the cost of each. On 2026-11-16 the owner accepted the
+// sizes of the apps with many features for now, and asked for a budget for
+// each example app.
 const APP_BUDGET = {
+  'tiled source': { minified: 59_245, brotli: 18_636 },
   'full set source': { minified: 85_491, brotli: 25_663 },
+  'side panel source': { minified: 56_177, brotli: 17_584 },
   'tab stacks source': { minified: 67_027, brotli: 20_723 },
 } as const;
 
@@ -219,10 +224,11 @@ beforeAll(async () => {
         )
       )
     );
-    // The full set and the app with tab stacks, as the bundle step builds
-    // them from the source.
+    // Apps B to E, as the bundle step builds them from the source.
     for (const [name, file] of [
+      ['tiled source', 'bench/apps/tiled.tsx'],
       ['full set source', 'bench/apps/full.tsx'],
+      ['side panel source', 'bench/apps/side-panel.tsx'],
       ['tab stacks source', 'bench/apps/tabs.tsx'],
     ] as const)
       outputs.set(name, measure(await rolldown(join(PACKAGE, file))));
@@ -316,7 +322,7 @@ test('the sizes of the apps', () => {
     ])
   );
   console.log(JSON.stringify(sizes, null, 1));
-  expect(Object.keys(sizes)).toHaveLength(7);
+  expect(Object.keys(sizes)).toHaveLength(9);
 });
 
 // The dist joins modules into a few files, so a bundler can drop only the
