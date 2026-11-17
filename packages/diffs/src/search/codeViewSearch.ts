@@ -1,8 +1,5 @@
 import type { CodeViewItem, FileDiffMetadata, SelectionSide } from '../types';
-import {
-  type DiffLineMetadata,
-  iterateOverDiff,
-} from '../utils/iterateOverDiff';
+import { DiffRowCursor } from '../utils/DiffRowCursor';
 import type { SearchParams } from './index';
 import { compileSearchQuery, matchSearchLine } from './lineSearch';
 
@@ -174,7 +171,7 @@ export class CodeViewSearchDiffCursor {
   private readonly additions: CodeViewSearchTextCursor | undefined;
   private readonly diffStyle: 'split' | 'unified';
   private readonly additionsOnly: boolean;
-  private nextRow = 0;
+  private readonly rows: DiffRowCursor;
   private nextSide: SelectionSide = 'deletions';
 
   constructor(item: CodeViewSearchDiff) {
@@ -186,69 +183,87 @@ export class CodeViewSearchDiffCursor {
         : undefined;
     this.diffStyle = diffStyle;
     this.additionsOnly = additionsOnly;
+    this.rows = new DiffRowCursor({
+      diff: fileDiff,
+      diffStyle,
+      expandedHunks: true,
+    });
   }
 
   // Returns true only after reaching the end. A visitor returning true stops
   // and returns false, even on the last line; the next call resumes after it.
   walk(visitLine: CodeViewSearchLineVisitor): boolean {
-    const { diff, additions, diffStyle, additionsOnly } = this;
-    let completed = true;
-    const visitSide = (
-      side: SelectionSide,
-      line: DiffLineMetadata | undefined
-    ): boolean => {
-      if (line == null) return false;
-      const { lineIndex, lineNumber } = line;
-      if (side === 'additions' && additions != null) {
-        return visitLine(
-          additions.readLine(lineIndex),
-          side,
-          lineNumber,
-          lineIndex
-        );
+    const { diff, diffStyle, additionsOnly, rows } = this;
+    if (this.nextSide === 'additions') {
+      this.nextSide = 'deletions';
+      if (this.visitAddition(visitLine)) return false;
+    }
+    if (additionsOnly) {
+      while (rows.next()) {
+        if (this.visitAddition(visitLine)) return false;
       }
-      const text = (
-        side === 'additions' ? diff.additionLines : diff.deletionLines
-      )[lineIndex];
-      return text != null
-        ? visitLine(trimLineEnding(text), side, lineNumber, lineIndex)
-        : false;
-    };
-    iterateOverDiff({
-      diff,
-      diffStyle,
-      expandedHunks: true,
-      startingLine: this.nextRow,
-      callback: ({ additionLine, deletionLine }) => {
-        let stopped: boolean;
-        if (additionsOnly || diffStyle === 'unified') {
-          this.nextRow++;
-          stopped =
-            additionsOnly ||
-            (additionLine != null &&
-              diff.additionLines[additionLine.lineIndex] != null)
-              ? visitSide('additions', additionLine)
-              : visitSide('deletions', deletionLine);
-        } else {
-          if (this.nextSide === 'deletions') {
-            this.nextSide = 'additions';
-            if (visitSide('deletions', deletionLine)) {
-              completed = false;
-              return true;
-            }
-          }
-          this.nextSide = 'deletions';
-          this.nextRow++;
-          stopped = visitSide('additions', additionLine);
-        }
-        if (stopped) {
-          completed = false;
-          return true;
-        }
-        return false;
-      },
-    });
-    return completed;
+      return true;
+    }
+    if (diffStyle === 'unified') {
+      const { additionLines } = diff;
+      while (rows.next()) {
+        const stopped =
+          rows.hasAddition && additionLines[rows.additionLineIndex] != null
+            ? this.visitAddition(visitLine)
+            : this.visitDeletion(visitLine);
+        if (stopped) return false;
+      }
+      return true;
+    }
+    while (rows.next()) {
+      this.nextSide = 'additions';
+      if (this.visitDeletion(visitLine)) return false;
+      this.nextSide = 'deletions';
+      if (this.visitAddition(visitLine)) return false;
+    }
+    return true;
+  }
+
+  // Hands over the current row's old line, if it has one. True when the
+  // visitor stops the walk.
+  private visitDeletion(visitLine: CodeViewSearchLineVisitor): boolean {
+    const { diff, rows } = this;
+    if (!rows.hasDeletion) return false;
+    const lineIndex = rows.deletionLineIndex;
+    const text = diff.deletionLines[lineIndex];
+    return text != null
+      ? visitLine(
+          trimLineEnding(text),
+          'deletions',
+          rows.deletionLineNumber,
+          lineIndex
+        )
+      : false;
+  }
+
+  // Hands over the current row's new line, if it has one. True when the
+  // visitor stops the walk.
+  private visitAddition(visitLine: CodeViewSearchLineVisitor): boolean {
+    const { diff, additions, rows } = this;
+    if (!rows.hasAddition) return false;
+    const { additionLineIndex: lineIndex, additionLineNumber } = rows;
+    if (additions != null) {
+      return visitLine(
+        additions.readLine(lineIndex),
+        'additions',
+        additionLineNumber,
+        lineIndex
+      );
+    }
+    const text = diff.additionLines[lineIndex];
+    return text != null
+      ? visitLine(
+          trimLineEnding(text),
+          'additions',
+          additionLineNumber,
+          lineIndex
+        )
+      : false;
   }
 }
 

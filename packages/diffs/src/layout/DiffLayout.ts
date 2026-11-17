@@ -24,6 +24,7 @@ import type { LineDiffRange } from '../utils/computeLineDiffRanges';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createSeparator } from '../utils/createSeparator';
+import { DiffRowCursor } from '../utils/DiffRowCursor';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import { createGutterGap } from '../utils/hast_utils';
@@ -33,7 +34,6 @@ import {
   getFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import {
   type Column,
@@ -43,6 +43,7 @@ import {
   RowCells,
 } from './RowCells';
 import type {
+  DiffLineMetadata,
   InjectedRow,
   LayoutColumns,
   LineKey,
@@ -76,7 +77,7 @@ export interface DiffLayoutInput<LAnnotation> {
   annotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
   /**
    * Give the empty line after the new file's final line break a row of its
-   * own; see IterateOverDiffProps.includeTrailingNewline.
+   * own; see DiffRowCursorOptions.includeTrailingNewline.
    */
   includeTrailingNewline: boolean;
   /** Render the "No newline at end of file" marker rows. */
@@ -96,6 +97,69 @@ export interface DiffLayoutResult {
   hunkData: HunkData[];
   rowCount: number;
   totalLines: number;
+}
+
+interface BothRowLines {
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+}
+
+interface DeletionRowLines {
+  deletionLine: DiffLineMetadata;
+  additionLine?: undefined;
+}
+
+interface AdditionRowLines {
+  deletionLine?: undefined;
+  additionLine: DiffLineMetadata;
+}
+
+// Reads the current row's lines for layout and for hosts that add rows.
+function readDiffRowLines(
+  rows: DiffRowCursor
+): BothRowLines | DeletionRowLines | AdditionRowLines {
+  const { splitLineIndex } = rows;
+  let deletionLine: DiffLineMetadata | undefined;
+  let additionLine: DiffLineMetadata | undefined;
+  if (rows.hasDeletion) {
+    const {
+      deletionLineIndex,
+      deletionLineNumber,
+      deletionUnifiedLineIndex,
+      deletionNoEOFCR,
+    } = rows;
+    deletionLine = {
+      lineIndex: deletionLineIndex,
+      lineNumber: deletionLineNumber,
+      unifiedLineIndex: deletionUnifiedLineIndex,
+      splitLineIndex,
+      noEOFCR: deletionNoEOFCR,
+    };
+  }
+  if (rows.hasAddition) {
+    const {
+      additionLineIndex,
+      additionLineNumber,
+      additionUnifiedLineIndex,
+      additionNoEOFCR,
+    } = rows;
+    additionLine = {
+      lineIndex: additionLineIndex,
+      lineNumber: additionLineNumber,
+      unifiedLineIndex: additionUnifiedLineIndex,
+      splitLineIndex,
+      noEOFCR: additionNoEOFCR,
+    };
+  }
+  if (deletionLine != null) {
+    return additionLine != null
+      ? { deletionLine, additionLine }
+      : { deletionLine };
+  }
+  if (additionLine != null) {
+    return { additionLine };
+  }
+  throw new Error('DiffLayout: row has no lines');
 }
 
 // The last walk: what it read and what it built, so marked lines can be
@@ -271,7 +335,7 @@ export class DiffLayout<LAnnotation = undefined> {
       this.options;
     let first: number | undefined;
     let lastLine: number | undefined;
-    iterateOverDiff({
+    const rows = new DiffRowCursor({
       diff: input.model.diff,
       diffStyle,
       startingLine: input.renderRange.startingLine,
@@ -279,13 +343,14 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks: expandUnchanged ? true : input.expandedHunks,
       collapsedContextThreshold,
       includeTrailingNewline: input.includeTrailingNewline,
-      callback: ({ additionLine }) => {
-        if (additionLine != null) {
-          first ??= additionLine.lineNumber;
-          lastLine = additionLine.lineNumber;
-        }
-      },
     });
+    while (rows.next()) {
+      if (rows.hasAddition) {
+        const { additionLineNumber } = rows;
+        first ??= additionLineNumber;
+        lastLine = additionLineNumber;
+      }
+    }
     return first == null || lastLine == null
       ? undefined
       : { first, last: lastLine };
@@ -391,7 +456,7 @@ export class DiffLayout<LAnnotation = undefined> {
       errorPrefix: 'DiffLayout.layout',
     });
 
-    iterateOverDiff({
+    const rows = new DiffRowCursor({
       diff,
       diffStyle,
       startingLine: renderRange.startingLine,
@@ -399,372 +464,364 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks: expandUnchanged ? true : expandedHunks,
       collapsedContextThreshold,
       includeTrailingNewline,
-      callback: ({
+    });
+    while (rows.next()) {
+      const { deletionLine, additionLine } = readDiffRowLines(rows);
+      const {
         hunkIndex,
         hunk,
         collapsedBefore,
         collapsedAfter,
-        additionLine,
-        deletionLine,
         type,
-      }) => {
-        if (additionLine != null) {
-          firstNewFileLine ??= additionLine.lineNumber;
-          lastNewFileLine = additionLine.lineNumber;
-        }
-        const splitLineIndex =
-          deletionLine != null
-            ? deletionLine.splitLineIndex
-            : additionLine.splitLineIndex;
-        const unifiedLineIndex =
-          additionLine != null
-            ? additionLine.unifiedLineIndex
-            : deletionLine.unifiedLineIndex;
+        splitLineIndex,
+        unifiedLineIndex,
+      } = rows;
+      if (additionLine != null) {
+        firstNewFileLine ??= additionLine.lineNumber;
+        lastNewFileLine = additionLine.lineNumber;
+      }
 
-        if (!unified && type !== 'change') {
+      if (!unified && type !== 'change') {
+        flushBuffer();
+      }
+
+      if (collapsedBefore > 0) {
+        pushSeparators({
+          hunkIndex,
+          collapsedLines: collapsedBefore,
+          rangeSize: Math.max(hunk?.collapsedBefore ?? 0, 0),
+          hunkSpecs: hunk?.hunkSpecs,
+          isFirstHunk: hunkIndex === 0,
+          isLastHunk: false,
+          isExpandable: isExpandableDiff,
+        });
+      }
+
+      const lineIndex = unified ? unifiedLineIndex : splitLineIndex;
+      const lineContext: RenderedLineContext = {
+        type,
+        hunkIndex,
+        lineIndex,
+        unifiedLineIndex,
+        splitLineIndex,
+        deletionLine,
+        additionLine,
+      };
+
+      // A changed line's row gets word diff marks against its pair, which
+      // the row looks up through the model when it is built. The type
+      // alone decides, not whether both sides are in hand here: in unified
+      // view the two sides of a pair arrive as separate rows.
+      const marked = marks && type === 'change';
+
+      // The unified row shows the new line when there is one; a split
+      // column's rows hang off that column's own line when it has one.
+      const lineKey: LineKey =
+        additionLine != null
+          ? `a${model.lineId(additionLine.lineIndex)}`
+          : `d${deletionLine.lineIndex}`;
+      const deletionsKey: LineKey =
+        deletionLine != null ? `d${deletionLine.lineIndex}` : lineKey;
+      const additionsKey = lineKey;
+
+      if (unified) {
+        const injected = host.getUnifiedInjectedRowsForLine?.(lineContext);
+        if (injected?.before != null) {
+          rowCount += pushUnifiedInjectedRows(
+            columns.unified,
+            injected.before,
+            `${lineKey}:before`
+          );
+        }
+        const lineType: LineTypes =
+          type === 'change'
+            ? additionLine != null
+              ? 'change-addition'
+              : 'change-deletion'
+            : type;
+        const decoration = host.getUnifiedLineDecoration({
+          type,
+          lineType,
+          additionLineIndex: additionLine?.lineIndex,
+          deletionLineIndex: deletionLine?.lineIndex,
+        });
+        const lineIndexText = `${unifiedLineIndex},${splitLineIndex}`;
+        // A unified row shows the new line when there is one.
+        this.#pushLineRow(
+          input,
+          columns.unified,
+          additionLine != null
+            ? {
+                column: 'unified',
+                key: lineKey,
+                side: 'additions',
+                lineIndex: additionLine.lineIndex,
+                marked,
+                contentProperties: decoration.contentProperties,
+                lineNumber: additionLine.lineNumber,
+                altLineNumber:
+                  type === 'change' ? undefined : deletionLine?.lineNumber,
+                lineIndexText,
+                gutterLineType: decoration.gutterLineType,
+                gutterProperties: decoration.gutterProperties,
+              }
+            : {
+                column: 'unified',
+                key: lineKey,
+                side: 'deletions',
+                lineIndex: deletionLine.lineIndex,
+                marked,
+                contentProperties: {
+                  ...decoration.contentProperties,
+                  contenteditable: 'false',
+                },
+                lineNumber: deletionLine.lineNumber,
+                altLineNumber: undefined,
+                lineIndexText,
+                gutterLineType: decoration.gutterLineType,
+                gutterProperties: decoration.gutterProperties,
+              }
+        );
+        const span = getUnifiedAnnotationSpan(
+          input,
+          deletionLine?.lineNumber,
+          additionLine?.lineNumber,
+          hunkIndex,
+          lineIndex
+        );
+        if (span != null) {
+          pushAnnotationRow(columns.unified, lineKey, span, lineType);
+          rowCount++;
+        }
+        if (injected?.after != null) {
+          rowCount += pushUnifiedInjectedRows(
+            columns.unified,
+            injected.after,
+            `${lineKey}:after`
+          );
+        }
+      } else {
+        const injected = host.getSplitInjectedRowsForLine?.(lineContext);
+        if (injected?.before != null) {
+          rowCount += pushSplitInjectedRows(
+            columns,
+            injected.before,
+            `${lineKey}:before`,
+            pendingBuffer,
+            flushBuffer
+          );
+        }
+        const deletionDecoration = host.getSplitLineDecoration({
+          side: 'deletions',
+          type,
+          lineIndex: deletionLine?.lineIndex,
+        });
+        const additionDecoration = host.getSplitLineDecoration({
+          side: 'additions',
+          type,
+          lineIndex: additionLine?.lineIndex,
+        });
+
+        const missingSide =
+          type === 'change'
+            ? additionLine == null
+              ? 'additions'
+              : deletionLine == null
+                ? 'deletions'
+                : undefined
+            : undefined;
+        if (missingSide != null) {
+          if (
+            pendingBuffer.side != null &&
+            pendingBuffer.side !== missingSide
+          ) {
+            flushBuffer();
+          }
+          pendingBuffer.side = missingSide;
+          pendingBuffer.size += 1;
+        } else if (type === 'change') {
+          // A change row with both sides fills the column a one-sided
+          // buffer was holding open; the buffer lands above this row.
           flushBuffer();
         }
 
-        if (collapsedBefore > 0) {
-          pushSeparators({
-            hunkIndex,
-            collapsedLines: collapsedBefore,
-            rangeSize: Math.max(hunk?.collapsedBefore ?? 0, 0),
-            hunkSpecs: hunk?.hunkSpecs,
-            isFirstHunk: hunkIndex === 0,
-            isLastHunk: false,
-            isExpandable: isExpandableDiff,
-          });
+        const spans = getSplitAnnotationSpans(
+          input,
+          deletionLine?.lineNumber,
+          additionLine?.lineNumber,
+          hunkIndex,
+          lineIndex
+        );
+        if (spans != null && pendingBuffer.size > 0) {
+          flushBuffer();
         }
 
-        const lineIndex = unified ? unifiedLineIndex : splitLineIndex;
-        const lineContext: RenderedLineContext = {
-          type,
-          hunkIndex,
-          lineIndex,
-          unifiedLineIndex,
-          splitLineIndex,
-          deletionLine,
-          additionLine,
-        };
-
-        // A changed line's row gets word diff marks against its pair, which
-        // the row looks up through the model when it is built. The type
-        // alone decides, not whether both sides are in hand here: in unified
-        // view the two sides of a pair arrive as separate rows.
-        const marked = marks && type === 'change';
-
-        const additionKey: LineKey | undefined =
-          additionLine != null
-            ? `a${model.lineId(additionLine.lineIndex)}`
-            : undefined;
-        const deletionKey: LineKey | undefined =
-          deletionLine != null ? `d${deletionLine.lineIndex}` : undefined;
-        // The unified row shows the new line when there is one; a split
-        // column's rows hang off that column's own line when it has one.
-        const lineKey = additionKey ?? deletionKey!;
-        const deletionsKey = deletionKey ?? additionKey!;
-        const additionsKey = additionKey ?? deletionKey!;
-
-        if (unified) {
-          const injected = host.getUnifiedInjectedRowsForLine?.(lineContext);
-          if (injected?.before != null) {
-            rowCount += pushUnifiedInjectedRows(
-              columns.unified,
-              injected.before,
-              `${lineKey}:before`
-            );
-          }
-          const lineType: LineTypes =
+        if (deletionLine != null) {
+          this.#pushLineRow(input, columns.deletions, {
+            column: 'deletions',
+            key: deletionsKey,
+            side: 'deletions',
+            lineIndex: deletionLine.lineIndex,
+            marked,
+            contentProperties: deletionDecoration.contentProperties,
+            lineNumber: deletionLine.lineNumber,
+            altLineNumber:
+              type === 'change' ? undefined : additionLine?.lineNumber,
+            lineIndexText: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+            gutterLineType: deletionDecoration.gutterLineType,
+            gutterProperties: deletionDecoration.gutterProperties,
+          });
+        }
+        if (additionLine != null) {
+          this.#pushLineRow(input, columns.additions, {
+            column: 'additions',
+            key: additionsKey,
+            side: 'additions',
+            lineIndex: additionLine.lineIndex,
+            marked,
+            contentProperties: additionDecoration.contentProperties,
+            lineNumber: additionLine.lineNumber,
+            altLineNumber:
+              type === 'change' ? undefined : deletionLine?.lineNumber,
+            lineIndexText: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+            gutterLineType: additionDecoration.gutterLineType,
+            gutterProperties: additionDecoration.gutterProperties,
+          });
+        }
+        if (spans != null) {
+          pushAnnotationRow(
+            columns.deletions,
+            deletionsKey,
+            spans.deletionSpan,
+            type === 'change'
+              ? deletionLine != null
+                ? 'change-deletion'
+                : 'context'
+              : type
+          );
+          pushAnnotationRow(
+            columns.additions,
+            additionsKey,
+            spans.additionSpan,
             type === 'change'
               ? additionLine != null
                 ? 'change-addition'
-                : 'change-deletion'
-              : type;
-          const decoration = host.getUnifiedLineDecoration({
-            type,
-            lineType,
-            additionLineIndex: additionLine?.lineIndex,
-            deletionLineIndex: deletionLine?.lineIndex,
-          });
-          const lineIndexText = `${unifiedLineIndex},${splitLineIndex}`;
-          // A unified row shows the new line when there is one.
-          this.#pushLineRow(
-            input,
-            columns.unified,
-            additionLine != null
-              ? {
-                  column: 'unified',
-                  key: lineKey,
-                  side: 'additions',
-                  lineIndex: additionLine.lineIndex,
-                  marked,
-                  contentProperties: decoration.contentProperties,
-                  lineNumber: additionLine.lineNumber,
-                  altLineNumber:
-                    type === 'change' ? undefined : deletionLine?.lineNumber,
-                  lineIndexText,
-                  gutterLineType: decoration.gutterLineType,
-                  gutterProperties: decoration.gutterProperties,
-                }
-              : {
-                  column: 'unified',
-                  key: lineKey,
-                  side: 'deletions',
-                  lineIndex: deletionLine.lineIndex,
-                  marked,
-                  contentProperties: {
-                    ...decoration.contentProperties,
-                    contenteditable: 'false',
-                  },
-                  lineNumber: deletionLine.lineNumber,
-                  altLineNumber: undefined,
-                  lineIndexText,
-                  gutterLineType: decoration.gutterLineType,
-                  gutterProperties: decoration.gutterProperties,
-                }
+                : 'context'
+              : type
           );
-          const span = getUnifiedAnnotationSpan(
-            input,
-            deletionLine?.lineNumber,
-            additionLine?.lineNumber,
-            hunkIndex,
-            lineIndex
-          );
-          if (span != null) {
-            pushAnnotationRow(columns.unified, lineKey, span, lineType);
-            rowCount++;
-          }
-          if (injected?.after != null) {
-            rowCount += pushUnifiedInjectedRows(
-              columns.unified,
-              injected.after,
-              `${lineKey}:after`
-            );
-          }
-        } else {
-          const injected = host.getSplitInjectedRowsForLine?.(lineContext);
-          if (injected?.before != null) {
-            rowCount += pushSplitInjectedRows(
-              columns,
-              injected.before,
-              `${lineKey}:before`,
-              pendingBuffer,
-              flushBuffer
-            );
-          }
-          const deletionDecoration = host.getSplitLineDecoration({
-            side: 'deletions',
-            type,
-            lineIndex: deletionLine?.lineIndex,
-          });
-          const additionDecoration = host.getSplitLineDecoration({
-            side: 'additions',
-            type,
-            lineIndex: additionLine?.lineIndex,
-          });
-
-          const missingSide =
-            type === 'change'
-              ? additionLine == null
-                ? 'additions'
-                : deletionLine == null
-                  ? 'deletions'
-                  : undefined
-              : undefined;
-          if (missingSide != null) {
-            if (
-              pendingBuffer.side != null &&
-              pendingBuffer.side !== missingSide
-            ) {
-              flushBuffer();
-            }
-            pendingBuffer.side = missingSide;
-            pendingBuffer.size += 1;
-          } else if (type === 'change') {
-            // A change row with both sides fills the column a one-sided
-            // buffer was holding open; the buffer lands above this row.
-            flushBuffer();
-          }
-
-          const spans = getSplitAnnotationSpans(
-            input,
-            deletionLine?.lineNumber,
-            additionLine?.lineNumber,
-            hunkIndex,
-            lineIndex
-          );
-          if (spans != null && pendingBuffer.size > 0) {
-            flushBuffer();
-          }
-
-          if (deletionLine != null) {
-            this.#pushLineRow(input, columns.deletions, {
-              column: 'deletions',
-              key: deletionsKey,
-              side: 'deletions',
-              lineIndex: deletionLine.lineIndex,
-              marked,
-              contentProperties: deletionDecoration.contentProperties,
-              lineNumber: deletionLine.lineNumber,
-              altLineNumber:
-                type === 'change' ? undefined : additionLine?.lineNumber,
-              lineIndexText: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              gutterLineType: deletionDecoration.gutterLineType,
-              gutterProperties: deletionDecoration.gutterProperties,
-            });
-          }
-          if (additionLine != null) {
-            this.#pushLineRow(input, columns.additions, {
-              column: 'additions',
-              key: additionsKey,
-              side: 'additions',
-              lineIndex: additionLine.lineIndex,
-              marked,
-              contentProperties: additionDecoration.contentProperties,
-              lineNumber: additionLine.lineNumber,
-              altLineNumber:
-                type === 'change' ? undefined : deletionLine?.lineNumber,
-              lineIndexText: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              gutterLineType: additionDecoration.gutterLineType,
-              gutterProperties: additionDecoration.gutterProperties,
-            });
-          }
-          if (spans != null) {
-            pushAnnotationRow(
-              columns.deletions,
-              deletionsKey,
-              spans.deletionSpan,
-              type === 'change'
-                ? deletionLine != null
-                  ? 'change-deletion'
-                  : 'context'
-                : type
-            );
-            pushAnnotationRow(
-              columns.additions,
-              additionsKey,
-              spans.additionSpan,
-              type === 'change'
-                ? additionLine != null
-                  ? 'change-addition'
-                  : 'context'
-                : type
-            );
-            rowCount++;
-          }
-          if (injected?.after != null) {
-            rowCount += pushSplitInjectedRows(
-              columns,
-              injected.after,
-              `${lineKey}:after`,
-              pendingBuffer,
-              flushBuffer
-            );
-          }
-        }
-
-        const isFinalSplitHunkRow =
-          !unified &&
-          hunk != null &&
-          splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
-        const isFinalHunkRow =
-          hunkIndex === diff.hunks.length - 1 &&
-          hunk != null &&
-          (unified
-            ? unifiedLineIndex ===
-              hunk.unifiedLineStart + hunk.unifiedLineCount - 1
-            : splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1);
-        const noEOFCRDeletion =
-          (deletionLine?.noEOFCR ?? false) ||
-          (isFinalSplitHunkRow && hunk.noEOFCRDeletions);
-        const noEOFCRAddition =
-          (additionLine?.noEOFCR ?? false) ||
-          (isFinalSplitHunkRow && hunk.noEOFCRAdditions);
-        if (showNoNewlineMarkers && (noEOFCRAddition || noEOFCRDeletion)) {
-          flushBuffer();
-          if (noEOFCRDeletion) {
-            const noEOFType: LineTypes =
-              type === 'context' || type === 'context-expanded'
-                ? type
-                : 'change-deletion';
-            this.#cells.fixedRow(
-              unified ? columns.unified : columns.deletions,
-              'eof:d',
-              noEOFType,
-              () => {
-                // A deleted line's marker is not part of the document.
-                const marker = createNoNewlineElement(noEOFType);
-                return {
-                  gutter: createGutterGap(noEOFType, 'metadata', 1),
-                  content:
-                    noEOFType === 'change-deletion' ? readOnly(marker) : marker,
-                };
-              }
-            );
-            if (!unified && !noEOFCRAddition) {
-              this.#cells.fixedRow(
-                columns.additions,
-                bufferKey(columns.additions),
-                '1',
-                () => ({
-                  gutter: createGutterGap(undefined, 'buffer', 1),
-                  content: createEmptyRowBuffer(1),
-                })
-              );
-            }
-          }
-          if (
-            noEOFCRAddition &&
-            !(unified && noEOFCRDeletion && type !== 'change')
-          ) {
-            const noEOFType: LineTypes =
-              type === 'context' || type === 'context-expanded'
-                ? type
-                : 'change-addition';
-            this.#cells.fixedRow(
-              unified ? columns.unified : columns.additions,
-              'eof:a',
-              noEOFType,
-              () => ({
-                gutter: createGutterGap(noEOFType, 'metadata', 1),
-                content: createNoNewlineElement(noEOFType),
-              })
-            );
-            if (!unified && !noEOFCRDeletion) {
-              this.#cells.fixedRow(
-                columns.deletions,
-                bufferKey(columns.deletions),
-                '1',
-                () => ({
-                  gutter: createGutterGap(undefined, 'buffer', 1),
-                  content: createEmptyRowBuffer(1),
-                })
-              );
-            }
-          }
           rowCount++;
         }
+        if (injected?.after != null) {
+          rowCount += pushSplitInjectedRows(
+            columns,
+            injected.after,
+            `${lineKey}:after`,
+            pendingBuffer,
+            flushBuffer
+          );
+        }
+      }
 
+      const isFinalSplitHunkRow =
+        !unified &&
+        hunk != null &&
+        splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
+      const isFinalHunkRow =
+        hunkIndex === diff.hunks.length - 1 &&
+        hunk != null &&
+        (unified
+          ? unifiedLineIndex ===
+            hunk.unifiedLineStart + hunk.unifiedLineCount - 1
+          : splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1);
+      const noEOFCRDeletion =
+        (deletionLine?.noEOFCR ?? false) ||
+        (isFinalSplitHunkRow && hunk.noEOFCRDeletions);
+      const noEOFCRAddition =
+        (additionLine?.noEOFCR ?? false) ||
+        (isFinalSplitHunkRow && hunk.noEOFCRAdditions);
+      if (showNoNewlineMarkers && (noEOFCRAddition || noEOFCRDeletion)) {
+        flushBuffer();
+        if (noEOFCRDeletion) {
+          const noEOFType: LineTypes =
+            type === 'context' || type === 'context-expanded'
+              ? type
+              : 'change-deletion';
+          this.#cells.fixedRow(
+            unified ? columns.unified : columns.deletions,
+            'eof:d',
+            noEOFType,
+            () => {
+              // A deleted line's marker is not part of the document.
+              const marker = createNoNewlineElement(noEOFType);
+              return {
+                gutter: createGutterGap(noEOFType, 'metadata', 1),
+                content:
+                  noEOFType === 'change-deletion' ? readOnly(marker) : marker,
+              };
+            }
+          );
+          if (!unified && !noEOFCRAddition) {
+            this.#cells.fixedRow(
+              columns.additions,
+              bufferKey(columns.additions),
+              '1',
+              () => ({
+                gutter: createGutterGap(undefined, 'buffer', 1),
+                content: createEmptyRowBuffer(1),
+              })
+            );
+          }
+        }
         if (
-          hunkSeparators !== 'simple' &&
-          hunkSeparators !== 'metadata' &&
-          (collapsedAfter > 0 || (isFinalHunkRow && canHydrateContext))
+          noEOFCRAddition &&
+          !(unified && noEOFCRDeletion && type !== 'change')
         ) {
-          pushSeparators({
-            hunkIndex: type === 'context-expanded' ? hunkIndex : hunkIndex + 1,
-            collapsedLines:
-              isFinalHunkRow && canHydrateContext ? 'unknown' : collapsedAfter,
-            rangeSize: trailingRangeSize,
-            hunkSpecs: undefined,
-            isFirstHunk: false,
-            isLastHunk: true,
-            isExpandable: isExpandableDiff,
-          });
+          const noEOFType: LineTypes =
+            type === 'context' || type === 'context-expanded'
+              ? type
+              : 'change-addition';
+          this.#cells.fixedRow(
+            unified ? columns.unified : columns.additions,
+            'eof:a',
+            noEOFType,
+            () => ({
+              gutter: createGutterGap(noEOFType, 'metadata', 1),
+              content: createNoNewlineElement(noEOFType),
+            })
+          );
+          if (!unified && !noEOFCRDeletion) {
+            this.#cells.fixedRow(
+              columns.deletions,
+              bufferKey(columns.deletions),
+              '1',
+              () => ({
+                gutter: createGutterGap(undefined, 'buffer', 1),
+                content: createEmptyRowBuffer(1),
+              })
+            );
+          }
         }
         rowCount++;
-      },
-    });
+      }
+
+      if (
+        hunkSeparators !== 'simple' &&
+        hunkSeparators !== 'metadata' &&
+        (collapsedAfter > 0 || (isFinalHunkRow && canHydrateContext))
+      ) {
+        pushSeparators({
+          hunkIndex: type === 'context-expanded' ? hunkIndex : hunkIndex + 1,
+          collapsedLines:
+            isFinalHunkRow && canHydrateContext ? 'unknown' : collapsedAfter,
+          rangeSize: trailingRangeSize,
+          hunkSpecs: undefined,
+          isFirstHunk: false,
+          isLastHunk: true,
+          isExpandable: isExpandableDiff,
+        });
+      }
+      rowCount++;
+    }
 
     flushBuffer();
 

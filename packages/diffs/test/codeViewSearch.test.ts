@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
+import type { DiffLineMetadata } from '../src/layout/RowSpec';
 import { MAX_SEARCH_MATCHES, type SearchParams } from '../src/search';
 import {
   CodeViewSearchDiffCursor,
@@ -9,70 +10,9 @@ import {
   CodeViewSearchTextCursor,
 } from '../src/search/codeViewSearch';
 import type { FileDiffMetadata, SelectionSide } from '../src/types';
-import {
-  type DiffLineCallbackProps,
-  type DiffLineMetadata,
-  iterateOverDiff,
-} from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { processPatch } from '../src/utils/parsePatchFiles';
-
-// Includes separated hunks, unequal change sides, and unchanged trailing rows.
-function createDiffFixtures(): FileDiffMetadata[] {
-  const before = Array.from({ length: 35 }, (_, index) => `line ${index}\n`);
-  const after = [...before];
-  after.splice(4, 2, 'replacement one\n', 'replacement two\n', 'added\n');
-  after.splice(23, 1, 'replacement later\n');
-  const full = parseDiffFromFile(
-    { name: 'search.txt', contents: before.join('') },
-    { name: 'search.txt', contents: after.join('') },
-    { context: 1, disableLineMatching: true }
-  );
-  const partial = processPatch(
-    '--- a/search.txt\n+++ b/search.txt\n@@ -4,4 +4,5 @@\n context\n-old one\n-old two\n+new one\n+new two\n+added\n context end\n@@ -20,3 +21,3 @@\n later context\n-old later\n+new later\n final context\n'
-  ).files[0];
-  if (partial == null) throw new Error('Expected parsed patch fixture');
-  return [full, partial];
-}
-
-describe('CodeView search diff resume contract', () => {
-  test('every starting row reproduces the entire remaining callback metadata', () => {
-    for (const diff of createDiffFixtures()) {
-      for (const diffStyle of ['split', 'unified'] satisfies (
-        | 'split'
-        | 'unified'
-      )[]) {
-        const full: DiffLineCallbackProps[] = [];
-        iterateOverDiff({
-          diff,
-          diffStyle,
-          expandedHunks: true,
-          callback: (row) => {
-            full.push(row);
-          },
-        });
-        expect(full.length).toBeGreaterThan(0);
-        for (
-          let startingLine = 0;
-          startingLine <= full.length;
-          startingLine++
-        ) {
-          const resumed: DiffLineCallbackProps[] = [];
-          iterateOverDiff({
-            diff,
-            diffStyle,
-            expandedHunks: true,
-            startingLine,
-            callback: (row) => {
-              resumed.push(row);
-            },
-          });
-          expect(resumed).toEqual(full.slice(startingLine));
-        }
-      }
-    }
-  });
-});
+import { collectDiffRows, createDiffFixtures } from './testUtils';
 
 // Records source coordinates as well as text so resume cannot silently change a side.
 type VisitedLine = [string, SelectionSide | undefined, number, number];
@@ -85,7 +25,7 @@ const params: SearchParams = {
   caseSensitive: false,
 };
 
-// Uses the existing row iterator to describe the source lines each style searches.
+// Uses cursor rows to describe the source lines each style searches.
 function expectedDiffLines(
   diff: FileDiffMetadata,
   diffStyle: 'split' | 'unified',
@@ -108,25 +48,24 @@ function expectedDiffLines(
         line.lineIndex,
       ]);
   };
-  iterateOverDiff({
+  for (const { additionLine, deletionLine } of collectDiffRows({
     diff,
     diffStyle,
     expandedHunks: true,
-    callback: ({ additionLine, deletionLine }) => {
-      if (scoped) add('additions', additionLine);
-      else if (diffStyle === 'unified') {
-        if (
-          additionLine != null &&
-          diff.additionLines[additionLine.lineIndex] != null
-        )
-          add('additions', additionLine);
-        else add('deletions', deletionLine);
-      } else {
-        add('deletions', deletionLine);
+  })) {
+    if (scoped) add('additions', additionLine);
+    else if (diffStyle === 'unified') {
+      if (
+        additionLine != null &&
+        diff.additionLines[additionLine.lineIndex] != null
+      )
         add('additions', additionLine);
-      }
-    },
-  });
+      else add('deletions', deletionLine);
+    } else {
+      add('deletions', deletionLine);
+      add('additions', additionLine);
+    }
+  }
   return lines;
 }
 

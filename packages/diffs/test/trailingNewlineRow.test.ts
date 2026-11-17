@@ -9,14 +9,11 @@ import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffModel } from '../src/model/DiffModel';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import type { FileDiffMetadata } from '../src/types';
-import {
-  type DiffLineCallbackProps,
-  endsWithNewline,
-  iterateOverDiff,
-} from '../src/utils/iterateOverDiff';
+import { endsWithNewline } from '../src/utils/endsWithNewline';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { installDom, wait } from './domHarness';
+import { collectDiffRows, type CollectedDiffRow } from './testUtils';
 import { contentAST } from './testUtils';
 
 afterAll(async () => {
@@ -86,24 +83,19 @@ function collectRows(
     expandedHunks?: true;
     diffStyle?: 'split' | 'unified';
   }
-): DiffLineCallbackProps[] {
-  const rows: DiffLineCallbackProps[] = [];
-  iterateOverDiff({
+): CollectedDiffRow[] {
+  return collectDiffRows({
     diff,
     diffStyle: options.diffStyle ?? 'split',
     expandedHunks: options.expandedHunks,
     includeTrailingNewline: options.includeTrailingNewline,
-    callback: (row) => {
-      rows.push(row);
-    },
   });
-  return rows;
 }
 
 // Whether a walk emitted a row past the new file's last line.
 function hasTrailingRow(
   diff: FileDiffMetadata,
-  rows: DiffLineCallbackProps[]
+  rows: CollectedDiffRow[]
 ): boolean {
   return rows.some(
     (row) => row.additionLine?.lineIndex === diff.additionLines.length
@@ -178,16 +170,12 @@ describe('trailing newline row', () => {
 
   test('is emitted by a walk whose window starts at it', () => {
     const diff = makeDiffEndingInChange();
-    const rows: DiffLineCallbackProps[] = [];
-    iterateOverDiff({
+    const rows = collectDiffRows({
       diff,
       diffStyle: 'split',
       startingLine: diff.splitLineCount,
       totalLines: 1,
       includeTrailingNewline: true,
-      callback: (row) => {
-        rows.push(row);
-      },
     });
     expect(rows.map((row) => row.additionLine?.lineNumber)).toEqual([4]);
   });

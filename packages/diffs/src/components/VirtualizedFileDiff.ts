@@ -37,6 +37,7 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
+import { DiffRowCursor } from '../utils/DiffRowCursor';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
@@ -45,10 +46,6 @@ import {
   includesFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
-import {
-  type DiffLineMetadata,
-  iterateOverDiff,
-} from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
   getExpandedRegion,
@@ -314,13 +311,11 @@ export class VirtualizedFileDiff<
 
   // Whether a line has a "No newline" marker row after it. Markers are hidden
   // while editing.
-  private hasNoNewlineMarker(
-    additionLine: DiffLineMetadata | undefined,
-    deletionLine: DiffLineMetadata | undefined
-  ): boolean {
+  private hasNoNewlineMarker(rows: DiffRowCursor): boolean {
     return (
       this.hunksRenderer.showsNoNewlineMarkers() &&
-      ((additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false))
+      ((rows.hasAddition && rows.additionNoEOFCR) ||
+        (rows.hasDeletion && rows.deletionNoEOFCR))
     );
   }
 
@@ -767,7 +762,7 @@ export class VirtualizedFileDiff<
     }
 
     let position: { top: number; height: number } | undefined;
-    iterateOverDiff({
+    const rows = new DiffRowCursor({
       diff: fileDiff,
       diffStyle,
       startingLine: checkpoint?.renderedLineIndex ?? 0,
@@ -777,85 +772,69 @@ export class VirtualizedFileDiff<
           this.hunksRenderer.getExpandedHunksMap()),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
-      callback: ({
-        hunkIndex,
-        hunk,
-        collapsedBefore,
-        collapsedAfter,
-        deletionLine,
-        additionLine,
-      }) => {
-        const lineIndex =
-          diffStyle === 'split'
-            ? (additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex)
-            : (additionLine?.unifiedLineIndex ??
-              deletionLine?.unifiedLineIndex);
-        if (lineIndex == null) {
-          throw new Error(
-            'VirtualizedFileDiff.getLinePosition: missing line index data'
-          );
-        }
-
-        if (collapsedBefore > 0) {
-          const separator = getLeadingHunkSeparatorLayout({
-            type: hunkSeparators,
-            metrics: this.metrics,
-            hunkIndex,
-            hunkSpecs: hunk?.hunkSpecs,
-          });
-          if (separator != null) {
-            top += separator.gapBefore;
-            if (
-              targetLineIndex >= lineIndex - collapsedBefore &&
-              targetLineIndex < lineIndex
-            ) {
-              position = {
-                top,
-                height: separator.height,
-              };
-              return true;
-            }
-            top += separator.height + separator.gapAfter;
-          }
-        }
-
-        const lineHeight = this.getLineHeight(
-          lineIndex,
-          additionLine?.lineIndex,
-          this.hasNoNewlineMarker(additionLine, deletionLine)
-        );
-        if (lineIndex === targetLineIndex) {
-          position = {
-            top,
-            height: lineHeight,
-          };
-          return true;
-        }
-        top += lineHeight;
-
-        if (collapsedAfter > 0) {
-          const separator = getTrailingHunkSeparatorLayout({
-            type: hunkSeparators,
-            metrics: this.metrics,
-          });
-          if (separator != null) {
-            if (
-              targetLineIndex > lineIndex &&
-              targetLineIndex <= lineIndex + collapsedAfter
-            ) {
-              position = {
-                top: top + separator.gapBefore,
-                height: separator.height,
-              };
-              return true;
-            }
-            top += separator.totalHeight;
-          }
-        }
-
-        return false;
-      },
     });
+    while (rows.next()) {
+      const { hunkIndex, hunk, collapsedBefore, collapsedAfter } = rows;
+      const lineIndex =
+        diffStyle === 'split' ? rows.splitLineIndex : rows.unifiedLineIndex;
+
+      if (collapsedBefore > 0) {
+        const separator = getLeadingHunkSeparatorLayout({
+          type: hunkSeparators,
+          metrics: this.metrics,
+          hunkIndex,
+          hunkSpecs: hunk?.hunkSpecs,
+        });
+        if (separator != null) {
+          top += separator.gapBefore;
+          if (
+            targetLineIndex >= lineIndex - collapsedBefore &&
+            targetLineIndex < lineIndex
+          ) {
+            position = {
+              top,
+              height: separator.height,
+            };
+            break;
+          }
+          top += separator.height + separator.gapAfter;
+        }
+      }
+
+      const lineHeight = this.getLineHeight(
+        lineIndex,
+        rows.hasAddition ? rows.additionLineIndex : undefined,
+        this.hasNoNewlineMarker(rows)
+      );
+      if (lineIndex === targetLineIndex) {
+        position = {
+          top,
+          height: lineHeight,
+        };
+        break;
+      }
+      top += lineHeight;
+
+      if (collapsedAfter > 0) {
+        const separator = getTrailingHunkSeparatorLayout({
+          type: hunkSeparators,
+          metrics: this.metrics,
+        });
+        if (separator != null) {
+          if (
+            targetLineIndex > lineIndex &&
+            targetLineIndex <= lineIndex + collapsedAfter
+          ) {
+            position = {
+              top: top + separator.gapBefore,
+              height: separator.height,
+            };
+            break;
+          }
+          top += separator.totalHeight;
+        }
+      }
+    }
 
     return position;
   }
@@ -961,7 +940,7 @@ export class VirtualizedFileDiff<
     // This may end up being quite expensive on extremely large files, we may
     // need to figure out how to anchor on different regions, or utilize
     // renderRange to shortcut this for us somehow
-    iterateOverDiff({
+    const rows = new DiffRowCursor({
       diff: fileDiff,
       diffStyle,
       startingLine: checkpoint?.renderedLineIndex ?? 0,
@@ -970,76 +949,48 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
-      callback: ({
-        hunkIndex,
-        hunk,
-        collapsedBefore,
-        collapsedAfter,
-        deletionLine,
-        additionLine,
-      }) => {
-        const lineIndex =
-          diffStyle === 'split'
-            ? (additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex)
-            : (additionLine?.unifiedLineIndex ??
-              deletionLine?.unifiedLineIndex);
-        if (lineIndex == null) {
-          throw new Error(
-            'VirtualizedFileDiff.getNumericScrollAnchor: missing line index data'
-          );
-        }
-
-        if (collapsedBefore > 0) {
-          const separator = getLeadingHunkSeparatorLayout({
-            type: hunkSeparators,
-            metrics: this.metrics,
-            hunkIndex,
-            hunkSpecs: hunk?.hunkSpecs,
-          });
-          if (separator != null) {
-            top += separator.totalHeight;
-          }
-        }
-
-        if (top >= localViewportTop) {
-          if (deletionLine != null) {
-            anchor = {
-              lineNumber: deletionLine.lineNumber,
-              side: 'deletions',
-              top,
-            };
-          } else if (additionLine != null) {
-            anchor = {
-              lineNumber: additionLine.lineNumber,
-              side: 'additions',
-              top,
-            };
-          }
-          if (anchor != null) {
-            return true;
-          }
-        }
-
-        const lineHeight = this.getLineHeight(
-          lineIndex,
-          additionLine?.lineIndex,
-          this.hasNoNewlineMarker(additionLine, deletionLine)
-        );
-        top += lineHeight;
-
-        if (collapsedAfter > 0) {
-          const separator = getTrailingHunkSeparatorLayout({
-            type: hunkSeparators,
-            metrics: this.metrics,
-          });
-          if (separator != null) {
-            top += separator.totalHeight;
-          }
-        }
-
-        return false;
-      },
     });
+    while (rows.next()) {
+      const { hunkIndex, hunk, collapsedBefore, collapsedAfter } = rows;
+      const lineIndex =
+        diffStyle === 'split' ? rows.splitLineIndex : rows.unifiedLineIndex;
+
+      if (collapsedBefore > 0) {
+        const separator = getLeadingHunkSeparatorLayout({
+          type: hunkSeparators,
+          metrics: this.metrics,
+          hunkIndex,
+          hunkSpecs: hunk?.hunkSpecs,
+        });
+        if (separator != null) {
+          top += separator.totalHeight;
+        }
+      }
+
+      if (top >= localViewportTop) {
+        anchor = rows.hasDeletion
+          ? { lineNumber: rows.deletionLineNumber, side: 'deletions', top }
+          : { lineNumber: rows.additionLineNumber, side: 'additions', top };
+        break;
+      }
+
+      const lineHeight = this.getLineHeight(
+        lineIndex,
+        rows.hasAddition ? rows.additionLineIndex : undefined,
+        this.hasNoNewlineMarker(rows)
+      );
+      top += lineHeight;
+
+      if (collapsedAfter > 0) {
+        const separator = getTrailingHunkSeparatorLayout({
+          type: hunkSeparators,
+          metrics: this.metrics,
+        });
+        if (separator != null) {
+          top += separator.totalHeight;
+        }
+      }
+    }
 
     return anchor;
   }
@@ -2157,7 +2108,7 @@ export class VirtualizedFileDiff<
     let firstVisibleHunk: number | undefined;
     let overflowCounter: number | undefined;
 
-    iterateOverDiff({
+    const rows = new DiffRowCursor({
       diff: fileDiff,
       diffStyle,
       startingLine: checkpoint?.renderedLineIndex ?? 0,
@@ -2166,102 +2117,93 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
-      callback: ({
+    });
+    while (rows.next()) {
+      const {
         hunkIndex,
         hunk,
         collapsedBefore,
         collapsedAfter,
-        deletionLine,
-        additionLine,
-      }) => {
-        const splitLineIndex =
-          additionLine != null
-            ? additionLine.splitLineIndex
-            : deletionLine.splitLineIndex;
-        const unifiedLineIndex =
-          additionLine != null
-            ? additionLine.unifiedLineIndex
-            : deletionLine.unifiedLineIndex;
-        const hasMetadata = this.hasNoNewlineMarker(additionLine, deletionLine);
-        const isFinalHunkRow =
-          hunkIndex === fileDiff.hunks.length - 1 &&
-          hunk != null &&
-          (diffStyle === 'split'
-            ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
-            : unifiedLineIndex ===
-              hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
-        const leadingSeparator =
-          collapsedBefore > 0
-            ? getLeadingHunkSeparatorLayout({
-                type: hunkSeparators,
-                metrics: this.metrics,
-                hunkIndex,
-                hunkSpecs: hunk?.hunkSpecs,
-              })
-            : undefined;
-        const gapAdjustment = leadingSeparator?.totalHeight ?? 0;
+        splitLineIndex,
+        unifiedLineIndex,
+      } = rows;
+      const hasMetadata = this.hasNoNewlineMarker(rows);
+      const isFinalHunkRow =
+        hunkIndex === fileDiff.hunks.length - 1 &&
+        hunk != null &&
+        (diffStyle === 'split'
+          ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
+          : unifiedLineIndex ===
+            hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
+      const leadingSeparator =
+        collapsedBefore > 0
+          ? getLeadingHunkSeparatorLayout({
+              type: hunkSeparators,
+              metrics: this.metrics,
+              hunkIndex,
+              hunkSpecs: hunk?.hunkSpecs,
+            })
+          : undefined;
+      const gapAdjustment = leadingSeparator?.totalHeight ?? 0;
 
-        absoluteLineTop += gapAdjustment;
+      absoluteLineTop += gapAdjustment;
 
-        const isAtHunkBoundary = currentLine % hunkLineCount === 0;
-        const currentHunk = Math.floor(currentLine / hunkLineCount);
+      const isAtHunkBoundary = currentLine % hunkLineCount === 0;
+      const currentHunk = Math.floor(currentLine / hunkLineCount);
 
-        // Track the boundary positional offset at a hunk
-        if (isAtHunkBoundary) {
-          hunkOffsets[currentHunk] =
-            absoluteLineTop - (fileTop + codeRegionTop + gapAdjustment);
+      // Track the boundary positional offset at a hunk
+      if (isAtHunkBoundary) {
+        hunkOffsets[currentHunk] =
+          absoluteLineTop - (fileTop + codeRegionTop + gapAdjustment);
 
-          // Check if we should bail (overflow complete)
-          if (overflowCounter != null) {
-            if (overflowCounter <= 0) {
-              return true;
-            }
-            overflowCounter--;
+        // Check if we should bail (overflow complete)
+        if (overflowCounter != null) {
+          if (overflowCounter <= 0) {
+            break;
           }
+          overflowCounter--;
         }
+      }
 
-        const lineHeight = this.getLineHeight(
-          diffStyle === 'split' ? splitLineIndex : unifiedLineIndex,
-          additionLine?.lineIndex,
-          hasMetadata
-        );
+      const lineHeight = this.getLineHeight(
+        diffStyle === 'split' ? splitLineIndex : unifiedLineIndex,
+        rows.hasAddition ? rows.additionLineIndex : undefined,
+        hasMetadata
+      );
 
-        // Track visible region
-        if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
-          firstVisibleHunk ??= currentHunk;
-        }
+      // Track visible region
+      if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
+        firstVisibleHunk ??= currentHunk;
+      }
 
-        // Start overflow when we are out of the viewport at a hunk boundary
-        if (
-          overflowCounter == null &&
-          absoluteLineTop >= bottom &&
-          isAtHunkBoundary
-        ) {
-          overflowCounter = overflowHunks;
-        }
+      // Start overflow when we are out of the viewport at a hunk boundary
+      if (
+        overflowCounter == null &&
+        absoluteLineTop >= bottom &&
+        isAtHunkBoundary
+      ) {
+        overflowCounter = overflowHunks;
+      }
 
-        currentLine++;
-        absoluteLineTop += lineHeight;
+      currentLine++;
+      absoluteLineTop += lineHeight;
 
-        if (collapsedAfter > 0 || (isFinalHunkRow && canHydratePartialDiff)) {
-          const trailingSeparator = getTrailingHunkSeparatorLayout({
-            type: hunkSeparators,
-            metrics: this.metrics,
-          });
-          if (trailingSeparator != null) {
-            if (
-              absoluteLineTop < bottom &&
-              absoluteLineTop + trailingSeparator.totalHeight > top
-            ) {
-              firstVisibleHunk ??= currentHunk;
-            }
-            absoluteLineTop += trailingSeparator.totalHeight;
+      if (collapsedAfter > 0 || (isFinalHunkRow && canHydratePartialDiff)) {
+        const trailingSeparator = getTrailingHunkSeparatorLayout({
+          type: hunkSeparators,
+          metrics: this.metrics,
+        });
+        if (trailingSeparator != null) {
+          if (
+            absoluteLineTop < bottom &&
+            absoluteLineTop + trailingSeparator.totalHeight > top
+          ) {
+            firstVisibleHunk ??= currentHunk;
           }
+          absoluteLineTop += trailingSeparator.totalHeight;
         }
-
-        return false;
-      },
-    });
+      }
+    }
 
     // No visible lines found
     if (firstVisibleHunk == null) {

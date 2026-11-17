@@ -13,7 +13,6 @@ import {
 } from '../src/search';
 import type { CodeViewItem, FileDiffMetadata } from '../src/types';
 import { getLineIndexForDiff } from '../src/utils/getLineIndexForDiff';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { fillSearch, getSearchState } from './codeViewSearchHarness';
@@ -24,6 +23,7 @@ import {
   wait,
   waitFor,
 } from './domHarness';
+import { collectDiffRows } from './testUtils';
 
 beforeAll(async () => {
   await getSharedHighlighter({
@@ -127,23 +127,22 @@ function checkDiffRows(
   additionsOnly = false
 ): void {
   const rows = new Map<string, [number, number]>();
-  iterateOverDiff({
+  for (const { additionLine, deletionLine } of collectDiffRows({
     diff,
     diffStyle,
     expandedHunks: true,
-    callback: ({ additionLine, deletionLine }) => {
-      if (additionLine != null)
-        rows.set(`additions:${additionLine.lineNumber}`, [
-          additionLine.unifiedLineIndex,
-          additionLine.splitLineIndex,
-        ]);
-      if (deletionLine != null)
-        rows.set(`deletions:${deletionLine.lineNumber}`, [
-          deletionLine.unifiedLineIndex,
-          deletionLine.splitLineIndex,
-        ]);
-    },
-  });
+  })) {
+    if (additionLine != null)
+      rows.set(`additions:${additionLine.lineNumber}`, [
+        additionLine.unifiedLineIndex,
+        additionLine.splitLineIndex,
+      ]);
+    if (deletionLine != null)
+      rows.set(`deletions:${deletionLine.lineNumber}`, [
+        deletionLine.unifiedLineIndex,
+        deletionLine.splitLineIndex,
+      ]);
+  }
   const scan = new CodeViewSearchScan(
     params,
     1,
