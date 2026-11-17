@@ -458,9 +458,15 @@ When a pane collapses to its header, the header stays, and the children of
 with its visibility attributes and its tab, and the content receives
 `PANE_VISIBILITY_EVENT` with `hidden: true` before it waits or unmounts. In
 `activity`, its effects then clean up, and they run again when it shows, in
-place of the event of the show. The `activity` mode needs React 19.2; with an
-earlier React, the content stays mounted. Do not return `null` from `renderPane`
-for an inactive tab: choose a mode, so that the layout knows when the tab shows.
+place of the event of the show. The package needs React 19.2 or later, for
+`<Activity>`. Do not return `null` from `renderPane` for an inactive tab: choose
+a mode, so that the layout knows when the tab shows.
+
+The mode is a fixed property of a kind of content: give a pane the same mode for
+as long as it is in the layout. The mode is not a level that changes with time,
+such as "unmount after ten minutes hidden": a function that gives a pane another
+mode later can mount its content again, with a new state, because the boundary
+of the mode changes.
 
 ## Tabs
 

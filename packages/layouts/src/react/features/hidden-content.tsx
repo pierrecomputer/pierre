@@ -35,10 +35,7 @@ function ContentBoundary({
     (visibility.reasons(value.id, first) & mask) !== 0;
   const hides = useSyncExternalStore(visibility.subscribe, hidden, hidden);
   if (mode === 'unmount') return hides ? null : children;
-  // `<Activity>` came with React 19.2: with an earlier React, the content
-  // stays mounted.
-  if (mode === 'mounted' || (Activity as unknown) === undefined)
-    return children;
+  if (mode === 'mounted') return children;
   return <Activity mode={hides ? 'hidden' : 'visible'}>{children}</Activity>;
 }
 
