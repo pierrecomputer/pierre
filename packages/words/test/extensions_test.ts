@@ -188,6 +188,34 @@ void test('math layout covers common constructs', () => {
   assert.match(svg('\\lim_{x\\to 0}'), />lim<\/text>/);
   assert.match(svg('\\sqrt[3]{x}'), /<path /);
   assert.match(svg('\\left( \\frac{a}{b} \\right)'), /<path d="M/);
+  // an accent over one letter takes scripts as the letter does
+  const subY = (tex: string) =>
+    /<text[^>]*font-size="700"[^>]*>/.exec(svg(tex))?.[0];
+  assert.equal(subY('\\hat{y}_c'), subY('y_c'));
+  assert.notEqual(subY('{y}_c'), subY('y_c'));
+  // fractions are ordinary atoms: no space before an opening parenthesis
+  assert.match(svg('\\frac{1}{2}(x)'), /<text x="740" y="0">\(/);
+  // `\over` splits its group into the same fraction as `\frac`
+  assert.equal(
+    svg('x = {-b \\pm \\sqrt{b^2-4ac} \\over 2a}').replace(
+      /aria-label="[^"]*"/,
+      ''
+    ),
+    svg('x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}').replace(
+      /aria-label="[^"]*"/,
+      ''
+    )
+  );
+  assert.equal(
+    svg('\\left( a \\over b \\right) + {{a \\over b} \\over c}').replace(
+      /aria-label="[^"]*"/,
+      ''
+    ),
+    svg('\\left( \\frac{a}{b} \\right) + \\frac{\\frac{a}{b}}{c}').replace(
+      /aria-label="[^"]*"/,
+      ''
+    )
+  );
   assert.match(
     svg('\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}'),
     /<path d="M/
@@ -355,7 +383,7 @@ void test('the Mermaid plugin renders mermaid fences', () => {
   // an open fence draws its complete lines
   assert.match(
     renderer.render('```mermaid\ngraph LR\nA-', true, true).html,
-    /^<div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div>/
+    /^<div data-markdown="code-block" data-code="graph LR\nA-" data-language="mermaid" data-incomplete="true"><div data-markdown="code-header"><span>mermaid<\/span><span><button [^>]*disabled="">Copy<\/button><button [^>]*disabled="">Download<\/button><\/span><\/div><div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div><\/div>/
   );
   // a line that does not parse keeps the last diagram
   assert.match(
@@ -386,9 +414,10 @@ void test('the Mermaid plugin renders mermaid fences', () => {
     false,
     false
   ).html;
+  // a closed diagram sits in the code block frame with enabled buttons
   assert.match(
     done,
-    /^<div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div>/
+    /^<div data-markdown="code-block" data-code="graph LR\n" data-language="mermaid"><div data-markdown="code-header"><span>mermaid<\/span><span><button [^>]*"Copy code">Copy<\/button><button [^>]*"Download code">Download<\/button><\/span><\/div><div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div><\/div>/
   );
   // a diagram that does not parse stays code
   assert.match(done, /data-language="mermaid"[^]*bad/);

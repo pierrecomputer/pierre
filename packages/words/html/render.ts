@@ -42,6 +42,7 @@ type InternalRenderedUpdate = RenderedHtmlUpdate & { [delta]?: string };
 const lineGroup = '<span data-markdown="code-lines">';
 const paragraphStart = '<p data-markdown="p">';
 const codeEnd = '</code></pre></div>';
+const codeBlockOpen = '<div data-markdown="code-block"';
 
 /**
  * Wrap code in groups of 64 lines, so the browser lays out only the last group
@@ -429,7 +430,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const number = index++;
       const custom = rendererFor(options.plugins, language);
       if (custom !== undefined) {
-        const code = decodeHtml(content);
+        let code = decodeHtml(content);
+        // Open code ends with an added LF. Drop it from a partial line.
+        if (isIncomplete && partial) code = code.slice(0, -1);
         // The leading NUL keeps these keys apart from the highlighter's.
         const key = '\0' + language + '\0' + code;
         let block = isIncomplete
@@ -438,16 +441,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             ? codeCache.get(key)
             : oldCodeCache.get(key);
         if (block === undefined)
-          block = custom.render({
-            // Open code ends with an added LF. Drop it from a partial line.
-            code: isIncomplete && partial ? code.slice(0, -1) : code,
-            language,
-            isIncomplete,
-          });
+          block = custom.render({ code, language, isIncomplete });
         if (!isIncomplete) codeCache.set(key, block);
         // A renderer that returns null shows the code block.
         if (block !== null) {
-          html += hookHtml(block);
+          block = hookHtml(block);
+          // A diagram sits in the code block frame: its header and buttons,
+          // which are disabled while the fence streams. The buttons take the
+          // source from `data-code`.
+          if (block !== '' && custom === options.plugins?.mermaid) {
+            const start = open + 1 + codeBlockOpen.length;
+            block = `${codeBlockOpen} data-code="${escapeHtml(code)}"${input.slice(start, input.indexOf('<pre', start))}${block}</div>`;
+          }
+          html += block;
           fences?.push(cursor, html.length, index);
           continue;
         }

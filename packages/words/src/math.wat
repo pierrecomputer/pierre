@@ -71,7 +71,7 @@
   (const $N.size 48)
   (const $N.max 2730)
   (const $N.kind 0)   ;; u8 $NK
-  (const $N.class 1)  ;; u8 atom class
+  (const $N.class 1)  ;; u8 atom class of a glyph; 1 on an accent over one glyph
   (const $N.scale 2)  ;; u16 font size, thousandths
   (const $N.x 4)
   (const $N.y 8)      ;; down is positive
@@ -526,7 +526,8 @@
                   (i32.sub (call $m.sc (i32.const $MC.lowerDrop)) (call $m.H (local.get $sub))))))))
         (call $m.setW (local.get $l) (local.get $w))
         (return (local.get $l))))
-    (if (i32.ne (i32.load8_u (call $m.nAt (local.get $nuc))) (i32.const $NK.glyph))
+    (if (i32.and (i32.ne (i32.load8_u (call $m.nAt (local.get $nuc))) (i32.const $NK.glyph))
+          (i32.eqz (i32.load8_u offset=$N.class (call $m.nAt (local.get $nuc)))))
       (then
         (local.set $u (i32.sub (call $m.H (local.get $nuc)) (call $m.sc (i32.const $MC.supDrop))))
         (local.set $v (i32.add (call $m.D (local.get $nuc)) (call $m.sc (i32.const $MC.subDrop))))))
@@ -1230,12 +1231,11 @@
       (i32.add (call $m.W (local.get $n)) (call $m.sc (i32.const 167))) (i32.const 0))
     (local.get $l))
 
-  ;; \frac, \dfrac, \tfrac, \binom and their kin
-  (func $m.frac (param $kind i32) (result i32)
+  ;; \frac, \dfrac, \tfrac, \binom and their kin. A $num of -1 reads both
+  ;; parts as arguments; `\over` passes the parts it parsed.
+  (func $m.frac (param $kind i32) (param $num i32) (param $den i32) (result i32)
     (local $old i32)
     (local $fs i32)
-    (local $num i32)
-    (local $den i32)
     (local $binom i32)
     (local $disp i32)
     (local $u i32)
@@ -1256,8 +1256,10 @@
     (if (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.eq (local.get $kind) (i32.const 5)))
       (then (local.set $fs (i32.or (i32.and (local.get $old) (i32.const 4)) (i32.const 1)))))
     (local.set $binom (i32.ge_u (local.get $kind) (i32.const 3)))
-    (local.set $num (call $m.argIn (call $m.fracStyle (local.get $fs))))
-    (local.set $den (call $m.argIn (i32.or (call $m.fracStyle (local.get $fs)) (i32.const 4))))
+    (if (i32.lt_s (local.get $num) (i32.const 0))
+      (then
+        (local.set $num (call $m.argIn (call $m.fracStyle (local.get $fs))))
+        (local.set $den (call $m.argIn (i32.or (call $m.fracStyle (local.get $fs)) (i32.const 4))))))
     (call $m.setStyle (local.get $fs))
     (local.set $disp (i32.eqz (i32.and (local.get $fs) (i32.const 3))))
     (local.set $t (call $m.sc (i32.const $MC.rule)))
@@ -1444,6 +1446,18 @@
       (i32.sub (i32.const 0) (local.get $raise)))
     (call $m.setW (local.get $l) (call $m.W (local.get $body)))
     (i32.store offset=$N.ic (call $m.nAt (local.get $l)) (call $m.IC (local.get $body)))
+    ;; An accent over one glyph takes scripts as the glyph does, as in KaTeX
+    ;; and MathJax: \hat{y}_c sets c as high as in y_c.
+    (loop $in
+      (local.set $a (call $m.nAt (local.get $body)))
+      (if (i32.and (i32.eq (i32.load8_u (local.get $a)) (i32.const $NK.list))
+            (i32.and (i32.ne (i32.load offset=$N.a (local.get $a)) (i32.const 0))
+              (i32.eq (i32.load offset=$N.a (local.get $a)) (i32.load offset=$N.tail (local.get $a)))))
+        (then
+          (local.set $body (i32.load offset=$N.a (local.get $a)))
+          (br $in))))
+    (if (i32.eq (i32.load8_u (local.get $a)) (i32.const $NK.glyph))
+      (then (i32.store8 offset=$N.class (call $m.nAt (local.get $l)) (i32.const 1))))
     (local.get $l))
 
   ;; \xrightarrow[below]{above} and the other extensible arrows
@@ -1858,8 +1872,8 @@
         (then (call $m.push (local.get $n) (i32.const 1) (i32.const $AF.limits)))
         (else (call $m.push (local.get $n) (i32.const 0) (i32.const 0))))
       (return))
-      ;; frac
-      (call $m.push (call $m.frac (local.get $x)) (i32.const 7) (i32.const 0))
+      ;; frac: an ordinary atom, as in KaTeX and MathJax, not TeX's inner
+      (call $m.push (call $m.frac (local.get $x) (i32.const -1) (i32.const 0)) (i32.const 0) (i32.const 0))
       (return))
       ;; sqrt
       (call $m.push (call $m.sqrt) (i32.const 0) (i32.const 0))
@@ -2046,7 +2060,14 @@
     (local $n i32)
     (local $old i32)
     (local $oldVariant i32)
+    (local $start i32)
+    (local $style i32)
+    (local $variant i32)
+    (local $end i32)
     (local.set $base (global.get $mA))
+    (local.set $start (global.get $mp))
+    (local.set $style (global.get $mStyle))
+    (local.set $variant (global.get $mVariant))
     (global.set $mDepth (i32.add (global.get $mDepth) (i32.const 1)))
     (if (i32.gt_u (global.get $mDepth) (i32.const 48))
       (then (global.set $mFail (i32.const 1))))
@@ -2113,6 +2134,29 @@
               (if (i32.lt_s (local.get $v) (i32.const 0))
                 (then
                   (if (i32.eqz (global.get $cmdLen)) (then (br $next)))
+                  ;; `\over` splits the group into a fraction. The atoms before
+                  ;; it were laid out in the wrong style, so they are parsed
+                  ;; again. Each pass takes new nodes, so the node limit bounds
+                  ;; the work of nested numerators.
+                  (if (i32.and (i32.eq (global.get $cmdLen) (i32.const 4))
+                        (i32.eq (i32.load (global.get $cmdP)) (i32.const "over")))
+                    (then
+                      (local.set $end (global.get $me))
+                      (local.set $k (global.get $mp))
+                      (global.set $mA (local.get $base))
+                      (global.set $me (local.get $save))
+                      (global.set $mp (local.get $start))
+                      (global.set $mVariant (local.get $variant))
+                      (call $m.setStyle (call $m.fracStyle (local.get $style)))
+                      (local.set $n (call $m.parseList (local.get $flags)))
+                      (global.set $me (local.get $end))
+                      (global.set $mp (local.get $k))
+                      (call $m.setStyle (i32.or (call $m.fracStyle (local.get $style)) (i32.const 4)))
+                      (local.set $v (call $m.parseList (local.get $flags)))
+                      (call $m.setStyle (local.get $style))
+                      (global.set $mA (local.get $base))
+                      (call $m.push (call $m.frac (i32.const 0) (local.get $n) (local.get $v)) (i32.const 0) (i32.const 0))
+                      (br $stop)))
                   ;; `\ ` is a space; an unknown command shows its name in red
                   (if (i32.and (i32.eq (global.get $cmdLen) (i32.const 1))
                         (call $isWhiteByte (i32.load8_u (global.get $cmdP))))

@@ -64,16 +64,12 @@ const diagramPlugins = { mermaid: createMermaidPlugin({ render }) };
 const subscribeNothing = () => () => {};
 const diagramsSample = String.raw`## Math and diagrams
 
-Inline math sits in the sentence, like $e^{i\pi} + 1 = 0$. Display math gets its own line:
-
-$$
-x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
-$$
+The Kullback–Leibler divergence $KL(\hat{y} || y)$ and the Jensen–Shannon divergence $JS(\hat{y} || y)$ of two distributions are:
 
 $$
 \begin{aligned}
-\int_{-\infty}^{\infty} e^{-x^2}\,dx &= \sqrt{\pi} \\
-\sum_{n=1}^{\infty} \frac{1}{n^2} &= \frac{\pi^2}{6}
+KL(\hat{y} || y) &= \sum_{c=1}^{M}\hat{y}_c \log{\frac{\hat{y}_c}{y_c}} \\
+JS(\hat{y} || y) &= \frac{1}{2}(KL(y||\frac{y+\hat{y}}{2}) + KL(\hat{y}||\frac{y+\hat{y}}{2}))
 \end{aligned}
 $$
 
