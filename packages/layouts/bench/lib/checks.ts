@@ -540,6 +540,31 @@ export const CHECKS: Check[] = [
     evaluate: atMost('tab-switch', 16, 'heavy', 'contentResizeCallbacks', 0),
   },
   {
+    id: 'tab-switch-time-independent-of-content',
+    rule: 'independence-from-content',
+    description:
+      'The main-thread time of a change of tab does not grow with content (16 panes, heavy over light).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio(
+      'tab-switch',
+      'mainThreadMs',
+      [16, 'heavy'],
+      [16, 'light'],
+      1
+    ),
+  },
+  {
+    // The tab that shows keeps the layout of its content: the change lays out
+    // its header and its tab list, about 1 to 3 ms. A floor of 3 ms keeps that
+    // work from counting; a layout of the whole content takes 10 ms or more.
+    id: 'tab-switch-layout-independent-of-content',
+    rule: 'independence-from-content',
+    description:
+      'The layout time of a change of tab does not grow with content: the content of the tab that shows keeps its layout (16 panes, heavy over light).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('tab-switch', 'layoutMs', [16, 'heavy'], [16, 'light'], 3),
+  },
+  {
     id: 'zoom-covered-panes-no-raster',
     rule: 'hidden-content',
     description:
