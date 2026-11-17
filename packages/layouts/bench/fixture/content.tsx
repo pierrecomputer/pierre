@@ -1,4 +1,10 @@
-import { type JSX, useEffect, useRef, useState } from 'react';
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 
 import { RealDiff, RealTerminal, RealTree } from './real-content';
 
@@ -42,7 +48,12 @@ export const counters: {
   resizeCallbacks: new Map<string, number>(),
 };
 
-const appendListeners = new Map<string, () => void>();
+// The output that streams into each pane, kept outside React, as an app keeps
+// it in a store: a pane whose content does not render while it is hidden
+// (`hidden=activity`), or does not exist (`hidden=unmount`), reads what it
+// missed when it shows again.
+const streams = new Map<string, number>();
+const streamListeners = new Map<string, Set<() => void>>();
 
 function bump(map: Map<string, number>, id: string): void {
   map.set(id, (map.get(id) ?? 0) + 1);
@@ -55,7 +66,27 @@ export function resetCounters(): void {
 
 /** Add output to a pane, as a terminal or an agent chat does while it streams. */
 export function appendTo(id: string): void {
-  appendListeners.get(id)?.();
+  streams.set(id, (streams.get(id) ?? 0) + 1);
+  for (const listener of [...(streamListeners.get(id) ?? [])]) listener();
+}
+
+/** The number of updates that streamed into a pane, from the store. */
+function useStream(id: string): number {
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      let listeners = streamListeners.get(id);
+      if (listeners === undefined) {
+        listeners = new Set();
+        streamListeners.set(id, listeners);
+      }
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    [id]
+  );
+  return useSyncExternalStore(subscribe, () => streams.get(id) ?? 0);
 }
 
 // A small deterministic generator, so that every run renders the same text.
@@ -153,14 +184,7 @@ export function PaneContent({
 }): JSX.Element {
   bump(counters.renders, id);
   const ref = useRef<HTMLDivElement>(null);
-  const [extra, setExtra] = useState(0);
-
-  useEffect(() => {
-    appendListeners.set(id, () => setExtra((value) => value + 1));
-    return () => {
-      appendListeners.delete(id);
-    };
-  }, [id]);
+  const extra = useStream(id);
 
   useEffect(() => {
     const element = ref.current;

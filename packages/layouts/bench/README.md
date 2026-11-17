@@ -69,7 +69,9 @@ editor or a terminal does real work in such a callback, so the count shows the
 work that a layout operation pushes into content.
 
 `window.__layoutsBench` exposes the store, the counters, `append(id)` to add
-output to a pane, `busy(ms)` to block the main thread, `mountOverlays()` to
+output to a pane (the output lives in a store outside React, as in an app, so a
+pane whose content does not render while it is hidden, or does not exist, shows
+what it missed when it shows again), `busy(ms)` to block the main thread, `mountOverlays()` to
 render the closed modal and drawer, and `setOverlay(overlay, open)` to open or
 close one of them through the app's state.
 
