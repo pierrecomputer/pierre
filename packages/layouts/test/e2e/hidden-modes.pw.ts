@@ -205,3 +205,28 @@ test('a collapse to the header keeps the header, and the content of Layout.Conte
   await expect(field(page, 'log')).toHaveCount(1);
   expect((await read(page)).mounts.log).toBe(2);
 });
+
+for (const mode of [undefined, 'activity', 'unmount']) {
+  test(`${mode ?? 'mounted'}: a tab that does not show needs no tab list, so no warning comes`, async ({
+    page,
+  }) => {
+    const warnings: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning') warnings.push(message.text());
+    });
+    await open(page, mode);
+    await page.getByRole('tab', { name: 'two', exact: true }).click();
+    await expect(page.locator('[data-layouts-pane="two"]')).toHaveAttribute(
+      'role',
+      'tabpanel'
+    );
+    await page.getByRole('tab', { name: 'one', exact: true }).click();
+    await expect(page.locator('[data-layouts-pane="one"]')).toHaveAttribute(
+      'role',
+      'tabpanel'
+    );
+    expect(warnings.filter((text) => text.includes('Layout.TabList'))).toEqual(
+      []
+    );
+  });
+}

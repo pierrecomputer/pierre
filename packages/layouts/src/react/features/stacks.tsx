@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 
 import tabsCss from '../../css/tabs.css?inline';
 import { focusTab, paneHosts } from '../../dom/panes';
+import { shownPane } from '../../model';
+import { presentation } from '../../presentation';
 import { type StackCommands, stacksStore } from '../../stacks';
 import { treeIndex } from '../../tree-index';
 import { cell } from '../cell';
@@ -39,25 +41,38 @@ function useStacks(context: ViewContext): FeatureHooks {
   const [pending] = useState(() => cell<string | null>(null));
   const store = context.store as unknown as StackCommands;
   if (process.env.NODE_ENV !== 'production')
-    // The condition is the same for each render of a build.
+    // The condition is the same for each render of a build. Only a tab that
+    // shows must be a tab panel: a host that does not show has no tab list
+    // in the modes of `hiddenContent()` that put its content away, and no
+    // reader reaches it. The check waits a task, because in those modes the
+    // content of a tab that starts to show mounts in a render after this one.
     // oxlint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
-      const element = context.element();
-      if (element === null || warnedTabList) return;
-      const { panes } = treeIndex(context.store.getSnapshot().root);
-      for (const host of paneHosts(element)) {
-        const id = host.getAttribute('data-layouts-pane') ?? '';
-        if (
-          panes.get(id)?.stack != null &&
-          host.getAttribute('role') !== 'tabpanel'
-        ) {
-          warnedTabList = true;
-          console.warn(
-            '@pierre/layouts: a pane of a stack shows its tabs. Render Layout.TabList in the header of each pane of a stack.'
-          );
-          return;
+      if (warnedTabList) return;
+      const timer = setTimeout(() => {
+        const element = context.element();
+        if (element === null || warnedTabList) return;
+        const state = context.store.getSnapshot();
+        const { panes } = treeIndex(state.root);
+        const { covered } = presentation(state);
+        for (const host of paneHosts(element)) {
+          const id = host.getAttribute('data-layouts-pane') ?? '';
+          const stack = panes.get(id)?.stack ?? null;
+          if (
+            stack !== null &&
+            shownPane(stack)?.id === id &&
+            !covered.has(id) &&
+            host.getAttribute('role') !== 'tabpanel'
+          ) {
+            warnedTabList = true;
+            console.warn(
+              '@pierre/layouts: a pane of a stack shows its tabs. Render Layout.TabList in the header of each pane of a stack.'
+            );
+            return;
+          }
         }
-      }
+      }, 0);
+      return () => clearTimeout(timer);
     });
   return {
     selectTab(id) {
