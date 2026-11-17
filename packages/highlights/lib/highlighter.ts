@@ -1086,23 +1086,37 @@ export function fenceImports(
  * their HTML, so no other Wasm loads.
  */
 export function registerLanguages(langs: readonly Language[]): void {
-  const added: Language[] = [];
+  let added: Language[] = [];
   for (const language of langs) {
     // A loader can return a new object for the same lexer on each call, so
     // compare the content.
     const aliases = JSON.stringify(language.aliases);
-    if (
-      ![...registeredLangs, ...added].some(
-        (old) =>
-          old === language ||
-          (old.name === language.name &&
-            old.wasm === language.wasm &&
-            JSON.stringify(old.aliases) === aliases)
-      )
-    )
+    const all = [...registeredLangs, ...added];
+    const old = all.find(
+      (old) =>
+        old === language ||
+        (old.name === language.name &&
+          old.wasm === language.wasm &&
+          JSON.stringify(old.aliases) === aliases)
+    );
+    if (old === undefined) {
       added.push(language);
+      continue;
+    }
+    // Skip it only while it owns all its aliases. Adding the old object again
+    // reuses its compiled module.
+    const later = new Set(
+      all
+        .slice(all.lastIndexOf(old) + 1)
+        .flatMap((lang) => Object.keys(lang.aliases))
+        .map((alias) => alias.toLowerCase())
+    );
+    if (Object.keys(old.aliases).some((a) => later.has(a.toLowerCase())))
+      added.push(old);
   }
   if (registered !== undefined && added.length === 0) return;
+  // Keep the last copy of each lexer, so a new init() replays the same order.
+  added = added.filter((lang, i) => added.lastIndexOf(lang) === i);
   const compiled = added.map((language) => compileLexer(language, true));
   if (registered === undefined) {
     registered = buildHighlighter(assertWasmModule(), [], true);
@@ -1110,7 +1124,10 @@ export function registerLanguages(langs: readonly Language[]): void {
   }
   // Only the new lexers are added, so the lexer instances stay in use.
   registered[1](added, compiled, registeredLexers);
-  registeredLangs = [...registeredLangs, ...added];
+  registeredLangs = [
+    ...registeredLangs.filter((lang) => !added.includes(lang)),
+    ...added,
+  ];
 }
 
 /**
