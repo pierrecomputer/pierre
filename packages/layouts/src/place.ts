@@ -3,6 +3,7 @@
 // owns it (`DEC-layouts-pane-commands`). A store feature cannot call the
 // commands of another feature, so these are functions over the layout.
 import type { EditCommands } from './edits';
+import { LayoutOperationError } from './layout-operation';
 import type { StackCommands } from './stacks';
 import type { CoreLayoutStore } from './store';
 import type { PaneNode, Place } from './types';
@@ -23,32 +24,51 @@ function need<T>(command: T | undefined, feature: string): T {
   return command;
 }
 
+// Run the command of a place: true when it ran, false when the app's rule
+// refuses the place, which changes nothing. Another refusal throws.
+function placed(run: () => void): boolean {
+  try {
+    run();
+    return true;
+  } catch (error) {
+    if (error instanceof LayoutOperationError && error.code === 'place_refused')
+      return false;
+    throw error;
+  }
+}
+
 /**
  * Move a pane to a place: beside a node with `move` of `edits()`, or into
- * the tabs of a stack with `moveToStack` of `stacks()`. It throws an error
- * that names the feature when the layout does not have it.
+ * the tabs of a stack with `moveToStack` of `stacks()`. False when the
+ * layout's `canPlace` refuses the place, which changes nothing. It throws an
+ * error that names the feature when the layout does not have it.
  */
 export function moveTo(
   layout: PlaceCommands,
   source: string,
   place: Place
-): void {
-  if ('beside' in place)
-    need(layout.move, 'edits()')(source, place.beside, place.edge);
-  else need(layout.moveToStack, 'stacks()')(source, place.into, place.index);
+): boolean {
+  return placed(() => {
+    if ('beside' in place)
+      need(layout.move, 'edits()')(source, place.beside, place.edge);
+    else need(layout.moveToStack, 'stacks()')(source, place.into, place.index);
+  });
 }
 
 /**
  * Open a new pane at a place: beside a node with `split` of `edits()`, or
- * as a tab with `addTab` of `stacks()`. It throws an error that names the
- * feature when the layout does not have it.
+ * as a tab with `addTab` of `stacks()`. False when the layout's `canPlace`
+ * refuses the place, which changes nothing. It throws an error that names
+ * the feature when the layout does not have it.
  */
 export function openAt(
   layout: PlaceCommands,
   pane: PaneNode,
   place: Place
-): void {
-  if ('beside' in place)
-    need(layout.split, 'edits()')(place.beside, pane, place.edge);
-  else need(layout.addTab, 'stacks()')(place.into, pane, place.index);
+): boolean {
+  return placed(() => {
+    if ('beside' in place)
+      need(layout.split, 'edits()')(place.beside, pane, place.edge);
+    else need(layout.addTab, 'stacks()')(place.into, pane, place.index);
+  });
 }

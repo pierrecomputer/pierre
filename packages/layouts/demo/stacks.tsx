@@ -14,7 +14,7 @@
 // - `?pinned=1`: main.ts and util.ts are pinned, README.md is
 //   `closable: false`, and each header has `Layout.CloseButton` and
 //   `Layout.MoveHandle`, with `paneDrag()`.
-// - `?refuse=edges`: the `canDrop` of `tabDrag()` refuses the edges of the
+// - `?refuse=edges`: the layout's `canPlace` refuses the edges of the
 //   panes, and keeps the targets that it gets in `__stacks.asked`.
 // - `?preview=1`: the app's element follows the pointer during a tab drag;
 //   `?preview=none`: no image follows it.
@@ -64,7 +64,7 @@ const TITLES: Record<string, string> = {
   output: 'Output',
 };
 
-// The targets that the `canDrop` of `?refuse=edges` gets.
+// The places that the `canPlace` of `?refuse=edges` gets.
 const asked: unknown[] = [];
 
 const features: Feature[] = [
@@ -74,12 +74,6 @@ const features: Feature[] = [
     : [
         stacks(),
         tabDrag({
-          ...(params.get('refuse') === 'edges' && {
-            canDrop: (source, target) => {
-              asked.push({ source, ...target, rect: undefined });
-              return target.place === 'center';
-            },
-          }),
           ...(params.get('preview') === 'none' && { preview: false }),
           ...(params.get('preview') === '1' && {
             preview: (tab: PaneNode) => (
@@ -125,7 +119,15 @@ const page = {
         },
       ],
     },
-    features
+    features,
+    params.get('refuse') === 'edges'
+      ? {
+          canPlace: (source, place) => {
+            asked.push({ source: source.id, place });
+            return !('beside' in place);
+          },
+        }
+      : {}
   ),
   renders: {} as Record<string, number>,
   asked,

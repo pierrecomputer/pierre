@@ -4,7 +4,7 @@
 //
 // - `?features=noedits`: `paneDrag()` without `edits()`, so it warns.
 // - `?features=nodrag`: no `paneDrag()`, so the move handles warn.
-// - `?refuse=left`: the `canDrop` of `paneDrag()` refuses the left edges.
+// - `?refuse=left`: the layout's `canPlace` refuses the left edges.
 import { type JSX, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -24,15 +24,7 @@ const params = new URLSearchParams(location.search);
 const featuresParam = params.get('features');
 const features: Feature[] = [
   ...(featuresParam === 'noedits' ? [] : [edits(naryTree)]),
-  ...(featuresParam === 'nodrag'
-    ? []
-    : [
-        paneDrag(
-          params.get('refuse') === 'left'
-            ? { canDrop: (_source, target) => target.place !== 'left' }
-            : {}
-        ),
-      ]),
+  ...(featuresParam === 'nodrag' ? [] : [paneDrag()]),
   corners(),
   zoom(),
 ];
@@ -67,7 +59,13 @@ const page = {
         },
       ],
     },
-    features
+    features,
+    params.get('refuse') === 'left'
+      ? {
+          canPlace: (_source, place) =>
+            !('beside' in place && place.edge === 'left'),
+        }
+      : {}
   ),
 };
 Object.assign(window, { __tiled: page });

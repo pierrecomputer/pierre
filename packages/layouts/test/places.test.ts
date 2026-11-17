@@ -1,6 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createLayoutStore, edits, moveTo, naryTree, openAt } from '../src';
+import {
+  type CanPlace,
+  createLayoutStore,
+  edits,
+  getPanes,
+  moveTo,
+  naryTree,
+  openAt,
+  stackOf,
+  stacks,
+} from '../src';
 import { applyLayoutOperations } from '../src/apply-operations';
 import type { FeatureModule } from '../src/react/contract';
 import { arrange, type ArrangeCommands } from '../src/react/features/arrange';
@@ -261,5 +271,102 @@ describe('the store part of arrange()', () => {
     const layout = store();
     expect(layout.grow('files', 'horizontal')).toBe(false);
     expect(layout.shrink('files', 'vertical')).toBe(false);
+  });
+});
+
+describe('one rule for places', () => {
+  // A group is a pane or a stack outside a stack. A place beside a node adds
+  // a group, unless the source is a pane alone already; a place in a stack
+  // adds none.
+  const groups = (node: LayoutNode): number =>
+    node.type === 'split'
+      ? node.children.reduce((sum, child) => sum + groups(child), 0)
+      : 1;
+  const asked: unknown[] = [];
+  const atMostThreeGroups: CanPlace = (source, place, state) => {
+    asked.push({ source: source.id, place });
+    if (!('beside' in place)) return true;
+    const alone =
+      getPanes(state.root).some(({ id }) => id === source.id) &&
+      stackOf(state.root, source.id) === null;
+    return alone || groups(state.root) < 3;
+  };
+  const store = () =>
+    createLayoutStore(tabs, [edits(naryTree), stacks()], {
+      canPlace: atMostThreeGroups,
+    });
+
+  test('a command throws place_refused, and the tree stays', () => {
+    const layout = store();
+    const before = layout.getSnapshot().root;
+    expect(() => layout.split('files', pane('x'), 'right')).toThrow(
+      'place_refused'
+    );
+    expect(() => layout.move('chat', 'notes', 'right')).toThrow(
+      'place_refused'
+    );
+    expect(layout.getSnapshot().root).toBe(before);
+    // A pane alone moves beside another: the count stays.
+    layout.move('files', 'notes', 'right');
+    expect(shape(layout.getSnapshot().root)).toEqual({
+      horizontal: [{ tabs: ['diff', 'chat'] }, 'notes', 'files'],
+    });
+  });
+
+  test('moveTo and openAt change nothing for a refused place, and say so', () => {
+    const layout = store();
+    const before = layout.getSnapshot().root;
+    expect(moveTo(layout, 'chat', { beside: 'notes', edge: 'right' })).toBe(
+      false
+    );
+    expect(openAt(layout, pane('x'), { beside: 'row', edge: 'left' })).toBe(
+      false
+    );
+    expect(layout.getSnapshot().root).toBe(before);
+    expect(openAt(layout, pane('x'), { into: 'notes' })).toBe(true);
+    expect(moveTo(layout, 'chat', { into: 'files', index: 0 })).toBe(true);
+  });
+
+  test('a server refuses the same places with the same rule', () => {
+    const split = {
+      type: 'split',
+      target: 'files',
+      pane: pane('x'),
+      edge: 'right',
+      id: 'split-x',
+    } as const;
+    expect(() =>
+      applyLayoutOperations(tabs, [split], { canPlace: atMostThreeGroups })
+    ).toThrow('place_refused');
+    // Without the rule, the server takes it.
+    expect(applyLayoutOperations(tabs, [split])).toBeDefined();
+    // The rule reads the tree of each operation in turn: a merge first
+    // leaves room for the split.
+    asked.length = 0;
+    const merged = applyLayoutOperations(
+      tabs,
+      [
+        {
+          type: 'moveToStack',
+          pane: 'notes',
+          target: 'files',
+          activate: true,
+          id: 'stack-x',
+        },
+        split,
+      ],
+      { canPlace: atMostThreeGroups }
+    );
+    expect(shape(merged)).toEqual({
+      horizontal: [
+        { tabs: ['files', 'notes'] },
+        'x',
+        { tabs: ['diff', 'chat'] },
+      ],
+    });
+    expect(asked).toEqual([
+      { source: 'notes', place: { into: 'files', index: undefined } },
+      { source: 'x', place: { beside: 'files', edge: 'right' } },
+    ]);
   });
 });

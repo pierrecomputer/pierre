@@ -16,11 +16,10 @@ export {
   type PaneVisibilityEvent,
 } from '../dom/pane-visibility-event';
 export type { PaneEdges } from '../css-layout';
-export type { DropPlace } from '../drop';
 export { naryTree } from '../models/n-ary';
 export { moveTo, openAt, type PlaceCommands } from '../place';
 export { neighbor, neighbors, visualOrder } from '../spatial';
-export type { Place } from '../types';
+export type { CanPlace, Place } from '../types';
 export type { ZoomCommands } from '../zoom';
 export type {
   Feature,
@@ -34,6 +33,7 @@ export type {
 } from './contract';
 export {
   createLayout,
+  type CreateLayoutOptions,
   type FeatureCommands,
   type LayoutObject,
 } from './create-layout';
@@ -53,10 +53,9 @@ export { corners } from './features/corners';
 export { hiddenContent } from './features/hidden-content';
 export { flip, type FlipOptions } from './features/flip';
 export { focusRing } from './features/focus-ring';
-export { paneDrag, type PaneDragOptions } from './features/pane-drag';
+export { paneDrag } from './features/pane-drag';
 export { stacks } from './features/stacks';
 export { tabDrag, type TabDragOptions } from './features/tab-drag';
-export type { CanDrop, DragSource, DropTarget } from './drag';
 export { edits, hiddenPanes, persistence } from './features/store-only';
 export { zoom } from './features/zoom';
 export {

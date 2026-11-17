@@ -17,18 +17,12 @@ import type {
   ViewRender,
 } from '../contract';
 import {
-  type CanDrop,
+  allowsPlace,
   type Drag,
   DropPreview,
   startDrag,
   useDrag,
 } from '../drag';
-
-/** The options of `paneDrag()`. */
-export interface PaneDragOptions {
-  /** The app's rule for the places of a pane: false refuses a target. */
-  readonly canDrop?: CanDrop;
-}
 
 const PANE = 'pane';
 
@@ -47,8 +41,7 @@ function titleOf(context: ViewContext, state: LayoutState, id: string): string {
 
 function usePaneDrag(
   context: ViewContext,
-  { state }: ViewRender,
-  { canDrop }: PaneDragOptions
+  { state }: ViewRender
 ): FeatureHooks {
   const drag = useDrag(context, (value: Drag | null) =>
     value?.source.kind === PANE ? value : null
@@ -60,10 +53,14 @@ function usePaneDrag(
       const source = { kind: PANE, id };
       startDrag(context, event, {
         source,
+        // The layout's rule for places refuses a target.
         accept: (target) =>
-          canDrop?.(source, target, context.store.getSnapshot()) === false
-            ? null
-            : target,
+          allowsPlace(context, id, {
+            beside: target.paneId,
+            edge: target.place as Edge,
+          })
+            ? target
+            : null,
         drop: ({ paneId, place }) =>
           (context.store as Partial<EditCommands>).move?.(
             id,
@@ -96,14 +93,14 @@ function usePaneDrag(
 /**
  * Move a pane with a pointer drag from `Layout.MoveHandle`, to an edge of
  * another pane. No drag starts while a pane fills the layout, or from a
- * pinned tab of a stack. `canDrop` refuses the places that the app does not
- * allow.
+ * pinned tab of a stack. The layout's `canPlace` refuses the places that the
+ * app does not allow: they show no marker and take no drop.
  */
-export function paneDrag(options: PaneDragOptions = {}): Feature {
+export function paneDrag(): Feature {
   const feature: FeatureModule = {
     name: 'pane-drag',
     requires: ['edits'],
-    use: (context, render) => usePaneDrag(context, render, options),
+    use: usePaneDrag,
     stylesheets: [['drop', dropCss]],
   };
   return feature;

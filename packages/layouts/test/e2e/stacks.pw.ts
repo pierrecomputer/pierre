@@ -742,7 +742,7 @@ test('stickyPinned keeps the pinned tabs in view while the others scroll, and tu
   await expect(list.locator('[data-sticky]')).toHaveCount(0);
 });
 
-test('canDrop of tabDrag() refuses a place once for each target, and allows the others', async ({
+test("the layout's canPlace refuses a place of a tab drag once for each target, and allows the others", async ({
   page,
 }) => {
   await page.goto('/stacks.html?refuse=edges');
@@ -773,11 +773,13 @@ test('canDrop of tabDrag() refuses a place once for each target, and allows the 
           window as unknown as {
             __stacks: {
               asked: {
-                source: { kind: string; id: string };
-                paneId: string;
-                place: string;
-                boundary?: number;
-                tabs?: string[];
+                source: string;
+                place: {
+                  beside?: string;
+                  edge?: string;
+                  into?: string;
+                  index?: number;
+                };
               }[];
             };
           }
@@ -786,14 +788,14 @@ test('canDrop of tabDrag() refuses a place once for each target, and allows the 
   // The pointer moves over the edge of Files many times, and the drag asks
   // about that target once.
   const edges = (await asked()).filter(
-    (target) => target.paneId === 'files' && target.place === 'right'
+    ({ place }) => place.beside === 'files' && place.edge === 'right'
   );
   expect(edges).toHaveLength(1);
-  expect(edges[0]).toMatchObject({
-    source: { kind: 'tab', id: 'util' },
-    paneId: 'files',
+  expect(edges[0]).toEqual({
+    source: 'util',
+    place: { beside: 'files', edge: 'right' },
   });
-  // A place in another tab list is allowed, with its boundary and its tabs.
+  // A place in another tab list is allowed, at its index among the tabs.
   const output = await tabBox(page, 'terminal', 'Output');
   await dragTab(page, 'main', 'util.ts', {
     x: output.x + output.width - 4,
@@ -802,11 +804,9 @@ test('canDrop of tabDrag() refuses a place once for each target, and allows the 
   await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
   await page.mouse.up();
   await expect(tabsOf(page, 'util').getByRole('tab')).toHaveCount(3);
-  expect((await asked()).at(-1)).toMatchObject({
-    paneId: 'terminal',
-    place: 'center',
-    boundary: 2,
-    tabs: ['terminal', 'output'],
+  expect((await asked()).at(-1)).toEqual({
+    source: 'util',
+    place: { into: 'terminal', index: 2 },
   });
 });
 

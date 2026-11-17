@@ -91,9 +91,9 @@ app keeps one, it can check what the parts give:
 - Fixed tabs: `pinned: true` and `closable: false` on pane nodes, in the tree
   and in the server's fold, and `stickyPinned` on `Layout.TabList` to keep the
   pinned tabs in view while the others scroll.
-- Drag: `tabDrag()` with `canDrop` for the app's drop rules, a still press for a
-  touch drag so that a swipe scrolls the tab list, and a drag image, or the
-  app's own element with `preview`.
+- Drag: `tabDrag()`, with the `canPlace` of `createLayout` for the app's rules,
+  a still press for a touch drag so that a swipe scrolls the tab list, and a
+  drag image, or the app's own element with `preview`.
 - The app's own markup for each tab, in the `render` prop of `Layout.Tab`, and
   the app's own handlers on the parts. A handler that calls `preventDefault()`
   stops the part's handler for that event.
@@ -144,6 +144,26 @@ tree after a sync, which equals the window's tree, is no change, and an app does
 not compare the trees first. On the server, `parseLayoutOperations` checks the
 operations of a client and `applyLayoutOperations` folds them on the stored tree
 with the same IDs. See "Operations" in the README.
+
+An app with a limit on places, for example at most 8 groups, writes it once, as
+the `canPlace` of `createLayout`. The drags, the pane menu, `moveTo`, `openAt`,
+and the commands of the layout read it, and an agent that calls them gets
+`false` or `place_refused`. The server folds the operations with the same
+function, so it refuses what the window refuses:
+
+```ts
+// shared/places.ts
+export const canPlace: CanPlace = (source, place, state) =>
+  !('beside' in place) ||
+  isAlone(state.root, source.id) ||
+  groupCount(state.root) < 8;
+
+// client
+const layout = createLayout(root, features, { canPlace });
+
+// server
+const next = applyLayoutOperations(stored, operations, { canPlace });
+```
 
 ## Save resize changes
 

@@ -15,7 +15,7 @@ import { presentation } from '../../presentation';
 import type { StackCommands } from '../../stacks';
 import { pinnedRun, tabInsertIndex, tabMoveIndex } from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
-import type { LayoutState, PaneNode } from '../../types';
+import type { LayoutState, PaneNode, Place } from '../../types';
 import { type Cell, cell } from '../cell';
 import type {
   EdgeMessageValues,
@@ -27,7 +27,7 @@ import type {
   ViewRender,
 } from '../contract';
 import {
-  type CanDrop,
+  allowsPlace,
   type Drag,
   DropPreview,
   type DropTarget,
@@ -38,11 +38,6 @@ import { touchHold } from '../touch-hold';
 
 /** The options of `tabDrag()`. */
 export interface TabDragOptions {
-  /**
-   * The app's rule for the places of a tab: false refuses a target. It runs
-   * after the rule of pinned tabs.
-   */
-  readonly canDrop?: CanDrop;
   /**
    * The still press in milliseconds that starts a touch drag of a tab, 250 by
    * default, so a swipe on a tab list scrolls it. A mouse or a pen starts a
@@ -155,6 +150,34 @@ function titleOf(context: ViewContext, state: LayoutState, id: string): string {
   return pane === undefined ? id : context.title(pane);
 }
 
+/**
+ * The place where a drop of a tab puts it, as `dropTab` does: beside a pane,
+ * into the stack of a pane, or at an index among its tabs. Null for a change
+ * of order in the tab list of the tab's own stack, which is not a place.
+ */
+function placeOfDrop(
+  context: ViewContext,
+  id: string,
+  target: DropTarget
+): Place | null {
+  const { panes } = treeIndex(context.store.getSnapshot().root);
+  const stack = panes.get(id)?.stack ?? null;
+  const targetStack = panes.get(target.paneId)?.stack ?? null;
+  if (target.boundary === undefined || target.tabs === undefined)
+    return target.place === 'center'
+      ? { into: target.paneId }
+      : { beside: target.paneId, edge: target.place };
+  if (stack !== null && stack === targetStack) return null;
+  return {
+    into: target.paneId,
+    index: tabInsertIndex(
+      targetStack?.children.map((tab) => tab.id) ?? [target.paneId],
+      target.tabs,
+      target.boundary
+    ),
+  };
+}
+
 /** Apply the drop of a tab, and focus the tab after the change. */
 function dropTab(context: ViewContext, id: string, target: DropTarget): void {
   const store = context.store as unknown as Partial<
@@ -222,7 +245,7 @@ function pinnedRule(
 function useTabDrag(
   context: ViewContext,
   { state }: ViewRender,
-  { canDrop, touchDelay = 250, preview }: TabDragOptions
+  { touchDelay = 250, preview }: TabDragOptions
 ): FeatureHooks {
   const [image] = useState(() =>
     cell<DragImageState>({
@@ -289,10 +312,13 @@ function useTabDrag(
             placeImage(next);
           },
         }),
+        // The pinned rule, then the layout's rule for places.
         accept(target) {
           const place = pinned(target);
+          const at =
+            place === null ? null : placeOfDrop(context, tab.id, place);
           return place === null ||
-            canDrop?.(source, place, context.store.getSnapshot()) === false
+            (at !== null && !allowsPlace(context, tab.id, at))
             ? null
             : place;
         },
@@ -336,8 +362,9 @@ function useTabDrag(
 
 /**
  * Drag a tab: within its tab list to change the order, into another stack,
- * or to an edge of a pane. It requires `stacks()`. `canDrop` refuses the
- * places that the app does not allow.
+ * or to an edge of a pane. It requires `stacks()`. The layout's `canPlace`
+ * refuses the places that the app does not allow, after the rule of pinned
+ * tabs.
  */
 export function tabDrag(options: TabDragOptions = {}): Feature {
   const feature: FeatureModule = {

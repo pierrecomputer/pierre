@@ -427,7 +427,11 @@ function menuItems(
         );
       if (
         stackOf(root, id) !== null &&
-        stackOf(root, pane) !== stackOf(root, id)
+        stackOf(root, pane) !== stackOf(root, id) &&
+        // The layout's rule allows each tab that the merge moves.
+        (stackOf(root, id)?.children ?? [])
+          .filter((tab) => tab.pinned !== true)
+          .every((tab) => store.canPlace(tab, { into: pane }))
       )
         items.push(
           item(

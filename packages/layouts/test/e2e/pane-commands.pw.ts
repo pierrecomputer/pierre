@@ -354,3 +354,40 @@ test('with arrange(), the move handle is the trigger of the pane menu', async ({
   await expect(page.getByRole('menu')).toHaveCount(0);
   expect((await box(page, '1')).x).toBeGreaterThan(to.x);
 });
+
+test("one rule for places: the layout's canPlace hides the menu items that it refuses, and refuses the drag", async ({
+  page,
+}) => {
+  // The rule refuses every place at a left edge.
+  await page.goto('/?refuse=left');
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
+  await handle(page, '2').click();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await expect(item(page, 'Move right of Pane 5')).toHaveCount(1);
+  await expect(item(page, 'Move to a new column at the right')).toHaveCount(1);
+  await expect(item(page, 'Move to a new column at the left')).toHaveCount(0);
+  await expect(
+    menu.getByRole('menuitem', { name: /^Move left of / })
+  ).toHaveCount(0);
+  await item(page, 'Move to…').click();
+  await expect(page.getByRole('menuitem', { name: /^Left of / })).toHaveCount(
+    0
+  );
+  await expect(
+    page.getByRole('menuitem', { name: 'Right of Pane 3' })
+  ).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  // A drag to the left edge of pane 3 shows no marker and does not move.
+  const from = await handle(page, '2').boundingBox();
+  const three = await box(page, '3');
+  if (from === null) throw new Error('No box');
+  const before = await box(page, '2');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(three.x + 6, three.y + three.height / 2, { steps: 8 });
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await box(page, '2')).toEqual(before);
+});

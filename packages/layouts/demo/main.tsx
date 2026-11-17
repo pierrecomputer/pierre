@@ -150,10 +150,18 @@ const AgentPane = lazy(() => import('./agent'));
 // The resize strategy of the menu, which the internal feature of the bench
 // reads at each pointer resize.
 let resizeOfMenu: ResizeStrategy = 'live';
-const store = createLayout(mosaic, [
-  ...allFeatures({ model: naryTree }),
-  resizeStrategy(() => resizeOfMenu),
-]);
+// `?refuse=left`: the layout's rule for places refuses each place at a left
+// edge, for drags, the pane menu, and commands alike.
+const store = createLayout(
+  mosaic,
+  [...allFeatures({ model: naryTree }), resizeStrategy(() => resizeOfMenu)],
+  new URLSearchParams(location.search).get('refuse') === 'left'
+    ? {
+        canPlace: (_source, place) =>
+          !('beside' in place && place.edge === 'left'),
+      }
+    : {}
+);
 let nextPane = 8;
 const colors = [
   '#edf2ff',

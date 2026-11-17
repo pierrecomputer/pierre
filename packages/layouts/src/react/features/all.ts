@@ -8,7 +8,6 @@ import type { StackCommands } from '../../stacks';
 import type { TreeModel } from '../../types';
 import type { ZoomCommands } from '../../zoom';
 import type { Feature } from '../contract';
-import type { CanDrop } from '../drag';
 import { arrange, type ArrangeCommands } from './arrange';
 import { corners } from './corners';
 import { flip, type FlipOptions } from './flip';
@@ -24,8 +23,6 @@ export interface AllFeaturesOptions {
   readonly model?: TreeModel;
   /** The animations: `false` for none, or the options of `flip()`. True by default. */
   readonly animate?: boolean | FlipOptions;
-  /** The app's rule for the places of a tab drag and a pane drag. */
-  readonly canDrop?: CanDrop;
 }
 
 /** The features of `allFeatures()`, with the commands that they add. */
@@ -47,7 +44,6 @@ export type AllFeatures = readonly (
 export function allFeatures({
   model = naryTree,
   animate = true,
-  canDrop,
 }: AllFeaturesOptions = {}): AllFeatures {
   return [
     edits(model),
@@ -56,8 +52,8 @@ export function allFeatures({
     persistence(),
     zoom(),
     arrange(),
-    paneDrag({ canDrop }),
-    tabDrag({ canDrop }),
+    paneDrag(),
+    tabDrag(),
     corners(),
     focusRing(),
     ...(animate === false ? [] : [flip(animate === true ? {} : animate)]),

@@ -101,6 +101,7 @@ export type LayoutOperationErrorCode =
   | 'invalid_sizes'
   | 'id_in_use'
   | 'pane_pinned'
+  | 'place_refused'
   | 'unknown_operation';
 
 /**

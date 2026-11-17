@@ -68,6 +68,7 @@ const ROOT_VALUES = sorted([
 
 const ROOT_TYPES = sorted([
   'ApplyLayoutOperationsOptions',
+  'CanPlace',
   'ChildExtent',
   'ChildSize',
   'CommandsOf',
@@ -156,15 +157,13 @@ const REACT_VALUES = sorted([
 const REACT_TYPES = sorted([
   'AllFeatures',
   'AllFeaturesOptions',
+  'CanPlace',
   'ArrangeCommands',
   'Axis',
-  'CanDrop',
   'CloseButtonState',
   'CollapseButtonState',
   'CoverOptions',
-  'DragSource',
-  'DropPlace',
-  'DropTarget',
+  'CreateLayoutOptions',
   'EdgeMessageValues',
   'Feature',
   'FeatureCommands',
@@ -178,7 +177,6 @@ const REACT_TYPES = sorted([
   'MoveHandleState',
   'OverlayCover',
   'OverlayCoverEvent',
-  'PaneDragOptions',
   'PaneEdges',
   'PaneMenuItem',
   'PaneMessageValues',

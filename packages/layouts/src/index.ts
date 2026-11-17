@@ -44,6 +44,7 @@ export type {
   LayoutNode,
   LayoutState,
   PaneGeometry,
+  CanPlace,
   PaneNode,
   Place,
   Rect,

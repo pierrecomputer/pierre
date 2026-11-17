@@ -25,7 +25,9 @@ import {
   placeRect,
 } from '../drop';
 import { tabBoundaryAt } from '../stacks-model';
-import type { LayoutGeometry, LayoutState, Rect } from '../types';
+import { type ContextOfStore, STORE_CONTEXT } from '../store';
+import { treeIndex } from '../tree-index';
+import type { LayoutGeometry, Place, Rect } from '../types';
 import type { ViewContext } from './contract';
 
 /** What a drag moves. */
@@ -49,15 +51,18 @@ export interface DropTarget {
 }
 
 /**
- * The app's rule for the places of a drag: false refuses a target, which then
- * shows no marker and no preview, and takes no drop. The drag asks once for
- * each target under the pointer, with the state of the layout.
+ * The layout's rule for places (`canPlace` of `createLayout`), for a pane
+ * that a drag puts in a place: false when the rule refuses it.
  */
-export type CanDrop = (
-  source: DragSource,
-  target: DropTarget,
-  state: LayoutState
-) => boolean;
+export function allowsPlace(
+  context: ViewContext,
+  id: string,
+  place: Place
+): boolean {
+  const store = (context.store as unknown as ContextOfStore)[STORE_CONTEXT];
+  const pane = treeIndex(store.get().root).panes.get(id)?.pane;
+  return pane !== undefined && store.canPlace(pane, place);
+}
 
 /** A drag that runs: its source, and its drop target, or null. */
 export interface Drag {

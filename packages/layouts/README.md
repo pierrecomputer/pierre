@@ -452,19 +452,33 @@ pane of a stack goes beside the whole stack. A close or a hide of the active tab
 shows the nearest tab. A stack of one pane gives way to that pane. A zoom of a
 tab zooms its stack, and a change of tab keeps the zoom.
 
-`tabDrag()` and `paneDrag()` take `canDrop(source, target, state)`, the app's
-rule for the places of a drag. A target that it refuses shows no marker and no
-preview, and takes no drop; the drag goes on. The drag asks once for each target
-under the pointer. `target.place` is an edge or `center`, and a place in a tab
-list also has its `boundary` among the `tabs` of the list. The pinned rule runs
-first. For example, at most 8 groups:
+A layout has one rule for places (`DEC-layouts-one-place-rule`):
+`canPlace(source, place, state)` in `createLayout`. `source` is the pane that
+goes to the place: a pane of the tree that moves, or a new pane that opens.
+`place` is a `Place`, and `state` holds the tree before the change. The drags,
+the items of `Layout.usePaneMenu()`, `moveTo`, `openAt`, and the commands
+`split`, `move`, `addTab`, and `moveToStack` all read it. A drag target that it
+refuses shows no marker and no preview, and takes no drop; the drag goes on, and
+it asks once for each target under the pointer, after the pinned rule. The menu
+does not offer a refused place. `moveTo` and `openAt` return `false` and change
+nothing. A command throws `LayoutOperationError` with the code `place_refused`.
+A change of the order of the tabs of one stack is not a place. For example, at
+most 8 groups, where a group is a pane or a stack outside a stack:
 
 ```ts
-tabDrag({
-  canDrop: (source, target, state) =>
-    target.place === 'center' || groupCount(state.root) < 8,
+const canPlace: CanPlace = (source, place, state) =>
+  !('beside' in place) ||
+  isAlone(state.root, source.id) ||
+  groupCount(state.root) < 8;
+
+const layout = createLayout(root, [edits(naryTree), stacks(), tabDrag()], {
+  canPlace,
 });
 ```
+
+Give a server the same rule:
+`applyLayoutOperations(root, operations, { canPlace })` refuses the same places
+with `place_refused`.
 
 `Layout.Tab` takes a `render` prop for the app's own tab. Mark a close control
 inside a tab with `data-layouts-tab-close`, so that a press on it does not start
@@ -710,7 +724,8 @@ applyOperations(layout, [{ type: 'setRoot', root: response.tree.root }]);
   `applyLayoutOperations(root, operations)` folds them on the stored tree, with
   the same IDs as the client. A refused operation throws `LayoutOperationError`
   with a code: `pane_not_found`, `node_not_found`, `last_pane`, `invalid_sizes`,
-  `id_in_use`, `pane_pinned`, or `unknown_operation`.
+  `id_in_use`, `pane_pinned`, `place_refused` (the `canPlace` option, the rule
+  of the layout), or `unknown_operation`.
 - Undo keeps the settled states: a listener that skips transient and remote
   changes pushes the state before each local change, and an undo sets that tree
   again with `setRoot`.

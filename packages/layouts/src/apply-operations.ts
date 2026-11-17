@@ -20,7 +20,7 @@ import {
   STORE_CONTEXT,
   type StoreFeature,
 } from './store';
-import type { LayoutNode } from './types';
+import type { CanPlace, LayoutNode } from './types';
 
 /**
  * Apply operations to a store in one change, `remote` by default: the
@@ -78,6 +78,11 @@ export interface ApplyLayoutOperationsOptions {
   readonly features?: readonly StoreFeature[];
   /** The maker of the IDs of new nodes, for operations that carry none. */
   readonly newId?: (kind: 'split' | 'stack') => string;
+  /**
+   * The app's rule for places, as in `createLayout`: an operation that puts
+   * a pane in a place that it refuses throws `place_refused`.
+   */
+  readonly canPlace?: CanPlace;
 }
 
 /**
@@ -94,7 +99,7 @@ export function applyLayoutOperations(
   const store = createLayoutStore(
     root,
     options.features ?? [edits(naryTree), stacksStore, hiddenPanesStore],
-    { newId: options.newId }
+    { newId: options.newId, canPlace: options.canPlace }
   );
   applyOperations(store, operations);
   return store.getSnapshot().root;

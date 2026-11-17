@@ -76,9 +76,14 @@ export const stacksStore: StoreFeature<StackCommands> = {
   ids: randomIds,
   folds: {
     activate: foldActivate,
-    addTab(root, { target, pane, index, activate, id }, { newId }) {
+    addTab(
+      root,
+      { target, pane, index, activate, id },
+      { newId, requirePlace }
+    ) {
       paneIn(root, target);
       requireNewPane(root, pane);
+      requirePlace(pane, { into: target, index }, root);
       return addToStack(
         root,
         target,
@@ -88,7 +93,11 @@ export const stacksStore: StoreFeature<StackCommands> = {
         activate
       );
     },
-    moveToStack(root, { pane, target, index, activate, id }, { model, newId }) {
+    moveToStack(
+      root,
+      { pane, target, index, activate, id },
+      { model, newId, requirePlace }
+    ) {
       const source = paneIn(root, pane);
       paneIn(root, target);
       if (pane === target) return root;
@@ -105,6 +114,8 @@ export const stacksStore: StoreFeature<StackCommands> = {
       }
       if (source.pinned === true && stack !== null)
         throw new LayoutOperationError('pane_pinned', pane);
+      // A change of order in one stack, above, is not a place.
+      requirePlace(source, { into: target, index }, root);
       if (model === null)
         throw new LayoutOperationError(
           'unknown_operation',

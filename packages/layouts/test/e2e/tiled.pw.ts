@@ -172,7 +172,7 @@ test('a move handle without paneDrag() and paneDrag() without edits() warn', asy
   ).toHaveLength(1);
 });
 
-test('canDrop refuses a place: no preview, no status, and no move', async ({
+test("the layout's canPlace refuses a place: no preview, no status, and no move", async ({
   page,
 }) => {
   await page.goto('/tiled.html?refuse=left');

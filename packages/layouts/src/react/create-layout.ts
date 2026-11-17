@@ -5,7 +5,7 @@ import {
   createLayoutStore,
   type StoreFeature,
 } from '../store';
-import type { LayoutNode } from '../types';
+import type { CanPlace, LayoutNode } from '../types';
 import type { Feature, FeatureModule } from './contract';
 
 type UnionToIntersection<U> = (
@@ -28,6 +28,17 @@ export type FeatureCommands<F extends readonly Feature[]> = UnionToIntersection<
 export type LayoutObject<F extends readonly Feature[] = readonly Feature[]> =
   CoreLayoutStore & FeatureCommands<F> & { readonly features: F };
 
+/** The options of `createLayout`. */
+export interface CreateLayoutOptions {
+  /**
+   * The app's rule for places (`DEC-layouts-one-place-rule`): false refuses
+   * a place for a pane. The drags, the pane menu, `moveTo`, `openAt`, and the
+   * commands read it; give `applyLayoutOperations` the same rule, so that a
+   * server refuses the same places.
+   */
+  readonly canPlace?: CanPlace;
+}
+
 /**
  * Create a layout with features, for example
  * `createLayout(root, [edits(naryTree), zoom(), paneDrag()])`, and render it
@@ -37,7 +48,8 @@ export type LayoutObject<F extends readonly Feature[] = readonly Feature[]> =
  */
 export function createLayout<const F extends readonly Feature[] = []>(
   root: LayoutNode,
-  features?: F
+  features?: F,
+  options: CreateLayoutOptions = {}
 ): LayoutObject<F> {
   // The features of the library carry their members.
   const modules = (features ??
@@ -54,7 +66,7 @@ export function createLayout<const F extends readonly Feature[] = []>(
   const stores: StoreFeature[] = [];
   for (const feature of modules)
     if (feature.store !== undefined) stores.push(feature.store);
-  return Object.assign(createLayoutStore(root, stores), {
+  return Object.assign(createLayoutStore(root, stores, options), {
     features: modules,
   }) as unknown as LayoutObject<F>;
 }

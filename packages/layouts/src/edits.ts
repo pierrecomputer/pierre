@@ -79,9 +79,10 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
     model,
     ids: randomIds,
     folds: {
-      split(root, { target, pane, edge, id }, { newId }) {
+      split(root, { target, pane, edge, id }, { newId, requirePlace }) {
         const ids = panesOf(root, target);
         requireNewPane(root, pane);
+        requirePlace(pane, { beside: target, edge }, root);
         return besideNode(
           root,
           ids,
@@ -96,7 +97,7 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
           throw new LayoutOperationError('last_pane', pane);
         return model.remove(root, pane) ?? root;
       },
-      move(root, { pane, target, edge, id }, { newId }) {
+      move(root, { pane, target, edge, id }, { newId, requirePlace }) {
         const source = paneIn(root, pane);
         // The other panes of the target: none when it holds only the pane.
         const others = panesOf(root, target).filter((each) => each !== pane);
@@ -104,6 +105,7 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
         // A pinned pane of a stack stays in its stack.
         if (source.pinned === true && stackOf(root, pane) !== null)
           throw new LayoutOperationError('pane_pinned', pane);
+        requirePlace(source, { beside: target, edge }, root);
         const remaining = model.remove(root, pane);
         return remaining === null
           ? root

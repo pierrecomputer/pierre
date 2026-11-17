@@ -11,6 +11,20 @@ export type Place =
   | { readonly beside: string; readonly edge: Edge }
   | { readonly into: string; readonly index?: number };
 
+/**
+ * An app's rule for places (`DEC-layouts-one-place-rule`): false refuses a
+ * place for a pane. `source` is the pane that goes there: a pane of the tree
+ * that moves, or a new pane that opens. `state` holds the tree before the
+ * change. The drags, the pane menu, `moveTo`, `openAt`, the commands of the
+ * store, and `applyLayoutOperations` all read it. A change of the order of
+ * the tabs of one stack is not a place.
+ */
+export type CanPlace = (
+  source: PaneNode,
+  place: Place,
+  state: LayoutState
+) => boolean;
+
 export interface PaneNode {
   readonly type: 'pane';
   readonly id: string;

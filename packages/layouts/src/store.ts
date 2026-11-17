@@ -3,6 +3,7 @@ import type {
   LayoutOperation,
   LayoutTreeOperation,
 } from './layout-operation';
+import { LayoutOperationError } from './layout-operation';
 import {
   findNode,
   paneIn,
@@ -15,10 +16,12 @@ import {
   stackOf,
 } from './model';
 import type {
+  CanPlace,
   ChildSize,
   LayoutNode,
   LayoutState,
   PaneNode,
+  Place,
   TreeModel,
 } from './types';
 import { validateLayout } from './validate';
@@ -82,6 +85,11 @@ export interface FoldContext {
   newId(kind: 'split' | 'stack'): string;
   /** A tree from a caller, with the shape of the model, as nodes that the store owns. */
   own(root: LayoutNode): LayoutNode;
+  /**
+   * Throw `place_refused` when the app's rule refuses a place for a pane, on
+   * the tree that the operation folds.
+   */
+  requirePlace(source: PaneNode, place: Place, root: LayoutNode): void;
 }
 
 /**
@@ -150,6 +158,8 @@ export interface StoreContext {
   own(root: LayoutNode): LayoutNode;
   /** A new split or stack ID: `<kind>-<random prefix of the store>-<count>`. */
   newId(kind: 'split' | 'stack'): string;
+  /** False when the app's rule refuses a place for a pane, in the current state. */
+  canPlace(source: PaneNode, place: Place): boolean;
 }
 
 /**
@@ -178,6 +188,8 @@ export interface CreateLayoutStoreOptions {
    * store.
    */
   readonly newId?: (kind: 'split' | 'stack') => string;
+  /** The app's rule for places, which the folds of the store read. */
+  readonly canPlace?: CanPlace;
 }
 
 type UnionToIntersection<U> = (
@@ -277,7 +289,21 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     return shaped;
   };
   const own = (root: LayoutNode): LayoutNode => copyAndFreeze(shape(root));
-  const foldContext: FoldContext = { model: model ?? null, newId, own };
+  // The app's rule, on the state with the tree that an operation folds.
+  const allows = (
+    source: PaneNode,
+    place: Place,
+    root: LayoutNode = state.root
+  ): boolean => options.canPlace?.(source, place, { ...state, root }) ?? true;
+  const foldContext: FoldContext = {
+    model: model ?? null,
+    newId,
+    own,
+    requirePlace(source, place, root) {
+      if (!allows(source, place, root))
+        throw new LayoutOperationError('place_refused', source.id);
+    },
+  };
 
   const initialRoot = own(initial);
   let state: LayoutState = Object.freeze({
@@ -380,6 +406,7 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     requirePane,
     own,
     newId,
+    canPlace: (source, place) => allows(source, place),
   };
 
   const store: CoreLayoutStore & ContextOfStore = {
