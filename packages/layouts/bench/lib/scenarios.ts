@@ -81,6 +81,14 @@ async function inPageTask(
           bench.setOverlay(overlay, open);
         } else if (operation === 'show') {
           bench.store.setHidden('p1', false);
+        } else if (operation === 'add-tab') {
+          const [target, id] = arg as [string, string];
+          bench.store.addTab(target, {
+            type: 'pane',
+            id,
+            minWidth: 48,
+            minHeight: 48,
+          });
         }
       }, 0);
     },
@@ -340,6 +348,28 @@ export const SCENARIOS: Scenario[] = [
     async run(page, _params, point) {
       await page.mouse.click(point!.x, point!.y);
       await page.waitForTimeout(IDLE_SETTLE_MS);
+    },
+  },
+  {
+    id: 'add-tab',
+    description:
+      'Add a tab beside the second pane: the first stack of the layout, whose new tab shows.',
+    async run(page) {
+      await inPageTask(page, 'add-tab', ['p1', 't1']);
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
+  },
+  {
+    id: 'add-tab-later',
+    description:
+      'With a stack beside the second pane, add a tab beside the third pane: a later stack.',
+    async setup(page, params) {
+      await addTab(page, params, 'p1', 't1');
+      return undefined;
+    },
+    async run(page) {
+      await inPageTask(page, 'add-tab', ['p2', 't2']);
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
     },
   },
   {

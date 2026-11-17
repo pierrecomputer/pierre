@@ -229,6 +229,8 @@ const DISCRETE = [
   'show',
   'collapse',
   'tab-switch',
+  'add-tab',
+  'add-tab-later',
 ];
 
 // The most content renders of any record of a scenario, at 4 and 16 panes
