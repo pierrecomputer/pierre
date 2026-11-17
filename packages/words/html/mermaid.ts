@@ -6,20 +6,34 @@ export interface MermaidRenderer<Options> {
 }
 
 /**
- * Render closed `mermaid` code blocks as SVG with Pele. An open fence, or a
- * diagram that does not parse, shows as a code block.
+ * Render `mermaid` code blocks as SVG with Pele. An open fence draws its
+ * complete lines and keeps the last diagram that parsed; with no diagram yet it
+ * shows nothing. A closed diagram that does not parse shows as a code block.
  */
 export function createMermaidPlugin<Options>(
   pele: MermaidRenderer<Options>,
   options?: Options
 ): MermaidPlugin {
+  // Complete lines of the open fence and their last diagram that parsed.
+  let source = '';
+  let last = '';
   return {
     render({ code, isIncomplete }: CodeOptions): string | null {
-      if (isIncomplete) return null;
+      if (isIncomplete) {
+        // Open code ends with an added LF. Its partial last line rarely parses.
+        code = code.slice(0, code.lastIndexOf('\n', code.length - 2) + 1);
+        if (code === source) return last;
+        // Another fence must not show the previous diagram.
+        if (!code.startsWith(source)) last = '';
+        source = code;
+        if (code.trim() === '') return '';
+      }
       try {
-        return `<div data-markdown="mermaid">${pele.render(code, options).svg}</div>`;
+        const html = `<div data-markdown="mermaid">${pele.render(code, options).svg}</div>`;
+        if (isIncomplete) last = html;
+        return html;
       } catch {
-        return null;
+        return isIncomplete ? last : null;
       }
     },
   };

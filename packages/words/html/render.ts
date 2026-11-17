@@ -589,6 +589,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const language =
       open === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, open));
     if (
+      (language === 'mermaid' && options.plugins?.mermaid !== undefined) ||
       options.plugins?.renderers?.some((renderer) =>
         typeof renderer.language === 'string'
           ? renderer.language === language

@@ -159,7 +159,7 @@ command shows in red, or in gray while its block is still open.
 
 ## Mermaid
 
-`@pierre/words/mermaid` renders closed `mermaid` code blocks with
+`@pierre/words/mermaid` renders `mermaid` code blocks with
 [Pele](https://pele.run), which you install and pass in:
 
 ```tsx
@@ -171,8 +171,10 @@ const plugins = { mermaid: createMermaidPlugin({ render }) };
 <Markdown plugins={plugins}>{text}</Markdown>;
 ```
 
-The second argument holds Pele's render options. An open fence and a diagram
-that does not parse show as code.
+The second argument holds Pele's render options. While the fence is open, the
+diagram grows with each complete line, and a line that does not parse keeps the
+last diagram. An open fence with no diagram yet shows nothing. A closed diagram
+that does not parse shows as code.
 
 A renderer in `plugins.renderers` can return `null` the same way to show the
 code block. The renderer keeps the output of a closed block and reuses it while

@@ -124,6 +124,15 @@ void test('root fences preserve markers, line endings, and incomplete state', ()
   }
 });
 
+void test('incomplete input skips a fence until its opening line ends', () => {
+  const html = (source: string, incomplete: boolean) =>
+    dec.decode(renderToHtml(source, { incomplete }));
+  for (const source of ['```', '```mer', '~~~js', '- a\n  ```js', '> ```js'])
+    assert.doesNotMatch(html(source, true), /<pre/, source);
+  for (const source of ['```js', '```js\n', '```js\r', '```js\nx'])
+    assert.match(html(source, source !== '```js'), /<pre/, source);
+});
+
 void test('plain paragraph runs stop at syntax, whitespace, and block boundaries', () => {
   const tails = [
     ['ordinary. Unicode 界é.', 'ordinary. Unicode 界é.'],

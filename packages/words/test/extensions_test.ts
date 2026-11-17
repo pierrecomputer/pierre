@@ -324,7 +324,7 @@ void test('element filters skip self-closing SVG children', () => {
   assert.match(rects, /<\/svg>[^]*>after<\/p>/);
 });
 
-void test('the Mermaid plugin renders closed mermaid fences', () => {
+void test('the Mermaid plugin renders mermaid fences', () => {
   const calls: string[] = [];
   const mermaid = createMermaidPlugin({
     render(source: string) {
@@ -335,8 +335,23 @@ void test('the Mermaid plugin renders closed mermaid fences', () => {
   });
   const renderer = createHtmlRenderer({ plugins: { mermaid } });
   const open = renderer.render('```mermaid\ngraph LR', true, true).html;
-  assert.match(open, /data-language="mermaid"/);
+  // an open fence with no diagram yet shows nothing
+  assert.equal(open.trim(), '');
   assert.deepEqual(calls, []);
+  // an open fence draws its complete lines
+  assert.match(
+    renderer.render('```mermaid\ngraph LR\nA-', true, true).html,
+    /^<div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div>/
+  );
+  // a line that does not parse keeps the last diagram
+  assert.match(
+    renderer.render('```mermaid\ngraph LR\nbad\nA', true, true).html,
+    /<svg data-test="graph LR">/
+  );
+  // the same complete lines do not render again
+  renderer.render('```mermaid\ngraph LR\nbad\nAB', true, true);
+  assert.deepEqual(calls, ['graph LR\n', 'graph LR\nbad\n']);
+  calls.length = 0;
   const done = renderer.render(
     '```mermaid\ngraph LR\n```\n\n```mermaid\nbad\n```\n',
     false,
@@ -349,6 +364,11 @@ void test('the Mermaid plugin renders closed mermaid fences', () => {
   // a diagram that does not parse stays code
   assert.match(done, /data-language="mermaid"[^]*bad/);
   assert.deepEqual(calls, ['graph LR\n', 'bad\n']);
+  // an open fence that does not parse yet shows nothing
+  assert.equal(
+    renderer.render('```mermaid\nbad\nx', true, true).html.trim(),
+    ''
+  );
 });
 
 void test('closed renderer blocks render once while the tail streams', () => {
@@ -379,7 +399,8 @@ void test('closed renderer blocks render once while the tail streams', () => {
   let out = '';
   for (let at = 1; at <= doc.length; at++)
     out = renderer.render(doc.slice(0, at), true, true).html;
-  assert.deepEqual(calls, ['graph LR\n', 'bad\n']);
+  // one render per complete line while open, then one when closed
+  assert.deepEqual(calls, ['graph LR\n', 'graph LR\n', 'bad\n', 'bad\n']);
   assert.equal(notes, 1);
   assert.match(out, /<aside>1:n\n<\/aside>/);
   // an open fence of a renderer that returns null is a code block

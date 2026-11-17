@@ -280,7 +280,21 @@
     (global.set $incompleteCodeRec (i32.const 0))
     (if (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.code))
           (i32.ne (global.get $codeFenceCh) (i32.const 0)))
-      (then (global.set $incompleteCodeRec (global.get $leafRec))))
+      (then
+        (global.set $incompleteCodeRec (global.get $leafRec))
+        ;; While input is incomplete, skip a code fence whose opening line has
+        ;; no line ending: its info string can still grow. Bit 7 means
+        ;; completion ran (and cleared bit 6). Math fences still show.
+        (if (i32.and
+              (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 192)) (i32.const 0))
+                (i32.ne (global.get $codeFenceCh) (i32.const "$")))
+              (i32.and (i32.eqz (i32.load offset=$R.nLines (global.get $leafRec)))
+                (i32.and
+                  (i32.ne (i32.load8_u (i32.sub (global.get $eof) (i32.const 1))) (i32.const 10))
+                  (i32.ne (i32.load8_u (i32.sub (global.get $eof) (i32.const 1))) (i32.const 13)))))
+          (then
+            (i32.store8 (global.get $leafRec) (enum.get $Blk.none))
+            (global.set $incompleteCodeRec (i32.const 0))))))
     (call $closeLeaf)
     (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 64)) (i32.const 0))
           (i32.ne (global.get $sp) (i32.const 0)))

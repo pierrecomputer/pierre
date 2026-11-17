@@ -77,7 +77,7 @@ $$
 \end{aligned}
 $$
 
-A Mermaid block becomes a diagram when its fence closes:
+A Mermaid block draws its diagram line by line as it streams:
 
 ~~~mermaid
 flowchart LR
