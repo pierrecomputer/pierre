@@ -10,18 +10,24 @@
   /* One opaque layer behind the pinned tabs and the gaps after them covers
      the tabs that scroll under them. It takes no room in the row. The tabs
      own their backgrounds above it, and each tab keeps its own layers, such
-     as a close mark, inside it. */
+     as a close mark, inside it. Its geometry is important, so an app's reset
+     of pseudo-elements, such as a margin of 0, cannot give it room in the
+     row: a pseudo-element takes no inline style. */
   .pierre-layouts-tabs[data-sticky-pinned]::before {
     content: '';
-    position: sticky;
-    left: var(--layouts-pinned-start, 0);
+    position: sticky !important;
+    left: var(--layouts-pinned-start, 0) !important;
     z-index: 1;
-    flex: none;
-    align-self: stretch;
-    width: calc(var(--layouts-pinned-width) + var(--layouts-pinned-gap, 0px));
-    margin-right: calc(
-      -1 * var(--layouts-pinned-width) - 2 * var(--layouts-pinned-gap, 0px)
-    );
+    flex: none !important;
+    align-self: stretch !important;
+    width: calc(
+      var(--layouts-pinned-width) + var(--layouts-pinned-gap, 0px)
+    ) !important;
+    margin: 0
+      calc(
+        -1 * var(--layouts-pinned-width) - 2 * var(--layouts-pinned-gap, 0px)
+      )
+      0 0 !important;
     background: var(--layouts-pane-background, #fff);
   }
 

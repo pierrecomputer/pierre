@@ -977,13 +977,16 @@ test('a tab drag held near the end of a tab list scrolls it', async ({
 test('sticky pinned tabs cover the tabs that scroll under them, their marks and the gaps included', async ({
   page,
 }) => {
-  await page.goto('/stacks.html?pinned=1&sticky=1&tabmark=1&gap=1');
+  await page.goto('/stacks.html?pinned=1&sticky=1&tabmark=1&gap=1&reset=1');
   await addTenTabs(page);
   const list = tabsOf(page, 'main');
   await expect(list).toHaveAttribute('data-sticky-pinned', '');
   const main = await tabBox(page, 'main', 'main.ts');
   const util = await tabBox(page, 'main', 'util.ts');
   const test = await tabBox(page, 'main', 'test.ts');
+  // The layer behind the pinned tabs takes no room, even under a reset.
+  const listBox = await list.boundingBox();
+  expect(Math.abs(main.x - (listBox?.x ?? 0))).toBeLessThan(1);
   // test.ts scrolls under util.ts: its mark is under util.ts.
   await list.evaluate((element, by) => {
     element.scrollLeft = by;
@@ -1016,7 +1019,7 @@ test('a stuck selected tab keeps its look, and a stuck tab shows its focus outli
   const rows = async (query: string) => {
     await page.goto(`/stacks.html?pinned=1${query}`);
     const list = tabsOf(page, 'main');
-    if (query !== '')
+    if (query.includes('sticky'))
       await expect(list).toHaveAttribute('data-sticky-pinned', '');
     const main = list.getByRole('tab', { name: 'main.ts' });
     const box = await main.boundingBox();
@@ -1040,8 +1043,8 @@ test('a stuck selected tab keeps its look, and a stuck tab shows its focus outli
       outline: outline.toString('base64'),
     };
   };
-  const plain = await rows('');
-  const sticky = await rows('&sticky=1');
+  const plain = await rows('&reset=1');
+  const sticky = await rows('&reset=1&sticky=1');
   expect(sticky.underline).toBe(plain.underline);
   expect(sticky.outline).toBe(plain.outline);
 });

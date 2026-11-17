@@ -26,6 +26,8 @@
 //   `position: relative`, as a utility class does.
 // - `?tabmark=1`: each tab holds a mark with `z-index: 10` at its left edge,
 //   as an app's close mark has.
+// - `?reset=1`: an app's reset sets the margin and the padding of every
+//   element and pseudo-element to 0, as Tailwind's preflight does.
 // - `?scroll=1`: the tab lists scroll (`overflow-x: auto`), as an app's own
 //   strip does, so a swipe scrolls them; `?gap=1`: they also have a 4 px gap.
 // - `?title=1`: each header shows `Layout.Title` before its tab list, and
@@ -64,10 +66,10 @@ const sticky =
       : false;
 const relativeTabs = params.get('tabclass') === 'relative';
 const tabMarks = params.get('tabmark') === '1';
-if (relativeTabs || tabMarks) {
+const reset = params.get('reset') === '1';
+if (relativeTabs || tabMarks || reset) {
   const style = document.createElement('style');
-  style.textContent =
-    '.stacks-relative-tab { position: relative; } .stacks-tab-mark { position: absolute; left: 2px; top: 4px; z-index: 10; width: 8px; height: 8px; background: red; }';
+  style.textContent = `.stacks-relative-tab { position: relative; } .stacks-tab-mark { position: absolute; left: 2px; top: 4px; z-index: 10; width: 8px; height: 8px; background: red; }${reset ? ' *, ::before, ::after { margin: 0; padding: 0; }' : ''}`;
   document.head.append(style);
 }
 const withTitle = params.get('title') === '1';

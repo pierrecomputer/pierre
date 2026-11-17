@@ -46,13 +46,13 @@ const BUDGET = {
 // (2026-11-16) move the tab-list code of the drag engine into `tabDrag()`,
 // which makes app B 360 brotli bytes smaller, and add the header band, the
 // edge scroll, the drop marker in the top layer, and the backdrop of sticky
-// pinned tabs, which make apps C and E about 450 and 360 bytes larger
+// pinned tabs, which make apps C and E 388 and 382 brotli bytes larger
 // (`DEC-layouts-modular-size-budget`: design ranks above bytes).
 const APP_BUDGET = {
   'tiled source': { minified: 57_993, brotli: 18_276 },
-  'full set source': { minified: 86_467, brotli: 26_116 },
+  'full set source': { minified: 86_525, brotli: 26_051 },
   'side panel source': { minified: 56_026, brotli: 17_551 },
-  'tab stacks source': { minified: 68_077, brotli: 21_086 },
+  'tab stacks source': { minified: 68_135, brotli: 21_105 },
 } as const;
 
 interface Output {
