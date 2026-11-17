@@ -125,8 +125,8 @@ features of `createLayout` from `@pierre/layouts/react`.
 
 The props of `Layout.Root` are `layout`, `renderPane`, `getPaneTitle`,
 `onResize`, `onPaneClose`, `getPaneProps`, `getSeparatorProps`, `stylesheets`,
-`messages`, `className`, `style`, and `gap`. The layout fills its parent; give
-that parent a definite height.
+`messages`, `keymap` (see "Keyboard and motion"), `className`, `style`, and
+`gap`. The layout fills its parent; give that parent a definite height.
 
 A focus change, a zoom, and a resize do not render pane content again: the store
 keeps the identity of each node that a change does not touch, and the view
@@ -288,17 +288,44 @@ returns the whole sentence, so a translation chooses its own words and word
 order. A function takes one flat object of named values, which an ICU message
 catalog takes as it is:
 
-| Key                                                                        | Values                                                                                                                                    | Default                                                    |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `layout`                                                                   | (a string)                                                                                                                                | Workspace                                                  |
-| `separator`                                                                | `beforeTitles`, `afterTitles` (titles joined with ", "), `beforeCount`, `afterCount`, `beforeId`, `afterId` (the first pane on each side) | Resize Files                                               |
-| `separatorValue`                                                           | `paneTitle`, `paneId` (the primary pane), `percent`                                                                                       | Files 25%                                                  |
-| `collapse`, `close`, `drag`, `tabs`                                        | `paneTitle`, `paneId`                                                                                                                     | Collapse Editor, Close Editor, Drag Editor, Tabs of Editor |
-| `zoom`                                                                     | `paneTitle`, `paneId`                                                                                                                     | Zoom Editor                                                |
-| `zoomed`, `restored`, `closed`, `collapsed`, `expanded`, `hidden`, `shown` | `paneTitle`, `paneId`                                                                                                                     | Editor zoomed, Editor restored, …                          |
-| `opened`, `moved`, `move`                                                  | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Terminal opened to the bottom of Editor, …                 |
-| `movedToTabs`, `moveInto`                                                  | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Editor moved into the group of Files, …                    |
-| `remote`                                                                   | `text` (what the same change from this window announces)                                                                                  | none: a remote change is silent                            |
+| Key              | Where                                              | Values                                                                                                                                    | Default                                    |
+| ---------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `layout`         | The name of the layout                             | (a string)                                                                                                                                | Workspace                                  |
+| `remote`         | The announcement of a change from elsewhere        | `text` (what the same change from this window announces)                                                                                  | None: a remote change is silent            |
+| `separator`      | The name of a separator                            | `beforeTitles`, `afterTitles` (titles joined with ", "), `beforeCount`, `afterCount`, `beforeId`, `afterId` (the first pane on each side) | Resize Files                               |
+| `separatorValue` | The value text of a separator                      | `paneTitle`, `paneId` (the primary pane), `percent`                                                                                       | Files 25%                                  |
+| `separatorStep`  | A step button of a separator                       | `paneTitle`, `paneId` (the primary pane), `edge`                                                                                          | Move left, Move right, Move up, Move down  |
+| `collapse`       | `Layout.CollapseButton`                            | `paneTitle`, `paneId`                                                                                                                     | Collapse Editor                            |
+| `close`          | `Layout.CloseButton`                               | `paneTitle`, `paneId`                                                                                                                     | Close Editor                               |
+| `zoom`           | `Layout.ZoomButton`                                | `paneTitle`, `paneId`                                                                                                                     | Zoom Editor                                |
+| `drag`           | `Layout.MoveHandle` without `arrange()`            | `paneTitle`, `paneId`                                                                                                                     | Drag Editor                                |
+| `paneMenu`       | `Layout.MoveHandle` with `arrange()`               | `paneTitle`, `paneId`                                                                                                                     | Arrange Editor                             |
+| `tabs`           | `Layout.TabList`                                   | `paneTitle`, `paneId`                                                                                                                     | Tabs of Editor                             |
+| `pinned`         | The description of a pinned tab                    | (a string)                                                                                                                                | Pinned                                     |
+| `zoomed`         | Announcement: a zoom                               | `paneTitle`, `paneId`                                                                                                                     | Editor zoomed                              |
+| `restored`       | Announcement: the end of a zoom                    | `paneTitle`, `paneId`                                                                                                                     | Editor restored                            |
+| `closed`         | Announcement: a close                              | `paneTitle`, `paneId`                                                                                                                     | Editor closed                              |
+| `collapsed`      | Announcement: a collapse                           | `paneTitle`, `paneId`                                                                                                                     | Editor collapsed                           |
+| `expanded`       | Announcement: an expand                            | `paneTitle`, `paneId`                                                                                                                     | Editor expanded                            |
+| `hidden`         | Announcement: a hide                               | `paneTitle`, `paneId`                                                                                                                     | Editor hidden                              |
+| `shown`          | Announcement: a show                               | `paneTitle`, `paneId`                                                                                                                     | Editor shown                               |
+| `opened`         | Announcement: a new pane at an edge of a pane      | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Terminal opened to the bottom of Editor    |
+| `moved`          | Announcement: a move to an edge of a pane          | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Editor moved to the right of Files         |
+| `openedAtEdge`   | Announcement: a new pane at an edge of the layout  | `paneTitle`, `paneId`, `edge`                                                                                                             | Terminal opened in a new row at the bottom |
+| `movedToEdge`    | Announcement: a move to an edge of the layout      | `paneTitle`, `paneId`, `edge`                                                                                                             | Editor moved to a new column at the left   |
+| `movedToTabs`    | Announcement: a move into another stack            | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Editor moved into the group of Files       |
+| `merged`         | Announcement: a merge of the tabs of a stack       | `paneTitles` (joined with ", "), `count`, `targetTitle`, `targetId`                                                                       | Diff, Chat moved into the group of Files   |
+| `resized`        | Announcement: a Grow or a Shrink                   | `paneTitle`, `paneId`, `axis`, `percent`                                                                                                  | Editor width 45%                           |
+| `move`           | Status during a drag to an edge of a pane          | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Move Editor to the right of Files          |
+| `moveInto`       | Status during a tab drag into a stack              | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Move Editor into the group of Files        |
+| `moveBeside`     | Pane menu item: beside the pane across an edge     | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge`                                                                                  | Move left of Files, Move above Files       |
+| `moveToEdge`     | Pane menu item: an edge of the layout              | `paneTitle`, `paneId`, `edge`                                                                                                             | Move to a new column at the left           |
+| `moveToTabs`     | Pane menu item: into the tabs of a pane            | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Move to the tabs of Files                  |
+| `mergeInto`      | Pane menu item: merge the tabs into a pane         | `paneTitle`, `paneId`, `targetTitle`, `targetId`                                                                                          | Merge tabs into Files                      |
+| `moveToMenu`     | Pane menu item that holds a place beside each pane | `paneTitle`, `paneId`                                                                                                                     | Move to…                                   |
+| `place`          | An item of "Move to…"                              | `paneTitle`, `paneId`, `targetTitle`, `targetId`, `edge` (an edge or `tabs`)                                                              | Left of Files, Above Files, Tabs of Files  |
+| `resize`         | Pane menu items: Grow and Shrink                   | `paneTitle`, `paneId`, `axis`, `grow`                                                                                                     | Wider, Narrower, Taller, Shorter           |
+| `maximize`       | Pane menu item of `zoom()`                         | `paneTitle`, `paneId`, `zoomed`                                                                                                           | Maximize, or Restore while zoomed          |
 
 The titles come from `getPaneTitle`, and the IDs are the `PaneNode.id` strings
 of the tree, so a translation in a language that inflects names can find the
@@ -887,30 +914,36 @@ button pattern.
 
 A drag of a separator changes the two children of its split beside it. When one
 of them reaches its minimum size, the next child on that side gives the space,
-and so on. Resize separators with arrow keys; hold Shift for larger steps. Home
-and End move a separator until the child before or after it has its minimum
-size. As in the window splitter pattern, the primary pane of a separator is the
-pane or the stack before it: the separator's name and value text come from its
-title, `aria-controls` names it, and Enter collapses it or expands it again. At
-the focus, and after each change while it has the focus, `aria-valuenow`,
-`aria-valuemin`, and `aria-valuemax` give the real place and limits in percent
-of the split: the limits are the places where the panes on each side have their
-minimum sizes. A separator's pointer target is at least 24 px across, with no
-change to the visible gap, and a focused separator keeps its focus visible in
-forced colors mode. A press and release on a separator with no move shows two
-step buttons across it, "Move left" and "Move right" (or up and down;
-`messages.separatorStep`), each a step of 10% of the split, as Shift with an
-arrow key: the path with no drag that WCAG 2.5.7 asks for, also in a layout with
-no feature. They stay for the next step, and a press elsewhere or Escape hides
-them. A corner of `corners()` is a pointer shortcut only: it has a 24 px target,
-takes no focus, and is hidden from assistive technology, because the keyboard
-resizes each of its two separators. Each control in `Layout.Header` is a pointer
-target of at least 24 px, and the header is 40 px high, so the target of a
-separator above the pane does not cover a control. The close mark of a tab
-(`pierre-layouts-tab-close`) has a target of 24 px. Escape cancels an active
-gesture, and restores a zoomed layout with `zoom()`, unless pane content handled
-it with `preventDefault()`. Hidden panes remain mounted but are inert and
-excluded from the accessibility tree. Motion respects `prefers-reduced-motion`.
+and so on. `onResize` reports the sizes after the release. No API changes the
+sizes during a drag: the resize session of the earlier `Layout` component
+(`onResizeStart`, whose session snapped or limited the sizes at each move) is
+gone, so an app cannot snap a panel to a grid or to fixed steps while the
+pointer moves. Snap points on a separator are a planned exploration, and a
+constraint option comes when an app needs one. Resize separators with arrow
+keys; hold Shift for larger steps. Home and End move a separator until the child
+before or after it has its minimum size. As in the window splitter pattern, the
+primary pane of a separator is the pane or the stack before it: the separator's
+name and value text come from its title, `aria-controls` names it, and Enter
+collapses it or expands it again. At the focus, and after each change while it
+has the focus, `aria-valuenow`, `aria-valuemin`, and `aria-valuemax` give the
+real place and limits in percent of the split: the limits are the places where
+the panes on each side have their minimum sizes. A separator's pointer target is
+at least 24 px across, with no change to the visible gap, and a focused
+separator keeps its focus visible in forced colors mode. A press and release on
+a separator with no move shows two step buttons across it, "Move left" and "Move
+right" (or up and down; `messages.separatorStep`), each a step of 10% of the
+split, as Shift with an arrow key: the path with no drag that WCAG 2.5.7 asks
+for, also in a layout with no feature. They stay for the next step, and a press
+elsewhere or Escape hides them. A corner of `corners()` is a pointer shortcut
+only: it has a 24 px target, takes no focus, and is hidden from assistive
+technology, because the keyboard resizes each of its two separators. Each
+control in `Layout.Header` is a pointer target of at least 24 px, and the header
+is 40 px high, so the target of a separator above the pane does not cover a
+control. The close mark of a tab (`pierre-layouts-tab-close`) has a target of 24
+px. Escape cancels an active gesture, and restores a zoomed layout with
+`zoom()`, unless pane content handled it with `preventDefault()`. Hidden panes
+remain mounted but are inert and excluded from the accessibility tree. Motion
+respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer

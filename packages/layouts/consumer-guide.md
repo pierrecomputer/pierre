@@ -218,6 +218,8 @@ each local `resize` operation: a pointer release, a key press on a separator
 that changes a size, or a call of `layout.setSizes`. A cancelled drag reports
 nothing. The same resize reaches the store's listeners as one `resize`
 operation. Storage and network writes remain the consumer's responsibility.
+`Root` has no resize session: an app cannot change the sizes during a drag (see
+the README).
 
 ## Add props to separators and pane hosts
 
