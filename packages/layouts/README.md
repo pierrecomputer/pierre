@@ -177,6 +177,15 @@ holds every sheet that the modules inject, and nothing else. Link it with a
 `<link rel="stylesheet">`; do not import it in JavaScript, which would bundle it
 again for the app.
 
+React puts the sheets of a layout together in `<head>`, in front of the app's
+own stylesheets. A sheet that comes after the first render goes in the middle of
+the stylesheets, and Chromium then updates the fonts of the whole document: each
+text lays out again, and the content of a hidden pane or an inactive tab lays
+out when it shows. So `stacks()` renders the sheet of `Layout.TabList` in the
+first render, also before the first stack. A part that first renders later, such
+as the first `Layout.Header` of a layout that starts with no header, adds its
+sheet then: render the parts from the first render, or link `styles.css`.
+
 Every rule of the layout is in the cascade layer `pierre-layouts`, so the CSS of
 an app without a layer wins over it at any specificity. Element defaults of an
 app, such as `button { cursor: pointer; }`, then also apply to the layout's own

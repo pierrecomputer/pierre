@@ -1050,3 +1050,44 @@ test('a merge of a stack into another speaks once, with each tab', async ({
     'tabpanel'
   );
 });
+
+test('with stacks(), the tab sheet is in the page before the first stack, so the first stack lays out no text again', async ({
+  page,
+  browser,
+}) => {
+  // The main demo has stacks() and no stack at first.
+  await page.goto('/');
+  await expect(page.locator('[data-layouts-pane]')).toHaveCount(7);
+  await expect(page.getByRole('tablist')).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      [...document.head.querySelectorAll('style')].map(
+        (style) => style.dataset.href
+      )
+    )
+  ).toContain('pierre-layouts-tabs');
+  // A sheet that comes later goes before the app's stylesheets, and Chromium
+  // then updates the fonts of the whole document: each text lays out again,
+  // and a hidden pane lays out all its content when it shows.
+  await browser.startTracing(page, {
+    categories: [
+      'devtools.timeline',
+      'disabled-by-default-devtools.timeline',
+      'blink',
+    ],
+  });
+  await page.getByRole('button', { name: 'Add tab', exact: true }).click();
+  await expect(page.getByRole('tablist').first()).toBeVisible();
+  await page.waitForTimeout(200);
+  const events = (
+    JSON.parse((await browser.stopTracing()).toString()) as {
+      traceEvents: { name: string }[];
+    }
+  ).traceEvents;
+  expect(
+    events.filter(
+      (event) =>
+        event.name === 'StyleEngine::InvalidateStyleAndLayoutForFontUpdates'
+    )
+  ).toEqual([]);
+});

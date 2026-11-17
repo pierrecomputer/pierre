@@ -6,6 +6,7 @@
 // `Layout.TabList` makes the host of its pane the tab panel of its tab.
 import { useEffect, useState } from 'react';
 
+import tabsCss from '../../css/tabs.css?inline';
 import { focusTab, paneHosts } from '../../dom/panes';
 import { type StackCommands, stacksStore } from '../../stacks';
 import { treeIndex } from '../../tree-index';
@@ -94,6 +95,12 @@ export function stacks(): Feature<StackCommands> {
     name: 'stacks',
     requires: ['edits'],
     store: stacksStore,
+    // The sheet of `Layout.TabList`, in the first render of `Root`. React
+    // puts the sheets of the layout before the app's stylesheets, so a sheet
+    // that comes later, with the first stack, goes in the middle of them, and
+    // Chromium then updates the fonts of the whole document: each text lays
+    // out again, and a hidden pane lays out all its content when it shows.
+    stylesheets: [['tabs', tabsCss]],
     // A move into another stack. The tab list shows a move inside one stack.
     announce(operation, { previous, operations, pane, target, messages }) {
       if (operation.type !== 'moveToStack') return null;
