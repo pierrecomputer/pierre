@@ -183,7 +183,7 @@ describe('mergeStack', () => {
     expect(store.getSnapshot().focusedPane).toBe('chat');
   });
 
-  test('takes the next pane when no pane comes before it, and leaves a pinned tab', () => {
+  test('takes the next pane when no pane comes before it, and moves a pinned tab into its pinned run', () => {
     const store = testStore({
       type: 'split',
       id: 'row',
@@ -201,7 +201,7 @@ describe('mergeStack', () => {
     });
     store.mergeStack('b');
     expect(shape(store.getSnapshot().root)).toEqual({
-      horizontal: ['a', { tabs: ['d', 'b', 'c'] }],
+      tabs: ['a', 'd', 'b', 'c'],
     });
   });
 });

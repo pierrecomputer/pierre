@@ -332,6 +332,20 @@ const editorsOrder = (page: Page): Promise<string[]> =>
     return editors?.children?.map((node) => node.id) ?? [];
   });
 
+// The order of a stack, from the store.
+const stackOrder = (page: Page, id: string): Promise<string[]> =>
+  page.evaluate((id) => {
+    type Node = { id: string; children?: Node[] };
+    const find = (node: Node): Node | undefined =>
+      node.id === id ? node : node.children?.map(find).find(Boolean);
+    const root = (
+      window as unknown as {
+        __stacks: { layout: { getSnapshot(): { root: Node } } };
+      }
+    ).__stacks.layout.getSnapshot().root;
+    return find(root)?.children?.map((node) => node.id) ?? [];
+  }, id);
+
 test('a tab drag inside its tab list changes the order of the tabs, and the tab keeps the focus', async ({
   page,
 }) => {
@@ -587,7 +601,7 @@ test("an app's handler that calls preventDefault() stops the tab's own handler",
     .toEqual(['docs', 'main', 'util', 'test', 'types']);
 });
 
-test('pinned tabs stay first and in their stack: key moves and drags clamp at the end of the run', async ({
+test('pinned tabs stay first: key moves and drags clamp to the pinned run, in their stack and in another', async ({
   page,
 }) => {
   await page.goto('/stacks.html?pinned=1');
@@ -628,29 +642,45 @@ test('pinned tabs stay first and in their stack: key moves and drags clamp at th
   await expect
     .poll(() => editorsOrder(page))
     .toEqual(['util', 'main', 'types', 'test', 'docs']);
-  // A pinned tab takes no place in another tab list or another pane.
-  const tools = await tabBox(page, 'terminal', 'Output');
-  // The dropped tab shows: its host holds the tab list now.
+  // A pinned tab drops into another tab list at the end of its pinned run,
+  // which is the start of a list with no pinned tab, and stays pinned.
+  const terminal = await tabBox(page, 'terminal', 'Terminal');
+  const output = await tabBox(page, 'terminal', 'Output');
   await dragTab(page, 'types', 'main.ts', {
-    x: tools.x + tools.width / 2,
-    y: tools.y + tools.height / 2,
+    x: output.x + output.width - 4,
+    y: output.y + output.height / 2,
   });
-  await expect(marker).toHaveCount(0);
+  await expect(marker).toHaveCount(1);
+  const mark2 = await marker.boundingBox();
+  expect(Math.abs((mark2?.x ?? 0) - terminal.x)).toBeLessThan(4);
+  await page.mouse.up();
+  await expect
+    .poll(() => stackOrder(page, 'tools'))
+    .toEqual(['main', 'terminal', 'output']);
+  expect(await editorsOrder(page)).toEqual(['util', 'types', 'test', 'docs']);
+  const moved = tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' });
+  await expect(moved).toHaveAttribute('data-pinned', 'true');
+  // And to an edge of another pane, beside it, still pinned.
   const files = await host(page, 'files').boundingBox();
   if (files === null) throw new Error('No box for files');
-  await page.mouse.move(files.x + files.width / 2, files.y + files.height / 2, {
-    steps: 4,
+  await dragTab(page, 'main', 'main.ts', {
+    x: files.x + files.width / 2,
+    y: files.y + files.height / 2,
   });
   await page.mouse.move(files.x + 4, files.y + files.height / 2, { steps: 4 });
-  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
   await page.mouse.up();
-  expect(await editorsOrder(page)).toEqual([
-    'util',
-    'main',
-    'types',
-    'test',
-    'docs',
-  ]);
+  await expect
+    .poll(() => stackOrder(page, 'tools'))
+    .toEqual(['terminal', 'output']);
+  await expect(
+    tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' })
+  ).toHaveAttribute('data-pinned', 'true');
+  const main = await host(page, 'main').boundingBox();
+  const filesAfter = await host(page, 'files').boundingBox();
+  expect((main?.x ?? 0) + (main?.width ?? 0)).toBeLessThanOrEqual(
+    (filesAfter?.x ?? 0) + 1
+  );
 });
 
 test('a tab that is not closable keeps Delete and its close button from closing it, and the app still closes it', async ({
@@ -765,6 +795,76 @@ test('stickyPinned keeps the pinned tabs in view while the others scroll, and tu
   await expect(list.locator('[data-sticky]')).toHaveCount(0);
 });
 
+// Add ten tabs after README.md, so that the editors' tab list scrolls.
+async function addTenTabs(page: Page): Promise<void> {
+  for (let index = 0; index < 10; index += 1)
+    await command(
+      page,
+      'addTab',
+      'docs',
+      { type: 'pane', id: `extra${index}` },
+      undefined,
+      { activate: false }
+    );
+}
+
+// The left edges of main.ts and util.ts, before and after a scroll of the
+// editors' tab list to its end.
+async function pinnedPlacesAcrossScroll(page: Page) {
+  const list = tabsOf(page, 'main');
+  const left = async (name: string) =>
+    (await list.getByRole('tab', { name }).boundingBox())?.x ?? Number.NaN;
+  const before = [await left('main.ts'), await left('util.ts')];
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  return { before, after: [await left('main.ts'), await left('util.ts')] };
+}
+
+test('stickyPinned with minRoom 0 keeps the pinned tabs in view in a narrow list', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1&sticky=room0');
+  await addTenTabs(page);
+  await page.setViewportSize({ width: 600, height: 900 });
+  const list = tabsOf(page, 'main');
+  // Less than the default 120 px is left beside the pinned tabs.
+  await expect
+    .poll(() =>
+      list.evaluate(
+        (element) =>
+          element.clientWidth -
+          Number.parseFloat(
+            element.style.getPropertyValue('--layouts-pinned-width')
+          )
+      )
+    )
+    .toBeLessThan(120);
+  await expect(list).toHaveAttribute('data-sticky-pinned', '');
+  const { before, after } = await pinnedPlacesAcrossScroll(page);
+  expect(Math.abs(after[0] - before[0])).toBeLessThan(1);
+  expect(Math.abs(after[1] - before[1])).toBeLessThan(1);
+});
+
+test("a sticky pinned tab stays stuck under an app's class that sets position: relative", async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1&sticky=1&tabclass=relative');
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await expect(list).toHaveAttribute('data-sticky-pinned', '');
+  const util = list.getByRole('tab', { name: 'util.ts' });
+  await expect(util).toHaveCSS('position', 'sticky');
+  const { before, after } = await pinnedPlacesAcrossScroll(page);
+  expect(Math.abs(after[0] - before[0])).toBeLessThan(1);
+  expect(Math.abs(after[1] - before[1])).toBeLessThan(1);
+  // The tab that does not stick keeps the app's position.
+  await expect(list.getByRole('tab', { name: 'test.ts' })).toHaveCSS(
+    'position',
+    'relative'
+  );
+});
+
 test("the layout's canPlace refuses a place of a tab drag once for each target, and allows the others", async ({
   page,
 }) => {
@@ -833,32 +933,28 @@ test("the layout's canPlace refuses a place of a tab drag once for each target, 
   });
 });
 
-test('the move handle of a pinned tab of a stack is disabled', async ({
+test('the move handle of a pinned tab moves it beside another pane, still pinned', async ({
   page,
 }) => {
   await page.goto('/stacks.html?pinned=1');
   const handle = host(page, 'main').getByRole('button', {
     name: 'Drag main.ts',
   });
-  await expect(handle).toHaveAttribute('aria-disabled', 'true');
-  await expect(
-    host(page, 'files').getByRole('button', { name: 'Drag Files' })
-  ).not.toHaveAttribute('aria-disabled');
+  await expect(handle).not.toHaveAttribute('aria-disabled');
   const from = await handle.boundingBox();
   const files = await host(page, 'files').boundingBox();
   if (from === null || files === null) throw new Error('No box');
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(files.x + 10, files.y + files.height / 2, { steps: 6 });
-  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
   await page.mouse.up();
-  expect(await editorsOrder(page)).toEqual([
-    'main',
-    'util',
-    'test',
-    'types',
-    'docs',
-  ]);
+  await expect
+    .poll(() => editorsOrder(page))
+    .toEqual(['util', 'test', 'types', 'docs']);
+  await expect(
+    tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' })
+  ).toHaveAttribute('data-pinned', 'true');
 });
 
 test.describe('a touch drag of a tab', () => {

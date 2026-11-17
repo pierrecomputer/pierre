@@ -385,15 +385,14 @@
 
 @layer pierre-layouts {
   /* `stickyPinned` of `Layout.TabList`, which alone adds this sheet: each
-     pinned tab sticks at the place that the tab list measures, over an opaque
-     layer, and a tab that scrolls into view stops beside the pinned tabs. */
+     pinned tab sticks at the place that the tab list measures (its inline
+     `position` and `left`), over an opaque layer, and a tab that scrolls into
+     view stops beside the pinned tabs. */
   .pierre-layouts-tabs[data-sticky-pinned] {
     scroll-padding-inline-start: var(--layouts-pinned-width);
   }
 
   .pierre-layouts-tabs > [data-sticky] {
-    position: sticky;
-    left: var(--layouts-pinned-left);
     z-index: 1;
   }
 

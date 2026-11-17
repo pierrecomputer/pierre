@@ -299,8 +299,8 @@ export interface MoveHandleState {
   /** The pane moves in a drag. */
   dragging: boolean;
   /**
-   * The handle does nothing: no drag starts, as the pane fills the layout or
-   * is a pinned tab, and the layout has no `arrange()` for a menu.
+   * The handle does nothing: no drag starts, as the pane fills the layout,
+   * and the layout has no `arrange()` for a menu.
    */
   disabled: boolean;
 }
@@ -317,8 +317,7 @@ const menuName = ({ paneTitle }: PaneMessageValues): string =>
  * (`Layout.usePaneMenu()`): a press and release with no move is a click,
  * its name is "Arrange Editor" (`messages.paneMenu`), and it has
  * `aria-haspopup="menu"`; the app's menu sets `aria-expanded`. No drag
- * starts while any pane fills the layout, or from a pinned tab of a stack.
- * Without `arrange()`, the handle is then `aria-disabled`, and a development
+ * starts while any pane fills the layout. Without `arrange()`, the handle is then `aria-disabled`, and a development
  * build warns that the handle gives no path with no drag (WCAG 2.5.7). The
  * handles of the covered panes do not change, so a zoom lays no other pane
  * out, and the covered panes are out of the accessibility tree. An app's
@@ -340,15 +339,11 @@ export function MoveHandle({
   warnMissing(menu, 'Layout.MoveHandle', 'arrange() for a move with no drag');
   const pane = usePaneState(value, (state) => state.pane);
   const title = usePaneState(value, (state) => state.title);
-  // No drag: a pane fills the layout, or a pinned tab of a stack stays in
-  // its stack.
-  const blocked = useLayoutState(context.store, (state) => {
-    const entry = treeIndex(state.root).panes.get(id);
-    return (
-      presentation(state).filled === id ||
-      (entry?.pane.pinned === true && entry.stack !== null)
-    );
-  });
+  // No drag while the pane fills the layout.
+  const blocked = useLayoutState(
+    context.store,
+    (state) => presentation(state).filled === id
+  );
   const dragging = useDrag(
     context,
     (drag) => drag?.source.kind === 'pane' && drag.source.id === id

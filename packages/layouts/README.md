@@ -519,10 +519,10 @@ layout.mergeStack('logs'); // Every tab of its stack into the pane before it.
 stack of a target, after its tabs and in their order, in one change: one
 `moveToStack` operation for each tab, which a server folds as it folds any
 other. The target is the pane before the stack in `visualOrder`, or the pane
-after it when none comes before it. A pinned tab stays. The target keeps its
-active tab, except when the merged stack had the focus: then the tab that showed
-shows, with the focus. The change speaks once: "Diff, Chat moved into the group
-of Files" (`messages.merged`).
+after it when none comes before it. Pinned tabs go to the pinned run of the
+target. The target keeps its active tab, except when the merged stack had the
+focus: then the tab that showed shows, with the focus. The change speaks once:
+"Diff, Chat moved into the group of Files" (`messages.merged`).
 
 `Layout.TabList` renders the tabs of the stack of its pane, with the WAI-ARIA
 tabs pattern, and makes the pane host the tab panel of its tab. A pane outside a
@@ -584,14 +584,16 @@ a drag; the class `pierre-layouts-tab-close` gives it the close mark's style.
 Two flags of a pane node hold the rules of an app's fixed tabs, in the tree, the
 saved form, and the folds of the operations, so a server applies the same rules:
 
-- `pinned: true`: the tab comes before the tabs that are not pinned, and stays
-  in its stack. A key move, a drag, `moveTab`, `moveToStack`, and `addTab` clamp
-  a place to the run of pinned tabs: a pinned tab goes at or before the end of
-  the run, and another tab at or after it. A move of a pinned tab out of its
-  stack (`move`, `moveToStack` into another stack, or `swap` with a pane that is
-  not a pinned tab of the same stack) throws `pane_pinned`, and `tabDrag()`
-  offers no such place. `layout.setPinned(id, pinned)` changes the flag and puts
-  the tab at the end of the pinned run. A pinned tab has `data-pinned` and the
+- `pinned: true`: the tab comes before the tabs that are not pinned in its
+  stack. A key move, a drag, `moveTab`, `moveToStack`, and `addTab` clamp a
+  place to the run of pinned tabs, in the tab's own stack or in another one: a
+  pinned tab goes at or before the end of the run, and another tab at or after
+  it. So a pinned tab that moves into another stack with no index goes to the
+  end of that stack's pinned run. A pinned tab that moves beside a pane (`move`,
+  a pane drag, or a tab drag to an edge) stays pinned, and comes first when tabs
+  join it. A `swap` that puts a pinned tab after a tab that is not pinned throws
+  `pane_pinned`. `layout.setPinned(id, pinned)` changes the flag and puts the
+  tab at the end of the pinned run. A pinned tab has `data-pinned` and the
   description "Pinned" (`messages.pinned`).
 - `closable: false`: the person cannot close the pane. Delete on its tab does
   nothing, and `Layout.CloseButton` is disabled. `layout.close(id)` from the
@@ -612,9 +614,13 @@ tabs scroll, as browsers and editors keep pinned tabs. Each pinned tab sticks at
 its own place, and a tab that takes the focus scrolls into view beside the
 pinned tabs. The list holds the width of the pinned tabs in
 `--layouts-pinned-width`, for the app's fade. The option turns itself off while
-less than 120 px of the list is left for the other tabs. It is off by default.
-The tab list must be the element that scrolls, as in `Layout.Header`, and each
-pinned tab a child of the list, as `Layout.Tab` and its `render` element are.
+less than 120 px of the list is left for the other tabs;
+`stickyPinned={{ minRoom: 0 }}` keeps the pinned tabs in view at every width,
+and another `minRoom` sets another limit. It is off by default. A stuck tab gets
+`position: sticky` and its `left` inline, as the styles of the gestures are, so
+an app's class on the tab cannot undo them. The tab list must be the element
+that scrolls, as in `Layout.Header`, and each pinned tab a child of the list, as
+`Layout.Tab` and its `render` element are.
 
 ## Collapsed panes
 

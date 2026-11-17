@@ -74,6 +74,7 @@ export {
 } from './parts/chrome';
 export type { PartProps, RenderProp } from './parts/part';
 export {
+  type StickyPinnedOptions,
   Tab,
   TabList,
   type TabListItemState,

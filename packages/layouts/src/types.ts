@@ -52,10 +52,11 @@ export interface PaneNode {
   /** The size of the pane along its split when it is collapsed. 0 by default. */
   readonly collapsedSize?: number;
   /**
-   * A pinned pane is a tab that stays in its stack, before the tabs that are
-   * not pinned: a move of a tab clamps to the run of pinned tabs, and a move
-   * of a pinned tab out of its stack throws `pane_pinned`. `setPinned` of
-   * `stacks()` changes it.
+   * A pinned pane is a tab that comes before the tabs that are not pinned in
+   * its stack: a move of a tab, into its own stack or another one, clamps to
+   * the run of pinned tabs, and a swap that puts a pinned tab after another
+   * tab throws `pane_pinned`. A pinned pane stays pinned when it moves.
+   * `setPinned` of `stacks()` changes it.
    */
   readonly pinned?: true;
   /**

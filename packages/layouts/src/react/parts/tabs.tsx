@@ -71,32 +71,47 @@ export interface TabListProps extends Omit<PartProps<object>, 'children'> {
   activation?: 'automatic' | 'manual';
   /**
    * Keep the pinned tabs in view while the other tabs scroll: each pinned tab
-   * sticks at its own place, and the list holds the width of the pinned tabs
-   * in `--layouts-pinned-width`, for the app's fade or scroll padding. It turns
-   * itself off while less than 120 px of the list is left for the other tabs.
-   * The tab list needs to be the element that scrolls. Only a tab list with
-   * this option adds its sheet, `pierre-layouts-sticky-pinned`.
+   * sticks at its own place, with an inline `position: sticky` and `left`,
+   * and the list holds the width of the pinned tabs in
+   * `--layouts-pinned-width`, for the app's fade or scroll padding. It turns
+   * itself off while less than `minRoom` px of the list (120 by default) is
+   * left for the other tabs. The tab list needs to be the element that
+   * scrolls. Only a tab list with this option adds its sheet,
+   * `pierre-layouts-sticky-pinned`.
    */
-  stickyPinned?: boolean;
+  stickyPinned?: boolean | StickyPinnedOptions;
 }
 
-// The space in pixels that sticky pinned tabs leave for the other tabs, at
-// the least.
+/** The options of `stickyPinned` on `Layout.TabList`. */
+export interface StickyPinnedOptions {
+  /**
+   * The least width in pixels that the sticky pinned tabs leave for the other
+   * tabs. In a narrower list, the pinned tabs scroll with the others. 120 by
+   * default; 0 keeps them in view at every width.
+   */
+  readonly minRoom?: number;
+}
+
+// The default `minRoom` of `stickyPinned`.
 const STICKY_ROOM = 120;
 
 /**
  * Make the pinned tabs of a tab list sticky, at the places that they have
  * when they do not stick, as each render and each resize of the list
  * measures them. A stuck tab reports its stuck place, so the measure runs
- * without the sticky attributes.
+ * without the sticky styles. The position is inline, as the styles of the
+ * gestures are, so that an app's class on a tab, such as a `relative`
+ * utility in a later layer, cannot undo it.
  */
 function useStickyPinned(
   tablist: RefObject<HTMLElement | null>,
-  on: boolean
+  options: boolean | StickyPinnedOptions
 ): void {
   useLayoutEffect(() => {
     const list = tablist.current;
-    if (!on || list === null) return;
+    if (options === false || list === null) return;
+    // `true` has no `minRoom`, so it takes the default.
+    const minRoom = (options as StickyPinnedOptions).minRoom ?? STICKY_ROOM;
     const pinned = (): HTMLElement[] => [
       ...list.querySelectorAll<HTMLElement>(':scope > [data-pinned]'),
     ];
@@ -104,11 +119,8 @@ function useStickyPinned(
       list.toggleAttribute('data-sticky-pinned', sticky);
       list.style.setProperty('--layouts-pinned-width', `${width}px`);
       for (const item of pinned()) {
-        if (sticky)
-          item.style.setProperty(
-            '--layouts-pinned-left',
-            `${item.offsetLeft}px`
-          );
+        item.style.left = sticky ? `${item.offsetLeft}px` : '';
+        item.style.position = sticky ? 'sticky' : '';
         item.toggleAttribute('data-sticky', sticky);
       }
     };
@@ -120,8 +132,7 @@ function useStickyPinned(
         last === undefined
           ? 0
           : last.offsetLeft + last.offsetWidth - tabs[0].offsetLeft;
-      if (width > 0 && list.clientWidth - width >= STICKY_ROOM)
-        stick(true, width);
+      if (width > 0 && list.clientWidth - width >= minRoom) stick(true, width);
     };
     place();
     const observer = new ResizeObserver(place);
@@ -187,11 +198,11 @@ export function TabList({
   const shown = tabs.filter((tab) =>
     own ? tab.hidden !== true : tab.id === value.id
   );
-  useStickyPinned(tablist, stickyPinned && own);
+  useStickyPinned(tablist, own && stickyPinned);
   return (
     <>
       <Style name="tabs" css={tabsCss} settings={context.stylesheets()} />
-      {stickyPinned && (
+      {stickyPinned !== false && (
         <Style
           name="sticky-pinned"
           css={stickyPinnedCss}

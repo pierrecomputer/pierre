@@ -10,6 +10,7 @@ import {
   parseStoredLayoutTree,
   stackOf,
 } from '../src/index';
+import { findNode } from '../src/model';
 import { testStore } from './helpers/store';
 
 const pane = (id: string, flags: Partial<PaneNode> = {}): PaneNode => ({
@@ -96,20 +97,51 @@ describe('pinned tabs', () => {
     ]);
   });
 
-  test('a pinned tab does not leave its stack', () => {
+  test('a pinned tab moves into another stack, stays pinned, and goes to the end of its pinned run', () => {
+    const store = testStore(start);
+    store.moveToStack('a', 'h');
+    let root = store.getSnapshot().root;
+    expect(order(root, 'h')).toEqual(['g', 'a', 'h']);
+    expect(order(root, 'b')).toEqual(['b', 'c', 'd', 'e']);
+    expect(findNode(root, 'a')).toEqual(pane('a', { pinned: true }));
+    // A place inside the run stays; a place past it clamps to its end.
+    store.moveToStack('b', 'g', 0);
+    store.moveToStack('c', 'g', 0);
+    root = store.getSnapshot().root;
+    expect(order(root, 'g')).toEqual(['b', 'g', 'a', 'c', 'h']);
+    // Into a pane outside a stack: a new stack, the pinned tab first.
+    store.moveToStack('g', 'f');
+    expect(order(store.getSnapshot().root, 'f')).toEqual(['g', 'f']);
+  });
+
+  test('a pinned tab moves beside a pane, and stays pinned', () => {
+    const store = testStore(start);
+    store.move('a', 'f', 'left');
+    const root = store.getSnapshot().root;
+    expect(stackOf(root, 'a')).toBeNull();
+    expect(findNode(root, 'a')).toEqual(pane('a', { pinned: true }));
+    expect(order(root, 'b')).toEqual(['b', 'c', 'd', 'e']);
+    // A tab that joins it later goes after it.
+    store.moveToStack('c', 'a', 0);
+    expect(order(store.getSnapshot().root, 'a')).toEqual(['a', 'c']);
+  });
+
+  test('a swap that puts a pinned tab after another tab throws pane_pinned', () => {
     const store = testStore(start);
     const before = store.getSnapshot().root;
-    expect(codeOf(() => store.moveToStack('a', 'h'))).toBe('pane_pinned');
-    expect(codeOf(() => store.moveToStack('a', 'f'))).toBe('pane_pinned');
-    expect(codeOf(() => store.move('a', 'f', 'left'))).toBe('pane_pinned');
     expect(codeOf(() => store.swap('a', 'f'))).toBe('pane_pinned');
     expect(codeOf(() => store.swap('a', 'c'))).toBe('pane_pinned');
-    expect(codeOf(() => store.swap('a', 'g'))).toBe('pane_pinned');
-    expect(store.getSnapshot().root).toBe(before);
-    store.swap('a', 'b');
-    expect(order(store.getSnapshot().root, 'a').slice(0, 2)).toEqual([
+    expect(codeOf(() => store.swap('h', 'b'))).toBe(null);
+    expect(store.getSnapshot().root).not.toBe(before);
+    const swapped = testStore(start);
+    swapped.swap('a', 'g');
+    const root = swapped.getSnapshot().root;
+    expect(order(root, 'a')).toEqual(['a', 'h']);
+    expect(order(root, 'g')).toEqual(['g', 'b', 'c', 'd', 'e']);
+    swapped.swap('g', 'b');
+    expect(order(swapped.getSnapshot().root, 'g').slice(0, 2)).toEqual([
       'b',
-      'a',
+      'g',
     ]);
   });
 
@@ -167,11 +199,16 @@ describe('pinned tabs', () => {
     expect(applyLayoutOperations(start, operations)).toEqual(
       store.getSnapshot().root
     );
+    const folded = applyLayoutOperations(start, [
+      { type: 'move', pane: 'b', target: 'f', edge: 'top', id: 'column' },
+      { type: 'moveToStack', pane: 'a', target: 'h', activate: true },
+    ]);
+    expect(stackOf(folded, 'b')).toBeNull();
+    expect(findNode(folded, 'b')).toEqual(pane('b', { pinned: true }));
+    expect(order(folded, 'h')).toEqual(['g', 'a', 'h']);
     expect(
       codeOf(() =>
-        applyLayoutOperations(start, [
-          { type: 'move', pane: 'b', target: 'f', edge: 'top' },
-        ])
+        applyLayoutOperations(start, [{ type: 'swap', panes: ['a', 'c'] }])
       )
     ).toBe('pane_pinned');
   });

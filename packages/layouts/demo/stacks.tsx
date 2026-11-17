@@ -20,7 +20,10 @@
 //   `?preview=none`: no image follows it.
 // - `?activation=manual`: the arrows move the focus only, and Enter or Space
 //   selects.
-// - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`).
+// - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`);
+//   `?sticky=room0`: at every width (`stickyPinned={{ minRoom: 0 }}`).
+// - `?tabclass=relative`: each tab has an app class that sets
+//   `position: relative`, as a utility class does.
 // - `?scroll=1`: the tab lists scroll (`overflow-x: auto`), as an app's own
 //   strip does, so a swipe scrolls them.
 // - `?title=1`: each header shows `Layout.Title` before its tab list, and
@@ -51,7 +54,18 @@ const guarded = params.get('guard') === '1';
 const pinned = params.get('pinned') === '1';
 const activation =
   params.get('activation') === 'manual' ? 'manual' : 'automatic';
-const sticky = params.get('sticky') === '1';
+const sticky =
+  params.get('sticky') === '1'
+    ? true
+    : params.get('sticky') === 'room0'
+      ? { minRoom: 0 }
+      : false;
+const relativeTabs = params.get('tabclass') === 'relative';
+if (relativeTabs) {
+  const style = document.createElement('style');
+  style.textContent = '.stacks-relative-tab { position: relative; }';
+  document.head.append(style);
+}
 const withTitle = params.get('title') === '1';
 // Whether the tab lists show (`?title=1`), which the app can change.
 const tabLists = {
@@ -203,7 +217,7 @@ const tabOf = (tab: PaneNode): JSX.Element =>
   ) : guarded ? (
     <GuardedTab id={tab.id} />
   ) : (
-    <Layout.Tab />
+    <Layout.Tab className={relativeTabs ? 'stacks-relative-tab' : undefined} />
   );
 
 function renderPane(pane: PaneNode): JSX.Element {

@@ -90,7 +90,8 @@ app keeps one, it can check what the parts give:
   tabs when a tab's content takes the focus as it shows, such as a terminal.
 - Fixed tabs: `pinned: true` and `closable: false` on pane nodes, in the tree
   and in the server's fold, and `stickyPinned` on `Layout.TabList` to keep the
-  pinned tabs in view while the others scroll.
+  pinned tabs in view while the others scroll (`{ minRoom: 0 }` at every width).
+  A pinned tab may move to another stack, and stays first there.
 - Drag: `tabDrag()`, with the `canPlace` of `createLayout` for the app's rules,
   a still press for a touch drag so that a swipe scrolls the tab list, and a
   drag image, or the app's own element with `preview`.

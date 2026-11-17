@@ -39,7 +39,8 @@ export interface StackCommands {
    * Move a pane into the stack of a target pane, at `index` among its tabs, or
    * after the target. A move inside one stack changes the order of its tabs.
    * With `activate: false`, the destination keeps its active tab. A pinned
-   * pane of a stack does not leave it: the move throws `pane_pinned`.
+   * tab stays pinned in its new stack: its place clamps to the pinned run of
+   * that stack, so with no index it goes to the end of the run.
    */
   moveToStack(
     sourceId: string,
@@ -57,16 +58,16 @@ export interface StackCommands {
    * Move every tab of the stack of a pane into the stack of a target pane,
    * after its tabs and in their order, in one change of `moveToStack`
    * operations. The target is the pane before the stack in `visualOrder`, or
-   * after it when no pane comes before it. A pinned tab stays. The target
-   * keeps its active tab, except when the merged stack had the focus: then
+   * after it when no pane comes before it. Pinned tabs go to the pinned run
+   * of the target. The target keeps its active tab, except when the merged stack had the focus: then
    * its tab that showed shows, with the focus. A pane outside a stack moves
    * alone.
    */
   mergeStack(id: string, targetId?: string): void;
   /**
    * Pin a pane, or unpin it. A pinned tab comes before the other tabs of its
-   * stack and stays in it. The pane goes to the end of the pinned run: the
-   * last pinned tab, or the first tab after the pinned ones.
+   * stack. The pane goes to the end of the pinned run: the last pinned tab,
+   * or the first tab after the pinned ones.
    */
   setPinned(id: string, pinned: boolean): void;
 }
@@ -112,8 +113,6 @@ export const stacksStore: StoreFeature<StackCommands> = {
           activate
         );
       }
-      if (source.pinned === true && stack !== null)
-        throw new LayoutOperationError('pane_pinned', pane);
       // A change of order in one stack, above, is not a place.
       requirePlace(source, { into: target, index }, root);
       if (model === null)
@@ -215,7 +214,6 @@ export const stacksStore: StoreFeature<StackCommands> = {
       let index = stackOf(root, target)?.children.length ?? 1;
       const operations = [];
       for (const tab of tabs) {
-        if (tab.pinned === true && stack !== null) continue;
         const operation = {
           type: 'moveToStack',
           pane: tab.id,

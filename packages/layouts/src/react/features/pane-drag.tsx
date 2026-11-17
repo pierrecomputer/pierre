@@ -92,9 +92,9 @@ function usePaneDrag(
 
 /**
  * Move a pane with a pointer drag from `Layout.MoveHandle`, to an edge of
- * another pane. No drag starts while a pane fills the layout, or from a
- * pinned tab of a stack. The layout's `canPlace` refuses the places that the
- * app does not allow: they show no marker and take no drop.
+ * another pane. No drag starts while a pane fills the layout. The layout's
+ * `canPlace` refuses the places that the app does not allow: they show no
+ * marker and take no drop.
  */
 export function paneDrag(): Feature<object, 'pane-drag', 'edits'> {
   const feature: FeatureModule = {

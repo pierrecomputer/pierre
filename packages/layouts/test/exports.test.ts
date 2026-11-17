@@ -191,6 +191,7 @@ const REACT_TYPES = sorted([
   'RenderProp',
   'RootProps',
   'SeparatorMessageValues',
+  'StickyPinnedOptions',
   'StylesheetsSetting',
   'TabDragOptions',
   'TabListItemState',

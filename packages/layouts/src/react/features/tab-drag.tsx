@@ -4,8 +4,8 @@
 // list to change the order of the tabs, into another tab list or the center
 // of another pane to join its stack, or to an edge of a pane to leave the
 // stack. While a pane fills the layout, only the tab list of the tab's own
-// stack takes a drop. A pinned tab of a stack drops only in its own tab list,
-// and a place in a tab list clamps to the run of pinned tabs.
+// stack takes a drop. A place in a tab list clamps to the run of pinned tabs,
+// for a pinned tab too.
 import { type ReactNode, useCallback, useState } from 'react';
 
 import dropCss from '../../css/drop.css?inline';
@@ -218,10 +218,9 @@ function dropTab(context: ViewContext, id: string, target: DropTarget): void {
 }
 
 /**
- * The pinned rule of a tab drag, as the folds of `stacks()` apply it: a pinned
- * tab of a stack takes only a place in the tab list of its own stack, and a
- * place in a tab list moves to the end of the pinned run when the tab is
- * pinned and is past it, or when the tab is not pinned and is before it.
+ * The pinned rule of a tab drag, as the folds of `stacks()` apply it: a place
+ * in a tab list moves to the end of the pinned run of that list when the tab
+ * is pinned and is past it, or when the tab is not pinned and is before it.
  */
 function pinnedRule(
   context: ViewContext,
@@ -229,13 +228,9 @@ function pinnedRule(
 ): (target: DropTarget) => DropTarget | null {
   return (target) => {
     const { panes } = treeIndex(context.store.getSnapshot().root);
-    const stack = panes.get(id)?.stack ?? null;
     const pinned = panes.get(id)?.pane.pinned === true;
     const { boundary, tabs } = target;
-    if (boundary === undefined || tabs === undefined)
-      return pinned && stack !== null ? null : target;
-    if (pinned && stack !== null && panes.get(target.paneId)?.stack !== stack)
-      return null;
+    if (boundary === undefined || tabs === undefined) return target;
     const run = pinnedRun(tabs.map((tab) => panes.get(tab)?.pane ?? {}));
     const place = pinned ? Math.min(boundary, run) : Math.max(boundary, run);
     return place === boundary ? target : { ...target, boundary: place };

@@ -13,6 +13,7 @@ import {
   slotOf,
   stackOf,
 } from './model';
+import { pinnedRun } from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
 import type { Edge, LayoutNode, PaneNode, TreeModel } from './types';
 
@@ -36,13 +37,12 @@ export interface EditCommands {
    * `split`. A target in a stack takes the pane beside the whole stack. A
    * target that the move takes apart, such as a split of the pane and one
    * other child, gives its place to what remains of it. A pane of a stack
-   * leaves its stack; a pinned one does not, and the move throws
-   * `pane_pinned`.
+   * leaves its stack, and a pinned one stays pinned.
    */
   move(sourceId: string, targetId: string, edge: Edge): void;
   /**
-   * Swap the places of two panes. A swap with a pinned pane throws
-   * `pane_pinned`, unless both are pinned tabs of one stack.
+   * Swap the places of two panes. A swap that puts a pinned tab after a tab
+   * that is not pinned throws `pane_pinned`.
    */
   swap(firstId: string, secondId: string): void;
 }
@@ -102,9 +102,6 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
         // The other panes of the target: none when it holds only the pane.
         const others = panesOf(root, target).filter((each) => each !== pane);
         if (others.length === 0) return root;
-        // A pinned pane of a stack stays in its stack.
-        if (source.pinned === true && stackOf(root, pane) !== null)
-          throw new LayoutOperationError('pane_pinned', pane);
         requirePlace(source, { beside: target, edge }, root);
         const remaining = model.remove(root, pane);
         return remaining === null
@@ -119,20 +116,18 @@ export function edits(model: TreeModel): StoreFeature<EditCommands> {
       },
       swap(root, { panes: [first, second] }) {
         const a = paneIn(root, first);
-        const b = paneIn(root, second);
-        // Only two pinned tabs of one stack trade places: inside its run.
-        const stack = stackOf(root, first);
-        if (
-          (a.pinned === true || b.pinned === true) &&
-          (a.pinned !== b.pinned ||
-            stack === null ||
-            stack !== stackOf(root, second))
-        )
-          throw new LayoutOperationError(
-            'pane_pinned',
-            a.pinned === true ? first : second
-          );
-        return swapPanes(root, first, second);
+        paneIn(root, second);
+        const next = swapPanes(root, first, second);
+        // The pinned tabs of each stack still come first.
+        for (const id of [first, second]) {
+          const tabs = stackOf(next, id)?.children ?? [];
+          if (pinnedRun(tabs) < tabs.filter((tab) => tab.pinned).length)
+            throw new LayoutOperationError(
+              'pane_pinned',
+              a.pinned === true ? first : second
+            );
+        }
+        return next;
       },
     },
     commands: ({ get, fold, commit, newId }) => ({
