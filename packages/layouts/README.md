@@ -160,6 +160,12 @@ Delete keeps a tab open, and an `onPointerDown` that prevents the default on
 reads the state of the pane of a component: its `pane` node, its `title`,
 `shown`, `focused`, `zoomed`, `collapsed`, `edges`, `tabs`, and `activeTab`. The
 component renders again only when the value that `select` returns changes.
+`Layout.useLayout()` gives the layout object of the pane's `Root`, for its
+commands, with no context of the app; it keeps its identity, so it renders its
+component for no change of the layout. `Layout.useLayout<typeof layout>()` names
+the type of the layout object, which the hook does not check. The consumer
+guide's "Keep pane content still" gives the rules that keep pane content from
+rendering at each change of the layout.
 
 ```tsx
 function PaneBar() {

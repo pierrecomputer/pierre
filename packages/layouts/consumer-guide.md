@@ -98,6 +98,52 @@ app keeps one, it can check what the parts give:
   the app's own handlers on the parts. A handler that calls `preventDefault()`
   stops the part's handler for that event.
 
+## Keep pane content still
+
+A change of the layout, such as a focus change, a resize, a zoom, or a change of
+tab, renders no pane content. `Root` renders the output of `renderPane` for a
+pane again only when the app's fields of its node change or `renderPane`
+changes. App code keeps this property with three rules.
+
+1. Keep the identity of `renderPane`: a function at module scope, or a
+   `useCallback` whose dependencies do not change with the layout. In
+   development, `Root` warns when `renderPane` changes while the tree does not.
+2. Give pane components no value that changes with each change of the layout. A
+   context provider above `Root` whose value is a new object at each render of a
+   component that subscribes to the layout renders each pane component that
+   reads it at each change, also at a focus change. Read the values of a pane in
+   the pane with `Layout.usePane(select)`, which renders its component only when
+   the selected value changes. Read the commands with `Layout.useLayout()`,
+   which gives the layout object of the pane's `Root` and keeps its identity, so
+   an app with a layout for each document needs no context of its own to find
+   it. Keep the value of each other context stable, for example with `useMemo`
+   on values that do not change with the layout.
+3. Do not return `null` for a tab that does not show. That content unmounts and
+   loses its state at each change of tab. The layout hides the host of a tab
+   that does not show and skips its rendering already. To drop the content of a
+   hidden pane, give the layout `hiddenContent(mode)`.
+
+```tsx
+const workspace = createLayout(tree, [edits(naryTree), stacks()]);
+type Workspace = typeof workspace;
+
+function CloseOthers() {
+  const layout = Layout.useLayout<Workspace>();
+  const tabs = Layout.usePane((pane) => pane.tabs);
+  const id = Layout.usePane((pane) => pane.id);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        for (const tab of tabs) if (tab.id !== id) layout.close(tab.id);
+      }}
+    >
+      Close other tabs
+    </button>
+  );
+}
+```
+
 ## Pane host attributes
 
 Each pane host has `data-layouts-pane` with the ID of its pane, and

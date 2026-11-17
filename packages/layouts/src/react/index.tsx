@@ -89,4 +89,4 @@ export {
   type OverlayCover,
   type OverlayCoverEvent,
 } from '../overlays/cover';
-export { type PaneState, usePane } from './use-pane';
+export { type PaneState, useLayout, usePane } from './use-pane';

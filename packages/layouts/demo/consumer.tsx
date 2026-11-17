@@ -60,15 +60,35 @@ function renderTab(tab: PaneNode): JSX.Element {
   );
 }
 
+// The renders of the zoom buttons, which the e2e tests read.
+const page = { zoomButtonRenders: 0 };
+Object.assign(window, { __consumer: page });
+
+function countZoomButtonRender(): void {
+  page.zoomButtonRenders += 1;
+}
+
+// The app's own zoom button: the layout object comes from the pane, as in an
+// app with a layout for each document, and the button renders for no change
+// of the layout.
+function ZoomButton(): JSX.Element {
+  const layout = Layout.useLayout<typeof store>();
+  const id = Layout.usePane((pane) => pane.id);
+  countZoomButtonRender();
+  return (
+    <button type="button" onClick={() => layout.toggleZoom(id)}>
+      Zoom {id}
+    </button>
+  );
+}
+
 // The app's own header element, with the tabs of the pane and its own zoom
 // button. A pane outside a stack shows its own tab.
 const renderPane = (pane: PaneNode): JSX.Element => (
   <>
     <Layout.Header render={<header data-custom-header="" />}>
       <Layout.TabList>{renderTab}</Layout.TabList>
-      <button type="button" onClick={() => store.toggleZoom(pane.id)}>
-        Zoom {pane.id}
-      </button>
+      <ZoomButton />
     </Layout.Header>
     <Layout.Content>
       <input

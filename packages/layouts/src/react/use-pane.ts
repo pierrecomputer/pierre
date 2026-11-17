@@ -2,7 +2,8 @@
 
 // `Layout.usePane`: the state of a pane, for app code and parts in the output
 // of `renderPane`. Each pane has one store of its state, which subscribes to
-// the layout once for all the components of the pane.
+// the layout once for all the components of the pane. `Layout.useLayout`: the
+// layout object of the pane, for its commands.
 import { useContext, useRef, useSyncExternalStore } from 'react';
 
 import {
@@ -20,6 +21,7 @@ import {
   PaneContext,
   type PaneContextValue,
 } from './contract';
+import type { LayoutObject } from './create-layout';
 
 /** The state of a pane, for `Layout.usePane`. */
 export interface PaneState {
@@ -233,4 +235,17 @@ export function usePaneState<T>(
  */
 export function usePane<T>(select: (pane: PaneState) => T): T {
   return usePaneState(usePaneContext('Layout.usePane'), select);
+}
+
+/**
+ * The layout object of the `Root` that renders the pane of a component in
+ * the output of `renderPane`: its commands and its state, with no context of
+ * the app, also in an app with a layout for each document. The object keeps
+ * its identity, so the hook renders its component for no change of the
+ * layout; read state with `Layout.usePane`. The type argument names the type
+ * of the layout object, for example `Layout.useLayout<typeof layout>()`: the
+ * hook does not check it.
+ */
+export function useLayout<L extends LayoutObject = LayoutObject>(): L {
+  return usePaneContext('Layout.useLayout').context.store as unknown as L;
 }

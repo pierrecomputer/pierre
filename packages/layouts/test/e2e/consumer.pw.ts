@@ -224,3 +224,21 @@ test('a key that pane content handles does not reach the layout', async ({
   await page.getByRole('button', { name: 'Zoom terminal' }).press('Escape');
   await expect(host(page, 'terminal')).not.toHaveAttribute('data-zoomed');
 });
+
+test('a pane component runs a command of Layout.useLayout() and renders for no change of the layout', async ({
+  page,
+}) => {
+  const renders = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __consumer: { zoomButtonRenders: number } })
+          .__consumer.zoomButtonRenders
+    );
+  const before = await renders();
+  await page.getByRole('button', { name: 'Zoom terminal' }).click();
+  await expect(host(page, 'terminal')).toHaveAttribute('data-zoomed', 'true');
+  await page.getByRole('button', { name: 'External zoom' }).click();
+  await expect(host(page, 'terminal')).not.toHaveAttribute('data-zoomed');
+  await page.getByRole('textbox', { name: 'Content editor' }).focus();
+  expect(await renders()).toBe(before);
+});

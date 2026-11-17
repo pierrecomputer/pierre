@@ -149,6 +149,7 @@ const REACT_VALUES = sorted([
   'TabList',
   'Title',
   'useCover',
+  'useLayout',
   'usePane',
   'usePaneMenu',
   'visualOrder',
