@@ -33,6 +33,7 @@ import {
   formatDiffsHubLineHash,
   parseDiffsHubLineHash,
 } from '@/lib/lineHash';
+import { readDiffTitleHeader } from '@/lib/readDiffTitleHeader';
 import {
   getStreamedPatchMetadata,
   streamGitPatchFiles,
@@ -308,6 +309,11 @@ export function usePatchLoader({
           throw new Error(
             detail.length > 0 ? detail : `Request failed (${response.status}).`
           );
+        }
+
+        const diffTitle = readDiffTitleHeader(response.headers);
+        if (diffTitle != null && isCurrentRequest()) {
+          document.title = diffTitle;
         }
 
         if (response.body == null) {
