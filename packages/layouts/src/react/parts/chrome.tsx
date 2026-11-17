@@ -7,6 +7,7 @@ import { type JSX, type PointerEvent, useCallback } from 'react';
 
 import contentCss from '../../css/content.css?inline';
 import headersCss from '../../css/headers.css?inline';
+import { COLLAPSED } from '../../dom/visibility';
 import { presentation } from '../../presentation';
 import { treeIndex } from '../../tree-index';
 import type { ZoomCommands } from '../../zoom';
@@ -113,9 +114,25 @@ export function Title({
  * focusable from script (`tabIndex` -1), and the arrow keys scroll it. A
  * read-only pane that scrolls gives it `tabIndex={0}`, as Safari does not
  * make a scroll container a tab stop.
+ *
+ * With `hiddenContent()`, its children follow the mode of the pane while
+ * the pane collapses to its header: they wait in a hidden `<Activity>`, or
+ * unmount.
  */
-export function Content({ render, ...props }: PartProps<object>): JSX.Element {
-  const { id, context } = usePaneContext('Layout.Content');
+export function Content({
+  render,
+  children,
+  ...props
+}: PartProps<object>): JSX.Element {
+  const value = usePaneContext('Layout.Content');
+  const { id, context } = value;
+  const { ContentBoundary } = context;
+  // The mode follows the kind of the pane, so the pane node of this render
+  // gives it.
+  const entry =
+    ContentBoundary === undefined
+      ? undefined
+      : treeIndex(context.store.getSnapshot().root).panes.get(id);
   return (
     <>
       <Style name="content" css={contentCss} settings={context.stylesheets()} />
@@ -126,6 +143,29 @@ export function Content({ render, ...props }: PartProps<object>): JSX.Element {
           className: 'pierre-layouts-content',
           ref: context.visibility.contentRef(id),
           tabIndex: props.tabIndex ?? -1,
+          // No children key without children, so that the children of a
+          // `render` element stay.
+          ...(children === undefined
+            ? {}
+            : {
+                children:
+                  ContentBoundary === undefined || entry === undefined ? (
+                    children
+                  ) : (
+                    <ContentBoundary
+                      value={value}
+                      mode={context.hiddenContent(entry.pane)}
+                      first={
+                        (entry.stack ?? entry.pane).collapsed === true
+                          ? COLLAPSED
+                          : 0
+                      }
+                      mask={COLLAPSED}
+                    >
+                      {children}
+                    </ContentBoundary>
+                  ),
+              }),
         }),
         {}
       )}

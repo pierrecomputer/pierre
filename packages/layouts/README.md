@@ -381,14 +381,15 @@ const layout = createLayout(root, [
 ]);
 ```
 
-Content reads its mode with `Layout.usePane((pane) => pane.hiddenContent)`. In
-each mode the host stays, with its visibility attributes and its tab, and the
-content receives `PANE_VISIBILITY_EVENT` with `hidden: true` before it waits or
-unmounts. In `activity`, its effects then clean up, and they run again when it
-shows, in place of the event of the show. The `activity` mode needs React 19.2;
-with an earlier React, the content stays mounted. Do not return `null` from
-`renderPane` for an inactive tab: choose a mode, so that the layout knows when
-the tab shows.
+When a pane collapses to its header, the header stays, and the children of
+`Layout.Content` follow the mode. Content reads its mode with
+`Layout.usePane((pane) => pane.hiddenContent)`. In each mode the host stays,
+with its visibility attributes and its tab, and the content receives
+`PANE_VISIBILITY_EVENT` with `hidden: true` before it waits or unmounts. In
+`activity`, its effects then clean up, and they run again when it shows, in
+place of the event of the show. The `activity` mode needs React 19.2; with an
+earlier React, the content stays mounted. Do not return `null` from `renderPane`
+for an inactive tab: choose a mode, so that the layout knows when the tab shows.
 
 ## Tabs
 

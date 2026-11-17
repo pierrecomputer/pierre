@@ -177,3 +177,31 @@ test('a function chooses the mode of each pane by the kind of its content', asyn
   expect(await ticking(page, 'notes')).toBe(false);
   await expect(field(page, 'log')).toHaveCount(0);
 });
+
+test('a collapse to the header keeps the header, and the content of Layout.Content follows the mode', async ({
+  page,
+}) => {
+  const header = (id: string) =>
+    page.locator(`[data-layouts-pane="${id}"] .pierre-layouts-header`);
+  // Mounted: the collapsed content keeps running.
+  await open(page);
+  await run(page, 'setCollapsed', 'log', true);
+  expect(await ticking(page, 'log')).toBe(true);
+  // Activity: it waits, with its state, and the header stays.
+  await open(page, 'activity');
+  await field(page, 'log').fill('kept');
+  await run(page, 'setCollapsed', 'log', true);
+  await expect(header('log')).toBeVisible();
+  expect(await ticking(page, 'log')).toBe(false);
+  await run(page, 'setCollapsed', 'log', false);
+  await expect(field(page, 'log')).toHaveValue('kept');
+  expect(await ticking(page, 'log')).toBe(true);
+  // Unmount: the content unmounts, and the header stays.
+  await open(page, 'unmount');
+  await run(page, 'setCollapsed', 'log', true);
+  await expect(header('log')).toBeVisible();
+  await expect(field(page, 'log')).toHaveCount(0);
+  await run(page, 'setCollapsed', 'log', false);
+  await expect(field(page, 'log')).toHaveCount(1);
+  expect((await read(page)).mounts.log).toBe(2);
+});
