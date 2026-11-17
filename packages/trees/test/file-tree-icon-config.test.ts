@@ -73,6 +73,53 @@ describe('file-tree icon config', () => {
     }
   });
 
+  test('renders file icon remaps by full path ahead of file name rules', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: true,
+        icons: {
+          byFileName: {
+            'screenshot.png': 'pst-test-generic',
+          },
+          byPath: {
+            'before/screenshot.png': 'pst-test-before',
+            'after/screenshot.png': 'pst-test-after',
+          },
+          spriteSheet:
+            '<svg data-icon-sprite aria-hidden="true" width="0" height="0"><symbol id="pst-test-generic" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /></symbol><symbol id="pst-test-before" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor" /></symbol><symbol id="pst-test-after" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="currentColor" /></symbol></svg>',
+        },
+        initialExpansion: 'open',
+        paths: [
+          'before/screenshot.png',
+          'after/screenshot.png',
+          'other/screenshot.png',
+        ],
+        initialVisibleRowCount: 240 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const hrefFor = (path: string) =>
+        getItemButton(shadowRoot, dom, path)
+          .querySelector('use')
+          ?.getAttribute('href');
+
+      expect(hrefFor('before/screenshot.png')).toBe('#pst-test-before');
+      expect(hrefFor('after/screenshot.png')).toBe('#pst-test-after');
+      expect(hrefFor('other/screenshot.png')).toBe('#pst-test-generic');
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('falls back to built-in file icon tiers when overrides are absent', async () => {
     const { cleanup, dom } = installDom();
     try {
