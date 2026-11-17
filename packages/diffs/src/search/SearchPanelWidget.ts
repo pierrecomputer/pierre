@@ -135,12 +135,20 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       });
     };
 
-    // Default to the empty-query "no results" state so it shows on open before
-    // any search runs.
-    const matchResultElement = h('div', {
-      dataset: { matches: '', noMatches: '' },
-      textContent: i18n.t('noSearchResults'),
-    });
+    // A query the panel opens with is searching until its first results
+    // arrive.
+    let searching = defaultQuery !== '';
+
+    const matchResultElement = h('div', { dataset: { matches: '' } });
+    // Shows that there are no matches: none found yet, or none at all.
+    const showNoMatches = () => {
+      matchResultElement.textContent = i18n.t(
+        searching ? 'searching' : 'noSearchResults'
+      );
+      matchResultElement.toggleAttribute('data-no-matches', !searching);
+    };
+    // Shown on open, before any search runs.
+    showNoMatches();
 
     const updateCurrentMatch = (currentIndex: number | undefined) => {
       matchResultElement.textContent =
@@ -153,7 +161,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       matches.currentIndex = currentIndex;
     };
 
-    let searching = false;
     let matchesUpdated = false;
     const updateMatches = (options?: { skipNavigation?: boolean }) => {
       matchesUpdated = true;
@@ -173,10 +180,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       // state. Both push an empty match set through onUpdate so the editor
       // drops #matches and clears the painted highlights.
       if (noMatches) {
-        matchResultElement.textContent = i18n.t(
-          searching ? 'searching' : 'noSearchResults'
-        );
-        matchResultElement.toggleAttribute('data-no-matches', !searching);
+        showNoMatches();
         matches.currentIndex = undefined;
         onUpdate(result, options);
       } else {
@@ -574,7 +578,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // on mount so this frame never changes the user's later focus or input
     // caret.
     this.#initializeMatches = () => {
-      if (matchesUpdated || !this.#host.isConnected) {
+      if (matchesUpdated || this.#closed) {
         return;
       }
       updateMatches();
@@ -616,6 +620,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
   navigate(findPrevious: boolean): void {
     this.#initializeMatches();
+    if (this.#closed) {
+      return;
+    }
     this.#navigate?.(findPrevious);
   }
 
