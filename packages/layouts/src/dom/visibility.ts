@@ -54,8 +54,11 @@ export interface PaneVisibility {
   /** The host of a pane, and its content (`Layout.Content`), while they are mounted. */
   host(id: string): HTMLElement | undefined;
   content(id: string): HTMLElement | undefined;
-  /** The reasons of a pane, as bits. */
-  reasons(id: string): number;
+  /**
+   * The reasons of a pane, as bits, or `fallback` before the view gives the
+   * pane its first reasons.
+   */
+  reasons(id: string, fallback?: number): number;
   /** Set the reasons of `mask` for a pane to those in `reasons`. */
   set(id: string, mask: number, reasons: number): void;
   /** Call `listener` after the reasons of any pane change. */
@@ -161,7 +164,7 @@ export function createPaneVisibility(): PaneVisibility {
     contentRef: (id) => refOf(contentRefs, contents, id),
     host: (id) => hosts.get(id),
     content: (id) => contents.get(id),
-    reasons: (id) => reasons.get(id) ?? 0,
+    reasons: (id, fallback = 0) => reasons.get(id) ?? fallback,
     set(id, mask, value) {
       const before = reasons.get(id);
       const next = ((before ?? 0) & ~mask) | (value & mask);

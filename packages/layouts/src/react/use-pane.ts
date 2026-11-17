@@ -15,7 +15,11 @@ import { HOST_HIDDEN } from '../dom/visibility';
 import { presentation } from '../presentation';
 import { treeIndex } from '../tree-index';
 import type { LayoutState, PaneNode } from '../types';
-import { PaneContext, type PaneContextValue } from './contract';
+import {
+  type HiddenContent,
+  PaneContext,
+  type PaneContextValue,
+} from './contract';
 
 /** The state of a pane, for `Layout.usePane`. */
 export interface PaneState {
@@ -40,6 +44,11 @@ export interface PaneState {
   readonly tabs: readonly PaneNode[];
   /** The ID of the pane that shows in the stack, or the ID of the pane alone. */
   readonly activeTab: string;
+  /**
+   * What the content of the pane does while the pane does not show: the
+   * `hiddenContent` of `Root` for this pane.
+   */
+  readonly hiddenContent: HiddenContent;
 }
 
 /** The state of one pane, shared by every component of the pane. */
@@ -73,6 +82,7 @@ const samePaneState = (a: PaneState, b: PaneState): boolean =>
   a.zoomed === b.zoomed &&
   a.collapsed === b.collapsed &&
   a.activeTab === b.activeTab &&
+  a.hiddenContent === b.hiddenContent &&
   a.edges === b.edges &&
   a.tabs === b.tabs;
 
@@ -147,6 +157,7 @@ function paneStoreOf(value: PaneContextValue): PaneStore {
       tabs:
         current !== null && sameTabs(current.tabs, tabs) ? current.tabs : tabs,
       activeTab: stack?.active ?? id,
+      hiddenContent: context.hiddenContent(pane),
     };
     if (current === null || !samePaneState(current, next)) current = next;
     return current;

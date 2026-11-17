@@ -25,6 +25,7 @@ export type { ZoomCommands } from '../zoom';
 export type {
   Feature,
   EdgeMessageValues,
+  HiddenContent,
   LayoutMessages,
   PaneMessageValues,
   SeparatorMessageValues,
@@ -49,6 +50,7 @@ export {
   usePaneMenu,
 } from './features/arrange';
 export { corners } from './features/corners';
+export { hiddenContent } from './features/hidden-content';
 export { flip, type FlipOptions } from './features/flip';
 export { focusRing } from './features/focus-ring';
 export { paneDrag, type PaneDragOptions } from './features/pane-drag';

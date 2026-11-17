@@ -27,6 +27,27 @@ import type {
   SeparatorGeometry,
 } from '../types';
 
+/**
+ * What the content of a pane does while its pane does not show, with the
+ * `hiddenContent()` feature: a hidden pane, an inactive tab of a stack, a
+ * pane under a zoom or an overlay, or a pane that collapses. From the most
+ * live to the least:
+ *
+ * - `mounted`: the content stays mounted and keeps running; the browser skips
+ *   its style, layout, and paint (`content-visibility: hidden`), and its host
+ *   receives `PANE_VISIBILITY_EVENT`, so that it can pause its own work.
+ * - `activity`: the content waits in a hidden React `<Activity>`. React keeps
+ *   its state and its DOM, cleans up its effects, and runs them again when it
+ *   shows. It needs React 19.2; with an earlier React, it is `mounted`.
+ * - `unmount`: the content unmounts, with its state, and mounts again when it
+ *   shows. A pane that does not show at its first render mounts only when it
+ *   shows.
+ *
+ * In each mode, the host and its visibility attributes stay, and the content
+ * receives the event of a hide before it waits or unmounts.
+ */
+export type HiddenContent = 'mounted' | 'activity' | 'unmount';
+
 /** The sizes of splits, by split ID. */
 export type Sizes = Record<string, ChildSize[]>;
 
@@ -321,6 +342,27 @@ export interface ViewContext {
   stylesheets(): StylesheetsSetting;
   /** The `messages` of `Root`. */
   messages(): LayoutMessages;
+  /** The mode of the content of a pane while it does not show: `hiddenContent()`, or `mounted`. */
+  hiddenContent(pane: PaneNode): HiddenContent;
+  /** The boundary of the content of a pane, from `hiddenContent()`, or undefined. */
+  readonly ContentBoundary:
+    | ((props: ContentBoundaryProps) => ReactNode)
+    | undefined;
+}
+
+/**
+ * The props of the boundary of the content of a pane: the whole output of
+ * `renderPane` for a reason that hides the host, or the children of
+ * `Layout.Content` for a collapse to the header.
+ */
+export interface ContentBoundaryProps {
+  readonly value: PaneContextValue;
+  readonly mode: HiddenContent;
+  /** The reasons of the pane from the layout state, before the view sets them. */
+  readonly first: number;
+  /** The reasons that hide the content. */
+  readonly mask: number;
+  readonly children: ReactNode;
 }
 
 /** What `Root` renders, for the view part of each feature. */
@@ -478,6 +520,10 @@ export interface FeatureModule<
     context: AnnounceContext
   ): string | null;
   use?(context: ViewContext, render: ViewRender): FeatureHooks;
+  /** For `hiddenContent()`: the mode of the content of a pane. */
+  contentMode?(pane: PaneNode): HiddenContent;
+  /** For `hiddenContent()`: the boundary that hides content by its mode. */
+  readonly ContentBoundary?: (props: ContentBoundaryProps) => ReactNode;
   /**
    * Sheets inside `@layer pierre-layouts`, by name. `Root` renders each sheet
    * once per document; two features can name the same sheet.

@@ -90,20 +90,21 @@ core commands and the commands of each feature. `Layout.Root` renders it. A bare
 keyboard, collapses panes, and announces its changes; each feature adds a
 behavior, its commands, and its CSS:
 
-| Feature         | What it adds                                                                                                 |
-| --------------- | ------------------------------------------------------------------------------------------------------------ |
-| `edits(model)`  | `split`, `close`, `move`, `swap`, with the rules of a tree model such as `naryTree`                          |
-| `stacks()`      | Tabs: `activate`, `addTab`, `moveToStack`, `moveTab`, `setPinned`, and the keys of `Layout.TabList`          |
-| `zoom()`        | `toggleZoom`, `setZoom`, `Layout.ZoomButton`, and Escape to restore                                          |
-| `hiddenPanes()` | `setHidden`                                                                                                  |
-| `persistence()` | `toStoredTree`, `setStoredTree`                                                                              |
-| `arrange()`     | `focusToward`, `grow`, `shrink`, and the items of `Layout.usePaneMenu()`; needs `edits()`                    |
-| `paneDrag()`    | A pointer drag of a pane beside another, from `Layout.MoveHandle`                                            |
-| `tabDrag()`     | A pointer drag of a tab: within its tab list, into another stack, or beside a pane                           |
-| `corners()`     | A handle where two separators meet, which resizes both                                                       |
-| `focusRing()`   | A ring around the pane that has the focus of the layout                                                      |
-| `flip(options)` | Animations of tree changes and zooms, from each element's old box (`{ layout, zoom }`, both true by default) |
-| `allFeatures()` | Every feature above, with `{ model, animate }` options                                                       |
+| Feature               | What it adds                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `edits(model)`        | `split`, `close`, `move`, `swap`, with the rules of a tree model such as `naryTree`                          |
+| `stacks()`            | Tabs: `activate`, `addTab`, `moveToStack`, `moveTab`, `setPinned`, and the keys of `Layout.TabList`          |
+| `zoom()`              | `toggleZoom`, `setZoom`, `Layout.ZoomButton`, and Escape to restore                                          |
+| `hiddenPanes()`       | `setHidden`                                                                                                  |
+| `hiddenContent(mode)` | What the content of a pane does while it does not show: `mounted`, `activity`, or `unmount`                  |
+| `persistence()`       | `toStoredTree`, `setStoredTree`                                                                              |
+| `arrange()`           | `focusToward`, `grow`, `shrink`, and the items of `Layout.usePaneMenu()`; needs `edits()`                    |
+| `paneDrag()`          | A pointer drag of a pane beside another, from `Layout.MoveHandle`                                            |
+| `tabDrag()`           | A pointer drag of a tab: within its tab list, into another stack, or beside a pane                           |
+| `corners()`           | A handle where two separators meet, which resizes both                                                       |
+| `focusRing()`         | A ring around the pane that has the focus of the layout                                                      |
+| `flip(options)`       | Animations of tree changes and zooms, from each element's old box (`{ layout, zoom }`, both true by default) |
+| `allFeatures()`       | Every feature above, with `{ model, animate }` options                                                       |
 
 A feature that needs another one gives a development warning when it is missing,
 for example `stacks()` for `Layout.TabList`. A feature is a value of the type
@@ -347,6 +348,47 @@ useEffect(() => {
   return () => host.removeEventListener(PANE_VISIBILITY_EVENT, onVisibility);
 }, []);
 ```
+
+### What hidden content does
+
+The `hiddenContent()` feature chooses what the content of a pane does while its
+pane does not show: a hidden pane, an inactive tab, a pane under a zoom or an
+overlay, or a pane that collapses. Without it, the content stays mounted. The
+modes go from the most live to the least:
+
+| Mode                | While the pane does not show                                           | When it shows again            |
+| ------------------- | ---------------------------------------------------------------------- | ------------------------------ |
+| `mounted` (default) | Mounted and running; style, layout, and paint skipped                  | Shows at once, with its state  |
+| `activity`          | In a hidden React `<Activity>`: state and DOM kept, effects cleaned up | Its effects run again          |
+| `unmount`           | Unmounted; a pane that does not show at its first render never mounts  | Mounts again, with a new state |
+
+`hiddenContent('activity')` gives every pane one mode. A function chooses for
+each pane from its node, for example by the kind of its content: a terminal that
+must keep running stays `mounted`, a preview that can pause waits in `activity`,
+and a heavy view that is cheap to build again unmounts.
+
+```ts
+const layout = createLayout(root, [
+  edits(naryTree),
+  stacks(),
+  hiddenContent((pane) =>
+    kindOf(pane) === 'terminal'
+      ? 'mounted'
+      : kindOf(pane) === 'graph'
+        ? 'unmount'
+        : 'activity'
+  ),
+]);
+```
+
+Content reads its mode with `Layout.usePane((pane) => pane.hiddenContent)`. In
+each mode the host stays, with its visibility attributes and its tab, and the
+content receives `PANE_VISIBILITY_EVENT` with `hidden: true` before it waits or
+unmounts. In `activity`, its effects then clean up, and they run again when it
+shows, in place of the event of the show. The `activity` mode needs React 19.2;
+with an earlier React, the content stays mounted. Do not return `null` from
+`renderPane` for an inactive tab: choose a mode, so that the layout knows when
+the tab shows.
 
 ## Tabs
 

@@ -353,6 +353,8 @@ interface PaneBodyProps {
   pane: PaneNode;
   renderPane: (pane: PaneNode) => ReactNode;
   value: PaneContextValue;
+  /** The reasons of the pane from the layout state, before the view sets them. */
+  first: number;
 }
 
 // Properties of a pane node that change where and whether its content shows,
@@ -393,8 +395,26 @@ const PaneBody = /* @__PURE__ */ memo(function PaneBody({
   pane,
   renderPane,
   value,
+  first,
 }: PaneBodyProps): JSX.Element {
-  return <PaneContext value={value}>{renderPane(pane)}</PaneContext>;
+  // With `hiddenContent()`, a boundary hides the content by its mode.
+  const { ContentBoundary, hiddenContent } = value.context;
+  return (
+    <PaneContext value={value}>
+      {ContentBoundary === undefined ? (
+        renderPane(pane)
+      ) : (
+        <ContentBoundary
+          value={value}
+          mode={hiddenContent(pane)}
+          first={first}
+          mask={HOST_HIDDEN}
+        >
+          {renderPane(pane)}
+        </ContentBoundary>
+      )}
+    </PaneContext>
+  );
 }, sameContentProps);
 
 /** The props of `Root` that its context reads after a render. */
@@ -598,6 +618,8 @@ function createViewInternals(
     }
   };
   const names = new Set(features.map((feature) => feature.name));
+  // The feature that chooses what hidden content does.
+  const hiding = features.find((feature) => feature.contentMode !== undefined);
   const context: ViewContext = {
     store,
     prefix,
@@ -706,6 +728,8 @@ function createViewInternals(
     has: (name) => names.has(name),
     stylesheets: () => latest.stylesheets,
     messages: () => latest.messages ?? NO_MESSAGES,
+    hiddenContent: (pane) => hiding?.contentMode?.(pane) ?? 'mounted',
+    ContentBoundary: hiding?.ContentBoundary,
   };
   if (process.env.NODE_ENV !== 'production')
     developmentPaneContexts.set(context, paneContexts);
@@ -1166,6 +1190,7 @@ export function Root(props: RootProps): JSX.Element {
                 pane={pane}
                 renderPane={renderPane}
                 value={internals.paneContext(pane.id)}
+                first={stateReasons(host, filled)}
               />
             </div>
           </section>
