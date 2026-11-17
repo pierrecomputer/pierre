@@ -291,6 +291,14 @@ one or more checks on the medians. The run prints a table of the checks, and the
 report holds them. A check that compares two parameter sets, for example heavy
 over light content, passes when the ratio is at most 1.25.
 
+A check of a metric of the runs passes or fails on the median, and also gives
+the `spread` of its value over the runs: the lower and the upper quartile, with
+five runs the second smallest and the second largest value. For a ratio, the
+spread is the lower quartile of the numerator over the upper quartile of the
+denominator, and the reverse. When the limit lies inside the spread, the check
+is `near` (`~` in the printed table): another run can give the other result, so
+a change of that check between two reports is not a change of the code.
+
 The `time` checks compare main-thread time with the time budgets of the intent,
 with light content at 4 and 16 panes: 2 ms per pointer move of a resize drag or
 a tab drag at 4 panes and 3 ms at 16 panes, and 10 ms for each discrete

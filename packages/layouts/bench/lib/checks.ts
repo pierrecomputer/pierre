@@ -10,6 +10,8 @@ export interface RecordSummary {
   content: ContentWeight;
   steps: number;
   median: Sample;
+  /** The value of each metric in each measured run, when the report keeps them. */
+  samples?: Partial<Record<keyof Sample, number[]>>;
   /** One run with invalidation tracking, when the bench ran it. */
   attribution?: Attribution;
   /** Memory after the operation of that run, when the bench measured it. */
@@ -38,19 +40,34 @@ export interface CheckResult {
   value: number | null;
   limit: string;
   pass: boolean | null;
+  /**
+   * The lower and the upper quartile of the value over the measured runs, for
+   * a check of a metric of the runs, or null.
+   */
+  spread?: [number, number] | null;
+  /**
+   * The limit lies inside the spread: another run can give the other result,
+   * so a change of this check between two reports is not a change of the code.
+   */
+  near?: boolean | null;
 }
 
 type Metric = keyof Sample;
+
+interface Evaluation {
+  value: number;
+  pass: boolean;
+  /** The quartiles of the value over the runs, and the numeric limit. */
+  spread?: [number, number];
+  bound?: number;
+}
 
 interface Check {
   id: string;
   rule: Rule;
   description: string;
   limit: string;
-  evaluate(
-    find: Finder,
-    findRepeat: RepeatFinder
-  ): { value: number; pass: boolean } | null;
+  evaluate(find: Finder, findRepeat: RepeatFinder): Evaluation | null;
 }
 
 type Finder = (
@@ -67,6 +84,27 @@ type RepeatFinder = (
 // Allowed growth when a cost must not depend on content or on the number of panes.
 const GROWTH = 1.25;
 
+// A quantile of the values of the runs, with linear interpolation: with five
+// runs, the lower quartile is the second smallest value.
+function quantile(values: readonly number[], q: number): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (sorted.length - 1) * q;
+  const below = Math.floor(at);
+  const above = Math.ceil(at);
+  return sorted[below] + (sorted[above] - sorted[below]) * (at - below);
+}
+
+// The lower and the upper quartile of a metric over the runs of a record.
+function quartiles(
+  record: RecordSummary,
+  metric: Metric,
+  divide = 1
+): [number, number] | undefined {
+  const values = record.samples?.[metric];
+  if (values === undefined || values.length === 0) return undefined;
+  return [quantile(values, 0.25) / divide, quantile(values, 0.75) / divide];
+}
+
 function atMost(
   scenario: string,
   panes: number,
@@ -78,8 +116,14 @@ function atMost(
   return (find) => {
     const record = find(scenario, panes, content);
     if (record === undefined) return null;
-    const value = record.median[metric] / (perStep ? record.steps : 1);
-    return { value, pass: value <= limit };
+    const divide = perStep ? record.steps : 1;
+    const value = record.median[metric] / divide;
+    return {
+      value,
+      pass: value <= limit,
+      spread: quartiles(record, metric, divide),
+      bound: limit,
+    };
   };
 }
 
@@ -117,7 +161,18 @@ function ratio(
     const value =
       Math.max(top.median[metric], floor) /
       Math.max(bottom.median[metric], floor);
-    return { value, pass: value <= GROWTH };
+    // The spread of the ratio: the low quartile of the numerator over the
+    // high quartile of the denominator, and the reverse.
+    const high = quartiles(top, metric);
+    const low = quartiles(bottom, metric);
+    const spread: [number, number] | undefined =
+      high === undefined || low === undefined
+        ? undefined
+        : [
+            Math.max(high[0], floor) / Math.max(low[1], floor),
+            Math.max(high[1], floor) / Math.max(low[0], floor),
+          ];
+    return { value, pass: value <= GROWTH, spread, bound: GROWTH };
   };
 }
 
@@ -675,6 +730,8 @@ export function evaluateChecks(
     );
   return CHECKS.map((check) => {
     const result = check.evaluate(find, findRepeat);
+    const spread = result?.spread;
+    const bound = result?.bound;
     return {
       id: check.id,
       rule: check.rule,
@@ -682,6 +739,14 @@ export function evaluateChecks(
       limit: check.limit,
       value: result === null ? null : Number(result.value.toFixed(3)),
       pass: result?.pass ?? null,
+      spread:
+        spread === undefined
+          ? null
+          : [Number(spread[0].toFixed(3)), Number(spread[1].toFixed(3))],
+      near:
+        spread === undefined || bound === undefined
+          ? null
+          : spread[0] <= bound && spread[1] > bound,
     };
   });
 }

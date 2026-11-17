@@ -236,18 +236,22 @@ export function writeReport(options: {
 /** Print the checks as a table, so that a reader sees the result without opening the report. */
 export function formatChecks(checks: CheckResult[]): string {
   const rows = checks.map((check) => [
-    check.pass === null ? 'n/a' : check.pass ? 'pass' : 'FAIL',
+    `${check.pass === null ? 'n/a' : check.pass ? 'pass' : 'FAIL'}${check.near === true ? '~' : ''}`,
     check.rule,
     check.id,
     check.value === null ? '-' : String(check.value),
+    check.spread == null ? '' : `${check.spread[0]}..${check.spread[1]}`,
     check.limit,
   ]);
-  const widths = [0, 1, 2, 3, 4].map((column) =>
+  const widths = [0, 1, 2, 3, 4, 5].map((column) =>
     Math.max(...rows.map((row) => row[column].length))
   );
-  return rows
+  const table = rows
     .map((row) =>
       row.map((cell, column) => cell.padEnd(widths[column])).join('  ')
     )
     .join('\n');
+  return checks.some((check) => check.near === true)
+    ? `${table}\n\n~ The limit lies between the quartiles of the runs: another run can give the other result.`
+    : table;
 }
