@@ -1,0 +1,47 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+
+tasks:
+  # scripts/build.ts compiles the WAT sources into dist/path-store.wasm plus a
+  # base64 module, then tsdown compiles the glue in lib/ next to it. Workspace
+  # consumers (trees) reach the wasm through their `^:build` deps.
+  build:
+    script: 'rm -rf dist && bun ./scripts/build.ts && tsdown'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'lib/**/*'
+      - 'scripts/build.ts'
+      - '/packages/wat-tools/index.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # The suite compiles the wasm from the WAT sources itself and imports the
+  # glue straight from lib/, so it needs no build of its own. Workspace deps
+  # (path-store ships src) still come from the inherited `^:build`.
+  test:
+    command: 'bun test --timeout 60000'
+    deps:
+      - '^:build'
+    options:
+      merge: 'replace'
+
+  # Engine comparison on the large fixtures. Compiles the WAT in-process.
+  bench:
+    command: 'bun ./benchmark/bench.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-node:
+    script:
+      'bun build ./benchmark/bench.ts --target=node
+      --outfile=./dist/bench.node.mjs >/dev/null && node ./dist/bench.node.mjs'
+    options:
+      cache: false
+      runInCI: 'always'

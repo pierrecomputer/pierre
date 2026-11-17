@@ -384,10 +384,10 @@ importers:
         version: 1.2.6(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vercel/analytics':
         specifier: 'catalog:'
-        version: 2.0.1(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 2.0.1(next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       '@vercel/speed-insights':
         specifier: 'catalog:'
-        version: 2.0.0(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 2.0.0(next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       babel-plugin-react-compiler:
         specifier: 'catalog:'
         version: 1.0.0
@@ -532,13 +532,13 @@ importers:
         version: 4.4.1
       '@vercel/analytics':
         specifier: 'catalog:'
-        version: 2.0.1(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 2.0.1(next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       '@vercel/firewall':
         specifier: 'catalog:'
         version: 1.2.1
       '@vercel/speed-insights':
         specifier: 'catalog:'
-        version: 2.0.0(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+        version: 2.0.0(next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       '@vscode/web-custom-data':
         specifier: 'catalog:'
         version: 0.6.3
@@ -755,6 +755,25 @@ importers:
         specifier: 'catalog:'
         version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
 
+  packages/path-store-wat:
+    dependencies:
+      '@pierre/path-store':
+        specifier: workspace:*
+        version: link:../path-store
+    devDependencies:
+      '@pierre/tree-test-data':
+        specifier: workspace:*
+        version: link:../tree-test-data
+      '@pierre/wat-tools':
+        specifier: workspace:*
+        version: link:../wat-tools
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/pipes:
     devDependencies:
       tsdown:
@@ -825,6 +844,9 @@ importers:
       '@pierre/path-store':
         specifier: workspace:*
         version: link:../path-store
+      '@pierre/path-store-wat':
+        specifier: workspace:*
+        version: link:../path-store-wat
       '@pierre/theming':
         specifier: workspace:*
         version: link:../theming
@@ -2786,6 +2808,7 @@ packages:
   '@secretlint/secretlint-rule-preset-recommend@10.2.2':
     resolution: {integrity: sha512-K3jPqjva8bQndDKJqctnGfwuAxU2n9XNCPtbXVI5JvC7FnQiNg/yWlQPbMUlBXtBoBGFYp08A94m6fvtc9v+zA==}
     engines: {node: '>=20.0.0'}
+    deprecated: Built into secretlint v14 and later. Remove this package; the rule id still works. https://github.com/secretlint/secretlint/blob/HEAD/docs/rules/preset-recommend.md
 
   '@secretlint/source-creator@10.2.2':
     resolution: {integrity: sha512-h6I87xJfwfUTgQ7irWq7UTdq/Bm1RuQ/fYhA3dtTIAop5BwSFmZyrchph4WcoEvbN460BWKmk4RYSvPElIIvxw==}
@@ -8884,14 +8907,14 @@ snapshots:
 
   '@ungap/structured-clone@1.3.1': {}
 
-  '@vercel/analytics@2.0.1(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
+  '@vercel/analytics@2.0.1(next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     optionalDependencies:
       next: 16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react: 19.2.7
 
   '@vercel/firewall@1.2.1': {}
 
-  '@vercel/speed-insights@2.0.0(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
+  '@vercel/speed-insights@2.0.0(next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     optionalDependencies:
       next: 16.3.3(@babel/core@7.29.7)(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react: 19.2.7

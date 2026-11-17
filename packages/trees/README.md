@@ -73,6 +73,33 @@ const tree = new FileTree({ preparedInput });
 Use `prepareFileTreeInput(paths)` for raw input. Use
 `preparePresortedFileTreeInput(paths)` when the final order is already known.
 
+## WebAssembly engine
+
+Large path lists ingest faster through the WebAssembly store engine, which
+builds and mutates the whole tree inside wasm memory. It ships as a separate
+entry so the default bundle never carries the module:
+
+```ts
+import { FileTree, preparePresortedFileTreeInput } from '@pierre/trees';
+import { preparePresortedFileTreeBytes, wasmEngine } from '@pierre/trees/wasm';
+
+// Already-ordered path strings.
+const tree = new FileTree({
+  engine: wasmEngine,
+  preparedInput: preparePresortedFileTreeInput(paths),
+});
+
+// Or newline-delimited UTF-8 bytes in tree order (a trailing `/` marks an
+// explicit directory): no JSON parse and no per-path string copy.
+const treeFromBytes = new FileTree({
+  engine: wasmEngine,
+  preparedInput: preparePresortedFileTreeBytes(bytes),
+});
+```
+
+Both engines expose the same tree API and produce the same rows, events, and
+mutation results; `engine` only changes where the paths live.
+
 ## React usage
 
 ```tsx
