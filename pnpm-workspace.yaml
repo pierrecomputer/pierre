@@ -117,6 +117,7 @@ catalog:
   'oxfmt': '0.55.0'
   'oxlint': '1.80.0'
   'oxlint-tsgolint': '7.0.2001'
+  'pele': '1.13.0'
   'postcss': '8.5.6'
   'postcss-calc': '10.1.1'
   'postcss-html': '1.8.1'

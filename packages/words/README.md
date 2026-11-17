@@ -155,7 +155,7 @@ and limits, big operators, `\left` and `\right`, matrices, `cases`, `aligned`,
 and spacing. Glyphs use the system math font. The layout uses the metrics of
 STIX Two Math, which Apple systems include; other math fonts work with small
 spacing differences. A formula that it cannot lay out shows as code. An unknown
-command shows in red.
+command shows in red, or in gray while its block is still open.
 
 ## Mermaid
 

@@ -138,6 +138,8 @@
   ;; font of letters: -1 default, else the font command's value
   (global $mVariant (mut i32) (i32.const -1))
   (global $mNot (mut i32) (i32.const 0))
+  ;; the formula is an open block that may still grow: unknown commands are gray
+  (global $mOpen (mut i32) (i32.const 0))
   (global $mLastClass (mut i32) (i32.const 0))
   (global $mHline (mut i32) (i32.const 0))
   (global $cmdP (mut i32) (i32.const 0))
@@ -2601,10 +2603,12 @@
           (br $char)))
       (out.str "</text>")))
 
-  ;; a color from the source, or red for unknown commands
+  ;; a color from the source, or red for unknown commands (gray while the block is open)
   (func $m.outColor (param $e i32)
     (if (i32.eq (local.get $e) (i32.const -1))
-      (then (call $outRaw (i32.const $mem.mathStatic+4) (i32.const 4)) (return)))
+      (then
+        (if (global.get $mOpen) (then (out.str "#888") (return)))
+        (call $outRaw (i32.const $mem.mathStatic+4) (i32.const 4)) (return)))
     (call $outRaw (i32.add (i32.const $mem.mathSrc) (i32.and (local.get $e) (i32.const 0xffff)))
       (i32.shr_u (local.get $e) (i32.const 16))))
 
@@ -2652,7 +2656,7 @@
     (if (local.get $display)
       (then (out.str "\22 style=\22display:block;margin:1em auto;overflow:visible"))
       (else
-        (out.str "\22 style=\22vertical-align:")
+        (out.str "\22 style=\22display:inline;vertical-align:")
         (call $m.outMilli (i32.sub (i32.const 0) (local.get $d)))
         (out.str "em;overflow:visible")))
     (out.str "\22 fill=\22currentColor\22 font-family=\22'STIX Two Math','Cambria Math','Latin Modern Math',math,serif\22 role=\22img\22 aria-label=\22")
@@ -2672,6 +2676,7 @@
     (local.set $len (i32.sub (local.get $e) (local.get $b)))
     (if (i32.ge_u (local.get $len) (i32.const 16000)) (then (return (i32.const 0))))
     (memory.copy (i32.const $mem.mathSrc) (call $contentAt (local.get $b)) (local.get $len))
+    (global.set $mOpen (i32.const 0))
     (call $mathSvg (local.get $len) (local.get $display)))
 
   ;; Render a `$$` fence or a `math` fence as display math. Returns 0 for
@@ -2712,6 +2717,7 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))
     (call $cr)
+    (global.set $mOpen (i32.eq (local.get $r) (global.get $incompleteCodeRec)))
     (if (i32.eqz (call $mathSvg (i32.sub (local.get $dst) (i32.const $mem.mathSrc)) (i32.const 1)))
       (then (return (i32.const 0))))
     (call $outByte (i32.const 10))

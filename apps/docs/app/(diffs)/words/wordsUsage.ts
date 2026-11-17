@@ -3,6 +3,7 @@ export const WORDS_EXAMPLE_KINDS = [
   'fades',
   'code',
   'hooks',
+  'diagrams',
   'playground',
 ] as const;
 
@@ -13,6 +14,7 @@ interface WordsUsageOptions {
   fadeDuration: number;
   highlight: boolean;
   lineNumbers: boolean;
+  diagrams?: boolean;
   repair: boolean;
 }
 
@@ -22,13 +24,15 @@ export function getWordsUsage({
   fadeDuration,
   highlight,
   lineNumbers,
+  diagrams = false,
   repair,
 }: WordsUsageOptions): string {
   const props = [
     'isAnimating={isStreaming}',
     repair ? '' : 'parseIncompleteMarkdown={false}',
     "animated={{ animation: 'fadeIn', duration: " + fadeDuration + ' }}',
-    highlight ? 'plugins={plugins}' : '',
+    diagrams ? 'math' : '',
+    highlight || diagrams ? 'plugins={plugins}' : '',
     lineNumbers ? '' : 'lineNumbers={false}',
     custom
       ? "components={{\n  a: (html) => html.replace('<a ', '<a class=\"your-link\" '),\n}}"
@@ -40,10 +44,15 @@ export function getWordsUsage({
     "import { Markdown } from '@pierre/words/react';\nimport '@pierre/words/styles.css';" +
       (highlight
         ? "\nimport { createHighlightsPlugin } from '@pierre/words/highlights';\nimport light from '@pierre/highlights/themes/pierre-light';\nimport dark from '@pierre/highlights/themes/pierre-dark';"
+        : '') +
+      (diagrams
+        ? "\nimport { createMermaidPlugin } from '@pierre/words/mermaid';\nimport { render } from 'pele';"
         : ''),
-    highlight
-      ? "const plugins = {\n  code: createHighlightsPlugin({ themes: { light, dark }, defaultColor: 'light-dark()' }),\n};"
-      : '',
+    diagrams
+      ? 'const plugins = {\n  mermaid: createMermaidPlugin({ render }),\n};'
+      : highlight
+        ? "const plugins = {\n  code: createHighlightsPlugin({ themes: { light, dark }, defaultColor: 'light-dark()' }),\n};"
+        : '',
     [
       'export function Message({ text, isStreaming }) {',
       '  return (',
@@ -66,6 +75,7 @@ export function getInitialWordsUsage(kind: WordsExampleKind): string {
     fadeDuration: 180,
     highlight: kind === 'code' || kind === 'playground',
     lineNumbers: kind === 'code' || kind === 'playground',
+    diagrams: kind === 'diagrams',
     repair: true,
   });
 }

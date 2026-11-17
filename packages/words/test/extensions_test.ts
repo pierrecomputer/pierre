@@ -78,7 +78,10 @@ void test('inline math renders as SVG', () => {
     out,
     /^<p>Euler <svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="[\d.]+em"/
   );
-  assert.match(out, /style="vertical-align:-?[\d.]+em;overflow:visible"/);
+  assert.match(
+    out,
+    /style="display:inline;vertical-align:-?[\d.]+em;overflow:visible"/
+  );
   assert.match(out, /role="img" aria-label="e\^\{i\\pi\}\+1=0"/);
   assert.equal(glyphs(out), '𝑒𝑖𝜋+1=0');
   assert.match(out, /<\/svg>\.<\/p>\n$/);
@@ -251,6 +254,17 @@ void test('completion leaves math alone', () => {
   );
   // an open display block shows the formula so far
   assert.equal(render('$$\\frac{a}{b}'), 'M\n');
+});
+
+void test('unknown commands are gray while the block is open', () => {
+  const color = (source: string) =>
+    /<g color="(#\w+)"/.exec(
+      createHtmlSession().render(source, { incomplete: true, math: true }).html
+    )?.[1];
+  assert.equal(color('$$\n\\fra'), '#888');
+  assert.equal(color('```math\n\\begi'), '#888');
+  assert.equal(color('$$\n\\fra\n$$'), '#c00');
+  assert.equal(color('```math\n\\begi\n```'), '#c00');
 });
 
 void test('math in ANSI and alt text shows its source', () => {
