@@ -32,6 +32,7 @@ import {
 import { useDrag } from '../drag';
 import { usePaneContext, usePaneState } from '../use-pane';
 import { canClose, closePane } from './close';
+import { nameHost } from './host-name';
 import {
   mergeProps,
   type PartProps,
@@ -137,26 +138,21 @@ const defaultTab = (): ReactNode => <Tab />;
 /**
  * Make the host of a pane the tab panel of the tab of its pane, named by that
  * tab, while a tab list shows in the host. A host without a tab list stays a
- * region named by the title of its pane. A tab list knows that it is there;
- * the view does not, so the tab list writes these two attributes.
+ * region named by the title of its pane. The tab list says that it renders
+ * in the host (`nameHost`), which writes the role and the name of the host.
  */
 function useTabPanel(
   context: ViewContext,
   id: string
 ): RefObject<HTMLElement | null> {
   const tablist = useRef<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    const host = tablist.current?.closest<HTMLElement>(
-      `[data-layouts-pane="${CSS.escape(id)}"]`
-    );
-    if (host == null) return;
-    host.setAttribute('role', 'tabpanel');
-    host.setAttribute('aria-labelledby', tabIdOf(context.prefix, id, id));
-    return () => {
-      host.removeAttribute('role');
-      host.removeAttribute('aria-labelledby');
-    };
-  }, [context, id]);
+  useLayoutEffect(
+    () =>
+      tablist.current === null
+        ? undefined
+        : nameHost(tablist.current, 'tab', tabIdOf(context.prefix, id, id)),
+    [context, id]
+  );
   return tablist;
 }
 

@@ -16,6 +16,7 @@ import { useDrag } from '../drag';
 import { DISABLED_GRIP_STYLE, GRIP_STYLE } from '../gesture-styles';
 import { usePaneContext, usePaneState } from '../use-pane';
 import { canClose, closePane, closes } from './close';
+import { nameHost } from './host-name';
 import {
   mergeProps,
   type PartProps,
@@ -66,7 +67,9 @@ export function Header({
  * The title of a pane, from `getPaneTitle`, as a heading: an `h2`, or the
  * element of `render`. The host of the pane takes its name from the heading
  * with `aria-labelledby`, except a tab panel, which takes the name of its
- * tab. Without a title, the host keeps the `aria-label` of the view.
+ * tab. Without a title, the host keeps the `aria-label` of the view. The
+ * heading says that it renders in the host (`nameHost`), which writes the
+ * name of the host.
  */
 export function Title({
   render,
@@ -78,16 +81,9 @@ export function Title({
   const title = usePaneState(value, (state) => state.title);
   // An encoded pane ID has no colon, so no other ID of the layout is this one.
   const headingId = `${paneIdOf(context.prefix, id)}:title`;
-  const nameHost = useCallback(
-    (heading: HTMLElement | null) => {
-      const host = heading?.closest('.pierre-layouts-pane');
-      if (host == null || host.getAttribute('role') === 'tabpanel') return;
-      host.setAttribute('aria-labelledby', headingId);
-      return () => {
-        if (host.getAttribute('aria-labelledby') === headingId)
-          host.removeAttribute('aria-labelledby');
-      };
-    },
+  const naming = useCallback(
+    (heading: HTMLElement | null) =>
+      heading === null ? undefined : nameHost(heading, 'title', headingId),
     [headingId]
   );
   return renderPart(
@@ -96,7 +92,7 @@ export function Title({
     mergeProps(props, {
       className: 'pierre-layouts-title',
       id: headingId,
-      ref: nameHost,
+      ref: naming,
       children: children ?? title,
     }),
     {}

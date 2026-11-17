@@ -134,7 +134,12 @@ output of `renderPane`, so they take no pane prop:
   `getPaneTitle`, as an `h2` heading (`render={<h3 />}` gives another level).
   The pane's region takes its name from this heading with `aria-labelledby`; a
   pane without a title keeps an `aria-label`, and a tab panel takes the name of
-  its tab.
+  its tab. One rule gives the role and the name of a pane host from the parts
+  that render in it, in any order: a host with `Layout.TabList` is a tab panel,
+  also with a title beside it, else a host with `Layout.Title` is a region that
+  its heading names. The parts say that they render after they mount, so a
+  server render gives each host its `aria-label` only, and the tab panel role
+  and the link to the heading come with hydration.
 - `Layout.Content`: the area that scrolls, and the target of a collapse.
 - `Layout.CollapseButton`, `Layout.CloseButton`, and `Layout.ZoomButton`.
 - `Layout.MoveHandle`: the handle of `paneDrag()`, and with `arrange()` the

@@ -23,7 +23,9 @@
 // - `?sticky=1`: the tab lists keep their pinned tabs in view (`stickyPinned`).
 // - `?scroll=1`: the tab lists scroll (`overflow-x: auto`), as an app's own
 //   strip does, so a swipe scrolls them.
-import { type JSX, StrictMode, useState } from 'react';
+// - `?title=1`: each header shows `Layout.Title` before its tab list, and
+//   "Hide the tab lists" removes the tab lists and keeps the titles.
+import { type JSX, StrictMode, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import type { PaneNode } from '../src';
@@ -50,6 +52,20 @@ const pinned = params.get('pinned') === '1';
 const activation =
   params.get('activation') === 'manual' ? 'manual' : 'automatic';
 const sticky = params.get('sticky') === '1';
+const withTitle = params.get('title') === '1';
+// Whether the tab lists show (`?title=1`), which the app can change.
+const tabLists = {
+  shown: true,
+  listeners: new Set<() => void>(),
+  subscribe(listener: () => void): () => void {
+    tabLists.listeners.add(listener);
+    return () => tabLists.listeners.delete(listener);
+  },
+  toggle(): void {
+    tabLists.shown = !tabLists.shown;
+    for (const listener of tabLists.listeners) listener();
+  },
+};
 const scrollStyle =
   params.get('scroll') === '1' ? { overflowX: 'auto' as const } : undefined;
 
@@ -171,6 +187,16 @@ function GuardedTab({ id }: { id: string }): JSX.Element {
   );
 }
 
+/** The children while the tab lists show (`?title=1`). */
+function WhileTabListsShow({
+  children,
+}: {
+  children: JSX.Element;
+}): JSX.Element | null {
+  const shown = useSyncExternalStore(tabLists.subscribe, () => tabLists.shown);
+  return shown ? children : null;
+}
+
 const tabOf = (tab: PaneNode): JSX.Element =>
   nestedControls && tab.id === 'docs' ? (
     <NestedTab />
@@ -200,7 +226,14 @@ function renderPane(pane: PaneNode): JSX.Element {
       ) : (
         <Layout.Header>
           {pinned && <Layout.MoveHandle />}
-          {chrome}
+          {withTitle ? (
+            <>
+              <Layout.Title />
+              <WhileTabListsShow>{chrome}</WhileTabListsShow>
+            </>
+          ) : (
+            chrome
+          )}
           {pinned && <Layout.CloseButton />}
         </Layout.Header>
       )}
@@ -217,6 +250,11 @@ function App(): JSX.Element {
   const [stable] = useState(() => renderPane);
   return (
     <div style={{ height: '100vh' }}>
+      {withTitle && (
+        <button type="button" onClick={() => tabLists.toggle()}>
+          Hide the tab lists
+        </button>
+      )}
       <Layout.Root
         layout={page.layout}
         renderPane={stable}

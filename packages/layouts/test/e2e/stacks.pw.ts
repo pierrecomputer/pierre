@@ -65,6 +65,29 @@ test('the tab list follows the APG tabs pattern', async ({ page }) => {
   );
 });
 
+test('with a title and a tab list, the tab names the host, and the title names it when the tab list goes', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?title=1');
+  const main = host(page, 'main');
+  const tab = tabsOf(page, 'main').getByRole('tab', { name: 'main.ts' });
+  const heading = main.getByRole('heading', { name: 'main.ts', exact: true });
+  const tabId = (await tab.getAttribute('id')) ?? 'a tab with an id';
+  const headingId =
+    (await heading.getAttribute('id')) ?? 'a heading with an id';
+  await expect(main).toHaveAttribute('role', 'tabpanel');
+  await expect(main).toHaveAttribute('aria-labelledby', tabId);
+  const toggle = page.getByRole('button', { name: 'Hide the tab lists' });
+  await toggle.click();
+  await expect(tabsOf(page, 'main')).toHaveCount(0);
+  await expect(main).not.toHaveAttribute('role');
+  await expect(main).toHaveAttribute('aria-labelledby', headingId);
+  await expect(main).toHaveAccessibleName('main.ts');
+  await toggle.click();
+  await expect(main).toHaveAttribute('role', 'tabpanel');
+  await expect(main).toHaveAttribute('aria-labelledby', tabId);
+});
+
 test('the arrows, Home, and End move the focus to a tab that shows, with no render of other content', async ({
   page,
 }) => {
