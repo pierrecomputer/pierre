@@ -43,11 +43,18 @@ export type CodeViewSearchItemProvider = (
   position: number
 ) => CodeViewSearchItem;
 
+// Called with each line to search. Returns true to stop the walk.
+// A diff line still has its line ending when the query is plain text, which
+// can never match one.
+// `additionLineNumber` and `additionLineIndex` are given when the same text is
+// also that line on the additions side, so its matches belong there too.
 export type CodeViewSearchLineVisitor = (
   text: string,
   side: SelectionSide | undefined,
   lineNumber: number,
-  lineIndex: number
+  lineIndex: number,
+  additionLineNumber?: number,
+  additionLineIndex?: number
 ) => boolean;
 
 // Walks one text line by line. Lines are found as they are read, so starting
@@ -174,7 +181,13 @@ export class CodeViewSearchDiffCursor {
   private readonly rows: DiffRowCursor;
   private nextSide: SelectionSide = 'deletions';
 
-  constructor(item: CodeViewSearchDiff) {
+  // `regex` says the query is a regular expression. A regex can match a line
+  // ending, so it is given lines without theirs. Plain text cannot, and is
+  // given the lines as the diff stores them.
+  constructor(
+    item: CodeViewSearchDiff,
+    private readonly regex: boolean
+  ) {
     const { fileDiff, additionContents, diffStyle, additionsOnly } = item;
     this.diff = fileDiff;
     this.additions =
@@ -193,7 +206,7 @@ export class CodeViewSearchDiffCursor {
   // Returns true only after reaching the end. A visitor returning true stops
   // and returns false, even on the last line; the next call resumes after it.
   walk(visitLine: CodeViewSearchLineVisitor): boolean {
-    const { diff, diffStyle, additionsOnly, rows } = this;
+    const { diff, additions, diffStyle, additionsOnly, rows } = this;
     if (this.nextSide === 'additions') {
       this.nextSide = 'deletions';
       if (this.visitAddition(visitLine)) return false;
@@ -216,6 +229,10 @@ export class CodeViewSearchDiffCursor {
       return true;
     }
     while (rows.next()) {
+      if (additions == null && rows.type !== 'change') {
+        if (this.visitUnchanged(visitLine)) return false;
+        continue;
+      }
       this.nextSide = 'additions';
       if (this.visitDeletion(visitLine)) return false;
       this.nextSide = 'deletions';
@@ -224,16 +241,39 @@ export class CodeViewSearchDiffCursor {
     return true;
   }
 
+  // Hands over an unchanged row. Its two sides hold the same text, so it is
+  // handed over once for both. If the texts differ, each side is handed over
+  // on its own. True when the visitor stops the walk.
+  private visitUnchanged(visitLine: CodeViewSearchLineVisitor): boolean {
+    const { diff, rows, regex } = this;
+    const { deletionLineIndex, additionLineIndex } = rows;
+    const text = diff.deletionLines[deletionLineIndex];
+    if (text == null || text !== diff.additionLines[additionLineIndex]) {
+      this.nextSide = 'additions';
+      if (this.visitDeletion(visitLine)) return true;
+      this.nextSide = 'deletions';
+      return this.visitAddition(visitLine);
+    }
+    return visitLine(
+      regex ? trimLineEnding(text) : text,
+      'deletions',
+      rows.deletionLineNumber,
+      deletionLineIndex,
+      rows.additionLineNumber,
+      additionLineIndex
+    );
+  }
+
   // Hands over the current row's old line, if it has one. True when the
   // visitor stops the walk.
   private visitDeletion(visitLine: CodeViewSearchLineVisitor): boolean {
-    const { diff, rows } = this;
+    const { diff, rows, regex } = this;
     if (!rows.hasDeletion) return false;
     const lineIndex = rows.deletionLineIndex;
     const text = diff.deletionLines[lineIndex];
     return text != null
       ? visitLine(
-          trimLineEnding(text),
+          regex ? trimLineEnding(text) : text,
           'deletions',
           rows.deletionLineNumber,
           lineIndex
@@ -244,7 +284,7 @@ export class CodeViewSearchDiffCursor {
   // Hands over the current row's new line, if it has one. True when the
   // visitor stops the walk.
   private visitAddition(visitLine: CodeViewSearchLineVisitor): boolean {
-    const { diff, additions, rows } = this;
+    const { diff, additions, rows, regex } = this;
     if (!rows.hasAddition) return false;
     const { additionLineIndex: lineIndex, additionLineNumber } = rows;
     if (additions != null) {
@@ -258,7 +298,7 @@ export class CodeViewSearchDiffCursor {
     const text = diff.additionLines[lineIndex];
     return text != null
       ? visitLine(
-          trimLineEnding(text),
+          regex ? trimLineEnding(text) : text,
           'additions',
           additionLineNumber,
           lineIndex
@@ -319,6 +359,7 @@ export class CodeViewSearchScan {
 
   private readonly pattern: RegExp | undefined;
   private readonly wholeWord: boolean;
+  private readonly regex: boolean;
   private readonly beforeStart: CodeViewSearchMatchEntry[] = [];
   private readonly afterStart: CodeViewSearchMatchEntry[] = [];
   // Where each partly searched item got to, by position.
@@ -339,6 +380,7 @@ export class CodeViewSearchScan {
   ) {
     this.pattern = compileSearchQuery(searchParams);
     this.wholeWord = searchParams.wholeWord;
+    this.regex = searchParams.regex;
     this.unsearched = itemCount > 0 ? [{ start: 0, end: itemCount }] : [];
   }
 
@@ -721,7 +763,7 @@ export class CodeViewSearchScan {
     pattern: RegExp,
     position: number
   ): CodeViewSearchItemProgress {
-    const { getItem, wholeWord, limit } = this;
+    const { getItem, wholeWord, regex, limit } = this;
     const item = getItem(position);
     const { type, itemId } = item;
     const cursor =
@@ -729,7 +771,7 @@ export class CodeViewSearchScan {
         ? new CodeViewSearchTextCursor(item.contents)
         : item.additionContents != null && item.additionsOnly
           ? new CodeViewSearchTextCursor(item.additionContents, 'additions')
-          : new CodeViewSearchDiffCursor(item);
+          : new CodeViewSearchDiffCursor(item, regex);
     const matches: CodeViewSearchMatch[] = [];
     let side: SelectionSide | undefined;
     let lineNumber = 0;
@@ -749,27 +791,61 @@ export class CodeViewSearchScan {
       });
       return ++this.matchCount >= limit;
     };
+    // Records a line's match span and copies its matches to the additions side
+    // when the same line appears there. Returns true at the match limit.
+    const recordLineMatches = (
+      startIndex: number,
+      additionLineNumber: number | undefined,
+      additionLineIndex: number | undefined
+    ): boolean => {
+      const endIndex = matches.length;
+      const lines =
+        side === 'deletions'
+          ? (progress.deletionLines ??= [])
+          : (progress.additionLines ??= []);
+      lines.push({ lineNumber, startIndex, endIndex });
+      const { atLimit } = this;
+      if (atLimit || additionLineNumber == null || additionLineIndex == null) {
+        return atLimit;
+      }
+      side = 'additions';
+      lineNumber = additionLineNumber;
+      lineIndex = additionLineIndex;
+      let reachedLimit = false;
+      for (let index = startIndex; index < endIndex; index++) {
+        const { startCharacter, endCharacter } = matches[index];
+        if (visitMatch(startCharacter, endCharacter)) {
+          reachedLimit = true;
+          break;
+        }
+      }
+      (progress.additionLines ??= []).push({
+        lineNumber: additionLineNumber,
+        startIndex: endIndex,
+        endIndex: matches.length,
+      });
+      return reachedLimit;
+    };
+    // Searches one line and stops when the match limit or time budget is reached.
     const visitLine: CodeViewSearchLineVisitor = (
       text,
       nextSide,
       nextLineNumber,
-      nextLineIndex
+      nextLineIndex,
+      additionLineNumber,
+      additionLineIndex
     ) => {
       side = nextSide;
       lineNumber = nextLineNumber;
       lineIndex = nextLineIndex;
       const startIndex = matches.length;
-      const capped = matchSearchLine(pattern, text, wholeWord, visitMatch);
+      let capped = matchSearchLine(pattern, text, wholeWord, visitMatch);
       if (matches.length > startIndex) {
-        const lines =
-          nextSide === 'deletions'
-            ? (progress.deletionLines ??= [])
-            : (progress.additionLines ??= []);
-        lines.push({
-          lineNumber: nextLineNumber,
+        capped = recordLineMatches(
           startIndex,
-          endIndex: matches.length,
-        });
+          additionLineNumber,
+          additionLineIndex
+        );
       }
       const { deadline } = this;
       if (deadline == null) return capped;

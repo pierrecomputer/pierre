@@ -4,8 +4,10 @@ import { TextDocument } from '../src/editor/textDocument';
 import type { DiffLineMetadata } from '../src/layout/RowSpec';
 import { MAX_SEARCH_MATCHES, type SearchParams } from '../src/search';
 import {
+  type CodeViewSearchDiff,
   CodeViewSearchDiffCursor,
   type CodeViewSearchItem,
+  type CodeViewSearchMatch,
   CodeViewSearchScan,
   CodeViewSearchTextCursor,
 } from '../src/search/codeViewSearch';
@@ -25,21 +27,37 @@ const params: SearchParams = {
   caseSensitive: false,
 };
 
-// Uses cursor rows to describe the source lines each style searches.
+// Lists source lines in search order, including edited addition text.
 function expectedDiffLines(
   diff: FileDiffMetadata,
   diffStyle: 'split' | 'unified',
-  scoped: boolean
+  scoped: boolean,
+  additionContents?: string
 ): VisitedLine[] {
   const lines: VisitedLine[] = [];
+  const additions =
+    additionContents != null
+      ? new TextDocument('file:///expected-additions', additionContents)
+      : undefined;
+  if (scoped && additions != null) {
+    return Array.from({ length: additions.lineCount }, (_, index) => [
+      additions.getLineText(index),
+      'additions',
+      index + 1,
+      index,
+    ]);
+  }
   const add = (
     side: SelectionSide,
     line: DiffLineMetadata | undefined
   ): void => {
     if (line == null) return;
-    const text = (
-      side === 'additions' ? diff.additionLines : diff.deletionLines
-    )[line.lineIndex];
+    const text =
+      side === 'additions' && additions != null
+        ? additions.getLineText(line.lineIndex)
+        : (side === 'additions' ? diff.additionLines : diff.deletionLines)[
+            line.lineIndex
+          ];
     if (text != null)
       lines.push([
         text.replace(/[\r\n]+$/, ''),
@@ -69,6 +87,57 @@ function expectedDiffLines(
   return lines;
 }
 
+// Expands a shared row into the same ordered source lines as separate visits.
+function recordVisitedLine(
+  lines: VisitedLine[],
+  text: string,
+  side: SelectionSide | undefined,
+  lineNumber: number,
+  lineIndex: number,
+  additionLineNumber?: number,
+  additionLineIndex?: number
+): void {
+  const lineText = text.replace(/[\r\n]+$/, '');
+  lines.push([lineText, side, lineNumber, lineIndex]);
+  if (additionLineNumber != null && additionLineIndex != null) {
+    lines.push([lineText, 'additions', additionLineNumber, additionLineIndex]);
+  }
+}
+
+// Searches one real item to completion, optionally stopping at a match limit.
+function scanItem(
+  item: CodeViewSearchItem,
+  searchParams: SearchParams = params,
+  limit = MAX_SEARCH_MATCHES
+): CodeViewSearchScan {
+  const scan = new CodeViewSearchScan(searchParams, 1, () => item, limit);
+  scan.advance();
+  return scan;
+}
+
+// Searches each source line separately to preserve both sides' result order.
+function expectedDiffMatches(
+  item: CodeViewSearchDiff,
+  searchParams: SearchParams
+): CodeViewSearchMatch[] {
+  const matches: CodeViewSearchMatch[] = [];
+  for (const [contents, side, lineNumber, lineIndex] of expectedDiffLines(
+    item.fileDiff,
+    item.diffStyle,
+    item.additionsOnly,
+    item.additionContents
+  )) {
+    const scan = scanItem(
+      { type: 'file', itemId: item.itemId, contents },
+      searchParams
+    );
+    for (const match of scan.getMatches()) {
+      matches.push({ ...match, itemType: 'diff', side, lineNumber, lineIndex });
+    }
+  }
+  return matches;
+}
+
 describe('CodeView search walkers', () => {
   test('text resumes after every line and trims LF, CRLF, CR and trailing empty text', () => {
     for (const contents of [
@@ -88,8 +157,8 @@ describe('CodeView search walkers', () => {
       const cursor = new CodeViewSearchTextCursor(contents);
       const lines: VisitedLine[] = [];
       while (
-        !cursor.walk((...line) => {
-          lines.push(line);
+        !cursor.walk((text, side, lineNumber, lineIndex) => {
+          lines.push([text, side, lineNumber, lineIndex]);
           return true;
         })
       ) {}
@@ -170,13 +239,16 @@ describe('CodeView search walkers', () => {
     );
     for (const cursor of [
       new CodeViewSearchTextCursor('line'),
-      new CodeViewSearchDiffCursor({
-        type: 'diff',
-        itemId: 'a',
-        fileDiff,
-        diffStyle: 'split',
-        additionsOnly: false,
-      }),
+      new CodeViewSearchDiffCursor(
+        {
+          type: 'diff',
+          itemId: 'a',
+          fileDiff,
+          diffStyle: 'split',
+          additionsOnly: false,
+        },
+        false
+      ),
     ]) {
       const texts: string[] = [];
       expect(
@@ -206,14 +278,17 @@ describe('CodeView search walkers', () => {
 
   test('an edited diff rejects a row outside its addition text', () => {
     const document = new TextDocument('file:///short', 'line edited');
-    const cursor = new CodeViewSearchDiffCursor({
-      type: 'diff',
-      itemId: 'a',
-      fileDiff: createLargeDiff(),
-      diffStyle: 'split',
-      additionsOnly: false,
-      additionContents: document.getText(),
-    });
+    const cursor = new CodeViewSearchDiffCursor(
+      {
+        type: 'diff',
+        itemId: 'a',
+        fileDiff: createLargeDiff(),
+        diffStyle: 'split',
+        additionsOnly: false,
+        additionContents: document.getText(),
+      },
+      false
+    );
     expect(() => cursor.walk(() => false)).toThrow(
       'line index 1 is out of range'
     );
@@ -228,35 +303,42 @@ describe('CodeView search walkers', () => {
         for (const scoped of [false, true]) {
           const expected = expectedDiffLines(diff, diffStyle, scoped);
           for (let stopAt = 0; stopAt < expected.length; stopAt++) {
-            const cursor = new CodeViewSearchDiffCursor({
+            const cursor = new CodeViewSearchDiffCursor(
+              {
+                type: 'diff',
+                itemId: 'a',
+                fileDiff: diff,
+                diffStyle,
+                additionsOnly: scoped,
+              },
+              false
+            );
+            const lines: VisitedLine[] = [];
+            let visited = 0;
+            cursor.walk((...line) => {
+              recordVisitedLine(lines, ...line);
+              return ++visited === stopAt + 1;
+            });
+            cursor.walk((...line) => {
+              recordVisitedLine(lines, ...line);
+              return false;
+            });
+            expect(lines).toEqual(expected);
+          }
+          const cursor = new CodeViewSearchDiffCursor(
+            {
               type: 'diff',
               itemId: 'a',
               fileDiff: diff,
               diffStyle,
               additionsOnly: scoped,
-            });
-            const lines: VisitedLine[] = [];
-            cursor.walk((...line) => {
-              lines.push(line);
-              return lines.length === stopAt + 1;
-            });
-            cursor.walk((...line) => {
-              lines.push(line);
-              return false;
-            });
-            expect(lines).toEqual(expected);
-          }
-          const cursor = new CodeViewSearchDiffCursor({
-            type: 'diff',
-            itemId: 'a',
-            fileDiff: diff,
-            diffStyle,
-            additionsOnly: scoped,
-          });
+            },
+            false
+          );
           const lines: VisitedLine[] = [];
           while (
             !cursor.walk((...line) => {
-              lines.push(line);
+              recordVisitedLine(lines, ...line);
               return true;
             })
           ) {}
@@ -294,6 +376,270 @@ function createLargeDiff(): FileDiffMetadata {
     { disableLineMatching: true }
   );
 }
+
+describe('CodeViewSearchScan diff line matching', () => {
+  test('plain text and escaped regex match separate source-line searches across diff modes', () => {
+    const diffs = [
+      ...createDiffFixtures(),
+      parseDiffFromFile(
+        { name: 'a', contents: 'old\nline.* line.*\nline\n' },
+        { name: 'a', contents: 'new\ninserted\nline.* line.*\nline\n' },
+        { disableLineMatching: true }
+      ),
+    ];
+    for (const fileDiff of diffs) {
+      for (const diffStyle of ['split', 'unified'] satisfies (
+        | 'split'
+        | 'unified'
+      )[]) {
+        for (const additionsOnly of [false, true]) {
+          for (const additionContents of [
+            undefined,
+            fileDiff.additionLines
+              .join('')
+              .replaceAll('line', 'edited line line'),
+          ]) {
+            const item: CodeViewSearchDiff = {
+              type: 'diff',
+              itemId: 'a',
+              fileDiff,
+              diffStyle,
+              additionsOnly,
+              additionContents,
+            };
+            for (const text of [
+              'line',
+              'LINE',
+              'context',
+              'line.*',
+              'line ',
+              'missing',
+            ]) {
+              for (const wholeWord of [false, true]) {
+                const searchParams = { ...params, text, wholeWord };
+                const expected = expectedDiffMatches(item, searchParams);
+                expect(scanItem(item, searchParams).getMatches()).toEqual(
+                  expected
+                );
+                expect(
+                  scanItem(item, {
+                    ...searchParams,
+                    regex: true,
+                    text: text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+                  }).getMatches()
+                ).toEqual(expected);
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test('unchanged split rows keep old-side matches first and each sides line spans', () => {
+    const item: CodeViewSearchDiff = {
+      type: 'diff',
+      itemId: 'a',
+      diffStyle: 'split',
+      additionsOnly: false,
+      fileDiff: parseDiffFromFile(
+        { name: 'a', contents: 'old\nline line line\nline\nlast\n' },
+        { name: 'a', contents: 'new\ninserted\nline line line\nline\nlast\n' },
+        { disableLineMatching: true }
+      ),
+    };
+    const scan = scanItem(item);
+    expect(
+      scan
+        .getMatches()
+        .map(
+          ({ side, lineNumber, lineIndex, startCharacter, endCharacter }) => [
+            side,
+            lineNumber,
+            lineIndex,
+            startCharacter,
+            endCharacter,
+          ]
+        )
+    ).toEqual([
+      ['deletions', 2, 1, 0, 4],
+      ['deletions', 2, 1, 5, 9],
+      ['deletions', 2, 1, 10, 14],
+      ['additions', 3, 2, 0, 4],
+      ['additions', 3, 2, 5, 9],
+      ['additions', 3, 2, 10, 14],
+      ['deletions', 3, 2, 0, 4],
+      ['additions', 4, 3, 0, 4],
+    ]);
+    const entry = scan.getFirstMatchedEntryAtOrAfter(0);
+    expect(entry?.deletionLines).toEqual([
+      { lineNumber: 2, startIndex: 0, endIndex: 3 },
+      { lineNumber: 3, startIndex: 6, endIndex: 7 },
+    ]);
+    expect(entry?.additionLines).toEqual([
+      { lineNumber: 3, startIndex: 3, endIndex: 6 },
+      { lineNumber: 4, startIndex: 7, endIndex: 8 },
+    ]);
+    for (const regex of [false, true]) {
+      const searchParams = { ...params, regex };
+      const unlimited = scanItem(item, searchParams, Infinity).getMatches();
+      for (const limit of [3, 4, 5, 6, 8]) {
+        const capped = scanItem(item, searchParams, limit);
+        expect(capped.finished).toBe(true);
+        expect(capped.atLimit).toBe(true);
+        expect(capped.getMatches()).toHaveLength(limit);
+        expect(capped.getMatches()).toEqual(unlimited.slice(0, limit));
+        expect(capped.getLineMatches(0, 2, 'deletions')).toEqual({
+          lineNumber: 2,
+          startIndex: 0,
+          endIndex: 3,
+        });
+        expect(capped.getLineMatches(0, 3, 'additions')).toEqual(
+          limit > 3
+            ? { lineNumber: 3, startIndex: 3, endIndex: Math.min(limit, 6) }
+            : undefined
+        );
+      }
+    }
+  });
+
+  test('unchanged rows with unequal stored final endings still find both sides', () => {
+    for (const ending of ['\n', '\r\n']) {
+      for (const reverse of [false, true]) {
+        const fileDiff = parseDiffFromFile(
+          { name: 'a', contents: `old\nline line${reverse ? '' : ending}` },
+          { name: 'a', contents: `new\nline line${reverse ? ending : ''}` },
+          { disableLineMatching: true, ignoreWhitespace: true }
+        );
+        const item: CodeViewSearchDiff = {
+          type: 'diff',
+          itemId: 'a',
+          fileDiff,
+          diffStyle: 'split',
+          additionsOnly: false,
+        };
+        for (const regex of [false, true]) {
+          const searchParams = { ...params, regex };
+          const matches = scanItem(item, searchParams).getMatches();
+          expect(matches).toEqual(expectedDiffMatches(item, searchParams));
+          expect(
+            matches.map(
+              ({ side, lineNumber, startCharacter, endCharacter }) => [
+                side,
+                lineNumber,
+                startCharacter,
+                endCharacter,
+              ]
+            )
+          ).toEqual([
+            ['deletions', 2, 0, 4],
+            ['deletions', 2, 5, 9],
+            ['additions', 2, 0, 4],
+            ['additions', 2, 5, 9],
+          ]);
+        }
+      }
+    }
+  });
+
+  test('literal end-of-line and whole-word matches keep coordinates for LF, CRLF and CR', () => {
+    for (const ending of ['\n', '\r\n', '\r']) {
+      const fileDiff = parseDiffFromFile(
+        { name: 'a', contents: `old\nprefix target${ending}` },
+        { name: 'a', contents: `new\nprefix target${ending}` },
+        { disableLineMatching: true }
+      );
+      for (const diffStyle of ['split', 'unified'] satisfies (
+        | 'split'
+        | 'unified'
+      )[]) {
+        for (const additionsOnly of [false, true]) {
+          const item: CodeViewSearchDiff = {
+            type: 'diff',
+            itemId: 'a',
+            fileDiff,
+            diffStyle,
+            additionsOnly,
+          };
+          for (const wholeWord of [false, true]) {
+            const searchParams = { ...params, text: 'target', wholeWord };
+            const matches = scanItem(item, searchParams).getMatches();
+            expect(matches).toEqual(expectedDiffMatches(item, searchParams));
+            expect(
+              matches.map(
+                ({ side, lineNumber, startCharacter, endCharacter }) => [
+                  side,
+                  lineNumber,
+                  startCharacter,
+                  endCharacter,
+                ]
+              )
+            ).toEqual(
+              diffStyle === 'split' && !additionsOnly
+                ? [
+                    ['deletions', 2, 7, 13],
+                    ['additions', 2, 7, 13],
+                  ]
+                : [['additions', 2, 7, 13]]
+            );
+            expect(
+              scanItem(item, { ...searchParams, regex: true }).getMatches()
+            ).toEqual(matches);
+            expect(
+              scanItem(item, { ...searchParams, text: 'target ' }).getMatches()
+            ).toEqual([]);
+          }
+        }
+      }
+    }
+  });
+
+  test('regex whitespace, negated classes and empty anchors still exclude diff endings', () => {
+    for (const ending of ['\n', '\r\n', '\r']) {
+      const fileDiff = parseDiffFromFile(
+        { name: 'a', contents: `x old\nx  ${ending}` },
+        { name: 'a', contents: `x new\nx  ${ending}` },
+        { disableLineMatching: true }
+      );
+      for (const diffStyle of ['split', 'unified'] satisfies (
+        | 'split'
+        | 'unified'
+      )[]) {
+        for (const additionsOnly of [false, true]) {
+          const item: CodeViewSearchDiff = {
+            type: 'diff',
+            itemId: 'a',
+            fileDiff,
+            diffStyle,
+            additionsOnly,
+          };
+          for (const text of ['\\s+$', '[^x]+', '$']) {
+            const searchParams = { ...params, text, regex: true };
+            const matches = scanItem(item, searchParams).getMatches();
+            expect(matches).toEqual(expectedDiffMatches(item, searchParams));
+            expect(
+              matches
+                .filter(({ lineNumber }) => lineNumber === 2)
+                .map(({ startCharacter, endCharacter }) => [
+                  startCharacter,
+                  endCharacter,
+                ])
+            ).toEqual(
+              text === '$'
+                ? []
+                : diffStyle === 'split' && !additionsOnly
+                  ? [
+                      [1, 3],
+                      [1, 3],
+                    ]
+                  : [[1, 3]]
+            );
+          }
+        }
+      }
+    }
+  });
+});
 
 describe('CodeViewSearchScan', () => {
   test('budgeted scans match full scans across files, diff styles, scopes and edited documents', () => {

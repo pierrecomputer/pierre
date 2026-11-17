@@ -24,8 +24,9 @@ export function compileSearchQuery(
   }
 }
 
-// Visits nonempty UTF-16 ranges in line text without its ending. The visitor
-// returns true to stop; the function returns whether it was stopped.
+// Visits nonempty UTF-16 ranges in line text. The text may still have its line
+// ending when the pattern is plain text, which can never match one. The
+// visitor returns true to stop; the function returns whether it was stopped.
 // The pattern carries state, so a visitor must not match another line with it.
 export function matchSearchLine(
   pattern: RegExp,
