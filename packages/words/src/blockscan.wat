@@ -212,16 +212,16 @@
           (i32.eq (local.get $c) (i32.const "~"))))
       (then
         ;; With the math option, `$$` opens a math block when no `$` follows
-        ;; on its line.
+        ;; on its line. Text after it is the first line of the block.
         (if (i32.or (i32.ne (local.get $c) (i32.const "$"))
               (i32.eqz (i32.and (global.get $ext) (i32.const 2))))
           (then (return (i32.const 0))))
         (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
-        (if (i32.or (i32.lt_u (i32.sub (local.get $i) (local.get $p)) (i32.const 2))
-              (i32.lt_u (call $findByte (local.get $i) (global.get $lineEnd) (i32.const "$"))
-                (global.get $lineEnd)))
-          (then (return (i32.const 0))))
-        (return (i32.sub (local.get $i) (local.get $p)))))
+        (return (i32.shl
+          (i32.and (i32.eq (i32.sub (local.get $i) (local.get $p)) (i32.const 2))
+            (i32.ge_u (call $findByte (local.get $i) (global.get $lineEnd) (i32.const "$"))
+              (global.get $lineEnd)))
+          (i32.const 1)))))
     (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
     (if (i32.lt_u (i32.sub (local.get $i) (local.get $p)) (i32.const 3)) (then (return (i32.const 0))))
     (if (i32.eq (local.get $c) (i32.const "\60"))
@@ -230,6 +230,14 @@
               (global.get $lineEnd))
           (then (return (i32.const 0))))))
     (i32.sub (local.get $i) (local.get $p)))
+
+  ;; The position of the `$$` that ends the line [$p,$end), or 0. Such a line
+  ;; closes an open math block, and the text before the `$$` is its last line.
+  (func $mathFenceEnd (param $p i32) (param $end i32) (result i32)
+    (local.set $end (i32.sub (call $trimSpaceBack (local.get $end) (local.get $p)) (i32.const 2)))
+    (select (local.get $end) (i32.const 0)
+      (i32.and (i32.ge_u (local.get $end) (local.get $p))
+        (i32.eq (i32.load16_u (local.get $end)) (i32.const "$$")))))
 
   ;; a bullet or ordered list marker; returns its width in bytes and leaves the
   ;; kind in $lmOrdered / $lmChar / $lmStart

@@ -50,9 +50,14 @@ export interface PluginConfig {
   code?: CodeHighlighterPlugin;
   /** Diagrams for `mermaid` code blocks. See `createMermaidPlugin`. */
   mermaid?: MermaidPlugin;
+  /**
+   * Renderers return HTML for a code block, or null to show the code. The
+   * output of a closed block is reused while its language and code stay the
+   * same.
+   */
   renderers?: {
     language: string | string[];
-    render(options: CodeOptions): string;
+    render(options: CodeOptions): string | null;
   }[];
 }
 

@@ -139,7 +139,9 @@ that Pele rejects, stays a code block. Pele is the app's dependency.
 
 The first custom renderer that matches the language replaces the entire code
 block and takes precedence over `plugins.code`. It receives
-`{ code, language, isIncomplete }` and returns an HTML string.
+`{ code, language, isIncomplete }` and returns an HTML string, or `null` to show
+the code block. The output of a closed block is reused while its language and
+code stay the same.
 
 A custom `CodeHighlighterPlugin` implements `highlight(options)` with the same
 input. Return escaped HTML for the inside of `<code>`, or `null` for plain text.

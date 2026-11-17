@@ -26,7 +26,10 @@ export interface AnsiOptions {
    * Korean text, as markdown-cjk-friendly does.
    */
   cjk?: boolean;
-  /** Render `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as SVG. */
+  /**
+   * Read `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as math. The
+   * terminal shows their TeX source.
+   */
   math?: boolean;
 }
 

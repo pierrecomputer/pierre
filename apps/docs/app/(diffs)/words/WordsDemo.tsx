@@ -234,10 +234,19 @@ function WordsExample({
       return;
     }
     setSource('');
-    gfmSpec ??= fetch('/words/gfm-spec.md').then((response) => response.text());
-    void gfmSpec.then((text) => {
-      if (sourceRequest.current === request) setSource(text);
+    gfmSpec ??= fetch('/words/gfm-spec.md').then((response) => {
+      if (!response.ok) throw new Error(`gfm-spec.md: ${response.status}`);
+      return response.text();
     });
+    void gfmSpec.then(
+      (text) => {
+        if (sourceRequest.current === request) setSource(text);
+      },
+      // A failed load is not kept, so picking the sample again retries it.
+      () => {
+        gfmSpec = undefined;
+      }
+    );
   };
   const replay = (): void => {
     setPlayback({ status: 'streaming', cursor: 0 });

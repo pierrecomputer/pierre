@@ -43,6 +43,7 @@ void test('cjk lets emphasis flank CJK text', () => {
     html('__日本語。__です', { cjk: true }),
     '<p>__日本語。__です</p>\n'
   );
+  assert.equal(html('☺\uFE0E_foo_', { cjk: true }), html('☺\uFE0E_foo_'));
   assert.equal(
     html('a**"b"**c', { cjk: true }),
     '<p>a**&quot;b&quot;**c</p>\n'
@@ -97,6 +98,21 @@ void test('single dollars follow the pandoc rules', () => {
   for (const source of plain)
     assert.doesNotMatch(html(source, { math: true }), /<svg/, source);
   assert.match(html('$x$, $2^n$', { math: true }), /<svg[^]*<svg/);
+  // a `$` that cannot close leaves its opener as text; later math still pairs
+  for (const source of [
+    'It costs $5 and $x$ is the count',
+    'Pay $5, $10 or $20 if $x$ holds',
+    '$1 $2 $x$',
+    '$y$5 and $x$',
+  ]) {
+    const out = html(source, { math: true });
+    assert.deepEqual(
+      [...out.matchAll(/aria-label="([^"]*)"/g)].map((m) => m[1]),
+      ['x'],
+      source
+    );
+  }
+  assert.equal(glyphs(html('$\\#\\%$', { math: true })), '#%');
   // a backslash escape inside math belongs to TeX
   assert.equal(glyphs(html('$\\$5 \\{x\\}$', { math: true })), '$5{𝑥}');
   // math takes precedence over emphasis and code inside it
@@ -120,6 +136,23 @@ void test('math blocks: $$ fences and math code fences', () => {
   }
   // an unclosed fence runs to the end, like code
   assert.equal(glyphs(html('$$\nx^2', { math: true })), '𝑥2');
+  // text after the opening `$$` and before the closing `$$` is math
+  for (const source of [
+    '$$x^2\n+ y$$\n\nafter',
+    '$$x^2\n+ y\n$$\nafter',
+    '$$\nx^2\n+ y $$\nafter',
+    '$$x^2\r\n+ y$$\r\nafter',
+  ]) {
+    const out = html(source, { math: true });
+    assert.equal(glyphs(out), '𝑥2+𝑦', source);
+    assert.match(out, /^<svg[^]*<\/svg>\n<p>after<\/p>\n$/, source);
+  }
+  assert.match(
+    html('- $$x^2\n  + y$$\n- b', { math: true }),
+    /<li>\n<svg[^]*<\/svg>\n<\/li>\n<li>b<\/li>/
+  );
+  assert.equal(glyphs(html('$$x^2 + y', { math: true })), '𝑥2+𝑦');
+  assert.doesNotMatch(html('$$$\nx\n$$$', { math: true }), /<svg/);
   // a `$$` line with more dollars is a paragraph
   assert.match(html('$$ a $$ b', { math: true }), /^<p><svg/);
   // other fences stay code
@@ -187,8 +220,37 @@ void test('formulas that do not fit show as code', () => {
 void test('unmatched dollars do not rescan the paragraph', () => {
   const prices = '$1 '.repeat(50000);
   assert.equal(html(prices, { math: true }), `<p>${prices.trimEnd()}</p>\n`);
-  // a later closer still pairs with the first opener
-  assert.match(html('$1 $2 $x$', { math: true }), /aria-label="1 \$2 \$x"/);
+});
+
+void test('completion leaves math alone', () => {
+  const render = (source: string) =>
+    createHtmlSession()
+      .render(source, { incomplete: true, math: true })
+      .html.replace(/<svg[^]*?<\/svg>/g, 'M');
+  // closed math is literal
+  assert.equal(render('For $x \\in [0, 1)$ we have'), '<p>For M we have</p>\n');
+  assert.equal(
+    render('Let $f^*(x)$ be the dual and'),
+    '<p>Let M be the dual and</p>\n'
+  );
+  assert.equal(
+    render('The set $\\{x_i\\}_{i=1}^n$ is `code'),
+    '<p>The set M is <code>code</code></p>\n'
+  );
+  // open math gets no repair inside, and what opened before it still closes
+  assert.equal(render('Let $f^*(x'), '<p>Let $f^*(x</p>\n');
+  assert.equal(render('where $$x_i [a'), '<p>where $$x_i [a</p>\n');
+  assert.equal(
+    render('**the dual $f^*(x'),
+    '<p><strong>the dual $f^*(x</strong></p>\n'
+  );
+  // a price is text, so repair goes on after it
+  assert.equal(
+    render('costs $5 and **bold'),
+    '<p>costs $5 and <strong>bold</strong></p>\n'
+  );
+  // an open display block shows the formula so far
+  assert.equal(render('$$\\frac{a}{b}'), 'M\n');
 });
 
 void test('math in ANSI and alt text shows its source', () => {
@@ -272,11 +334,45 @@ void test('the Mermaid plugin renders closed mermaid fences', () => {
   );
   // a diagram that does not parse stays code
   assert.match(done, /data-language="mermaid"[^]*bad/);
-  // the last diagram is cached
-  createHtmlRenderer({ plugins: { mermaid } }).render(
-    '```mermaid\nbad\n```\n',
-    false,
-    false
-  );
   assert.deepEqual(calls, ['graph LR\n', 'bad\n']);
+});
+
+void test('closed renderer blocks render once while the tail streams', () => {
+  const calls: string[] = [];
+  const mermaid = createMermaidPlugin({
+    render(source: string) {
+      calls.push(source);
+      if (source.includes('bad')) throw new Error('parse error');
+      return { svg: '<svg></svg>' };
+    },
+  });
+  let notes = 0;
+  const renderer = createHtmlRenderer({
+    plugins: {
+      mermaid,
+      renderers: [
+        {
+          language: 'note',
+          render: ({ code, isIncomplete }) =>
+            isIncomplete ? null : `<aside>${++notes}:${code}</aside>`,
+        },
+      ],
+    },
+  });
+  // one list item keeps every fence in the pending output
+  const doc =
+    '- a\n\n  ```mermaid\n  graph LR\n  ```\n\n  ```mermaid\n  bad\n  ```\n\n  ```note\n  n\n  ```\n\n  tail text that streams';
+  let out = '';
+  for (let at = 1; at <= doc.length; at++)
+    out = renderer.render(doc.slice(0, at), true, true).html;
+  assert.deepEqual(calls, ['graph LR\n', 'bad\n']);
+  assert.equal(notes, 1);
+  assert.match(out, /<aside>1:n\n<\/aside>/);
+  // an open fence of a renderer that returns null is a code block
+  assert.match(
+    createHtmlRenderer({
+      plugins: { renderers: [{ language: 'note', render: () => null }] },
+    }).render('```note\nn\n```\n', false, false).html,
+    /data-language="note"/
+  );
 });

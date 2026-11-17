@@ -256,9 +256,10 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let allSlots = false;
   // Raw end, formatted end, and next code index at fences in the current pending output.
   let pendingFences: number[] = [];
-  // Completed fence HTML by language and code. Resets keep only the fences they reuse.
-  let codeCache = new Map<string, string>();
-  let oldCodeCache = new Map<string, string>();
+  // Completed fence output by language and code: highlighted HTML, or what a
+  // renderer returned. Resets keep only the fences they reuse.
+  let codeCache = new Map<string, string | null>();
+  let oldCodeCache = new Map<string, string | null>();
   // The open fence, the formatted HTML around it, and its previous escaped and decoded code.
   let fenceKey = 0;
   let fence:
@@ -408,30 +409,32 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const language =
         open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
       const number = index++;
-      const diagram =
-        language === 'mermaid'
-          ? options.plugins?.mermaid?.render({
-              code: decodeHtml(content),
-              language,
-              isIncomplete,
-            })
-          : undefined;
-      if (diagram != null) {
-        html += hookHtml(diagram);
-        fences?.push(cursor, html.length, index);
-        continue;
-      }
-      const custom = options.plugins?.renderers?.find((renderer) =>
-        typeof renderer.language === 'string'
-          ? renderer.language === language
-          : renderer.language.includes(language)
-      );
-      if (custom !== undefined) {
-        html += hookHtml(
-          custom.render({ code: decodeHtml(content), language, isIncomplete })
+      // The Mermaid plugin is a renderer for one language.
+      const custom =
+        (language === 'mermaid' ? options.plugins?.mermaid : undefined) ??
+        options.plugins?.renderers?.find((renderer) =>
+          typeof renderer.language === 'string'
+            ? renderer.language === language
+            : renderer.language.includes(language)
         );
-        fences?.push(cursor, html.length, index);
-        continue;
+      if (custom !== undefined) {
+        const code = decodeHtml(content);
+        // The leading NUL keeps these keys apart from the highlighter's.
+        const key = '\0' + language + '\0' + code;
+        let block = isIncomplete
+          ? undefined
+          : codeCache.has(key)
+            ? codeCache.get(key)
+            : oldCodeCache.get(key);
+        if (block === undefined)
+          block = custom.render({ code, language, isIncomplete });
+        if (!isIncomplete) codeCache.set(key, block);
+        // A renderer that returns null shows the code block.
+        if (block !== null) {
+          html += hookHtml(block);
+          fences?.push(cursor, html.length, index);
+          continue;
+        }
       }
       const plugin = options.plugins?.code;
       // Only a different open fence replaces the live highlighter.

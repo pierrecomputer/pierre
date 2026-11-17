@@ -8,9 +8,9 @@
   ;; TeX's appendix G: atoms collect on a stack until their list ends, then
   ;; scripts attach and inter-atom spaces apply. Box nodes live in a fixed
   ;; arena; the SVG writer walks them once. Lengths are thousandths of the
-  ;; em of the surrounding text. Glyph metrics come from KaTeX's fonts
-  ;; (Computer Modern), and glyphs print as Unicode math alphanumerics in the
-  ;; system math font, each at its own position.
+  ;; em of the surrounding text. Glyph metrics come from STIX Two Math
+  ;; (src/math-metrics.txt), and glyphs print as Unicode math alphanumerics
+  ;; in the system math font, each at its own position.
   (math-glyphs $mem.mathGlyphs $mem.mathGlyphsEnd)
   (math-commands $mem.mathCmds $mem.mathCmdsEnd)
 

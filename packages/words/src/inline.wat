@@ -82,8 +82,9 @@
   (global $bracketLo (mut i32) (i32.const 0))
   (global $scannedBackticks (mut i32) (i32.const 0))
   (global $tickTop (mut i32) (i32.const 0))
-  ;; Start of a failed single-`$` closer scan in this leaf, or 0.
-  (global $dollarMiss (mut i32) (i32.const 0))
+  ;; Set by $handleDollar when an opening `$` run found no closer before the
+  ;; content ended, so more input can still make it math.
+  (global $mathAtEnd (mut i32) (i32.const 0))
   (global $lastMarkEnd (mut i32) (i32.const 0))
   (global $literalNeedsEscape (mut i32) (i32.const 0))
 
@@ -155,7 +156,6 @@
     (global.set $bracketLo (i32.const 0))
     (global.set $scannedBackticks (i32.const 0))
     (global.set $tickTop (i32.const 0))
-    (global.set $dollarMiss (i32.const 0))
     (global.set $htmlNoClose (i32.const 0))
     (global.set $wwwRejectBefore (i32.const 0))
     (global.set $lastMarkEnd (i32.const 0))
@@ -467,16 +467,18 @@
     (global.set $scannedBackticks (i32.const 1))
     (i32.const 0))
 
-  ;; Math between `$` or `$$` runs. Like a code span, its content is literal.
-  ;; A single `$` opens only before a non-space and closes only after a
-  ;; non-space and before a non-digit, so prices stay text. Backslash
-  ;; escapes inside are TeX's.
+  ;; Math between `$` or `$$` runs. Like a code span, its content is literal,
+  ;; and backslash escapes inside are TeX's. A single `$` follows Pandoc: it
+  ;; opens only before a non-space, and the next `$` either closes it, after a
+  ;; non-space and before a non-digit, or leaves it as text. So prices stay
+  ;; text. $mathAtEnd says the content ended before a `$` could close the run.
   (func $handleDollar (param $p i32) (param $end i32) (result i32)
     (local $base i32)
     (local $q i32)
     (local $n i32)
     (local $i i32)
     (local $c i32)
+    (global.set $mathAtEnd (i32.const 0))
     (local.set $base (global.get $contentBase))
     (local.set $q (local.get $p))
     (loop $run
@@ -489,28 +491,13 @@
     (if (i32.and (i32.eq (local.get $n) (i32.const 1))
           (call $isWhiteByte (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
       (then (return (local.get $q))))
-    ;; Closers do not depend on the opener. A failed scan from $dollarMiss
-    ;; visited this `$` unless an odd `\` run or a `$` skipped it, and then
-    ;; went on from $q, so this scan fails too. Without this, `$1 ` repeated
-    ;; rescans the tail per price.
-    (if (i32.and (i32.eq (local.get $n) (i32.const 1))
-          (i32.and (i32.ne (global.get $dollarMiss) (i32.const 0))
-            (i32.ge_u (local.get $p) (global.get $dollarMiss))))
-      (then
-        (local.set $i (local.get $p))
-        (loop $esc
-          (local.set $c (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))
-          (if (i32.eq (local.get $c) (i32.const "\5c"))
-            (then
-              (local.set $i (i32.sub (local.get $i) (i32.const 1)))
-              (br $esc))))
-        (if (i32.and (i32.ne (local.get $c) (i32.const "$"))
-              (i32.eqz (i32.and (i32.sub (local.get $p) (local.get $i)) (i32.const 1))))
-          (then (return (local.get $q))))))
     (local.set $i (local.get $q))
     (block $none
       (loop $scan
-        (br_if $none (i32.ge_u (local.get $i) (local.get $end)))
+        (if (i32.ge_u (local.get $i) (local.get $end))
+          (then
+            (global.set $mathAtEnd (i32.const 1))
+            (br $none)))
         (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $i))))
         (if (i32.eq (local.get $c) (i32.const "\5c"))
           (then
@@ -522,26 +509,19 @@
               (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))))
             (if (i32.eq (local.get $n) (i32.const 2))
               (then
-                (if (i32.and (i32.eq (local.get $c) (i32.const "$")) (i32.gt_u (local.get $i) (local.get $q)))
+                (if (i32.eq (local.get $c) (i32.const "$"))
                   (then
                     (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x20000))
                       (local.get $p) (i32.add (local.get $i) (i32.const 2)) (local.get $q)))
                     (return (i32.add (local.get $i) (i32.const 2))))))
               (else
-                (if (i32.eq (local.get $c) (i32.const "$"))
-                  (then
-                    (local.set $i (i32.add (local.get $i) (i32.const 2)))
-                    (br $scan)))
-                (if (i32.eqz (i32.or (call $isDigit (local.get $c))
-                      (call $isWhiteByte (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))))
-                  (then
-                    (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x10000))
-                      (local.get $p) (i32.add (local.get $i) (i32.const 1)) (local.get $q)))
-                    (return (i32.add (local.get $i) (i32.const 1)))))))))
+                (br_if $none (i32.or (call $isDigit (local.get $c))
+                  (call $isWhiteByte (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))))
+                (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x10000))
+                  (local.get $p) (i32.add (local.get $i) (i32.const 1)) (local.get $q)))
+                (return (i32.add (local.get $i) (i32.const 1)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $scan)))
-    (if (i32.and (i32.eq (local.get $n) (i32.const 1)) (i32.eqz (global.get $dollarMiss)))
-      (then (global.set $dollarMiss (local.get $q))))
     (local.get $q))
 
   (func $handleDelim (param $p i32) (param $end i32) (result i32)
@@ -589,11 +569,12 @@
         (if (i32.lt_u (local.get $q) (local.get $end))
           (then (local.set $flags (call $utf8At (i32.add (local.get $base) (local.get $q))
             (i32.add (local.get $base) (local.get $end))))))
-        (if (i32.and (global.get $ext) (i32.const 1))
+        ;; `_` keeps the CommonMark rules
+        (if (i32.and (i32.and (global.get $ext) (i32.const 1)) (i32.ne (local.get $c) (i32.const "_")))
           (then
             (local.set $k (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
               (local.get $k) (local.get $flags)))
-            (local.set $cjk (i32.ne (local.get $c) (i32.const "_")))))
+            (local.set $cjk (i32.const 1))))
         (local.set $k (i32.or
           (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
             (i32.const 2))

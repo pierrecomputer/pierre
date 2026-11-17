@@ -149,9 +149,9 @@
           (loop $find
             (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
             (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $p))))
-            ;; * . : < [ \ ] _ ` ~
+            ;; $ * . : < [ \ ] _ ` ~
             (br_if $found (call $byteIn (local.get $c)
-              (i64.const 0x1400440000000000) (i64.const 0x40000001b8000000)))
+              (i64.const 0x1400441000000000) (i64.const 0x40000001b8000000)))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $find)))
         (if (i32.eq (local.get $c) (i32.const "<"))
@@ -351,6 +351,22 @@
           (br_if $run (i32.and (i32.lt_u (local.get $q) (local.get $e))
             (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $q))) (local.get $c)))))
         (local.set $n (i32.sub (local.get $q) (local.get $p)))
+        (if (i32.eq (local.get $c) (i32.const "$"))
+          (then
+            ;; Math is skipped whole, as inline analysis reads it. An opener
+            ;; that the content ends in can still become math, so nothing
+            ;; after it is repaired. A lone `$` before a digit is more likely
+            ;; a price, and the scan goes on.
+            (if (i32.and (global.get $ext) (i32.const 2))
+              (then
+                (global.set $nSlots (i32.const 0))
+                (local.set $t (call $handleDollar (local.get $p) (local.get $e)))
+                (br_if $done (i32.and (global.get $mathAtEnd)
+                  (i32.eqz (i32.and (i32.eq (local.get $n) (i32.const 1))
+                    (call $isDigit (i32.load8_u (i32.add (local.get $base) (local.get $q))))))))
+                (local.set $q (local.get $t))))
+            (local.set $p (local.get $q))
+            (br $scan)))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then
             (local.set $t (call $scanToClosingBackticks (local.get $q) (local.get $e) (local.get $n)))

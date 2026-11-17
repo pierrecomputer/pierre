@@ -47,7 +47,9 @@
     "footnote"  ;; container, data = assigned number; extra as for linkdef
   )
 
-  ;; Record flags.
+  ;; Record flags. Warning: the byte is full, so $F.math shares a bit with
+  ;; $F.task. Check the block type before reading either: $F.task is for list
+  ;; items and $F.math for code records.
   (const $F.opener 1)
   (const $F.closer 2)
   (const $F.loose 4)

@@ -139,13 +139,17 @@
             (return (i32.const 1))))
         (local.set $line (call $lineStartBefore (local.get $stop) (local.get $p)))
         (local.set $end (call $findLineEnd (local.get $stop)))
-        (local.set $q (call $runEnd (local.get $line) (local.get $stop) (i32.const 32)))
-        (if (i32.eq (local.get $q) (local.get $stop))
-          (then
-            (if (i32.le_u (i32.sub (local.get $stop) (local.get $line)) (i32.const 3))
-              (then (br_if $found
-                (local.tee $close (call $closesFence (local.get $stop) (local.get $end)))))))
-          (else (br_if $found (i32.eq (i32.load8_u (local.get $q)) (i32.const 9)))))
+        (if (i32.eq (global.get $codeFenceCh) (i32.const "$"))
+          (then (br_if $found
+            (local.tee $close (call $mathFenceEnd (local.get $line) (local.get $end)))))
+          (else
+            (local.set $q (call $runEnd (local.get $line) (local.get $stop) (i32.const 32)))
+            (if (i32.eq (local.get $q) (local.get $stop))
+              (then
+                (if (i32.le_u (i32.sub (local.get $stop) (local.get $line)) (i32.const 3))
+                  (then (br_if $found
+                    (local.tee $close (call $closesFence (local.get $stop) (local.get $end)))))))
+              (else (br_if $found (i32.eq (i32.load8_u (local.get $q)) (i32.const 9)))))))
         (local.set $stop (local.get $end))
         (br $scan)))
     ;; the body holds the lines before the stopping line or EOF, without the
@@ -155,6 +159,12 @@
         (i32.eq (i32.load8_u (i32.sub (local.get $line) (i32.const 1))) (i32.const 10))))))
     (if (local.get $close)
       (then
+        ;; $close is 1 for a code fence, and the closing `$$` of a math block
+        (if (i32.gt_u (local.get $close) (call $skipSpace (local.get $line) (local.get $end)))
+          (then
+            (global.set $pos (local.get $line))
+            (global.set $lineEnd (local.get $close))
+            (call $addLine)))
         (call $closeLeaf)
         (global.set $lineEnd (local.get $end))
         (return (i32.const 1))))
@@ -666,15 +676,29 @@
             (then
               (if (global.get $codeFenceCh)
                 (then
-                  (if (i32.and
-                        (i32.le_u (global.get $indent) (i32.const 3))
-                        (i32.and (i32.lt_u (global.get $fns) (global.get $lineEnd))
-                          (i32.eq (i32.load8_u (global.get $fns)) (global.get $codeFenceCh))))
+                  (if (i32.eq (global.get $codeFenceCh) (i32.const "$"))
                     (then
-                      (if (call $closesFence (global.get $fns) (global.get $lineEnd))
+                      (if (local.tee $n (call $mathFenceEnd (global.get $fns) (global.get $lineEnd)))
                         (then
+                          (if (i32.gt_u (local.get $n) (global.get $fns))
+                            (then
+                              (local.set $e (global.get $lineEnd))
+                              (call $advanceToFns (i32.const 0))
+                              (global.set $lineEnd (local.get $n))
+                              (call $addLine)
+                              (global.set $lineEnd (local.get $e))))
                           (call $closeLeaf)
-                          (return (i32.const 1))))))
+                          (return (i32.const 1)))))
+                    (else
+                      (if (i32.and
+                            (i32.le_u (global.get $indent) (i32.const 3))
+                            (i32.and (i32.lt_u (global.get $fns) (global.get $lineEnd))
+                              (i32.eq (i32.load8_u (global.get $fns)) (global.get $codeFenceCh))))
+                        (then
+                          (if (call $closesFence (global.get $fns) (global.get $lineEnd))
+                            (then
+                              (call $closeLeaf)
+                              (return (i32.const 1))))))))
                   ;; strip up to the opening fence's own indentation
                   (if (local.tee $n (select (global.get $codeFenceOff) (global.get $indent)
                         (i32.lt_u (global.get $codeFenceOff) (global.get $indent))))
@@ -827,15 +851,22 @@
               (call $prepareLeafParent)
               (call $openLeaf (enum.get $Blk.code))
               (call $recFlag (global.get $leafRec) (i32.const $F.fenced))
-              (if (i32.eq (i32.load8_u (global.get $fns)) (i32.const "$"))
-                (then (call $recFlag (global.get $leafRec) (i32.const $F.math))))
               (global.set $codeFenceCh (i32.load8_u (global.get $fns)))
               (global.set $codeFenceN (local.get $m))
               (global.set $codeFenceOff (local.get $markerOff))
               (local.set $save (call $skipSpace (global.get $pos) (global.get $lineEnd)))
               (i32.store offset=8 (global.get $leafRec) (local.get $save))
-              (i32.store offset=12 (global.get $leafRec)
-                (call $trimSpaceBack (global.get $lineEnd) (local.get $save)))
+              (if (i32.eq (global.get $codeFenceCh) (i32.const "$"))
+                (then
+                  ;; A math block has no info string.
+                  (call $recFlag (global.get $leafRec) (i32.const $F.math))
+                  (i32.store offset=12 (global.get $leafRec) (local.get $save))
+                  (if (i32.lt_u (local.get $save) (global.get $lineEnd))
+                    (then
+                      (global.set $pos (local.get $save))
+                      (call $addLine))))
+                (else (i32.store offset=12 (global.get $leafRec)
+                  (call $trimSpaceBack (global.get $lineEnd) (local.get $save)))))
               (global.set $pos (global.get $lineEnd))
               (global.set $skipLine (i32.const 1))
               (br $stop))

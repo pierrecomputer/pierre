@@ -137,10 +137,17 @@ $$
 ```
 
 - `$...$` is inline math. As in Pandoc, the opening `$` must have a non-space
-  after it, and the closing `$` a non-space before it and no digit after it, so
+  after it, and the next `$` closes it only with a non-space before it and no
+  digit after it. If that `$` cannot close it, the opening `$` is text, so
   `$5 and $10` stays text.
 - `$$...$$` is display math, also inside a paragraph.
-- A `$$` fence or a `math` code fence is a display block.
+- A line that starts with `$$` and holds no other `$` opens a display block,
+  which ends at a line that ends with `$$`. Text after the opening `$$` and
+  before the closing `$$` belongs to the formula.
+- A `math` code fence is a display block too.
+
+While a formula streams with `incomplete: true`, an open display block shows
+what it has so far. Open inline math shows as plain text until its closing `$`.
 
 The renderer covers the common LaTeX math commands: fractions, roots, scripts
 and limits, big operators, `\left` and `\right`, matrices, `cases`, `aligned`,
@@ -166,6 +173,10 @@ const plugins = { mermaid: createMermaidPlugin({ render }) };
 
 The second argument holds Pele's render options. An open fence and a diagram
 that does not parse show as code.
+
+A renderer in `plugins.renderers` can return `null` the same way to show the
+code block. The renderer keeps the output of a closed block and reuses it while
+the language and code stay the same.
 
 ## HTML sessions
 

@@ -482,7 +482,13 @@ table('math-commands', () => {
       const at = item.lastIndexOf(':');
       const name = at > 0 ? item.slice(0, at) : item;
       const value = at > 0 ? parseInt(item.slice(at + 1), 16) : 0;
-      if (entries.has(name) || name.length > 31 || !(value < 1 << 21))
+      // sym, ital, op and opl print their value as a glyph, so it cannot be 0.
+      if (
+        entries.has(name) ||
+        name.length > 31 ||
+        !(value < 1 << 21) ||
+        (k < 4 && value === 0)
+      )
         throw new Error(`math.txt: bad entry ${item}`);
       entries.set(name, (k << 24) | (c << 21) | value);
     }

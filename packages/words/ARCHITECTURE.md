@@ -140,9 +140,12 @@ reserve output space for batches of text and tags.
 ## Math
 
 With the math option, `$` joins the inline syntax bytes and `$$` the fence
-markers. A math mark or block copies its TeX to a fixed buffer, because output
-growth can move scratch content. [`math.wat`](./src/math.wat) then parses and
-lays out the formula in one pass, as TeX's appendix G does:
+markers. A `$$` fence has no info string: text after the opening `$$` is its
+first line, and it closes at a line that ends with `$$`. Streaming completion
+skips closed math and repairs nothing after an opener that can still close. A
+math mark or block copies its TeX to a fixed buffer, because output growth can
+move scratch content. [`math.wat`](./src/math.wat) then parses and lays out the
+formula in one pass, as TeX's appendix G does:
 
 - Atoms collect on a stack until their list ends. Then scripts attach, binary
   operators without operands become ordinary, and inter-atom spaces apply.
