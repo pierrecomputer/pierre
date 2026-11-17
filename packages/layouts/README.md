@@ -795,22 +795,26 @@ separator does, and report it through `onResize`; they speak "Editor width 45%"
 `pane.taller`, `pane.shorter`, and `pane.menu`, which opens the pane menu of the
 focused pane from its move handle.
 
-`Layout.usePaneMenu()`, in a component of a pane, gives the items of the pane
-menu for the app's own menu component, whose trigger is `Layout.MoveHandle`; the
-library ships no menu component. Each item has an `id`, a `group` (`move`,
-`size`, or `zoom`), a `label`, `disabled`, and `run()`; a move item has its
-`place`, and "Move to…" has its `items`. The move items list each place that
-changes the layout once: beside the pane across each edge ("Move left of
-Files"), at each edge of the layout ("Move to a new column at the left"), with
-`stacks()` into the tabs of each neighbor and "Merge tabs into Files" for a pane
-of a stack, and in "Move to…" a place beside each other pane and its tabs. Then
-"Wider", "Narrower", "Taller", and "Shorter", disabled at a limit, and with
-`zoom()` "Maximize" or "Restore". While a pane fills the layout, the move and
-size items are disabled and "Restore" stays. The labels come from `messages`
-(`moveBeside`, `moveToEdge`, `moveToTabs`, `mergeInto`, `moveToMenu`, `place`,
-`resize`, and `maximize`). The items read the layout's boxes for the limits, so
-render them only while the menu is open. `demo/pane-menu.tsx` is a reference
-menu on the hook, with the WAI-ARIA menu button pattern.
+`Layout.usePaneMenu(open)`, in a component of a pane, gives the items of the
+pane menu for the app's own menu component, whose trigger is
+`Layout.MoveHandle`; the library ships no menu component. Each item has an `id`,
+a `group` (`move`, `size`, or `zoom`), a `label`, `disabled`, and `run()`; a
+move item has its `place`, and "Move to…" has its `items`. The move items list
+each place that changes the layout once: beside the pane across each edge ("Move
+left of Files"), at each edge of the layout ("Move to a new column at the
+left"), with `stacks()` into the tabs of each neighbor and "Merge tabs into
+Files" for a pane of a stack, and in "Move to…" a place beside each other pane
+and its tabs. Then "Wider", "Narrower", "Taller", and "Shorter", disabled at a
+limit, and with `zoom()` "Maximize" or "Restore". While a pane fills the layout,
+the move and size items are disabled and "Restore" stays. The labels come from
+`messages` (`moveBeside`, `moveToEdge`, `moveToTabs`, `mergeInto`, `moveToMenu`,
+`place`, `resize`, and `maximize`). The items exist while `open` is true: they
+read the layout's boxes for the limits and change with the layout. With `open`
+false, the hook gives an empty list, reads nothing, and does not render its
+component when the layout changes, so the header that holds the trigger can call
+it with the state of its menu: `const items = Layout.usePaneMenu(menuOpen)`.
+`demo/pane-menu.tsx` is a reference menu on the hook, with the WAI-ARIA menu
+button pattern.
 
 A drag of a separator changes the two children of its split beside it. When one
 of them reaches its minimum size, the next child on that side gives the space,

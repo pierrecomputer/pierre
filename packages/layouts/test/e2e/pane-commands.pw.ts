@@ -355,6 +355,32 @@ test('with arrange(), the move handle is the trigger of the pane menu', async ({
   expect((await box(page, '1')).x).toBeGreaterThan(to.x);
 });
 
+test('a closed pane menu does not render for a change of the layout, and an open one has its items', async ({
+  page,
+}) => {
+  // Each header calls `Layout.usePaneMenu(open)` with the state of its menu.
+  const renders = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __paneMenu: { triggerRenders: number } })
+          .__paneMenu.triggerRenders
+    );
+  const before = await renders();
+  await note(page, '2').focus();
+  await page.getByRole('button', { name: 'Next pane', exact: true }).click();
+  expect(await focusedPane(page)).toBe('5');
+  expect(await renders()).toBe(before);
+  const trigger = page
+    .locator('[data-layouts-pane="5"]')
+    .getByRole('button', { name: 'Arrange Pane 5', exact: true });
+  await trigger.click();
+  const maximize = page.getByRole('menuitem', { name: 'Maximize' });
+  await expect(maximize).toHaveCount(1);
+  await maximize.click();
+  await trigger.click();
+  await expect(page.getByRole('menuitem', { name: 'Restore' })).toHaveCount(1);
+});
+
 test("one rule for places: the layout's canPlace hides the menu items that it refuses, and refuses the drag", async ({
   page,
 }) => {

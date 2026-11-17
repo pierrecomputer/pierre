@@ -1,4 +1,4 @@
-// A reference pane menu on `Layout.usePaneMenu()`: the WAI-ARIA menu button
+// A reference pane menu on `Layout.usePaneMenu(open)`: the WAI-ARIA menu button
 // pattern, with `Layout.MoveHandle` as its trigger. A drag of the handle
 // moves the pane; a click, Enter, Space, or Arrow Down opens the menu, and
 // Arrow Up opens it on its last item. In the menu, the arrows move, Home and
@@ -23,8 +23,19 @@ import type { PaneMenuItem } from '../src/react';
 
 type Start = 'first' | 'last';
 
+// The renders of the pane menu triggers, which the e2e tests read: a closed
+// menu does not render for a change of the layout.
+const page = { triggerRenders: 0 };
+Object.assign(window, { __paneMenu: page });
+
+function countTriggerRender(): void {
+  page.triggerRenders += 1;
+}
+
 export function PaneMenu(): JSX.Element {
   const [open, setOpen] = useState<Start | null>(null);
+  const items = Layout.usePaneMenu(open !== null);
+  countTriggerRender();
   const trigger = useRef<HTMLElement | null>(null);
   const triggerId = useId();
   const menuId = useId();
@@ -55,6 +66,7 @@ export function PaneMenu(): JSX.Element {
             anchor={trigger}
             onClose={close}
             onDone={() => close(true)}
+            items={items}
           />,
           document.body
         )}
@@ -69,7 +81,8 @@ function Menu({
   anchor,
   onClose,
   onDone,
-  items: own,
+  items,
+  sub = false,
 }: {
   id: string;
   labelledBy: string;
@@ -79,10 +92,10 @@ function Menu({
   onClose: (refocus: boolean) => void;
   /** An item ran: close every menu, and focus the trigger. */
   onDone: () => void;
-  items?: readonly PaneMenuItem[];
+  items: readonly PaneMenuItem[];
+  /** A submenu, at the right of its item, which its menu closes. */
+  sub?: boolean;
 }): JSX.Element {
-  const all = Layout.usePaneMenu();
-  const items = own ?? all;
   const menu = useRef<HTMLDivElement | null>(null);
   const [submenu, setSubmenu] = useState<Start | null>(null);
   const subId = useId();
@@ -93,12 +106,12 @@ function Menu({
     const rect = anchor.current?.getBoundingClientRect();
     const height = menu.current?.offsetHeight ?? 0;
     if (rect === undefined) return;
-    const top = own === undefined ? rect.bottom + 4 : rect.top;
+    const top = sub ? rect.top : rect.bottom + 4;
     setBox({
-      left: own === undefined ? rect.left : rect.right + 2,
+      left: sub ? rect.right + 2 : rect.left,
       top: Math.max(8, Math.min(top, innerHeight - height - 8)),
     });
-  }, [anchor, own]);
+  }, [anchor, sub]);
   const elements = (): HTMLElement[] => [
     ...(menu.current?.querySelectorAll<HTMLElement>(
       ':scope > [role="menuitem"]'
@@ -110,7 +123,7 @@ function Menu({
   }, [start]);
   // A press outside the menu closes it.
   useEffect(() => {
-    if (own !== undefined) return;
+    if (sub) return;
     const outside = (event: PointerEvent): void => {
       const target = event.target as Node;
       if (
@@ -190,7 +203,8 @@ function Menu({
             labelledBy={id}
             start={submenu}
             anchor={opener}
-            items={items.find((item) => item.items !== undefined)?.items}
+            items={items.find((item) => item.items !== undefined)?.items ?? []}
+            sub
             onClose={(refocus) => {
               setSubmenu(null);
               if (refocus) opener.current?.focus();

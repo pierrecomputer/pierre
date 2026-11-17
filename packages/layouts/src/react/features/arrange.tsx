@@ -297,6 +297,10 @@ export function arrange(): Feature<ArrangeCommands> {
   return feature;
 }
 
+// The items of a menu that is not open: one array, so that its identity
+// stays.
+const NO_ITEMS: readonly PaneMenuItem[] = [];
+
 /**
  * The items of the pane menu of the pane of the calling component, for the
  * app's own menu component, with `Layout.MoveHandle` as its trigger. It needs
@@ -304,13 +308,19 @@ export function arrange(): Feature<ArrangeCommands> {
  * beside the pane across each edge, at each edge of the layout, into the tabs
  * of each neighbor with `stacks()`, and "Move to…" with a place beside each
  * other pane. While a pane fills the layout, the move and size items are
- * disabled and "Restore" stays. The items read the layout's boxes for the
- * limits of Grow and Shrink, so render them only while the menu is open.
+ * disabled and "Restore" stays. The items exist only while `open` is true:
+ * they read the layout's boxes for the limits of Grow and Shrink, and change
+ * with each change of the layout. While `open` is false, the hook gives no
+ * items, reads nothing, and renders its component for no change of the
+ * layout, so a header can call it with the state of its menu.
  */
-export function usePaneMenu(): readonly PaneMenuItem[] {
+export function usePaneMenu(open: boolean): readonly PaneMenuItem[] {
   const { id, context } = usePaneContext('Layout.usePaneMenu');
-  const state = useLayoutState(context.store, (each) => each);
-  return useMemo(() => menuItems(context, state, id), [context, state, id]);
+  const state = useLayoutState(context.store, (each) => (open ? each : null));
+  return useMemo(
+    () => (state === null ? NO_ITEMS : menuItems(context, state, id)),
+    [context, state, id]
+  );
 }
 
 function menuItems(
