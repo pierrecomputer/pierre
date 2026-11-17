@@ -116,11 +116,25 @@ function useStickyPinned(
       ...list.querySelectorAll<HTMLElement>(':scope > [data-pinned]'),
     ];
     const stick = (sticky: boolean, width = 0): void => {
+      const items = pinned();
       list.toggleAttribute('data-sticky-pinned', sticky);
       list.style.setProperty('--layouts-pinned-width', `${width}px`);
-      for (const item of pinned()) {
+      // The backdrop of the run starts at the first pinned tab, and covers
+      // the gap after each one.
+      list.style.setProperty(
+        '--layouts-pinned-start',
+        `${items[0]?.offsetLeft ?? 0}px`
+      );
+      // `normal` is no gap, and is not a length.
+      const gap = Number.parseFloat(getComputedStyle(list).columnGap);
+      list.style.setProperty(
+        '--layouts-pinned-gap',
+        `${Number.isNaN(gap) ? 0 : gap}px`
+      );
+      for (const item of items) {
         item.style.left = sticky ? `${item.offsetLeft}px` : '';
         item.style.position = sticky ? 'sticky' : '';
+        item.style.zIndex = sticky ? '2' : '';
         item.toggleAttribute('data-sticky', sticky);
       }
     };

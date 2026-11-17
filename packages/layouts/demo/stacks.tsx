@@ -24,8 +24,10 @@
 //   `?sticky=room0`: at every width (`stickyPinned={{ minRoom: 0 }}`).
 // - `?tabclass=relative`: each tab has an app class that sets
 //   `position: relative`, as a utility class does.
+// - `?tabmark=1`: each tab holds a mark with `z-index: 10` at its left edge,
+//   as an app's close mark has.
 // - `?scroll=1`: the tab lists scroll (`overflow-x: auto`), as an app's own
-//   strip does, so a swipe scrolls them.
+//   strip does, so a swipe scrolls them; `?gap=1`: they also have a 4 px gap.
 // - `?title=1`: each header shows `Layout.Title` before its tab list, and
 //   "Hide the tab lists" removes the tab lists and keeps the titles.
 import { type JSX, StrictMode, useState, useSyncExternalStore } from 'react';
@@ -61,9 +63,11 @@ const sticky =
       ? { minRoom: 0 }
       : false;
 const relativeTabs = params.get('tabclass') === 'relative';
-if (relativeTabs) {
+const tabMarks = params.get('tabmark') === '1';
+if (relativeTabs || tabMarks) {
   const style = document.createElement('style');
-  style.textContent = '.stacks-relative-tab { position: relative; }';
+  style.textContent =
+    '.stacks-relative-tab { position: relative; } .stacks-tab-mark { position: absolute; left: 2px; top: 4px; z-index: 10; width: 8px; height: 8px; background: red; }';
   document.head.append(style);
 }
 const withTitle = params.get('title') === '1';
@@ -81,7 +85,12 @@ const tabLists = {
   },
 };
 const scrollStyle =
-  params.get('scroll') === '1' ? { overflowX: 'auto' as const } : undefined;
+  params.get('scroll') === '1' || params.get('gap') === '1'
+    ? {
+        overflowX: 'auto' as const,
+        ...(params.get('gap') === '1' && { columnGap: 4 }),
+      }
+    : undefined;
 
 const TITLES: Record<string, string> = {
   main: 'main.ts',
@@ -216,6 +225,11 @@ const tabOf = (tab: PaneNode): JSX.Element =>
     <NestedTab />
   ) : guarded ? (
     <GuardedTab id={tab.id} />
+  ) : tabMarks ? (
+    <Layout.Tab>
+      <span className="stacks-tab-mark" />
+      <span className="pierre-layouts-tab-title">{TITLES[tab.id]}</span>
+    </Layout.Tab>
   ) : (
     <Layout.Tab className={relativeTabs ? 'stacks-relative-tab' : undefined} />
   );

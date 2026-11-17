@@ -865,6 +865,187 @@ test("a sticky pinned tab stays stuck under an app's class that sets position: r
   );
 });
 
+// The marker of a tab drop, and whether it paints above what is under it.
+async function markerOf(page: Page) {
+  const marker = page.locator('.pierre-layouts-tab-drop');
+  await expect(marker).toHaveCount(1);
+  // The marker takes no pointer events, so the probe turns them on.
+  return marker.evaluate((element: HTMLElement) => {
+    const box = element.getBoundingClientRect();
+    const x = box.x + box.width / 2;
+    element.style.pointerEvents = 'auto';
+    const top = document.elementFromPoint(x, box.y + box.height / 2);
+    element.style.pointerEvents = '';
+    return { x, onTop: top === element };
+  });
+}
+
+test('in a scrolled list with sticky pinned tabs, the drop marker shows above them, at the boundary under the pointer', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1&sticky=1');
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await expect(list).toHaveAttribute('data-sticky-pinned', '');
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  const main = await tabBox(page, 'main', 'main.ts');
+  const util = await tabBox(page, 'main', 'util.ts');
+  const y = main.y + main.height / 2;
+  await dragTab(page, 'main', 'util.ts', { x: main.x + main.width * 0.3, y });
+  let marker = await markerOf(page);
+  expect(marker.onTop).toBe(true);
+  expect(Math.abs(marker.x - main.x)).toBeLessThan(2);
+  // Past the pinned run, a pinned tab drops at the end of the run.
+  await page.mouse.move(util.x + util.width + 40, y, { steps: 3 });
+  marker = await markerOf(page);
+  expect(marker.onTop).toBe(true);
+  expect(Math.abs(marker.x - (util.x + util.width))).toBeLessThan(2);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+});
+
+test('in a scrolled list, the drop marker shows at the edge of the tab under the pointer', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?scroll=1');
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await list.evaluate((element) => {
+    element.scrollLeft = 200;
+  });
+  const tabs = list.getByRole('tab');
+  const from = await tabs.nth(6).boundingBox();
+  const to = await tabs.nth(8).boundingBox();
+  if (from === null || to === null) throw new Error('No tabs');
+  const y = from.y + from.height / 2;
+  await page.mouse.move(from.x + from.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width * 0.3, y, { steps: 6 });
+  const marker = await markerOf(page);
+  expect(marker.onTop).toBe(true);
+  expect(Math.abs(marker.x - to.x)).toBeLessThan(2);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+});
+
+test('a tab drag keeps its drop in the tab list while the pointer is in the header band, and shows the pane preview below it', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html');
+  const list = await tabsOf(page, 'main').boundingBox();
+  const test = await tabBox(page, 'main', 'test.ts');
+  if (list === null) throw new Error('No tab list');
+  await dragTab(page, 'main', 'util.ts', {
+    x: test.x + test.width * 0.7,
+    y: list.y + list.height + 4,
+  });
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(1);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(0);
+  await page.mouse.move(test.x + test.width * 0.7, list.y + list.height + 80, {
+    steps: 4,
+  });
+  await expect(page.locator('.pierre-layouts-tab-drop')).toHaveCount(0);
+  await expect(page.locator('.pierre-layouts-drop')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+});
+
+test('a tab drag held near the end of a tab list scrolls it', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?scroll=1');
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  const box = await list.boundingBox();
+  if (box === null) throw new Error('No tab list');
+  const scrollLeft = () => list.evaluate((element) => element.scrollLeft);
+  expect(await scrollLeft()).toBe(0);
+  await dragTab(page, 'main', 'util.ts', {
+    x: box.x + box.width - 6,
+    y: box.y + box.height / 2,
+  });
+  await expect.poll(scrollLeft).toBeGreaterThan(100);
+  // Back near the start, it scrolls back.
+  await page.mouse.move(box.x + 6, box.y + box.height / 2, { steps: 4 });
+  await expect.poll(scrollLeft).toBe(0);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+});
+
+test('sticky pinned tabs cover the tabs that scroll under them, their marks and the gaps included', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1&sticky=1&tabmark=1&gap=1');
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await expect(list).toHaveAttribute('data-sticky-pinned', '');
+  const main = await tabBox(page, 'main', 'main.ts');
+  const util = await tabBox(page, 'main', 'util.ts');
+  const test = await tabBox(page, 'main', 'test.ts');
+  // test.ts scrolls under util.ts: its mark is under util.ts.
+  await list.evaluate((element, by) => {
+    element.scrollLeft = by;
+  }, test.x - util.x);
+  const hits = await list.evaluate(
+    (element, points) =>
+      points.map(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        return (
+          hit
+            ?.closest('[data-layouts-tab]')
+            ?.getAttribute('data-layouts-tab') ?? 'none'
+        );
+      }),
+    [
+      [util.x + 6, util.y + 8],
+      [main.x + main.width + 2, main.y + main.height / 2],
+    ]
+  );
+  expect(hits[0]).toBe('util');
+  expect(hits[1]).not.toBe('test');
+  expect(hits[1]).not.toMatch(/^extra/);
+});
+
+test('a stuck selected tab keeps its look, and a stuck tab shows its focus outline', async ({
+  page,
+}) => {
+  // The bottom rows of the selected main.ts (its underline) and its top rows
+  // (its focus outline), without and with stickyPinned.
+  const rows = async (query: string) => {
+    await page.goto(`/stacks.html?pinned=1${query}`);
+    const list = tabsOf(page, 'main');
+    if (query !== '')
+      await expect(list).toHaveAttribute('data-sticky-pinned', '');
+    const main = list.getByRole('tab', { name: 'main.ts' });
+    const box = await main.boundingBox();
+    if (box === null) throw new Error('No tab');
+    const clip = (y: number) => ({
+      x: box.x + 4,
+      y,
+      width: box.width - 8,
+      height: 2,
+    });
+    const underline = await page.screenshot({
+      clip: clip(box.y + box.height - 2),
+    });
+    await main.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowLeft');
+    await expect(main).toBeFocused();
+    const outline = await page.screenshot({ clip: clip(box.y) });
+    return {
+      underline: underline.toString('base64'),
+      outline: outline.toString('base64'),
+    };
+  };
+  const plain = await rows('');
+  const sticky = await rows('&sticky=1');
+  expect(sticky.underline).toBe(plain.underline);
+  expect(sticky.outline).toBe(plain.outline);
+});
+
 test("the layout's canPlace refuses a place of a tab drag once for each target, and allows the others", async ({
   page,
 }) => {

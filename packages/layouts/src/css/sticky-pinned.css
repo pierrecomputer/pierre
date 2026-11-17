@@ -1,21 +1,31 @@
 @layer pierre-layouts {
   /* `stickyPinned` of `Layout.TabList`, which alone adds this sheet: each
      pinned tab sticks at the place that the tab list measures (its inline
-     `position` and `left`), over an opaque layer, and a tab that scrolls into
-     view stops beside the pinned tabs. */
+     `position`, `left`, and `z-index`), and a tab that scrolls into view
+     stops beside the pinned tabs. */
   .pierre-layouts-tabs[data-sticky-pinned] {
     scroll-padding-inline-start: var(--layouts-pinned-width);
   }
 
-  .pierre-layouts-tabs > [data-sticky] {
+  /* One opaque layer behind the pinned tabs and the gaps after them covers
+     the tabs that scroll under them. It takes no room in the row. The tabs
+     own their backgrounds above it, and each tab keeps its own layers, such
+     as a close mark, inside it. */
+  .pierre-layouts-tabs[data-sticky-pinned]::before {
+    content: '';
+    position: sticky;
+    left: var(--layouts-pinned-start, 0);
     z-index: 1;
+    flex: none;
+    align-self: stretch;
+    width: calc(var(--layouts-pinned-width) + var(--layouts-pinned-gap, 0px));
+    margin-right: calc(
+      -1 * var(--layouts-pinned-width) - 2 * var(--layouts-pinned-gap, 0px)
+    );
+    background: var(--layouts-pane-background, #fff);
   }
 
-  .pierre-layouts-tabs > [data-sticky]::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: var(--layouts-pane-background, #fff);
+  .pierre-layouts-tabs[data-sticky-pinned] > * {
+    isolation: isolate;
   }
 }

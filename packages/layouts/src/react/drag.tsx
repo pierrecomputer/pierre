@@ -8,15 +8,6 @@
 // also the center of a pane and the tab lists (a drop into a stack).
 import { type PointerEvent, type ReactNode, useSyncExternalStore } from 'react';
 
-import { hostOf } from '../dom/panes';
-import {
-  boundaryOffset,
-  clearTabDrop,
-  readTabEdges,
-  showTabDrop,
-  tablistAt,
-  tabsOf,
-} from '../dom/tab-drag';
 import {
   type DropPlace,
   dropPlace,
@@ -24,7 +15,6 @@ import {
   paneAt,
   placeRect,
 } from '../drop';
-import { tabBoundaryAt } from '../stacks-model';
 import { type ContextOfStore, STORE_CONTEXT } from '../store';
 import { treeIndex } from '../tree-index';
 import type { LayoutGeometry, Place, Rect } from '../types';
@@ -101,6 +91,8 @@ export interface DragOptions {
     press: PointerEvent<HTMLElement>,
     begin: () => void
   ) => DragWait | undefined;
+  /** The drops in the tab lists, for a source that can drop into a stack. */
+  readonly band?: DragBand;
   /** The pointer moved to a point of the layout, during the drag. */
   follow?(x: number, y: number): void;
   /** Apply the drop. */
@@ -155,46 +147,35 @@ export function dropTargetAt(
   return { paneId, place, rect };
 }
 
-/** The tab list under a point, as a drop target with the boundary under the point. */
-function tabListTargetAt(
-  element: HTMLElement,
-  geometry: LayoutGeometry,
-  x: number,
-  y: number,
-  clientX: number,
-  clientY: number,
-  options: DragOptions
-): { target: DropTarget; tablist: HTMLElement; offset: number } | null {
-  const hit = paneAt(geometry, x, y, '');
-  if (hit === undefined) return null;
-  const own = options.group?.includes(hit.pane.id) === true;
-  if (options.rearrange === false && !own) return null;
-  const host = hostOf(element, hit.pane.id);
-  const tablist = host === undefined ? null : tablistAt(host, clientX, clientY);
-  if (tablist === null) return null;
-  const edges = readTabEdges(tablist);
-  const under: DropTarget = {
-    paneId: hit.pane.id,
-    place: 'center',
-    rect: null,
-    boundary: tabBoundaryAt(
-      edges,
-      clientX - tablist.getBoundingClientRect().left
-    ),
-    tabs: tabsOf(tablist).map((tab) => tab.dataset.layoutsTab ?? ''),
-  };
-  const target = accepted(options, under);
-  return target === null
-    ? null
-    : {
-        target,
-        tablist,
-        offset: boundaryOffset(edges, target.boundary ?? 0),
-      };
+/**
+ * A drop in a tab list while the pointer is in the header band of its pane:
+ * the target, or null when the source's rule refuses it, the tab list, and
+ * the pixels that the list scrolls in a frame while the pointer stays.
+ */
+export interface BandTarget {
+  readonly target: DropTarget | null;
+  readonly tablist: HTMLElement;
+  readonly scroll: number;
+}
+
+/**
+ * The drops of a source in the tab lists, which `tabDrag()` gives, so a
+ * layout with only pane drags has no code for tab lists.
+ */
+export interface DragBand {
+  /** The drop at a point in the header band of a pane, or null outside a band. */
+  at(
+    element: HTMLElement,
+    geometry: LayoutGeometry,
+    point: { x: number; y: number; clientX: number; clientY: number },
+    options: DragOptions
+  ): BandTarget | null;
+  /** Show the marker of a drop in a tab list in the layout, or no marker. */
+  mark(element: HTMLElement, band: BandTarget | null): void;
 }
 
 // The target that a source takes for a target under the pointer, or null.
-const accepted = (
+export const accepted = (
   options: DragOptions,
   target: DropTarget | null
 ): DropTarget | null =>
@@ -267,12 +248,39 @@ export function startDrag(
     capture();
     context.view.set({ [DRAG]: { source: options.source, target } });
   });
-  // The tab list that shows the drop marker, or null.
-  let marked: HTMLElement | null = null;
-  const mark = (tablist: HTMLElement | null, offset: number): void => {
-    if (marked !== null && marked !== tablist) clearTabDrop(marked);
-    marked = tablist;
-    if (tablist !== null) showTabDrop(tablist, offset);
+  // The last point of the pointer, and the frame of the scroll of a tab list
+  // while the pointer stays near one of its ends.
+  let point = { clientX, clientY };
+  let frame = 0;
+  // Find the target at the last point, move the marker, and keep a tab list
+  // scrolling while the pointer is near one of its ends.
+  const track = (): void => {
+    const element = context.element();
+    if (element === null) return;
+    const bounds = element.getBoundingClientRect();
+    const x = point.clientX - bounds.left;
+    const y = point.clientY - bounds.top;
+    options.follow?.(x, y);
+    const geometry = context.readGeometry();
+    const band =
+      options.band?.at(element, geometry, { x, y, ...point }, rules) ?? null;
+    options.band?.mark(element, band);
+    if (band !== null && band.scroll !== 0 && frame === 0)
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        band.tablist.scrollLeft += band.scroll;
+        track();
+      });
+    const next =
+      band !== null
+        ? band.target
+        : options.rearrange === false
+          ? null
+          : accepted(rules, dropTargetAt(geometry, x, y, rules));
+    if (started && sameTarget(next, target)) return;
+    started = true;
+    target = next;
+    context.view.set({ [DRAG]: { source: options.source, target } });
   };
   context.startGesture({
     pointerId,
@@ -286,42 +294,17 @@ export function startDrag(
         (!started && distance < DRAG_THRESHOLD_PX)
       )
         return;
-      const element = context.element();
-      if (element === null) return;
       if (!started) capture();
-      const bounds = element.getBoundingClientRect();
-      const x = move.clientX - bounds.left;
-      const y = move.clientY - bounds.top;
-      options.follow?.(x, y);
-      const geometry = context.readGeometry();
-      const list =
-        options.center === true
-          ? tabListTargetAt(
-              element,
-              geometry,
-              x,
-              y,
-              move.clientX,
-              move.clientY,
-              rules
-            )
-          : null;
-      mark(list?.tablist ?? null, list?.offset ?? 0);
-      const next =
-        list?.target ??
-        (options.rearrange === false
-          ? null
-          : accepted(rules, dropTargetAt(geometry, x, y, rules)));
-      if (started && sameTarget(next, target)) return;
-      started = true;
-      target = next;
-      context.view.set({ [DRAG]: { source: options.source, target } });
+      point = { clientX: move.clientX, clientY: move.clientY };
+      track();
     },
     end(cancel) {
       wait?.end();
+      cancelAnimationFrame(frame);
       if (handle.hasPointerCapture?.(pointerId))
         handle.releasePointerCapture(pointerId);
-      mark(null, 0);
+      const element = context.element();
+      if (element !== null) options.band?.mark(element, null);
       if (!started) return;
       swallowNextClick();
       context.view.set({ [DRAG]: null });

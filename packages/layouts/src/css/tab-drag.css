@@ -1,15 +1,12 @@
 @layer pierre-layouts {
-  /* Where a tab that the pointer drags goes. The view moves it with a
-     transform from the left edge of the tab list. */
-  :where(.pierre-layouts [data-layouts-tablist]) {
-    position: relative;
-  }
-
+  /* Where a tab that the pointer drags goes, in the top layer of the
+     layout, above sticky tabs and an app's fades. The view moves it with a
+     transform and gives it the height of the tab list. */
   .pierre-layouts-tab-drop {
     position: absolute;
-    top: 6px;
-    bottom: 6px;
+    top: 0;
     left: 0;
+    z-index: 7;
     width: 2px;
     margin-left: -1px;
     border-radius: 1px;

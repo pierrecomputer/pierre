@@ -540,12 +540,18 @@ drag. A touch drag of a tab starts after a still press of 250 ms
 (`tabDrag({ touchDelay })` changes it), so a swipe on a tab list scrolls it; a
 mouse or a pen starts a drag after a move of 4 pixels. During a drag, a copy of
 the tab follows the pointer, beside it, and the source dims; the marker shows
-the place, and the other tabs do not move. `tabDrag({ preview })` renders the
-app's element in place of the copy, and `tabDrag({ preview: false })` shows no
-image, so a move that keeps its place draws no frame. A split or a move beside a
-pane of a stack goes beside the whole stack. A close or a hide of the active tab
-shows the nearest tab. A stack of one pane gives way to that pane. A zoom of a
-tab zooms its stack, and a change of tab keeps the zoom.
+the place, and the other tabs do not move. The marker is in the top layer of the
+layout, above sticky pinned tabs and an app's fades. While the pointer is in the
+header band of a pane, from its top to 8 px below its tab list, the drop goes
+into the tab list, at the nearest boundary that shows; the preview of a place in
+the pane starts when the pointer leaves the band. A pointer held within 32 px of
+an end of the list, or past it, scrolls the list, after the stuck pinned tabs at
+the start. `tabDrag({ preview })` renders the app's element in place of the
+copy, and `tabDrag({ preview: false })` shows no image, so a move that keeps its
+place draws no frame. A split or a move beside a pane of a stack goes beside the
+whole stack. A close or a hide of the active tab shows the nearest tab. A stack
+of one pane gives way to that pane. A zoom of a tab zooms its stack, and a
+change of tab keeps the zoom.
 
 A layout has one rule for places (`DEC-layouts-one-place-rule`):
 `canPlace(source, place, state)` in `createLayout`. `source` is the pane that
@@ -613,14 +619,19 @@ layout.setPinned('notes', true); // After the last pinned tab.
 tabs scroll, as browsers and editors keep pinned tabs. Each pinned tab sticks at
 its own place, and a tab that takes the focus scrolls into view beside the
 pinned tabs. The list holds the width of the pinned tabs in
-`--layouts-pinned-width`, for the app's fade. The option turns itself off while
+`--layouts-pinned-width`, for the app's fade. One opaque layer in
+`--layouts-pane-background` sits behind the pinned tabs and the gaps after them,
+so the tabs that scroll under them do not show, and each tab of the list is
+isolated, so a layer inside a tab, such as a close mark with a `z-index`, stays
+under the pinned tabs. The pinned tabs keep their own backgrounds, such as a
+selected or a hover look, above that layer. The option turns itself off while
 less than 120 px of the list is left for the other tabs;
 `stickyPinned={{ minRoom: 0 }}` keeps the pinned tabs in view at every width,
 and another `minRoom` sets another limit. It is off by default. A stuck tab gets
-`position: sticky` and its `left` inline, as the styles of the gestures are, so
-an app's class on the tab cannot undo them. The tab list must be the element
-that scrolls, as in `Layout.Header`, and each pinned tab a child of the list, as
-`Layout.Tab` and its `render` element are.
+`position: sticky`, its `left`, and `z-index: 2` inline, as the styles of the
+gestures are, so an app's class on the tab cannot undo them. The tab list must
+be a flex row and the element that scrolls, as in `Layout.Header`, and each
+pinned tab a child of the list, as `Layout.Tab` and its `render` element are.
 
 ## Collapsed panes
 

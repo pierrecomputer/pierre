@@ -131,13 +131,28 @@ const clampIndex = (
 /**
  * The tab boundary nearest to a point in a tab list: the number of tabs whose
  * middle is before the point, from 0 (before the first tab) to the number of
- * tabs (after the last).
+ * tabs (after the last). Over the stuck pinned tabs (`sticky`), only they
+ * count, as the tabs that scroll under them come after them.
  */
 export function tabBoundaryAt(
-  edges: readonly { left: number; right: number }[],
+  edges: readonly { left: number; right: number; sticky?: boolean }[],
   x: number
 ): number {
-  return edges.filter(({ left, right }) => (left + right) / 2 < x).length;
+  const end = stuckEnd(edges);
+  return edges.filter(
+    ({ left, right, sticky }) =>
+      (left + right) / 2 < x && (sticky === true || x >= end)
+  ).length;
+}
+
+/** The right edge of the stuck pinned tabs of a tab list, or 0. */
+export function stuckEnd(
+  edges: readonly { right: number; sticky?: boolean }[]
+): number {
+  return Math.max(
+    0,
+    ...edges.filter(({ sticky }) => sticky === true).map(({ right }) => right)
+  );
 }
 
 /**

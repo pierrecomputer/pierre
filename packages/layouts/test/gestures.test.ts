@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { boundaryOffset } from '../src/dom/tab-drag';
 import {
   dropPlace,
   dropTarget,
@@ -202,6 +203,23 @@ describe('tab reordering', () => {
     expect(tabBoundaryAt(edges, 51)).toBe(1);
     expect(tabBoundaryAt(edges, 140)).toBe(2);
     expect(tabBoundaryAt(edges, 400)).toBe(3);
+  });
+
+  test('over stuck pinned tabs only they count, and a place past them shows at their end at the least', () => {
+    // Two stuck tabs, a tab that scrolled under them, and a tab after them.
+    const stuck = [
+      { left: 0, right: 40, sticky: true },
+      { left: 40, right: 80, sticky: true },
+      { left: 20, right: 70, sticky: false },
+      { left: 70, right: 120, sticky: false },
+    ];
+    expect(tabBoundaryAt(stuck, 30)).toBe(1);
+    expect(tabBoundaryAt(stuck, 75)).toBe(2);
+    expect(tabBoundaryAt(stuck, 100)).toBe(4);
+    expect(boundaryOffset(stuck, 1)).toBe(40);
+    expect(boundaryOffset(stuck, 2)).toBe(80);
+    expect(boundaryOffset(stuck, 3)).toBe(80);
+    expect(boundaryOffset(stuck, 4)).toBe(120);
   });
 
   test('a boundary beside the tab moves nothing, and others give an index among the other tabs', () => {

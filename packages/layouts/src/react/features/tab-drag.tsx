@@ -10,10 +10,26 @@ import { type ReactNode, useCallback, useState } from 'react';
 
 import dropCss from '../../css/drop.css?inline';
 import tabDragCss from '../../css/tab-drag.css?inline';
+import { hostOf } from '../../dom/panes';
+import {
+  boundaryOffset,
+  clearTabDrop,
+  edgeScroll,
+  readTabEdges,
+  showTabDrop,
+  tablistInBand,
+  tabsOf,
+} from '../../dom/tab-drag';
+import { paneAt } from '../../drop';
 import type { EditCommands } from '../../edits';
 import { presentation } from '../../presentation';
 import type { StackCommands } from '../../stacks';
-import { pinnedRun, tabInsertIndex, tabMoveIndex } from '../../stacks-model';
+import {
+  pinnedRun,
+  tabBoundaryAt,
+  tabInsertIndex,
+  tabMoveIndex,
+} from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
 import type { LayoutState, PaneNode, Place } from '../../types';
 import { type Cell, cell } from '../cell';
@@ -27,8 +43,10 @@ import type {
   ViewRender,
 } from '../contract';
 import {
+  accepted,
   allowsPlace,
   type Drag,
+  type DragBand,
   DropPreview,
   type DropTarget,
   startDrag,
@@ -131,6 +149,43 @@ function DragImage({
 }
 
 const TAB = 'tab';
+
+// The marker of the drop of the band that shows, and its place in the list.
+const offsets = new WeakMap<HTMLElement, number>();
+
+/**
+ * The drops of a tab in the tab lists: in the header band of a pane, from
+ * its top to just below its tab list, a drop goes into the tab list, at the
+ * boundary nearest to the pointer that shows. A pointer near an end of the
+ * list scrolls it. The marker shows in the top layer of the layout.
+ */
+const tabBand: DragBand = {
+  at(element, geometry, { x, y, clientX, clientY }, options) {
+    const hit = paneAt(geometry, x, y, '');
+    if (hit === undefined) return null;
+    const own = options.group?.includes(hit.pane.id) === true;
+    if (options.rearrange === false && !own) return null;
+    const host = hostOf(element, hit.pane.id);
+    const tablist = host === undefined ? null : tablistInBand(host, clientY);
+    if (tablist === null) return null;
+    const edges = readTabEdges(tablist);
+    const box = tablist.getBoundingClientRect();
+    const at = clientX - box.left;
+    const target = accepted(options, {
+      paneId: hit.pane.id,
+      place: 'center',
+      rect: null,
+      boundary: tabBoundaryAt(edges, Math.min(Math.max(at, 0), box.width)),
+      tabs: tabsOf(tablist).map((tab) => tab.dataset.layoutsTab ?? ''),
+    });
+    offsets.set(tablist, boundaryOffset(edges, target?.boundary ?? 0));
+    return { target, tablist, scroll: edgeScroll(tablist, edges, at) };
+  },
+  mark(element, band) {
+    if (band === null || band.target === null) clearTabDrop(element);
+    else showTabDrop(element, band.tablist, offsets.get(band.tablist) ?? 0);
+  },
+};
 
 const moveText = ({
   paneTitle,
@@ -295,6 +350,7 @@ function useTabDrag(
       startDrag(context, event, {
         source,
         center: true,
+        band: tabBand,
         group: stack?.children
           .filter((other) => other.hidden !== true)
           .map((other) => other.id) ?? [tab.id],

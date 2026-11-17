@@ -229,7 +229,7 @@ test('a pointer drag in the tab bar reorders the tabs and shows the drop place',
   await page.mouse.down();
   await page.mouse.move(to.x + 4, y, { steps: 6 });
   // The marker shows at the left edge of the first tab.
-  const marker = tabs.locator('.pierre-layouts-tab-drop');
+  const marker = page.locator('.pierre-layouts-tab-drop');
   await expect(marker).toHaveCount(1);
   const box = await marker.boundingBox();
   expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - to.x)).toBeLessThan(

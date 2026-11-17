@@ -42,12 +42,17 @@ const BUDGET = {
 // announcement, the sheet of sticky pinned tabs, and the drag with no image;
 // their results name the cost of each. On 2026-11-16 the owner accepted the
 // sizes of the apps with many features for now, and asked for a budget for
-// each example app.
+// each example app. The fixes of the owner's test of the chat-bb tab strip
+// (2026-11-16) move the tab-list code of the drag engine into `tabDrag()`,
+// which makes app B 360 brotli bytes smaller, and add the header band, the
+// edge scroll, the drop marker in the top layer, and the backdrop of sticky
+// pinned tabs, which make apps C and E about 450 and 360 bytes larger
+// (`DEC-layouts-modular-size-budget`: design ranks above bytes).
 const APP_BUDGET = {
-  'tiled source': { minified: 59_245, brotli: 18_636 },
-  'full set source': { minified: 85_491, brotli: 25_663 },
-  'side panel source': { minified: 56_177, brotli: 17_584 },
-  'tab stacks source': { minified: 67_027, brotli: 20_723 },
+  'tiled source': { minified: 57_993, brotli: 18_276 },
+  'full set source': { minified: 86_467, brotli: 26_116 },
+  'side panel source': { minified: 56_026, brotli: 17_551 },
+  'tab stacks source': { minified: 68_077, brotli: 21_086 },
 } as const;
 
 interface Output {
