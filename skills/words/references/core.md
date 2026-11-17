@@ -18,6 +18,13 @@ and ANSI calls use the same instance.
 | `skipHtml`    | `false` | Omit raw HTML from the Markdown source                                    |
 | `incomplete`  | `false` | Complete common unfinished inline syntax for display                      |
 | `frontmatter` | `false` | Return `[meta, output]` and remove leading YAML frontmatter from the body |
+| `math`        | `false` | Render `$...$`, `$$...$$`, `$$` fences, and `math` fences as SVG          |
+| `cjk`         | `false` | Let `*` and `~` emphasis open and close next to CJK text                  |
+
+Sessions take `math` and `cjk` too, and `renderToAnsi()` takes both; ANSI shows
+math as its TeX source. A single `$` follows Pandoc: no space inside the dollars
+and no digit after the closing one, so `$5 and $10` stays text. Math SVG uses
+the system math font and STIX Two Math metrics.
 
 Core HTML preserves raw HTML by default. `skipHtml: true` omits raw HTML, but
 Markdown links and images still need URL checks. Sanitize core output before

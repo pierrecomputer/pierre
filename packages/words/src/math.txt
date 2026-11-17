@@ -1,0 +1,45 @@
+# TeX commands of src/math.wat. Each line: kind, atom class, then name:value
+# pairs. Classes: o ord, O op, b bin, r rel, ( open, ) close, p punct, i inner.
+# Values are hexadecimal code points unless the kind says otherwise.
+
+ital o alpha:3b1 beta:3b2 gamma:3b3 delta:3b4 epsilon:3f5 varepsilon:3b5 zeta:3b6 eta:3b7 theta:3b8 vartheta:3d1 iota:3b9 kappa:3ba lambda:3bb mu:3bc nu:3bd xi:3be omicron:3bf pi:3c0 varpi:3d6 rho:3c1 varrho:3f1 sigma:3c3 varsigma:3c2 tau:3c4 upsilon:3c5 phi:3d5 varphi:3c6 chi:3c7 psi:3c8 omega:3c9 digamma:3dd varkappa:3f0
+sym o Gamma:393 Delta:394 Theta:398 Lambda:39b Xi:39e Pi:3a0 Sigma:3a3 Upsilon:3a5 Phi:3a6 Psi:3a8 Omega:3a9 varGamma:393 varDelta:394 varTheta:398 varLambda:39b varXi:39e varPi:3a0 varSigma:3a3 varUpsilon:3a5 varPhi:3a6 varPsi:3a8 varOmega:3a9
+sym o infty:221e partial:2202 nabla:2207 forall:2200 exists:2203 nexists:2204 neg:ac lnot:ac emptyset:2205 varnothing:2205 aleph:2135 beth:2136 gimel:2137 hbar:127 hslash:210f ell:2113 wp:2118 Re:211c Im:2111 angle:2220 measuredangle:2221 triangle:25b3 square:25a1 Box:25a1 blacksquare:25a0 top:22a4 bot:22a5 prime:2032 surd:221a flat:266d natural:266e sharp:266f clubsuit:2663 diamondsuit:2662 heartsuit:2661 spadesuit:2660 ldots:2026 dots:2026 dotso:2026 dotsc:2026 cdots:22ef dotsb:22ef dotsm:22ef dotsi:22ef vdots:22ee ddots:22f1 checkmark:2713 degree:b0 imath:131 jmath:237 S:a7 P:b6 dag:2020 ddag:2021 copyright:a9 pounds:a3 yen:a5 mho:2127 eth:f0 complement:2201 Finv:2132 Game:2141 backprime:2035 bigstar:2605 lozenge:25ca blacklozenge:29eb circledS:24c8 diagup:2571 diagdown:2572 triangledown:25bd blacktriangle:25b2 blacktriangledown:25bc sphericalangle:2222 varclubsuit:2667 vardiamondsuit:2666 varheartsuit:2665 varspadesuit:2664 maltese:2720 # :23 $:24 %:25 &:26 _:5f backslash:5c vert:7c Vert:2016 |:2016 textbackslash:5c
+sym b pm:b1 mp:2213 times:d7 div:f7 cdot:22c5 centerdot:22c5 ast:2217 star:22c6 circ:2218 bullet:2219 cap:2229 cup:222a wedge:2227 land:2227 vee:2228 lor:2228 oplus:2295 ominus:2296 otimes:2297 oslash:2298 odot:2299 setminus:2216 smallsetminus:2216 sqcap:2293 sqcup:2294 uplus:228e amalg:2a3f dagger:2020 ddagger:2021 wr:2240 diamond:22c4 bigtriangleup:25b3 bigtriangledown:25bd triangleleft:25c3 triangleright:25b9 lhd:22b2 rhd:22b3 unlhd:22b4 unrhd:22b5 bigcirc:25ef boxplus:229e boxminus:229f boxtimes:22a0 boxdot:22a1 divideontimes:22c7 ltimes:22c9 rtimes:22ca leftthreetimes:22cb rightthreetimes:22cc curlywedge:22cf curlyvee:22ce dotplus:2214 intercal:22ba barwedge:22bc veebar:22bb doublebarwedge:2a5e Cap:22d2 Cup:22d3 circledast:229b circledcirc:229a circleddash:229d
+sym r le:2264 leq:2264 ge:2265 geq:2265 ne:2260 neq:2260 equiv:2261 approx:2248 approxeq:224a sim:223c simeq:2243 cong:2245 propto:221d subset:2282 supset:2283 subseteq:2286 supseteq:2287 subsetneq:228a supsetneq:228b in:2208 notin:2209 ni:220b owns:220b perp:22a5 parallel:2225 nparallel:2226 mid:2223 nmid:2224 ll:226a gg:226b lll:22d8 ggg:22d9 prec:227a succ:227b preceq:2aaf succeq:2ab0 models:22a8 vdash:22a2 dashv:22a3 vDash:22a8 Vdash:22a9 asymp:224d doteq:2250 bowtie:22c8 Join:22c8 smile:2323 frown:2322 sqsubset:228f sqsupset:2290 sqsubseteq:2291 sqsupseteq:2292 lesssim:2272 gtrsim:2273 lessapprox:2a85 gtrapprox:2a86 leqslant:2a7d geqslant:2a7e nleq:2270 ngeq:2271 nless:226e ngtr:226f nsubseteq:2288 nsupseteq:2289 ncong:2247 nsim:2241 triangleq:225c coloneqq:2254 eqqcolon:2255 Coloneqq:2a74 therefore:2234 because:2235 lessgtr:2276 gtrless:2277 leqq:2266 geqq:2267 lneq:2a87 gneq:2a88 lneqq:2268 gneqq:2269 subseteqq:2ac5 supseteqq:2ac6 Subset:22d0 Supset:22d1 trianglelefteq:22b4 trianglerighteq:22b5 vartriangleleft:22b2 vartriangleright:22b3 eqcirc:2256 circeq:2257 bumpeq:224f Bumpeq:224e thicksim:223c thickapprox:2248 backsim:223d backsimeq:22cd precsim:227e succsim:227f pitchfork:22d4 between:226c risingdotseq:2253 fallingdotseq:2252 doteqdot:2251 Doteq:2251 multimap:22b8 varpropto:221d
+sym r to:2192 rightarrow:2192 leftarrow:2190 gets:2190 Rightarrow:21d2 Leftarrow:21d0 leftrightarrow:2194 Leftrightarrow:21d4 iff:27fa implies:27f9 impliedby:27f8 mapsto:21a6 longmapsto:27fc longrightarrow:27f6 longleftarrow:27f5 longleftrightarrow:27f7 Longrightarrow:27f9 Longleftarrow:27f8 Longleftrightarrow:27fa uparrow:2191 downarrow:2193 updownarrow:2195 Uparrow:21d1 Downarrow:21d3 Updownarrow:21d5 nearrow:2197 searrow:2198 swarrow:2199 nwarrow:2196 hookrightarrow:21aa hookleftarrow:21a9 rightharpoonup:21c0 rightharpoondown:21c1 leftharpoonup:21bc leftharpoondown:21bd rightleftharpoons:21cc leftrightharpoons:21cb leftrightarrows:21c6 rightleftarrows:21c4 rightrightarrows:21c9 leftleftarrows:21c7 twoheadrightarrow:21a0 twoheadleftarrow:219e rightarrowtail:21a3 leftarrowtail:21a2 looparrowright:21ac looparrowleft:21ab curvearrowright:21b7 curvearrowleft:21b6 circlearrowright:21bb circlearrowleft:21ba Rrightarrow:21db Lleftarrow:21da upuparrows:21c8 downdownarrows:21ca restriction:21be upharpoonright:21be leadsto:21dd rightsquigarrow:21dd leftrightsquigarrow:21ad nrightarrow:219b nleftarrow:219a nRightarrow:21cf nLeftarrow:21cd nleftrightarrow:21ae nLeftrightarrow:21ce
+sym ( lbrace:7b {:7b langle:27e8 lfloor:230a lceil:2308 lbrack:5b lvert:7c lVert:2016 lgroup:27ee ulcorner:250c llcorner:2514
+sym ) rbrace:7d }:7d rangle:27e9 rfloor:230b rceil:2309 rbrack:5d rvert:7c rVert:2016 rgroup:27ef urcorner:2510 lrcorner:2518
+sym p colon:3a
+op O int:222b iint:222c iiint:222d oint:222e oiint:222f oiiint:2230 intop:222b smallint:222b
+opl O sum:2211 prod:220f coprod:2210 bigcup:22c3 bigcap:22c2 bigvee:22c1 bigwedge:22c0 bigoplus:2a01 bigotimes:2a02 bigodot:2a00 biguplus:2a04 bigsqcup:2a06
+fn O sin cos tan cot sec csc sinh cosh tanh coth arcsin arccos arctan arctg arcctg arg deg dim exp hom ker lg ln log sh ch th tg ctg cth cosec
+fnl O det gcd inf lim max min Pr sup liminf:3 limsup:3 injlim:3 projlim:4
+accent o hat:2c6 check:2c7 tilde:2dc acute:2ca grave:2cb dot:2d9 ddot:a8 breve:2d8 bar:2c9 vec:20d7 mathring:2da
+wide o overline:1 underline:2 widehat:3 widetilde:4 overrightarrow:5 overleftarrow:6 overbrace:7 underbrace:8 overleftrightarrow:9 widecheck:a
+frac i frac:0 dfrac:1 tfrac:2 binom:3 dbinom:4 tbinom:5 cfrac:1
+sqrt o sqrt:0
+left o left:0 right:1 middle:2
+big o big:1 Big:2 bigg:3 Bigg:4
+big ( bigl:1 Bigl:2 biggl:3 Biggl:4
+big ) bigr:1 Bigr:2 biggr:3 Biggr:4
+big r bigm:1 Bigm:2 biggm:3 Biggm:4
+font o mathrm:0 mathit:1 mathbf:2 mathbb:3 mathcal:4 mathscr:5 mathfrak:6 mathsf:7 mathtt:8 boldsymbol:9 bm:9 mathnormal:a Bbb:3 bold:2 frak:6
+text o text:0 textrm:0 textnormal:0 mbox:0 hbox:0 textit:1 textbf:2 texttt:8 textsf:7 emph:1 textup:0 textmd:0
+space o ,:43 thinspace:43 ::44 >:44 medspace:44 ;:45 thickspace:45 !:3d negthinspace:3d negmedspace:3c negthickspace:3b quad:52 qquad:64 enspace:49 enskip:49 nobreakspace:46 space:46 ~:46
+style o displaystyle:0 textstyle:1 scriptstyle:2 scriptscriptstyle:3
+color o color:0 textcolor:1
+begin o begin:0
+end o end:0
+over o overset:0 underset:1 stackrel:2
+xarrow r xrightarrow:2192 xleftarrow:2190 xRightarrow:21d2 xLeftarrow:21d0 xleftrightarrow:2194 xLeftrightarrow:21d4 xmapsto:21a6 xhookrightarrow:21aa xhookleftarrow:21a9 xrightharpoonup:21c0 xrightleftharpoons:21cc xtwoheadrightarrow:21a0
+phantom o phantom:0 hphantom:1 vphantom:2 smash:3 mathstrut:4 strut:4
+boxed o boxed:0 fbox:1
+not r not:0
+opname O operatorname:0 operatorname*:1 operatornamewithlimits:1
+limits o limits:0 nolimits:1 displaylimits:2
+mod b bmod:0 pmod:1 mod:2 pod:3
+kern o hspace:0 hspace*:0 kern:0 mkern:1 mskip:1 hskip:0 mspace:1
+cr o \:0 newline:0 cr:0
+ignore o nonumber:0 notag:0 allowbreak:0 relax:0 nobreak:0 label:1 tag:2 tag*:2 hline:3 hdashline:3
+mathop O mathop:0 mathbin:2 mathrel:3 mathopen:4 mathclose:5 mathpunct:6 mathinner:7 mathord:8

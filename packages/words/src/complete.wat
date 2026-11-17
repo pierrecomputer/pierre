@@ -382,12 +382,18 @@
         ;; character before the run times four plus the class after it, 2 for
         ;; whitespace, 1 for punctuation, else 0. Bit 0 says it can open, bit 1
         ;; that it can close. $k is 0 inside a word.
+        (global.set $cjkSide (i32.const 0))
+        (if (i32.and (i32.and (global.get $ext) (i32.const 1)) (i32.ne (local.get $c) (i32.const "_")))
+          (then (local.set $prev (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
+            (local.get $prev) (local.get $next)))))
         (local.set $k (i32.or
           (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $prev)) (call $isWhiteCp (local.get $prev)))
             (i32.const 2))
           (select (i32.const 2) (call $isPunctCp (local.get $next)) (call $isWhiteCp (local.get $next)))))
         (local.set $flags (i32.and
           (i32.shr_u (i32.const 0x52d2b) (i32.shl (local.get $k) (i32.const 1))) (i32.const 3)))
+        (if (i32.and (global.get $cjkSide) (i32.eqz (i32.and (local.get $k) (i32.const 10))))
+          (then (local.set $flags (i32.const 3))))
         (if (i32.eq (local.get $c) (i32.const "~"))
           (then
             ;; three or more tildes are text
@@ -479,10 +485,12 @@
             ;; from bit 16, then the delimiters left and the content offset
             ;; after the run. The parser can pair any opener, but some are not
             ;; repaired: intraword runs (an asterisk there is often
-            ;; arithmetic), runs over three, a lone `~` (usually "about"), and
-            ;; what a closing run has left.
+            ;; arithmetic, but not next to CJK text with the cjk option), runs
+            ;; over three, a lone `~` (usually "about"), and what a closing
+            ;; run has left.
             (local.set $t (i32.or
-              (i32.or (i32.eqz (local.get $k)) (i32.gt_u (local.get $n) (i32.const 3)))
+              (i32.or (i32.and (i32.eqz (local.get $k)) (i32.eqz (global.get $cjkSide)))
+                (i32.gt_u (local.get $n) (i32.const 3)))
               (i32.or (i32.ne (local.get $m) (local.get $n))
                 (i32.and (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $n) (i32.const 1))))))
             (local.set $top (i32.add (i32.const $mem.completeDelims) (i32.shl (local.get $depth) (i32.const 4))))

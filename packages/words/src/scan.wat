@@ -4,10 +4,11 @@
   (global $src (mut i32) (i32.const $mem.input)) ;; start of the markdown, past any frontmatter
   (global $eof (mut i32) (i32.const 0)) ;; end of the input text (the NUL sentinel sits there)
 
-  ;; Unicode punctuation (the P and S general categories from U+0080), then
-  ;; the zero-width and the wide code points, as packed ranges.
+  ;; Unicode punctuation (the P and S general categories from U+0080), the
+  ;; zero-width, the wide, and the CJK code points, as packed ranges.
   (unicode-range-tables $mem.packed $mem.packedEnd
-    $mem.punct $mem.punctEnd $mem.width $mem.wide $mem.wide $mem.widthEnd)
+    $mem.punct $mem.punctEnd $mem.width $mem.wide $mem.wide $mem.widthEnd
+    $mem.cjk $mem.cjkEnd)
 
   ;; Expand the packed set of code point ranges at $src into the table at $dst:
   ;; a u32 count, then sorted u32 entries of first:21 and span:11. Per range the
@@ -164,6 +165,41 @@
           (i32.or
             (i32.eq (local.get $cp) (i32.const 0x205f))
             (i32.eq (local.get $cp) (i32.const 0x3000)))))))
+
+  ;; Option bits of control byte 31: 1 = cjk, 2 = math.
+  (global $ext (mut i32) (i32.const 0))
+
+  ;; a CJK character for the cjk option
+  (func $isCjkCp (param $cp i32) (result i32)
+    (i32.and (i32.ge_u (local.get $cp) (i32.const 0x1100))
+      (call $inRanges (i32.const $mem.cjk) (local.get $cp))))
+
+  ;; The cjk option lets a `*` or `~` run between other characters flank a
+  ;; CJK neighbor, as markdown-it-cjk-friendly does. $prev ends at $at and
+  ;; $next follows the run. A variation selector after a non-space stands for
+  ;; the character before it, which this returns in place of $prev. Sets
+  ;; $cjkSide when either neighbor is CJK.
+  (global $cjkSide (mut i32) (i32.const 0))
+  (func $cjkPrev (param $at i32) (param $base i32) (param $prev i32) (param $next i32) (result i32)
+    (local $two i32)
+    (global.set $cjkSide (call $isCjkCp (local.get $next)))
+    (if (i32.le_u (i32.sub (local.get $prev) (i32.const 0xfe00)) (i32.const 14))
+      (then
+        (local.set $two (call $utf8Before (i32.sub (local.get $at) (i32.const 3)) (local.get $base)))
+        (if (i32.and (i32.ne (local.get $two) (i32.const 0))
+              (i32.eqz (call $isWhiteCp (local.get $two))))
+          (then
+            (global.set $cjkSide (i32.or (global.get $cjkSide) (i32.or
+              (call $isCjkCp (local.get $two))
+              ;; a quotation mark with VS2 is the full-width form
+              (i32.and (i32.eq (local.get $prev) (i32.const 0xfe01))
+                (i32.eq (i32.and (i32.sub (local.get $two) (i32.const 0x2018)) (i32.const -6)) (i32.const 0))))))
+            (return (local.get $two))))))
+    (global.set $cjkSide (i32.or (global.get $cjkSide) (i32.or
+      (call $isCjkCp (local.get $prev))
+      ;; an ideographic variation selector follows a CJK character
+      (i32.le_u (i32.sub (local.get $prev) (i32.const 0xe0100)) (i32.const 0xef)))))
+    (local.get $prev))
 
   ;; The end of the sequence $utf8At decoded last.
   (global $utf8Next (mut i32) (i32.const 0))

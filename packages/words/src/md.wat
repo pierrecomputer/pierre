@@ -22,13 +22,15 @@
                       host clears it)
       [28:30)         byte length of the id prefix at $mem.idPrefix (u16 LE)
       [30]            document contains global definitions
+      [31]            extension flags (u8): bit 0 = CJK-friendly emphasis,
+                      bit 1 = math
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch
       [64:80)         hex digits
-      [80:$mem.input) static tables and fixed work areas, in this order (see
-                      memory.wat for the addresses): pooled output string
-                      literals, scanner byte tables, HTML5 named character
+      [80:65536)      static tables and fixed work areas, in this order (see
+                      memory.wat for the addresses): Unicode CJK ranges,
+                      scanner byte tables, HTML5 named character
                       references and their immutable index, Unicode P|S ranges,
                       Unicode case folding, HTML block tag names and the GFM
                       tag filter list, Unicode display width ranges, ansi marker
@@ -37,8 +39,11 @@
                       stack, then opener bottoms, tick memo, and the bracket
                       stack; completion uses it for its two stacks), table
                       column widths, the ansi line prefix and pending marker,
-                      ansi list state, and the packed Unicode range tables
-    [] pages 2..N (text buffer)
+                      ansi list state, the packed Unicode range tables, and
+                      the id prefix
+    [] pages 2 to 4: math glyph metrics, TeX commands, math work areas,
+       pooled output string literals, and math box nodes
+    [] pages 5..N (text buffer)
       [$mem.input:EOF) input, a NUL sentinel, then at least 32 bytes of slack
       [meta:rec)      frontmatter JSON
       [rec:out)       block records, the reference hash table, the footnote order,
@@ -46,7 +51,7 @@
       [out:…)         rendered output
       [scratch:end)   rebuilt block content when needed, and inline marks
   ;;)
-  (memory (export "memory") 2)
+  (memory (export "memory") 5)
 
   (import "./out.wat")
   (import "./scan.wat")
@@ -58,6 +63,7 @@
   (import "./frontmatter.wat")
   (import "./complete.wat")
   (import "./format.wat")
+  (import "./math.wat")
 
   (entity-table $mem.entities $mem.entitiesEnd $mem.entitySlots $mem.entityNames)
   (string-pool $mem.strings $mem.stringsEnd)
@@ -106,6 +112,12 @@
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
     (global.set $fmt (i32.load8_u (i32.const 26)))
+    (global.set $ext (i32.load8_u (i32.const 31)))
+    ;; with the math option the scan tables mark `$` (low nibble 4, class 2)
+    (local.set $start (i32.and (global.get $ext) (i32.const 2)))
+    (i32.store8 offset=4 (i32.const $mem.markLo) (local.get $start))
+    (i32.store8 offset=4 (i32.const $mem.syntaxLo) (local.get $start))
+    (i32.store8 offset=4 (i32.const $mem.paragraphLo) (local.get $start))
     (global.set $tableHead (i32.const 0))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $src (i32.const $mem.input))
@@ -293,9 +305,11 @@
     (call $unpackEntities)
     (drop (call $unpackRanges
       (call $unpackRanges
-        (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))
-        (i32.const $mem.width))
-      (i32.const $mem.wide))))
+        (call $unpackRanges
+          (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))
+          (i32.const $mem.width))
+        (i32.const $mem.wide))
+      (i32.const $mem.cjk))))
   (start $init)
 
   ;; Render the input in [$mem.input, $mem.input + length) and publish the result.

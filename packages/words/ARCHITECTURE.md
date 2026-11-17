@@ -17,20 +17,21 @@ UTF-8 input
 
 ## Source map
 
-| Files                                        | Purpose                                        |
-| -------------------------------------------- | ---------------------------------------------- |
-| `src/md.wat`, `memory.wat`, `out.wat`        | Entry point, memory layout, and buffer growth  |
-| `src/block.wat`, `blockscan.wat`             | Block analysis and container state             |
-| `src/types.wat`, `record.wat`                | Record layout and block content                |
-| `src/inline.wat`, `link.wat`, `extlink.wat`  | Inline syntax, references, and autolinks       |
-| `src/scan.wat`, `entity.wat`, `htmlscan.wat` | SIMD scans, entities, and HTML grammar         |
-| `src/render.wat`, `html.wat`, `ansi.wat`     | Record traversal and output backends           |
-| `src/format.wat`                             | Final markup for the HTML renderer             |
-| `src/frontmatter.wat`, `complete.wat`        | YAML frontmatter and unfinished syntax         |
-| `scripts/build.ts`                           | WAT preprocessor and compiler                  |
-| `lib/`                                       | Wasm loaders, byte APIs, and HTML sessions     |
-| `html/`                                      | HTML options, hooks, and DOM updates           |
-| `react/`                                     | React component, styles, and Highlights plugin |
+| Files                                          | Purpose                                         |
+| ---------------------------------------------- | ----------------------------------------------- |
+| `src/md.wat`, `memory.wat`, `out.wat`          | Entry point, memory layout, and buffer growth   |
+| `src/block.wat`, `blockscan.wat`               | Block analysis and container state              |
+| `src/types.wat`, `record.wat`                  | Record layout and block content                 |
+| `src/inline.wat`, `link.wat`, `extlink.wat`    | Inline syntax, references, and autolinks        |
+| `src/scan.wat`, `entity.wat`, `htmlscan.wat`   | SIMD scans, entities, and HTML grammar          |
+| `src/render.wat`, `html.wat`, `ansi.wat`       | Record traversal and output backends            |
+| `src/format.wat`                               | Final markup for the HTML renderer              |
+| `src/frontmatter.wat`, `complete.wat`          | YAML frontmatter and unfinished syntax          |
+| `src/math.wat`, `math.txt`, `math-metrics.txt` | TeX math to SVG, its commands and glyph metrics |
+| `scripts/build.ts`                             | WAT preprocessor and compiler                   |
+| `lib/`                                         | Wasm loaders, byte APIs, and HTML sessions      |
+| `html/`                                        | HTML options, hooks, and DOM updates            |
+| `react/`                                       | React component, styles, and Highlights plugin  |
 
 ## Build
 
@@ -60,11 +61,12 @@ data segments overlap. `tsdown` then writes the JavaScript and declarations to
 
 The fixed prefix holds control fields, generated tables, and work buffers. See
 [`md.wat`](./src/md.wat) for the control fields and
-[`memory.wat`](./src/memory.wat) for exact addresses. Input starts at byte
-65,536; JavaScript grows memory before writing it after this fixed prefix. Named
-entities expand from front-coded names into an immutable index at instantiation.
-The last 4 KiB of the prefix hold the id prefix of formatted HTML. Document data
-comes after:
+[`memory.wat`](./src/memory.wat) for exact addresses. Pages 2 to 4 hold the math
+tables, the output string pool, and the math box nodes. Input starts at byte
+262,144; JavaScript grows memory before writing it after this fixed prefix.
+Named entities expand from front-coded names into an immutable index at
+instantiation. The last 4 KiB of the prefix hold the id prefix of formatted
+HTML. Document data comes after:
 
 ```text
 input + NUL sentinel + at least 32 bytes of slack
@@ -134,6 +136,27 @@ supplies its own output rules:
 
 SIMD helpers scan 16 bytes at a time. Fast paths copy safe text directly and
 reserve output space for batches of text and tags.
+
+## Math
+
+With the math option, `$` joins the inline syntax bytes and `$$` the fence
+markers. A math mark or block copies its TeX to a fixed buffer, because output
+growth can move scratch content. [`math.wat`](./src/math.wat) then parses and
+lays out the formula in one pass, as TeX's appendix G does:
+
+- Atoms collect on a stack until their list ends. Then scripts attach, binary
+  operators without operands become ordinary, and inter-atom spaces apply.
+- Each box is a 48-byte node with a size, a position in its parent, and a kind:
+  glyph, list, rule, path, text, or space. The SVG writer walks the boxes once.
+- Glyphs print as Unicode math alphanumerics, each at its own position, so the
+  system math font draws them. Delimiters that must grow, radicals, braces, and
+  wide accents are SVG paths.
+- Glyph metrics and layout constants come from the MATH table of STIX Two Math
+  (`scripts/gen-math-metrics.py`). The commands are in `src/math.txt`.
+
+A formula that overflows the node arena, the atom or cell stacks, 48 levels of
+nesting, or 16,000 bytes of source writes nothing, and the caller shows its
+source as code. HTML sessions keep each math SVG as one DOM unit.
 
 ## Streaming
 
@@ -232,8 +255,8 @@ does not reconcile individual Markdown nodes.
 - Limits: 250 container levels, 999 characters per link or footnote label, nine
   digits per ordered-list start, 512 table columns, 255 backticks per code span,
   256 open brackets per leaf, 64 open delimiter runs in the block that
-  completion repairs, 4,096 bytes of escaped id prefix, and 1,073,610,752 bytes
-  (2^30 − 128 KiB) of input.
+  completion repairs, 4,096 bytes of escaped id prefix, and 1,073,414,144 bytes
+  (2^30 − 320 KiB) of input.
 - A table closes after a row takes it past 524,288 auto-filled cells, matching
   cmark-gfm. Later lines parse as normal Markdown. Supplied cells do not count
   toward this limit.

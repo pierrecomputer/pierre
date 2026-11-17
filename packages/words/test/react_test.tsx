@@ -2723,3 +2723,22 @@ describe('incremental streaming', () => {
     session.dispose();
   });
 });
+
+test('the DOM renderer keeps streamed math SVG equal to a full render', () => {
+  const source =
+    'Euler $e^{i\\pi}+1=0$ and **bold $x^2$**.\n\n$$\n\\int_0^1 x\\,dx\n$$\n\n- $$\\sum_i a_i$$\n';
+  for (const animated of [false, true]) {
+    const dom = new JSDOM('<div id="a"></div><div id="b"></div>');
+    const streamed = dom.window.document.getElementById('a')!;
+    const full = dom.window.document.getElementById('b')!;
+    const renderer = createDomRenderer(streamed, { math: true });
+    for (let at = 1; at <= source.length; at++)
+      renderer.update(source.slice(0, at), true, true, animated, 'block');
+    renderer.update(source, false, false);
+    createDomRenderer(full, { math: true }).update(source, false, false);
+    expect(streamed.innerHTML).toBe(full.innerHTML);
+    expect(streamed.querySelectorAll('svg')).toHaveLength(4);
+    // fades never wrap SVG text
+    expect(streamed.querySelector('svg span')).toBeNull();
+  }
+});

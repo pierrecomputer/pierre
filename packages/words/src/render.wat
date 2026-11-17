@@ -385,7 +385,7 @@
               (block $code
                (block $escape
                 (br_table $emph $text $emph $code $link $rawhtml $entity $escape
-                  $softbreak $hardbreak $linkopen $linkclose $link $footnote
+                  $softbreak $hardbreak $linkopen $linkclose $link $footnote $code
                   (local.get $t)))
                ;; an escaped character without its backslash
                (local.set $b (i32.add (local.get $b) (i32.const 1)))
@@ -394,6 +394,13 @@
               (local.set $q (i32.load offset=$M.data (local.get $m)))
               (local.set $e (i32.sub (i32.add (local.get $e) (local.get $b)) (local.get $q)))
               (local.set $b (local.get $q))
+              ;; math in HTML; ANSI and alt text show its source as code
+              (if (i32.and (i32.eq (local.get $t) (enum.get $Mk.math))
+                    (i32.eqz (i32.or (global.get $mode) (global.get $plain))))
+                (then
+                  (if (call $mathInline (local.get $b) (local.get $e)
+                        (i32.eq (i32.load8_u offset=$M.ch (local.get $m)) (i32.const 2)))
+                    (then (return)))))
               (local.set $base (global.get $contentBase))
               ;; Strip one leading and trailing space together unless all content is
               ;; spaces or line breaks.

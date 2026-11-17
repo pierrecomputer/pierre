@@ -80,6 +80,8 @@
             (call $outSmall (i64.or (i64.const "</h0>\n")
               (i64.shl (i64.extend_i32_u (local.get $n)) (i64.const 24))) (i32.const 6))
             (return))
+          (if (i32.and (global.get $ext) (i32.const 2))
+            (then (if (call $mathBlock (local.get $r)) (then (return)))))
           (if (global.get $fmt)
             (then (call $htmlCodeBlockFmt (local.get $r)))
             (else (call $htmlCodeBlock (local.get $r))))

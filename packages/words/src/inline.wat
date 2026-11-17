@@ -49,6 +49,7 @@
     "linkclose"  ;; link details occupy rem through closeTail
     "extlink"    ;; a GFM extended autolink; data = 0 verbatim, 1 http://, 2 mailto:
     "footnote"   ;; a GFM footnote reference; data = the definition record
+    "math"       ;; `$` or `$$` math; data = content begin, ch = dollar count
   )
 
   ;; emphasis tag kinds
@@ -246,6 +247,11 @@
             (if (i32.eq (local.get $c) (i32.const 10))
               (then
                 (local.set $p (call $handleNewline (local.get $p) (local.get $end)))
+                (br $dispatched)))
+            ;; the scan tables mark `$` only with the math option
+            (if (i32.eq (local.get $c) (i32.const "$"))
+              (then
+                (local.set $p (call $handleDollar (local.get $p) (local.get $end)))
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const ":"))
               (then
@@ -458,8 +464,66 @@
     (global.set $scannedBackticks (i32.const 1))
     (i32.const 0))
 
+  ;; Math between `$` or `$$` runs. Like a code span, its content is literal.
+  ;; A single `$` opens only before a non-space and closes only after a
+  ;; non-space and before a non-digit, so prices stay text. Backslash
+  ;; escapes inside are TeX's.
+  (func $handleDollar (param $p i32) (param $end i32) (result i32)
+    (local $base i32)
+    (local $q i32)
+    (local $n i32)
+    (local $i i32)
+    (local $c i32)
+    (local.set $base (global.get $contentBase))
+    (local.set $q (local.get $p))
+    (loop $run
+      (local.set $q (i32.add (local.get $q) (i32.const 1)))
+      (br_if $run (i32.and (i32.lt_u (local.get $q) (local.get $end))
+        (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $q))) (i32.const "$")))))
+    (local.set $n (i32.sub (local.get $q) (local.get $p)))
+    (if (i32.or (i32.gt_u (local.get $n) (i32.const 2)) (i32.ge_u (local.get $q) (local.get $end)))
+      (then (return (local.get $q))))
+    (if (i32.and (i32.eq (local.get $n) (i32.const 1))
+          (call $isWhiteByte (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
+      (then (return (local.get $q))))
+    (local.set $i (local.get $q))
+    (block $none
+      (loop $scan
+        (br_if $none (i32.ge_u (local.get $i) (local.get $end)))
+        (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $i))))
+        (if (i32.eq (local.get $c) (i32.const "\5c"))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 2)))
+            (br $scan)))
+        (if (i32.eq (local.get $c) (i32.const "$"))
+          (then
+            (local.set $c (select (i32.load8_u offset=1 (i32.add (local.get $base) (local.get $i))) (i32.const 0)
+              (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))))
+            (if (i32.eq (local.get $n) (i32.const 2))
+              (then
+                (if (i32.and (i32.eq (local.get $c) (i32.const "$")) (i32.gt_u (local.get $i) (local.get $q)))
+                  (then
+                    (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x20000))
+                      (local.get $p) (i32.add (local.get $i) (i32.const 2)) (local.get $q)))
+                    (return (i32.add (local.get $i) (i32.const 2))))))
+              (else
+                (if (i32.eq (local.get $c) (i32.const "$"))
+                  (then
+                    (local.set $i (i32.add (local.get $i) (i32.const 2)))
+                    (br $scan)))
+                (if (i32.eqz (i32.or (call $isDigit (local.get $c))
+                      (call $isWhiteByte (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))))
+                  (then
+                    (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x10000))
+                      (local.get $p) (i32.add (local.get $i) (i32.const 1)) (local.get $q)))
+                    (return (i32.add (local.get $i) (i32.const 1)))))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (local.get $q))
+
   (func $handleDelim (param $p i32) (param $end i32) (result i32)
     (local $base i32)
+    (local $cjk i32)
     (local $c i32)
     (local $q i32)
     (local $n i32)
@@ -502,6 +566,11 @@
         (if (i32.lt_u (local.get $q) (local.get $end))
           (then (local.set $flags (call $utf8At (i32.add (local.get $base) (local.get $q))
             (i32.add (local.get $base) (local.get $end))))))
+        (if (i32.and (global.get $ext) (i32.const 1))
+          (then
+            (local.set $k (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
+              (local.get $k) (local.get $flags)))
+            (local.set $cjk (i32.ne (local.get $c) (i32.const "_")))))
         (local.set $k (i32.or
           (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
             (i32.const 2))
@@ -513,6 +582,10 @@
           (select (i32.const 2) (call $isAsciiPunct (local.get $flags)) (call $isWhiteByte (local.get $flags)))))))
     (local.set $flags (i32.and
       (i32.shr_u (i32.const 0x52d2b) (i32.shl (local.get $k) (i32.const 1))) (i32.const 3)))
+    ;; between two other characters, a CJK neighbor makes the run both flanking
+    (if (i32.and (i32.and (local.get $cjk) (global.get $cjkSide))
+          (i32.eqz (i32.and (local.get $k) (i32.const 10))))
+      (then (local.set $flags (i32.const 3))))
     (if (i32.or (i32.eqz (local.get $flags))
           (i32.and (i32.eq (local.get $c) (i32.const "_")) (i32.eqz (local.get $k))))
       (then (return (local.get $q))))

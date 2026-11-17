@@ -2,9 +2,10 @@
   (const $mem.numbuf 48)
   (const $mem.numbufEnd 64)
   (const $mem.hexdigits 64)
-  (const $mem.strings 80)
-  (const $mem.stringsEnd 1344)
-  (const $mem.paragraphLo $mem.stringsEnd)
+  ;; CJK ranges for the cjk option (see $isCjkCp)
+  (const $mem.cjk 80)
+  (const $mem.cjkEnd 1344)
+  (const $mem.paragraphLo $mem.cjkEnd)
   (const $mem.crByte $mem.paragraphLo+16)
   (const $mem.quoteEscape $mem.crByte+1)
   (const $mem.lineEnds $mem.quoteEscape+8)
@@ -66,5 +67,25 @@
   ;; The id prefix of formatted HTML, already escaped: the host writes it here
   ;; and its length in control bytes [28:30).
   (const $mem.idPrefix 61440)
-  (const $mem.input 65536)
+  ;; Page 2 holds the math tables and work areas of math.wat, pages 3 and 4
+  ;; its box nodes (48 bytes each).
+  (const $mem.mathGlyphs 65536)
+  (const $mem.mathGlyphsEnd $mem.mathGlyphs+10240)
+  (const $mem.mathCmds $mem.mathGlyphsEnd)
+  (const $mem.mathCmdsEnd $mem.mathCmds+8192)
+  (const $mem.mathSrc $mem.mathCmdsEnd)
+  (const $mem.mathSrcEnd $mem.mathSrc+16384)
+  (const $mem.mathAtoms $mem.mathSrcEnd)
+  (const $mem.mathAtomsEnd $mem.mathAtoms+16384)
+  (const $mem.mathCells $mem.mathAtomsEnd)
+  (const $mem.mathCellsEnd $mem.mathCells+7936)
+  ;; static strings and the environment names of math.wat
+  (const $mem.mathStatic $mem.mathCellsEnd)
+  ;; pooled output string literals
+  (const $mem.strings $mem.mathStatic+768)
+  (const $mem.stringsEnd 131072)
+  (const $mem.mathStaticEnd $mem.strings)
+  (const $mem.mathNodes 131072)
+  (const $mem.mathNodesEnd 262144)
+  (const $mem.input 262144)
 )

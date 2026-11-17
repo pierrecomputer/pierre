@@ -36,10 +36,13 @@ render.
 | `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. `meta` is `null` if there is none. |
 | `skipHtml`    | `false` | Omit raw HTML.                                                                         |
 | `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
+| `math`        | `false` | Render math as SVG. See [Math](#math).                                                 |
+| `cjk`         | `false` | Let emphasis open and close next to Chinese, Japanese, and Korean text.                |
 
 `renderToAnsi()` takes `width`, the wrap column. With the default, `0`, the
 terminal wraps the text. Control characters print as U+FFFD, so a document
-cannot send escape sequences.
+cannot send escape sequences. It also takes `math` and `cjk`; math shows its TeX
+source.
 
 **Warning:** `renderToHtml()` keeps raw HTML by default. Sanitize the output of
 untrusted Markdown before you add it to a page. `skipHtml` alone is not a
@@ -70,7 +73,9 @@ normal Markdown.
 | `animated`                              | Fade in new text. Use `true` or `{ animation: 'fadeIn', duration: 180 }`. Default: `false`.   |
 | `caret`                                 | Show a `block` or `circle` caret while the stream is active.                                  |
 | `components`                            | HTML hooks for generated elements, including `inlineCode`.                                    |
+| `math`, `cjk`                           | Render math as SVG, and CJK-friendly emphasis. Default: `false`.                              |
 | `plugins.code`                          | Code highlighter.                                                                             |
+| `plugins.mermaid`                       | Mermaid diagram renderer. See [Mermaid](#mermaid).                                            |
 | `plugins.renderers`                     | Custom code block renderers, selected by language.                                            |
 | `controls`                              | Code copy/download buttons. Use a boolean or `{ code: { copy, download } }`. Default: `true`. |
 | `lineNumbers`                           | Show code line numbers. Default: `true`.                                                      |
@@ -97,7 +102,7 @@ The component omits raw HTML and rejects unsafe URL schemes. It allows external
 images, so use `urlTransform` or element filters to block them. Hooks and
 plugins are trusted code: escape any untrusted text they add.
 
-Math, Mermaid, CJK extensions, and remark or rehype plugins are not supported.
+Remark and rehype plugins are not supported.
 
 ### Syntax highlighting
 
@@ -113,6 +118,54 @@ const plugins = { code: createHighlightsPlugin({ theme: pierreLight }) };
 Create the plugin once, outside the render. Unknown languages render as plain
 text. React and `@pierre/highlights` are optional peer dependencies, and the
 core entry point loads neither.
+
+## Math
+
+With `math: true`, the parser reads TeX between dollar signs and renders it as
+SVG, with no other dependency:
+
+```md
+Inline math: $e^{i\pi} + 1 = 0$. Display math:
+$$\sum_{n=1}^\infty \frac{1}{n^2}$$
+
+$$
+\begin{aligned}
+f(x) &= \int_0^x t^2 \, dt \\
+     &= \frac{x^3}{3}
+\end{aligned}
+$$
+```
+
+- `$...$` is inline math. As in Pandoc, the opening `$` must have a non-space
+  after it, and the closing `$` a non-space before it and no digit after it, so
+  `$5 and $10` stays text.
+- `$$...$$` is display math, also inside a paragraph.
+- A `$$` fence or a `math` code fence is a display block.
+
+The renderer covers the common LaTeX math commands: fractions, roots, scripts
+and limits, big operators, `\left` and `\right`, matrices, `cases`, `aligned`,
+`array`, accents, braces, extensible arrows, letter fonts, `\text`, `\color`,
+and spacing. Glyphs use the system math font. The layout uses the metrics of
+STIX Two Math, which Apple systems include; other math fonts work with small
+spacing differences. A formula that it cannot lay out shows as code. An unknown
+command shows in red.
+
+## Mermaid
+
+`@pierre/words/mermaid` renders closed `mermaid` code blocks with
+[Pele](https://pele.run), which you install and pass in:
+
+```tsx
+import { render } from 'pele';
+import { createMermaidPlugin } from '@pierre/words/mermaid';
+
+const plugins = { mermaid: createMermaidPlugin({ render }) };
+
+<Markdown plugins={plugins}>{text}</Markdown>;
+```
+
+The second argument holds Pele's render options. An open fence and a diagram
+that does not parse show as code.
 
 ## HTML sessions
 

@@ -41,5 +41,7 @@ no runtime dependencies. React and `@pierre/highlights` are optional peers.
   React API for its URL checks and element filters.
 - `components` hooks and plugins return HTML strings, not React elements. They
   are trusted code. Escape untrusted text that they add.
-- Math, Mermaid, CJK extensions, and remark or rehype plugins are not built in.
-  Use a custom code renderer when the app needs a special fence language.
+- Math (`math: true`) and CJK-friendly emphasis (`cjk: true`) are built-in
+  options. Mermaid needs Pele through `@pierre/words/mermaid`. Remark and rehype
+  plugins are not supported. Use a custom code renderer for other fence
+  languages.

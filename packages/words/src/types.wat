@@ -53,6 +53,7 @@
   (const $F.loose 4)
   (const $F.fenced 8)
   (const $F.task 16)
+  (const $F.math 16) ;; a code record from a `$$` fence
   (const $F.taskDone 32)
   (const $F.joinedLines 64) ;; a paragraph descriptor contains multiple physical lines
   (const $F.plainInline 128) ;; block scanning proved literal HTML content

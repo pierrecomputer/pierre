@@ -399,6 +399,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const language =
         open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
       const number = index++;
+      const diagram =
+        language === 'mermaid'
+          ? options.plugins?.mermaid?.render({
+              code: decodeHtml(content),
+              language,
+              isIncomplete,
+            })
+          : undefined;
+      if (diagram != null) {
+        html += hookHtml(diagram);
+        fences?.push(cursor, html.length, index);
+        continue;
+      }
       const custom = options.plugins?.renderers?.find((renderer) =>
         typeof renderer.language === 'string'
           ? renderer.language === language
@@ -765,11 +778,14 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         // slots, and a URL hook needs unchecked URLs.
         allSlots =
           plugins?.code !== undefined ||
+          plugins?.mermaid !== undefined ||
           (plugins?.renderers?.length ?? 0) > 0 ||
           options.allowedElements !== undefined ||
           options.disallowedElements !== undefined;
         const sessionOptions: InternalSessionOptions = {
           incomplete,
+          cjk: options.cjk,
+          math: options.math,
           [formatKey]: {
             flags:
               formatFlags.on |

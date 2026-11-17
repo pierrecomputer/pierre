@@ -9,7 +9,10 @@ const isFade = (node: Node): node is HTMLElement =>
   (node as Element).getAttribute('data-markdown') === 'token';
 const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
-  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"]';
+  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], svg';
+
+// The source HTML of each math SVG that patchHtml placed, to reuse equal ones.
+const svgSources = new WeakMap<Node, string>();
 
 // Must equal the `markdown-fade-in` duration in react/styles.css: fades with
 // this duration carry no inline style, and cleanup is timed from this value.
@@ -312,6 +315,18 @@ function patchHtml(
             else text.data = value;
           }
         } else actual = document.createTextNode(value);
+        at = end;
+      } else if (html.startsWith('<svg', at)) {
+        // Math SVG is one unit: keep an equal one, else let the parser build it.
+        const end = html.indexOf('</svg>', at) + 6;
+        const source = html.slice(at, end);
+        if (current !== null && svgSources.get(current) === source)
+          actual = current;
+        else {
+          template.innerHTML = source;
+          actual = template.content.firstChild!;
+          svgSources.set(actual, source);
+        }
         at = end;
       } else {
         const end = html.indexOf('>', at);
@@ -705,6 +720,7 @@ export function createDomRenderer(
         const right = b?.renderers ?? [];
         return (
           a?.code === b?.code &&
+          a?.mermaid === b?.mermaid &&
           left.length === right.length &&
           left.every(
             (renderer, at) =>

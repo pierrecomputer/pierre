@@ -159,3 +159,7 @@
     animation: none;
   }
 }
+[data-markdown='mermaid'] {
+  margin-block: 1.25em;
+  overflow-x: auto;
+}

@@ -164,7 +164,7 @@
   ;; One bit per input byte marks possible block starts. Non-ASCII bytes have
   ;; no bit set; indentation and block precedence are checked by the caller.
   (data (i32.const $mem.blockStarts)
-    "\00\26\00\00\09\2c\ff\77\00\00\00\88\01\00\00\50"
+    "\00\26\00\00\19\2c\ff\77\00\00\00\88\01\00\00\50"
     "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
   (func $mayStartBlock (param $ch i32) (result i32)
     (i32.and (i32.shr_u
@@ -769,7 +769,7 @@
                (block $atx
                 (block $quote
                   (br_table
-                    $atx $stop $stop $stop $stop $stop $stop $hr $list
+                    $atx $fence $stop $stop $stop $stop $stop $hr $list
                     $stop $setext $stop $stop $list $list $list $list $list
                     $list $list $list $list $list $table $stop $html $setext
                     $quote $stop $stop $stop $stop $stop $stop $stop $stop
@@ -827,6 +827,8 @@
               (call $prepareLeafParent)
               (call $openLeaf (enum.get $Blk.code))
               (call $recFlag (global.get $leafRec) (i32.const $F.fenced))
+              (if (i32.eq (i32.load8_u (global.get $fns)) (i32.const "$"))
+                (then (call $recFlag (global.get $leafRec) (i32.const $F.math))))
               (global.set $codeFenceCh (i32.load8_u (global.get $fns)))
               (global.set $codeFenceN (local.get $m))
               (global.set $codeFenceOff (local.get $markerOff))

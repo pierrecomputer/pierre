@@ -41,8 +41,15 @@ export interface CodeHighlighterPlugin {
   createSession?(): CodeHighlighterSession;
 }
 
+export interface MermaidPlugin {
+  /** Return HTML for a `mermaid` code block, or null to show the code. */
+  render(options: CodeOptions): string | null;
+}
+
 export interface PluginConfig {
   code?: CodeHighlighterPlugin;
+  /** Diagrams for `mermaid` code blocks. See `createMermaidPlugin`. */
+  mermaid?: MermaidPlugin;
   renderers?: {
     language: string | string[];
     render(options: CodeOptions): string;
@@ -54,6 +61,10 @@ export interface ControlsConfig {
 }
 
 export interface HtmlOptions {
+  /** CJK-friendly emphasis. See `HtmlSessionOptions.cjk`. */
+  cjk?: boolean;
+  /** Math as SVG. See `HtmlSessionOptions.math`. */
+  math?: boolean;
   components?: Components;
   plugins?: PluginConfig;
   controls?: boolean | ControlsConfig;

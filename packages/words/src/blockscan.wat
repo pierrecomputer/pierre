@@ -210,7 +210,18 @@
     (if (i32.eqz (i32.or
           (i32.eq (local.get $c) (i32.const "\60"))
           (i32.eq (local.get $c) (i32.const "~"))))
-      (then (return (i32.const 0))))
+      (then
+        ;; With the math option, `$$` opens a math block when no `$` follows
+        ;; on its line.
+        (if (i32.or (i32.ne (local.get $c) (i32.const "$"))
+              (i32.eqz (i32.and (global.get $ext) (i32.const 2))))
+          (then (return (i32.const 0))))
+        (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
+        (if (i32.or (i32.lt_u (i32.sub (local.get $i) (local.get $p)) (i32.const 2))
+              (i32.lt_u (call $findByte (local.get $i) (global.get $lineEnd) (i32.const "$"))
+                (global.get $lineEnd)))
+          (then (return (i32.const 0))))
+        (return (i32.sub (local.get $i) (local.get $p)))))
     (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
     (if (i32.lt_u (i32.sub (local.get $i) (local.get $p)) (i32.const 3)) (then (return (i32.const 0))))
     (if (i32.eq (local.get $c) (i32.const "\60"))
