@@ -184,6 +184,13 @@ void test('formulas that do not fit show as code', () => {
   );
 });
 
+void test('unmatched dollars do not rescan the paragraph', () => {
+  const prices = '$1 '.repeat(50000);
+  assert.equal(html(prices, { math: true }), `<p>${prices.trimEnd()}</p>\n`);
+  // a later closer still pairs with the first opener
+  assert.match(html('$1 $2 $x$', { math: true }), /aria-label="1 \$2 \$x"/);
+});
+
 void test('math in ANSI and alt text shows its source', () => {
   const ansi = dec.decode(renderToAnsi('a $x^2$ b', { math: true }));
   assert.match(ansi, /x\^2/);
@@ -218,6 +225,27 @@ void test('sessions and the HTML renderer stream math', () => {
   const toggled = createHtmlSession();
   toggled.render('$x$');
   assert.equal(toggled.render('$x$', { math: true }).reset, true);
+});
+
+void test('element filters skip self-closing SVG children', () => {
+  const doc = '$$\\frac{a}{b}$$\n\nafter\n';
+  for (const options of [
+    { disallowedElements: ['svg'] },
+    { allowedElements: ['p'] },
+  ]) {
+    const out = createHtmlRenderer({ math: true, ...options }).render(
+      doc,
+      false,
+      false
+    ).html;
+    assert.doesNotMatch(out, /<svg|<rect|<path/);
+    assert.match(out, />after<\/p>/);
+  }
+  const rects = createHtmlRenderer({
+    math: true,
+    disallowedElements: ['rect'],
+  }).render(doc, false, false).html;
+  assert.match(rects, /<\/svg>[^]*>after<\/p>/);
 });
 
 void test('the Mermaid plugin renders closed mermaid fences', () => {

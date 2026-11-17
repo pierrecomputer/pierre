@@ -82,6 +82,8 @@
   (global $bracketLo (mut i32) (i32.const 0))
   (global $scannedBackticks (mut i32) (i32.const 0))
   (global $tickTop (mut i32) (i32.const 0))
+  ;; Start of a failed single-`$` closer scan in this leaf, or 0.
+  (global $dollarMiss (mut i32) (i32.const 0))
   (global $lastMarkEnd (mut i32) (i32.const 0))
   (global $literalNeedsEscape (mut i32) (i32.const 0))
 
@@ -153,6 +155,7 @@
     (global.set $bracketLo (i32.const 0))
     (global.set $scannedBackticks (i32.const 0))
     (global.set $tickTop (i32.const 0))
+    (global.set $dollarMiss (i32.const 0))
     (global.set $htmlNoClose (i32.const 0))
     (global.set $wwwRejectBefore (i32.const 0))
     (global.set $lastMarkEnd (i32.const 0))
@@ -486,6 +489,24 @@
     (if (i32.and (i32.eq (local.get $n) (i32.const 1))
           (call $isWhiteByte (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
       (then (return (local.get $q))))
+    ;; Closers do not depend on the opener. A failed scan from $dollarMiss
+    ;; visited this `$` unless an odd `\` run or a `$` skipped it, and then
+    ;; went on from $q, so this scan fails too. Without this, `$1 ` repeated
+    ;; rescans the tail per price.
+    (if (i32.and (i32.eq (local.get $n) (i32.const 1))
+          (i32.and (i32.ne (global.get $dollarMiss) (i32.const 0))
+            (i32.ge_u (local.get $p) (global.get $dollarMiss))))
+      (then
+        (local.set $i (local.get $p))
+        (loop $esc
+          (local.set $c (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))
+          (if (i32.eq (local.get $c) (i32.const "\5c"))
+            (then
+              (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+              (br $esc))))
+        (if (i32.and (i32.ne (local.get $c) (i32.const "$"))
+              (i32.eqz (i32.and (i32.sub (local.get $p) (local.get $i)) (i32.const 1))))
+          (then (return (local.get $q))))))
     (local.set $i (local.get $q))
     (block $none
       (loop $scan
@@ -519,6 +540,8 @@
                     (return (i32.add (local.get $i) (i32.const 1)))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $scan)))
+    (if (i32.and (i32.eq (local.get $n) (i32.const 1)) (i32.eqz (global.get $dollarMiss)))
+      (then (global.set $dollarMiss (local.get $q))))
     (local.get $q))
 
   (func $handleDelim (param $p i32) (param $end i32) (result i32)
@@ -1044,7 +1067,7 @@
             (i32.eq (local.get $c) (i32.const "-")))))
           (local.set $q (i32.add (local.get $q) (i32.const 1)))
           (br_if $l (i32.le_u (i32.sub (local.get $q) (local.get $seg)) (i32.const 63)))))
-      (if (i32.eq (i32.load8_u offset=0 (i32.sub (local.get $q) (i32.const 1))) (i32.const "-"))
+      (if (i32.eq (i32.load8_u (i32.sub (local.get $q) (i32.const 1))) (i32.const "-"))
         (then (return (i32.const 0))))
       (br_if $label (i32.eq (local.get $c) (i32.const "."))))
     (if (i32.ne (local.get $c) (i32.const ">")) (then (return (i32.const 0))))

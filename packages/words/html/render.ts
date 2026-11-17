@@ -109,8 +109,12 @@ function hookHtml(html: unknown): string {
 
 const voidTags = new Set(['br', 'hr', 'img', 'input']);
 
-/** Whether the formatted tag at `at` is void. Every formatted tag has an attribute after its name. */
-const isVoidAt = (html: string, at: number): boolean =>
+/**
+ * Whether the formatted tag in [at, end) has no closing tag: an HTML void tag
+ * or a self-closing SVG tag. Every formatted tag has an attribute after its name.
+ */
+const isVoidAt = (html: string, at: number, end: number): boolean =>
+  html.charCodeAt(end - 2) === 47 ||
   html.startsWith('br ', at + 1) ||
   html.startsWith('hr ', at + 1) ||
   html.startsWith('img ', at + 1) ||
@@ -140,7 +144,7 @@ function mapElements(
   transform: (html: string) => string
 ): string {
   const expression = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'g');
-  const isVoid = voidTags.has(tag);
+  const voidTag = voidTags.has(tag);
   const open: string[] = [];
   let result = '';
   let cursor = 0;
@@ -151,6 +155,7 @@ function mapElements(
   ) {
     let piece = html.slice(cursor, match.index);
     cursor = expression.lastIndex;
+    const isVoid = voidTag || match[0].endsWith('/>');
     if (match[1] === '' && !isVoid) {
       if (open.length === 0) result += piece;
       else open[open.length - 1] += piece;
@@ -347,7 +352,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           const closing = html.charCodeAt(at + 1) === 47;
           end = html.indexOf('>', at) + 1;
           if (dropped > 0) {
-            if (!closing) dropped += isVoidAt(html, at) ? 0 : 1;
+            if (!closing) dropped += isVoidAt(html, at, end) ? 0 : 1;
             else if (--dropped === 0) from = end;
             continue;
           }
@@ -362,7 +367,11 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           if (closing && options.unwrapDisallowed !== true) continue;
           result += html.slice(from, at);
           from = end;
-          if (options.unwrapDisallowed !== true && !voidTags.has(tag))
+          if (
+            options.unwrapDisallowed !== true &&
+            !voidTags.has(tag) &&
+            html.charCodeAt(end - 2) !== 47
+          )
             dropped = 1;
         }
         html = dropped > 0 ? result : result + html.slice(from);
@@ -874,7 +883,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               end = raw.indexOf('>', at) + 1;
               if (end === 0 || end >= same) break;
               if (raw.charCodeAt(at + 1) === 47) depth--;
-              else if (!isVoidAt(raw, at)) depth++;
+              else if (!isVoidAt(raw, at, end)) depth++;
               if (depth === 0 && raw.charCodeAt(end) === 10) cut = end + 1;
             }
           }
