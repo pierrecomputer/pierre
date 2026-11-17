@@ -1,5 +1,5 @@
 import { init } from './core.ts';
-import wasmBytes from './md.wasm.mjs';
+import wasmBytes from './words.wasm.mjs';
 
 init(new WebAssembly.Module(wasmBytes));
 

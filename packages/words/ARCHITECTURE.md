@@ -19,7 +19,7 @@ UTF-8 input
 
 | Files                                        | Purpose                                        |
 | -------------------------------------------- | ---------------------------------------------- |
-| `src/md.wat`, `memory.wat`, `out.wat`        | Entry point, memory layout, and buffer growth  |
+| `src/words.wat`, `memory.wat`, `out.wat`     | Entry point, memory layout, and buffer growth  |
 | `src/block.wat`, `blockscan.wat`             | Block analysis and container state             |
 | `src/types.wat`, `record.wat`                | Record layout and block content                |
 | `src/inline.wat`, `link.wat`, `extlink.wat`  | Inline syntax, references, and autolinks       |
@@ -61,7 +61,7 @@ data segments overlap. `tsdown` then writes the JavaScript and declarations to
 ## Memory
 
 The fixed prefix holds control fields, generated tables, and work buffers. See
-[`md.wat`](./src/md.wat) for the control fields and
+[`words.wat`](./src/words.wat) for the control fields and
 [`memory.wat`](./src/memory.wat) for exact addresses. Pages 2 to 4 hold the math
 tables, the output string pool, and the math box nodes. Input starts at byte
 262,144; JavaScript grows memory before writing it after this fixed prefix.

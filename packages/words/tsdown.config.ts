@@ -7,7 +7,7 @@ export default defineConfig([
     unbundle: true,
     platform: 'neutral',
     dts: { tsgo: true },
-    deps: { neverBundle: [/^\.\/md\.wasm/] },
+    deps: { neverBundle: [/^\.\/words\.wasm/] },
   },
   {
     entry: {

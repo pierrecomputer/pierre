@@ -975,7 +975,7 @@ void test('reference lookups ignore the hash seed and keep namespaces apart', as
   const { init } = await import('../dist/index.js');
   const { readFileSync } = await import('node:fs');
   const wasm = new WebAssembly.Module(
-    readFileSync(new URL('../dist/md.wasm', import.meta.url))
+    readFileSync(new URL('../dist/words.wasm', import.meta.url))
   );
   let doc = '';
   for (let i = 0; i < 300; i++)

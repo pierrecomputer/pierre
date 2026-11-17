@@ -38,7 +38,7 @@ const WIDE_RANGES =
   '1FACD-1FADC,1FADF-1FAEA,1FAEF-1FAF8,20000-2FFFD,30000-3FFFD';
 
 const start = performance.now();
-const source = new URL('../src/md.wat', import.meta.url);
+const source = new URL('../src/words.wat', import.meta.url);
 const path = source.pathname;
 const enumMap: EnumMap = new Map();
 const bitsetMap: BitsetMap = new Map();
@@ -580,7 +580,7 @@ code = code.replace(/ POOL:(\d+) /g, (_, i) => {
 code = expandEnumGetsAndStrings(code, enumMap, path);
 checkDataSegments(code, path, 262144);
 const wasmBytes = optimizeWasm(wat2wasm(path, code), {
-  filename: 'md.wat',
+  filename: 'words.wat',
   shrinkLevel: 1,
 });
 
@@ -588,9 +588,9 @@ const wasmBytes = optimizeWasm(wat2wasm(path, code), {
 const dist = new URL('../dist/', import.meta.url);
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
-fs.writeFileSync(new URL('md.wasm', dist), wasmBytes);
+fs.writeFileSync(new URL('words.wasm', dist), wasmBytes);
 fs.writeFileSync(
-  new URL('md.wasm.mjs', dist),
+  new URL('words.wasm.mjs', dist),
   `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
     `const b = new Uint8Array(s.length);\n` +
     `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
