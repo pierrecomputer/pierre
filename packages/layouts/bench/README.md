@@ -18,18 +18,19 @@ A full headless run takes about 30 minutes. The memory values and the repeat
 scenario take about 20 of them; `BENCH_MEMORY=0` skips them. Options come from
 the environment:
 
-| Variable            | Default            | Meaning                                                                                                                                           |
-| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BENCH_RUNS`        | `5`                | Measured runs for each scenario and parameter set.                                                                                                |
-| `BENCH_WARMUP`      | `1`                | Runs before the measured runs. The report does not keep them.                                                                                     |
-| `BENCH_PANES`       | `4,16`             | Pane counts.                                                                                                                                      |
-| `BENCH_CONTENT`     | `light,heavy,real` | Content weights.                                                                                                                                  |
-| `BENCH_SCENARIOS`   | all                | A comma-separated list of scenario IDs.                                                                                                           |
-| `BENCH_SAVE`        | `1`                | `0` writes the report to the output directory, not `results`.                                                                                     |
-| `BENCH_MODE`        | `headless`         | `headed` opens a browser window and measures frames at the display rate.                                                                          |
-| `BENCH_ATTRIBUTION` | `1`                | `0` skips the attribution run of each record.                                                                                                     |
-| `BENCH_MEMORY`      | `1`                | `0` skips the memory values and the repeat scenario.                                                                                              |
-| `BENCH_QUERY`       | empty              | Fixture parameters that select a variant, for example `layers=off`, or `hidden=activity` and `hidden=unmount` for the modes of `hiddenContent()`. |
+| Variable               | Default            | Meaning                                                                                                                                           |
+| ---------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BENCH_RUNS`           | `5`                | Measured runs for each scenario and parameter set.                                                                                                |
+| `BENCH_WARMUP`         | `1`                | Runs before the measured runs. The report does not keep them.                                                                                     |
+| `BENCH_PANES`          | `4,16`             | Pane counts.                                                                                                                                      |
+| `BENCH_CONTENT`        | `light,heavy,real` | Content weights.                                                                                                                                  |
+| `BENCH_SCENARIOS`      | all                | A comma-separated list of scenario IDs.                                                                                                           |
+| `BENCH_SAVE`           | `1`                | `0` writes the report to the output directory, not `results`.                                                                                     |
+| `BENCH_MODE`           | `headless`         | `headed` opens a browser window and measures frames at the display rate.                                                                          |
+| `BENCH_ATTRIBUTION`    | `1`                | `0` skips the attribution run of each record.                                                                                                     |
+| `BENCH_MEMORY`         | `1`                | `0` skips the memory values and the repeat scenario.                                                                                              |
+| `BENCH_MEMORY_SAMPLES` | `3`                | Memory snapshots for each memory value. The report keeps the median of each value.                                                                |
+| `BENCH_QUERY`          | empty              | Fixture parameters that select a variant, for example `layers=off`, or `hidden=activity` and `hidden=unmount` for the modes of `hiddenContent()`. |
 
 For a quick trial that writes nothing to the repository:
 
@@ -195,7 +196,10 @@ the record's `memory` holds the values. The run first reads the layers, then
 waits until Chromium releases the raster resources that the operation stopped
 using (about 5 s after an animation), then requests a detailed memory-infra dump
 with `Tracing.requestMemoryDump`, which forces a garbage collection. The DOM
-counters and the JS heap come after two forced garbage collections. The memory
+counters and the JS heap come after two forced garbage collections. The run
+takes `BENCH_MEMORY_SAMPLES` snapshots, three by default, and keeps the median
+of each value, so that one noisy dump does not decide a check; `samples` holds
+the count. The unused raster resources come from the first snapshot. The memory
 run takes about 7 s for each record after an animation.
 
 | Field                                               | Source                                                                                                                                                            |

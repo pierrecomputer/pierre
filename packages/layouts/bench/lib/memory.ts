@@ -51,6 +51,11 @@ export interface MemorySnapshot {
   estimatedRasterMb: number;
   /** Each pane's layers, estimate, and DOM nodes. */
   panes: Record<string, PaneMemory>;
+  /**
+   * The number of snapshots whose median, value by value, this snapshot is
+   * (`measureMemoryMedian`). One snapshot has no count.
+   */
+  samples?: number;
 }
 
 const MB = 2 ** 20;
@@ -467,4 +472,69 @@ export async function measureMemory(page: Page): Promise<MemorySnapshot> {
     estimatedRasterMb: mb(estimatedBytes),
     panes,
   };
+}
+
+function medianValue(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const value =
+    sorted.length % 2 === 1
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2;
+  return Number(value.toFixed(3));
+}
+
+type MemoryValue = Exclude<
+  keyof MemorySnapshot,
+  'panes' | 'samples' | 'tileMemoryUnusedMb'
+>;
+
+const MEMORY_VALUES: readonly MemoryValue[] = [
+  'tileMemoryMb',
+  'tileMemoryVisibleMb',
+  'rendererMb',
+  'gpuMb',
+  'v8Mb',
+  'blinkGcMb',
+  'partitionAllocMb',
+  'mallocMb',
+  'jsHeapMb',
+  'domNodes',
+  'jsEventListeners',
+  'layers',
+  'drawingLayers',
+  'estimatedRasterMb',
+];
+
+/**
+ * Measure the memory of a page `count` times, with no operation between the
+ * snapshots, and give the median of each value, so that one noisy dump does
+ * not decide a check. The unused raster resources come from the first
+ * snapshot: the later ones start after Chromium released them.
+ */
+export async function measureMemoryMedian(
+  page: Page,
+  count: number
+): Promise<MemorySnapshot> {
+  const snapshots: MemorySnapshot[] = [];
+  for (let index = 0; index < Math.max(1, count); index++)
+    snapshots.push(await measureMemory(page));
+  if (snapshots.length === 1) return snapshots[0];
+  const median = { ...snapshots[0], samples: snapshots.length };
+  for (const value of MEMORY_VALUES)
+    median[value] = medianValue(snapshots.map((snapshot) => snapshot[value]));
+  const panes: Record<string, PaneMemory> = {};
+  for (const id of Object.keys(snapshots[0].panes)) {
+    const own = snapshots.flatMap((snapshot) =>
+      snapshot.panes[id] === undefined ? [] : [snapshot.panes[id]]
+    );
+    panes[id] = {
+      layers: medianValue(own.map((pane) => pane.layers)),
+      drawingLayers: medianValue(own.map((pane) => pane.drawingLayers)),
+      estimatedRasterMb: medianValue(own.map((pane) => pane.estimatedRasterMb)),
+      domNodes: medianValue(own.map((pane) => pane.domNodes)),
+    };
+  }
+  median.panes = panes;
+  return median;
 }

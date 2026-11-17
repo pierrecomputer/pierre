@@ -9,7 +9,11 @@ import {
   type Sample,
   settle,
 } from './lib/measure';
-import { measureMemory, type MemorySnapshot } from './lib/memory';
+import {
+  measureMemory,
+  measureMemoryMedian,
+  type MemorySnapshot,
+} from './lib/memory';
 import { options } from './lib/options';
 import { GROWTH_VALUES, type RawRecord, type RepeatRecord } from './lib/report';
 import {
@@ -191,7 +195,8 @@ for (const panes of options.panes) {
               scenario.target ?? null
             );
           else await operation();
-          if (options.memory) memory = await measureMemory(page);
+          if (options.memory)
+            memory = await measureMemoryMedian(page, options.memorySamples);
         }
         const record: RawRecord = {
           scenario: scenario.id,
@@ -245,10 +250,10 @@ for (const [panes, content] of repeatParams) {
     if (content === 'real') await page.waitForTimeout(REAL_CONTENT_SETTLE_MS);
     await repeatZoomAndHide(page, 1);
     await settle(page);
-    const before = await measureMemory(page);
+    const before = await measureMemoryMedian(page, options.memorySamples);
     await repeatZoomAndHide(page, REPEAT_CYCLES);
     await settle(page);
-    const after = await measureMemory(page);
+    const after = await measureMemoryMedian(page, options.memorySamples);
     const growth = Object.fromEntries(
       GROWTH_VALUES.map((value) => [
         value,
@@ -256,9 +261,9 @@ for (const [panes, content] of repeatParams) {
       ])
     ) as RepeatRecord['growth'];
     await zoomFirstPane(page);
-    const zoomed = await measureMemory(page);
+    const zoomed = await measureMemoryMedian(page, options.memorySamples);
     await hideOtherPanes(page);
-    const alone = await measureMemory(page);
+    const alone = await measureMemoryMedian(page, options.memorySamples);
     const record: RepeatRecord = {
       panes,
       content,

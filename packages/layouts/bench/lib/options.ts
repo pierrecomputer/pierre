@@ -21,6 +21,8 @@ export interface BenchOptions {
   attribution: boolean;
   /** Memory values after the extra run of each record, and the repeat scenario. */
   memory: boolean;
+  /** The snapshots of each memory value, whose median the report keeps. */
+  memorySamples: number;
 }
 
 /**
@@ -42,4 +44,6 @@ export const options: BenchOptions = {
   attribution: process.env.BENCH_ATTRIBUTION !== '0',
   /** Measure memory after the extra run of each record. Set `BENCH_MEMORY=0` to skip it. */
   memory: process.env.BENCH_MEMORY !== '0',
+  /** Take the median of this many memory snapshots for each value. */
+  memorySamples: Number(process.env.BENCH_MEMORY_SAMPLES ?? 3),
 };
