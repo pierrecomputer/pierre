@@ -33,7 +33,6 @@
       (loop $search
         (br_if $done (i32.ge_u (local.get $lo) (local.get $n)))
         (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $n)) (i32.const 1)))
-        ;; entry key <= $cp
         (if (i32.ge_u (local.get $cp) (i32.and (i32.const 0x1ffff)
               (i32.load (i32.add (local.get $at) (i32.shl (local.get $mid) (i32.const 2))))))
           (then (local.set $lo (i32.add (local.get $mid) (i32.const 1))))
@@ -126,7 +125,6 @@
                 (br $l)))))
         (local.set $out (i32.add (local.get $out) (call $utf8Encode (local.get $out) (local.get $cp))))
         (br $l)))
-    ;; FNV-1a over the normalized bytes
     (local.set $h (global.get $hashSeed))
     (local.set $p (local.get $dst))
     (block $hashed
@@ -229,7 +227,6 @@
               (br $l)))
           (if (i32.eq (local.get $c) (i32.const "\5c"))
             (then
-              ;; an escaped punctuation character
               (local.set $i (i32.add (local.get $i) (i32.and
                 (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))
                 (call $isAsciiPunct (i32.load8_u offset=1 (local.get $i)))))))
@@ -300,9 +297,8 @@
         (i32.add (local.get $p) (i32.const 1)) (local.get $end)))))
     (local.get $p))
 
-  ;; Parse link reference definitions off the front of a paragraph and drop the
-  ;; text they consumed. Definitions may span lines, so this works on the
-  ;; paragraph's contiguous content buffer.
+  ;; Parse link reference definitions off the front of a paragraph and drop
+  ;; their text. Works on the content buffer since definitions may span lines.
   (func $resolveLinkDefs (param $r i32)
     (local $len i32)
     (local $off i32)
@@ -344,7 +340,7 @@
             (i32.ne (i32.load8_u (local.get $pos)) (i32.const ":"))))
       (then (return)))
     (local.set $len (call $blockContent (local.get $r)))
-    ;; Parse one definition per iteration; the first failure ends the scan.
+    ;; One definition per pass; the first failure ends the scan.
     (loop $defs
       (local.set $base (call $contentAt (i32.const 0)))
       (local.set $end (i32.add (local.get $base) (local.get $len)))
@@ -474,8 +470,8 @@
         (i32.store offset=$R.nLines (local.get $r)
           (select (i32.const 0) (local.get $lineCount) (local.get $blank))))))
 
-  ;; Link definitions as they are appended so indexing need not walk unrelated
-  ;; blocks twice. Record addresses do not move when scratch or memory grows.
+  ;; Chain definitions in source order so $linkIndex skips other blocks.
+  ;; Record addresses do not move when scratch or memory grows.
   (func $noteDefinition (param $r i32)
     (if (global.get $defTail)
       (then (i32.store offset=$R.defNext (global.get $defTail) (local.get $r)))
@@ -507,7 +503,6 @@
     (block $filled
       (loop $l
         (br_if $filled (i32.eqz (local.get $r)))
-        ;; the first definition of a type wins
         (local.set $slot (call $linkSlot
           (i32.add (local.get $r) (i32.const $R.labelBytes))
           (i32.load offset=$R.labelLen (local.get $r))
@@ -519,8 +514,7 @@
         (br $l)))
     (global.set $rec (i32.add (local.get $table) (i32.mul (local.get $slots) (i32.const 4))))
     (global.set $recEnd (local.get $table))
-    ;; the footnotes are numbered as they are first referenced, so the section
-    ;; at the end needs a place to record that order
+    ;; footnotes are numbered by first reference; reserve room for that order
     (if (global.get $fnTotal)
       (then
         (call $ensureRec (i32.add (i32.mul (global.get $fnTotal) (i32.const 4)) (i32.const 16)))
@@ -551,7 +545,6 @@
     (local $i i32)
     (local $at i32)
     (local $slot i32)
-    ;; the high bits of a multiplicative mix pick the first entry
     (local.set $i (i32.shr_u (i32.mul (local.get $hash) (i32.const 0x9e3779b1))
       (i32.clz (global.get $linkMask))))
     (block $found

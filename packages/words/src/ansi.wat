@@ -60,11 +60,9 @@
   (global $brkDrop (mut i32) (i32.const 0))
   (global $fnRefEnd (mut i32) (i32.const 0)) ;; output end after the last footnote reference
 
-  ;; A style that opens or closes on a byte that has not been written yet is
-  ;; left to whoever writes it: the first writer after a prefix applies $sgr,
-  ;; and $ansiFlushSpace syncs once the space it held back is out. Emitting
-  ;; here instead would put the escape sequence before that space, which is
-  ;; what underlines the leading space of a link.
+  ;; A style change at line start or before a held-back space is left to the
+  ;; next writer. Emitting it here would put the escape before that space and
+  ;; underline the leading space of a link.
   (func $sgrSet (param $mask i32)
     (global.set $sgr (local.get $mask))
     (if (i32.eqz (i32.or (global.get $atLineStart) (global.get $pendingSpace)))
@@ -183,20 +181,17 @@
       (i32.sub (i32.sub (global.get $ansiCol) (global.get $brkCol)) (global.get $brkDrop))))
     (global.set $brkOut (i32.const 0)))
 
-  ;; Open a line with its prefix. The style in force is left to whoever writes
-  ;; next: every writer syncs it, so a line that starts with a style change
-  ;; emits one sequence, not two.
+  ;; Open a line with its prefix. The next writer syncs the style, so a line
+  ;; that starts with a style change emits one sequence, not two.
   (func $ansiIndent
     (if (i32.eqz (global.get $atLineStart)) (then (return)))
     (call $ansiPrefix)
     (global.set $atLineStart (i32.const 0))
     (global.set $ansiCol (global.get $prefixCols)))
 
-  ;; Write the line prefix, with the pending list marker in the place of its
-  ;; own indent, which is plain spaces. That indent is not always last: a block
-  ;; quote inside the item pushes its bar after it. $atLineStart is 2 when an
-  ;; item opened right inside another one: the outer marker and the prefix
-  ;; before the inner marker are then on the line already.
+  ;; Write the line prefix with the pending list marker in place of its indent,
+  ;; which is not always last (a quote in the item pushes its bar after it).
+  ;; $atLineStart 2: the outer marker and its prefix are on the line already.
   (func $ansiPrefix
     (local $at i32)
     (local.set $at (global.get $prefixLen))
@@ -303,8 +298,7 @@
           (then
             (call $ansiPrefix)
             (global.set $atLineStart (i32.const 2))))
-        ;; Write this item's marker into the pending buffer and keep the style
-        ;; that is in force at the marker rather than at the line start.
+        ;; keep the style in force at the marker, not at the line start
         (local.set $p (i32.const $mem.pending))
         (if (i32.eq (i32.load8_u offset=$mem.listKind (global.get $listDepth))
               (enum.get $Blk.ol))
@@ -324,7 +318,6 @@
             (global.set $pendingLen (local.get $n))
             (global.set $pendingCols (local.get $n)))
           (else
-            ;; Bullets cycle with nesting depth.
             (i32.store (local.get $p) (i32.load offset=$mem.bullet
               (i32.shl (i32.rem_u (i32.sub (global.get $listDepth) (i32.const 1)) (i32.const 3))
                 (i32.const 2))))
@@ -505,8 +498,8 @@
       (br_if $l (i32.lt_u (local.get $dst) (local.get $end))))
     (global.set $out (local.get $end)))
 
-  ;; Walk only table records to reserve one bounded workspace after the records.
-  ;; HTML and table-free documents need none; the output never moves over it.
+  ;; Reserve one bounded cell-width workspace after the records, sized by the
+  ;; largest table. The output never moves over it.
   (func $ansiTableSpace
     (local $r i32)
     (local $cols i32)
@@ -537,8 +530,7 @@
   (func $ansiColumn (param $i i32) (result i32)
     (i32.add (i32.const $mem.column) (i32.shl (local.get $i) (i32.const 2))))
 
-  ;; Two passes over the rows: the first measures every cell, so the columns
-  ;; can be aligned, and the second writes them using those measurements.
+  ;; Pass 1 measures every cell to align the columns, pass 2 writes them.
   (func $ansiTable (param $r i32)
     (local $cols i32)
     (local $rows i32)
@@ -559,7 +551,6 @@
     (local $lead i32)
     (local.set $cols (i32.load offset=8 (local.get $r)))
     (local.set $rows (i32.load offset=$R.nLines (local.get $r)))
-    ;; cells lay out on one line
     (global.set $noWrap (i32.const 1))
     (loop $passes
       (local.set $row (i32.const 0))
@@ -626,20 +617,17 @@
                     (i32.ge_u (local.get $lead) (i32.const $A.center))))
                   (call $ansiSpaces (local.get $lead))
                   (local.set $pad (i32.sub (local.get $pad) (local.get $lead)))
-                  ;; the header row is bold
                   (if (i32.eqz (local.get $row)) (then (call $sgrOn (i32.const $S.bold))))
-                  ;; A cell starts at the prefix column, here and when it is measured: what
-                  ;; it renders, such as the space before a link target, then depends
-                  ;; only on the cell.
+                  ;; Start at the prefix column, as when measured, so what a cell
+                  ;; renders depends only on the cell.
                   (global.set $ansiCol (global.get $prefixCols))
                   (if (local.get $has)
                     (then (call $renderCell (local.get $beg) (local.get $cellTo)
                       (global.get $cellUnescapePipe))))
-                  ;; commit a held-back space (it belongs to this cell) and the style that
-                  ;; was waiting on it, so the separator does not inherit a deferred close
+                  ;; commit this cell's held-back space and style, so the separator
+                  ;; does not inherit a deferred close
                   (call $ansiFlushSpace)
                   (if (i32.eqz (local.get $row)) (then (call $sgrOff (i32.const $S.bold))))
-                  ;; the last column needs no trailing padding
                   (if (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $cols))
                     (then (call $ansiSpaces (local.get $pad))))))
               (local.set $cell (i32.add (local.get $cell) (i32.const 1)))
@@ -727,21 +715,17 @@
     (memory.fill (global.get $out) (i32.const 32) (local.get $n))
     (global.set $out (i32.add (global.get $out) (local.get $n))))
 
-  ;; Write text, wrapping at the configured width. When $content is set the
-  ;; range is an offset into the current content. Its base is re-read after
-  ;; every write because copied content can move with scratch.
+  ;; Write text, wrapping at the configured width. With $content set the range
+  ;; is an offset into the current content, whose base is re-read after every
+  ;; write because copied content can move with scratch.
   ;;
-  ;; Runs of printable bytes with single spaces between them are copied whole.
-  ;; Each space is a break opportunity: a run that does not fit is cut at its
-  ;; last space that does, and $ansiBreak moves text glued to an earlier one.
-  ;; Other spaces are held back until the next word is placed, so a wrapped
-  ;; line never ends in one. Controls, DEL and C1 controls become U+FFFD so
-  ;; the text cannot drive the terminal.
+  ;; Runs of printable bytes with single spaces are copied whole; a run that
+  ;; does not fit is cut at its last space that does. Other spaces are held
+  ;; back, so a wrapped line never ends in one. Controls, DEL and C1 controls
+  ;; become U+FFFD so the text cannot drive the terminal.
   ;;
-  ;; $ansiCol is exact when wrapping or in a table cell, which is measured by
-  ;; it, so UTF-8 is then placed a character at a time. Otherwise it only has
-  ;; to tell whether a line has content, and counts bytes. The text is valid
-  ;; UTF-8: see $ansiScrubInput.
+  ;; $ansiCol is exact (UTF-8 placed per character) only when wrapping or in a
+  ;; table cell; otherwise it counts bytes. The text is valid UTF-8.
   (func $ansiRaw (param $p i32) (param $e i32) (param $content i32)
     (local $base i32)
     (local $end i32)
@@ -960,7 +944,6 @@
         (local.set $c (i32.load8_u (local.get $p)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br_if $l (i32.lt_u (local.get $c) (i32.const 0x80)))
-        ;; one sequence after the other, while they follow each other
         (loop $seq
           (block $next
             (block $bad
@@ -991,8 +974,7 @@
         ;; that byte is ASCII, or the sentinel
         (br $l))))
 
-  ;; Hold back a space until the next word is placed. A line never starts
-  ;; with one.
+  ;; Hold back a space until the next word is placed; a line never starts with one.
   (func $ansiSpace
     (if (i32.eqz (global.get $atLineStart))
       (then (global.set $pendingSpace (i32.const 1)))))
@@ -1045,12 +1027,11 @@
     (call $prefixPop (local.get $w) (local.get $w))
     (global.set $needBlank (i32.const 0)))
 
-  ;; static prefix and marker fragments
   (data (i32.const $mem.quoteBar)
     "\1b[38;5;240m\e2\94\82\1b[0m "
-    "\e2\80\a2 "  ;; level 1
-    "\e2\97\a6 "  ;; level 2
-    "\e2\96\aa "  ;; level 3
+    "\e2\80\a2 "
+    "\e2\97\a6 "
+    "\e2\96\aa "
     "                "  ;; indents are at most 13 wide
     "\01\02\04\08\10\20\40\80"
     "\09\7f\c2\ff"

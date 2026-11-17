@@ -165,8 +165,7 @@
 
   (func $renderInline (param $r i32)
     (drop (call $blockContent (local.get $r)))
-    ;; Resolve the proven literal range after reservation: rebuilt content may
-    ;; move even though ordinary root paragraphs usually alias immutable input.
+    ;; Resolve the literal range only after reserving: rebuilt content may move.
     (if (i32.and (i32.eqz (global.get $mode))
           (i32.ne (i32.and (i32.load8_u offset=1 (local.get $r))
             (i32.const $F.plainInline)) (i32.const 0)))
@@ -182,10 +181,8 @@
     (call $inlineScan)
     (call $walkInlines))
 
-  ;; Emit an emphasis tag into an already-reserved HTML run without touching
-  ;; the global cursor or checking capacity for each fragment. Tags are
-  ;; written branch-free: a whole word, then a nibble table of lengths indexed
-  ;; by kind (em, strong, del for 1, 2, 3).
+  ;; Write an emphasis tag (kind 1 em, 2 strong, 3 del) into reserved output,
+  ;; branch-free: a whole word, then a nibble table of lengths by kind.
   (func $htmlEmphCloseAt (param $dst i32) (param $kind i32) (result i32)
     (i64.store (local.get $dst) (select (i64.const "</em>")
       (select (i64.const "</strong") (i64.const "</del>")
@@ -207,11 +204,9 @@
       (then (return (call $markAt (local.get $dst) (i32.sub (local.get $kind) (i32.const 2))))))
     (local.get $dst))
 
-  ;; Batch safe literal gaps and consecutive emphasis marks within at most 256
-  ;; source bytes. Six output bytes per source byte cover every emphasis tag.
-  ;; Reserve before resolving scratch pointers, then keep the cursor local;
-  ;; other mark kinds and image labels stay on the general rendering path.
-  ;; Return the next slot in the low word and source offset in the high word.
+  ;; Batch safe literal gaps and emphasis marks over at most 256 source bytes;
+  ;; six output bytes per source byte cover every tag. Reserve before resolving
+  ;; scratch pointers. Returns the next slot (low word) and source offset (high).
   (func $htmlEmphasisRun (param $i i32) (param $p i32) (result i64)
     (local $limit i32)
     (local $n i32)
@@ -307,8 +302,7 @@
             (br_if $found (i32.ge_u (local.get $next) (local.get $p)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $skip)))
-        ;; Capture the mark bounds before text emission can grow the output
-        ;; and rebase scratch. renderMark resolves its own fresh slot address.
+        ;; Load mark bounds first: text output can move scratch.
         (local.set $markEnd (i32.load offset=$M.end (local.get $m)))
         (if (i32.and (local.get $fastHtml) (i32.eqz (global.get $plain)))
           (then
@@ -371,7 +365,6 @@
     (local.set $t (i32.load8_u offset=$M.type (local.get $m)))
     (local.set $b (i32.load offset=$M.beg (local.get $m)))
     (local.set $e (i32.load offset=$M.end (local.get $m)))
-    ;; Dispatch on the mark type: each handler follows the block it names.
     (block $emph
      (block $text
       (block $footnote
@@ -437,8 +430,7 @@
               (if (i32.eqz (global.get $plain))
                 (then (call $sgrOn (i32.const $S.code))))
               (block $codeDone
-                ;; Single-line leaves and table cells cannot contain a code newline;
-                ;; avoid searching them again before HTML escaping or ANSI emission.
+                ;; Single-line leaves and cells hold no newline.
                 (if (global.get $singleLineContent)
                   (then
                     (call $rText (local.get $b) (local.get $e))
@@ -639,9 +631,8 @@
                 (global.set $out (call $htmlEmphOpenAt (global.get $out) (local.get $kind)))))))
         (br $l))))
 
-  ;; Inline analysis already classified unmarked text. When none of it needs
-  ;; HTML escaping, copy gaps directly rather than classifying each span again.
-  ;; Marks (code, escapes, entities, image labels) retain their normal writers.
+  ;; Copy unmarked text directly when inline analysis found nothing in it that
+  ;; needs HTML escaping.
   (func $rLiteral (param $b i32) (param $e i32)
     (local $n i32)
     (if (i32.ge_u (local.get $b) (local.get $e)) (then (return)))
@@ -716,7 +707,6 @@
 
   ;; write [$p,$e) percent-encoded. Bit 0 of $flags decodes entity references,
   ;; bit 1 removes backslash escapes, matching what each link form cleans.
-  ;; The SIMD copier takes every safe byte, so the scalar path only encodes.
   ;; $lit is an escaped character's address: it is literal even if it is & or \.
   (func $outHref (param $p i32) (param $e i32) (param $flags i32)
     (local $c i32)
@@ -782,9 +772,8 @@
 
   (data (i32.const $mem.hexdigits) "0123456789ABCDEF")
 
-  ;; Clean entities/backslashes and HTML-escape in one pass. The caller already
-  ;; reserved worst-case output; literal spans copy directly from SIMD loads.
-  ;; Decoded entities still use the text escaper, never another cleanup pass.
+  ;; Decode entities/backslashes and HTML-escape in one pass, into output the
+  ;; caller reserved for the worst case.
   (func $outCleanText (param $p i32) (param $e i32) (param $flags i32)
     (local $c i32)
     (local $n i32)
@@ -878,13 +867,11 @@
           (i32.and (i32.load8_u offset=$M.flags (local.get $close))
             (i32.const $LF.hasTitle)))))))
 
-  ;; Alias trimmed input unless the boundary scan found an escaped pipe.
-  ;; Only those cells need rebuilding; ordinary inline escapes stay in input.
+  ;; Alias the trimmed input; only a cell with an escaped pipe is rebuilt.
   (func $renderCell (param $beg i32) (param $end i32) (param $unescapePipe i32)
     (local $dst i32)
     (local $n i32)
     (local $c i32)
-    ;; Trim before choosing between immutable input and rebuilt content.
     (global.set $singleLineContent (i32.const 1))
     (global.set $scratchUsed (i32.const 0))
     (global.set $scratchTailUsed (i32.const 0))

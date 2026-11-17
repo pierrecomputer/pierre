@@ -56,7 +56,7 @@ function mountDOM(markup = ''): HTMLElement {
   return document.getElementById('app')!;
 }
 
-/** Compare token styling independently of existing live/static line-span serialization. */
+/** Compare token styling, ignoring how live and static lines are wrapped in spans. */
 function canonicalizeCode(fragment: DocumentFragment): void {
   for (const code of fragment.querySelectorAll('pre code')) {
     if (code.querySelector('span[style]') === null) continue;
@@ -1858,7 +1858,7 @@ describe('direct HTML sessions', () => {
     expect(container.querySelector('a')?.getAttribute('href')).toBe(
       'https://example.com'
     );
-    // Before, each update parsed the whole document and highlighted every fence.
+    // Updates must not reparse the whole document or rehighlight every fence.
     const total = container.innerHTML.length;
     expect(fences).toBeLessThanOrEqual(4);
     expect(Math.max(...parsed)).toBeLessThan(total / 4);

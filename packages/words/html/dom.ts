@@ -397,7 +397,7 @@ function patchHtml(
   return firstPending;
 }
 
-/** Patch `parent` to match `incoming`, and reuse nodes. A fade span counts as text. Returns the node at `committed`. */
+/** Patch `parent` to match `incoming`, reusing nodes. A fade span counts as text. Returns the node at `committed`. */
 function patchChildren(
   parent: Node,
   incoming: Node,
@@ -774,7 +774,7 @@ export function createDomRenderer(
       fades.update(active, animated);
       const nextCaret = active ? shape : undefined;
       if (!changed && nextCaret === previousCaret) return;
-      // Remove the caret first, so patches never see it.
+      // Patches must never see the caret.
       caret.remove();
       const codeUpdate: InternalCodeUpdate | undefined = update.code;
       const append = (update as InternalHtmlUpdate)[delta];

@@ -71,7 +71,7 @@ function groupLines(body: string): string {
     : result;
 }
 
-/** The gutter of an open fence, with its line numbers in the same 64-line groups as the code. Wasm writes it for other blocks. */
+/** The gutter of an open fence, in the same 64-line groups as the code. Wasm writes it for other blocks. */
 function lineNumbers(count: number): string {
   let html = '<span data-markdown="line-numbers" aria-hidden="true">';
   for (let line = 1; line <= count; line += 64) {
@@ -83,7 +83,7 @@ function lineNumbers(count: number): string {
   return html + '</span>';
 }
 
-/** Whether an element filter or hook can rewrite formatted HTML, so output cannot be extended in place. */
+/** Whether a filter or hook can rewrite formatted HTML, so output cannot be extended in place. */
 export const rewritesElements = (options: HtmlOptions): boolean =>
   options.allowedElements !== undefined ||
   options.disallowedElements !== undefined ||
@@ -228,7 +228,7 @@ function transformUrls(html: string, options: HtmlOptions): string {
   return from === 0 ? html : result + html.slice(from);
 }
 
-/** Format session output with HTML options. Keeps completed HTML and at most one live highlighter. */
+/** Format session output with HTML options. Keeps at most one live highlighter. */
 export function createHtmlRenderer(options: HtmlOptions = {}) {
   let parser = createHtmlSession();
   // Formatted completed HTML and the Wasm HTML it was formatted from.
@@ -288,7 +288,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     session?.dispose();
   };
 
-  /** Drop all state after an option change or a hook error, so the next render starts clean. */
+  /** Drop all state after an option change or a hook error. */
   const resetState = (): void => {
     dispose();
     parser = createHtmlSession();
@@ -311,14 +311,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   };
 
   /**
-   * Finish session HTML. Wasm wrote the markup. This runs what needs the
-   * host: element filters, the URL hook, code plugins, and element hooks.
-   * Code blocks for a plugin or filter, and the open fence of an active
-   * stream, come in slots, each after a NUL: the state and language, the
-   * markup before `<code>`, the `<code>` tag, and the escaped code. The state
-   * is "0" for a closed block, "1" for an open fence, and "2" for an open
-   * fence of an active stream. An open fence has no gutter yet. Without
-   * `slots` the input holds no such block, which saves the search.
+   * Run the host-only steps on session HTML: element filters, the URL hook,
+   * code plugins, and element hooks. Code blocks for a plugin or filter, and
+   * the open fence of an active stream, come in slots, each after a NUL: the
+   * state ("0" closed, "1" open fence, "2" open fence of an active stream) and
+   * language, the markup before `<code>`, the `<code>` tag, and the escaped
+   * code. An open fence has no gutter yet. Without `slots` there is no such
+   * block, so the search is skipped.
    */
   const format = (
     input: string,
@@ -409,7 +408,6 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const language =
         open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
       const number = index++;
-      // The Mermaid plugin is a renderer for one language.
       const custom =
         (language === 'mermaid' ? options.plugins?.mermaid : undefined) ??
         options.plugins?.renderers?.find((renderer) =>
@@ -542,7 +540,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     return [html, index];
   };
 
-  /** Move already formatted pending fences into completed output without highlighting them again. */
+  /** Move formatted pending fences into completed output without highlighting them again. */
   const formatAddition = (
     input: string,
     firstCode: number,
@@ -571,8 +569,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
 
   /**
    * Format the last open fence as changed lines when no hook or filter needs
-   * its full element. The HTML around the fence is reused while it is unchanged,
-   * so this also works for a fence in a list or quote.
+   * its full element. Reuses the HTML around it, so this works in lists and quotes too.
    */
   const formatFence = (
     input: string,
@@ -787,8 +784,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       try {
         const controls = controlFlags(options.controls);
         const plugins = options.plugins;
-        // Wasm writes the markup. Plugins and filters need code blocks in
-        // slots, and a URL hook needs unchecked URLs.
+        // Plugins and filters need code blocks in slots.
         allSlots =
           plugins?.code !== undefined ||
           plugins?.mermaid !== undefined ||
@@ -813,7 +809,6 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         };
         const update = parser.render(source, sessionOptions);
         const change = (update as InternalHtmlUpdate)[delta];
-        // Without slots in the output, no step has to search for them.
         const slots =
           allSlots || (update as InternalHtmlUpdate)[formatKey] === true;
         const fenceDelta = typeof change === 'object' ? change : undefined;
@@ -861,9 +856,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             oldCodeCache = codeCache;
             codeCache = new Map();
           }
-          // Link definitions reset every update. Keep whole top-level blocks
-          // that did not change since the previous update as completed HTML,
-          // so only the changing tail is formatted and patched.
+          // Link definitions reset every update. Keep unchanged top-level
+          // blocks as completed HTML, so only the changing tail is formatted.
           let cut = Math.max(update.stable.length, stableRaw.length);
           if (update.reset && cut === stableRaw.length) {
             const previousRaw =

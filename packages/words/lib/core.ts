@@ -312,11 +312,9 @@ export function createHtmlSession(): {
     render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
-      // A missing option and `false` are the same mode.
       const wanted = options?.incomplete === true;
       const ext =
         (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);
-      // The HTML renderer asks for its final markup with a private option.
       const form = options?.[format];
       const sameMode =
         incomplete === wanted &&

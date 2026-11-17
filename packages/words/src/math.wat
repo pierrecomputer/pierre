@@ -3,14 +3,11 @@
   (import "./scan.wat")
   (import "./out.wat")
 
-  ;; TeX math to SVG for the math option. The parser reads a copy of the
-  ;; source at $mem.mathSrc and lays out boxes as it goes, in the manner of
-  ;; TeX's appendix G: atoms collect on a stack until their list ends, then
-  ;; scripts attach and inter-atom spaces apply. Box nodes live in a fixed
-  ;; arena; the SVG writer walks them once. Lengths are thousandths of the
-  ;; em of the surrounding text. Glyph metrics come from STIX Two Math
-  ;; (tables/math-metrics.txt), and glyphs print as Unicode math alphanumerics
-  ;; in the system math font, each at its own position.
+  ;; TeX math to SVG. Lays out boxes while parsing a copy of the source at
+  ;; $mem.mathSrc, as in TeX's appendix G: atoms collect on a stack until their
+  ;; list ends, then scripts attach and inter-atom spaces apply. Lengths are
+  ;; thousandths of the surrounding em. Metrics come from STIX Two Math
+  ;; (tables/math-metrics.txt); glyphs print as Unicode math alphanumerics.
   (math-glyphs $mem.mathGlyphs $mem.mathGlyphsEnd)
   (math-commands $mem.mathCmds $mem.mathCmdsEnd)
 
@@ -71,7 +68,6 @@
   (const $MC.radicalKernAfter 335) ;; subtracted
   (const $MC.radicalRaise 55)
 
-  ;; node fields
   (const $N.size 48)
   (const $N.max 2730)
   (const $N.kind 0)   ;; u8 $NK
@@ -96,21 +92,18 @@
   (const $NK.path 4)
   (const $NK.text 5)
 
-  ;; atom stack entries
   (const $A.size 16)
   (const $A.nuc 0)
   (const $A.sup 4)
   (const $A.sub 8)
   (const $A.class 12)
   (const $A.flags 13)
-  ;; atom flags
   (const $AF.limits 1)
   (const $AF.nolimits 2)
   (const $AF.displayLimits 4)
   (const $AF.op 8)
   (const $AF.middle 16)
 
-  ;; parse flags
   (const $P.brace 1)
   (const $P.single 2)
   (const $P.leadOrd 4)
@@ -296,7 +289,6 @@
         (global.set $gH (i32.const 700))
         (global.set $gD (i32.const 0)))))
 
-  ;; A glyph node for $cp.
   (func $m.glyph (param $cp i32) (param $class i32) (result i32)
     (local $n i32)
     (local $p i32)
@@ -1196,7 +1188,7 @@
     (call $m.setBox (local.get $n) (call $m.sc (local.get $w)) (call $m.sc (local.get $h)) (call $m.sc (local.get $d)))
     (local.get $n))
 
-;; A big operator: in display style the text glyph grows to the display
+  ;; A big operator: in display style the text glyph grows to the display
   ;; size (integrals to the font's minimum display height), centered on the axis.
   (func $m.bigOp (param $cp i32) (result i32)
     (local $f i32)
@@ -1224,7 +1216,7 @@
     (i32.store offset=$N.ic (call $m.nAt (local.get $l)) (local.get $f))
     (local.get $l))
 
-    ;; An operator name such as `lim`; $split puts a thin space after that many letters.
+  ;; An operator name such as `lim`; $split puts a thin space after that many letters.
   (func $m.opName (param $p i32) (param $len i32) (param $split i32) (result i32)
     (local $l i32)
     (local $n i32)
@@ -2679,9 +2671,9 @@
     (global.set $mOpen (i32.const 0))
     (call $mathSvg (local.get $len) (local.get $display)))
 
-  ;; Render a `$$` fence or a `math` fence as display math. Returns 0 for
-  ;; other blocks, and for a formula that does not fit, which then renders as
-  ;; code. The code writers keep their single caller, so they stay inlined.
+  ;; Render a `$$` or `math` fence as display math. Returns 0 for other blocks
+  ;; and for a formula that does not fit (it renders as code).
+  ;; Warning: the code writers must keep their single caller to stay inlined.
   (func $mathBlock (param $r i32) (result i32)
     (local $p i32)
     (local $n i32)

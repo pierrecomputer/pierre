@@ -17,7 +17,6 @@
   (global $blank (mut i32) (i32.const 0))
   (global $lineEnd (mut i32) (i32.const 0))
 
-  ;; scanner results
   (global $atxLevel (mut i32) (i32.const 0))
   (global $lmOrdered (mut i32) (i32.const 0))
   (global $lmChar (mut i32) (i32.const 0))

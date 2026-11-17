@@ -51,9 +51,8 @@ export interface PluginConfig {
   /** Diagrams for `mermaid` code blocks. See `createMermaidPlugin`. */
   mermaid?: MermaidPlugin;
   /**
-   * Renderers return HTML for a code block, or null to show the code. The
-   * output of a closed block is reused while its language and code stay the
-   * same.
+   * Renderers return HTML for a code block, or null to show the code. A closed
+   * block's output is reused while its language and code stay the same.
    */
   renderers?: {
     language: string | string[];

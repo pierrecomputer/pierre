@@ -139,7 +139,7 @@ export async function measureDownload(): Promise<DownloadReport> {
   return { download, downloadRun, downloadCoverage };
 }
 
-/** Keep the standalone and full benchmark's download comparison identical. */
+/** Shared by the standalone and full benchmark, so both print the same table. */
 export function printDownload(download: DownloadReport['download']): void {
   console.log('Download, gzip KB');
   console.table(

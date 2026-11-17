@@ -49,17 +49,13 @@
           (br $lines))))
     (i32.add (call $lineBeg (local.get $line)) (local.get $off)))
 
-  ;; Complete a streaming input after block analysis, so repair follows the
-  ;; parser's blocks. Only the block that the next bytes can extend is scanned,
-  ;; over the content inline analysis will read. Code spans, raw HTML, link
-  ;; destinations, and bare URLs are skipped whole, as inline analysis does. A
-  ;; bounded stack of open delimiter runs pairs closers as the parser does
-  ;; (flanking, nearest opener, rule of three) and supplies the missing closing
-  ;; markers. Where it cannot be sure a closer would pair, it writes none: a
-  ;; closer that does not pair would show as text the user did not type.
-  ;; Returns whether the input changed, which needs another parse.
-  ;; $firstItemBlock says the block is the first in a list item, where `[x]`
-  ;; can become a task marker.
+  ;; Complete a streaming input after block analysis. Only the last block is
+  ;; scanned, skipping code spans, raw HTML, link destinations, and bare URLs
+  ;; as inline analysis does. A bounded stack of open delimiter runs pairs
+  ;; closers as the parser does (flanking, nearest opener, rule of three).
+  ;; When unsure a closer would pair, it writes none: an unpaired closer shows
+  ;; as text the user did not type. Returns whether the input changed (needs
+  ;; another parse). $firstItemBlock: first block of a list item (`[x]` task).
   (func $complete (param $firstItemBlock i32) (result i32)
     (local $r i32) (local $type i32) (local $line i32) (local $last i32)
     (local $base i32) (local $p i32) (local $q i32) (local $t i32) (local $e i32)
@@ -211,11 +207,10 @@
             (br $scan)))
         (if (i32.eq (local.get $c) (i32.const "["))
           (then
-            ;; An entry holds the offset after the `[`, then the emphasis depth
-            ;; there, bit 8 for an image, bit 9 when this bracket cannot end as a
-            ;; link, because a link cannot hold a link, and bit 10 for `[^`: it
-            ;; may be a footnote reference and never shows as a pending link.
-            ;; Past the limit brackets are only counted.
+            ;; Entry: offset after the `[`, then the emphasis depth there | bit 8
+            ;; image | bit 9 cannot be a link (inside a link) | bit 10 `[^`
+            ;; (maybe a footnote, never a pending link). Past the limit brackets
+            ;; are only counted.
             (if (i32.lt_u (local.get $links) (i32.const 64))
               (then
                 (local.set $top (i32.add (i32.const $mem.completeLinks) (i32.shl (local.get $links) (i32.const 3))))
@@ -353,10 +348,9 @@
         (local.set $n (i32.sub (local.get $q) (local.get $p)))
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
-            ;; Math is skipped whole, as inline analysis reads it. An opener
-            ;; that the content ends in can still become math, so nothing
-            ;; after it is repaired. A lone `$` before a digit is more likely
-            ;; a price, and the scan goes on.
+            ;; Math is skipped whole. An opener the content ends in can still
+            ;; become math, so nothing after it is repaired, unless it is a lone
+            ;; `$` before a digit (likely a price).
             (if (i32.and (global.get $ext) (i32.const 2))
               (then
                 (global.set $nSlots (i32.const 0))
@@ -496,14 +490,11 @@
           (then
             ;; Past the limit the stack would no longer follow the parser.
             (if (i32.ge_u (local.get $depth) (i32.const 64)) (then (return (i32.const 0))))
-            ;; An entry holds the character, bit 8 when the opener can also
-            ;; close, bit 9 when it gets no closers, and the run length modulo 3
-            ;; from bit 16, then the delimiters left and the content offset
-            ;; after the run. The parser can pair any opener, but some are not
-            ;; repaired: intraword runs (an asterisk there is often
-            ;; arithmetic, but not next to CJK text with the cjk option), runs
-            ;; over three, a lone `~` (usually "about"), and what a closing
-            ;; run has left.
+            ;; Entry: character | bit 8 can also close | bit 9 gets no closers |
+            ;; run length % 3 << 16, then delimiters left, then the content
+            ;; offset after the run. Not repaired: intraword runs (often
+            ;; arithmetic, unless next to CJK with the cjk option), runs over
+            ;; three, a lone `~` (usually "about"), and what a closer left.
             (local.set $t (i32.or
               (i32.or (i32.and (i32.eqz (local.get $k)) (i32.eqz (global.get $cjkSide)))
                 (i32.gt_u (local.get $n) (i32.const 3)))
@@ -567,12 +558,10 @@
                   (then (local.set $open (i32.const 0))))))))))
     ;; $prev counts the closers that stay outside a pending link's text.
     (local.set $prev (select (local.get $openDepth) (i32.const 0) (local.get $open)))
-    ;; Closers go before trailing whitespace, so spaces between streamed words
-    ;; cannot remove and recreate their formatting. They cannot follow an
-    ;; unescaped `\` either, which would escape them. One that ends a word has
-    ;; nothing to escape yet: $n is 1 for it, and the closers replace it. One
-    ;; before whitespace is text or a hard break, and one after whitespace would
-    ;; leave the closers behind that whitespace: both stay after the closers.
+    ;; Closers go before trailing whitespace, so streamed spaces do not toggle
+    ;; formatting. They cannot follow an unescaped `\`, which would escape
+    ;; them: a `\` ending a word is replaced ($n = 1); one before or after
+    ;; whitespace stays after the closers.
     (local.set $n (i32.const 0))
     (loop $place
       (local.set $closeAt (local.get $cut))
@@ -682,18 +671,14 @@
         (local.set $tick (i32.const 0))
         (local.set $open (i32.const 0))
         (local.set $prev (i32.const 0))))
-    ;; Zero the closers of openers that cannot get them. Go from the last
-    ;; closer written to the first. $k is the character of the closer run that
-    ;; the closers so far begin with, $m its length, and $flags says that
-    ;; punctuation follows it: another run, the placeholder's `]`, or a `\` that
-    ;; stays behind the closers. Such a run may be able to open too, and then
-    ;; the rule of three applies to all of its openers, as it does to an opener
-    ;; that can also close: it rejects a run of length L for an opener of length
-    ;; n when L is no multiple of 3 and L + n is one. $next has a bit for each n
-    ;; modulo 3 that the rule applies to. Delimiters typed right before the
-    ;; closers make the run longer by a length this pass does not know.
-    ;; The rule may reject that too, unless they are the first half of a closer
-    ;; ($join). Two `~~` closers in a row are four tildes, which is text.
+    ;; Zero the closers of openers that cannot get them, last closer first.
+    ;; $k is the character of the current closer run, $m its length, $flags
+    ;; that punctuation follows it (another run, the placeholder's `]`, or a
+    ;; kept `\`), so it may also open. Then the rule of three rejects run length
+    ;; L for opener length n when L % 3 != 0 and (L + n) % 3 == 0; $next has a
+    ;; bit per n % 3 it applies to. Delimiters typed just before the closers
+    ;; add an unknown length, which the rule may reject too unless they are the
+    ;; first half of a closer ($join). Two `~~` closers in a row are text.
     (local.set $join (i32.and (i32.ne (local.get $join) (i32.const 0))
       (i32.eq (local.get $join) (local.get $at))))
     (local.set $glue (local.get $k))
@@ -773,7 +758,6 @@
         (local.set $remaining (i32.add (local.get $remaining)
           (i32.load offset=$mem.completeDelims+4 (i32.shl (local.get $q) (i32.const 4)))))
         (br $size)))
-    ;; an earlier pass used $n for itself
     (local.set $n (i32.sub (local.get $closeAt) (local.get $at)))
     ;; The delimiters typed before the closers paired at lengths the rule of
     ;; three allows only to a run that cannot open. After punctuation ($glue),
@@ -828,7 +812,6 @@
             (br_if $lineEnd (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
             (local.set $from (i32.add (local.get $from) (i32.const 1)))
             (br $sameLine)))))
-    ;; Move the whitespace once, however long it is.
     (memory.copy (i32.sub (i32.add (local.get $from) (local.get $remaining)) (local.get $n))
       (local.get $from) (i32.sub (local.get $to) (local.get $from)))
     (local.set $to (i32.sub (i32.add (local.get $to) (local.get $remaining)) (local.get $n)))
@@ -838,8 +821,8 @@
       (i32.const $mem.completeDelims) (local.get $prev) (local.get $depth)))
     (if (local.get $open)
       (then
-        ;; $htmlLinkOpen recognizes this destination and writes no URL. Bit 4 says
-        ;; that this input holds it; the host resets option flags before every render.
+        ;; $htmlLinkOpen writes no URL for this destination. Option bit 4 marks
+        ;; it; the host resets option flags before every render.
         (i32.store8 (i32.const 1) (i32.or (i32.load8_u (i32.const 1)) (i32.const 16)))
         ;; The space keeps the line from becoming a link reference definition:
         ;; a bare destination that ends in `(` is never valid.
