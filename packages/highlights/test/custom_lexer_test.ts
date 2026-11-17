@@ -307,6 +307,13 @@ test('registerLanguages adds lexers to the shared functions of the main entry', 
   // back to the Go lexer for the other files.
   registerLanguages([go]);
   expect(codeToTokens('hello', { ...options, lang: 'go' })).toEqual(builtIn);
+  // A lexer registered before takes its names back from a later one.
+  registerLanguages([override]);
+  expect(codeToTokens('hello', { ...options, lang: 'go' })).not.toEqual(
+    builtIn
+  );
+  registerLanguages([go]);
+  expect(codeToTokens('hello', { ...options, lang: 'go' })).toEqual(builtIn);
 });
 
 test('registerLanguages keeps its lexers after a rejected call and a new init()', () => {
