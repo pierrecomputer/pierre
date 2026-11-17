@@ -10,7 +10,7 @@ export {
   pixelCorners,
 } from './corners';
 export { type EditCommands, edits } from './edits';
-export { computeLayout } from './geometry';
+export { computeLayout, getMaximumSize, getMinimumSize } from './geometry';
 export { type HiddenPaneCommands, hiddenPanes } from './hidden-panes';
 export {
   isTreeOperation,

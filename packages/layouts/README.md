@@ -738,9 +738,15 @@ applyOperations(layout, [{ type: 'setRoot', root: response.tree.root }]);
 `computeLayout(root, width, height, gap)` returns pane rectangles and separators
 for other rendering adapters, and `pixelCorners(geometry, gap)` adds the corner
 intersections. Corners are a separate pass, so an adapter without corners does
-not compute them. Pane minimums default to 120 × 80 pixels. When minimums cannot
-fit, the engine shares the shortage proportionally without creating negative
-dimensions or overflow. Preferred sizes survive temporary viewport constraints.
+not compute them. Pane minimums default to 120 × 80 pixels.
+`getMinimumSize(root, gap)` and `getMaximumSize(root, gap)` give the smallest
+and the largest size of a tree or a subtree with the same rules: the minimums of
+the panes, the collapsed size of a collapsed child, the gaps, and no space for
+hidden panes; a size with no limit is `Infinity`. An app reads them, for
+example, for the minimum width of the panel that holds a layout. When minimums
+cannot fit, the engine shares the shortage proportionally without creating
+negative dimensions or overflow. Preferred sizes survive temporary viewport
+constraints.
 
 ## Keyboard and motion
 

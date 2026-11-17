@@ -14,8 +14,14 @@ const DEFAULT_MIN_WIDTH = 120;
 const DEFAULT_MIN_HEIGHT = 80;
 
 /**
- * Compute subtree minimums so resizing an ancestor respects every nested pane.
- * Hidden panes take no space, so a subtree of hidden panes has no minimum.
+ * The smallest size of a subtree in pixels, with `gap` pixels between the
+ * children of a split, which a resize of an ancestor keeps: the sum of the
+ * minimums of the children along a split, and the largest minimum across it.
+ * A pane has its `minWidth` and `minHeight` (120 × 80 by default), a stack the
+ * largest minimum of its panes, and a collapsed child its collapsed size along
+ * its split. Hidden panes take no space, so a subtree of hidden panes has no
+ * minimum. An app reads it, for example, for the minimum width of a panel
+ * that holds the layout.
  */
 export function getMinimumSize(
   node: LayoutNode,

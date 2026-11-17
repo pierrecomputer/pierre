@@ -41,6 +41,8 @@ const ROOT_VALUES = sorted([
   'canClose',
   'computeCSSLayout',
   'computeLayout',
+  'getMaximumSize',
+  'getMinimumSize',
   'coverLayout',
   'createLayoutStore',
   'cssCorners',
