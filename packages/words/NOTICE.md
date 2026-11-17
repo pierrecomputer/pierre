@@ -5,11 +5,11 @@ original license.
 
 ## Data in the published package
 
-| Data                             | Location                                               | Source                                                                         | License                                                   |
-| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| HTML named character references  | `src/entities.txt`, `dist/md.wasm`                     | [WHATWG HTML `entities.json`](https://html.spec.whatwg.org/entities.json)      | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| East Asian Width ranges          | `scripts/build.ts`, `dist/md.wasm`                     | [Unicode `EastAsianWidth.txt`](https://www.unicode.org/Public/UCD/latest/ucd/) | [Unicode License v3](https://www.unicode.org/license.txt) |
-| Math glyph metrics and constants | `src/math-metrics.txt`, `src/math.wat`, `dist/md.wasm` | [STIX Two Math](https://github.com/stipub/stixfonts)                           | [SIL Open Font License 1.1](https://openfontlicense.org)  |
+| Data                             | Location                                                  | Source                                                                         | License                                                   |
+| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| HTML named character references  | `tables/entities.txt`, `dist/md.wasm`                     | [WHATWG HTML `entities.json`](https://html.spec.whatwg.org/entities.json)      | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| East Asian Width ranges          | `scripts/build.ts`, `dist/md.wasm`                        | [Unicode `EastAsianWidth.txt`](https://www.unicode.org/Public/UCD/latest/ucd/) | [Unicode License v3](https://www.unicode.org/license.txt) |
+| Math glyph metrics and constants | `tables/math-metrics.txt`, `src/math.wat`, `dist/md.wasm` | [STIX Two Math](https://github.com/stipub/stixfonts)                           | [SIL Open Font License 1.1](https://openfontlicense.org)  |
 
 ## Test and benchmark files, not published
 

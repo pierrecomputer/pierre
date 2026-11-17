@@ -114,7 +114,7 @@ table('entity-table', (tableBase, inner) => {
     throw new Error('entity-table sizes differ from $entitySlot');
   const entities: Record<string, string> = {};
   for (const line of fs
-    .readFileSync(new URL('../src/entities.txt', import.meta.url), 'utf-8')
+    .readFileSync(new URL('../tables/entities.txt', import.meta.url), 'utf-8')
     .split('\n')) {
     if (line === '' || line.startsWith('# ')) continue;
     const i = line.indexOf(' ');
@@ -422,14 +422,17 @@ table('unicode-range-tables', (_, inner) => {
 });
 
 // (math-glyphs <base> <end>): glyph metrics of STIX Two Math for src/math.wat,
-// from src/math-metrics.txt. A u32 run count, then per run of consecutive
+// from tables/math-metrics.txt. A u32 run count, then per run of consecutive
 // code points a u32 (first | count - 1 << 21) and a u32 index of its first
 // glyph, then five bytes per glyph: depth (i8), height, italic correction,
 // width (u8), and the top accent position less half the width (i8), all in
 // hundredths of an em.
 table('math-glyphs', () => {
   const rows = fs
-    .readFileSync(new URL('../src/math-metrics.txt', import.meta.url), 'utf-8')
+    .readFileSync(
+      new URL('../tables/math-metrics.txt', import.meta.url),
+      'utf-8'
+    )
     .trim()
     .split('\n')
     .map((line) => line.split(' ').map(Number));
@@ -460,7 +463,7 @@ table('math-glyphs', () => {
   return bytes;
 });
 
-// (math-commands <base> <end>): the TeX commands of src/math.txt. A u32 per
+// (math-commands <base> <end>): the TeX commands of tables/math.txt. A u32 per
 // name length up to 31: group offset (u16) and count (u16). A group holds its
 // entries back to back: the name, then a u32 value of kind << 24, atom class
 // << 21, and a 21-bit value.
@@ -471,7 +474,7 @@ const mathKinds =
 table('math-commands', () => {
   const entries = new Map<string, number>();
   for (const line of fs
-    .readFileSync(new URL('../src/math.txt', import.meta.url), 'utf-8')
+    .readFileSync(new URL('../tables/math.txt', import.meta.url), 'utf-8')
     .split('\n')) {
     if (line.startsWith('#') || line.trim() === '') continue;
     const [kind, cls, ...items] = line.trim().split(/\s+/);

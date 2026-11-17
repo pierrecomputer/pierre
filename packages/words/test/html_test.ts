@@ -1553,7 +1553,7 @@ void test('named references decode exactly and reject near misses', async () => 
   const { readFileSync } = await import('node:fs');
   const table = new Map<string, string>();
   for (const line of readFileSync(
-    new URL('../src/entities.txt', import.meta.url),
+    new URL('../tables/entities.txt', import.meta.url),
     'utf-8'
   ).split('\n')) {
     if (line === '' || line.startsWith('# ')) continue;

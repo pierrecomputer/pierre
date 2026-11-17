@@ -17,21 +17,22 @@ UTF-8 input
 
 ## Source map
 
-| Files                                          | Purpose                                         |
-| ---------------------------------------------- | ----------------------------------------------- |
-| `src/md.wat`, `memory.wat`, `out.wat`          | Entry point, memory layout, and buffer growth   |
-| `src/block.wat`, `blockscan.wat`               | Block analysis and container state              |
-| `src/types.wat`, `record.wat`                  | Record layout and block content                 |
-| `src/inline.wat`, `link.wat`, `extlink.wat`    | Inline syntax, references, and autolinks        |
-| `src/scan.wat`, `entity.wat`, `htmlscan.wat`   | SIMD scans, entities, and HTML grammar          |
-| `src/render.wat`, `html.wat`, `ansi.wat`       | Record traversal and output backends            |
-| `src/format.wat`                               | Final markup for the HTML renderer              |
-| `src/frontmatter.wat`, `complete.wat`          | YAML frontmatter and unfinished syntax          |
-| `src/math.wat`, `math.txt`, `math-metrics.txt` | TeX math to SVG, its commands and glyph metrics |
-| `scripts/build.ts`                             | WAT preprocessor and compiler                   |
-| `lib/`                                         | Wasm loaders, byte APIs, and HTML sessions      |
-| `html/`                                        | HTML options, hooks, and DOM updates            |
-| `react/`                                       | React component, styles, and Highlights plugin  |
+| Files                                        | Purpose                                        |
+| -------------------------------------------- | ---------------------------------------------- |
+| `src/md.wat`, `memory.wat`, `out.wat`        | Entry point, memory layout, and buffer growth  |
+| `src/block.wat`, `blockscan.wat`             | Block analysis and container state             |
+| `src/types.wat`, `record.wat`                | Record layout and block content                |
+| `src/inline.wat`, `link.wat`, `extlink.wat`  | Inline syntax, references, and autolinks       |
+| `src/scan.wat`, `entity.wat`, `htmlscan.wat` | SIMD scans, entities, and HTML grammar         |
+| `src/render.wat`, `html.wat`, `ansi.wat`     | Record traversal and output backends           |
+| `src/format.wat`                             | Final markup for the HTML renderer             |
+| `src/frontmatter.wat`, `complete.wat`        | YAML frontmatter and unfinished syntax         |
+| `src/math.wat`                               | TeX math to SVG                                |
+| `tables/`                                    | Entity names, TeX commands, and glyph metrics  |
+| `scripts/build.ts`                           | WAT preprocessor and compiler                  |
+| `lib/`                                       | Wasm loaders, byte APIs, and HTML sessions     |
+| `html/`                                      | HTML options, hooks, and DOM updates           |
+| `react/`                                     | React component, styles, and Highlights plugin |
 
 ## Build
 
@@ -155,7 +156,7 @@ formula in one pass, as TeX's appendix G does:
   system math font draws them. Delimiters that must grow, radicals, braces, and
   wide accents are SVG paths.
 - Glyph metrics and layout constants come from the MATH table of STIX Two Math
-  (`scripts/gen-math-metrics.py`). The commands are in `src/math.txt`.
+  (`scripts/gen-math-metrics.py`). The commands are in `tables/math.txt`.
 
 A formula that overflows the node arena, the atom or cell stacks, 48 levels of
 nesting, or 16,000 bytes of source writes nothing, and the caller shows its

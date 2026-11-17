@@ -1,4 +1,4 @@
-# Write src/math-metrics.txt from STIX Two Math (SIL Open Font License 1.1):
+# Write tables/math-metrics.txt from STIX Two Math (SIL Open Font License 1.1):
 #   python3 scripts/gen-math-metrics.py <path to STIXTwoMath.otf>
 # It needs fontTools. Each line: code point, then depth, height, italic
 # correction, advance width, and top accent position less half the width, in
@@ -31,7 +31,7 @@ for start, end in [(0x1d400, 0x1d4d0), (0x1d504, 0x1d56c), (0x1d5a0, 0x1d5d4),
                    (0x1d670, 0x1d6a4), (0x1d6a8, 0x1d756), (0x1d7ce, 0x1d7ec),
                    (0x1d7f6, 0x1d800)]:
     wanted |= set(range(start, end))
-for value in re.findall(r':([0-9a-f]+)', (here / '../src/math.txt').read_text()):
+for value in re.findall(r':([0-9a-f]+)', (here / '../tables/math.txt').read_text()):
     if int(value, 16) >= 0x80:
         wanted.add(int(value, 16))
 
@@ -46,4 +46,4 @@ for cp in sorted(wanted):
     width = font['hmtx'][name][0]
     lines.append(f'{cp} {-y0} {y1} {italic.get(name, 0)} {width} '
                  f'{accent.get(name, width // 2) - width // 2}')
-(here / '../src/math-metrics.txt').write_text('\n'.join(lines) + '\n')
+(here / '../tables/math-metrics.txt').write_text('\n'.join(lines) + '\n')
