@@ -13,6 +13,7 @@ import {
   type StoreFeature,
   zoom,
 } from '../src';
+import { type ContextOfStore, STORE_CONTEXT } from '../src/store';
 
 const pane = (id: string) => ({ type: 'pane', id }) as const;
 
@@ -256,6 +257,81 @@ describe('focusNext and focusPrevious', () => {
     const single = createLayoutStore(pane('a'));
     expect(single.focusNext()).toBe(false);
     expect(single.focusPrevious()).toBe(false);
+  });
+
+  test('a pane collapsed to 0 pixels takes no focus; a pane collapsed to its header does', () => {
+    const store = createLayoutStore(row);
+    store.setCollapsed('b', true);
+    expect(store.focusNext()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('c');
+    store.focusPane('b');
+    expect(store.getSnapshot().focusedPane).toBe('c');
+    // The focused pane collapses: the focus goes to the first pane that can
+    // take it, and no other pane can.
+    store.setCollapsed('c', true);
+    expect(store.getSnapshot().focusedPane).toBe('a');
+    expect(store.focusNext()).toBe(false);
+    const header = createLayoutStore({
+      ...row,
+      children: [pane('a'), { ...pane('b'), collapsedSize: 24 }, pane('c')],
+    });
+    header.setCollapsed('b', true);
+    expect(header.focusNext()).toBe(true);
+    expect(header.getSnapshot().focusedPane).toBe('b');
+  });
+
+  test('the tabs of a stack collapsed to 0 pixels take no focus', () => {
+    const store = createLayoutStore(
+      {
+        ...row,
+        children: [
+          pane('a'),
+          {
+            type: 'stack',
+            id: 's',
+            active: 'b',
+            children: [pane('b'), pane('d')],
+          },
+          pane('c'),
+        ],
+      },
+      [stacks()]
+    );
+    store.setCollapsed('b', true);
+    expect(store.focusNext()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('c');
+  });
+
+  test("a view's rule for covered panes: they take no focus, and the steps skip them", () => {
+    const store = createLayoutStore(row);
+    const context = (store as unknown as ContextOfStore)[STORE_CONTEXT];
+    const uncover = context.coverFocus((id) => id === 'b');
+    expect(store.focusNext()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('c');
+    store.focusPane('b');
+    expect(store.getSnapshot().focusedPane).toBe('c');
+    expect(store.focusPrevious()).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('a');
+    uncover();
+    store.focusPane('b');
+    expect(store.getSnapshot().focusedPane).toBe('b');
+  });
+
+  test('a view can refuse the wrap at an end of the order', () => {
+    const store = createLayoutStore(row);
+    const context = (store as unknown as ContextOfStore)[STORE_CONTEXT];
+    const ends: string[] = [];
+    const refuse = (): boolean => {
+      ends.push(store.getSnapshot().focusedPane);
+      return false;
+    };
+    expect(context.focusStep(-1, refuse)).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('a');
+    expect(context.focusStep(1, refuse)).toBe(true);
+    expect(context.focusStep(1, refuse)).toBe(true);
+    expect(context.focusStep(1, refuse)).toBe(true);
+    expect(store.getSnapshot().focusedPane).toBe('c');
+    expect(ends).toEqual(['a', 'c']);
   });
 
   test('a focus with reveal on the focused pane is still a change', () => {

@@ -27,9 +27,9 @@ const PACKAGE = join(import.meta.dir, '..');
 // with the same minified size, so its budget is 50 bytes above the measured
 // size.
 const BUDGET = {
-  'two-pane source': { minified: 33_725, brotli: 11_287 },
-  'two-pane rolldown': { minified: 33_730, brotli: 11_303 },
-  'two-pane esbuild': { minified: 34_192, brotli: 12_034 },
+  'two-pane source': { minified: 33_929, brotli: 11_387 },
+  'two-pane rolldown': { minified: 33_932, brotli: 11_382 },
+  'two-pane esbuild': { minified: 34_412, brotli: 12_161 },
 } as const;
 
 // The budgets of the full set (app C, `allFeatures()` and every part) and of
@@ -41,8 +41,8 @@ const BUDGET = {
 // pane state, the remote announcement, the sheet of sticky pinned tabs, and
 // the drag with no image; their results name the cost of each.
 const APP_BUDGET = {
-  'full set source': { minified: 85_027, brotli: 25_478 },
-  'tab stacks source': { minified: 66_567, brotli: 20_551 },
+  'full set source': { minified: 85_234, brotli: 25_608 },
+  'tab stacks source': { minified: 66_770, brotli: 20_615 },
 } as const;
 
 interface Output {

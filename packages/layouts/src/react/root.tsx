@@ -38,6 +38,7 @@ import {
   HIDDEN,
   HOST_HIDDEN,
   INACTIVE,
+  OVERLAY,
   registerVisibility,
   STATE_REASONS,
 } from '../dom/visibility';
@@ -46,6 +47,7 @@ import type { LayoutChange, LayoutOperation } from '../layout-operation';
 import { collapsedSizeOf, getPanes, shownPanes } from '../model';
 import { presentation } from '../presentation';
 import { startResizeGesture } from '../resize-gesture';
+import { type ContextOfStore, STORE_CONTEXT } from '../store';
 import type {
   ChildSize,
   Direction,
@@ -539,38 +541,28 @@ function createViewInternals(
     gesture = null;
     active.end(cancel);
   };
-  // F6 and Shift+F6: the next or the previous pane that shows, without the
-  // panes that an overlay covers, around the ends.
+  // The store owns the order of the panes for the focus. The view adds its
+  // rule: a pane that an overlay covers takes no focus.
+  const storeContext = (store as unknown as ContextOfStore)[STORE_CONTEXT];
+  let uncover: (() => void) | null = null;
+  // F6 and Shift+F6: the store's `focusNext` and `focusPrevious`. With one
+  // pane that can take the focus, or in a modal dialog, the key goes on to the
+  // content and the browser. At an end, an app can cancel the wrap.
   const paneStep = (event: KeyboardEvent, forward: boolean): boolean => {
-    const state = store.getSnapshot();
-    const order = presentation(state).rearrangeable
-      ? shownPanes(state.root).filter(
-          ({ id }) => (context.visibility.reasons(id) & HOST_HIDDEN) === 0
+    const layout = element;
+    return (
+      layout !== null &&
+      (event.target as Element).closest('dialog[open],[aria-modal="true"]') ===
+        null &&
+      storeContext.focusStep(forward ? 1 : -1, () =>
+        layout.dispatchEvent(
+          new CustomEvent(FOCUS_EDGE_EVENT, {
+            cancelable: true,
+            detail: { direction: forward ? 'next' : 'previous' },
+          })
         )
-      : [];
-    // With one pane, or in a modal dialog, the key goes on to the content
-    // and the browser.
-    if (
-      element === null ||
-      order.length < 2 ||
-      (event.target as Element).closest('dialog[open],[aria-modal="true"]') !==
-        null
-    )
-      return false;
-    const at = order.findIndex(({ id }) => id === state.focusedPane);
-    // At an end, an app can cancel the wrap.
-    const next =
-      (forward ? at === order.length - 1 : at === 0) &&
-      !element.dispatchEvent(
-        new CustomEvent(FOCUS_EDGE_EVENT, {
-          cancelable: true,
-          detail: { direction: forward ? 'next' : 'previous' },
-        })
       )
-        ? undefined
-        : order.at(forward ? (at + 1) % order.length : at - 1);
-    if (next !== undefined) store.focusPane(next.id, { reveal: true });
-    return true;
+    );
   };
   const core: readonly KeyCommand[] = [
     {
@@ -737,8 +729,15 @@ function createViewInternals(
     context,
     setElement(next) {
       if (element !== null) registerVisibility(element, null);
+      uncover?.();
+      uncover = null;
       element = next;
-      if (element !== null) registerVisibility(element, context.visibility);
+      if (element !== null) {
+        registerVisibility(element, context.visibility);
+        uncover = storeContext.coverFocus(
+          (id) => (context.visibility.reasons(id) & OVERLAY) !== 0
+        );
+      }
       registerLayoutElement(store, element);
     },
     setLatest(next) {

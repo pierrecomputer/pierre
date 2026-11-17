@@ -96,6 +96,18 @@ export function shownPanes(node: LayoutNode): PaneNode[] {
 }
 
 /**
+ * The panes that can take the focus: the panes that show, except a pane
+ * collapsed to 0 pixels, alone or with its stack. A pane collapsed to its
+ * header can take it.
+ */
+export function focusablePanes(node: LayoutNode): PaneNode[] {
+  if (collapsedSizeOf(node) === 0) return [];
+  return node.type === 'split'
+    ? node.children.flatMap(focusablePanes)
+    : shownPanes(node);
+}
+
+/**
  * The pane of a stack that shows: the active pane, or, when a caller hid it,
  * the first visible pane. Null when every pane of the stack is hidden.
  */

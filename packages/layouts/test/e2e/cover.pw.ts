@@ -107,6 +107,40 @@ test('a covered pane that is also hidden sends no event for the second reason', 
   expect((await read(page)).visibility.c).toEqual([true]);
 });
 
+test('a pane that an overlay covers takes no focus from an app command or F6', async ({
+  page,
+}) => {
+  await call(page, 'openPopover');
+  await expect(host(page, 'c')).toHaveAttribute('data-covered', 'overlay');
+  const step = (name: 'focusNext' | 'focusPrevious' | 'focusB') =>
+    page.evaluate((name) => {
+      const { layout } = (
+        window as unknown as {
+          __cover: {
+            layout: {
+              focusPane(id: string): void;
+              focusNext(): boolean;
+              focusPrevious(): boolean;
+              getSnapshot(): { focusedPane: string };
+            };
+          };
+        }
+      ).__cover;
+      if (name === 'focusB') layout.focusPane('b');
+      else layout[name]();
+      return layout.getSnapshot().focusedPane;
+    }, name);
+  // The popover covers panes b and c.
+  expect(await step('focusNext')).toBe('d');
+  expect(await step('focusB')).toBe('d');
+  expect(await step('focusPrevious')).toBe('a');
+  await page.keyboard.press('F6');
+  await expect(host(page, 'd')).toHaveAttribute('data-focused', 'true');
+  await call(page, 'closePopover');
+  await expect(host(page, 'c')).not.toHaveAttribute('data-covered');
+  expect(await step('focusPrevious')).toBe('c');
+});
+
 test('a drawer inside a positioned container covers the panes under it on the screen', async ({
   page,
 }) => {

@@ -6,6 +6,7 @@ import type {
 import { LayoutOperationError } from './layout-operation';
 import {
   findNode,
+  focusablePanes,
   paneIn,
   parentOf,
   replaceNode,
@@ -55,13 +56,15 @@ export interface CoreLayoutStore {
   /**
    * Give a pane the focus of the layout. With `reveal`, the view also moves
    * the DOM focus into the pane: to the element that had it last, else to its
-   * `Layout.Content`, else to its host.
+   * `Layout.Content`, else to its host. A pane that cannot take the focus
+   * does not get it: a pane that does not show, a pane collapsed to 0
+   * pixels, and a pane that an overlay covers (`coverLayout`).
    */
   focusPane(id: string, options?: { readonly reveal?: boolean }): void;
   /**
-   * Move the focus, with the DOM focus, to the next pane that shows in
+   * Move the focus, with the DOM focus, to the next pane that can take it, in
    * `visualOrder`, from the last to the first. False when no other pane can
-   * take it: one pane shows, or a pane fills the layout.
+   * take it: one pane can, or a pane fills the layout. F6 uses it.
    */
   focusNext(): boolean;
   /** As `focusNext`, to the previous pane, from the first to the last. */
@@ -160,6 +163,17 @@ export interface StoreContext {
   newId(kind: 'split' | 'stack'): string;
   /** False when the app's rule refuses a place for a pane, in the current state. */
   canPlace(source: PaneNode, place: Place): boolean;
+  /**
+   * Add the rule of a view for the panes that its overlays cover: they take
+   * no focus. It returns a function that removes the rule.
+   */
+  coverFocus(covered: (id: string) => boolean): () => void;
+  /**
+   * `focusNext` (`by` 1) or `focusPrevious` (`by` -1) for a view. At an end of
+   * the order, `wrap` can refuse to go around: then the focus stays, and the
+   * step still returns true.
+   */
+  focusStep(by: 1 | -1, wrap?: () => boolean): boolean;
 }
 
 /**
@@ -308,7 +322,8 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   const initialRoot = own(initial);
   let state: LayoutState = Object.freeze({
     root: initialRoot,
-    focusedPane: shownPanes(initialRoot)[0].id,
+    focusedPane: (focusablePanes(initialRoot)[0] ?? shownPanes(initialRoot)[0])
+      .id,
     zoomedPane: null,
   });
   // The state after the last change that was not transient.
@@ -336,8 +351,12 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   ): void => {
     const sameTree = next.root === state.root;
     if (!sameTree) (model?.validate ?? validateLayout)(next.root);
-    // Focus and zoom belong to panes that show only.
+    // Zoom belongs to a pane that shows, and focus to a pane that can take
+    // it: the pane of `next`, else the pane that has it, else the first.
     const panes = shownPanes(next.root);
+    const focusable = focusablePanes(next.root);
+    const takes = (id: string): boolean =>
+      focusable.some((pane) => pane.id === id);
     const shows = (id: string | null): boolean =>
       panes.some((pane) => pane.id === id);
     let zoomed = next.zoomedPane;
@@ -353,9 +372,11 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       )
         zoomed = null;
     }
-    const focusedPane = shows(next.focusedPane)
+    const focusedPane = takes(next.focusedPane)
       ? next.focusedPane
-      : panes[0].id;
+      : takes(state.focusedPane)
+        ? state.focusedPane
+        : (focusable[0] ?? panes[0]).id;
     const zoomedPane = shows(zoomed) ? zoomed : null;
     // `focusPane` with `reveal` gives its focus operation: a change, also on
     // the focused pane, as the view moves the DOM focus.
@@ -384,14 +405,24 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   const requirePane = (id: string): void => {
     paneIn(state.root, id);
   };
-  // The pane `by` places from the focused pane in the order of the panes
-  // that show, around the ends, with the DOM focus. No step while a pane
-  // fills the layout.
-  const focusStep = (by: number): boolean => {
-    const order = shownPanes(state.root);
+  // The rules of the views for the panes that their overlays cover.
+  const covers = new Set<(id: string) => boolean>();
+  // The panes that can take the focus, in order: the panes of the tree that
+  // can, without the panes that an overlay covers.
+  const focusOrder = (): PaneNode[] =>
+    focusablePanes(state.root).filter(
+      ({ id }) => ![...covers].some((covered) => covered(id))
+    );
+  // The pane `by` places from the focused pane in the focus order, with the
+  // DOM focus. No step while a pane fills the layout.
+  const focusStep = (by: 1 | -1, wrap?: () => boolean): boolean => {
+    const order = focusOrder();
     if (state.zoomedPane !== null || order.length < 2) return false;
     const at = order.findIndex(({ id }) => id === state.focusedPane);
-    store.focusPane(order[(at + by + order.length) % order.length].id, {
+    // From a pane outside the order, the step starts at an end.
+    const next = at === -1 ? (by > 0 ? 0 : order.length - 1) : at + by;
+    if ((next < 0 || next === order.length) && wrap?.() === false) return true;
+    store.focusPane(order[(next + order.length) % order.length].id, {
       reveal: true,
     });
     return true;
@@ -407,6 +438,13 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     own,
     newId,
     canPlace: (source, place) => allows(source, place),
+    coverFocus(covered) {
+      covers.add(covered);
+      return () => {
+        covers.delete(covered);
+      };
+    },
+    focusStep,
   };
 
   const store: CoreLayoutStore & ContextOfStore = {
@@ -439,6 +477,7 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     },
     focusPane(id, options) {
       requirePane(id);
+      if (!focusOrder().some((pane) => pane.id === id)) return;
       commit(
         { ...state, focusedPane: id },
         options?.reveal === true

@@ -5,7 +5,12 @@ import { expect, type Page, test } from '@playwright/test';
 
 interface TwoPanePage {
   layout: {
-    getSnapshot(): { root: { sizes?: readonly unknown[] } };
+    getSnapshot(): {
+      root: { sizes?: readonly unknown[] };
+      focusedPane: string;
+    };
+    focusNext(): boolean;
+    focusPane(id: string): void;
   };
   resizes: Record<string, unknown>[];
   renders: Record<string, number>;
@@ -134,6 +139,49 @@ test('a collapse to 0 pixels hides and inerts the whole pane, with no render of 
   expect(await host.evaluate((element: HTMLElement) => element.inert)).toBe(
     false
   );
+});
+
+test('a pane collapsed to 0 pixels takes no focus', async ({ page }) => {
+  await page.goto('/two-pane.html');
+  const focus = () =>
+    page.evaluate(() => {
+      const { layout } = (window as unknown as { __twoPane: TwoPanePage })
+        .__twoPane;
+      return {
+        focused: layout.getSnapshot().focusedPane,
+        next: layout.focusNext(),
+        after: layout.getSnapshot().focusedPane,
+      };
+    });
+  expect(await focus()).toEqual({
+    focused: 'sidebar',
+    next: true,
+    after: 'main',
+  });
+  await page.evaluate(() =>
+    (
+      window as unknown as { __twoPane: TwoPanePage }
+    ).__twoPane.layout.focusPane('sidebar')
+  );
+  // The focused pane collapses: the focus goes to the pane that can take it.
+  await page.getByRole('button', { name: 'Collapse the sidebar' }).click();
+  await expect(page.locator('[data-layouts-pane="main"]')).toHaveAttribute(
+    'data-focused',
+    'true'
+  );
+  expect(await focus()).toEqual({
+    focused: 'main',
+    next: false,
+    after: 'main',
+  });
+  await page.evaluate(() =>
+    (
+      window as unknown as { __twoPane: TwoPanePage }
+    ).__twoPane.layout.focusPane('sidebar')
+  );
+  await expect(
+    page.locator('[data-layouts-pane="sidebar"]')
+  ).not.toHaveAttribute('data-focused', 'true');
 });
 
 test('stylesheets with a nonce give each sheet the nonce', async ({ page }) => {
