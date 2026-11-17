@@ -26,10 +26,14 @@ const PACKAGE = join(import.meta.dir, '..');
 // esbuild build moves by up to 50 bytes when the files of the dist change,
 // with the same minified size, so its budget is 50 bytes above the measured
 // size.
+// The fixes of the review of 2026-11-17 make the core of the store keep its
+// contract with a server: changes in commit order (61 brotli bytes), sizes
+// that the store owns (49), the check of `setSizes` (20), and pinned tabs
+// first in a tree from elsewhere (27).
 const BUDGET = {
-  'two-pane source': { minified: 33_929, brotli: 11_387 },
-  'two-pane rolldown': { minified: 33_932, brotli: 11_382 },
-  'two-pane esbuild': { minified: 34_412, brotli: 12_161 },
+  'two-pane source': { minified: 34_600, brotli: 11_544 },
+  'two-pane rolldown': { minified: 34_600, brotli: 11_563 },
+  'two-pane esbuild': { minified: 35_090, brotli: 12_322 },
 } as const;
 
 // The budgets of the other example apps, from the source, as the bundle step
@@ -49,12 +53,17 @@ const BUDGET = {
 // pinned tabs, which make apps C and E 388 and 382 brotli bytes larger
 // (`DEC-layouts-modular-size-budget`: design ranks above bytes). The scroll
 // buttons of the owner's next test add `Layout.TabListScrollButton` to app C
-// (663 brotli bytes), and the sticky backdrop's shadow 2 to 11 bytes.
+// (663 brotli bytes), and the sticky backdrop's shadow 2 to 11 bytes. The
+// fixes of the review of 2026-11-17 add the core's contract with a server to
+// every app (157 brotli bytes in app A), and to the apps with tabs a valid
+// tab index in each operation, sticky places that follow an unpin and a
+// width change, and the tab list of each pane host, which the scroll buttons
+// of app C follow with one measurement for each list.
 const APP_BUDGET = {
-  'tiled source': { minified: 57_993, brotli: 18_276 },
-  'full set source': { minified: 88_827, brotli: 26_714 },
-  'side panel source': { minified: 56_026, brotli: 17_551 },
-  'tab stacks source': { minified: 68_176, brotli: 21_107 },
+  'tiled source': { minified: 58_667, brotli: 18_445 },
+  'full set source': { minified: 91_021, brotli: 27_355 },
+  'side panel source': { minified: 56_708, brotli: 17_786 },
+  'tab stacks source': { minified: 69_596, brotli: 21_515 },
 } as const;
 
 interface Output {

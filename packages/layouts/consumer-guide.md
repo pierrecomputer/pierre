@@ -186,6 +186,13 @@ layout.subscribe(({ operations, origin }) => {
 applyOperations(layout, [{ type: 'setRoot', root: serverTree }]);
 ```
 
+Every listener gets the changes in the order of their commits. A command that a
+listener runs, such as a pin when a tab opens, makes a change that every
+listener gets after the current one, so the operations that a listener sends
+replay on the server in order. `getSnapshot()` gives the latest state, which can
+be newer than the change that a listener gets. Each operation holds its own
+values: a listener can keep it.
+
 A remote `setRoot` keeps each node that equals the current one, so the server's
 tree after a sync, which equals the window's tree, is no change, and an app does
 not compare the trees first. On the server, `parseLayoutOperations` checks the
@@ -196,14 +203,13 @@ An app with a limit on places, for example at most 8 groups, writes it once, as
 the `canPlace` of `createLayout`. The drags, the pane menu, `moveTo`, `openAt`,
 and the commands of the layout read it, and an agent that calls them gets
 `false` or `place_refused`. The server folds the operations with the same
-function, so it refuses what the window refuses:
+function, so it refuses what the window refuses. The rule gets the tree, and no
+window state such as the focused pane, which the server does not have:
 
 ```ts
 // shared/places.ts
-export const canPlace: CanPlace = (source, place, state) =>
-  !('beside' in place) ||
-  isAlone(state.root, source.id) ||
-  groupCount(state.root) < 8;
+export const canPlace: CanPlace = (source, place, root) =>
+  !('beside' in place) || isAlone(root, source.id) || groupCount(root) < 8;
 
 // client
 const layout = createLayout(root, features, { canPlace });

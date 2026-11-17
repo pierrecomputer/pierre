@@ -1,6 +1,7 @@
-// The checks of the core shape of a layout tree. The parser of the saved form
-// and the store use them; this module imports nothing else of the library, so
-// an app that only parses a saved tree loads no other module.
+// The checks of the core shape of a layout tree, and the order of the pinned
+// tabs. The parser of the saved form and the store use them; this module
+// imports nothing else of the library, so an app that only parses a saved
+// tree loads no other module.
 import type { ChildSize, LayoutNode, PaneNode, StackNode } from './types';
 
 /** True when a value is a weight or a size in pixels that a split accepts. */
@@ -111,4 +112,24 @@ export function hasVisiblePane(node: LayoutNode): boolean {
   return node.type === 'pane'
     ? node.hidden !== true
     : node.children.some(hasVisiblePane);
+}
+
+/**
+ * The tree with the pinned tabs of each stack first, in their order, then the
+ * other tabs in theirs: the order that the commands keep. A tree from
+ * elsewhere, such as an old save, can mix them. A tree whose stacks keep the
+ * order is returned as it is.
+ */
+export function pinnedFirst(node: LayoutNode): LayoutNode {
+  if (node.type === 'pane') return node;
+  const children: LayoutNode[] =
+    node.type === 'stack'
+      ? [
+          ...node.children.filter(({ pinned }) => pinned === true),
+          ...node.children.filter(({ pinned }) => pinned !== true),
+        ]
+      : node.children.map(pinnedFirst);
+  return children.every((child, index) => child === node.children[index])
+    ? node
+    : ({ ...node, children } as LayoutNode);
 }

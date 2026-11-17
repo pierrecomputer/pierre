@@ -9,7 +9,7 @@ import type {
   StackNode,
   StoredLayoutTree,
 } from './types';
-import { validateLayout } from './validate';
+import { pinnedFirst, validateLayout } from './validate';
 
 /**
  * A tree or a list of operations from storage or from a client that does not
@@ -210,8 +210,9 @@ function parseNode(value: unknown, path: string): LayoutNode {
 /**
  * Validate the saved form of a layout, `{ version: 3, root }`, read from
  * storage or from a client. It checks the core shape of the tree: the fields
- * of each node, unique IDs, and one size for each child. A store gives the
- * tree the shape of its model when it takes it.
+ * of each node, unique IDs, and one size for each child. The pinned tabs of
+ * each stack come first in the result, in their order, then the other tabs
+ * in theirs. A store gives the tree the shape of its model when it takes it.
  */
 export function parseStoredLayoutTree(value: unknown): StoredLayoutTree {
   const fields = fieldsOf(value, 'tree', TREE_KEYS);
@@ -226,7 +227,7 @@ export function parseStoredLayoutTree(value: unknown): StoredLayoutTree {
       error instanceof Error ? error.message : String(error)
     );
   }
-  return { version: 3, root };
+  return { version: 3, root: pinnedFirst(root) };
 }
 
 // The fields of each tree operation, besides `type`.

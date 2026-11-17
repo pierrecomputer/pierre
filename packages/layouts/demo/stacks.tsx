@@ -35,6 +35,13 @@
 //   `?fit=1`: they are as wide as their tabs, up to the room of the header.
 // - `?title=1`: each header shows `Layout.Title` before its tab list, and
 //   "Hide the tab lists" removes the tab lists and keeps the titles.
+// - `?labels=long`: the editor and tool tabs have long names, as real files
+//   and tools have.
+// - `?tabmin=label`: a tab keeps at least 8 characters of its label: the tab
+//   lists scroll, with scroll buttons, in place of tabs of one letter.
+// - `?compact=1`: a pane outside a stack shows its title in place of a tab
+//   list of one tab and its scroll buttons, so its label takes the width of
+//   the header.
 import { type JSX, StrictMode, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -77,6 +84,16 @@ if (relativeTabs || tabMarks || reset) {
   document.head.append(style);
 }
 const withTitle = params.get('title') === '1';
+const longLabels = params.get('labels') === 'long';
+const labelMinimum = params.get('tabmin') === 'label';
+const compact = params.get('compact') === '1';
+if (labelMinimum) {
+  const style = document.createElement('style');
+  // The padding of a tab holds its close mark: 10 px before the label and 22
+  // px after it.
+  style.textContent = `.pierre-layouts-header .pierre-layouts-tab { min-width: calc(8ch + 32px); } .pierre-layouts-header .pierre-layouts-tabs { overflow-x: auto; scrollbar-width: none; }`;
+  document.head.append(style);
+}
 // Whether the tab lists show (`?title=1`), which the app can change.
 const tabLists = {
   shown: true,
@@ -99,16 +116,27 @@ const scrollStyle =
       }
     : undefined;
 
-const TITLES: Record<string, string> = {
-  main: 'main.ts',
-  util: 'util.ts',
-  test: 'test.ts',
-  types: 'types.ts',
-  docs: 'README.md',
-  files: 'Files',
-  terminal: 'Terminal',
-  output: 'Output',
-};
+const TITLES: Record<string, string> = longLabels
+  ? {
+      main: 'SecondaryPanelTabStrip.tsx',
+      util: 'panelLayoutStore.ts',
+      test: 'SecondaryPanelTabStrip.layout.test.tsx',
+      types: 'thread-layout-operations.ts',
+      docs: 'CONTRIBUTING.md',
+      files: 'Workspace files',
+      terminal: 'Terminal: pnpm dev',
+      output: 'Output: TypeScript',
+    }
+  : {
+      main: 'main.ts',
+      util: 'util.ts',
+      test: 'test.ts',
+      types: 'types.ts',
+      docs: 'README.md',
+      files: 'Files',
+      terminal: 'Terminal',
+      output: 'Output',
+    };
 
 // The places that the `canPlace` of `?refuse=edges` gets.
 const asked: unknown[] = [];
@@ -241,18 +269,42 @@ const tabOf = (tab: PaneNode): JSX.Element =>
     <Layout.Tab className={relativeTabs ? 'stacks-relative-tab' : undefined} />
   );
 
+/**
+ * The title of a pane outside a stack, in place of its tab list of one tab
+ * and its scroll buttons (`?compact=1`), and the tab list of a pane in a
+ * stack.
+ */
+function CompactChrome({ list }: { list: JSX.Element }): JSX.Element {
+  const alone = Layout.usePane((state) => state.tabs.length === 1);
+  return alone ? <Layout.Title /> : list;
+}
+
 function renderPane(pane: PaneNode): JSX.Element {
+  const tabList = (
+    <Layout.TabList
+      activation={activation}
+      stickyPinned={sticky}
+      style={scrollStyle}
+    >
+      {tabOf}
+    </Layout.TabList>
+  );
+  const start = scrollButtons && <Layout.TabListScrollButton side="start" />;
+  const end = scrollButtons && <Layout.TabListScrollButton side="end" />;
+  const list = (
+    <>
+      {start}
+      {tabList}
+      {end}
+    </>
+  );
   const chrome =
     toolsWithoutTabList && (pane.id === 'terminal' || pane.id === 'output') ? (
       <Layout.Title />
+    ) : compact ? (
+      <CompactChrome list={list} />
     ) : (
-      <Layout.TabList
-        activation={activation}
-        stickyPinned={sticky}
-        style={scrollStyle}
-      >
-        {tabOf}
-      </Layout.TabList>
+      list
     );
   return (
     <>
@@ -261,16 +313,17 @@ function renderPane(pane: PaneNode): JSX.Element {
       ) : (
         <Layout.Header>
           {pinned && <Layout.MoveHandle />}
-          {scrollButtons && <Layout.TabListScrollButton side="start" />}
           {withTitle ? (
+            // The scroll buttons stay while the tab list hides and shows.
             <>
+              {start}
               <Layout.Title />
-              <WhileTabListsShow>{chrome}</WhileTabListsShow>
+              <WhileTabListsShow>{tabList}</WhileTabListsShow>
+              {end}
             </>
           ) : (
             chrome
           )}
-          {scrollButtons && <Layout.TabListScrollButton side="end" />}
           {pinned && <Layout.CloseButton />}
         </Layout.Header>
       )}

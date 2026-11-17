@@ -12,7 +12,13 @@ import {
   stackOf,
 } from './model';
 import { visualOrder } from './spatial';
-import { addToStack, moveTabTo, pinPane } from './stacks-model';
+import {
+  addToStack,
+  moveTabTo,
+  pinPane,
+  tabIndex,
+  tabsAround,
+} from './stacks-model';
 import { focusAfterLeaving, type StoreFeature } from './store';
 import type { PaneNode, TabOptions } from './types';
 
@@ -154,7 +160,7 @@ export const stacksStore: StoreFeature<StackCommands> = {
         type: 'addTab',
         target: targetId,
         pane: { ...pane },
-        index,
+        index: tabIndex(index, tabsAround(state.root, targetId)),
         activate,
         id: newId('stack'),
       } as const;
@@ -175,7 +181,7 @@ export const stacksStore: StoreFeature<StackCommands> = {
         type: 'moveToStack',
         pane: sourceId,
         target: targetId,
-        index,
+        index: tabIndex(index, tabsAround(state.root, targetId, sourceId)),
         activate,
         id: newId('stack'),
       } as const;
@@ -230,7 +236,11 @@ export const stacksStore: StoreFeature<StackCommands> = {
     },
     moveTab(id, index) {
       const state = get();
-      const operation = { type: 'moveTab', pane: id, index } as const;
+      const operation = {
+        type: 'moveTab',
+        pane: id,
+        index: tabIndex(index, tabsAround(state.root, id, id)) as number,
+      } as const;
       const root = fold(operation);
       if (root === state.root) return;
       commit({ ...state, root, focusedPane: id }, [operation]);

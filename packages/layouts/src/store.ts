@@ -25,7 +25,7 @@ import type {
   Place,
   TreeModel,
 } from './types';
-import { validateLayout } from './validate';
+import { pinnedFirst, validateLayout } from './validate';
 
 /**
  * The commands that every store has: the state, the tree, sizes, collapse, and
@@ -37,14 +37,25 @@ export interface CoreLayoutStore {
    * Call a listener after each change, with the operations of the change and
    * its origin. A change with no operations is transient, such as a frame of
    * a resize drag: a listener that skips them sees one change for each user
-   * action.
+   * action. Every listener gets the changes in the order of their commits:
+   * a command that a listener runs makes a change that the listeners get
+   * after the current one, so the operations replay on a server in order.
+   * `getSnapshot` gives the latest state, which can be newer than the change
+   * that a listener gets.
    */
   subscribe(listener: (change: LayoutChange) => void): () => void;
-  /** Set the tree. A store with a tree model gives it the shape of the model. */
+  /**
+   * Set the tree. A store with a tree model gives it the shape of the model.
+   * The pinned tabs of each stack come first, in their order, as in the
+   * initial tree.
+   */
   setRoot(root: LayoutNode): void;
   /**
    * Set the sizes of splits, by split ID: one size for each child of the
-   * split, as in `SplitNode.sizes`.
+   * split, as in `SplitNode.sizes`. A split that the tree does not hold
+   * throws `node_not_found`, and a wrong number of sizes `invalid_sizes`, as
+   * on a server: the state does not change. The store keeps a copy of the
+   * sizes.
    */
   setSizes(sizes: Readonly<Record<string, readonly ChildSize[]>>): void;
   /**
@@ -243,15 +254,17 @@ const CORE_FOLDS: Folds = {
   resize(root, { sizes }) {
     let next = root;
     for (const [id, values] of Object.entries(sizes)) {
-      // `applyOperations` checks the splits and the sizes of an operation
-      // from elsewhere.
       const node = findNode(next, id);
+      if (node?.type !== 'split')
+        throw new LayoutOperationError('node_not_found', id);
+      if (values.length !== node.children.length)
+        throw new LayoutOperationError('invalid_sizes', id);
       // Sizes that do not change keep the tree, so the change has no operation.
-      if (
-        node?.type === 'split' &&
-        JSON.stringify(values) !== JSON.stringify(node.sizes)
-      )
-        next = replaceNode(next, id, () => ({ ...node, sizes: [...values] }));
+      if (JSON.stringify(values) !== JSON.stringify(node.sizes))
+        next = replaceNode(next, id, () => ({
+          ...node,
+          sizes: values.map(ownSize),
+        }));
     }
     return next;
   },
@@ -295,20 +308,22 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
     ((kind: 'split' | 'stack'): string => `${kind}-${++count}`);
   // Give a tree the shape of the model, and validate it. The checks of
   // `validateLayout` come first, so that the model gets a sound tree.
-  const shape = (root: LayoutNode): LayoutNode => {
-    validateLayout(root);
+  const shape = (tree: LayoutNode): LayoutNode => {
+    validateLayout(tree);
+    const root = pinnedFirst(tree);
     if (model === undefined) return root;
     const shaped = model.normalize(root, () => newId('split'));
     model.validate(shaped);
     return shaped;
   };
   const own = (root: LayoutNode): LayoutNode => copyAndFreeze(shape(root));
-  // The app's rule, on the state with the tree that an operation folds.
+  // The app's rule, on the tree that an operation folds. It gets no window
+  // state, such as the focus, which a server does not have.
   const allows = (
     source: PaneNode,
     place: Place,
     root: LayoutNode = state.root
-  ): boolean => options.canPlace?.(source, place, { ...state, root }) ?? true;
+  ): boolean => options.canPlace?.(source, place, root) ?? true;
   const foldContext: FoldContext = {
     model: model ?? null,
     newId,
@@ -329,12 +344,30 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
   // The state after the last change that was not transient.
   let settled = state;
   const get = (): LayoutState => state;
+  // The changes that the listeners have yet to get, in commit order. The
+  // first one is the change that they get now.
+  const pending: LayoutChange[] = [];
+  // Give a change to every listener, after the changes before it: a command
+  // that a listener runs adds its change to the queue, and the delivery that
+  // runs gives it to every listener after the current change. A listener that
+  // throws does not stop the delivery: the first error throws at its end.
   const notify = (
     operations: readonly LayoutOperation[],
     origin: LayoutChange['origin']
   ): void => {
-    const change: LayoutChange = { operations, origin };
-    for (const listener of [...listeners]) listener(change);
+    pending.push({ operations, origin });
+    if (pending.length > 1) return;
+    let failed = false;
+    let failure: unknown;
+    for (; pending.length > 0; pending.shift())
+      for (const listener of [...listeners])
+        try {
+          listener(pending[0]);
+        } catch (error) {
+          if (!failed) failure = error;
+          failed = true;
+        }
+    if (failed) throw failure;
   };
   // A command runs the fold of its own operation; `applyOperations` checks an
   // operation from elsewhere first.
@@ -464,7 +497,18 @@ export function createLayoutStore<const F extends readonly StoreFeature[] = []>(
       commit({ ...state, root: operation.root }, [operation]);
     },
     setSizes(sizes) {
-      const operation: LayoutTreeOperation = { type: 'resize', sizes };
+      // The operation holds its own copy, which a listener can keep.
+      const operation: LayoutTreeOperation = {
+        type: 'resize',
+        sizes: Object.freeze(
+          Object.fromEntries(
+            Object.entries(sizes).map(([id, values]) => [
+              id,
+              Object.freeze(values.map(ownSize)),
+            ])
+          )
+        ),
+      };
       commit({ ...state, root: fold(operation) }, [operation]);
     },
     setCollapsed(id, collapsed) {
@@ -544,14 +588,23 @@ function copyAndFreeze(node: LayoutNode): LayoutNode {
   if (
     Object.isFrozen(node) &&
     Object.isFrozen(node.sizes) &&
+    node.sizes.every(Object.isFrozen) &&
     sameNodes(children, node.children)
   )
     return node;
   return Object.freeze({
     ...node,
     children: Object.freeze(children),
-    sizes: Object.freeze([...node.sizes]),
+    sizes: Object.freeze(node.sizes.map(ownSize)),
   });
+}
+
+/**
+ * A size that the store owns: a frozen copy of a size in pixels, so that a
+ * caller that changes its own record after it passed it in changes no state.
+ */
+function ownSize(size: ChildSize): ChildSize {
+  return typeof size === 'number' ? size : Object.freeze({ px: size.px });
 }
 
 /**
@@ -564,6 +617,7 @@ function freezeNew(node: LayoutNode): LayoutNode {
   if (node.type === 'split') {
     node.children.forEach(freezeNew);
     Object.freeze(node.children);
+    node.sizes.forEach(Object.freeze);
     Object.freeze(node.sizes);
   } else if (node.type === 'stack') {
     node.children.forEach(freezeNew);

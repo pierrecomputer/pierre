@@ -4,7 +4,8 @@
 // toward one end, to the next tab that does not show there.
 import { type JSX, type MouseEvent, useLayoutEffect, useState } from 'react';
 
-import { tablistOf, tabToShow } from '../../dom/tab-scroll';
+import { paneTablist } from '../../dom/pane-tablist';
+import { tabToShow, watchTabScroll } from '../../dom/tab-scroll';
 import { usePaneContext } from '../use-pane';
 import { mergeProps, type PartProps, renderPart } from './part';
 
@@ -21,54 +22,15 @@ export interface TabListScrollButtonProps extends PartProps<TabListScrollButtonS
 const scrollName = ({ side }: { side: 'start' | 'end' }): string =>
   side === 'start' ? 'Scroll tabs left' : 'Scroll tabs right';
 
-// What the button reads from its tab list: whether a press scrolls, and the
+// What a button reads from its tab list: whether a press scrolls, and the
 // width of the stuck pinned tabs, after which the start button can sit.
 interface Reading {
   canScroll: boolean;
   pinned: number;
 }
 
-/**
- * Watch the tab list of the pane of a button: its size, its tabs, their
- * stuck state, and its scroll. It calls `read` for each change.
- */
-function watchTablist(element: HTMLElement, read: () => void): () => void {
-  const list = tablistOf(element);
-  if (list === null) return () => {};
-  let frame = 0;
-  const onScroll = (): void => {
-    if (frame === 0)
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        read();
-      });
-  };
-  const sizes = new ResizeObserver(read);
-  const observe = (): void => {
-    sizes.disconnect();
-    sizes.observe(list);
-    for (const child of list.children) sizes.observe(child);
-  };
-  const changes = new MutationObserver(() => {
-    observe();
-    read();
-  });
-  observe();
-  changes.observe(list, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['data-sticky', 'data-sticky-pinned'],
-  });
-  list.addEventListener('scroll', onScroll, { passive: true });
-  read();
-  return () => {
-    sizes.disconnect();
-    changes.disconnect();
-    list.removeEventListener('scroll', onScroll);
-    cancelAnimationFrame(frame);
-  };
-}
+const hostOf = (element: Element): Element | null =>
+  element.closest('[data-layouts-pane]');
 
 /**
  * Scroll the tab list of the pane toward `side`, to the next tab that does
@@ -81,7 +43,9 @@ function watchTablist(element: HTMLElement, read: () => void): () => void {
  * or over the list's ends with the app's fades; its
  * `--layouts-pinned-width` gives the width of the stuck pinned tabs, after
  * which a start button can sit. A press takes no focus: the tab list's keys
- * move through the tabs.
+ * move through the tabs. The button follows the tab list that shows in its
+ * pane, also a list that replaces another one, and the buttons of a list
+ * share one measurement.
  */
 export function TabListScrollButton({
   side,
@@ -96,15 +60,12 @@ export function TabListScrollButton({
     pinned: 0,
   });
   useLayoutEffect(() => {
-    if (button === null) return;
-    return watchTablist(button, () => {
-      const list = tablistOf(button);
-      const pinned = Number.parseFloat(
-        list?.style.getPropertyValue('--layouts-pinned-width') ?? ''
-      );
+    const host = button === null ? null : hostOf(button);
+    if (host === null) return;
+    return watchTabScroll(host, (scroll) => {
       const next = {
-        canScroll: list !== null && tabToShow(list, side) !== null,
-        pinned: Number.isNaN(pinned) ? 0 : pinned,
+        canScroll: side === 'start' ? scroll.start : scroll.end,
+        pinned: scroll.pinned,
       };
       setReading((current) =>
         current.canScroll === next.canScroll && current.pinned === next.pinned
@@ -132,7 +93,8 @@ export function TabListScrollButton({
       },
       onMouseDown: (event: MouseEvent) => event.preventDefault(),
       onClick: (event: MouseEvent<HTMLElement>) => {
-        const list = tablistOf(event.currentTarget);
+        const host = hostOf(event.currentTarget);
+        const list = host === null ? null : paneTablist(host);
         const tab = list === null ? null : tabToShow(list, side);
         if (list === null || tab === null) return;
         const still = matchMedia('(prefers-reduced-motion: reduce)').matches;

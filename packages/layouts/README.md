@@ -555,10 +555,11 @@ of one pane gives way to that pane. A zoom of a tab zooms its stack, and a
 change of tab keeps the zoom.
 
 A layout has one rule for places (`DEC-layouts-one-place-rule`):
-`canPlace(source, place, state)` in `createLayout`. `source` is the pane that
+`canPlace(source, place, root)` in `createLayout`. `source` is the pane that
 goes to the place: a pane of the tree that moves, or a new pane that opens.
-`place` is a `Place`, and `state` holds the tree before the change. The drags,
-the items of `Layout.usePaneMenu()`, `moveTo`, `openAt`, and the commands
+`place` is a `Place`, and `root` is the tree before the change. The rule gets no
+window state, such as the focused pane, because a server has only the tree. The
+drags, the items of `Layout.usePaneMenu()`, `moveTo`, `openAt`, and the commands
 `split`, `move`, `addTab`, and `moveToStack` all read it. A drag target that it
 refuses shows no marker and no preview, and takes no drop; the drag goes on, and
 it asks once for each target under the pointer, after the pinned rule. The menu
@@ -568,10 +569,8 @@ A change of the order of the tabs of one stack is not a place. For example, at
 most 8 groups, where a group is a pane or a stack outside a stack:
 
 ```ts
-const canPlace: CanPlace = (source, place, state) =>
-  !('beside' in place) ||
-  isAlone(state.root, source.id) ||
-  groupCount(state.root) < 8;
+const canPlace: CanPlace = (source, place, root) =>
+  !('beside' in place) || isAlone(root, source.id) || groupCount(root) < 8;
 
 const layout = createLayout(root, [edits(naryTree), stacks(), tabDrag()], {
   canPlace,
@@ -601,7 +600,10 @@ saved form, and the folds of the operations, so a server applies the same rules:
   join it. A `swap` that puts a pinned tab after a tab that is not pinned throws
   `pane_pinned`. `layout.setPinned(id, pinned)` changes the flag and puts the
   tab at the end of the pinned run. A pinned tab has `data-pinned` and the
-  description "Pinned" (`messages.pinned`).
+  description "Pinned" (`messages.pinned`). A tree from elsewhere, such as an
+  old save, can mix pinned tabs with the others: `parseStoredLayoutTree`, the
+  initial tree of a store, and `setRoot` put the pinned tabs of each stack
+  first, in their order, then the other tabs in theirs.
 - `closable: false`: the person cannot close the pane. Delete on its tab does
   nothing, and `Layout.CloseButton` is disabled. `layout.close(id)` from the
   app's code still closes it.
@@ -646,7 +648,9 @@ tab list, or over its ends with the app's fades, and count their width in the
 list's `scroll-padding-inline-start` and `scroll-padding-inline-end`, so a tab
 that scrolls into view is not under them. A button's `--layouts-pinned-width`
 gives the width of the stuck pinned tabs, after which a start button can sit.
-`messages.scrollTabs` names them.
+`messages.scrollTabs` names them. The buttons follow the tab list that shows in
+their pane, also a list that replaces another one while they stay mounted, and
+the buttons of a list share one measurement of it.
 
 ## Collapsed panes
 
@@ -832,6 +836,16 @@ layout.subscribe(({ operations, origin }) => {
 applyOperations(layout, [{ type: 'setRoot', root: response.tree.root }]);
 ```
 
+- Every listener gets the changes in the order of their commits, also a change
+  that a command of another listener makes, after the current change. So the
+  tree operations that a listener sends fold on a server to the tree of the
+  window. `getSnapshot()` gives the latest state, which can be newer than the
+  change that a listener gets.
+- A local command sends only operations that a server takes: an index of a tab
+  is a whole number from 0 to the number of tabs, and `setSizes` with a split
+  that the tree does not hold, or with a wrong number of sizes, throws
+  `node_not_found` or `invalid_sizes`, as a server does, and changes nothing.
+  Each operation holds its own copy of the caller's values.
 - A gesture, such as a resize drag, changes the layout in each frame with
   `layout.transient(run)`: the listeners get those changes with no operations.
   It ends with one operation, or with `layout.revert()`, which restores the

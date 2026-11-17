@@ -20,7 +20,10 @@ import { canClose as viewCanClose } from '../src/react/parts/close';
 import { startResizeGesture } from '../src/resize-gesture';
 import { stacks } from '../src/stacks';
 import { type CoreLayoutStore, createLayoutStore } from '../src/store';
-import { parseLayoutOperations } from '../src/stored-tree';
+import {
+  parseLayoutOperations,
+  parseStoredLayoutTree,
+} from '../src/stored-tree';
 import type { LayoutNode, LayoutState, PaneNode } from '../src/types';
 import { zoom } from '../src/zoom';
 import { testStore } from './helpers/store';
@@ -174,6 +177,39 @@ const COMMANDS: readonly [
   [
     'moveTab',
     (store) => store.moveTab('c', 1),
+    [{ type: 'moveTab', pane: 'c', index: 1 }],
+  ],
+  [
+    'addTab at a negative index',
+    (store) => store.addTab('c', pane('e'), -1),
+    [
+      {
+        type: 'addTab',
+        target: 'c',
+        pane: pane('e'),
+        index: 0,
+        activate: true,
+        id: expect.stringMatching(/^stack-/) as unknown as string,
+      },
+    ],
+  ],
+  [
+    'moveToStack at an index past the tabs',
+    (store) => store.moveToStack('b', 'c', 9),
+    [
+      {
+        type: 'moveToStack',
+        pane: 'b',
+        target: 'c',
+        index: 2,
+        activate: true,
+        id: expect.stringMatching(/^stack-/) as unknown as string,
+      },
+    ],
+  ],
+  [
+    'moveTab at a fractional index',
+    (store) => store.moveTab('c', 0.6),
     [{ type: 'moveTab', pane: 'c', index: 1 }],
   ],
   [
@@ -544,5 +580,159 @@ describe('a tree that equals the current tree', () => {
     expect(
       after.children.map((child, index) => child === before.children[index])
     ).toEqual(after.children.map((child) => child.id !== 'a'));
+  });
+});
+
+describe('the boundary where an app sends operations', () => {
+  // Fold the tree operations of the changes on a server, from the JSON that a
+  // client sends.
+  const replay = (root: LayoutNode, changes: readonly LayoutChange[]) =>
+    applyLayoutOperations(
+      root,
+      parseLayoutOperations(
+        JSON.parse(
+          JSON.stringify(
+            changes.flatMap((change) =>
+              change.operations.filter(isTreeOperation)
+            )
+          )
+        )
+      )
+    );
+
+  test('every listener gets the changes in commit order, also a change that a listener makes, and they replay to the same tree', () => {
+    const store = storeOf();
+    const before = store.getSnapshot().root;
+    // The first listener pins each new tab; the second one sends the changes.
+    store.subscribe(({ operations }) => {
+      for (const operation of operations)
+        if (operation.type === 'addTab')
+          store.setPinned(operation.pane.id, true);
+    });
+    const sent = record(store);
+    store.addTab('c', pane('e'));
+    expect(
+      sent.map(({ operations }) => operations.map(({ type }) => type))
+    ).toEqual([['addTab'], ['setPinned']]);
+    expect(replay(before, sent)).toEqual(store.getSnapshot().root);
+  });
+
+  test('a listener that throws does not stop the delivery to the others', () => {
+    const store = storeOf();
+    store.subscribe(() => {
+      throw new Error('listener');
+    });
+    const changes = record(store);
+    expect(() => store.activate('d')).toThrow('listener');
+    expect(changes).toHaveLength(1);
+    // The delivery ended: the next change reaches the listeners too.
+    expect(() => store.activate('c')).toThrow('listener');
+    expect(changes).toHaveLength(2);
+  });
+
+  test('setSizes with a split that the tree does not hold, or a wrong number of sizes, throws as a server does and changes nothing', () => {
+    const store = storeOf();
+    const before = store.getSnapshot();
+    const changes = record(store);
+    expect(() => store.setSizes({ gone: [1, 1], row: [2, 3, 1] })).toThrow(
+      expect.objectContaining({ code: 'node_not_found' })
+    );
+    expect(() => store.setSizes({ row: [2, 3] })).toThrow(
+      expect.objectContaining({ code: 'invalid_sizes' })
+    );
+    expect(changes).toEqual([]);
+    expect(store.getSnapshot()).toBe(before);
+  });
+
+  test('the place rule gets the tree, the same on the client and on the server', () => {
+    const seen: LayoutNode[] = [];
+    const canPlace = (_source: PaneNode, _place: unknown, root: LayoutNode) => {
+      seen.push(root);
+      return true;
+    };
+    const store = createLayoutStore(start, features, { canPlace });
+    const before = store.getSnapshot().root;
+    store.focusPane('b');
+    const changes = record(store);
+    store.addTab('c', pane('e'));
+    expect(seen).toEqual([before]);
+    applyLayoutOperations(
+      before,
+      changes[0].operations.filter(isTreeOperation),
+      { canPlace }
+    );
+    expect(seen).toEqual([before, before]);
+  });
+
+  test('a size record that the caller changes after it passed it in changes no state, and the operation keeps its values', () => {
+    const fixed = { px: 22 };
+    const store = createLayoutStore(
+      {
+        type: 'split',
+        id: 'row',
+        direction: 'horizontal',
+        sizes: [fixed, 1],
+        children: [pane('a'), pane('b')],
+      },
+      features
+    );
+    const changes = record(store);
+    fixed.px = 500;
+    const sizesOf = () => {
+      const root = store.getSnapshot().root;
+      return root.type === 'split' ? root.sizes : null;
+    };
+    expect(sizesOf()).toEqual([{ px: 22 }, 1]);
+    const next = { px: 30 };
+    const values = [next, 1];
+    store.setSizes({ row: values });
+    next.px = 600;
+    values[1] = 9;
+    expect(sizesOf()).toEqual([{ px: 30 }, 1]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0].operations).toEqual([
+      { type: 'resize', sizes: { row: [{ px: 30 }, 1] } },
+    ]);
+  });
+
+  describe('the pinned tabs of a stack from elsewhere come first, in their order', () => {
+    // A save with a stack that mixes pinned tabs with the others.
+    const mixed: LayoutNode = {
+      type: 'stack',
+      id: 'tabs',
+      active: 'c',
+      children: [
+        pane('a'),
+        { ...pane('b'), pinned: true },
+        pane('c'),
+        { ...pane('d'), pinned: true },
+      ],
+    };
+    const order = (root: LayoutNode): string[] =>
+      root.type === 'stack' ? root.children.map(({ id }) => id) : [];
+    const sorted = ['b', 'd', 'a', 'c'];
+
+    test('at parse', () => {
+      expect(
+        order(parseStoredLayoutTree({ version: 3, root: mixed }).root)
+      ).toEqual(sorted);
+    });
+
+    test('at initialization, at setRoot, and from a remote setRoot', () => {
+      const store = storeOf(mixed);
+      expect(order(store.getSnapshot().root)).toEqual(sorted);
+      store.setRoot(start);
+      store.setRoot(mixed);
+      expect(order(store.getSnapshot().root)).toEqual(sorted);
+      store.setRoot(start);
+      applyOperations(store, [{ type: 'setRoot', root: mixed }]);
+      expect(order(store.getSnapshot().root)).toEqual(sorted);
+    });
+
+    test('on a server', () => {
+      expect(
+        order(applyLayoutOperations(start, [{ type: 'setRoot', root: mixed }]))
+      ).toEqual(sorted);
+    });
   });
 });

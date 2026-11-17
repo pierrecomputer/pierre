@@ -17,6 +17,7 @@ import {
 
 import stickyPinnedCss from '../../css/sticky-pinned.css?inline';
 import tabsCss from '../../css/tabs.css?inline';
+import { registerTablist } from '../../dom/pane-tablist';
 import { tabMoveIndex } from '../../stacks-model';
 import { treeIndex } from '../../tree-index';
 import type { PaneNode } from '../../types';
@@ -97,11 +98,12 @@ const STICKY_ROOM = 120;
 
 /**
  * Make the pinned tabs of a tab list sticky, at the places that they have
- * when they do not stick, as each render and each resize of the list
- * measures them. A stuck tab reports its stuck place, so the measure runs
- * without the sticky styles. The position is inline, as the styles of the
- * gestures are, so that an app's class on a tab, such as a `relative`
- * utility in a later layer, cannot undo it.
+ * when they do not stick, as each render, each resize of the list, and each
+ * resize of a pinned tab measures them. A stuck tab reports its stuck place,
+ * so the measure runs without the sticky styles. The position is inline, as
+ * the styles of the gestures are, so that an app's class on a tab, such as a
+ * `relative` utility in a later layer, cannot undo it. The effect clears the
+ * tabs that it styled, also a tab that is no longer pinned.
  */
 function useStickyPinned(
   tablist: RefObject<HTMLElement | null>,
@@ -112,11 +114,14 @@ function useStickyPinned(
     if (options === false || list === null) return;
     // `true` has no `minRoom`, so it takes the default.
     const minRoom = (options as StickyPinnedOptions).minRoom ?? STICKY_ROOM;
+    // The tabs that the effect styled: a tab that is no longer pinned has
+    // lost `data-pinned`, and keeps its styles until the effect clears them.
+    const styled = new Set<HTMLElement>();
     const pinned = (): HTMLElement[] => [
       ...list.querySelectorAll<HTMLElement>(':scope > [data-pinned]'),
     ];
     const stick = (sticky: boolean, width = 0): void => {
-      const items = pinned();
+      const items = sticky ? pinned() : [...styled];
       list.toggleAttribute('data-sticky-pinned', sticky);
       list.style.setProperty('--layouts-pinned-width', `${width}px`);
       // The backdrop of the run starts at the first pinned tab, and covers
@@ -136,11 +141,28 @@ function useStickyPinned(
         item.style.position = sticky ? 'sticky' : '';
         item.style.zIndex = sticky ? '2' : '';
         item.toggleAttribute('data-sticky', sticky);
+        if (sticky) styled.add(item);
       }
+      if (!sticky) styled.clear();
     };
+    // The list and its pinned tabs: a pinned tab that changes its width
+    // moves the places of the tabs after it, with no resize of the list.
+    const observer = new ResizeObserver(() => place());
+    const watched = new Set<Element>([list]);
+    observer.observe(list);
     const place = (): void => {
       stick(false);
       const tabs = pinned();
+      for (const tab of watched)
+        if (tab !== list && !tabs.includes(tab as HTMLElement)) {
+          observer.unobserve(tab);
+          watched.delete(tab);
+        }
+      for (const tab of tabs)
+        if (!watched.has(tab)) {
+          observer.observe(tab);
+          watched.add(tab);
+        }
       const last = tabs.at(-1);
       const width =
         last === undefined
@@ -149,8 +171,6 @@ function useStickyPinned(
       if (width > 0 && list.clientWidth - width >= minRoom) stick(true, width);
     };
     place();
-    const observer = new ResizeObserver(place);
-    observer.observe(list);
     return () => {
       observer.disconnect();
       stick(false);
@@ -164,20 +184,24 @@ const defaultTab = (): ReactNode => <Tab />;
  * Make the host of a pane the tab panel of the tab of its pane, named by that
  * tab, while a tab list shows in the host. A host without a tab list stays a
  * region named by the title of its pane. The tab list says that it renders
- * in the host (`nameHost`), which writes the role and the name of the host.
+ * in the host (`nameHost`), which writes the role and the name of the host,
+ * and registers itself as the list of the host, for the scroll buttons.
  */
 function useTabPanel(
   context: ViewContext,
   id: string
 ): RefObject<HTMLElement | null> {
   const tablist = useRef<HTMLElement | null>(null);
-  useLayoutEffect(
-    () =>
-      tablist.current === null
-        ? undefined
-        : nameHost(tablist.current, 'tab', tabIdOf(context.prefix, id, id)),
-    [context, id]
-  );
+  useLayoutEffect(() => {
+    const list = tablist.current;
+    if (list === null) return;
+    const unname = nameHost(list, 'tab', tabIdOf(context.prefix, id, id));
+    const unregister = registerTablist(list);
+    return () => {
+      unregister();
+      unname?.();
+    };
+  }, [context, id]);
   return tablist;
 }
 

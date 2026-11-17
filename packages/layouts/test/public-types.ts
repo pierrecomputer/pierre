@@ -1,7 +1,7 @@
 // Checks of the public types, which the typecheck runs and no test runner
 // executes: an app names and passes a feature, and sees none of its members
 // (`DEC-layouts-public-surface`).
-import type { LayoutNode } from '../src';
+import type { CanPlace, LayoutNode } from '../src';
 import {
   allFeatures,
   arrange,
@@ -34,3 +34,10 @@ void createLayout(tree, allFeatures());
 // A list typed as `Feature[]` names no feature, so it gets no check.
 const list: readonly Feature[] = [arrange()];
 void createLayout(tree, list);
+
+// A place rule reads the tree, which a server has too, and no window state:
+// a rule that reads the focus would refuse on the server what the window took.
+const intoFocus: CanPlace = (_source, place, root) =>
+  // @ts-expect-error The rule gets the tree, not the focused pane.
+  'into' in place && place.into === root.focusedPane;
+void createLayout(tree, [edits(naryTree), stacks()], { canPlace: intoFocus });

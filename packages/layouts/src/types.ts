@@ -14,15 +14,17 @@ export type Place =
 /**
  * An app's rule for places (`DEC-layouts-one-place-rule`): false refuses a
  * place for a pane. `source` is the pane that goes there: a pane of the tree
- * that moves, or a new pane that opens. `state` holds the tree before the
+ * that moves, or a new pane that opens. `root` is the tree before the
  * change. The drags, the pane menu, `moveTo`, `openAt`, the commands of the
  * store, and `applyLayoutOperations` all read it. A change of the order of
- * the tabs of one stack is not a place.
+ * the tabs of one stack is not a place. The rule gets no window state, such
+ * as the focused pane: a server folds the same operations with the same
+ * rule, and has only the tree.
  */
 export type CanPlace = (
   source: PaneNode,
   place: Place,
-  state: LayoutState
+  root: LayoutNode
 ) => boolean;
 
 export interface PaneNode {

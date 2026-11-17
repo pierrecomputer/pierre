@@ -283,13 +283,13 @@ describe('one rule for places', () => {
       ? node.children.reduce((sum, child) => sum + groups(child), 0)
       : 1;
   const asked: unknown[] = [];
-  const atMostThreeGroups: CanPlace = (source, place, state) => {
+  const atMostThreeGroups: CanPlace = (source, place, root) => {
     asked.push({ source: source.id, place });
     if (!('beside' in place)) return true;
     const alone =
-      getPanes(state.root).some(({ id }) => id === source.id) &&
-      stackOf(state.root, source.id) === null;
-    return alone || groups(state.root) < 3;
+      getPanes(root).some(({ id }) => id === source.id) &&
+      stackOf(root, source.id) === null;
+    return alone || groups(root) < 3;
   };
   const store = () =>
     createLayoutStore(tabs, [edits(naryTree), stacks()], {

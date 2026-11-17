@@ -50,14 +50,6 @@ export function applyOperations(
       const id = (operation as { id?: string }).id;
       if (id !== undefined && findNode(root, id) !== null)
         throw new LayoutOperationError('id_in_use', id);
-      if (operation.type === 'resize')
-        for (const [split, sizes] of Object.entries(operation.sizes)) {
-          const node = findNode(root, split);
-          if (node?.type !== 'split')
-            throw new LayoutOperationError('node_not_found', split);
-          if (sizes.length !== node.children.length)
-            throw new LayoutOperationError('invalid_sizes', split);
-        }
       // A tree from elsewhere keeps the nodes that equal the current ones, so
       // an equal tree is no change.
       root =

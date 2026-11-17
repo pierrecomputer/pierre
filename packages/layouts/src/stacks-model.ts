@@ -120,14 +120,40 @@ export function pinPane(
   return replaceNode(root, stack.id, () => ({ ...stack, children: tabs }));
 }
 
+/**
+ * The index of a tab among `length` tabs, as a fold takes it: a whole number
+ * from 0 to `length`. A command sends this index in its operation, as the
+ * parser of a server refuses a negative or a fractional one, so both sides
+ * fold the same tree and ask the place rule the same question.
+ */
+export const tabIndex = (
+  index: number | undefined,
+  length: number
+): number | undefined =>
+  index === undefined
+    ? undefined
+    : Number.isNaN(index)
+      ? 0
+      : Math.min(length, Math.max(0, Math.round(index)));
+
+/**
+ * The number of tabs that a pane goes among in the stack of a target pane:
+ * the other tabs of that stack, or the target alone, outside a stack.
+ */
+export function tabsAround(
+  root: LayoutNode,
+  target: string,
+  pane?: string
+): number {
+  const tabs = stackOf(root, target)?.children;
+  return tabs === undefined ? 1 : tabs.filter(({ id }) => id !== pane).length;
+}
+
 const clampIndex = (
   index: number | undefined,
   fallback: number,
   length: number
-): number =>
-  index === undefined
-    ? fallback
-    : Math.min(length, Math.max(0, Math.round(index)));
+): number => tabIndex(index, length) ?? fallback;
 /**
  * The tab boundary nearest to a point in a tab list: the number of tabs whose
  * middle is before the point, from 0 (before the first tab) to the number of

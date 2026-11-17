@@ -68,3 +68,68 @@ describe('dropTargetAt', () => {
     ).toBeNull();
   });
 });
+
+// The cases of the drops of a tab outside the tab lists: a row of a stack of
+// two tabs and a pane, 400 by 600 pixels each, with a gap of 8.
+describe('dropTargetAt for a tab', () => {
+  const groups: LayoutNode = {
+    type: 'split',
+    id: 'row',
+    direction: 'horizontal',
+    sizes: [1, 1],
+    children: [
+      {
+        type: 'stack',
+        id: 'left',
+        active: 'a',
+        children: [
+          { type: 'pane', id: 'a' },
+          { type: 'pane', id: 'b' },
+        ],
+      },
+      { type: 'pane', id: 'c' },
+    ],
+  };
+  const pixels = computeLayout(groups, 808, 600, 8);
+  const tab = (id: string, group: readonly string[], center = true) => ({
+    source: { kind: 'tab', id },
+    center,
+    group,
+    drop,
+  });
+
+  test('a tab drops into the center or on an edge of another group', () => {
+    expect(dropTargetAt(pixels, 600, 300, tab('b', ['a', 'b']))).toMatchObject({
+      paneId: 'c',
+      place: 'center',
+    });
+    expect(dropTargetAt(pixels, 790, 300, tab('b', ['a', 'b']))).toMatchObject({
+      paneId: 'c',
+      place: 'right',
+    });
+  });
+
+  test('a tab leaves its own group only by an edge, beside a sibling', () => {
+    expect(dropTargetAt(pixels, 200, 300, tab('a', ['a', 'b']))).toBeNull();
+    expect(dropTargetAt(pixels, 200, 590, tab('a', ['a', 'b']))).toMatchObject({
+      paneId: 'b',
+      place: 'bottom',
+    });
+    expect(dropTargetAt(pixels, 200, 590, tab('b', ['a', 'b']))).toMatchObject({
+      paneId: 'a',
+      place: 'bottom',
+    });
+  });
+
+  test('a lone tab has no place in its own pane', () => {
+    expect(dropTargetAt(pixels, 790, 300, tab('c', ['c']))).toBeNull();
+    expect(dropTargetAt(pixels, 10, 300, tab('c', ['c']))).toMatchObject({
+      paneId: 'a',
+      place: 'left',
+    });
+  });
+
+  test('a point outside every group has no target', () => {
+    expect(dropTargetAt(pixels, 900, 300, tab('b', ['a', 'b']))).toBeNull();
+  });
+});

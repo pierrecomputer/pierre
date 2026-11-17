@@ -11,12 +11,6 @@ export interface DropTarget {
 
 export type DropPlace = Edge | 'center';
 
-export interface TabDropTarget {
-  paneId: string;
-  place: DropPlace;
-  rect: Rect;
-}
-
 const EDGE_X_FRACTION = 0.28;
 
 const EDGE_Y_FRACTION = 0.3;
@@ -83,23 +77,4 @@ export function placeRect(rect: Rect, place: DropPlace): Rect {
     height:
       place === 'top' || place === 'bottom' ? rect.height / 2 : rect.height,
   };
-}
-
-export function tabDropTarget(
-  geometry: LayoutGeometry,
-  x: number,
-  y: number,
-  tabId: string,
-  group: readonly string[],
-  center = false
-): TabDropTarget | null {
-  const hit = paneAt(geometry, x, y, '');
-  if (hit === undefined) return null;
-  const place = center ? 'center' : dropPlace(hit.rect, x, y);
-  if (!group.includes(hit.pane.id))
-    return { paneId: hit.pane.id, place, rect: placeRect(hit.rect, place) };
-  const sibling =
-    hit.pane.id === tabId ? group.find((id) => id !== tabId) : hit.pane.id;
-  if (place === 'center' || sibling === undefined) return null;
-  return { paneId: sibling, place, rect: placeRect(hit.rect, place) };
 }

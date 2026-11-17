@@ -1199,6 +1199,109 @@ test('with sticky pinned tabs, the start button shows the tab right after the st
   expect(shown ?? -1).toBeGreaterThanOrEqual(-1);
 });
 
+test('an unpinned tab loses its sticky place while its list stays mounted, and scrolls with the others', async ({
+  page,
+}) => {
+  await page.goto(
+    '/stacks.html?scrollbuttons=1&pinned=1&sticky=1&gap=1&reset=1'
+  );
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await expect(list.locator('[data-sticky]')).toHaveCount(2);
+  await command(page, 'setPinned', 'util', false);
+  const util = list.getByRole('tab', { name: 'util.ts' });
+  await expect(util).not.toHaveAttribute('data-pinned');
+  await expect(util).not.toHaveAttribute('data-sticky');
+  expect(
+    await util.evaluate((tab) => [
+      (tab as HTMLElement).style.position,
+      (tab as HTMLElement).style.left,
+    ])
+  ).toEqual(['', '']);
+  await expect(list.locator('[data-sticky]')).toHaveCount(1);
+  // At the end of the list, util.ts scrolled out of view: it does not cover
+  // the tabs after the stuck main.ts, and the start button can show it.
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  const main = await tabBox(page, 'main', 'main.ts');
+  const box = await util.boundingBox();
+  expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+    main.x + main.width + 1
+  );
+  const buttons = await scrollButtonsOf(page, 'main');
+  await expect.poll(() => buttons.shows(buttons.start)).toBe(true);
+});
+
+test('a pinned tab that changes its width moves the sticky places after it, with no resize of the list', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?pinned=1&sticky=1&gap=1&reset=1');
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await expect(list.locator('[data-sticky]')).toHaveCount(2);
+  const width = () => list.evaluate((element) => element.clientWidth);
+  const before = await width();
+  // The label of main.ts grows by 65 px, as a longer title would make it.
+  const grown = await list.evaluate((element) => {
+    const main = element.querySelector<HTMLElement>(
+      '[data-layouts-tab="main"]'
+    );
+    if (main === null) throw new Error('No main.ts');
+    const next = main.offsetWidth + 65;
+    main.style.minWidth = `${next}px`;
+    return next;
+  });
+  const places = () =>
+    list.evaluate((element) => {
+      const util = element.querySelector<HTMLElement>(
+        '[data-layouts-tab="util"]'
+      );
+      return {
+        left: Number.parseFloat(util?.style.left ?? ''),
+        run: Number.parseFloat(
+          element.style.getPropertyValue('--layouts-pinned-width')
+        ),
+        util: util?.offsetWidth ?? 0,
+      };
+    });
+  // util.ts sticks after main.ts and the 4 px gap, and the run holds both.
+  await expect.poll(async () => (await places()).left).toBe(grown + 4);
+  const { run, util } = await places();
+  expect(run).toBe(grown + 4 + util);
+  expect(await width()).toBe(before);
+});
+
+test('the scroll buttons follow a tab list that replaces the one they watched', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?scrollbuttons=1&title=1&scroll=1');
+  for (let index = 0; index < 16; index += 1)
+    await command(
+      page,
+      'addTab',
+      'docs',
+      { type: 'pane', id: `extra${index}` },
+      undefined,
+      { activate: false }
+    );
+  const toggle = page.getByRole('button', { name: 'Hide the tab lists' });
+  await toggle.click();
+  await expect(tabsOf(page, 'main')).toHaveCount(0);
+  await toggle.click();
+  const list = tabsOf(page, 'main');
+  await expect(list.getByRole('tab')).toHaveCount(21);
+  const buttons = await scrollButtonsOf(page, 'main');
+  await expect.poll(() => buttons.shows(buttons.end)).toBe(true);
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await expect.poll(() => buttons.shows(buttons.start)).toBe(true);
+  await expect.poll(() => buttons.shows(buttons.end)).toBe(false);
+  await pressAndSettle(page, buttons.start, list);
+  await expect.poll(() => buttons.shows(buttons.end)).toBe(true);
+});
+
 test("the layout's canPlace refuses a place of a tab drag once for each target, and allows the others", async ({
   page,
 }) => {
