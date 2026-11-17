@@ -169,7 +169,7 @@
   ;; One bit per input byte marks possible block starts. Non-ASCII bytes have
   ;; no bit set; indentation and block precedence are checked by the caller.
   (data (i32.const $mem.blockStarts)
-    "\00\26\00\00\19\2c\ff\77\00\00\00\88\01\00\00\50"
+    "\00\26\00\00\09\2c\ff\77\00\00\00\88\01\00\00\50"
     "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
   (func $mayStartBlock (param $ch i32) (result i32)
     (i32.and (i32.shr_u

@@ -142,8 +142,10 @@ $$
   `$5 and $10` stays text.
 - `$$...$$` is display math, also inside a paragraph.
 - A line that starts with `$$` and holds no other `$` opens a display block,
-  which ends at a line that ends with `$$`. Text after the opening `$$` and
-  before the closing `$$` belongs to the formula.
+  which ends at a line that ends with `$$` (not `\$$`). As in TeX, the block
+  holds no blank line: if a blank line comes before the closing `$$`, the
+  opening line is text. Text after the opening `$$` and before the closing `$$`
+  belongs to the formula.
 - A `math` code fence is a display block too.
 
 While a formula streams with `incomplete: true`, an open display block shows

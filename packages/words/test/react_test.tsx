@@ -2742,3 +2742,17 @@ test('the DOM renderer keeps streamed math SVG equal to a full render', () => {
     expect(streamed.querySelector('svg span')).toBeNull();
   }
 });
+
+test('the DOM renderer keeps math SVG placed by a large first render', () => {
+  const dom = new JSDOM('<div id="a"></div>');
+  const root = dom.window.document.getElementById('a')!;
+  const renderer = createDomRenderer(root, { math: true });
+  // more than 1 KB, so the browser parses the first render in one batch
+  const source = `${'text '.repeat(300)}\n\n$x^2$ and *a`;
+  renderer.update(source, true, true, false);
+  const svg = root.querySelector('svg');
+  expect(svg).not.toBeNull();
+  // not a plain append, so the update walks the SVG
+  renderer.update(source + 'b*', true, true, false);
+  expect(root.querySelector('svg')).toBe(svg);
+});

@@ -57,11 +57,15 @@
     (global.set $mode (i32.load8_u (i32.const 0)))
     (global.set $fmt (i32.load8_u (i32.const 26)))
     (global.set $ext (i32.load8_u (i32.const 31)))
-    ;; with the math option the scan tables mark `$` (low nibble 4, class 2)
+    ;; with the math option the scan tables mark `$` (low nibble 4, class 2),
+    ;; and `$` (bit 4 of byte 4) may start a block
     (local.set $start (i32.and (global.get $ext) (i32.const 2)))
     (i32.store8 offset=4 (i32.const $mem.markLo) (local.get $start))
     (i32.store8 offset=4 (i32.const $mem.syntaxLo) (local.get $start))
     (i32.store8 offset=4 (i32.const $mem.paragraphLo) (local.get $start))
+    (i32.store8 offset=4 (i32.const $mem.blockStarts)
+      (i32.or (i32.const 9) (i32.shl (local.get $start) (i32.const 3))))
+    (global.set $mathTo (i32.const 0))
     (global.set $tableHead (i32.const 0))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $src (i32.const $mem.input))

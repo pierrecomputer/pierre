@@ -158,6 +158,17 @@ void test('math blocks: $$ fences and math code fences', () => {
   assert.doesNotMatch(html('$$$\nx\n$$$', { math: true }), /<svg/);
   // a `$$` line with more dollars is a paragraph
   assert.match(html('$$ a $$ b', { math: true }), /^<p><svg/);
+  // a math block holds no blank line, so a stray `$$` line stays text
+  assert.equal(
+    html('Total\n$$100 off\n\nNext\n\n# H', { math: true }),
+    '<p>Total\n$$100 off</p>\n<p>Next</p>\n<h1>H</h1>\n'
+  );
+  // `\$$` is an escaped dollar, not the closing `$$`
+  assert.equal(glyphs(html('$$\nx = 5\\$$\ny\n$$', { math: true })), '𝑥=5$𝑦');
+  assert.match(
+    html('$$\na \\\\$$\nafter', { math: true }),
+    /<\/svg>\n<p>after/
+  );
   // other fences stay code
   assert.match(
     html('```tex\nx\n```', { math: true }),
@@ -223,6 +234,9 @@ void test('formulas that do not fit show as code', () => {
 void test('unmatched dollars do not rescan the paragraph', () => {
   const prices = '$1 '.repeat(50000);
   assert.equal(html(prices, { math: true }), `<p>${prices.trimEnd()}</p>\n`);
+  // each unclosed `$$` line must not scan to the blank line again
+  const openers = '$$a b\n'.repeat(50000) + '\nend';
+  assert.match(html(openers, { math: true }), /^<p>/);
 });
 
 void test('completion leaves math alone', () => {
@@ -368,6 +382,28 @@ void test('the Mermaid plugin renders mermaid fences', () => {
   assert.equal(
     renderer.render('```mermaid\nbad\nx', true, true).html.trim(),
     ''
+  );
+});
+
+void test('one Mermaid plugin streams fences of many documents', () => {
+  const mermaid = createMermaidPlugin({
+    render(source: string) {
+      if (source.includes('bad')) throw new Error('parse error');
+      return { svg: `<svg data-test="${source.trim()}"></svg>` };
+    },
+  });
+  const a = createHtmlRenderer({ plugins: { mermaid } });
+  const b = createHtmlRenderer({ plugins: { mermaid } });
+  a.render('```mermaid\ngraph A\nx', true, true);
+  b.render('```mermaid\ngraph B\nx', true, true);
+  // each fence keeps its own last diagram
+  assert.match(
+    a.render('```mermaid\ngraph A\nbad\nx', true, true).html,
+    /data-test="graph A"/
+  );
+  assert.match(
+    b.render('```mermaid\ngraph B\nbad\nx', true, true).html,
+    /data-test="graph B"/
   );
 });
 

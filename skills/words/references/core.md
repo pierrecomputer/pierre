@@ -26,7 +26,8 @@ math as its TeX source. A single `$` follows Pandoc: no space inside the dollars
 and no digit after the closing one, and a `$` that cannot close leaves the
 opening one as text, so `$5 and $10` stays text. A line that starts with `$$`
 and holds no other `$` opens a display block, which ends at a line that ends
-with `$$`. Math SVG uses the system math font and STIX Two Math metrics.
+with `$$` before any blank line; otherwise the line is text. Math SVG uses the
+system math font and STIX Two Math metrics.
 
 Core HTML preserves raw HTML by default. `skipHtml: true` omits raw HTML, but
 Markdown links and images still need URL checks. Sanitize core output before

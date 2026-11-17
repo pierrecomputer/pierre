@@ -14,27 +14,41 @@ export function createMermaidPlugin<Options>(
   pele: MermaidRenderer<Options>,
   options?: Options
 ): MermaidPlugin {
-  // Complete lines of the open fence and their last diagram that parsed.
-  let source = '';
-  let last = '';
+  // The output of each open fence, by its complete lines. One plugin often
+  // serves many documents, so several fences can stream at once.
+  const open = new Map<string, string>();
+  const draw = (code: string): string =>
+    `<div data-markdown="mermaid">${pele.render(code, options).svg}</div>`;
   return {
     render({ code, isIncomplete }: CodeOptions): string | null {
-      if (isIncomplete) {
-        // Open code ends with an added LF. Its partial last line rarely parses.
-        code = code.slice(0, code.lastIndexOf('\n', code.length - 2) + 1);
-        if (code === source) return last;
-        // Another fence must not show the previous diagram.
-        if (!code.startsWith(source)) last = '';
-        source = code;
-        if (code.trim() === '') return '';
+      if (!isIncomplete) {
+        try {
+          return draw(code);
+        } catch {
+          return null;
+        }
       }
-      try {
-        const html = `<div data-markdown="mermaid">${pele.render(code, options).svg}</div>`;
-        if (isIncomplete) last = html;
-        return html;
-      } catch {
-        return isIncomplete ? last : null;
-      }
+      // Open code ends with an added LF. Its partial last line rarely parses.
+      code = code.slice(0, code.lastIndexOf('\n', code.length - 2) + 1);
+      let html = open.get(code);
+      if (html !== undefined) return html;
+      // The longest earlier state of this fence holds its last diagram.
+      let previous: string | undefined;
+      html = '';
+      for (const [key, value] of open)
+        if (code.startsWith(key) && key.length >= (previous?.length ?? 0)) {
+          previous = key;
+          html = value;
+        }
+      if (previous !== undefined) open.delete(previous);
+      if (code.trim() !== '')
+        try {
+          html = draw(code);
+        } catch {}
+      open.set(code, html);
+      // Fences that closed leave their last state behind.
+      if (open.size > 16) open.delete(open.keys().next().value!);
+      return html;
     },
   };
 }

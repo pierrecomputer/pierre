@@ -251,6 +251,15 @@ function patchHtml(
             }
         } else if (at >= committed && firstPending === null)
           firstPending = fragment.firstChild;
+        // Record math SVG sources as the walk below does, so patches keep them.
+        if (html.includes('<svg', at)) {
+          const svgs = fragment.querySelectorAll('svg');
+          for (let open = html.indexOf('<svg', at), index = 0; open >= 0; ) {
+            const end = html.indexOf('</svg>', open) + 6;
+            svgSources.set(svgs[index++], html.slice(open, end));
+            open = html.indexOf('<svg', end);
+          }
+        }
         parent.appendChild(fragment);
         at = html.length;
         return;

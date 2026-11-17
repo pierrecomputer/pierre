@@ -20,6 +20,8 @@ import type {
   CodeHighlighterSession,
   CodeHighlightUpdate,
   HtmlOptions,
+  MermaidPlugin,
+  PluginConfig,
 } from './types';
 
 /** Changed lines of the open code fence, for the DOM renderer. */
@@ -106,6 +108,18 @@ function hookHtml(html: unknown): string {
     throw new TypeError('HTML hooks must return strings');
   return html;
 }
+
+/** The plugin that renders code blocks of `language`, if any. */
+const rendererFor = (
+  plugins: PluginConfig | undefined,
+  language: string
+): Pick<MermaidPlugin, 'render'> | undefined =>
+  (language === 'mermaid' ? plugins?.mermaid : undefined) ??
+  plugins?.renderers?.find((renderer) =>
+    typeof renderer.language === 'string'
+      ? renderer.language === language
+      : renderer.language.includes(language)
+  );
 
 const voidTags = new Set(['br', 'hr', 'img', 'input']);
 
@@ -408,13 +422,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const language =
         open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
       const number = index++;
-      const custom =
-        (language === 'mermaid' ? options.plugins?.mermaid : undefined) ??
-        options.plugins?.renderers?.find((renderer) =>
-          typeof renderer.language === 'string'
-            ? renderer.language === language
-            : renderer.language.includes(language)
-        );
+      const custom = rendererFor(options.plugins, language);
       if (custom !== undefined) {
         const code = decodeHtml(content);
         // The leading NUL keeps these keys apart from the highlighter's.
@@ -585,15 +593,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const end = input.indexOf('\0', body);
     const language =
       open === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, open));
-    if (
-      (language === 'mermaid' && options.plugins?.mermaid !== undefined) ||
-      options.plugins?.renderers?.some((renderer) =>
-        typeof renderer.language === 'string'
-          ? renderer.language === language
-          : renderer.language.includes(language)
-      ) === true
-    )
-      return;
+    if (rendererFor(options.plugins, language) !== undefined) return;
     const plugin = options.plugins?.code;
     const prefix = input.slice(0, start);
     const suffix = input.slice(end + 1 + codeEnd.length);
