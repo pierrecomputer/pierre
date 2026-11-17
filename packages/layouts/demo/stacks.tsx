@@ -26,10 +26,13 @@
 //   `position: relative`, as a utility class does.
 // - `?tabmark=1`: each tab holds a mark with `z-index: 10` at its left edge,
 //   as an app's close mark has.
+// - `?scrollbuttons=1`: each header has `Layout.TabListScrollButton` before
+//   and after its tab list.
 // - `?reset=1`: an app's reset sets the margin and the padding of every
 //   element and pseudo-element to 0, as Tailwind's preflight does.
 // - `?scroll=1`: the tab lists scroll (`overflow-x: auto`), as an app's own
-//   strip does, so a swipe scrolls them; `?gap=1`: they also have a 4 px gap.
+//   strip does, so a swipe scrolls them; `?gap=1`: they also have a 4 px gap;
+//   `?fit=1`: they are as wide as their tabs, up to the room of the header.
 // - `?title=1`: each header shows `Layout.Title` before its tab list, and
 //   "Hide the tab lists" removes the tab lists and keeps the titles.
 import { type JSX, StrictMode, useState, useSyncExternalStore } from 'react';
@@ -67,6 +70,7 @@ const sticky =
 const relativeTabs = params.get('tabclass') === 'relative';
 const tabMarks = params.get('tabmark') === '1';
 const reset = params.get('reset') === '1';
+const scrollButtons = params.get('scrollbuttons') === '1';
 if (relativeTabs || tabMarks || reset) {
   const style = document.createElement('style');
   style.textContent = `.stacks-relative-tab { position: relative; } .stacks-tab-mark { position: absolute; left: 2px; top: 4px; z-index: 10; width: 8px; height: 8px; background: red; }${reset ? ' *, ::before, ::after { margin: 0; padding: 0; }' : ''}`;
@@ -91,6 +95,7 @@ const scrollStyle =
     ? {
         overflowX: 'auto' as const,
         ...(params.get('gap') === '1' && { columnGap: 4 }),
+        ...(params.get('fit') === '1' && { flex: '0 1 auto' }),
       }
     : undefined;
 
@@ -256,6 +261,7 @@ function renderPane(pane: PaneNode): JSX.Element {
       ) : (
         <Layout.Header>
           {pinned && <Layout.MoveHandle />}
+          {scrollButtons && <Layout.TabListScrollButton side="start" />}
           {withTitle ? (
             <>
               <Layout.Title />
@@ -264,6 +270,7 @@ function renderPane(pane: PaneNode): JSX.Element {
           ) : (
             chrome
           )}
+          {scrollButtons && <Layout.TabListScrollButton side="end" />}
           {pinned && <Layout.CloseButton />}
         </Layout.Header>
       )}

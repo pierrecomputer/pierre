@@ -231,6 +231,11 @@ export interface LayoutMessages {
   /** The description of a pinned tab. Default: "Pinned". */
   readonly pinned?: string;
   /**
+   * The name of `Layout.TabListScrollButton`, by the end of the tab list that
+   * it scrolls toward. Default: "Scroll tabs left" and "Scroll tabs right".
+   */
+  readonly scrollTabs?: (values: { readonly side: 'start' | 'end' }) => string;
+  /**
    * The status message during a tab drag into a stack: the tab and a pane of
    * the target stack. Default: "Move Editor into the group of Files".
    */

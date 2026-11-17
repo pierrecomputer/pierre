@@ -33,7 +33,9 @@ const renderPane = () => (
   <>
     <Layout.Header>
       <Layout.MoveHandle />
+      <Layout.TabListScrollButton side="start" />
       <Layout.TabList />
+      <Layout.TabListScrollButton side="end" />
       <Layout.CollapseButton />
       <Layout.ZoomButton />
       <Layout.CloseButton />

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 // `stacks()`, `Layout.TabList`, and `Layout.Tab` (demo/stacks.tsx): the APG
 // tabs pattern, the keys, the focus, and the tab of a pane outside a stack.
@@ -1047,6 +1047,156 @@ test('a stuck selected tab keeps its look, and a stuck tab shows its focus outli
   const sticky = await rows('&reset=1&sticky=1');
   expect(sticky.underline).toBe(plain.underline);
   expect(sticky.outline).toBe(plain.outline);
+});
+
+// The scroll buttons of the header of a pane, and whether each shows.
+async function scrollButtonsOf(page: Page, id: string) {
+  const start = host(page, id).locator('button[aria-label="Scroll tabs left"]');
+  const end = host(page, id).locator('button[aria-label="Scroll tabs right"]');
+  const shows = async (button: typeof start) =>
+    button.evaluate(
+      (element) =>
+        !(element as HTMLButtonElement).disabled &&
+        getComputedStyle(element).visibility !== 'hidden'
+    );
+  return { start, end, shows };
+}
+
+// Press a scroll button and wait for the list to settle.
+async function pressAndSettle(page: Page, button: Locator, list: Locator) {
+  const before = await list.evaluate((element) => element.scrollLeft);
+  await button.click();
+  await expect
+    .poll(() => list.evaluate((element) => element.scrollLeft))
+    .not.toBe(before);
+  await page.waitForTimeout(50);
+}
+
+// The names of the tabs of a list that show whole inside its box.
+const wholeTabs = (page: Page, id: string) =>
+  tabsOf(page, id).evaluate((list) => {
+    const box = list.getBoundingClientRect();
+    return [...list.querySelectorAll('[role="tab"]')]
+      .filter((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return rect.left >= box.left - 1 && rect.right <= box.right + 1;
+      })
+      .map((tab) => tab.getAttribute('data-layouts-tab'));
+  });
+
+test('a scroll button shows only for a tab that does not show on its side, and a list of one tab or of pinned tabs only shows none', async ({
+  page,
+}) => {
+  await page.goto(
+    '/stacks.html?scrollbuttons=1&pinned=1&sticky=room0&gap=1&reset=1&fit=1'
+  );
+  const editors = await scrollButtonsOf(page, 'main');
+  expect(await editors.shows(editors.start)).toBe(false);
+  expect(await editors.shows(editors.end)).toBe(false);
+  // A pinned tab alone in its group: no width to scroll, and no button.
+  await command(page, 'move', 'main', 'util', 'bottom');
+  await expect(tabsOf(page, 'main').getByRole('tab')).toHaveCount(1);
+  const lone = await scrollButtonsOf(page, 'main');
+  expect(
+    await tabsOf(page, 'main').evaluate(
+      (list) => list.scrollWidth - list.clientWidth
+    )
+  ).toBe(0);
+  expect(await lone.shows(lone.start)).toBe(false);
+  expect(await lone.shows(lone.end)).toBe(false);
+  // Ten more tabs: the end button shows, and the start button does not.
+  for (let index = 0; index < 10; index += 1)
+    await command(
+      page,
+      'addTab',
+      'docs',
+      { type: 'pane', id: `extra${index}` },
+      undefined,
+      { activate: false }
+    );
+  const many = await scrollButtonsOf(page, 'util');
+  await expect.poll(() => many.shows(many.end)).toBe(true);
+  expect(await many.shows(many.start)).toBe(false);
+});
+
+test('a press on a scroll button shows the next tab that does not show, whole, keeps the focus where it was, and moves nothing else', async ({
+  page,
+}) => {
+  await page.goto('/stacks.html?scrollbuttons=1&scroll=1&gap=1');
+  await addTenTabs(page);
+  const buttons = await scrollButtonsOf(page, 'main');
+  const list = tabsOf(page, 'main');
+  const listBox = await list.boundingBox();
+  const tab = list.getByRole('tab', { name: 'main.ts' });
+  await tab.focus();
+  const before = await wholeTabs(page, 'main');
+  const hidden = await list.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return [...element.querySelectorAll('[role="tab"]')]
+      .find((tab) => tab.getBoundingClientRect().right > box.right + 1)
+      ?.getAttribute('data-layouts-tab');
+  });
+  await buttons.end.click();
+  await expect.poll(() => wholeTabs(page, 'main')).toContain(hidden);
+  expect(await wholeTabs(page, 'main')).not.toEqual(before);
+  await expect(tab).toBeFocused();
+  // The start button shows now, and the list keeps its box.
+  await expect.poll(() => buttons.shows(buttons.start)).toBe(true);
+  expect(await list.boundingBox()).toEqual(listBox);
+  // Presses reach the end, where the end button hides; then back.
+  for (
+    let press = 0;
+    press < 30 && (await buttons.shows(buttons.end));
+    press += 1
+  )
+    await pressAndSettle(page, buttons.end, list);
+  expect(await buttons.shows(buttons.end)).toBe(false);
+  expect(
+    await list.evaluate(
+      (element) =>
+        element.scrollWidth - element.clientWidth - element.scrollLeft
+    )
+  ).toBeLessThan(2);
+  for (
+    let press = 0;
+    press < 30 && (await buttons.shows(buttons.start));
+    press += 1
+  )
+    await pressAndSettle(page, buttons.start, list);
+  expect(await list.evaluate((element) => element.scrollLeft)).toBe(0);
+  expect(await list.boundingBox()).toEqual(listBox);
+});
+
+test('with sticky pinned tabs, the start button shows the tab right after the stuck run', async ({
+  page,
+}) => {
+  await page.goto(
+    '/stacks.html?scrollbuttons=1&pinned=1&sticky=1&gap=1&reset=1'
+  );
+  await addTenTabs(page);
+  const list = tabsOf(page, 'main');
+  await expect(list).toHaveAttribute('data-sticky-pinned', '');
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  const buttons = await scrollButtonsOf(page, 'main');
+  await expect.poll(() => buttons.shows(buttons.start)).toBe(true);
+  const util = await tabBox(page, 'main', 'util.ts');
+  await buttons.start.click();
+  // The tab that comes into view starts after the stuck run and its gap.
+  const shown = await list.evaluate((element, runEnd) => {
+    const tabs = [
+      ...element.querySelectorAll('[role="tab"]:not([data-sticky])'),
+    ];
+    const first = tabs.find(
+      (tab) => tab.getBoundingClientRect().right > runEnd + 1
+    );
+    return first === undefined
+      ? null
+      : first.getBoundingClientRect().left - runEnd;
+  }, util.x + util.width);
+  expect(shown).not.toBeNull();
+  expect(shown ?? -1).toBeGreaterThanOrEqual(-1);
 });
 
 test("the layout's canPlace refuses a place of a tab drag once for each target, and allows the others", async ({

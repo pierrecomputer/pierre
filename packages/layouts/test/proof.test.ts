@@ -47,12 +47,14 @@ const BUDGET = {
 // which makes app B 360 brotli bytes smaller, and add the header band, the
 // edge scroll, the drop marker in the top layer, and the backdrop of sticky
 // pinned tabs, which make apps C and E 388 and 382 brotli bytes larger
-// (`DEC-layouts-modular-size-budget`: design ranks above bytes).
+// (`DEC-layouts-modular-size-budget`: design ranks above bytes). The scroll
+// buttons of the owner's next test add `Layout.TabListScrollButton` to app C
+// (663 brotli bytes), and the sticky backdrop's shadow 2 to 11 bytes.
 const APP_BUDGET = {
   'tiled source': { minified: 57_993, brotli: 18_276 },
-  'full set source': { minified: 86_525, brotli: 26_051 },
+  'full set source': { minified: 88_827, brotli: 26_714 },
   'side panel source': { minified: 56_026, brotli: 17_551 },
-  'tab stacks source': { minified: 68_135, brotli: 21_105 },
+  'tab stacks source': { minified: 68_176, brotli: 21_107 },
 } as const;
 
 interface Output {

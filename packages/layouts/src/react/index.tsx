@@ -74,6 +74,11 @@ export {
 } from './parts/chrome';
 export type { PartProps, RenderProp } from './parts/part';
 export {
+  TabListScrollButton,
+  type TabListScrollButtonProps,
+  type TabListScrollButtonState,
+} from './parts/tab-scroll';
+export {
   type StickyPinnedOptions,
   Tab,
   TabList,

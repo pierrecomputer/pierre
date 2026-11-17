@@ -302,6 +302,7 @@ catalog takes as it is:
 | `paneMenu`       | `Layout.MoveHandle` with `arrange()`               | `paneTitle`, `paneId`                                                                                                                     | Arrange Editor                             |
 | `tabs`           | `Layout.TabList`                                   | `paneTitle`, `paneId`                                                                                                                     | Tabs of Editor                             |
 | `pinned`         | The description of a pinned tab                    | (a string)                                                                                                                                | Pinned                                     |
+| `scrollTabs`     | `Layout.TabListScrollButton`                       | `side` (`start` or `end`)                                                                                                                 | Scroll tabs left, Scroll tabs right        |
 | `zoomed`         | Announcement: a zoom                               | `paneTitle`, `paneId`                                                                                                                     | Editor zoomed                              |
 | `restored`       | Announcement: the end of a zoom                    | `paneTitle`, `paneId`                                                                                                                     | Editor restored                            |
 | `closed`         | Announcement: a close                              | `paneTitle`, `paneId`                                                                                                                     | Editor closed                              |
@@ -632,6 +633,20 @@ and another `minRoom` sets another limit. It is off by default. A stuck tab gets
 gestures are, so an app's class on the tab cannot undo them. The tab list must
 be a flex row and the element that scrolls, as in `Layout.Header`, and each
 pinned tab a child of the list, as `Layout.Tab` and its `render` element are.
+
+`<Layout.TabListScrollButton side="start" />` and `side="end"` scroll the tab
+list of their pane toward one end, to the next tab that does not show there: a
+tab that is not stuck and lies outside the list's box after the stuck pinned
+tabs (a tab wider than that part shows when its start does). A press scrolls
+that tab into view inside the list's scroll padding, and takes no focus, as the
+keys of the tab list move through the tabs. With no such tab, the button is
+disabled and hidden and keeps its room, so nothing moves when it shows: a list
+of one tab, or of pinned tabs only, shows no button. Put the buttons beside the
+tab list, or over its ends with the app's fades, and count their width in the
+list's `scroll-padding-inline-start` and `scroll-padding-inline-end`, so a tab
+that scrolls into view is not under them. A button's `--layouts-pinned-width`
+gives the width of the stuck pinned tabs, after which a start button can sit.
+`messages.scrollTabs` names them.
 
 ## Collapsed panes
 

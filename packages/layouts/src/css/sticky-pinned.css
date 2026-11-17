@@ -12,7 +12,9 @@
      own their backgrounds above it, and each tab keeps its own layers, such
      as a close mark, inside it. Its geometry is important, so an app's reset
      of pseudo-elements, such as a margin of 0, cannot give it room in the
-     row: a pseudo-element takes no inline style. */
+     row: a pseudo-element takes no inline style. Its box ends with the last
+     pinned tab, and a shadow covers the gap after it, so it adds no width
+     to scroll: a list of pinned tabs only does not scroll. */
   .pierre-layouts-tabs[data-sticky-pinned]::before {
     content: '';
     position: sticky !important;
@@ -20,15 +22,13 @@
     z-index: 1;
     flex: none !important;
     align-self: stretch !important;
-    width: calc(
-      var(--layouts-pinned-width) + var(--layouts-pinned-gap, 0px)
-    ) !important;
+    width: var(--layouts-pinned-width) !important;
     margin: 0
-      calc(
-        -1 * var(--layouts-pinned-width) - 2 * var(--layouts-pinned-gap, 0px)
-      )
-      0 0 !important;
+      calc(-1 * var(--layouts-pinned-width) - var(--layouts-pinned-gap, 0px)) 0
+      0 !important;
     background: var(--layouts-pane-background, #fff);
+    box-shadow: var(--layouts-pinned-gap, 0) 0 0 0
+      var(--layouts-pane-background, #fff);
   }
 
   .pierre-layouts-tabs[data-sticky-pinned] > * {
