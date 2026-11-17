@@ -116,13 +116,11 @@
             (br $name)))
         (br_if $attrsDone (i32.eq (local.get $q) (local.get $p)))
         (local.set $p (local.get $q))
-        ;; optional spacechar* '=' spacechar* value
         (local.set $q (call $skipWs (local.get $p) (local.get $end)))
         (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
               (i32.eq (i32.load8_u (local.get $q)) (i32.const "=")))
           (then
             (local.set $q (call $skipWs (i32.add (local.get $q) (i32.const 1)) (local.get $end)))
-            ;; attributevalue = unquoted | 'single' | "double"
             (if (i32.ge_u (local.get $q) (local.get $end))
               (then
                 (global.set $tagAtEnd (i32.const 1))
@@ -173,10 +171,9 @@
     (if (i32.ne (i32.load8_u (local.get $p)) (i32.const ">")) (then (return (i32.const 0))))
     (i32.add (local.get $p) (i32.const 1)))
 
-  ;; Bits for the constructs whose closer is known to be absent from the rest
-  ;; of the inline content: comment 1, processing instruction 2, CDATA 4,
-  ;; declaration 8. A later opener of the same kind searches a suffix of the
-  ;; failed range, so it fails at once. The inline scan clears this per leaf.
+  ;; Constructs whose closer is missing from the rest of the inline content:
+  ;; comment 1, processing instruction 2, CDATA 4, declaration 8. A later opener
+  ;; of the same kind would search a suffix of the failed range. Reset per leaf.
   (global $htmlNoClose (mut i32) (i32.const 0))
 
   ;; The position past the first $n-byte sequence $seq (packed little-endian)
@@ -200,8 +197,7 @@
         (global.set $htmlNoClose (i32.or (global.get $htmlNoClose) (local.get $kind)))))
     (i32.const 0))
 
-  ;; A complete raw HTML construct starting at `<`, or 0. Handles tags,
-  ;; comments, processing instructions, declarations and CDATA.
+  ;; The end of a complete raw HTML construct starting at `<`, or 0.
   (func $scanHtmlAny (param $p i32) (param $end i32) (result i32)
     (local $c i32)
     (local $q i32)

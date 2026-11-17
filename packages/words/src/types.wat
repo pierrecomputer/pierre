@@ -1,6 +1,5 @@
 (module
-  ;; Block analysis writes one flat record stream; rendering walks it once.
-  ;; A record is
+  ;; Record layout:
   ;;
   ;;   [0]  type (u8, $Blk)      [1]  flags (u8, $F)
   ;;   [2]  line-array offset (u16)
@@ -10,17 +9,11 @@
   ;;        (table alignments, link reference definition title and label)
   ;;   [..] nLines * {beg u32, end u32}
   ;;
-  ;; A descriptor can cover contiguous LF-separated source lines. Paragraphs
-  ;; retain their last physical line for table conversion; joinedLines marks
-  ;; records that cannot use single-line inline rendering merely from nLines.
-  ;;
-  ;; `size` makes the stream walkable without knowing any type's layout, and
-  ;; keeping the variable-length part *before* the lines means dropping
-  ;; trailing lines never moves anything. A code or HTML line's `end` carries
-  ;; the number of virtual spaces a partially consumed tab left in front of it
-  ;; in its top two bits, which limits the input to 1 GiB (the output would
-  ;; pass the wasm32 ceiling long before that). Other lines start at their
-  ;; first byte that is not a space or tab, so their top bits are zero.
+  ;; A line descriptor can cover several LF-separated source lines.
+  ;; Paragraphs keep their last physical line for table conversion.
+  ;; The top two bits of a code or HTML line's `end` hold the virtual spaces
+  ;; left by a partly consumed tab. This limits input to 1 GiB. Other lines
+  ;; have zero top bits.
   (const $R.header 24)
   (const $R.line 8)
   (const $R.nLines 16)     ;; u32 line/range count, not limited to 65535
@@ -47,12 +40,14 @@
     "footnote"  ;; container, data = assigned number; extra as for linkdef
   )
 
-  ;; Record flags.
+  ;; Warning: $F.math shares a bit with $F.task. Check the block type first:
+  ;; $F.task is for list items, $F.math for code records.
   (const $F.opener 1)
   (const $F.closer 2)
   (const $F.loose 4)
   (const $F.fenced 8)
   (const $F.task 16)
+  (const $F.math 16) ;; a code record from a `$$` fence
   (const $F.taskDone 32)
   (const $F.joinedLines 64) ;; a paragraph descriptor contains multiple physical lines
   (const $F.plainInline 128) ;; block scanning proved literal HTML content
@@ -62,9 +57,7 @@
   (const $Nest 250)        ;; CommonMark container-nesting limit
   (const $MaxTableAutoCells 524288)
 
-  ;; Container stack entry (see $mem.container): 24 bytes so 250 levels fill
-  ;; 6 KB and the same region can hold the inline opener/bracket state after
-  ;; analysis finishes.
+  ;; Container stack entry (see $mem.container)
   (const $CS.size 24)
   (const $CS.type 0)
   (const $CS.ch 1)
@@ -74,7 +67,6 @@
   (const $CS.line 12)
   (const $CS.children 16)
 
-  ;; Container flags, and the masks that clear them.
   (const $C.lastLineBlank 1)
   (const $C.lastChildEndsBlank 2)
   (const $C.blankPending 4) ;; a block inside one of the list's items ended blank
@@ -82,7 +74,6 @@
   (const $C.clearLastLineBlank 254)
   (const $C.clearLastChildEndsBlank 253)
 
-  ;; Table column alignment.
   (const $A.none 0)
   (const $A.left 1)
   (const $A.center 2)

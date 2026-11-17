@@ -112,7 +112,6 @@
                 (i32.or (call $isWhiteCp (local.get $cp)) (call $isPunctCp (local.get $cp))))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))
-    ;; no underscores in the last two segments of the domain
     (if (i32.or (local.get $uscore1) (local.get $uscore2))
       (then
         (global.set $wwwRejectBefore (local.get $prevSeg))
@@ -120,9 +119,8 @@
     (select (i32.sub (local.get $i) (local.get $p)) (i32.const 0)
       (i32.or (local.get $allowShort) (local.get $np))))
 
-  ;; Mark the URL that starts at $beg, with its domain at $host, and return
-  ;; its end, or 0 when it is none. $www is 1 for a bare `www.` domain, which
-  ;; needs a second segment and something after `www.`, and gets `http://`.
+  ;; Mark the URL at $beg (domain at $host); returns its end or 0. A bare
+  ;; `www.` domain ($www=1) needs a second segment and gets `http://`.
   (func $urlAutolink (param $beg i32) (param $host i32) (param $end i32) (param $www i32) (result i32)
     (local $n i32)
     (local.set $n (call $checkDomain (local.get $host) (local.get $end) (i32.eqz (local.get $www))))
@@ -193,8 +191,7 @@
       (br_if $no (i32.eqz (i32.or (i64.eq (local.get $w) (i64.const "http:"))
         (i32.or (i64.eq (local.get $w) (i64.const "https:"))
           (i64.eq (local.get $w) (i64.const "ftp:"))))))
-      ;; The host starts with a letter or digit. Past ASCII that is any
-      ;; character other than whitespace or punctuation.
+      ;; the host starts with a letter, digit, or non-ASCII non-space non-punct
       (local.set $n (i32.load8_u offset=3 (i32.add (local.get $base) (local.get $p))))
       (br_if $no (if (result i32) (i32.lt_u (local.get $n) (i32.const 0x80))
         (then (i32.eqz (call $isAlnum (local.get $n))))
@@ -241,7 +238,6 @@
                   (i32.or (enum.get $Mk.emph) (i32.const 0x5f0000)))))
               (local.set $beg (i32.load offset=$M.beg (local.get $m)))
               (local.set $k (i32.sub (local.get $k) (i32.const 1)))
-              ;; the end of the mark before it, read from the previous slot
               (local.set $stop (select
                 (i32.load offset=$M.end (i32.sub (local.get $m) (i32.const $M.size)))
                 (i32.const 0) (local.get $k)))

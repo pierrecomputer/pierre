@@ -5,7 +5,7 @@ import test from 'node:test';
 import { init } from '../dist/core.js';
 
 const wasm = new WebAssembly.Module(
-  readFileSync(new URL('../dist/md.wasm', import.meta.url))
+  readFileSync(new URL('../dist/words.wasm', import.meta.url))
 );
 const dec = new TextDecoder();
 

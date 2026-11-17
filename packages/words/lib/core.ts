@@ -29,7 +29,9 @@ type Options = AnsiOptions &
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
-const maxInput = 2 ** 30 - 2 * pageSize;
+// `$mem.input` in src/memory.wat: the input follows four pages of tables.
+const inputAt = 4 * pageSize;
+const maxInput = 2 ** 30 - inputAt - pageSize;
 
 // `$mem.idPrefix` in src/memory.wat, and the room it has.
 const idPrefixAt = 61440;
@@ -140,7 +142,7 @@ class Renderer {
         this.grow(Math.min(written + (end - read) * 3, maxInput + 1) + 8192);
         const next = enc.encodeInto(
           end - read === input.length ? input : input.slice(read, end),
-          this.buffer.subarray(pageSize + written, pageSize + maxInput + 1)
+          this.buffer.subarray(inputAt + written, inputAt + maxInput + 1)
         );
         written += next.written;
         if (next.read < end - read || written > maxInput) throw tooLarge();
@@ -153,7 +155,7 @@ class Renderer {
       // growing detaches the old buffer, so copy an aliasing input first
       if (input.buffer === this.memory.buffer) input = input.slice();
       this.grow(input.length + 8192);
-      this.buffer.set(input, pageSize);
+      this.buffer.set(input, inputAt);
       inputLength = input.length;
     }
     this.dv.setUint8(0, mode);
@@ -164,6 +166,10 @@ class Renderer {
         (options?.boundary === true ? 8 : 0) |
         (mode === 1 && typeof input !== 'string' ? 32 : 0) |
         (options?.incomplete === true ? 64 : 0)
+    );
+    this.dv.setUint8(
+      31,
+      (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
     const format = options?.format;
@@ -196,7 +202,7 @@ class Renderer {
       true
     );
     // the NUL sentinel and the slack the SIMD scans read into
-    this.buffer.fill(0, pageSize + inputLength, pageSize + inputLength + 32);
+    this.buffer.fill(0, inputAt + inputLength, inputAt + inputLength + 32);
     try {
       this.wasmRender();
     } finally {
@@ -216,7 +222,7 @@ class Renderer {
   }
 
   grow(len: number) {
-    const needed = 1 + Math.ceil(len / pageSize);
+    const needed = inputAt / pageSize + Math.ceil(len / pageSize);
     if (needed > this.pages) {
       this.memory.grow(needed - this.pages);
       this.bindMemory();
@@ -263,7 +269,11 @@ export function renderToHtml(
 }
 
 export function renderToAnsi(input: Input, options?: AnsiOptions): Uint8Array {
-  return shared.render(input, 1, { width: options?.width }).output;
+  return shared.render(input, 1, {
+    width: options?.width,
+    cjk: options?.cjk,
+    math: options?.math,
+  }).output;
 }
 
 /**
@@ -278,6 +288,7 @@ export function createHtmlSession(): {
   let offset = 0;
   let definitions = false;
   let incomplete: boolean | undefined;
+  let extensions: number | undefined;
   let flags: number | undefined;
   let idPrefix: string | undefined;
   let result: InternalHtmlUpdate | undefined;
@@ -301,12 +312,13 @@ export function createHtmlSession(): {
     render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
-      // A missing option and `false` are the same mode.
       const wanted = options?.incomplete === true;
-      // The HTML renderer asks for its final markup with a private option.
+      const ext =
+        (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);
       const form = options?.[format];
       const sameMode =
         incomplete === wanted &&
+        extensions === ext &&
         flags === form?.flags &&
         idPrefix === form?.idPrefix;
       if (input === previous && sameMode && result != null) return result;
@@ -321,6 +333,7 @@ export function createHtmlSession(): {
         const appended = input.slice(previous.length);
         if (
           !paragraphSyntax.test(appended) &&
+          ((ext & 2) === 0 || !appended.includes('$')) &&
           (!paragraph.links || !/[()]/.test(appended)) &&
           !/www\./i.test(previous.slice(-3) + appended)
         ) {
@@ -461,6 +474,8 @@ export function createHtmlSession(): {
       const renderOptions = {
         skipHtml: true,
         incomplete: wanted,
+        cjk: (ext & 1) !== 0,
+        math: (ext & 2) !== 0,
         boundary: true,
         format: form,
       };
@@ -490,6 +505,7 @@ export function createHtmlSession(): {
       offset = nextOffset;
       previous = input;
       incomplete = wanted;
+      extensions = ext;
       flags = form?.flags;
       idPrefix = form?.idPrefix;
       const completedHtml = stable;

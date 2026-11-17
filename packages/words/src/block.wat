@@ -10,8 +10,8 @@
   ;; The open container spine. Level 0 is the document; levels 1..$sp are the
   ;; entries in $mem.container; level $sp+1 is the open leaf, when there is one.
   (global $sp (mut i32) (i32.const 0))
-  ;; The entry of level $sp. Every push sets it from $sp, so it is valid
-  ;; whenever $sp is not zero and needs no reset between renders.
+  ;; The entry of level $sp. Valid whenever $sp is not zero; every push sets
+  ;; it, so it needs no reset between renders.
   (global $top (mut i32) (i32.const 0))
   (global $leaf (mut i32) (i32.const 0))     ;; $Blk of the open leaf, or none
   (global $tableHead (mut i32) (i32.const 0))
@@ -38,8 +38,8 @@
     (i32.add (i32.const $mem.container)
       (i32.mul (i32.sub (local.get $i) (i32.const 1)) (i32.const $CS.size))))
 
-  ;; Append the current line to the open leaf, invalidating any literal proof
-  ;; because this additional content has not passed the whole-run classifier.
+  ;; Append the current line to the open leaf. Clears the literal proof: this
+  ;; line has not passed the whole-run classifier.
   (func $addLine
     (local $beg i32)
     (local $end i32)
@@ -63,8 +63,7 @@
         (if (i32.gt_s (local.get $missing) (i32.const 0))
           (then (global.set $tableAutoCells
             (i32.add (global.get $tableAutoCells) (local.get $missing)))))))
-    ;; HTML can retain an unindented LF-separated fenced block as one input
-    ;; span. ANSI keeps individual lines so it can reapply their prefixes.
+    ;; HTML may keep a fenced body as one span; ANSI keeps lines for prefixes.
     (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
       (then
         (if (i32.and
@@ -92,8 +91,6 @@
       (i32.add (i32.load offset=$R.nLines (local.get $r)) (i32.const 1)))
     (call $recGrow (local.get $r) (i32.const $R.line)))
 
-  ;; Add the code lines from $p to $end. HTML keeps an LF-separated span as one
-  ;; range; ANSI keeps each line so it can reapply prefixes.
   (func $addCodeLines (param $p i32) (param $end i32)
     (global.set $pos (local.get $p))
     (global.set $lineEnd (local.get $end))
@@ -106,11 +103,10 @@
           (br_if $line (i32.lt_u (global.get $lineEnd) (local.get $end)))))
       (else (call $addLine))))
 
-  ;; Unindented top-level fences need no per-line container bookkeeping. Add
-  ;; their body up to a line that may close the fence; a closing line is
-  ;; consumed here too. A tab before a fence byte stops the body so ordinary
-  ;; scanning measures it. A line ending in CR gets its own range, so
-  ;; rendering still normalizes the line ending.
+  ;; Add an unindented top-level fence body up to a line that may close it,
+  ;; and consume a closing line. A tab before a fence byte stops the body so
+  ;; ordinary scanning measures it. A line ending in CR gets its own range so
+  ;; rendering still normalizes it.
   (func $tryCodeRun (result i32)
     (local $start i32)
     (local $stop i32)
@@ -139,13 +135,17 @@
             (return (i32.const 1))))
         (local.set $line (call $lineStartBefore (local.get $stop) (local.get $p)))
         (local.set $end (call $findLineEnd (local.get $stop)))
-        (local.set $q (call $runEnd (local.get $line) (local.get $stop) (i32.const 32)))
-        (if (i32.eq (local.get $q) (local.get $stop))
-          (then
-            (if (i32.le_u (i32.sub (local.get $stop) (local.get $line)) (i32.const 3))
-              (then (br_if $found
-                (local.tee $close (call $closesFence (local.get $stop) (local.get $end)))))))
-          (else (br_if $found (i32.eq (i32.load8_u (local.get $q)) (i32.const 9)))))
+        (if (i32.eq (global.get $codeFenceCh) (i32.const "$"))
+          (then (br_if $found
+            (local.tee $close (call $mathFenceEnd (local.get $line) (local.get $end)))))
+          (else
+            (local.set $q (call $runEnd (local.get $line) (local.get $stop) (i32.const 32)))
+            (if (i32.eq (local.get $q) (local.get $stop))
+              (then
+                (if (i32.le_u (i32.sub (local.get $stop) (local.get $line)) (i32.const 3))
+                  (then (br_if $found
+                    (local.tee $close (call $closesFence (local.get $stop) (local.get $end)))))))
+              (else (br_if $found (i32.eq (i32.load8_u (local.get $q)) (i32.const 9)))))))
         (local.set $stop (local.get $end))
         (br $scan)))
     ;; the body holds the lines before the stopping line or EOF, without the
@@ -155,10 +155,15 @@
         (i32.eq (i32.load8_u (i32.sub (local.get $line) (i32.const 1))) (i32.const 10))))))
     (if (local.get $close)
       (then
+        ;; $close is 1 for a code fence, and the closing `$$` of a math block
+        (if (i32.gt_u (local.get $close) (call $skipSpace (local.get $line) (local.get $end)))
+          (then
+            (global.set $pos (local.get $line))
+            (global.set $lineEnd (local.get $close))
+            (call $addLine)))
         (call $closeLeaf)
         (global.set $lineEnd (local.get $end))
         (return (i32.const 1))))
-    ;; zero only when no line was added
     (i32.or (i32.gt_u (local.get $line) (local.get $p)) (i32.ne (local.get $p) (local.get $start))))
 
   ;; One bit per input byte marks possible block starts. Non-ASCII bytes have
@@ -172,8 +177,7 @@
         (i32.shl (i32.shr_u (local.get $ch) (i32.const 5)) (i32.const 2))))
       (local.get $ch)) (i32.const 1)))
 
-  ;; A root heading is already complete. Write its final record without
-  ;; opening a leaf or running container bookkeeping; zero means no heading.
+  ;; Write a root heading's final record without opening a leaf; 0: no heading.
   (func $rootHeading (param $start i32) (result i32)
     (local $p i32)
     (local $level i32)
@@ -217,8 +221,7 @@
     (global.set $rec (i32.add (local.get $r) (local.get $size)))
     (call $lineAfter (local.get $lineEnd)))
 
-  ;; An unindented root fence needs no container matching or indentation state.
-  ;; Initialize the leaf once, then let the code-run scanner consume its body.
+  ;; Open an unindented root fence, then let $tryCodeRun consume its body.
   (func $rootFence (param $p i32) (result i32)
     (local $n i32)
     (local $r i32)
@@ -240,10 +243,9 @@
     (i32.store offset=12 (local.get $r) (call $trimSpaceBack (global.get $lineEnd) (local.get $beg)))
     (call $lineAfter (global.get $lineEnd)))
 
-  ;; A non-block first byte at an empty document spine guarantees a paragraph.
-  ;; Scan first, then reserve its header and one or two unpadded ranges together.
-  ;; The final physical line stays separate for table conversion. No container
-  ;; needs child bookkeeping; store the scan's literal proof on this record.
+  ;; A non-block first byte at an empty spine is always a paragraph: scan the
+  ;; run, then write the record with its literal proof. The last line stays
+  ;; separate for table conversion.
   (func $startPlainParagraphRun (param $start i32) (result i32)
     (local $bounds i64)
     (local $beg i32)
@@ -284,16 +286,13 @@
     (global.set $leafBlank (i32.const 0))
     (call $lineAfter (local.get $end)))
 
-  ;; Append an ordinary paragraph continuation after phase 1 has established
-  ;; $lastMatched and $findFirstNonspace has populated $fns/$blank. Returns 0
-  ;; when phase 2 must still check a possible interrupting block start.
+  ;; Fast path for a paragraph continuation line (needs $lastMatched, $fns and
+  ;; $blank). Returns 0 when phase 2 must check for an interrupting block.
   (func $tryParagraphContinuation (result i32)
     (if (i32.or
           (i32.ne (global.get $leaf) (enum.get $Blk.p))
           (global.get $blank))
       (then (return (i32.const 0))))
-    ;; Block markers, table delimiters, and ordered-list digits retain the
-    ;; full phase-2 precedence. Everything else can only continue the open p.
     (if (call $mayStartBlock (i32.load8_u (global.get $fns)))
       (then (return (i32.const 0))))
     ;; Lazy lines drop their indentation too.
@@ -305,10 +304,9 @@
       (then (call $appendParagraphRun (call $lineAfter (global.get $lineEnd)))))
     (i32.const 1))
 
-  ;; Compact a whole eligible paragraph run, publishing its final two ranges
-  ;; once. The newest physical line stays separate for possible table-header
-  ;; conversion. No allocation occurs during scanning, so descriptor pointers
-  ;; stay valid. Return zero when the lines need the general path.
+  ;; Compact a paragraph run into its final two ranges; the last line stays
+  ;; separate for table-header conversion. Nothing allocates while scanning, so
+  ;; descriptor pointers stay valid. Returns 0 when the general path is needed.
   (func $tryCompactParagraphRun (param $p i32) (result i32)
     (local $n i32)
     (local $last i32)
@@ -362,8 +360,7 @@
       (return (local.get $next)))
     (i32.const 0))
 
-  ;; Consume further unindented lines that cannot interrupt the current
-  ;; top-level paragraph without rebuilding the phase state.
+  ;; Consume unindented lines that cannot interrupt the top-level paragraph.
   (func $appendParagraphRun (param $p i32)
     (local $end i32)
     (if (call $tryCompactParagraphRun (local.get $p)) (then (return)))
@@ -519,8 +516,7 @@
       (i64.extend_i32_u (global.get $lineEnd)))
     (global.set $curLevel (global.get $sp)))
 
-  ;; Close the top container. Callers check that there is one, and that no
-  ;; leaf is open.
+  ;; Close the top container. Callers ensure there is one and no open leaf.
   (func $closeContainer
     (local $e i32)
     (local $t i32)
@@ -541,9 +537,8 @@
           (i32.ne (i32.load offset=$CS.children (local.get $e)) (i32.const 0))
           (i32.le_u (i32.sub (local.get $t) (enum.get $Blk.ul)) (i32.const 2)))))))
 
-  ;; Finalize every block the current line did not match. A leaf that did
-  ;; match stays open, unless a new block starts here ($newBlock): then
-  ;; nothing that was open can stay open.
+  ;; Finalize every block the current line did not match. A matched leaf
+  ;; stays open unless $newBlock is set.
   (func $closeUnmatched (param $newBlock i32)
     (local $n i32)
     (if (global.get $closed) (then (return)))
@@ -558,9 +553,8 @@
         (call $closeContainer)
         (br $l))))
 
-  ;; remove trailing blank lines and, unless $keepSpace, trailing whitespace
-  ;; from the last line, so a hard line break can never sit at the end of a
-  ;; block
+  ;; Remove trailing blank lines and, unless $keepSpace, trailing whitespace,
+  ;; so a block never ends in a hard line break.
   (func $rtrimLines (param $r i32) (param $keepSpace i32)
     (local $n i32)
     (local $line i32)
@@ -612,7 +606,6 @@
     (local $n i32)
     (local $start i32)
     (local.set $start (global.get $pos))
-    ;; Consume a repeated blank line without the walk over every level.
     (if (global.get $idleBlank)
       (then
         (if (i32.ge_u (call $skipSpace (local.get $start) (global.get $lineEnd)) (global.get $lineEnd))
@@ -648,9 +641,8 @@
           (br $l)))
       (global.set $allMatched (i32.const 0)))
     (global.set $lastMatched (i32.sub (local.get $i) (i32.const 1)))
-    ;; A line blank from its start closes any leaf but code or HTML and leaves
-    ;; every matched level open. Below a deep spine, let the next blank line
-    ;; skip the walk; shallow walks are cheap enough to repeat.
+    ;; A fully blank line below a deep spine lets the next blank line skip the
+    ;; walk; shallow walks are cheap enough to repeat.
     (if (i32.and (global.get $blank) (i32.ge_u (global.get $lastMatched) (i32.const 8)))
       (then (global.set $idleBlank (i32.and
         (i32.gt_u (i32.sub (global.get $leaf) (enum.get $Blk.code)) (i32.const 1))
@@ -666,15 +658,29 @@
             (then
               (if (global.get $codeFenceCh)
                 (then
-                  (if (i32.and
-                        (i32.le_u (global.get $indent) (i32.const 3))
-                        (i32.and (i32.lt_u (global.get $fns) (global.get $lineEnd))
-                          (i32.eq (i32.load8_u (global.get $fns)) (global.get $codeFenceCh))))
+                  (if (i32.eq (global.get $codeFenceCh) (i32.const "$"))
                     (then
-                      (if (call $closesFence (global.get $fns) (global.get $lineEnd))
+                      (if (local.tee $n (call $mathFenceEnd (global.get $fns) (global.get $lineEnd)))
                         (then
+                          (if (i32.gt_u (local.get $n) (global.get $fns))
+                            (then
+                              (local.set $e (global.get $lineEnd))
+                              (call $advanceToFns (i32.const 0))
+                              (global.set $lineEnd (local.get $n))
+                              (call $addLine)
+                              (global.set $lineEnd (local.get $e))))
                           (call $closeLeaf)
-                          (return (i32.const 1))))))
+                          (return (i32.const 1)))))
+                    (else
+                      (if (i32.and
+                            (i32.le_u (global.get $indent) (i32.const 3))
+                            (i32.and (i32.lt_u (global.get $fns) (global.get $lineEnd))
+                              (i32.eq (i32.load8_u (global.get $fns)) (global.get $codeFenceCh))))
+                        (then
+                          (if (call $closesFence (global.get $fns) (global.get $lineEnd))
+                            (then
+                              (call $closeLeaf)
+                              (return (i32.const 1))))))))
                   ;; strip up to the opening fence's own indentation
                   (if (local.tee $n (select (global.get $codeFenceOff) (global.get $indent)
                         (i32.lt_u (global.get $codeFenceOff) (global.get $indent))))
@@ -769,7 +775,7 @@
                (block $atx
                 (block $quote
                   (br_table
-                    $atx $stop $stop $stop $stop $stop $stop $hr $list
+                    $atx $fence $stop $stop $stop $stop $stop $hr $list
                     $stop $setext $stop $stop $list $list $list $list $list
                     $list $list $list $list $list $table $stop $html $setext
                     $quote $stop $stop $stop $stop $stop $stop $stop $stop
@@ -832,8 +838,17 @@
               (global.set $codeFenceOff (local.get $markerOff))
               (local.set $save (call $skipSpace (global.get $pos) (global.get $lineEnd)))
               (i32.store offset=8 (global.get $leafRec) (local.get $save))
-              (i32.store offset=12 (global.get $leafRec)
-                (call $trimSpaceBack (global.get $lineEnd) (local.get $save)))
+              (if (i32.eq (global.get $codeFenceCh) (i32.const "$"))
+                (then
+                  ;; A math block has no info string.
+                  (call $recFlag (global.get $leafRec) (i32.const $F.math))
+                  (i32.store offset=12 (global.get $leafRec) (local.get $save))
+                  (if (i32.lt_u (local.get $save) (global.get $lineEnd))
+                    (then
+                      (global.set $pos (local.get $save))
+                      (call $addLine))))
+                (else (i32.store offset=12 (global.get $leafRec)
+                  (call $trimSpaceBack (global.get $lineEnd) (local.get $save)))))
               (global.set $pos (global.get $lineEnd))
               (global.set $skipLine (i32.const 1))
               (br $stop))
@@ -1031,8 +1046,7 @@
     (local $bookE i32)
     (local $level i32)
     (call $findFirstNonspace)
-    ;; last_line_blank bookkeeping, which decides list looseness. First, no
-    ;; matched container ends with a blank line.
+    ;; last_line_blank bookkeeping, which decides list looseness
     (local.set $level (global.get $curLevel))
     (local.set $bookI (select (local.get $level) (global.get $sp)
       (i32.lt_u (local.get $level) (global.get $sp))))
@@ -1046,8 +1060,7 @@
         (local.set $bookI (i32.sub (local.get $bookI) (i32.const 1)))
         (local.set $bookE (i32.add (local.get $bookE) (i32.const $CS.size)))
         (br $book)))
-    ;; A consumed heading, thematic break, table row, or fence is not a blank
-    ;; line.
+    ;; a consumed heading, break, table row or fence is not a blank line
     (if (i32.and (global.get $blank) (i32.eqz (global.get $skipLine)))
       (then
         (if (i32.gt_u (local.get $level) (global.get $sp))

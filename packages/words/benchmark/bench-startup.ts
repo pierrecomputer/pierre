@@ -23,7 +23,7 @@ const repositories = [
     : resolve(flags.candidate),
 ];
 const entries = repositories.map((repo) => {
-  const bytes = readFileSync(repo + '/packages/words/dist/md.wasm');
+  const bytes = readFileSync(repo + '/packages/words/dist/words.wasm');
   return {
     repo,
     resolvedEntry: '',

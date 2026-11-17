@@ -2,15 +2,12 @@
   (import "./memory.wat")
   (import "./scan.wat")
 
-  ;; Nibble classification for the bytes $outText has to escape: NUL, `"`, `&`,
-  ;; `<` and `>`. One swizzle and high-nibble equality classify sixteen bytes.
-  ;; Load this classifier once per writer. Some Wasm backends reconstruct
-  ;; vector immediates inside each iteration instead of retaining a register.
+  ;; Nibble classifier for the bytes $outText escapes: NUL, `"`, `&`, `<`, `>`.
+  ;; Load it once per writer: some backends rebuild vector immediates per loop.
   (data (i32.const $mem.escapeNibbles)
     "\00\ff\02\ff\ff\ff\02\ff\ff\ff\ff\ff\03\ff\03\ff")
 
-  ;; A load-once quote replacement avoids reconstructing its six-byte integer
-  ;; immediate for each occurrence while retaining immediate dispatch otherwise.
+  ;; Loaded once so the six-byte quote replacement is not rebuilt per use.
   (data (i32.const $mem.quoteEscape) "&quot;\00\00")
 
   ;; Regions live above the input, in the order they stop growing:
@@ -98,11 +95,9 @@
       (global.get $scratchCap)))
     (call $rebase (global.get $scratchBase)))
 
-  ;; make room for $n more block-record bytes
   (func $ensureRec (param $n i32)
     (call $ensureGrow (global.get $rec) (local.get $n)))
 
-  ;; make room for $n more output bytes
   (func $ensureOut (param $n i32)
     (call $ensureGrow (global.get $out) (local.get $n)))
 
@@ -155,7 +150,6 @@
       (br_if $l (i32.lt_u (local.get $dst) (local.get $end))))
     (local.get $end))
 
-  ;; Write pooled literals.
   (func $outRaw (param $ptr i32) (param $n i32)
     (call $ensureOut (local.get $n))
     (global.set $out (call $copyAt (global.get $out) (local.get $ptr) (local.get $n))))
@@ -165,7 +159,6 @@
     (i32.store8 (global.get $out) (local.get $c))
     (global.set $out (i32.add (global.get $out) (i32.const 1))))
 
-  ;; copy [$lhs,$rhs) verbatim
   (func $outCopy (param $lhs i32) (param $rhs i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
     (call $ensureOut (i32.sub (local.get $rhs) (local.get $lhs)))
@@ -214,19 +207,15 @@
       (local.set $lhs (local.get $end))
       (br $chunk)))
 
-  ;; Copy escaped text after the caller has reserved the worst-case output.
-  ;; This entry point is what lets scratch-backed callers reserve before they
-  ;; turn their offsets into pointers, without paying for a second check.
-  ;; Processes 16 bytes per step, keeping the write cursor local until done:
-  ;; this reserved loop cannot allocate or call another output writer.
-  ;; Wide loads may read up to 15 bytes past $rhs: always inside a buffer with
-  ;; slack. Wide stores may write up to 15 bytes of garbage past the advanced
-  ;; cursor; later writes overwrite it.
+  ;; Copy escaped text into output the caller already reserved, so scratch-
+  ;; backed callers can reserve before turning offsets into pointers. Wide
+  ;; loads and stores may go up to 15 bytes past $rhs and the cursor, inside
+  ;; the slack; later writes overwrite the garbage.
   (func $outTextReserved (param $lhs i32) (param $rhs i32)
     (global.set $out (call $outTextAt (local.get $lhs) (local.get $rhs) (global.get $out))))
 
-  ;; Return the reserved writer's cursor so compound emitters can keep it local
-  ;; until their closing tag, without publishing intermediate global positions.
+  ;; $outTextReserved at $dst, returning the cursor so callers can keep it local.
+  ;; This loop must not allocate or call another output writer.
   (func $outTextAt (param $lhs i32) (param $rhs i32) (param $dst i32) (result i32)
     (local $c i32)
     (local $mask i32)

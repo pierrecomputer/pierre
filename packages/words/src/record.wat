@@ -4,8 +4,8 @@
   (import "./scan.wat")
   (import "./out.wat")
 
-  ;; The current leaf content is either an immutable input span or a rebuilt
-  ;; scratch span. $rebase refreshes this absolute base when scratch moves.
+  ;; Content is an input span or a rebuilt scratch span. $rebase refreshes
+  ;; the base when scratch moves.
   (global $contentLen (mut i32) (i32.const 0))
   (global $contentBase (mut i32) (i32.const 0))
   (global $contentInputEnd (mut i32) (i32.const 0)) ;; source end, including rebuilt content
@@ -17,7 +17,7 @@
   (func $recNew (param $type i32) (result i32)
     (local $r i32)
     (local.set $r (global.get $rec))
-    ;; test the room here: growing is rare, and the call would cost every record
+    ;; inline check: a call here would cost every record
     (if (i32.gt_u (i32.add (local.get $r) (i32.const $R.header)) (global.get $outCap))
       (then (call $ensureRec (i32.const $R.header))))
     (i64.store (local.get $r) (i64.or
@@ -36,7 +36,6 @@
   (func $recGrow (param $r i32) (param $n i32)
     (i32.store offset=4 (local.get $r) (i32.add (i32.load offset=4 (local.get $r)) (local.get $n))))
 
-  ;; where a record's line array starts: after its type-specific bytes
   (func $recLines (param $r i32) (result i32)
     (i32.add (local.get $r) (i32.load16_u offset=2 (local.get $r))))
 
@@ -52,9 +51,8 @@
   (func $linePad (param $line i32) (result i32)
     (i32.shr_u (i32.load offset=4 (local.get $line)) (i32.const 30)))
 
-  ;; The content of a paragraph or heading, whose lines never carry tab
-  ;; padding. Alias an exact LF-separated input span when possible. Otherwise
-  ;; rebuild the content in scratch with normalized newlines.
+  ;; Paragraph or heading only (no tab padding). Aliases the input span when
+  ;; lines are LF-joined; otherwise rebuilds it in scratch.
   (func $blockContent (param $r i32) (result i32)
     (local $n i32)
     (local $i i32)
@@ -120,8 +118,7 @@
             (i32.store8 (i32.add (local.get $dst) (local.get $total)) (i32.const 10))
             (local.set $total (i32.add (local.get $total) (i32.const 1)))))
         (br $l)))
-    ;; a NUL sentinel keeps bounded lookahead safe; the reserved slack keeps
-    ;; the 16-byte SIMD loads inside memory
+    ;; NUL sentinel for lookahead; slack for 16-byte SIMD loads
     (memory.fill (i32.add (local.get $dst) (local.get $total)) (i32.const 0) (i32.const 32))
     (global.set $contentLen (local.get $total))
     (global.set $scratchUsed (i32.add (local.get $total) (i32.const 32)))

@@ -25,6 +25,7 @@ between updates. Set `isAnimating` to `false` when the stream ends.
 | `caret`                              | None                     | Show a `'block'` or `'circle'` caret while active                     |
 | `onAnimationStart`, `onAnimationEnd` | None                     | Callbacks for the active stream lifecycle                             |
 | `idPrefix`                           | Unique React id plus `-` | Prefix generated footnote ids and their links                         |
+| `math`, `cjk`                        | `false`                  | Math as SVG, and CJK-friendly emphasis                                |
 
 Fades and the caret need `@pierre/words/styles.css`. Fades run only during an
 active stream. Reduced motion and a zero duration disable fades. The callbacks

@@ -3,14 +3,14 @@
   (import "./scan.wat")
   (import "./htmlscan.wat")
 
-  ;; The last successful $entityMatch: its value code (see $entityEncode) and
-  ;; its UTF-8 text in the conversion scratch.
+  ;; The last successful $entityMatch: $entCp is its value code (see
+  ;; $entityEncode); $entVal/$entLen are its UTF-8 text in the scratch.
   (global $entVal (mut i32) (i32.const 0))
   (global $entLen (mut i32) (i32.const 0))
   (global $entCp (mut i32) (i32.const 0))
 
-  ;; Resolve HTML escape spellings directly from their packed bytes. The low
-  ;; word is the name plus semicolon's length, and the high word its code point.
+  ;; Fast path for amp, quot, apos, lt and gt. Returns the length of the name
+  ;; plus `;` in the low word and the code point in the high word, or 0.
   (func $entityEscape (param $p i32) (result i64)
     (local $word i32)
     (local.set $word (i32.load (local.get $p)))
@@ -61,7 +61,7 @@
         (i32.const 0xc2b2ae35)))))
     (i32.xor (local.get $hash) (i32.shr_u (local.get $hash) (i32.const 16))))
 
-  ;; The generated displacement table selects one immutable name/value record.
+  ;; The record slot for $hash in the generated displacement table.
   (func $entitySlot (param $hash i32) (result i32)
     (local $seed i32)
     (local.set $seed (i32.load16_u offset=$mem.entities
@@ -166,9 +166,8 @@
             (i32.shr_u (local.get $v) (i32.const 22)))))))))
     (local.get $n))
 
-  ;; match an entity or numeric character reference at $p (which points at `&`).
-  ;; Returns the number of input bytes consumed, or 0. On success $entVal and
-  ;; $entLen hold the UTF-8 replacement text.
+  ;; Match an entity or numeric character reference at the `&` at $p. Returns
+  ;; the bytes consumed, or 0.
   (func $entityMatch (param $p i32) (param $end i32) (result i32)
     (local $q i32)
     (local $c i32)
@@ -209,7 +208,7 @@
               (br $digit)))
           (if (i32.eqz (local.get $digits)) (then (return (i32.const 0)))))
         (else
-          ;; Exact name validation below also rejects non-alphanumeric bytes.
+          ;; the exact name check below rejects other non-alphanumeric bytes
           (if (i32.eqz (call $isAlpha (i32.load8_u (local.get $q))))
             (then (return (i32.const 0))))
           (local.set $word (call $entityEscape (local.get $q)))

@@ -1274,7 +1274,7 @@ void test('completion stays linear on long runs', () => {
 void test('a render that throws leaves the session unchanged', () => {
   const renderer = init(
     new WebAssembly.Module(
-      readFileSync(new URL('../dist/md.wasm', import.meta.url))
+      readFileSync(new URL('../dist/words.wasm', import.meta.url))
     )
   );
   const session = createHtmlSession();

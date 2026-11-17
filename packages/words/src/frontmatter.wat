@@ -3,12 +3,10 @@
   (import "./scan.wat")
   (import "./out.wat")
 
-  ;; A YAML frontmatter block is `---` on the first line, the document, and a
-  ;; closing `---` or `...` line. It is converted to JSON in the output buffer
-  ;; so the host can hand it straight to JSON.parse; the practical subset is
-  ;; block mappings and sequences, flow collections, quoted and plain scalars,
-  ;; block scalars, and comments. `[` and `{` differ only in bit 5, as do `]`
-  ;; and `}`, so `c | 32` tests both.
+  ;; YAML frontmatter (`---` first line up to a closing `---` or `...` line) is
+  ;; written as JSON for the host's JSON.parse. Subset: block mappings and
+  ;; sequences, flow collections, quoted, plain and block scalars, comments.
+  ;; `[`/`{` and `]`/`}` differ only in bit 5, so `c | 32` tests both.
   (global $ylBeg (mut i32) (i32.const 0))   ;; first non-space byte of the current line
   (global $ylEnd (mut i32) (i32.const 0))
   (global $ylIndent (mut i32) (i32.const 0)) ;; -1 when no content line is left
@@ -86,7 +84,6 @@
     (select (global.get $ylEnd) (local.get $q)
       (i32.lt_u (call $yFind (global.get $ylBeg) (local.get $q) (i32.const "#")) (local.get $q))))
 
-  ;; the current line starts with a `-` item marker
   (func $yIsSeqItem (result i32)
     (i32.and (i32.eq (i32.load8_u (global.get $ylBeg)) (i32.const "-"))
       (i32.or (i32.eq (i32.add (global.get $ylBeg) (i32.const 1)) (global.get $ylEnd))
@@ -336,7 +333,6 @@
         (br $l)))
     (local.get $q))
 
-  ;; [$p, $end) without a trailing ` #` comment
   (func $yTrimComment (param $p i32) (param $end i32) (result i32)
     (local $q i32)
     (local.set $q (call $yFind (local.get $p) (local.get $end) (i32.const "#")))
@@ -484,12 +480,10 @@
         (br $l)))
     (local.get $p))
 
-  ;; A flow collection, rebuilt as JSON rather than copied through. The
-  ;; structure is re-emitted so a malformed collection still parses: stray
-  ;; separators are dropped, a missing value is null, `a: b` inside a sequence
-  ;; is the one-pair mapping YAML says it is, and an unterminated collection
-  ;; is closed. Line breaks are spaces, and `#` after a space starts a comment.
-  ;; Returns the position after the collection.
+  ;; A flow collection, rebuilt as JSON so a malformed one still parses: stray
+  ;; separators are dropped, a missing value is null, `a: b` in a sequence is a
+  ;; one-pair mapping, and an unterminated collection is closed. Returns the
+  ;; position after it.
   (func $yFlow (param $p i32) (param $end i32) (result i32)
     (local $close i32)
     (local $c i32)
@@ -545,7 +539,6 @@
             (local.set $p (call $skipWs (i32.add (local.get $q) (i32.const 1)) (local.get $end)))
             (local.set $seg (call $yFlowItemEnd (local.get $p) (local.get $end))))
           (else (local.set $seg (local.get $p))))
-        ;; an empty value is null
         (call $yValue (local.get $p) (local.get $seg))
         (local.set $p (local.get $seg))
         (if (i32.eqz (local.get $map)) (then (call $outByte (i32.const "}"))))
@@ -627,8 +620,7 @@
     (call $yEscaped (local.get $p) (local.get $end) (i32.const 0))
     (call $outByte (i32.const "\22")))
 
-  ;; Write the quoted scalar that opens at $p as a JSON string, and return the
-  ;; position of its closing quote, or $end.
+  ;; Write the quoted scalar at $p as JSON; return its closing quote or $end.
   (func $yQuoted (param $p i32) (param $end i32) (result i32)
     (local $q i32)
     (local.set $q (call $yQuoteEnd (local.get $p) (local.get $end)))

@@ -1,4 +1,3 @@
-/** Escape text for use in HTML. */
 export function escapeHtml(value: string): string {
   let result = '';
   let from = 0;
@@ -124,7 +123,7 @@ export const isNameCode = (code: number): boolean =>
   code === 95 ||
   (code >= 97 && code <= 122);
 
-/** Find the first changed byte range with native string comparisons before checking its short tail. */
+/** Find the first changed range: native string compares first, then the short tail. */
 export function unchangedEnd(
   a: string,
   b: string,

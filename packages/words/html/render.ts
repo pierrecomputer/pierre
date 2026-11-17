@@ -20,6 +20,8 @@ import type {
   CodeHighlighterSession,
   CodeHighlightUpdate,
   HtmlOptions,
+  MermaidPlugin,
+  PluginConfig,
 } from './types';
 
 /** Changed lines of the open code fence, for the DOM renderer. */
@@ -71,7 +73,7 @@ function groupLines(body: string): string {
     : result;
 }
 
-/** The gutter of an open fence, with its line numbers in the same 64-line groups as the code. Wasm writes it for other blocks. */
+/** The gutter of an open fence, in the same 64-line groups as the code. Wasm writes it for other blocks. */
 function lineNumbers(count: number): string {
   let html = '<span data-markdown="line-numbers" aria-hidden="true">';
   for (let line = 1; line <= count; line += 64) {
@@ -83,7 +85,7 @@ function lineNumbers(count: number): string {
   return html + '</span>';
 }
 
-/** Whether an element filter or hook can rewrite formatted HTML, so output cannot be extended in place. */
+/** Whether a filter or hook can rewrite formatted HTML, so output cannot be extended in place. */
 export const rewritesElements = (options: HtmlOptions): boolean =>
   options.allowedElements !== undefined ||
   options.disallowedElements !== undefined ||
@@ -107,10 +109,26 @@ function hookHtml(html: unknown): string {
   return html;
 }
 
+/** The plugin that renders code blocks of `language`, if any. */
+const rendererFor = (
+  plugins: PluginConfig | undefined,
+  language: string
+): Pick<MermaidPlugin, 'render'> | undefined =>
+  (language === 'mermaid' ? plugins?.mermaid : undefined) ??
+  plugins?.renderers?.find((renderer) =>
+    typeof renderer.language === 'string'
+      ? renderer.language === language
+      : renderer.language.includes(language)
+  );
+
 const voidTags = new Set(['br', 'hr', 'img', 'input']);
 
-/** Whether the formatted tag at `at` is void. Every formatted tag has an attribute after its name. */
-const isVoidAt = (html: string, at: number): boolean =>
+/**
+ * Whether the formatted tag in [at, end) has no closing tag: an HTML void tag
+ * or a self-closing SVG tag. Every formatted tag has an attribute after its name.
+ */
+const isVoidAt = (html: string, at: number, end: number): boolean =>
+  html.charCodeAt(end - 2) === 47 ||
   html.startsWith('br ', at + 1) ||
   html.startsWith('hr ', at + 1) ||
   html.startsWith('img ', at + 1) ||
@@ -140,7 +158,7 @@ function mapElements(
   transform: (html: string) => string
 ): string {
   const expression = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'g');
-  const isVoid = voidTags.has(tag);
+  const voidTag = voidTags.has(tag);
   const open: string[] = [];
   let result = '';
   let cursor = 0;
@@ -151,6 +169,7 @@ function mapElements(
   ) {
     let piece = html.slice(cursor, match.index);
     cursor = expression.lastIndex;
+    const isVoid = voidTag || match[0].endsWith('/>');
     if (match[1] === '' && !isVoid) {
       if (open.length === 0) result += piece;
       else open[open.length - 1] += piece;
@@ -223,7 +242,7 @@ function transformUrls(html: string, options: HtmlOptions): string {
   return from === 0 ? html : result + html.slice(from);
 }
 
-/** Format session output with HTML options. Keeps completed HTML and at most one live highlighter. */
+/** Format session output with HTML options. Keeps at most one live highlighter. */
 export function createHtmlRenderer(options: HtmlOptions = {}) {
   let parser = createHtmlSession();
   // Formatted completed HTML and the Wasm HTML it was formatted from.
@@ -243,6 +262,10 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let pendingSource: HtmlUpdate | undefined;
   let pendingInput: string | undefined;
   let pendingActive = false;
+  // Whether the source ends inside a line. An open fence runs to the end, so
+  // this tells renderers if the last code line is still being written.
+  let partial = false;
+  let pendingPartial = false;
   let pendingCode = -1;
   let pendingHtml = '';
   let pendingParagraph: { body: string } | undefined;
@@ -251,9 +274,10 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let allSlots = false;
   // Raw end, formatted end, and next code index at fences in the current pending output.
   let pendingFences: number[] = [];
-  // Completed fence HTML by language and code. Resets keep only the fences they reuse.
-  let codeCache = new Map<string, string>();
-  let oldCodeCache = new Map<string, string>();
+  // Completed fence output by language and code: highlighted HTML, or what a
+  // renderer returned. Resets keep only the fences they reuse.
+  let codeCache = new Map<string, string | null>();
+  let oldCodeCache = new Map<string, string | null>();
   // The open fence, the formatted HTML around it, and its previous escaped and decoded code.
   let fenceKey = 0;
   let fence:
@@ -282,7 +306,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     session?.dispose();
   };
 
-  /** Drop all state after an option change or a hook error, so the next render starts clean. */
+  /** Drop all state after an option change or a hook error. */
   const resetState = (): void => {
     dispose();
     parser = createHtmlSession();
@@ -296,6 +320,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     pendingHtml = '';
     pendingParagraph = undefined;
     pendingActive = false;
+    pendingPartial = false;
     pendingCode = -1;
     pendingFence = undefined;
     pendingFences = [];
@@ -305,14 +330,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   };
 
   /**
-   * Finish session HTML. Wasm wrote the markup. This runs what needs the
-   * host: element filters, the URL hook, code plugins, and element hooks.
-   * Code blocks for a plugin or filter, and the open fence of an active
-   * stream, come in slots, each after a NUL: the state and language, the
-   * markup before `<code>`, the `<code>` tag, and the escaped code. The state
-   * is "0" for a closed block, "1" for an open fence, and "2" for an open
-   * fence of an active stream. An open fence has no gutter yet. Without
-   * `slots` the input holds no such block, which saves the search.
+   * Run the host-only steps on session HTML: element filters, the URL hook,
+   * code plugins, and element hooks. Code blocks for a plugin or filter, and
+   * the open fence of an active stream, come in slots, each after a NUL: the
+   * state ("0" closed, "1" open fence, "2" open fence of an active stream) and
+   * language, the markup before `<code>`, the `<code>` tag, and the escaped
+   * code. An open fence has no gutter yet. Without `slots` there is no such
+   * block, so the search is skipped.
    */
   const format = (
     input: string,
@@ -347,7 +371,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           const closing = html.charCodeAt(at + 1) === 47;
           end = html.indexOf('>', at) + 1;
           if (dropped > 0) {
-            if (!closing) dropped += isVoidAt(html, at) ? 0 : 1;
+            if (!closing) dropped += isVoidAt(html, at, end) ? 0 : 1;
             else if (--dropped === 0) from = end;
             continue;
           }
@@ -362,7 +386,11 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           if (closing && options.unwrapDisallowed !== true) continue;
           result += html.slice(from, at);
           from = end;
-          if (options.unwrapDisallowed !== true && !voidTags.has(tag))
+          if (
+            options.unwrapDisallowed !== true &&
+            !voidTags.has(tag) &&
+            html.charCodeAt(end - 2) !== 47
+          )
             dropped = 1;
         }
         html = dropped > 0 ? result : result + html.slice(from);
@@ -399,17 +427,30 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const language =
         open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
       const number = index++;
-      const custom = options.plugins?.renderers?.find((renderer) =>
-        typeof renderer.language === 'string'
-          ? renderer.language === language
-          : renderer.language.includes(language)
-      );
+      const custom = rendererFor(options.plugins, language);
       if (custom !== undefined) {
-        html += hookHtml(
-          custom.render({ code: decodeHtml(content), language, isIncomplete })
-        );
-        fences?.push(cursor, html.length, index);
-        continue;
+        const code = decodeHtml(content);
+        // The leading NUL keeps these keys apart from the highlighter's.
+        const key = '\0' + language + '\0' + code;
+        let block = isIncomplete
+          ? undefined
+          : codeCache.has(key)
+            ? codeCache.get(key)
+            : oldCodeCache.get(key);
+        if (block === undefined)
+          block = custom.render({
+            // Open code ends with an added LF. Drop it from a partial line.
+            code: isIncomplete && partial ? code.slice(0, -1) : code,
+            language,
+            isIncomplete,
+          });
+        if (!isIncomplete) codeCache.set(key, block);
+        // A renderer that returns null shows the code block.
+        if (block !== null) {
+          html += hookHtml(block);
+          fences?.push(cursor, html.length, index);
+          continue;
+        }
       }
       const plugin = options.plugins?.code;
       // Only a different open fence replaces the live highlighter.
@@ -517,7 +558,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     return [html, index];
   };
 
-  /** Move already formatted pending fences into completed output without highlighting them again. */
+  /** Move formatted pending fences into completed output without highlighting them again. */
   const formatAddition = (
     input: string,
     firstCode: number,
@@ -546,8 +587,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
 
   /**
    * Format the last open fence as changed lines when no hook or filter needs
-   * its full element. The HTML around the fence is reused while it is unchanged,
-   * so this also works for a fence in a list or quote.
+   * its full element. Reuses the HTML around it, so this works in lists and quotes too.
    */
   const formatFence = (
     input: string,
@@ -563,14 +603,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const end = input.indexOf('\0', body);
     const language =
       open === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, open));
-    if (
-      options.plugins?.renderers?.some((renderer) =>
-        typeof renderer.language === 'string'
-          ? renderer.language === language
-          : renderer.language.includes(language)
-      ) === true
-    )
-      return;
+    if (rendererFor(options.plugins, language) !== undefined) return;
     const plugin = options.plugins?.code;
     const prefix = input.slice(0, start);
     const suffix = input.slice(end + 1 + codeEnd.length);
@@ -759,17 +792,22 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       active = false
     ): RenderedHtmlUpdate {
       try {
+        const wasPartial = partial;
+        const last = source.charCodeAt(source.length - 1);
+        partial = incomplete && last !== 10 && last !== 13;
         const controls = controlFlags(options.controls);
         const plugins = options.plugins;
-        // Wasm writes the markup. Plugins and filters need code blocks in
-        // slots, and a URL hook needs unchecked URLs.
+        // Plugins and filters need code blocks in slots.
         allSlots =
           plugins?.code !== undefined ||
+          plugins?.mermaid !== undefined ||
           (plugins?.renderers?.length ?? 0) > 0 ||
           options.allowedElements !== undefined ||
           options.disallowedElements !== undefined;
         const sessionOptions: InternalSessionOptions = {
           incomplete,
+          cjk: options.cjk,
+          math: options.math,
           [formatKey]: {
             flags:
               formatFlags.on |
@@ -784,7 +822,6 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         };
         const update = parser.render(source, sessionOptions);
         const change = (update as InternalHtmlUpdate)[delta];
-        // Without slots in the output, no step has to search for them.
         const slots =
           allSlots || (update as InternalHtmlUpdate)[formatKey] === true;
         const fenceDelta = typeof change === 'object' ? change : undefined;
@@ -792,6 +829,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         if (
           update === previousUpdate &&
           active === pendingActive &&
+          partial === wasPartial &&
           result !== undefined
         )
           return result;
@@ -832,9 +870,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             oldCodeCache = codeCache;
             codeCache = new Map();
           }
-          // Link definitions reset every update. Keep whole top-level blocks
-          // that did not change since the previous update as completed HTML,
-          // so only the changing tail is formatted and patched.
+          // Link definitions reset every update. Keep unchanged top-level
+          // blocks as completed HTML, so only the changing tail is formatted.
           let cut = Math.max(update.stable.length, stableRaw.length);
           if (update.reset && cut === stableRaw.length) {
             const previousRaw =
@@ -858,7 +895,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               end = raw.indexOf('>', at) + 1;
               if (end === 0 || end >= same) break;
               if (raw.charCodeAt(at + 1) === 47) depth--;
-              else if (!isVoidAt(raw, at)) depth++;
+              else if (!isVoidAt(raw, at, end)) depth++;
               if (depth === 0 && raw.charCodeAt(end) === 10) cut = end + 1;
             }
           }
@@ -931,6 +968,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             if (
               pendingInput !== pendingRaw ||
               pendingActive !== active ||
+              pendingPartial !== partial ||
               pendingCode !== nextCode
             ) {
               const uses = liveUses;
@@ -951,6 +989,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               if (liveUses === uses) dispose();
               pendingInput = pendingRaw;
               pendingActive = active;
+              pendingPartial = partial;
               pendingCode = nextCode;
             }
           }

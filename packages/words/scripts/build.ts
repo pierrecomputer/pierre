@@ -38,7 +38,7 @@ const WIDE_RANGES =
   '1FACD-1FADC,1FADF-1FAEA,1FAEF-1FAF8,20000-2FFFD,30000-3FFFD';
 
 const start = performance.now();
-const source = new URL('../src/md.wat', import.meta.url);
+const source = new URL('../src/words.wat', import.meta.url);
 const path = source.pathname;
 const enumMap: EnumMap = new Map();
 const bitsetMap: BitsetMap = new Map();
@@ -114,7 +114,7 @@ table('entity-table', (tableBase, inner) => {
     throw new Error('entity-table sizes differ from $entitySlot');
   const entities: Record<string, string> = {};
   for (const line of fs
-    .readFileSync(new URL('../src/entities.txt', import.meta.url), 'utf-8')
+    .readFileSync(new URL('../tables/entities.txt', import.meta.url), 'utf-8')
     .split('\n')) {
     if (line === '' || line.startsWith('# ')) continue;
     const i = line.indexOf(' ');
@@ -362,8 +362,8 @@ table('unicode-fold-table', (base) => {
   return bytes;
 });
 
-// (unicode-range-tables <base> <end> <table> <tableEnd> ...): three sets of
-// code points, read by $isPunctCp and $cpWidth. The P and S general categories
+// (unicode-range-tables <base> <end> <table> <tableEnd> ...): four sets of
+// code points, read by $isPunctCp, $cpWidth and $isCjkCp. The P and S general categories
 // from U+0080, the code points that take no terminal cell (combining marks,
 // format characters, conjoining jamo), and the wide ones. The binary stores
 // them packed: per range, a varint with the distance from the end of the
@@ -371,6 +371,10 @@ table('unicode-fold-table', (base) => {
 // a set. $unpackRanges expands each set into its table at instantiation.
 table('unicode-range-tables', (_, inner) => {
   const room = inner.trim().split(/\s+/).slice(2).map(Number);
+  const wide = WIDE_RANGES.split(',').map((r): [number, number] => {
+    const [lo, hi] = r.split('-');
+    return [parseInt(lo, 16), parseInt(hi ?? lo, 16)];
+  });
   const sets = [
     codePointRanges(0x80, (char) => /[\p{P}\p{S}]/u.test(char)),
     codePointRanges(
@@ -379,10 +383,19 @@ table('unicode-range-tables', (_, inner) => {
         cp !== 0xad &&
         (/[\p{Mn}\p{Me}\p{Cf}]/u.test(char) || (cp >= 0x1160 && cp <= 0x11ff))
     ),
-    WIDE_RANGES.split(',').map((r) => {
-      const [lo, hi] = r.split('-');
-      return [parseInt(lo, 16), parseInt(hi ?? lo, 16)];
-    }),
+    wide,
+    // CJK for the cjk option, as markdown-it-cjk-friendly defines it: East
+    // Asian Wide, Fullwidth, or Halfwidth without emoji, and Hangul.
+    codePointRanges(
+      0x1100,
+      (char, cp) =>
+        /\p{sc=Hangul}/u.test(char) ||
+        (!/\p{Emoji_Presentation}/u.test(char) &&
+          (cp === 0x20a9 ||
+            (cp >= 0xff61 && cp <= 0xffdc) ||
+            (cp >= 0xffe8 && cp <= 0xffee) ||
+            wide.some(([lo, hi]) => cp >= lo && cp <= hi)))
+    ),
   ];
   const bytes: number[] = [];
   sets.forEach((ranges, i) => {
@@ -406,6 +419,101 @@ table('unicode-range-tables', (_, inner) => {
       throw new Error(`unicode-range-tables set ${i} needs ${entries} entries`);
   });
   return Uint8Array.from(bytes);
+});
+
+// (math-glyphs <base> <end>): glyph metrics of STIX Two Math for src/math.wat,
+// from tables/math-metrics.txt. A u32 run count, then per run of consecutive
+// code points a u32 (first | count - 1 << 21) and a u32 index of its first
+// glyph, then five bytes per glyph: depth (i8), height, italic correction,
+// width (u8), and the top accent position less half the width (i8), all in
+// hundredths of an em.
+table('math-glyphs', () => {
+  const rows = fs
+    .readFileSync(
+      new URL('../tables/math-metrics.txt', import.meta.url),
+      'utf-8'
+    )
+    .trim()
+    .split('\n')
+    .map((line) => line.split(' ').map(Number));
+  const runs: number[][] = [];
+  for (const [i, [cp]] of rows.entries()) {
+    const last = runs.at(-1);
+    if (last !== undefined && last[0] + last[1] === cp && last[1] < 2048)
+      last[1]++;
+    else runs.push([cp, 1, i]);
+  }
+  const at = 4 + runs.length * 8;
+  const bytes = new Uint8Array(at + rows.length * 5);
+  const dv = new DataView(bytes.buffer);
+  dv.setUint32(0, runs.length, true);
+  runs.forEach(([cp, n, i], r) => {
+    dv.setUint32(4 + r * 8, cp | ((n - 1) << 21), true);
+    dv.setUint32(8 + r * 8, i, true);
+  });
+  rows.forEach(([, ...m], i) =>
+    m.forEach((v, j) => {
+      const q = Math.round((j === 1 ? Math.max(v, 0) : v) / 10);
+      const signed = j === 0 || j === 4;
+      if (q < (signed ? -128 : 0) || q > (signed ? 127 : 255))
+        throw new Error(`math-glyphs metric out of range: ${rows[i][0]} ${v}`);
+      dv.setUint8(at + i * 5 + j, q & 0xff);
+    })
+  );
+  return bytes;
+});
+
+// (math-commands <base> <end>): the TeX commands of tables/math.txt. A u32 per
+// name length up to 31: group offset (u16) and count (u16). A group holds its
+// entries back to back: the name, then a u32 value of kind << 24, atom class
+// << 21, and a 21-bit value.
+const mathKinds =
+  'sym ital op opl fn fnl accent wide frac sqrt left big font text space style color begin end over xarrow phantom boxed not opname limits mod kern cr ignore mathop'.split(
+    ' '
+  );
+table('math-commands', () => {
+  const entries = new Map<string, number>();
+  for (const line of fs
+    .readFileSync(new URL('../tables/math.txt', import.meta.url), 'utf-8')
+    .split('\n')) {
+    if (line.startsWith('#') || line.trim() === '') continue;
+    const [kind, cls, ...items] = line.trim().split(/\s+/);
+    const k = mathKinds.indexOf(kind);
+    const c = 'oObr()pi'.indexOf(cls);
+    if (k < 0 || c < 0) throw new Error(`math.txt: bad line ${line}`);
+    for (const item of items) {
+      const at = item.lastIndexOf(':');
+      const name = at > 0 ? item.slice(0, at) : item;
+      const value = at > 0 ? parseInt(item.slice(at + 1), 16) : 0;
+      // sym, ital, op and opl print their value as a glyph, so it cannot be 0.
+      if (
+        entries.has(name) ||
+        name.length > 31 ||
+        !(value < 1 << 21) ||
+        (k < 4 && value === 0)
+      )
+        throw new Error(`math.txt: bad entry ${item}`);
+      entries.set(name, (k << 24) | (c << 21) | value);
+    }
+  }
+  const header = 32 * 4;
+  const names = [...entries.keys()];
+  const parts: number[] = [];
+  const head = new Uint8Array(header);
+  const hv = new DataView(head.buffer);
+  for (let len = 1; len < 32; len++) {
+    const of = names.filter((n) => n.length === len);
+    hv.setUint16(len * 4, header + parts.length, true);
+    hv.setUint16(len * 4 + 2, of.length, true);
+    for (const n of of) {
+      for (let i = 0; i < len; i++) parts.push(n.charCodeAt(i));
+      const v = entries.get(n)!;
+      parts.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, v >>> 24);
+    }
+  }
+  if (header + parts.length > 0xffff)
+    throw new Error('math-commands exceeds u16 offsets');
+  return Uint8Array.from([...head, ...parts]);
 });
 
 // (out.str "...") writes a literal to the output. Short literals become one
@@ -470,9 +578,9 @@ code = code.replace(/ POOL:(\d+) /g, (_, i) => {
 });
 
 code = expandEnumGetsAndStrings(code, enumMap, path);
-checkDataSegments(code, path, 65536);
+checkDataSegments(code, path, 262144);
 const wasmBytes = optimizeWasm(wat2wasm(path, code), {
-  filename: 'md.wat',
+  filename: 'words.wat',
   shrinkLevel: 1,
 });
 
@@ -480,9 +588,9 @@ const wasmBytes = optimizeWasm(wat2wasm(path, code), {
 const dist = new URL('../dist/', import.meta.url);
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
-fs.writeFileSync(new URL('md.wasm', dist), wasmBytes);
+fs.writeFileSync(new URL('words.wasm', dist), wasmBytes);
 fs.writeFileSync(
-  new URL('md.wasm.mjs', dist),
+  new URL('words.wasm.mjs', dist),
   `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
     `const b = new Uint8Array(s.length);\n` +
     `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +

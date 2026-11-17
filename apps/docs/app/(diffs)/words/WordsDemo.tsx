@@ -10,15 +10,19 @@ import {
   IconRefresh,
 } from '@pierre/icons';
 import { createHighlightsPlugin } from '@pierre/words/highlights';
+import { createMermaidPlugin } from '@pierre/words/mermaid';
 import { Markdown } from '@pierre/words/react';
 import '@pierre/words/styles.css';
 import type { Components } from '@pierre/words/react';
+import { register, render } from 'pele/core';
+import flowchart from 'pele/diagrams/flowchart';
 import {
   type ReactNode,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import {
@@ -54,6 +58,34 @@ const plugins = {
     defaultColor: 'light-dark()',
   }),
 };
+// Register only the diagram type the demo uses, so the page skips Pele's full bundle.
+register(flowchart);
+const diagramPlugins = { mermaid: createMermaidPlugin({ render }) };
+const subscribeNothing = () => () => {};
+const diagramsSample = String.raw`## Math and diagrams
+
+Inline math sits in the sentence, like $e^{i\pi} + 1 = 0$. Display math gets its own line:
+
+$$
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$
+
+$$
+\begin{aligned}
+\int_{-\infty}^{\infty} e^{-x^2}\,dx &= \sqrt{\pi} \\
+\sum_{n=1}^{\infty} \frac{1}{n^2} &= \frac{\pi^2}{6}
+\end{aligned}
+$$
+
+A Mermaid block draws its diagram line by line as it streams:
+
+~~~mermaid
+flowchart LR
+  A[Markdown] --> B(Words)
+  B --> C{Block}
+  C -->|math| D[SVG formula]
+  C -->|mermaid| E[Pele diagram]
+~~~`;
 const overrides: Components = {
   // Keep streamed title spans inside one flex item beside the icon.
   h2: (html) =>
@@ -149,16 +181,19 @@ function WordsExample({
   preloadedUsage: PreloadedCodeExample<undefined, undefined>;
 }) {
   const playground = kind === 'playground';
+  const diagrams = kind === 'diagrams';
   const fixedSpeed =
-    kind === 'streaming' || kind === 'code' || kind === 'hooks';
+    kind === 'streaming' || kind === 'code' || kind === 'hooks' || diagrams;
   const initialSource =
     kind === 'code'
       ? samples.code
       : kind === 'hooks'
         ? hooksSample
-        : playground
-          ? samples.conversation
-          : streamingSample;
+        : diagrams
+          ? diagramsSample
+          : playground
+            ? samples.conversation
+            : streamingSample;
   const previewRef = useRef<HTMLDivElement>(null);
   const [sample, setSample] = useState(
     kind === 'streaming' ? 'streaming' : 'conversation'
@@ -179,10 +214,16 @@ function WordsExample({
   const [fadeDuration, setFadeDuration] = useState(180);
   const charactersPerStep = (fixedSpeed ? 8 : speed) * (stressScale ?? 1);
   const isStreaming = playback.status === 'streaming';
+  // Pele measures text with a canvas in the browser, so a server-rendered diagram would not match.
+  const serverRender = useSyncExternalStore(
+    subscribeNothing,
+    () => false,
+    () => diagrams
+  );
   const cursor =
     playback.status === 'streaming'
       ? playback.cursor
-      : playback.status === 'waiting'
+      : playback.status === 'waiting' || serverRender
         ? 0
         : source.length;
   const sourceId = playground ? 'markdown-source' : 'words-' + kind + '-source';
@@ -234,10 +275,19 @@ function WordsExample({
       return;
     }
     setSource('');
-    gfmSpec ??= fetch('/words/gfm-spec.md').then((response) => response.text());
-    void gfmSpec.then((text) => {
-      if (sourceRequest.current === request) setSource(text);
+    gfmSpec ??= fetch('/words/gfm-spec.md').then((response) => {
+      if (!response.ok) throw new Error(`gfm-spec.md: ${response.status}`);
+      return response.text();
     });
+    void gfmSpec.then(
+      (text) => {
+        if (sourceRequest.current === request) setSource(text);
+      },
+      // A failed load is not kept, so picking the sample again retries it.
+      () => {
+        gfmSpec = undefined;
+      }
+    );
   };
   const replay = (): void => {
     setPlayback({ status: 'streaming', cursor: 0 });
@@ -247,6 +297,7 @@ function WordsExample({
     fadeDuration,
     highlight,
     lineNumbers,
+    diagrams,
     repair,
   });
   const selectedSample =
@@ -457,7 +508,10 @@ function WordsExample({
                 animated={{ animation: 'fadeIn', duration: fadeDuration }}
                 parseIncompleteMarkdown={repair}
                 components={custom ? overrides : undefined}
-                plugins={highlight ? plugins : undefined}
+                math={diagrams}
+                plugins={
+                  diagrams ? diagramPlugins : highlight ? plugins : undefined
+                }
                 lineNumbers={lineNumbers}
               >
                 {source.slice(0, cursor)}
@@ -562,6 +616,22 @@ export function WordsDemo({
             Customize the generated HTML with string hooks. Switch between the
             default output and styled headings, links, and inline code without
             changing the Markdown.
+          </>
+        }
+      />
+      <WordsExample
+        kind="diagrams"
+        preloadedUsage={usageExamples.diagrams}
+        title="Math and diagrams"
+        description={
+          <>
+            Turn on <code>math</code> to render TeX as SVG, with no extra
+            dependency. Pass{' '}
+            <a href="https://pele.run" className="styled-link">
+              Pele
+            </a>{' '}
+            to <code>createMermaidPlugin</code> to draw <code>mermaid</code>{' '}
+            blocks as diagrams.
           </>
         }
       />

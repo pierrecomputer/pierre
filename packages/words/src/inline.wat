@@ -9,17 +9,14 @@
   (import "./link.wat")
   (import "./extlink.wat")
 
-  ;; Inline analysis runs over one contiguous content buffer and records every
-  ;; construct it finds as a mark. Marks are kept in input order, so rendering
-  ;; is a single merge walk of "text between marks" and "what each mark means".
-  ;; Emphasis is resolved afterwards, over the delimiter marks only, exactly as
-  ;; the spec's appendix describes.
+  ;; Inline analysis records every construct in one content buffer as a mark,
+  ;; in input order, so rendering is one merge walk of text and marks. Emphasis
+  ;; is resolved afterwards over the delimiter marks, as in the spec appendix.
   ;;
-  ;; Marks are dense 32-byte records in input order. Four-byte emphasis tags
-  ;; grow down from the top of scratch, so neither kind of record interrupts the
-  ;; other. $M.prev and $M.data share a word: emphasis walks the delimiter list,
-  ;; every other mark stores a payload. Everything is addressed by index or
-  ;; offset, so scratch can move under us.
+  ;; Marks are dense 32-byte records; 4-byte emphasis tags grow down from the
+  ;; top of scratch. $M.prev and $M.data share a word: delimiters use prev,
+  ;; other marks a payload. Everything is addressed by index or offset, because
+  ;; scratch can move.
   (const $M.size 32)
   (const $M.beg 0)
   (const $M.end 4)
@@ -49,16 +46,15 @@
     "linkclose"  ;; link details occupy rem through closeTail
     "extlink"    ;; a GFM extended autolink; data = 0 verbatim, 1 http://, 2 mailto:
     "footnote"   ;; a GFM footnote reference; data = the definition record
+    "math"       ;; `$` or `$$` math; data = content begin, ch = dollar count
   )
 
-  ;; emphasis tag kinds
   (const $T.em 1)
   (const $T.strong 2)
   (const $T.del 3)
   (const $T.kindMask 3)
   (const $T.nextMask 4294967292)
 
-  ;; mark flags
   (const $MF.canOpen 1)
   (const $MF.canClose 2)
   (const $MF.image 4)
@@ -81,6 +77,9 @@
   (global $bracketLo (mut i32) (i32.const 0))
   (global $scannedBackticks (mut i32) (i32.const 0))
   (global $tickTop (mut i32) (i32.const 0))
+  ;; Set by $handleDollar when an opening `$` run found no closer before the
+  ;; content ended, so more input can still make it math.
+  (global $mathAtEnd (mut i32) (i32.const 0))
   (global $lastMarkEnd (mut i32) (i32.const 0))
   (global $literalNeedsEscape (mut i32) (i32.const 0))
 
@@ -174,8 +173,7 @@
     (block $done
       (loop $l
         (local.set $base (global.get $contentBase))
-        ;; Cached lanes are content-relative, so scratch growth cannot stale
-        ;; them. Handlers advance p past consumed syntax without changing text.
+        ;; Cached lanes are content-relative, so scratch growth cannot stale them.
         (if (i32.lt_u (local.get $p) (local.get $scanEnd))
           (then
             (local.set $mask (i32.and (local.get $mask)
@@ -207,8 +205,6 @@
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
         (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $p))))
         (block $dispatched
-          ;; Split the ASCII candidates before testing individual handlers.
-          ;; This keeps punctuation and emphasis from crossing unrelated cases.
           (block $delimiters
             (if (i32.ge_u (local.get $c) (i32.const 64))
               (then
@@ -246,6 +242,11 @@
             (if (i32.eq (local.get $c) (i32.const 10))
               (then
                 (local.set $p (call $handleNewline (local.get $p) (local.get $end)))
+                (br $dispatched)))
+            ;; the scan tables mark `$` only with the math option
+            (if (i32.eq (local.get $c) (i32.const "$"))
+              (then
+                (local.set $p (call $handleDollar (local.get $p) (local.get $end)))
                 (br $dispatched)))
             (if (i32.eq (local.get $c) (i32.const ":"))
               (then
@@ -306,9 +307,9 @@
     (local $at i32)
     (local $q i32)
     (local.set $at (i32.add (global.get $contentBase) (local.get $p)))
-    ;; HTML copies an ordinary soft break verbatim. Leave it in the surrounding
-    ;; text span when neither side needs trimming. Brackets retain marks because
-    ;; an image's alt text turns newlines into spaces; ANSI also needs its hook.
+    ;; HTML copies a plain soft break verbatim, so it needs no mark unless a side
+    ;; needs trimming, a bracket is open (alt text turns newlines into spaces),
+    ;; or the output is ANSI.
     (if (i32.eqz (i32.or (global.get $mode) (global.get $bracketSp)))
       (then
         (if (i32.eqz (i32.or (i32.eqz (local.get $p))
@@ -328,8 +329,7 @@
       (local.get $p) (local.get $q) (i32.const 0)))
     (local.get $q))
 
-  ;; The mark keeps the value code, because the conversion scratch is reused
-  ;; by every mark.
+  ;; The mark keeps the value code: the conversion scratch is reused per mark.
   (func $handleEntity (param $p i32) (param $end i32) (result i32)
     (local $n i32)
     (local.set $n (call $entityMatch (i32.add (global.get $contentBase) (local.get $p))
@@ -380,10 +380,9 @@
           (i32.const "\60")))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))
-    ;; Most spans close within sixteen bytes: test the first run there before
-    ;; the full scan, which also refuses runs over 255. A run found here needs
-    ;; no memo entry, because it ends before any scan that reaches the content
-    ;; end starts.
+    ;; Most spans close within 16 bytes: test the first run there before the
+    ;; full scan. A run found here needs no memo entry, because it ends before
+    ;; any scan that reaches the content end starts.
     (local.set $i (i32.add (local.get $q) (call $firstLane
       (i8x16.eq (v128.load (i32.add (local.get $base) (local.get $q)))
         (i8x16.splat (i32.const "\60")))
@@ -408,11 +407,9 @@
 
   ;; The position just past a run of exactly $n backticks, or 0. Runs longer
   ;; than 255 never pair. $mem.tickMemo holds, per run length, the start of
-  ;; the latest such run seen in this leaf; entries above $tickTop, the
-  ;; longest run seen, are stale. Until a scan reaches EOF, each scan covers a
-  ;; later range, so stores only raise entries. That scan leaves each entry at
-  ;; its length's last run, so a later scan for a length whose last run starts
-  ;; before it fails without scanning, and further stores could only lower it.
+  ;; the latest such run in this leaf; entries above $tickTop are stale. Scans
+  ;; cover later ranges, so stores only raise entries; after a scan reaches
+  ;; EOF, a lookup whose memo entry starts before $p fails without scanning.
   (func $scanToClosingBackticks (param $p i32) (param $end i32) (param $n i32) (result i32)
     (local $base i32)
     (local $q i32)
@@ -458,8 +455,66 @@
     (global.set $scannedBackticks (i32.const 1))
     (i32.const 0))
 
+  ;; Math between `$` or `$$` runs. Like a code span, its content is literal,
+  ;; and backslash escapes inside are TeX's. A single `$` follows Pandoc: it
+  ;; opens only before a non-space, and the next `$` either closes it, after a
+  ;; non-space and before a non-digit, or leaves it as text. So prices stay
+  ;; text. $mathAtEnd says the content ended before a `$` could close the run.
+  (func $handleDollar (param $p i32) (param $end i32) (result i32)
+    (local $base i32)
+    (local $q i32)
+    (local $n i32)
+    (local $i i32)
+    (local $c i32)
+    (global.set $mathAtEnd (i32.const 0))
+    (local.set $base (global.get $contentBase))
+    (local.set $q (local.get $p))
+    (loop $run
+      (local.set $q (i32.add (local.get $q) (i32.const 1)))
+      (br_if $run (i32.and (i32.lt_u (local.get $q) (local.get $end))
+        (i32.eq (i32.load8_u (i32.add (local.get $base) (local.get $q))) (i32.const "$")))))
+    (local.set $n (i32.sub (local.get $q) (local.get $p)))
+    (if (i32.or (i32.gt_u (local.get $n) (i32.const 2)) (i32.ge_u (local.get $q) (local.get $end)))
+      (then (return (local.get $q))))
+    (if (i32.and (i32.eq (local.get $n) (i32.const 1))
+          (call $isWhiteByte (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
+      (then (return (local.get $q))))
+    (local.set $i (local.get $q))
+    (block $none
+      (loop $scan
+        (if (i32.ge_u (local.get $i) (local.get $end))
+          (then
+            (global.set $mathAtEnd (i32.const 1))
+            (br $none)))
+        (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $i))))
+        (if (i32.eq (local.get $c) (i32.const "\5c"))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 2)))
+            (br $scan)))
+        (if (i32.eq (local.get $c) (i32.const "$"))
+          (then
+            (local.set $c (select (i32.load8_u offset=1 (i32.add (local.get $base) (local.get $i))) (i32.const 0)
+              (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))))
+            (if (i32.eq (local.get $n) (i32.const 2))
+              (then
+                (if (i32.eq (local.get $c) (i32.const "$"))
+                  (then
+                    (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x20000))
+                      (local.get $p) (i32.add (local.get $i) (i32.const 2)) (local.get $q)))
+                    (return (i32.add (local.get $i) (i32.const 2))))))
+              (else
+                (br_if $none (i32.or (call $isDigit (local.get $c))
+                  (call $isWhiteByte (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))))
+                (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x10000))
+                  (local.get $p) (i32.add (local.get $i) (i32.const 1)) (local.get $q)))
+                (return (i32.add (local.get $i) (i32.const 1)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (local.get $q))
+
   (func $handleDelim (param $p i32) (param $end i32) (result i32)
     (local $base i32)
+    (local $cjk i32)
     (local $c i32)
     (local $q i32)
     (local $n i32)
@@ -502,6 +557,12 @@
         (if (i32.lt_u (local.get $q) (local.get $end))
           (then (local.set $flags (call $utf8At (i32.add (local.get $base) (local.get $q))
             (i32.add (local.get $base) (local.get $end))))))
+        ;; `_` keeps the CommonMark rules
+        (if (i32.and (i32.and (global.get $ext) (i32.const 1)) (i32.ne (local.get $c) (i32.const "_")))
+          (then
+            (local.set $k (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
+              (local.get $k) (local.get $flags)))
+            (local.set $cjk (i32.const 1))))
         (local.set $k (i32.or
           (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
             (i32.const 2))
@@ -513,6 +574,10 @@
           (select (i32.const 2) (call $isAsciiPunct (local.get $flags)) (call $isWhiteByte (local.get $flags)))))))
     (local.set $flags (i32.and
       (i32.shr_u (i32.const 0x52d2b) (i32.shl (local.get $k) (i32.const 1))) (i32.const 3)))
+    ;; between two other characters, a CJK neighbor makes the run both flanking
+    (if (i32.and (i32.and (local.get $cjk) (global.get $cjkSide))
+          (i32.eqz (i32.and (local.get $k) (i32.const 10))))
+      (then (local.set $flags (i32.const 3))))
     (if (i32.or (i32.eqz (local.get $flags))
           (i32.and (i32.eq (local.get $c) (i32.const "_")) (i32.eqz (local.get $k))))
       (then (return (local.get $q))))
@@ -548,8 +613,7 @@
       (if (result i32) (i32.ge_s (local.get $delimBottom) (i32.const 0))
         (then (i32.load offset=$M.next (call $slotAt (local.get $delimBottom))))
         (else (global.get $delimHead))))
-    ;; There is nothing to resolve or clear when every delimiter precedes the
-    ;; bottom. Initialize four opener entries per iteration only when needed.
+    ;; nothing to resolve when every delimiter precedes the bottom
     (if (i32.lt_s (local.get $closer) (i32.const 0)) (then (return)))
     ;; Opener bottoms are indexed by the run character's 0x60 bits, whether
     ;; the closer can open, and its length modulo 3: bytes 32..123.
@@ -615,8 +679,7 @@
         (call $delimRemove (global.get $delimTail))
         (br $l))))
 
-  ;; Add one opening and one closing tag for an emphasis match. Reserving and
-  ;; allocating the pair together avoids a second scratch-capacity check.
+  ;; Add the opening and closing tags of an emphasis match with one capacity check.
   (func $tagPair (param $opener i32) (param $closer i32) (param $kind i32)
     (local $openTag i32)
     (local $closeTag i32)
@@ -825,9 +888,8 @@
                 (i32.load8_u offset=10 (local.get $b))))))
           (br_if $link (local.tee $def
             (call $lookupLabel (local.get $rawB) (local.get $rawE) (i32.const 0))))
-          ;; Repair only the original document's trailing label, after real
-          ;; references have failed. Code blocks and definition destinations never
-          ;; reach this inline path; rebuilt nested content retains its source end.
+          ;; After real references fail, repair only the original document's
+          ;; trailing label; rebuilt nested content keeps its source end.
           (if (local.get $image)
             (then
               (br_if $footnote (local.get $note))
@@ -882,8 +944,7 @@
     (global.set $bracketSp (i32.sub (global.get $bracketSp) (i32.const 1)))
     (local.get $initial))
 
-  ;; Normalize [$b,$e) of the content buffer and look it up in the reference
-  ;; map, as a footnote label or as a link label.
+  ;; Normalize [$b,$e) and look it up as a footnote or link label.
   (func $lookupLabel (param $b i32) (param $e i32) (param $footnote i32) (result i32)
     (local $tmp i32)
     (local $normalized i64)
@@ -971,7 +1032,7 @@
             (i32.eq (local.get $c) (i32.const "-")))))
           (local.set $q (i32.add (local.get $q) (i32.const 1)))
           (br_if $l (i32.le_u (i32.sub (local.get $q) (local.get $seg)) (i32.const 63)))))
-      (if (i32.eq (i32.load8_u offset=0 (i32.sub (local.get $q) (i32.const 1))) (i32.const "-"))
+      (if (i32.eq (i32.load8_u (i32.sub (local.get $q) (i32.const 1))) (i32.const "-"))
         (then (return (i32.const 0))))
       (br_if $label (i32.eq (local.get $c) (i32.const "."))))
     (if (i32.ne (local.get $c) (i32.const ">")) (then (return (i32.const 0))))

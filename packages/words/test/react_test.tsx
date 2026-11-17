@@ -56,7 +56,7 @@ function mountDOM(markup = ''): HTMLElement {
   return document.getElementById('app')!;
 }
 
-/** Compare token styling independently of existing live/static line-span serialization. */
+/** Compare token styling, ignoring how live and static lines are wrapped in spans. */
 function canonicalizeCode(fragment: DocumentFragment): void {
   for (const code of fragment.querySelectorAll('pre code')) {
     if (code.querySelector('span[style]') === null) continue;
@@ -1858,7 +1858,7 @@ describe('direct HTML sessions', () => {
     expect(container.querySelector('a')?.getAttribute('href')).toBe(
       'https://example.com'
     );
-    // Before, each update parsed the whole document and highlighted every fence.
+    // Updates must not reparse the whole document or rehighlight every fence.
     const total = container.innerHTML.length;
     expect(fences).toBeLessThanOrEqual(4);
     expect(Math.max(...parsed)).toBeLessThan(total / 4);
@@ -2722,4 +2722,37 @@ describe('incremental streaming', () => {
     ).toBeNull();
     session.dispose();
   });
+});
+
+test('the DOM renderer keeps streamed math SVG equal to a full render', () => {
+  const source =
+    'Euler $e^{i\\pi}+1=0$ and **bold $x^2$**.\n\n$$\n\\int_0^1 x\\,dx\n$$\n\n- $$\\sum_i a_i$$\n';
+  for (const animated of [false, true]) {
+    const dom = new JSDOM('<div id="a"></div><div id="b"></div>');
+    const streamed = dom.window.document.getElementById('a')!;
+    const full = dom.window.document.getElementById('b')!;
+    const renderer = createDomRenderer(streamed, { math: true });
+    for (let at = 1; at <= source.length; at++)
+      renderer.update(source.slice(0, at), true, true, animated, 'block');
+    renderer.update(source, false, false);
+    createDomRenderer(full, { math: true }).update(source, false, false);
+    expect(streamed.innerHTML).toBe(full.innerHTML);
+    expect(streamed.querySelectorAll('svg')).toHaveLength(4);
+    // fades never wrap SVG text
+    expect(streamed.querySelector('svg span')).toBeNull();
+  }
+});
+
+test('the DOM renderer keeps math SVG placed by a large first render', () => {
+  const dom = new JSDOM('<div id="a"></div>');
+  const root = dom.window.document.getElementById('a')!;
+  const renderer = createDomRenderer(root, { math: true });
+  // more than 1 KB, so the browser parses the first render in one batch
+  const source = `${'text '.repeat(300)}\n\n$x^2$ and *a`;
+  renderer.update(source, true, true, false);
+  const svg = root.querySelector('svg');
+  expect(svg).not.toBeNull();
+  // not a plain append, so the update walks the SVG
+  renderer.update(source + 'b*', true, true, false);
+  expect(root.querySelector('svg')).toBe(svg);
 });

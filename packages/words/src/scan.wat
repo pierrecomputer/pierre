@@ -4,10 +4,11 @@
   (global $src (mut i32) (i32.const $mem.input)) ;; start of the markdown, past any frontmatter
   (global $eof (mut i32) (i32.const 0)) ;; end of the input text (the NUL sentinel sits there)
 
-  ;; Unicode punctuation (the P and S general categories from U+0080), then
-  ;; the zero-width and the wide code points, as packed ranges.
+  ;; Unicode punctuation (the P and S general categories from U+0080), the
+  ;; zero-width, the wide, and the CJK code points, as packed ranges.
   (unicode-range-tables $mem.packed $mem.packedEnd
-    $mem.punct $mem.punctEnd $mem.width $mem.wide $mem.wide $mem.widthEnd)
+    $mem.punct $mem.punctEnd $mem.width $mem.wide $mem.wide $mem.widthEnd
+    $mem.cjk $mem.cjkEnd)
 
   ;; Expand the packed set of code point ranges at $src into the table at $dst:
   ;; a u32 count, then sorted u32 entries of first:21 and span:11. Per range the
@@ -80,9 +81,8 @@
         (br $search)))
     (i32.const 0))
 
-  ;; Return the lowest set-bit index, or -1 for zero. Callers either guard a
-  ;; nonzero mask or select a separate zero-mask result. This clz identity stays
-  ;; inline on runtimes that lower Wasm ctz to an external helper call.
+  ;; The lowest set-bit index, or -1 for zero. Uses clz because some runtimes
+  ;; lower Wasm ctz to a helper call.
   (func $firstBit (param $bits i32) (result i32)
     (i32.sub (i32.const 31) (i32.clz
       (i32.and (local.get $bits) (i32.sub (i32.const 0) (local.get $bits))))))
@@ -100,10 +100,9 @@
   (data (i32.const $mem.lanePack)
     "\0e\0c\0a\08\06\04\02\00\0e\0c\0a\08\06\04\02\00")
 
-  ;; Find the first true byte of a comparison vector, or 16 when none match.
-  ;; Pack four bits per lane with the first byte in the highest nibble, so clz
-  ;; directly gives its position. Callers load the packing table once to avoid
-  ;; rebuilding shuffle constants inside their scan loops.
+  ;; The first true byte of a comparison vector, or 16. Packs four bits per
+  ;; lane, first byte in the top nibble, so clz gives its position. Callers
+  ;; load $pack once so the shuffle constant is not rebuilt in their loops.
   (func $firstLane (param $flags v128) (param $pack v128) (result i32)
     (i32.wrap_i64 (i64.shr_u (i64.clz (i64x2.extract_lane 0
       (i8x16.swizzle (v128.or
@@ -130,8 +129,7 @@
   (func $isAlnum (param $c i32) (result i32)
     (i32.or (call $isAlpha (local.get $c)) (call $isDigit (local.get $c))))
 
-  ;; the 32 ASCII punctuation characters, i.e. every printable byte that is
-  ;; neither alphanumeric nor a space
+  ;; the 32 ASCII punctuation characters (printable, not alphanumeric or space)
   (func $isAsciiPunct (param $c i32) (result i32)
     (if (i32.gt_u (i32.sub (local.get $c) (i32.const 33)) (i32.const 93))
       (then (return (i32.const 0))))
@@ -164,6 +162,40 @@
           (i32.or
             (i32.eq (local.get $cp) (i32.const 0x205f))
             (i32.eq (local.get $cp) (i32.const 0x3000)))))))
+
+  ;; Option bits of control byte 31: 1 = cjk, 2 = math.
+  (global $ext (mut i32) (i32.const 0))
+
+  (func $isCjkCp (param $cp i32) (result i32)
+    (i32.and (i32.ge_u (local.get $cp) (i32.const 0x1100))
+      (call $inRanges (i32.const $mem.cjk) (local.get $cp))))
+
+  ;; The cjk option lets a `*` or `~` run between other characters flank a
+  ;; CJK neighbor, as markdown-it-cjk-friendly does. $prev ends at $at and
+  ;; $next follows the run. A variation selector after a non-space stands for
+  ;; the character before it, which this returns in place of $prev. Sets
+  ;; $cjkSide when either neighbor is CJK.
+  (global $cjkSide (mut i32) (i32.const 0))
+  (func $cjkPrev (param $at i32) (param $base i32) (param $prev i32) (param $next i32) (result i32)
+    (local $two i32)
+    (global.set $cjkSide (call $isCjkCp (local.get $next)))
+    (if (i32.le_u (i32.sub (local.get $prev) (i32.const 0xfe00)) (i32.const 14))
+      (then
+        (local.set $two (call $utf8Before (i32.sub (local.get $at) (i32.const 3)) (local.get $base)))
+        (if (i32.and (i32.ne (local.get $two) (i32.const 0))
+              (i32.eqz (call $isWhiteCp (local.get $two))))
+          (then
+            (global.set $cjkSide (i32.or (global.get $cjkSide) (i32.or
+              (call $isCjkCp (local.get $two))
+              ;; a quotation mark with VS2 is the full-width form
+              (i32.and (i32.eq (local.get $prev) (i32.const 0xfe01))
+                (i32.eq (i32.and (i32.sub (local.get $two) (i32.const 0x2018)) (i32.const -6)) (i32.const 0))))))
+            (return (local.get $two))))))
+    (global.set $cjkSide (i32.or (global.get $cjkSide) (i32.or
+      (call $isCjkCp (local.get $prev))
+      ;; an ideographic variation selector follows a CJK character
+      (i32.le_u (i32.sub (local.get $prev) (i32.const 0xe0100)) (i32.const 0xef)))))
+    (local.get $prev))
 
   ;; The end of the sequence $utf8At decoded last.
   (global $utf8Next (mut i32) (i32.const 0))
@@ -234,10 +266,9 @@
     (select (local.get $c) (i32.const 0xfffd)
       (i32.eq (global.get $utf8Next) (local.get $p))))
 
-  ;; Classify syntax and literal HTML-escaping bytes together so inline analysis
-  ;; can prove whether its unmarked gaps need escaping. Reuse candidates after
-  ;; each mark; the caller discards matches beyond its content end. Once gaps
-  ;; need escaping anyway, the syntax table drops NUL, `"` and `>`.
+  ;; Syntax and HTML-escaping bytes in one table, so inline analysis knows if
+  ;; its unmarked gaps need escaping. Once they do, the syntax table drops NUL,
+  ;; `"` and `>`. The caller discards matches past its content end.
   (data (i32.const $mem.markLo)
     "\51\02\02\00\00\00\02\00\00\00\07\08\0c\08\26\08")
   (data (i32.const $mem.markHi)
@@ -259,12 +290,10 @@
     "\51\02\02\00\00\00\02\00\00\00\07\08\0c\09\26\08")
   (global $plainRunJoined (mut i32) (i32.const 0))
 
-  ;; Scan ordinary root-paragraph lines with one table load and cached masks
-  ;; across line feeds. After inline syntax, collect further ordinary lines
-  ;; with a newline scan; inline parsing still processes the full span. Stop
-  ;; before a possible block start or CR. Return the final physical line's
-  ;; begin/end so its predecessors can share one descriptor without losing the
-  ;; line needed for table conversion. The caller has checked the first byte.
+  ;; Scan ordinary root-paragraph lines, keeping masks across line feeds; after
+  ;; inline syntax, collect more lines with a newline scan. Stop before a
+  ;; possible block start or CR. Returns the last line's begin/end, needed for
+  ;; table conversion. The caller has checked the first byte.
   (func $findPlainParagraphRun (param $start i32) (result i64)
     (local $beg i32)
     (local $p i32)
@@ -416,9 +445,8 @@
     (if (i32.gt_u (local.get $p) (local.get $end)) (then (local.set $p (local.get $end))))
     (local.get $p))
 
-  ;; Find the next table separator or escape introducer without scanning
-  ;; ordinary cell text byte by byte. These two bytes differ only by bit 5,
-  ;; so folding that bit lets one comparison identify both. Clip to the row.
+  ;; The next `|` or `\` in the row. The two bytes differ only in bit 5, so
+  ;; one comparison finds both.
   (func $findCellBoundary (param $p i32) (param $end i32) (result i32)
     (local $lane i32)
     (local $w v128)
@@ -439,9 +467,8 @@
         (br $wide)))
     (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
 
-  ;; Find a possible fence byte or CR in one pass. Separate searches could
-  ;; repeatedly scan a long code block when only one of the bytes is present.
-  ;; Ordinary code vectors need only a presence test, not lane packing.
+  ;; Find a possible fence byte or CR in one pass, so a long code block that
+  ;; holds only one of them is not scanned again and again.
   (func $findCodeRunEnd (param $p i32) (param $end i32) (param $fence i32) (result i32)
     (local $matches v128)
     (local $w v128)
@@ -491,7 +518,6 @@
         (br $byte)))
     (local.get $p))
 
-  ;; skip spaces and tabs
   (func $skipSpace (param $p i32) (param $end i32) (result i32)
     (block $done
       (loop $l

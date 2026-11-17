@@ -1,53 +1,4 @@
 (module
-  (;;
-    memory structure
-    [] page 1 (control block and static tables)
-      [0]             render mode (u8): 0 = html, 1 = ansi
-      [1]             option flags (u8): bit 0 = frontmatter, bit 1 = skip raw HTML,
-                      bit 2 = repair a delivery-ending closed link label,
-                      bit 3 = session render: measure the boundary in UTF-16
-                      units and mark an open fence,
-                      bit 4 = completion appended a pending link destination,
-                      bit 5 = ansi input is bytes and may hold invalid UTF-8,
-                      bit 6 = complete unfinished inline syntax,
-                      bit 7 = completion changed the input (set by render)
-      [2:6)           input length (u32 LE)
-      [6:10)          output start (u32 LE)
-      [10:14)         output length (u32 LE)
-      [14:18)         frontmatter JSON start (u32 LE, 0 when absent)
-      [18:22)         frontmatter JSON length (u32 LE)
-      [22:26)         ansi wrap width (u32 LE, 0 = no wrapping)
-      [26]            HTML format flags (u8, see $Fmt in format.wat); 0 = plain HTML
-      [27]            the output has a code block in slots (set by render; the
-                      host clears it)
-      [28:30)         byte length of the id prefix at $mem.idPrefix (u16 LE)
-      [30]            document contains global definitions
-      [36:40)         UTF-16 length of the input before the boundary (option bit 3)
-      [40:44)         UTF-16 length of the output before the boundary (option bit 3)
-      [48:64)         decimal conversion scratch
-      [64:80)         hex digits
-      [80:$mem.input) static tables and fixed work areas, in this order (see
-                      memory.wat for the addresses): pooled output string
-                      literals, scanner byte tables, HTML5 named character
-                      references and their immutable index, Unicode P|S ranges,
-                      Unicode case folding, HTML block tag names and the GFM
-                      tag filter list, Unicode display width ranges, ansi marker
-                      fragments and SGR depth counters, the block analysis
-                      container stack (render reuses it as the type/tightness
-                      stack, then opener bottoms, tick memo, and the bracket
-                      stack; completion uses it for its two stacks), table
-                      column widths, the ansi line prefix and pending marker,
-                      ansi list state, and the packed Unicode range tables
-    [] pages 2..N (text buffer)
-      [$mem.input:EOF) input, a NUL sentinel, then at least 32 bytes of slack
-      [meta:rec)      frontmatter JSON
-      [rec:out)       block records, the reference hash table, the footnote order,
-                      and temporary ANSI table measurements when needed
-      [out:…)         rendered output
-      [scratch:end)   rebuilt block content when needed, and inline marks
-  ;;)
-  (memory (export "memory") 2)
-
   (import "./out.wat")
   (import "./scan.wat")
   (import "./entity.wat")
@@ -58,6 +9,7 @@
   (import "./frontmatter.wat")
   (import "./complete.wat")
   (import "./format.wat")
+  (import "./math.wat")
 
   (entity-table $mem.entities $mem.entitiesEnd $mem.entitySlots $mem.entityNames)
   (string-pool $mem.strings $mem.stringsEnd)
@@ -90,11 +42,9 @@
         (br $wide)))
     (local.get $n))
 
-  ;; Analyze the blocks of the input in [$mem.input, $mem.input + length).
-  ;; Returns the input length before the last safe append boundary. Bit 31 is
-  ;; set when completion is on and the last block is the first one in a list
-  ;; item. $render calls this twice, which also keeps the hot line loop in a
-  ;; function of its own.
+  ;; Analyze the input blocks. Returns the input length before the last safe
+  ;; append boundary; bit 31 is set when completion is on and the last block is
+  ;; the first one in a list item. Keeps the hot line loop out of $render.
   (func $analyze (result i32)
     (local $start i32)
     (local $fmClose i32)
@@ -106,6 +56,16 @@
     (i32.store8 (i32.const 30) (i32.const 0))
     (global.set $mode (i32.load8_u (i32.const 0)))
     (global.set $fmt (i32.load8_u (i32.const 26)))
+    (global.set $ext (i32.load8_u (i32.const 31)))
+    ;; with the math option the scan tables mark `$` (low nibble 4, class 2),
+    ;; and `$` (bit 4 of byte 4) may start a block
+    (local.set $start (i32.and (global.get $ext) (i32.const 2)))
+    (i32.store8 offset=4 (i32.const $mem.markLo) (local.get $start))
+    (i32.store8 offset=4 (i32.const $mem.syntaxLo) (local.get $start))
+    (i32.store8 offset=4 (i32.const $mem.paragraphLo) (local.get $start))
+    (i32.store8 offset=4 (i32.const $mem.blockStarts)
+      (i32.or (i32.const 9) (i32.shl (local.get $start) (i32.const 3))))
+    (global.set $mathTo (i32.const 0))
     (global.set $tableHead (i32.const 0))
     (global.set $eof (i32.add (i32.const $mem.input) (i32.load (i32.const 2))))
     (global.set $src (i32.const $mem.input))
@@ -163,8 +123,7 @@
           (br_if $blocksDone (i32.ge_u (local.get $blockStart) (global.get $eof)))
           (if (i32.eqz (global.get $sp))
             (then
-              ;; A document-level empty LF line closes ordinary leaves at once;
-              ;; this boundary needs no indentation scan or container state.
+              ;; a document-level empty LF line closes ordinary leaves at once
               (if (i32.and (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const 10))
                     (call $blankEndsLeaf))
                 (then
@@ -233,21 +192,18 @@
                       (then
                         (call $addBlockLine)
                         (br $lineDone)))))))
-            ;; Nested paragraphs still match their container prefixes first.
-            ;; The ordinary-text case can then skip block-start scanning and
-            ;; generic looseness dispatch, also when the line is a lazy
-            ;; continuation.
+            ;; Nested paragraphs match container prefixes first, then ordinary
+            ;; text (lazy continuation too) skips block-start scanning.
             (br_if $lineDone (call $matchOpenBlocks))
             (br_if $lineDone (if (result i32)
               (i32.and (global.get $sp) (i32.eq (global.get $leaf) (enum.get $Blk.p)))
               (then (call $tryParagraphContinuation))
               (else (i32.const 0))))
             (call $addBlockLine))
-          ;; Freeze only newline-terminated blank lines at document depth. EOF
-          ;; closures and open lists/code remain mutable; inline repair touches
-          ;; only the last block, so it cannot reach across this boundary.
-          ;; $blank also holds after a thematic break or a heading, so the
-          ;; line itself must be blank.
+          ;; Freeze only newline-terminated blank lines at document depth; EOF
+          ;; closures and open lists/code stay mutable. Inline repair touches
+          ;; only the last block, so it cannot cross this boundary. $blank also
+          ;; holds after a thematic break or heading, so check the line itself.
           (if (i32.and (i32.and (global.get $blank) (i32.eqz (global.get $sp)))
                 (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.none))
                   (i32.lt_u (local.get $blockEnd) (global.get $eof))))
@@ -263,12 +219,25 @@
         (local.set $safeEnd (i32.sub (local.get $blockStart) (i32.const $mem.input)))
         (global.set $boundaryRec (global.get $rec))
         (br $blockLine)))
-    ;; Preserve the specific leaf closed by EOF so nested/footnote code blocks
-    ;; can expose their incomplete state without guessing from output order.
+    ;; the code leaf left open at EOF, so nested/footnote code shows as incomplete
     (global.set $incompleteCodeRec (i32.const 0))
     (if (i32.and (i32.eq (global.get $leaf) (enum.get $Blk.code))
           (i32.ne (global.get $codeFenceCh) (i32.const 0)))
-      (then (global.set $incompleteCodeRec (global.get $leafRec))))
+      (then
+        (global.set $incompleteCodeRec (global.get $leafRec))
+        ;; While input is incomplete, skip a code fence whose opening line has
+        ;; no line ending: its info string can still grow. Bit 7 means
+        ;; completion ran (and cleared bit 6). Math fences still show.
+        (if (i32.and
+              (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 192)) (i32.const 0))
+                (i32.ne (global.get $codeFenceCh) (i32.const "$")))
+              (i32.and (i32.eqz (i32.load offset=$R.nLines (global.get $leafRec)))
+                (i32.and
+                  (i32.ne (i32.load8_u (i32.sub (global.get $eof) (i32.const 1))) (i32.const 10))
+                  (i32.ne (i32.load8_u (i32.sub (global.get $eof) (i32.const 1))) (i32.const 13)))))
+          (then
+            (i32.store8 (global.get $leafRec) (enum.get $Blk.none))
+            (global.set $incompleteCodeRec (i32.const 0))))))
     (call $closeLeaf)
     (if (i32.and (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 64)) (i32.const 0))
           (i32.ne (global.get $sp) (i32.const 0)))
@@ -293,9 +262,11 @@
     (call $unpackEntities)
     (drop (call $unpackRanges
       (call $unpackRanges
-        (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))
-        (i32.const $mem.width))
-      (i32.const $mem.wide))))
+        (call $unpackRanges
+          (call $unpackRanges (i32.const $mem.packed) (i32.const $mem.punct))
+          (i32.const $mem.width))
+        (i32.const $mem.wide))
+      (i32.const $mem.cjk))))
   (start $init)
 
   ;; Render the input in [$mem.input, $mem.input + length) and publish the result.

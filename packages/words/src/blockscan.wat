@@ -17,7 +17,6 @@
   (global $blank (mut i32) (i32.const 0))
   (global $lineEnd (mut i32) (i32.const 0))
 
-  ;; scanner results
   (global $atxLevel (mut i32) (i32.const 0))
   (global $lmOrdered (mut i32) (i32.const 0))
   (global $lmChar (mut i32) (i32.const 0))
@@ -210,7 +209,22 @@
     (if (i32.eqz (i32.or
           (i32.eq (local.get $c) (i32.const "\60"))
           (i32.eq (local.get $c) (i32.const "~"))))
-      (then (return (i32.const 0))))
+      (then
+        ;; With the math option, `$$` opens a math block when no `$` follows
+        ;; on its line and the block closes before a blank line or EOF. Text
+        ;; after it is the first line of the block.
+        (if (i32.or (i32.ne (local.get $c) (i32.const "$"))
+              (i32.eqz (i32.and (global.get $ext) (i32.const 2))))
+          (then (return (i32.const 0))))
+        (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
+        (return (i32.shl
+          (if (result i32)
+            (i32.and (i32.eq (i32.sub (local.get $i) (local.get $p)) (i32.const 2))
+              (i32.ge_u (call $findByte (local.get $i) (global.get $lineEnd) (i32.const "$"))
+                (global.get $lineEnd)))
+            (then (call $mathCloses (global.get $lineEnd)))
+            (else (i32.const 0)))
+          (i32.const 1)))))
     (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
     (if (i32.lt_u (i32.sub (local.get $i) (local.get $p)) (i32.const 3)) (then (return (i32.const 0))))
     (if (i32.eq (local.get $c) (i32.const "\60"))
@@ -219,6 +233,53 @@
               (global.get $lineEnd))
           (then (return (i32.const 0))))))
     (i32.sub (local.get $i) (local.get $p)))
+
+  ;; The position of the `$$` that ends the line [$p,$end), or 0. Such a line
+  ;; closes an open math block, and the text before the `$$` is its last line.
+  ;; An odd run of backslashes before it makes the first `$` TeX's `\$`.
+  (func $mathFenceEnd (param $p i32) (param $end i32) (result i32)
+    (local $q i32)
+    (local.set $end (i32.sub (call $trimSpaceBack (local.get $end) (local.get $p)) (i32.const 2)))
+    (if (i32.or (i32.lt_u (local.get $end) (local.get $p))
+          (i32.ne (i32.load16_u (local.get $end)) (i32.const "$$")))
+      (then (return (i32.const 0))))
+    (local.set $q (local.get $end))
+    (block $done
+      (loop $l
+        (br_if $done (i32.le_u (local.get $q) (local.get $p)))
+        (br_if $done (i32.ne (i32.load8_u (i32.sub (local.get $q) (i32.const 1))) (i32.const "\5c")))
+        (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+        (br $l)))
+    (select (i32.const 0) (local.get $end)
+      (i32.and (i32.sub (local.get $end) (local.get $q)) (i32.const 1))))
+
+  ;; Whether the math block opened on the line ending at $p closes before a
+  ;; blank line, or reaches EOF and stays open while streaming. As in TeX,
+  ;; display math holds no blank line, so a stray `$$` line stays text. The
+  ;; answer holds for every opener before the stopping line, so a run of `$$`
+  ;; lines scans once; $analyze clears $mathTo.
+  (global $mathFrom (mut i32) (i32.const 0))
+  (global $mathTo (mut i32) (i32.const 0))
+  (global $mathOk (mut i32) (i32.const 0))
+  (func $mathCloses (param $p i32) (result i32)
+    (local $end i32)
+    (if (i32.and (i32.ge_u (local.get $p) (global.get $mathFrom))
+          (i32.lt_u (local.get $p) (global.get $mathTo)))
+      (then (return (global.get $mathOk))))
+    (global.set $mathFrom (local.get $p))
+    (block $done
+      (loop $l
+        (global.set $mathOk (i32.const 1))
+        (local.set $p (call $lineAfter (local.get $p)))
+        (br_if $done (i32.ge_u (local.get $p) (global.get $eof)))
+        (local.set $end (call $findLineEnd (local.get $p)))
+        (global.set $mathOk (i32.lt_u (call $skipSpace (local.get $p) (local.get $end)) (local.get $end)))
+        (br_if $done (i32.eqz (global.get $mathOk)))
+        (br_if $done (call $mathFenceEnd (local.get $p) (local.get $end)))
+        (local.set $p (local.get $end))
+        (br $l)))
+    (global.set $mathTo (local.get $p))
+    (global.get $mathOk))
 
   ;; a bullet or ordered list marker; returns its width in bytes and leaves the
   ;; kind in $lmOrdered / $lmChar / $lmStart

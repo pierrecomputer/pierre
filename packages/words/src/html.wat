@@ -17,7 +17,6 @@
     (if (i32.ne (i32.load8_u (i32.sub (global.get $out) (i32.const 1))) (i32.const 10))
       (then (call $outByte (i32.const 10)))))
 
-  ;; Container openers are quote, ul, ol and li; each starts a new line.
   (func $htmlBlockOpen (param $t i32) (param $r i32)
     (call $cr)
     (if (i32.eq (local.get $t) (enum.get $Blk.quote))
@@ -80,6 +79,8 @@
             (call $outSmall (i64.or (i64.const "</h0>\n")
               (i64.shl (i64.extend_i32_u (local.get $n)) (i64.const 24))) (i32.const 6))
             (return))
+          (if (i32.and (global.get $ext) (i32.const 2))
+            (then (if (call $mathBlock (local.get $r)) (then (return)))))
           (if (global.get $fmt)
             (then (call $htmlCodeBlockFmt (local.get $r)))
             (else (call $htmlCodeBlock (local.get $r))))
@@ -119,9 +120,8 @@
         (out.str "disabled=\22\22 type=\22checkbox\22>")))
     (global.set $pendingTask (i32.const 0)))
 
-  ;; Code needs only HTML escaping, its two tags, and a space for each line
-  ;; ending. Reserve everything together, then resolve content pointers after
-  ;; possible growth. Single-line content skips the line-ending search.
+  ;; Reserve the worst case once, then resolve content pointers, which growth
+  ;; may move. Line endings become spaces.
   (func $htmlCodeSpan (param $beg i32) (param $end i32)
     (local $dst i32)
     (local $q i32)
@@ -198,7 +198,7 @@
     (local $n i32)
     (local $tag i32)
     (local $tagEnd i32)
-    ;; Structured React output excludes raw HTML; generated elements remain intact.
+    ;; structured React output drops raw HTML
     (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (then (return)))
     (block $done
       (loop $l
@@ -305,9 +305,8 @@
         (br $l)))
     (out.str "</tr>\n"))
 
-  ;; Emit the whole cell opener under one reservation instead of three small
-  ;; writes for its tag, optional alignment, and closing angle bracket.
-  ;; Formatted cells align with a style.
+  ;; The whole cell opener under one reservation. Formatted cells align with
+  ;; a style.
   (func $htmlCellOpen (param $head i32) (param $align i32)
     (local $dst i32)
     (call $ensureOut (i32.const 56))

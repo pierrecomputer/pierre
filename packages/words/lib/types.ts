@@ -21,12 +21,29 @@ export type Frontmatter =
 export interface AnsiOptions {
   /** Wrap text at this column. With 0, the default, the terminal wraps it. */
   width?: number;
+  /**
+   * Let `*` and `~` emphasis open and close next to Chinese, Japanese, and
+   * Korean text, as markdown-cjk-friendly does.
+   */
+  cjk?: boolean;
+  /**
+   * Read `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as math. The
+   * terminal shows their TeX source.
+   */
+  math?: boolean;
 }
 
 /** Options for incremental HTML rendering. */
 export interface HtmlSessionOptions {
   /** Complete common unfinished inline syntax. */
   incomplete?: boolean;
+  /**
+   * Let `*` and `~` emphasis open and close next to Chinese, Japanese, and
+   * Korean text, as markdown-cjk-friendly does.
+   */
+  cjk?: boolean;
+  /** Render `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as SVG. */
+  math?: boolean;
 }
 
 /** The result of one session render. */

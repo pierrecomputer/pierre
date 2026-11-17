@@ -7,6 +7,10 @@ export interface AnimateOptions {
 export type Components = Partial<Record<string, (html: string) => string>>;
 
 export interface CodeOptions {
+  /**
+   * Code lines, each ending with LF. For a `MermaidPlugin` or `renderers`, the
+   * last line of an open fence has no LF while it is still being written.
+   */
   code: string;
   language: string;
   isIncomplete: boolean;
@@ -41,11 +45,22 @@ export interface CodeHighlighterPlugin {
   createSession?(): CodeHighlighterSession;
 }
 
+export interface MermaidPlugin {
+  /** Return HTML for a `mermaid` code block, or null to show the code. */
+  render(options: CodeOptions): string | null;
+}
+
 export interface PluginConfig {
   code?: CodeHighlighterPlugin;
+  /** Diagrams for `mermaid` code blocks. See `createMermaidPlugin`. */
+  mermaid?: MermaidPlugin;
+  /**
+   * Renderers return HTML for a code block, or null to show the code. A closed
+   * block's output is reused while its language and code stay the same.
+   */
   renderers?: {
     language: string | string[];
-    render(options: CodeOptions): string;
+    render(options: CodeOptions): string | null;
   }[];
 }
 
@@ -54,6 +69,10 @@ export interface ControlsConfig {
 }
 
 export interface HtmlOptions {
+  /** CJK-friendly emphasis. See `HtmlSessionOptions.cjk`. */
+  cjk?: boolean;
+  /** Math as SVG. See `HtmlSessionOptions.math`. */
+  math?: boolean;
   components?: Components;
   plugins?: PluginConfig;
   controls?: boolean | ControlsConfig;

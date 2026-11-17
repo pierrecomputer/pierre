@@ -180,6 +180,9 @@ catalogs:
     oxlint-tsgolint:
       specifier: 7.0.2001
       version: 7.0.2001
+    pele:
+      specifier: 1.13.0
+      version: 1.13.0
     postcss:
       specifier: 8.5.6
       version: 8.5.6
@@ -566,6 +569,9 @@ importers:
       next-mdx-remote:
         specifier: 'catalog:'
         version: 6.0.0(@types/react@19.2.7)(react@19.2.7)
+      pele:
+        specifier: 'catalog:'
+        version: 1.13.0
       postcss:
         specifier: 'catalog:'
         version: 8.5.6
@@ -5679,6 +5685,10 @@ packages:
   path-type@6.0.0:
     resolution: {integrity: sha512-Vj7sf++t5pBD637NSfkxpHSMfWaeig5+DKWLhcqIYx6mWQz5hdJTGDVMQiJcw1ZYkhs7AazKDGpRVji1LJCZUQ==}
     engines: {node: '>=18'}
+
+  pele@1.13.0:
+    resolution: {integrity: sha512-Ie8UKY9x00MsuR3jO6AzUwzK2Z6MIV3Tf4EDdITiuk8Uaz8K7g0R082WqsqNaSU8DdgkrRvZThzhit83mi/uiw==}
+    engines: {node: '>=20'}
 
   pend@1.2.0:
     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
@@ -11586,6 +11596,8 @@ snapshots:
   path-to-regexp@8.4.2: {}
 
   path-type@6.0.0: {}
+
+  pele@1.13.0: {}
 
   pend@1.2.0: {}
 

@@ -29,6 +29,11 @@
       "import": "./dist/highlights.js",
       "default": "./dist/highlights.js"
     },
+    "./mermaid": {
+      "types": "./dist/mermaid.d.ts",
+      "import": "./dist/mermaid.js",
+      "default": "./dist/mermaid.js"
+    },
     "./html": {
       "types": "./dist/html.d.ts",
       "import": "./dist/html.js",

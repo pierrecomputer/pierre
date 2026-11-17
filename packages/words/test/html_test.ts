@@ -124,6 +124,15 @@ void test('root fences preserve markers, line endings, and incomplete state', ()
   }
 });
 
+void test('incomplete input skips a fence until its opening line ends', () => {
+  const html = (source: string, incomplete: boolean) =>
+    dec.decode(renderToHtml(source, { incomplete }));
+  for (const source of ['```', '```mer', '~~~js', '- a\n  ```js', '> ```js'])
+    assert.doesNotMatch(html(source, true), /<pre/, source);
+  for (const source of ['```js', '```js\n', '```js\r', '```js\nx'])
+    assert.match(html(source, source !== '```js'), /<pre/, source);
+});
+
 void test('plain paragraph runs stop at syntax, whitespace, and block boundaries', () => {
   const tails = [
     ['ordinary. Unicode 界é.', 'ordinary. Unicode 界é.'],
@@ -942,8 +951,8 @@ void test('ill-formed UTF-8 in labels decodes to U+FFFD and never traps', () => 
         typeof p === 'string' ? [...new TextEncoder().encode(p)] : p
       )
     );
-  // stray continuation bytes used to decode as two-byte leads that fold to
-  // six bytes, overrunning the label scratch
+  // stray continuation bytes must not decode as two-byte leads that fold to
+  // six bytes and overrun the label scratch
   const stray: number[] = [];
   for (let i = 0; i < 100000; i++) stray.push(0x8e, 0x90);
   const out = html(bytes('[', stray, ']'));
@@ -975,7 +984,7 @@ void test('reference lookups ignore the hash seed and keep namespaces apart', as
   const { init } = await import('../dist/index.js');
   const { readFileSync } = await import('node:fs');
   const wasm = new WebAssembly.Module(
-    readFileSync(new URL('../dist/md.wasm', import.meta.url))
+    readFileSync(new URL('../dist/words.wasm', import.meta.url))
   );
   let doc = '';
   for (let i = 0; i < 300; i++)
@@ -1267,19 +1276,19 @@ void test('pathological input terminates', () => {
     '<'.repeat(2000),
     '|'.repeat(1000) + '\n|-|\n',
     '*a* [b](c) '.repeat(10000),
-    // unclosed raw HTML openers and rejected www domains used to rescan the
-    // rest of the paragraph each time (0.7 to 3 s each at these sizes)
+    // unclosed raw HTML openers and rejected www domains must not rescan the
+    // rest of the paragraph each time
     'x ' + '<!-- '.repeat(40000),
     'x ' + '<?'.repeat(40000),
     'x ' + '<![CDATA[]'.repeat(20000),
     'x ' + '<!A'.repeat(150000),
     'www.a_'.repeat(32000),
-    // crafted to collide in the unseeded label hash (0.6 s before)
+    // crafted to collide in an unseeded label hash
     collidingLabels(8192, 40000),
-    // each container marker once rescanned the rest of the line
+    // each container marker must not rescan the rest of the line
     '- '.repeat(100000) + 'x',
     '> ' + '*\t'.repeat(100000) + 'x',
-    // each blank line once walked every open level
+    // each blank line must not walk every open level
     '- '.repeat(125) + 'x' + '\n'.repeat(400000) + 'y',
     '[^a]: '.repeat(249) + 'x' + '\n  '.repeat(200000) + 'y',
   ];
@@ -1553,7 +1562,7 @@ void test('named references decode exactly and reject near misses', async () => 
   const { readFileSync } = await import('node:fs');
   const table = new Map<string, string>();
   for (const line of readFileSync(
-    new URL('../src/entities.txt', import.meta.url),
+    new URL('../tables/entities.txt', import.meta.url),
     'utf-8'
   ).split('\n')) {
     if (line === '' || line.startsWith('# ')) continue;

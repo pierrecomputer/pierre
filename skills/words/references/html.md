@@ -58,6 +58,8 @@ These options apply to `Markdown`, `createHtmlRenderer()`, and
 | `components`             | Map from HTML tag names to HTML string hooks. `inlineCode` targets inline code                          |
 | `plugins.code`           | Code highlighter plugin                                                                                 |
 | `plugins.renderers`      | Custom fence renderers, selected by language                                                            |
+| `plugins.mermaid`        | Mermaid renderer from `createMermaidPlugin({ render })` of `@pierre/words/mermaid` with Pele's `render` |
+| `math`, `cjk`            | Math as SVG, and CJK-friendly emphasis. Default `false`                                                 |
 | `controls`               | Code copy/download buttons. Default `true`. Accepts `{ code: { copy, download } }` or `{ code: false }` |
 | `lineNumbers`            | Code line numbers. Default `true`                                                                       |
 | `allowedElements`        | Keep only these generated Markdown tags                                                                 |
@@ -124,9 +126,22 @@ const plugins: PluginConfig = {
 };
 ```
 
+```ts
+import { render } from 'pele';
+import { createMermaidPlugin } from '@pierre/words/mermaid';
+
+const plugins: PluginConfig = { mermaid: createMermaidPlugin({ render }) };
+```
+
+The Mermaid plugin renders closed `mermaid` fences as
+`<div data-markdown="mermaid">` with Pele's SVG. An open fence, or a diagram
+that Pele rejects, stays a code block. Pele is the app's dependency.
+
 The first custom renderer that matches the language replaces the entire code
 block and takes precedence over `plugins.code`. It receives
-`{ code, language, isIncomplete }` and returns an HTML string.
+`{ code, language, isIncomplete }` and returns an HTML string, or `null` to show
+the code block. The output of a closed block is reused while its language and
+code stay the same.
 
 A custom `CodeHighlighterPlugin` implements `highlight(options)` with the same
 input. Return escaped HTML for the inside of `<code>`, or `null` for plain text.

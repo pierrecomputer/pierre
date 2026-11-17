@@ -9,7 +9,10 @@ const isFade = (node: Node): node is HTMLElement =>
   (node as Element).getAttribute('data-markdown') === 'token';
 const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
-  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"]';
+  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], svg';
+
+// The source HTML of each math SVG that patchHtml placed, to reuse equal ones.
+const svgSources = new WeakMap<Node, string>();
 
 // Must equal the `markdown-fade-in` duration in react/styles.css: fades with
 // this duration carry no inline style, and cleanup is timed from this value.
@@ -248,6 +251,15 @@ function patchHtml(
             }
         } else if (at >= committed && firstPending === null)
           firstPending = fragment.firstChild;
+        // Record math SVG sources as the walk below does, so patches keep them.
+        if (html.includes('<svg', at)) {
+          const svgs = fragment.querySelectorAll('svg');
+          for (let open = html.indexOf('<svg', at), index = 0; open >= 0; ) {
+            const end = html.indexOf('</svg>', open) + 6;
+            svgSources.set(svgs[index++], html.slice(open, end));
+            open = html.indexOf('<svg', end);
+          }
+        }
         parent.appendChild(fragment);
         at = html.length;
         return;
@@ -312,6 +324,18 @@ function patchHtml(
             else text.data = value;
           }
         } else actual = document.createTextNode(value);
+        at = end;
+      } else if (html.startsWith('<svg', at)) {
+        // Math SVG is one unit: keep an equal one, else let the parser build it.
+        const end = html.indexOf('</svg>', at) + 6;
+        const source = html.slice(at, end);
+        if (current !== null && svgSources.get(current) === source)
+          actual = current;
+        else {
+          template.innerHTML = source;
+          actual = template.content.firstChild!;
+          svgSources.set(actual, source);
+        }
         at = end;
       } else {
         const end = html.indexOf('>', at);
@@ -382,7 +406,7 @@ function patchHtml(
   return firstPending;
 }
 
-/** Patch `parent` to match `incoming`, and reuse nodes. A fade span counts as text. Returns the node at `committed`. */
+/** Patch `parent` to match `incoming`, reusing nodes. A fade span counts as text. Returns the node at `committed`. */
 function patchChildren(
   parent: Node,
   incoming: Node,
@@ -705,6 +729,7 @@ export function createDomRenderer(
         const right = b?.renderers ?? [];
         return (
           a?.code === b?.code &&
+          a?.mermaid === b?.mermaid &&
           left.length === right.length &&
           left.every(
             (renderer, at) =>
@@ -758,7 +783,7 @@ export function createDomRenderer(
       fades.update(active, animated);
       const nextCaret = active ? shape : undefined;
       if (!changed && nextCaret === previousCaret) return;
-      // Remove the caret first, so patches never see it.
+      // Patches must never see the caret.
       caret.remove();
       const codeUpdate: InternalCodeUpdate | undefined = update.code;
       const append = (update as InternalHtmlUpdate)[delta];

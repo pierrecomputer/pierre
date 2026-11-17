@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const text = wasmToText(
-  readFileSync(new URL('../dist/md.wasm', import.meta.url))
+  readFileSync(new URL('../dist/words.wasm', import.meta.url))
 );
 
 // JavaScriptCore can inline SIMD code into a function compiled with the scalar

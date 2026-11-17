@@ -111,12 +111,10 @@
       (then (call $outByte (i32.const 34)))
       (else (global.set $out (local.get $at)))))
 
-  ;; Write the first word of the info string of code block $r, escaped. The
-  ;; word has entities and escapes resolved first, as cmark does. Literal
-  ;; whitespace ends the word in the source. Decoded whitespace is trimmed
-  ;; before the word and ends it after, so cut the cleaned output: escaping
-  ;; never adds or removes whitespace. An info string that decodes to
-  ;; whitespace writes nothing.
+  ;; Write the first word of code block $r's info string, escaped, with entities
+  ;; and escapes resolved first as cmark does. Literal whitespace ends the word;
+  ;; decoded whitespace is trimmed before it and ends it after. Escaping never
+  ;; changes whitespace, so the cleaned output can be cut.
   (func $htmlInfoWord (param $r i32)
     (local $p i32)
     (local $e i32)

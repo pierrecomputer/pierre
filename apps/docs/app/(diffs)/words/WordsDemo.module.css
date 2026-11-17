@@ -190,3 +190,19 @@
     transition: none;
   }
 }
+
+[data-words-example='diagrams'] .preview {
+  min-height: 480px;
+}
+
+/* Pele draws with these variables; its defaults are light-only. */
+.preview [data-markdown='mermaid'] {
+  --pele-bg: var(--background);
+  --pele-fg: var(--foreground);
+  --pele-muted: var(--muted-foreground);
+  --pele-line: var(--muted-foreground);
+  --pele-surface: var(--muted);
+  --pele-surface-alt: color-mix(in srgb, var(--muted) 70%, var(--foreground));
+  --pele-border: var(--border);
+  --pele-font: inherit;
+}

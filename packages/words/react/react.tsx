@@ -42,6 +42,8 @@ export function Markdown({
   parseIncompleteMarkdown = true,
   components,
   plugins,
+  cjk,
+  math,
   controls = true,
   lineNumbers = true,
   caret,
@@ -68,6 +70,8 @@ export function Markdown({
   const options: HtmlOptions = {
     components,
     plugins,
+    cjk,
+    math,
     controls,
     lineNumbers,
     allowedElements,

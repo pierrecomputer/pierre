@@ -1,5 +1,5 @@
 import { init } from './core.ts';
-import wasmModule from './md.wasm';
+import wasmModule from './words.wasm';
 
 init(wasmModule);
 

@@ -7,13 +7,14 @@ export default defineConfig([
     unbundle: true,
     platform: 'neutral',
     dts: { tsgo: true },
-    deps: { neverBundle: [/^\.\/md\.wasm/] },
+    deps: { neverBundle: [/^\.\/words\.wasm/] },
   },
   {
     entry: {
       react: 'react/react.tsx',
       highlights: 'react/highlights.ts',
       html: 'html/index.ts',
+      mermaid: 'html/mermaid.ts',
       // Only for the docs typecheck, through its project reference. Not published.
       'benchmark/fixtures/index': 'benchmark/fixtures/index.ts',
     },

@@ -36,7 +36,7 @@ const engines = await Promise.all(
   })
 );
 const names = readFileSync(
-  candidate + '/packages/words/src/entities.txt',
+  candidate + '/packages/words/tables/entities.txt',
   'utf8'
 )
   .split('\n')
