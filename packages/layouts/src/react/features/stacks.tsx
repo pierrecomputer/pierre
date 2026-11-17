@@ -90,7 +90,7 @@ function useStacks(context: ViewContext): FeatureHooks {
  * `Layout.TabList` in the header of each pane of a stack; a pane outside a
  * stack can show its own tab with one too, or a `Layout.Title`.
  */
-export function stacks(): Feature<StackCommands> {
+export function stacks(): Feature<StackCommands, 'stacks', 'edits'> {
   const feature: FeatureModule<StackCommands> = {
     name: 'stacks',
     requires: ['edits'],

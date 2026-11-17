@@ -26,7 +26,7 @@ export function cornersOf(layout: CSSLayout): CSSCorner[] {
 }
 
 /** Show a resize handle at each corner where two separators meet. */
-export function corners(): Feature {
+export function corners(): Feature<object, 'corners', never> {
   const feature: FeatureModule = {
     name: 'corners',
     stylesheets: [['corners', cornersCss]],

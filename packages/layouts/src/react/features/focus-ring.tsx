@@ -17,7 +17,7 @@ const FULL_SIZE: CSSProperties = {
 };
 
 /** Show a ring around the pane that has the focus of the layout. */
-export function focusRing(): Feature {
+export function focusRing(): Feature<object, 'focus-ring', never> {
   const feature: FeatureModule = {
     name: 'focus-ring',
     use: (_context, { state, geometry }) => {

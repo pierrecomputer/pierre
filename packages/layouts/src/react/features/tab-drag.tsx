@@ -366,7 +366,9 @@ function useTabDrag(
  * refuses the places that the app does not allow, after the rule of pinned
  * tabs.
  */
-export function tabDrag(options: TabDragOptions = {}): Feature {
+export function tabDrag(
+  options: TabDragOptions = {}
+): Feature<object, 'tab-drag', 'stacks'> {
   const feature: FeatureModule = {
     name: 'tab-drag',
     requires: ['stacks'],

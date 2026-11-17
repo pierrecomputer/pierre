@@ -53,7 +53,7 @@ function ContentBoundary({
  */
 export function hiddenContent(
   option: HiddenContent | ((pane: PaneNode) => HiddenContent)
-): Feature {
+): Feature<object, 'hidden-content', never> {
   const feature: FeatureModule = {
     name: 'hidden-content',
     contentMode: (pane) =>

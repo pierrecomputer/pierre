@@ -19,6 +19,28 @@ type UnionToIntersection<U> = (
 type CommandsOfFeature<T> =
   T extends Feature<infer Commands> ? Commands : never;
 
+// The names of the features of a union, and the names that they need.
+type NamesOf<T> = T extends Feature<object, infer Name, string> ? Name : never;
+type NeedsOf<T> =
+  T extends Feature<object, string, infer Needs> ? Needs : never;
+
+/**
+ * A list of features, with a type error for each feature that a feature of
+ * the list needs and the list does not have: for example
+ * `createLayout(root, [arrange()])` fails with "Property 'add the feature
+ * edits()' is missing". The check is in the types only.
+ */
+type WithNeededFeatures<F extends readonly Feature[]> = [
+  Exclude<NeedsOf<F[number]>, NamesOf<F[number]>>,
+] extends [never]
+  ? unknown
+  : {
+      readonly [Name in Exclude<
+        NeedsOf<F[number]>,
+        NamesOf<F[number]>
+      > as `add the feature ${Name}()`]: true;
+    };
+
 /** The commands that a list of features adds to a layout. */
 export type FeatureCommands<F extends readonly Feature[]> = UnionToIntersection<
   CommandsOfFeature<F[number]>
@@ -44,11 +66,13 @@ export interface CreateLayoutOptions {
  * `createLayout(root, [edits(naryTree), zoom(), paneDrag()])`, and render it
  * with `<Layout.Root layout={layout} />`. Each change reaches
  * `layout.subscribe` with its operations, so an app syncs or keeps an undo
- * history without a wrapper of the commands.
+ * history without a wrapper of the commands. A feature that needs another
+ * feature, such as `arrange()`, which needs `edits()`, gives a type error
+ * when the list does not have it, and a development warning.
  */
 export function createLayout<const F extends readonly Feature[] = []>(
   root: LayoutNode,
-  features?: F,
+  features?: F & NoInfer<WithNeededFeatures<F>>,
   options: CreateLayoutOptions = {}
 ): LayoutObject<F> {
   // The features of the library carry their members.

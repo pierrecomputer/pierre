@@ -106,10 +106,22 @@ behavior, its commands, and its CSS:
 | `flip(options)`       | Animations of tree changes and zooms, from each element's old box (`{ layout, zoom }`, both true by default) |
 | `allFeatures()`       | Every feature above, with `{ model, animate }` options                                                       |
 
-A feature that needs another one gives a development warning when it is missing,
-for example `stacks()` for `Layout.TabList`. A feature is a value of the type
-`Feature`, which an app names and passes; its members are internal, so an app
-does not write its own feature yet.
+A feature that needs another feature in the same layout (`arrange()`,
+`paneDrag()`, and `stacks()` need `edits()`; `tabDrag()` needs `stacks()`) gives
+a type error in `createLayout` when the list does not have it: "Property '"add
+the feature edits()"' is missing". The check is in the types only, so it costs
+no byte; a development build also warns. A list typed as `Feature[]` names no
+feature, so it gets no type check. A part whose feature is missing gives a
+development warning, for example `Layout.TabList` without `stacks()`. A feature
+is a value of the type `Feature`, which an app names and passes; its members are
+internal, so an app does not write its own feature yet.
+
+The root entry also exports `edits`, `stacks`, `zoom`, `hiddenPanes`,
+`persistence`, and `naryTree`, for `createLayoutStore` on a server or in a test.
+Those store features are not features of `createLayout`: one of them in the list
+of `createLayout` fails with TS2559, "Type 'StoreFeature<EditCommands>' has no
+properties in common with type 'Feature<object, string, string>'". Import the
+features of `createLayout` from `@pierre/layouts/react`.
 
 The props of `Layout.Root` are `layout`, `renderPane`, `getPaneTitle`,
 `onResize`, `onPaneClose`, `getPaneProps`, `getSeparatorProps`, `stylesheets`,
@@ -149,6 +161,45 @@ output of `renderPane`, so they take no pane prop:
   that "Restore" stays in reach. Without `arrange()`, it is a drag handle only,
   and a development build warns, as WCAG 2.5.7 asks for a path with no drag.
 - `Layout.TabList` and `Layout.Tab`: the tabs of a stack (see "Tabs").
+
+`Root` renders no header. The default header of the earlier `Layout` component,
+with a move handle, the tabs of a stack or the title of a lone pane, and the
+zoom and close buttons, is a few parts:
+
+```tsx
+const layout = createLayout(tree, [
+  edits(naryTree),
+  stacks(),
+  zoom(),
+  paneDrag(),
+]);
+
+function PaneHeader() {
+  const stacked = Layout.usePane((pane) => pane.tabs.length > 1);
+  return (
+    <Layout.Header>
+      <Layout.MoveHandle />
+      {stacked ? <Layout.TabList /> : <Layout.Title />}
+      <Layout.ZoomButton />
+      <Layout.CloseButton />
+    </Layout.Header>
+  );
+}
+
+const renderPane = (pane: PaneNode) => (
+  <>
+    <PaneHeader />
+    <Layout.Content>
+      <PaneContent pane={pane} />
+    </Layout.Content>
+  </>
+);
+```
+
+Without `arrange()`, the move handle is a drag handle only, and a development
+build warns, as WCAG 2.5.7 asks for a path with no drag. Add `arrange()` and
+render the items of `Layout.usePaneMenu(open)` in the app's own menu, with the
+handle as its trigger, as `demo/main.tsx` and `demo/pane-menu.tsx` do.
 
 Each part takes a `render` prop, an element or a function of the part's props
 and state, so an app gives a part its own markup and keeps the part's roles,

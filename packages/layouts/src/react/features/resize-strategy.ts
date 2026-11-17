@@ -21,7 +21,7 @@ import { cornersOf } from './corners';
  */
 export function resizeStrategy(
   strategy: ResizeStrategy | (() => ResizeStrategy)
-): Feature {
+): Feature<object, 'resize-strategy', never> {
   const current = typeof strategy === 'function' ? strategy : () => strategy;
   function useResizeStrategy(context: ViewContext): FeatureHooks {
     const { store } = context;

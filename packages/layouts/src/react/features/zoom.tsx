@@ -181,7 +181,7 @@ function useZoom(
  * Zoom a pane: `layout.toggleZoom(id)` and `layout.setZoom(id | null)`, and
  * `Layout.ZoomButton`. Escape restores the layout.
  */
-export function zoom(): Feature<ZoomCommands> {
+export function zoom(): Feature<ZoomCommands, 'zoom', never> {
   const feature: FeatureModule<ZoomCommands> = {
     name: 'zoom',
     store: zoomStore,

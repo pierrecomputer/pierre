@@ -96,7 +96,7 @@ function usePaneDrag(
  * pinned tab of a stack. The layout's `canPlace` refuses the places that the
  * app does not allow: they show no marker and take no drop.
  */
-export function paneDrag(): Feature {
+export function paneDrag(): Feature<object, 'pane-drag', 'edits'> {
   const feature: FeatureModule = {
     name: 'pane-drag',
     requires: ['edits'],

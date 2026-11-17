@@ -69,7 +69,7 @@ const shownText = ({ paneTitle }: PaneMessageValues): string =>
  * `edits(naryTree)`. The layout gives its trees the
  * shape of the model.
  */
-export function edits(model: TreeModel): Feature<EditCommands> {
+export function edits(model: TreeModel): Feature<EditCommands, 'edits', never> {
   const feature: FeatureModule<EditCommands> = {
     name: 'edits',
     store: editsStore(model),
@@ -93,7 +93,11 @@ export function edits(model: TreeModel): Feature<EditCommands> {
 }
 
 /** Hide a pane and show it again: `layout.setHidden`. */
-export function hiddenPanes(): Feature<HiddenPaneCommands> {
+export function hiddenPanes(): Feature<
+  HiddenPaneCommands,
+  'hidden-panes',
+  never
+> {
   const feature: FeatureModule<HiddenPaneCommands> = {
     name: 'hidden-panes',
     store: hiddenPanesStore,
@@ -108,7 +112,11 @@ export function hiddenPanes(): Feature<HiddenPaneCommands> {
 }
 
 /** The saved form of a layout: `layout.toStoredTree` and `layout.setStoredTree`. */
-export function persistence(): Feature<PersistenceCommands> {
+export function persistence(): Feature<
+  PersistenceCommands,
+  'persistence',
+  never
+> {
   const feature: FeatureModule<PersistenceCommands> = {
     name: 'persistence',
     store: persistenceStore,

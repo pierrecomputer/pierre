@@ -222,7 +222,7 @@ function useArrange(context: ViewContext): FeatureHooks {
  * `pane.wider`, `pane.narrower`, `pane.taller`, `pane.shorter`, and
  * `pane.menu`). It needs `edits()`.
  */
-export function arrange(): Feature<ArrangeCommands> {
+export function arrange(): Feature<ArrangeCommands, 'arrange', 'edits'> {
   const feature: FeatureModule<ArrangeCommands> = {
     name: 'arrange',
     requires: ['edits'],

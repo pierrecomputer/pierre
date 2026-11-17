@@ -483,18 +483,29 @@ export interface AnnounceContext {
   readonly messages: LayoutMessages;
 }
 
-// The brand of a feature, which carries the type of the commands that it adds
-// to a layout object. No value has it at run time.
+// The brands of a feature, which carry the type of the commands that it adds
+// to a layout object, its name, and the names of the features that it needs.
+// No value has them at run time.
 declare const featureCommands: unique symbol;
+declare const featureName: unique symbol;
+declare const featureNeeds: unique symbol;
 
 /**
  * A feature of a layout, for `createLayout`: a value that a function of
  * `@pierre/layouts/react` returns, such as `edits(naryTree)` or `zoom()`.
- * `Commands` types the commands that it adds to the layout object. Its members
- * are internal to the library, so an app does not write a feature.
+ * `Commands` types the commands that it adds to the layout object, `Name` is
+ * its name, and `Needs` the names of the features that it needs in the same
+ * layout, so that `createLayout` gives a type error when one is missing. Its
+ * members are internal to the library, so an app does not write a feature.
  */
-export interface Feature<Commands extends object = object> {
+export interface Feature<
+  Commands extends object = object,
+  Name extends string = string,
+  Needs extends string = string,
+> {
   readonly [featureCommands]?: Commands;
+  readonly [featureName]?: Name;
+  readonly [featureNeeds]?: Needs;
 }
 
 /**
@@ -503,7 +514,7 @@ export interface Feature<Commands extends object = object> {
  */
 export interface FeatureModule<
   Commands extends object = object,
-> extends Feature<Commands> {
+> extends Feature<Commands, never, never> {
   readonly name: string;
   /**
    * The names of the features that this feature needs in the same layout.

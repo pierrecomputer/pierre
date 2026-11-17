@@ -156,7 +156,9 @@ function useFlip(context: ViewContext, options: FlipOptions): FeatureHooks {
  * with a transform, and a pane that shows again grows into its place. A
  * pointer resize, and a user who prefers reduced motion, get no animation.
  */
-export function flip(options: FlipOptions = {}): Feature {
+export function flip(
+  options: FlipOptions = {}
+): Feature<object, 'flip', never> {
   function useFlipView(context: ViewContext): FeatureHooks {
     return useFlip(context, options);
   }
