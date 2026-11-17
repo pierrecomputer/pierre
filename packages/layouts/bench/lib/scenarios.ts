@@ -209,6 +209,25 @@ export const SCENARIOS: Scenario[] = [
     },
   },
   {
+    id: 'restore-stream',
+    description: `Zoom the first pane, append ${APPEND_STEPS} messages to each covered pane, then click the restore button: the covered panes show again with the output that they missed.`,
+    target: 'p0',
+    async setup(page) {
+      await zoomFirstPane(page);
+      await page.evaluate((steps) => {
+        const bench = window.__layoutsBench;
+        for (const id of bench.paneIds.slice(1))
+          for (let step = 0; step < steps; step++) bench.append(id);
+      }, APPEND_STEPS);
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+      return center(page, '[data-layouts-pane="p0"] button[aria-pressed]');
+    },
+    async run(page, _params, point) {
+      await page.mouse.click(point!.x, point!.y);
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
+  },
+  {
     id: 'zoom-busy',
     description:
       'Zoom the first pane, then block the main thread for 200 ms during the animation.',

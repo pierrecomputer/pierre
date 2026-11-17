@@ -37,6 +37,15 @@ For a quick trial that writes nothing to the repository:
 BENCH_RUNS=1 BENCH_WARMUP=0 BENCH_SAVE=0 moon run layouts:bench
 ```
 
+The full bench of a head also runs zoom and restore in each mode of
+`hiddenContent()`, with the output that streams into covered panes
+(`restore-stream`), and the repeat scenario. Each mode writes its own report:
+
+```sh
+BENCH_QUERY=hidden=activity BENCH_SCENARIOS=zoom,restore,restore-stream,repeat moon run layouts:bench
+BENCH_QUERY=hidden=unmount BENCH_SCENARIOS=zoom,restore,restore-stream,repeat moon run layouts:bench
+```
+
 The fixture server uses port `4178` plus `PIERRE_PORT_OFFSET`. In a worktree
 that the environment's manager created, set `PIERRE_PORT_OFFSET` to the
 `WORKTREE_PORT_OFFSET` of `.env.worktree`.
@@ -71,9 +80,10 @@ work that a layout operation pushes into content.
 `window.__layoutsBench` exposes the store, the counters, `append(id)` to add
 output to a pane (the output lives in a store outside React, as in an app, so a
 pane whose content does not render while it is hidden, or does not exist, shows
-what it missed when it shows again), `busy(ms)` to block the main thread, `mountOverlays()` to
-render the closed modal and drawer, and `setOverlay(overlay, open)` to open or
-close one of them through the app's state.
+what it missed when it shows again), `busy(ms)` to block the main thread,
+`mountOverlays()` to render the closed modal and drawer, and
+`setOverlay(overlay, open)` to open or close one of them through the app's
+state.
 
 `?modal=` selects the strategy of the modal: `popover` (the default),
 `dialog-hide-covered`, or `dialog`. `?backdrop=opaque` gives it a backdrop that
@@ -100,6 +110,7 @@ isolate the content area.
 | `idle`              | Nothing. Shows the cost of the harness itself.                                                                                                        |
 | `zoom`              | Click the zoom button of the first pane.                                                                                                              |
 | `restore`           | Click the restore button of the zoomed first pane.                                                                                                    |
+| `restore-stream`    | Zoom the first pane, append 10 messages to each covered pane, then click the restore button. The covered panes show again with what they missed.      |
 | `zoom-busy`         | Zoom, then block the main thread for 200 ms during the animation.                                                                                     |
 | `focus`             | Click the content of the second pane.                                                                                                                 |
 | `resize`            | Drag the root separator 160 px in 16 pointer moves.                                                                                                   |
