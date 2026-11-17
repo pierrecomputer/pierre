@@ -6,6 +6,7 @@ import * as Layout from '../../src/react';
 import {
   allFeatures,
   createLayout,
+  hiddenContent,
   type LayoutObject,
   naryTree,
 } from '../../src/react';
@@ -94,6 +95,14 @@ if (requestedLayers === 'on' || requestedLayers === 'off')
   setPaneLayers(requestedLayers === 'on');
 else if (requestedLayers !== null && /^\d+$/.test(requestedLayers))
   setPaneLayers({ minPanes: Number(requestedLayers) });
+// What the content of a pane that does not show does (`hiddenContent()`):
+// `hidden=activity` or `hidden=unmount`; without the parameter, it stays
+// mounted, with no feature.
+const requestedHidden = params.get('hidden');
+const hiding =
+  requestedHidden === 'activity' || requestedHidden === 'unmount'
+    ? [hiddenContent(requestedHidden)]
+    : [];
 // The modal strategy: `popover` (the default), `dialog-hide-covered`, or
 // `dialog`; and `backdrop=opaque` for a backdrop that hides the page.
 const requestedModal = params.get('modal');
@@ -134,6 +143,7 @@ function buildTree(ids: readonly string[], depth = 0): LayoutNode {
 // the run, which is an internal feature (`DEC-layouts-experiments-internal`).
 const store = createLayout(buildTree(paneIds), [
   ...allFeatures({ model: naryTree }),
+  ...hiding,
   resizeStrategy(resize),
 ]);
 
