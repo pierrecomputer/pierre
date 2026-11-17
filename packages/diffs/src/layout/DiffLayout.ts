@@ -571,10 +571,7 @@ export class DiffLayout<LAnnotation = undefined> {
                 side: 'deletions',
                 lineIndex: deletionLine.lineIndex,
                 marked,
-                contentProperties: {
-                  ...decoration.contentProperties,
-                  contenteditable: 'false',
-                },
+                contentProperties: decoration.contentProperties,
                 lineNumber: deletionLine.lineNumber,
                 altLineNumber: undefined,
                 lineIndexText,
@@ -1044,7 +1041,10 @@ export class DiffLayout<LAnnotation = undefined> {
       row.contentProperties,
       row.lineNumber,
       row.altLineNumber,
-      row.lineIndexText
+      row.lineIndexText,
+      // A unified view shows deleted lines among the lines being edited. The
+      // caret must not enter them.
+      row.column === 'unified' && row.side === 'deletions'
     );
     return {
       key: row.key,
@@ -1065,7 +1065,8 @@ export class DiffLayout<LAnnotation = undefined> {
     contentProperties: Properties | undefined,
     lineNumber: number,
     altLineNumber: number | undefined,
-    lineIndexText: string
+    lineIndexText: string,
+    readOnly: boolean
   ): HASTElement {
     let marked = base;
     if (ranges.length > 0) {
@@ -1082,7 +1083,8 @@ export class DiffLayout<LAnnotation = undefined> {
       contentProperties,
       lineNumber,
       altLineNumber,
-      lineIndexText
+      lineIndexText,
+      readOnly
     );
   }
 
