@@ -262,6 +262,10 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let pendingSource: HtmlUpdate | undefined;
   let pendingInput: string | undefined;
   let pendingActive = false;
+  // Whether the source ends inside a line. An open fence runs to the end, so
+  // this tells renderers if the last code line is still being written.
+  let partial = false;
+  let pendingPartial = false;
   let pendingCode = -1;
   let pendingHtml = '';
   let pendingParagraph: { body: string } | undefined;
@@ -316,6 +320,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     pendingHtml = '';
     pendingParagraph = undefined;
     pendingActive = false;
+    pendingPartial = false;
     pendingCode = -1;
     pendingFence = undefined;
     pendingFences = [];
@@ -433,7 +438,12 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             ? codeCache.get(key)
             : oldCodeCache.get(key);
         if (block === undefined)
-          block = custom.render({ code, language, isIncomplete });
+          block = custom.render({
+            // Open code ends with an added LF. Drop it from a partial line.
+            code: isIncomplete && partial ? code.slice(0, -1) : code,
+            language,
+            isIncomplete,
+          });
         if (!isIncomplete) codeCache.set(key, block);
         // A renderer that returns null shows the code block.
         if (block !== null) {
@@ -782,6 +792,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       active = false
     ): RenderedHtmlUpdate {
       try {
+        const wasPartial = partial;
+        const last = source.charCodeAt(source.length - 1);
+        partial = incomplete && last !== 10 && last !== 13;
         const controls = controlFlags(options.controls);
         const plugins = options.plugins;
         // Plugins and filters need code blocks in slots.
@@ -816,6 +829,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         if (
           update === previousUpdate &&
           active === pendingActive &&
+          partial === wasPartial &&
           result !== undefined
         )
           return result;
@@ -954,6 +968,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             if (
               pendingInput !== pendingRaw ||
               pendingActive !== active ||
+              pendingPartial !== partial ||
               pendingCode !== nextCode
             ) {
               const uses = liveUses;
@@ -974,6 +989,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               if (liveUses === uses) dispose();
               pendingInput = pendingRaw;
               pendingActive = active;
+              pendingPartial = partial;
               pendingCode = nextCode;
             }
           }

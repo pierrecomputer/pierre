@@ -28,8 +28,8 @@ export function createMermaidPlugin<Options>(
           return null;
         }
       }
-      // Open code ends with an added LF. Its partial last line rarely parses.
-      code = code.slice(0, code.lastIndexOf('\n', code.length - 2) + 1);
+      // A partial last line, with no LF yet, rarely parses.
+      code = code.slice(0, code.lastIndexOf('\n') + 1);
       let html = open.get(code);
       if (html !== undefined) return html;
       // The longest earlier state of this fence holds its last diagram.

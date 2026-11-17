@@ -7,6 +7,10 @@ export interface AnimateOptions {
 export type Components = Partial<Record<string, (html: string) => string>>;
 
 export interface CodeOptions {
+  /**
+   * Code lines, each ending with LF. For a `MermaidPlugin` or `renderers`, the
+   * last line of an open fence has no LF while it is still being written.
+   */
   code: string;
   language: string;
   isIncomplete: boolean;

@@ -365,6 +365,21 @@ void test('the Mermaid plugin renders mermaid fences', () => {
   // the same complete lines do not render again
   renderer.render('```mermaid\ngraph LR\nbad\nAB', true, true);
   assert.deepEqual(calls, ['graph LR\n', 'graph LR\nbad\n']);
+  // a line is complete at its LF, with no next line yet
+  assert.match(
+    renderer.render('```mermaid\ngraph LR\nbad\nAB\n', true, true).html,
+    /<svg data-test="graph LR">/
+  );
+  assert.deepEqual(calls, [
+    'graph LR\n',
+    'graph LR\nbad\n',
+    'graph LR\nbad\nAB\n',
+  ]);
+  const fresh = createHtmlRenderer({ plugins: { mermaid } });
+  assert.match(
+    fresh.render('```mermaid\ngraph LR\nA-B\n', true, true).html,
+    /<svg data-test="graph LR\nA-B">/
+  );
   calls.length = 0;
   const done = renderer.render(
     '```mermaid\ngraph LR\n```\n\n```mermaid\nbad\n```\n',
