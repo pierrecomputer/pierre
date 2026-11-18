@@ -471,8 +471,8 @@ table('math-glyphs', (_, inner) => {
 
 // (math-commands <base> <end> <packed> <packedEnd> <spill> <spillEnd>): the TeX
 // commands of tables/math.txt. At <base>, a u32 per name length up to 31:
-// group offset from <base> (u16) and count (u16). $m.unpackCmds fills the
-// groups at instantiation: each entry is the name, then a u32 value of
+// group offset from <base> (u16) and count (u16). The first $mathSvg fills
+// the groups: each entry is the name, then a u32 value of
 // kind << 24, atom class << 21, and a 16-bit value. Groups that do not fit
 // before <end> go to <spill>, and so do the macro bodies, each a length byte
 // and its UTF-8 TeX; a macro's value is the offset of its body from <base>,
@@ -565,7 +565,7 @@ code = replaceForm(code, 'math-commands', (inner) => {
   bytes.push(0);
   if (packed + bytes.length > packedEnd)
     throw new Error(`math-commands packed needs ${bytes.length} bytes`);
-  // the spilled groups are zeros until $m.unpackCmds fills them
+  // the spilled groups are zeros until $mathSvg fills them
   let used = spillBytes.length;
   while (used > 0 && spillBytes[used - 1] === 0) used--;
   return (

@@ -157,10 +157,16 @@
   (global $cmdLen (mut i32) (i32.const 0))
   ;; where the next macro expansion with an argument goes, past the source
   (global $mTop (mut i32) (i32.const 0))
+  ;; the command tables are expanded
+  (global $mReady (mut i32) (i32.const 0))
   ;; end of the last copied macro byte a node points to: text and colors
   (global $mPin (mut i32) (i32.const 0))
   ;; end of the pairs at $mem.mathInfix
-  (global $mInfix (mut i32) (i32.const 0))
+  (global $mInfix (mut i32) (i32.const $mem.mathInfix))
+  ;; numerators being parsed again
+  (global $mReparse (mut i32) (i32.const 0))
+  ;; a bit at $mem.mathInfixBits is set
+  (global $mBits (mut i32) (i32.const 0))
   (global $gD (mut i32) (i32.const 0))
   (global $gH (mut i32) (i32.const 0))
   (global $gI (mut i32) (i32.const 0))
@@ -685,46 +691,6 @@
                 (br_if $comment (i32.and (i32.ne (call $m.peek) (i32.const 10)) (i32.ne (call $m.peek) (i32.const 0))))))
             (else (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))
           (br $l)))))
-
-  ;; Expand the packed commands at $mem.mathNodes into their name length
-  ;; groups (see math-commands in scripts/build.ts). The previous name stays
-  ;; in $mem.mathSrc for the shared prefix; group cursors are at $mem.mathAtoms.
-  (func $m.unpackCmds
-    (local $n i32)
-    (local $i i32)
-    (local $src i32)
-    (local $len i32)
-    (local $c i32)
-    (local $at i32)
-    (local $dst i32)
-    (loop $cursor
-      (local.set $len (i32.add (local.get $len) (i32.const 4)))
-      (i32.store offset=$mem.mathAtoms (local.get $len)
-        (i32.add (i32.const $mem.mathCmds) (i32.load16_u offset=$mem.mathCmds (local.get $len))))
-      (br_if $cursor (i32.lt_u (local.get $len) (i32.const 124))))
-    (local.set $n (i32.load16_u (i32.const $mem.mathNodes)))
-    (local.set $src (i32.add (i32.const $mem.mathNodes+2) (i32.mul (local.get $n) (i32.const 3))))
-    (loop $name
-      (local.set $len (i32.load8_u (local.get $src)))
-      (loop $byte
-        (local.set $src (i32.add (local.get $src) (i32.const 1)))
-        (local.set $c (i32.load8_u (local.get $src)))
-        (if (i32.gt_u (local.get $c) (i32.const 0x20))
-          (then
-            (i32.store8 offset=$mem.mathSrc (local.get $len) (local.get $c))
-            (local.set $len (i32.add (local.get $len) (i32.const 1)))
-            (br $byte))))
-      (local.set $at (i32.add (i32.const $mem.mathAtoms) (i32.shl (local.get $len) (i32.const 2))))
-      (local.set $dst (i32.load (local.get $at)))
-      (memory.copy (local.get $dst) (i32.const $mem.mathSrc) (local.get $len))
-      (local.set $c (i32.add (i32.const $mem.mathNodes+2) (local.get $i)))
-      (local.set $c (i32.or (i32.load8_u (local.get $c))
-        (i32.or (i32.shl (i32.load8_u (i32.add (local.get $c) (local.get $n))) (i32.const 8))
-          (i32.shl (i32.load8_u (i32.add (local.get $c) (i32.shl (local.get $n) (i32.const 1)))) (i32.const 21)))))
-      (i32.store (i32.add (local.get $dst) (local.get $len)) (local.get $c))
-      (i32.store (local.get $at) (i32.add (i32.add (local.get $dst) (local.get $len)) (i32.const 4)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br_if $name (i32.lt_u (local.get $i) (local.get $n)))))
 
   ;; Look up the command name [$p, $p + $len): its value, or -1. Each name
   ;; length group is sorted, so this is a binary search.
@@ -2469,10 +2435,18 @@
     (local $variant i32)
     (local $end i32)
     (local $t i32)
+    (local $nodes i32)
+    (local $top i32)
+    (local $pin i32)
+    (local $splits i32)
     (local.set $base (global.get $mA))
     (local.set $start (global.get $mp))
     (local.set $style (global.get $mStyle))
     (local.set $variant (global.get $mVariant))
+    (local.set $nodes (global.get $mN))
+    (local.set $top (global.get $mTop))
+    (local.set $pin (global.get $mPin))
+    (local.set $splits (global.get $mInfix))
     (global.set $mDepth (i32.add (global.get $mDepth) (i32.const 1)))
     (if (i32.gt_u (global.get $mDepth) (i32.const 48))
       (then (global.set $mFail (i32.const 1))))
@@ -2481,19 +2455,26 @@
     (block $stop
      (block $infix
       ;; A list that a pass before found split by `\over` splits again at once,
-      ;; so nested numerators are not searched once per enclosing split.
-      (local.set $t (i32.const $mem.mathInfix))
-      (block $search
-        (loop $find
-          (br_if $search (i32.ge_u (local.get $t) (global.get $mInfix)))
-          (if (i32.and (i32.eq (i32.load (local.get $t)) (local.get $start))
-                (i32.lt_u (i32.load offset=4 (local.get $t)) (global.get $me)))
+      ;; so nested numerators are not searched once per enclosing split. The
+      ;; pairs are searched only when the start's bit is set.
+      (local.set $t (i32.sub (local.get $start) (i32.const $mem.mathCmds)))
+      (if (i32.lt_u (local.get $t) (i32.const 24576))
+        (then
+          (if (i32.and (i32.load8_u offset=$mem.mathInfixBits (i32.shr_u (local.get $t) (i32.const 3)))
+                (i32.shl (i32.const 1) (i32.and (local.get $t) (i32.const 7))))
             (then
-              (global.set $mp (local.tee $save (i32.load offset=4 (local.get $t))))
-              (local.set $v (call $m.readCmd))
-              (br $infix)))
-          (local.set $t (i32.add (local.get $t) (i32.const 8)))
-          (br $find)))
+              (local.set $t (global.get $mInfix))
+              (block $search
+                (loop $find
+                  (br_if $search (i32.le_u (local.get $t) (i32.const $mem.mathInfix)))
+                  (local.set $t (i32.sub (local.get $t) (i32.const 8)))
+                  (if (i32.and (i32.eq (i32.load (local.get $t)) (local.get $start))
+                        (i32.lt_u (i32.load offset=4 (local.get $t)) (global.get $me)))
+                    (then
+                      (global.set $mp (local.tee $save (i32.load offset=4 (local.get $t))))
+                      (local.set $v (call $m.readCmd))
+                      (br $infix)))
+                  (br $find)))))))
       (loop $l
         (br_if $stop (global.get $mFail))
         (if (i32.and (local.get $flags) (i32.const $P.single))
@@ -2567,11 +2548,28 @@
               ;; `\over` and the other infix fractions split the group
               (if (i32.and (i32.eq (local.get $k) (i32.const $K.frac)) (i32.ne (i32.and (local.get $v) (i32.const 0x40)) (i32.const 0)))
                 (then
-                  (if (i32.lt_u (global.get $mInfix) (i32.const $mem.mathInfixEnd))
+                  ;; Macro copies of the first pass are free again, unless a
+                  ;; pair points into them.
+                  (if (i32.eq (global.get $mInfix) (local.get $splits))
+                    (then
+                      (global.set $mTop (local.get $top))
+                      (global.set $mPin (local.get $pin))))
+                  (local.set $t (i32.sub (local.get $start) (i32.const $mem.mathCmds)))
+                  (if (i32.and (i32.lt_u (global.get $mInfix) (i32.const $mem.mathInfixEnd))
+                        (i32.lt_u (local.get $t) (i32.const 24576)))
                     (then
                       (i32.store (global.get $mInfix) (local.get $start))
                       (i32.store offset=4 (global.get $mInfix) (local.get $save))
-                      (global.set $mInfix (i32.add (global.get $mInfix) (i32.const 8)))))
+                      (global.set $mInfix (i32.add (global.get $mInfix) (i32.const 8)))
+                      (global.set $mBits (i32.const 1))
+                      (i32.store8 offset=$mem.mathInfixBits (i32.shr_u (local.get $t) (i32.const 3))
+                        (i32.or (i32.load8_u offset=$mem.mathInfixBits (i32.shr_u (local.get $t) (i32.const 3)))
+                          (i32.shl (i32.const 1) (i32.and (local.get $t) (i32.const 7))))))
+                    (else
+                      ;; Without a pair, each enclosing numerator parsed again
+                      ;; would search this list again, doubling the work per
+                      ;; level: fail instead.
+                      (if (global.get $mReparse) (then (global.set $mFail (i32.const 1))))))
                   (br $infix)))
               (if (i32.and (i32.ne (i32.and (local.get $flags) (i32.const $P.cell)) (i32.const 0))
                     (i32.or (i32.eq (local.get $k) (i32.const $K.cr)) (i32.eq (local.get $k) (i32.const $K.end))))
@@ -2610,8 +2608,9 @@
           (call $m.push (call $m.symbol (local.get $c) (local.get $k)) (local.get $k) (i32.const 0)))
         (br $l)))
      ;; The atoms before the split were laid out in the wrong style, so they
-     ;; are parsed again as the numerator. Each pass takes new nodes, so the
-     ;; node limit bounds the work of numerators the pairs do not cover.
+     ;; are parsed again as the numerator. No atom keeps the nodes of the
+     ;; first pass, so they are free again.
+     (global.set $mN (local.get $nodes))
      (local.set $t (i32.const -1))
      (if (i32.and (local.get $v) (i32.const 0x20)) (then (local.set $t (call $m.dimen (i32.const 0)))))
      (local.set $end (global.get $me))
@@ -2621,7 +2620,9 @@
      (global.set $mp (local.get $start))
      (global.set $mVariant (local.get $variant))
      (call $m.setStyle (call $m.fracStyle (local.get $style)))
+     (global.set $mReparse (i32.add (global.get $mReparse) (i32.const 1)))
      (local.set $n (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
+     (global.set $mReparse (i32.sub (global.get $mReparse) (i32.const 1)))
      (global.set $me (local.get $end))
      (global.set $mp (local.get $k))
      (call $m.setStyle (i32.or (call $m.fracStyle (local.get $style)) (i32.const 4)))
@@ -3021,6 +3022,7 @@
     (local $cp i32)
     (local $f i32)
     (local $b i32)
+    (local $open i32)
     (local.set $p (call $m.nAt (local.get $n)))
     (block $done
       (block $text
@@ -3083,17 +3085,22 @@
           (local.set $c (global.get $utf8Next))
           (if (local.get $b)
             (then
+              ;; other characters in bold get a stroke, one tspan per run;
+              ;; a space keeps the run
               (local.set $b (call $m.textCp (local.get $cp) (local.get $f)))
-              ;; other characters in bold get a stroke
-              (if (i32.and (i32.eq (local.get $b) (local.get $cp)) (i32.ne (local.get $cp) (i32.const 32)))
+              (if (i32.ne (local.get $cp) (i32.const 32))
                 (then
-                  (out.str "<tspan stroke=\22currentColor\22 stroke-width=\2230\22>")
-                  (call $m.outCp (local.get $cp))
-                  (out.str "</tspan>"))
-                (else (call $m.outCp (local.get $b))))
+                  (if (i32.ne (local.get $open) (i32.eq (local.get $b) (local.get $cp)))
+                    (then
+                      (if (local.get $open)
+                        (then (out.str "</tspan>"))
+                        (else (out.str "<tspan stroke=\22currentColor\22 stroke-width=\2230\22>")))
+                      (local.set $open (i32.eqz (local.get $open)))))))
+              (call $m.outCp (local.get $b))
               (local.set $b (i32.const 1)))
             (else (call $m.outCp (local.get $cp))))
           (br $char)))
+      (if (local.get $open) (then (out.str "</tspan>")))
       (out.str "</text>")))
 
   ;; a color from the source, or red for unknown commands (gray while the block is open)
@@ -3113,6 +3120,50 @@
     (local $w i32)
     (local $h i32)
     (local $d i32)
+    (local $n i32)
+    (local $i i32)
+    (local $src i32)
+    (local $c i32)
+    (local $at i32)
+    (local $dst i32)
+    ;; The first formula expands the packed commands at $mem.mathNodes into
+    ;; their name length groups (see math-commands in scripts/build.ts), before
+    ;; nodes overwrite them. The previous name stays in $mem.mathCells for the
+    ;; shared prefix; group cursors are at $mem.mathAtoms.
+    (if (i32.eqz (global.get $mReady))
+      (then
+        (global.set $mReady (i32.const 1))
+        (local.set $root (local.get $len))
+        (local.set $len (i32.const 0))
+        (loop $cursor
+          (local.set $len (i32.add (local.get $len) (i32.const 4)))
+          (i32.store offset=$mem.mathAtoms (local.get $len)
+            (i32.add (i32.const $mem.mathCmds) (i32.load16_u offset=$mem.mathCmds (local.get $len))))
+          (br_if $cursor (i32.lt_u (local.get $len) (i32.const 124))))
+        (local.set $n (i32.load16_u (i32.const $mem.mathNodes)))
+        (local.set $src (i32.add (i32.const $mem.mathNodes+2) (i32.mul (local.get $n) (i32.const 3))))
+        (loop $name
+          (local.set $len (i32.load8_u (local.get $src)))
+          (loop $byte
+            (local.set $src (i32.add (local.get $src) (i32.const 1)))
+            (local.set $c (i32.load8_u (local.get $src)))
+            (if (i32.gt_u (local.get $c) (i32.const 0x20))
+              (then
+                (i32.store8 offset=$mem.mathCells (local.get $len) (local.get $c))
+                (local.set $len (i32.add (local.get $len) (i32.const 1)))
+                (br $byte))))
+          (local.set $at (i32.add (i32.const $mem.mathAtoms) (i32.shl (local.get $len) (i32.const 2))))
+          (local.set $dst (i32.load (local.get $at)))
+          (memory.copy (local.get $dst) (i32.const $mem.mathCells) (local.get $len))
+          (local.set $c (i32.add (i32.const $mem.mathNodes+2) (local.get $i)))
+          (local.set $c (i32.or (i32.load8_u (local.get $c))
+            (i32.or (i32.shl (i32.load8_u (i32.add (local.get $c) (local.get $n))) (i32.const 8))
+              (i32.shl (i32.load8_u (i32.add (local.get $c) (i32.shl (local.get $n) (i32.const 1)))) (i32.const 21)))))
+          (i32.store (i32.add (local.get $dst) (local.get $len)) (local.get $c))
+          (i32.store (local.get $at) (i32.add (i32.add (local.get $dst) (local.get $len)) (i32.const 4)))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br_if $name (i32.lt_u (local.get $i) (local.get $n))))
+        (local.set $len (local.get $root))))
     (global.set $mN (i32.const 0))
     ;; node 0 stands for "no box" (W, H, D read 0); an overflow writes it
     (memory.fill (i32.const $mem.mathNodes) (i32.const 0) (i32.const $N.size))
@@ -3129,6 +3180,13 @@
     (call $m.setStyle (select (i32.const 0) (i32.const 1) (local.get $display)))
     (global.set $mTop (i32.add (global.get $me) (i32.const 8)))
     (global.set $mPin (i32.const 0))
+    (global.set $mReparse (i32.const 0))
+    ;; A pair dropped with its macro copy leaves its bit set, which only
+    ;; costs a search until here.
+    (if (global.get $mBits)
+      (then
+        (global.set $mBits (i32.const 0))
+        (memory.fill (i32.const $mem.mathInfixBits) (i32.const 0) (i32.const 3072))))
     (global.set $mInfix (i32.const $mem.mathInfix))
     (local.set $root (call $m.grid (i32.const -1)))
     (if (global.get $mFail) (then (return (i32.const 0))))

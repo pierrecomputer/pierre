@@ -447,9 +447,9 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         if (block !== null) {
           block = hookHtml(block);
           // A diagram sits in the code block frame: its header and buttons,
-          // which are disabled while the fence streams. The buttons take the
-          // source from `data-code`; Wasm escapes `"` in code, so the slot
-          // content is a safe attribute value.
+          // which are disabled while the fence streams. The buttons of a
+          // closed fence take the source from `data-code`; Wasm escapes `"`
+          // in code, so the slot content is a safe attribute value.
           if (
             block !== '' &&
             (custom === options.plugins?.mermaid || custom.frame === true)
@@ -457,7 +457,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             const start = open + 1 + codeBlockOpen.length;
             const pre = input.indexOf('<pre', start);
             if (pre !== -1 && pre < tag)
-              block = `${codeBlockOpen} data-code="${isIncomplete && partial ? content.slice(0, -1) : content}"${input.slice(start, pre)}${block}</div>`;
+              block = `${codeBlockOpen}${isIncomplete ? '' : ` data-code="${content}"`}${input.slice(start, pre)}${block}</div>`;
           }
           html += block;
           fences?.push(cursor, html.length, index);

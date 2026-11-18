@@ -387,6 +387,10 @@ void test('math fractions: infix forms and \\genfrac', () => {
   let nested = 'a';
   for (let i = 0; i < 16; i++) nested = `{${nested}\\over b}`;
   assert.equal(svg(nested).match(/<rect /g)?.length, 16);
+  // the first pass before a split frees its nodes, so a numerator is as
+  // long as a whole formula can be
+  const terms = Array.from({ length: 280 }, (_, i) => `a_${i}`).join('+');
+  assert.match(svg(`{${terms}\\over 2}`), /<rect /);
 });
 
 void test('math boxes, lines and laps', () => {
@@ -435,6 +439,11 @@ void test('math font switches and bold text', () => {
   assert.match(
     svg('\\textbf{a!}'),
     /𝐚<tspan stroke="currentColor" stroke-width="30">!<\/tspan>/
+  );
+  // a run of stroked characters, with its spaces, shares one tspan
+  assert.match(
+    svg('\\textbf{中文， 标点!a}'),
+    />中文， 标点!<\/tspan>𝐚<\/text>/
   );
   assert.equal(glyphs(svg('\\text{a \\bf b} c')), 'a 𝐛𝑐');
   assert.equal(glyphs(svg('\\text{\\mathbf{x}y}')), '𝐱y');
@@ -649,7 +658,7 @@ void test('the Mermaid plugin renders mermaid fences', () => {
   // an open fence draws its complete lines
   assert.match(
     renderer.render('```mermaid\ngraph LR\nA-', true, true).html,
-    /^<div data-markdown="code-block" data-code="graph LR\nA-" data-language="mermaid" data-incomplete="true"><div data-markdown="code-header"><span>mermaid<\/span><span><button [^>]*disabled="">Copy<\/button><button [^>]*disabled="">Download<\/button><\/span><\/div><div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div><\/div>/
+    /^<div data-markdown="code-block" data-language="mermaid" data-incomplete="true"><div data-markdown="code-header"><span>mermaid<\/span><span><button [^>]*disabled="">Copy<\/button><button [^>]*disabled="">Download<\/button><\/span><\/div><div data-markdown="mermaid"><svg data-test="graph LR"><\/svg><\/div><\/div>/
   );
   // a line that does not parse keeps the last diagram
   assert.match(
@@ -692,7 +701,8 @@ void test('the Mermaid plugin renders mermaid fences', () => {
   assert.equal(
     renderer.render('```mermaid\nbad\nx', true, true).html.trim(),
     ''
-  ); // the source in data-code stays escaped
+  );
+  // the source in data-code stays escaped
   assert.match(
     renderer.render('```mermaid\ngraph "<&>"\n```\n', false, false).html,
     /^<div data-markdown="code-block" data-code="graph &quot;&lt;&amp;&gt;&quot;\n" data-language="mermaid">/
