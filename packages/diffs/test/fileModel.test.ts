@@ -157,7 +157,6 @@ describe('FileLayout', () => {
     const model = FileModel.fromFile(FILE);
     const { column, rowCount, totalLines } = layoutFor().layout({
       model,
-      editing: false,
       rows: plainRows(model),
       renderRange: ALL,
       annotations: {},
@@ -177,7 +176,6 @@ describe('FileLayout', () => {
     const model = FileModel.fromFile(FILE);
     const { column, rowCount } = layoutFor().layout({
       model,
-      editing: false,
       rows: plainRows(model),
       renderRange: ALL,
       annotations: {
@@ -204,7 +202,6 @@ describe('FileLayout', () => {
     const layout = layoutFor();
     const input = {
       model,
-      editing: true,
       rows: plainRows(model),
       renderRange: ALL,
       annotations: {},

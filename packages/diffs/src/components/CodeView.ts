@@ -1674,6 +1674,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private resetSearchState(): void {
     dequeueRender(this.flushSearchMatches);
     dequeueRender(this.paintSearchHighlights);
+    dequeueRender(this.revealCurrentSearchMatch);
     this.searchHighlighter?.clear();
     this.searchState.scope = undefined;
     this.searchState.matches = [];
@@ -1960,6 +1961,28 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (needsRefresh) this.render();
   }
 
+  // Called before each find step. When the current match stands for the
+  // cut-off part of a line, this finishes searching its item and has the
+  // panel read the matches again. If the line was just expanded, the step
+  // then starts from the match the stand-in really was, and stays in that
+  // line instead of skipping it.
+  private settleCutOffSearchMatch = (): void => {
+    const { scan, current } = this.searchState;
+    if (scan == null || current?.cutOff !== true) {
+      return;
+    }
+    const position = this.getSearchItemPosition(current.itemId);
+    if (position == null) {
+      return;
+    }
+    while (scan.isItemPending(position) && !scan.finished) {
+      if (scan.advance(BACKGROUND_TASK_BUDGET_MS, position)) {
+        this.searchMatchesDirty = true;
+      }
+    }
+    this.flushSearchMatches();
+  };
+
   private flushSearchMatches = (): void => {
     dequeueRender(this.flushSearchMatches);
     if (!this.searchMatchesDirty) {
@@ -1992,6 +2015,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // repainted by whatever put them on screen.
     if (currentChanged) {
       this.render();
+    } else if (matches.length === 0) {
+      // Nothing puts an empty list on screen, so the old matches come off here.
+      this.searchHighlighter?.clear();
     }
   }
 
@@ -2061,8 +2087,25 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.setSearchResults(matches, currentItemPending ? current : nextCurrent);
     if (jumpTarget != null && pending === 'jump') {
       this.scrollToSearchMatch(jumpTarget);
+    } else if (
+      current?.cutOff === true &&
+      nextCurrent != null &&
+      nextCurrent.cutOff !== true
+    ) {
+      // The current match stood for the cut-off part of a line, and that part
+      // shows now. Go to where the match really is, once its row is rendered.
+      queueRender(this.revealCurrentSearchMatch);
     }
     return nextIndex;
+  };
+
+  // Scrolls to the current match. Queued to run after the frame's render, so
+  // the match is measured in the rows that are on screen by then.
+  private revealCurrentSearchMatch = (): void => {
+    const { current } = this.searchState;
+    if (current != null) {
+      this.scrollToSearchMatch(current);
+    }
   };
 
   private queueSearchHighlightPaint = (): void => {
@@ -2155,11 +2198,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const { id: itemId } = item.item;
     const document = itemEditors.get(itemId)?.editor.getEditState()?.document;
     const contents = document?.getText();
+    const lineCuts = item.instance.getLineCutsForSearch();
     return item.type === 'file'
-      ? { itemId, type: 'file', contents: contents ?? item.item.file.contents }
+      ? {
+          itemId,
+          type: 'file',
+          lineCuts,
+          contents: contents ?? item.item.file.contents,
+        }
       : {
           itemId,
           type: 'diff',
+          lineCuts,
           fileDiff: this.getSearchDiff(item),
           additionContents: contents,
           diffStyle: options.diffStyle ?? 'split',
@@ -2814,6 +2864,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         );
       },
       onUpdate: this.updateSearchResults,
+      onBeforeNavigate: this.settleCutOffSearchMatch,
       onClose: () => {
         this.closeSearch();
       },
@@ -5989,6 +6040,8 @@ function hasSearchIndexOptionChanged<LAnnotation, Caret>(
   nextOptions: CodeViewOptions<LAnnotation, Caret>
 ): boolean {
   return (
+    previousOptions.tokenizeMaxLineLength !==
+      nextOptions.tokenizeMaxLineLength ||
     (previousOptions.diffStyle ?? 'split') !==
       (nextOptions.diffStyle ?? 'split') ||
     (previousOptions.expandUnchanged ?? false) !==

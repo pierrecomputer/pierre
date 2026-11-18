@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
 import type { DiffLineMetadata } from '../src/layout/RowSpec';
+import { LineCuts } from '../src/rows/LineCuts';
 import { MAX_SEARCH_MATCHES, type SearchParams } from '../src/search';
 import {
   type CodeViewSearchDiff,
@@ -376,6 +377,106 @@ function createLargeDiff(): FileDiffMetadata {
     { disableLineMatching: true }
   );
 }
+
+describe('find on cut lines', () => {
+  // Reads the source coordinates that stepping through the results will visit.
+  function coordinates(item: CodeViewSearchItem, query = params) {
+    return scanItem(item, query)
+      .getMatches()
+      .map(({ lineNumber, startCharacter, endCharacter }) => [
+        lineNumber,
+        startCharacter,
+        endCharacter,
+      ]);
+  }
+
+  test('keeps visible matches and the first hidden or crossing match', () => {
+    const cuts = new LineCuts();
+    const item: CodeViewSearchItem = {
+      type: 'file',
+      itemId: 'file',
+      contents: 'line line line line\nline-----none\n--------line line',
+      lineCuts: { cutLength: 9, expandedLines: cuts.expandedLines },
+    };
+    expect(coordinates(item)).toEqual([
+      [1, 0, 4],
+      [1, 5, 9],
+      [1, 10, 14],
+      [2, 0, 4],
+      [3, 8, 12],
+    ]);
+    cuts.expand({ additionLineNumber: 1 });
+    expect(coordinates(item)).toEqual([
+      [1, 0, 4],
+      [1, 5, 9],
+      [1, 10, 14],
+      [1, 15, 19],
+      [2, 0, 4],
+      [3, 8, 12],
+    ]);
+    expect(
+      coordinates({
+        ...item,
+        lineCuts: { cutLength: Infinity, expandedLines: cuts.expandedLines },
+      })
+    ).toEqual([
+      [1, 0, 4],
+      [1, 5, 9],
+      [1, 10, 14],
+      [1, 15, 19],
+      [2, 0, 4],
+      [3, 8, 12],
+      [3, 13, 17],
+    ]);
+  });
+
+  test('word boundaries and end anchors see past the cut', () => {
+    const item: CodeViewSearchItem = {
+      type: 'file',
+      itemId: 'words',
+      contents: 'lines of text\nlines on a line',
+      lineCuts: { cutLength: 4, expandedLines: new LineCuts().expandedLines },
+    };
+    expect(coordinates(item, { ...params, wholeWord: true })).toEqual([
+      [2, 11, 15],
+    ]);
+    expect(
+      coordinates(item, { ...params, text: 'line$', regex: true })
+    ).toEqual([[2, 11, 15]]);
+  });
+
+  test('split context shares its hidden match and changed lines keep their own', () => {
+    const matches = scanItem({
+      type: 'diff',
+      itemId: 'diff',
+      diffStyle: 'split',
+      additionsOnly: false,
+      fileDiff: parseDiffFromFile(
+        { name: 'a', contents: 'old line line\nline line line' },
+        {
+          name: 'a',
+          contents: 'new text here\nadded line line\nline line line',
+        },
+        { disableLineMatching: true }
+      ),
+      lineCuts: { cutLength: 4, expandedLines: new LineCuts().expandedLines },
+    }).getMatches();
+    expect(
+      matches.map(({ side, lineNumber, startCharacter }) => [
+        side,
+        lineNumber,
+        startCharacter,
+      ])
+    ).toEqual([
+      ['deletions', 1, 4],
+      ['additions', 2, 6],
+      ['deletions', 2, 0],
+      ['deletions', 2, 5],
+      ['additions', 3, 0],
+      ['additions', 3, 5],
+    ]);
+  });
+});
 
 describe('CodeViewSearchScan diff line matching', () => {
   test('plain text and escaped regex match separate source-line searches across diff modes', () => {

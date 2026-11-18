@@ -64,6 +64,11 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
   ) => number | undefined;
   /** Reports the panel state on open and after every change. */
   onStateChange?: (state: SearchPanelState) => void;
+  /**
+   * Called before each find step, so the host can bring its matches up to
+   * date first.
+   */
+  onBeforeNavigate?: () => void;
   onClose: () => void;
 }
 
@@ -98,6 +103,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       onQueryChange,
       onUpdate,
       onStateChange,
+      onBeforeNavigate,
       onClose,
     } = options;
 
@@ -208,6 +214,12 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       findPrevious: boolean = false,
       retainFocus: boolean = false
     ) => {
+      onBeforeNavigate?.();
+      // The host reports to its own callbacks while it catches up, and one of
+      // them may close the panel.
+      if (this.#closed) {
+        return;
+      }
       const { all, currentIndex } = matches;
       if (all.length > 0) {
         let nextIndex: number;

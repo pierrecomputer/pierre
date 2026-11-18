@@ -5,6 +5,7 @@ import {
   type TextDocumentChange,
 } from '../editor/textDocument';
 import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
+import type { SearchLineCuts } from '../search/codeViewSearch';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
@@ -1219,6 +1220,16 @@ export class VirtualizedFileDiff<
     // CodeView sessions retain their editor association while rendering is
     // suspended; CodeView itself runs the exit recompute when it reaps one.
     return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
+  }
+
+  // What find needs to know about this item's cut-off lines: the length they
+  // are cut at, and the lines that were expanded.
+  public getLineCutsForSearch(): SearchLineCuts {
+    const { hunksRenderer, options } = this;
+    return {
+      cutLength: hunksRenderer.getLineCutLength(options),
+      expandedLines: hunksRenderer.lineCuts.expandedLines,
+    };
   }
 
   // Search maps live editor lines against the session's hunks, including while

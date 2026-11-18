@@ -198,6 +198,9 @@ slices, starting with rendered items. Matches and counts arrive as items finish;
 through matches found so far. Replace actions are disabled until the scan
 finishes.
 
+If the hidden part of a long line contains matches, find counts them as one
+match and highlights the expand button. Expanding the line finds the rest.
+
 `onItemCollapsedChange(item, nextItem)` runs after `CodeView` changes an item's
 `collapsed` itself, which find does when it opens a collapsed item to show a
 match. `CodeView` has already applied `nextItem`, with the new `collapsed` and a

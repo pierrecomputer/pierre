@@ -59,7 +59,10 @@ async function withViewer(
     states: SearchPanelState[];
     finish(): Promise<void>;
   }) => void | Promise<void>,
-  options: { diffStyle?: 'split' | 'unified' } = {}
+  options: {
+    diffStyle?: 'split' | 'unified';
+    tokenizeMaxLineLength?: number;
+  } = {}
 ): Promise<void> {
   const dom = installDom();
   const states: SearchPanelState[] = [];
@@ -980,14 +983,23 @@ describe('CodeView sliced find', () => {
     });
   });
 
-  test('a long line stops at the cap and publishes a finished result', async () => {
+  test('a hidden match can fill the last place at the cap', async () => {
+    const cutLength = 'target '.length * (MAX_SEARCH_MATCHES - 1);
     await withViewer(
-      [fileItem('long', 'target '.repeat(MAX_SEARCH_MATCHES + 100))],
+      [
+        fileItem(
+          'long',
+          'target '.repeat(MAX_SEARCH_MATCHES + 100) + '\ntarget'
+        ),
+      ],
       async ({ viewer, root, finish }) => {
         fillSearch(root, 'target');
         await finish();
-        expect(getSearchState(viewer).matches).toHaveLength(MAX_SEARCH_MATCHES);
-      }
+        const { matches } = getSearchState(viewer);
+        expect(matches).toHaveLength(MAX_SEARCH_MATCHES);
+        expect(matches.at(-1)?.startCharacter).toBe(cutLength);
+      },
+      { tokenizeMaxLineLength: cutLength }
     );
   });
 

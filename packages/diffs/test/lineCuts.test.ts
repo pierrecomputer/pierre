@@ -20,10 +20,13 @@ import {
   preloadHighlighter,
 } from '../src/highlighter/shared_highlighter';
 import { i18n } from '../src/i18n/I18n';
+import type { SearchPanelState } from '../src/search';
 import { preloadFile, preloadFileDiff } from '../src/ssr';
+import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
+import { pressSearchEnter } from './codeViewSearchHarness';
 import {
   createRoot,
   dispatchScroll,
@@ -399,6 +402,127 @@ test('an accepted file starts with nothing expanded even when the text is unchan
     }
   } finally {
     instance.cleanUp();
+  }
+});
+
+test('open find counts follow expansion, replacement and editing', async () => {
+  let state: SearchPanelState | undefined;
+  const viewer = new CodeView({
+    ...options,
+    createEditor: (type, settings, key) => new Editor(type, settings, key),
+    onSearchStateChange: (next) => {
+      state = next;
+    },
+  });
+  const item = {
+    id: 'cut',
+    type: 'file',
+    file: { name: 'cut.txt', contents: 'hit hit hit' },
+  } satisfies CodeViewItem<undefined>;
+  // Waits for the open panel to report its final count after each change.
+  const expectCount = async (count: number) => {
+    await waitFor(() => state?.matchCount === count && !state.searching);
+    expect(state).toMatchObject({ matchCount: count, searching: false });
+  };
+  try {
+    viewer.setup(createRoot());
+    await renderItems(viewer, [item]);
+    viewer.openSearch({ query: 'hit' });
+    await expectCount(2);
+    container = viewer.getRenderedItems()[0].element;
+    expand(row(1));
+    await expectCount(3);
+    expect(row(1).querySelector('button')).toBeNull();
+
+    const replacement = {
+      ...item,
+      file: { ...item.file, contents: '----hit hit hit' },
+      version: 1,
+    };
+    viewer.updateItem(replacement);
+    await expectCount(1);
+    expect(row(1).textContent).toBe('----');
+
+    viewer.updateItem({ ...replacement, version: 2, edit: true });
+    await expectCount(3);
+    expect(row(1).textContent).toBe(replacement.file.contents);
+    viewer.updateItem({ ...replacement, version: 3 });
+    await expectCount(1);
+  } finally {
+    viewer.cleanUp();
+  }
+});
+
+test('a find step right after expanding a line stays in that line', async () => {
+  let state: SearchPanelState | undefined;
+  const viewer = new CodeView({
+    ...options,
+    onSearchStateChange: (next) => {
+      state = next;
+    },
+  });
+  try {
+    const root = createRoot();
+    viewer.setup(root);
+    await renderItems(viewer, [
+      {
+        id: 'cut',
+        type: 'file',
+        file: { name: 'cut.txt', contents: '----hit hit\nhit' },
+      },
+    ]);
+    viewer.openSearch({ query: 'hit' });
+    await waitFor(() => state?.matchCount === 2 && !state.searching);
+    // The current match stands for the hidden part of line 1.
+    expect(state).toMatchObject({ matchCount: 2, currentMatchIndex: 0 });
+
+    // Expand and step before anything has searched the line again.
+    container = viewer.getRenderedItems()[0].element;
+    expand(row(1));
+    pressSearchEnter(root);
+    await waitFor(() => state?.matchCount === 3 && !state.searching);
+    // The step went to the second match in line 1, not on to line 2.
+    expect(state).toMatchObject({ matchCount: 3, currentMatchIndex: 1 });
+  } finally {
+    viewer.cleanUp();
+  }
+});
+
+test('find uses the current cut length for a diff that has never been on screen', async () => {
+  let state: SearchPanelState | undefined;
+  const settings = {
+    ...options,
+    onSearchStateChange: (next: SearchPanelState | undefined) => {
+      state = next;
+    },
+  };
+  const viewer = new CodeView(settings);
+  try {
+    viewer.setup(createRoot({ height: 120 }));
+    await renderItems(viewer, [
+      {
+        id: 'first',
+        type: 'file',
+        file: { name: 'first.txt', contents: 'hit\n' + 'pad\n'.repeat(200) },
+      },
+      {
+        id: 'offscreen',
+        type: 'diff',
+        fileDiff: parseDiffFromFile(
+          { name: 'diff.txt', contents: 'original' },
+          { name: 'diff.txt', contents: '----hit hit hit' }
+        ),
+      },
+    ]);
+    viewer.openSearch({ query: 'hit' });
+    await waitFor(() => state?.matchCount === 2);
+    expect(state?.matchCount).toBe(2);
+    viewer.setOptions({ ...settings, tokenizeMaxLineLength: 0 });
+    await waitFor(() => state?.matchCount === 4);
+    expect(state?.matchCount).toBe(4);
+    expect(viewer.getRenderedItems().map(({ id }) => id)).toEqual(['first']);
+  } finally {
+    viewer.cleanUp();
   }
 });
 

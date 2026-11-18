@@ -539,10 +539,21 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  public getEffectiveCodeOptions(): Pick<
-    BaseCodeOptions,
-    'theme' | 'tokenizeMaxLineLength'
-  > {
+  // The length this renderer cuts long lines at: the highlighter's line limit.
+  // Infinity when nothing is cut: the limit is off, or the item is being
+  // edited and every line shows whole.
+  public getLineCutLength(options: BaseCodeOptions = this.options): number {
+    if (this.editSessionActive) {
+      return Infinity;
+    }
+    const { tokenizeMaxLineLength = 1000 } =
+      this.getEffectiveCodeOptions(options);
+    return tokenizeMaxLineLength > 0 ? tokenizeMaxLineLength : Infinity;
+  }
+
+  public getEffectiveCodeOptions(
+    options: BaseCodeOptions = this.options
+  ): Pick<BaseCodeOptions, 'theme' | 'tokenizeMaxLineLength'> {
     const poolOptions =
       this.workerManager?.isWorkingPool() === true
         ? this.workerManager.getFileRenderOptions()
@@ -550,8 +561,7 @@ export class FileRenderer<LAnnotation = undefined> {
     return {
       theme: this.getLocalHighlightTheme(),
       tokenizeMaxLineLength:
-        poolOptions?.tokenizeMaxLineLength ??
-        this.options.tokenizeMaxLineLength,
+        poolOptions?.tokenizeMaxLineLength ?? options.tokenizeMaxLineLength,
     };
   }
 
@@ -1011,10 +1021,8 @@ export class FileRenderer<LAnnotation = undefined> {
     rows: RowSource,
     renderRange: RenderRange
   ): FileLayoutInput<LAnnotation> {
-    const { tokenizeMaxLineLength = 1000 } = this.getEffectiveCodeOptions();
-    this.lineCuts.setLimit(tokenizeMaxLineLength);
+    this.lineCuts.setLimit(this.getLineCutLength());
     return {
-      editing: this.editSessionActive,
       model,
       rows,
       renderRange,

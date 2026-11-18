@@ -17,7 +17,6 @@ import type { LineKey, RowSpec } from './RowSpec';
 export interface FileLayoutInput<LAnnotation> {
   model: FileModel;
   rows: RowSource;
-  editing: boolean;
   renderRange: RenderRange;
   /** Annotations by line number; line 0 holds the file-level ones. */
   annotations: Record<number, LineAnnotation<LAnnotation>[] | undefined>;
@@ -53,7 +52,6 @@ function sameInputs<LAnnotation>(
   return (
     last.model === next.model &&
     last.rows === next.rows &&
-    last.editing === next.editing &&
     last.annotations === next.annotations &&
     last.annotationSlotName === next.annotationSlotName &&
     areRenderRangesEqual(last.renderRange, next.renderRange)
@@ -190,7 +188,7 @@ export class FileLayout<LAnnotation = undefined> {
   // A line's row: its base row from the row source, stamped with its line
   // attributes, with the gutter cell beside it.
   #lineRow(
-    { model, rows, editing }: FileLayoutInput<LAnnotation>,
+    { model, rows }: FileLayoutInput<LAnnotation>,
     line: number,
     key: LineKey
   ): RowSpec {
@@ -198,8 +196,7 @@ export class FileLayout<LAnnotation = undefined> {
     const lineIndexText = `${line}`;
     const base = rows.additionRow(model, line);
     const content = this.#cells.line(
-      // A file being edited shows every line whole.
-      editing ? base : this.lineCuts.additionRow(base, model, line, lineNumber),
+      this.lineCuts.additionRow(base, model, line, lineNumber),
       { 'data-line-type': 'context' },
       lineNumber,
       undefined,

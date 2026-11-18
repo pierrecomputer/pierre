@@ -71,7 +71,6 @@ export interface DiffLayoutInput<LAnnotation> {
   host: DiffHunksRenderer<LAnnotation>;
   model: DiffModel;
   rows: RowSource;
-  editing: boolean;
   renderRange: RenderRange;
   expandedHunks: ExpandedHunksMap;
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
@@ -182,7 +181,6 @@ function sameInputs<LAnnotation>(
     last.host === next.host &&
     last.model === next.model &&
     last.rows === next.rows &&
-    last.editing === next.editing &&
     last.expandedHunks === next.expandedHunks &&
     last.deletionAnnotations === next.deletionAnnotations &&
     last.additionAnnotations === next.additionAnnotations &&
@@ -1058,7 +1056,7 @@ export class DiffLayout<LAnnotation = undefined> {
     base: HASTElement,
     ranges: readonly LineDiffRange[],
     row: LineRowInputs,
-    { model, editing }: DiffLayoutInput<LAnnotation>
+    { model }: DiffLayoutInput<LAnnotation>
   ): HASTElement {
     const {
       side,
@@ -1078,27 +1076,23 @@ export class DiffLayout<LAnnotation = undefined> {
         this.#markedRows.set(base, { ranges, row: marked });
       }
     }
-    // A diff being edited shows every line whole, on both sides.
     const { lineCuts } = this;
-    let shown = marked;
-    if (!editing) {
-      shown =
-        side === 'additions'
-          ? lineCuts.additionRow(
-              marked,
-              model,
-              lineIndex,
-              lineNumber,
-              altLineNumber
-            )
-          : lineCuts.deletionRow(
-              marked,
-              model,
-              lineIndex,
-              lineNumber,
-              altLineNumber
-            );
-    }
+    const shown =
+      side === 'additions'
+        ? lineCuts.additionRow(
+            marked,
+            model,
+            lineIndex,
+            lineNumber,
+            altLineNumber
+          )
+        : lineCuts.deletionRow(
+            marked,
+            model,
+            lineIndex,
+            lineNumber,
+            altLineNumber
+          );
     return this.#cells.line(
       shown,
       contentProperties,

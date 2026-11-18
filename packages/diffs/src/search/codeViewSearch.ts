@@ -1,3 +1,4 @@
+import { cutLineLength, type LineCuts } from '../rows/LineCuts';
 import type { CodeViewItem, FileDiffMetadata, SelectionSide } from '../types';
 import { DiffRowCursor } from '../utils/DiffRowCursor';
 import type { SearchParams } from './index';
@@ -20,12 +21,26 @@ export interface CodeViewSearchLineMetadata {
 export interface CodeViewSearchMatch extends CodeViewSearchLineMetadata {
   startCharacter: number;
   endCharacter: number;
+  /**
+   * True for the one match that stands for the cut-off part of a long line.
+   * It is shown on the line's expand button.
+   */
+  cutOff?: true;
+}
+
+// What the scan needs to know about an item's cut-off lines.
+export interface SearchLineCuts {
+  /** The length lines are cut at. Infinity when nothing is cut. */
+  cutLength: number;
+  /** The lines that were expanded, by side and line number. */
+  expandedLines: LineCuts['expandedLines'];
 }
 
 export interface CodeViewSearchFile {
   type: 'file';
   itemId: string;
   contents: string;
+  lineCuts?: SearchLineCuts;
 }
 
 export interface CodeViewSearchDiff {
@@ -35,6 +50,7 @@ export interface CodeViewSearchDiff {
   additionContents?: string;
   diffStyle: 'split' | 'unified';
   additionsOnly: boolean;
+  lineCuts?: SearchLineCuts;
 }
 
 export type CodeViewSearchItem = CodeViewSearchFile | CodeViewSearchDiff;
@@ -766,6 +782,9 @@ export class CodeViewSearchScan {
     const { getItem, wholeWord, regex, limit } = this;
     const item = getItem(position);
     const { type, itemId } = item;
+    // A line longer than this may be cut off. Infinity when nothing is cut.
+    const { lineCuts } = item;
+    const cutLength = lineCuts?.cutLength ?? Infinity;
     const cursor =
       type === 'file'
         ? new CodeViewSearchTextCursor(item.contents)
@@ -778,7 +797,8 @@ export class CodeViewSearchScan {
     let lineIndex = 0;
     const visitMatch = (
       startCharacter: number,
-      endCharacter: number
+      endCharacter: number,
+      cutOff?: true
     ): boolean => {
       matches.push({
         itemId,
@@ -788,8 +808,29 @@ export class CodeViewSearchScan {
         lineIndex,
         startCharacter,
         endCharacter,
+        cutOff,
       });
       return ++this.matchCount >= limit;
+    };
+    // Searches a long line. A cut-off line is searched up to its first match
+    // in the hidden part, which stands for the whole hidden part.
+    const searchLongLine = (text: string): void => {
+      const visible = cutLineLength(text, cutLength);
+      if (
+        visible == null ||
+        lineCuts?.expandedLines[side ?? 'additions'].has(lineNumber) === true
+      ) {
+        matchSearchLine(pattern, text, wholeWord, visitMatch);
+        return;
+      }
+      matchSearchLine(pattern, text, wholeWord, (start, end) => {
+        if (end <= visible) {
+          return visitMatch(start, end);
+        }
+        // The first match past the visible part stands for all of it.
+        visitMatch(start, end, true);
+        return true;
+      });
     };
     // Records a line's match span and copies its matches to the additions side
     // when the same line appears there. Returns true at the match limit.
@@ -813,8 +854,8 @@ export class CodeViewSearchScan {
       lineIndex = additionLineIndex;
       let reachedLimit = false;
       for (let index = startIndex; index < endIndex; index++) {
-        const { startCharacter, endCharacter } = matches[index];
-        if (visitMatch(startCharacter, endCharacter)) {
+        const { startCharacter, endCharacter, cutOff } = matches[index];
+        if (visitMatch(startCharacter, endCharacter, cutOff)) {
           reachedLimit = true;
           break;
         }
@@ -839,14 +880,14 @@ export class CodeViewSearchScan {
       lineNumber = nextLineNumber;
       lineIndex = nextLineIndex;
       const startIndex = matches.length;
-      let capped = matchSearchLine(pattern, text, wholeWord, visitMatch);
-      if (matches.length > startIndex) {
-        capped = recordLineMatches(
-          startIndex,
-          additionLineNumber,
-          additionLineIndex
-        );
+      if (text.length <= cutLength) {
+        matchSearchLine(pattern, text, wholeWord, visitMatch);
+      } else {
+        searchLongLine(text);
       }
+      const capped =
+        matches.length > startIndex &&
+        recordLineMatches(startIndex, additionLineNumber, additionLineIndex);
       const { deadline } = this;
       if (deadline == null) return capped;
       this.scannedCharacters += text.length + 1;

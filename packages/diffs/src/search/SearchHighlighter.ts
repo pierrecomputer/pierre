@@ -21,6 +21,7 @@ function isAlreadyRegisteredError(error: unknown): boolean {
 // the document shares two registry entries styled inside every code shadow root.
 export class SearchHighlighter {
   private ranges: { range: Range; highlight: Highlight }[] = [];
+  private readonly markedButtons: HTMLButtonElement[] = [];
   private currentRange: Range | undefined;
 
   private constructor(private readonly highlights: SearchHighlights) {}
@@ -72,10 +73,15 @@ export class SearchHighlighter {
   }
 
   clear(): void {
-    for (const { range, highlight } of this.ranges) {
+    const { ranges, markedButtons } = this;
+    for (const button of markedButtons) {
+      button.removeAttribute('data-search-match');
+    }
+    markedButtons.length = 0;
+    for (const { range, highlight } of ranges) {
       highlight.delete(range);
     }
-    this.ranges.length = 0;
+    ranges.length = 0;
     this.currentRange = undefined;
   }
 
@@ -141,6 +147,22 @@ export class SearchHighlighter {
         index++;
       }
       offset = end;
+    }
+    if (index < matches.length) {
+      // A match that does not fit in the row's text is in the hidden part of a
+      // cut-off line. Its button stands in for it.
+      const button = row.querySelector<HTMLButtonElement>('[data-expand-line]');
+      if (button == null) {
+        return;
+      }
+      const { current } = matches[index];
+      button.setAttribute('data-search-match', current ? 'current' : '');
+      this.markedButtons.push(button);
+      if (current) {
+        const buttonRange = document.createRange();
+        buttonRange.selectNode(button);
+        this.currentRange ??= buttonRange;
+      }
     }
   }
 }

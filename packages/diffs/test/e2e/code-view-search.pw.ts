@@ -304,6 +304,99 @@ for (const kind of ['file', 'split', 'unified']) {
   }
 }
 
+for (const overflow of ['scroll', 'wrap']) {
+  test(`find steps to a cut line's button in ${overflow} mode`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 640, height: 800 });
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?highlight&kind=file&${overflow}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.evaluate((element) => {
+      element.style.setProperty(
+        '--diffs-bg-search-match-override',
+        'rgb(230, 190, 45)'
+      );
+      element.style.setProperty(
+        '--diffs-bg-search-match-current-override',
+        'rgb(75, 155, 240)'
+      );
+    });
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    const count = root.locator('[data-matches]');
+    const button = root.getByRole('button', { name: 'Show full line' });
+    await input.fill('updated');
+    await expect(count).toHaveText('1 of 1');
+
+    // Moving the only match leaves the panel open with no current match.
+    await page.evaluate(() =>
+      window.__codeView?.updateItem({
+        id: 'item',
+        type: 'file',
+        version: 1,
+        file: {
+          name: 'cut.txt',
+          contents:
+            'padding\n'.repeat(23) +
+            'word '.repeat(400) +
+            'updated updated updated',
+        },
+      })
+    );
+    await expect(count).toHaveText('1 result');
+    await expect(button).toHaveAttribute('data-search-match', '');
+    await expect(button).toHaveCSS('background-color', 'rgb(230, 190, 45)');
+    await expect(button).not.toBeInViewport();
+    await input.press('Enter');
+    await expect(count).toHaveText('1 of 1');
+    await expect(button).toHaveAttribute('data-search-match', 'current');
+    await expect(button).toHaveCSS('background-color', 'rgb(75, 155, 240)');
+    // The sideways scroll lands within a pixel of the button's far edge.
+    await expect(button).toBeInViewport({ ratio: 0.9 });
+
+    await input.fill('');
+    await expect(button).not.toHaveAttribute('data-search-match');
+    await input.fill('word updated');
+    await expect(button).toHaveAttribute('data-search-match', 'current');
+    await expectSearchHighlights(root, 0);
+    await input.press('Escape');
+    await expect(button).not.toHaveAttribute('data-search-match');
+
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    await input.fill('updated');
+    await expect(count).toHaveText('1 of 1');
+    await button.click();
+    await expect(button).toHaveCount(0);
+    await expect(count).toHaveText('1 of 3');
+    await expectSearchHighlights(root, 3);
+    // The match the button stood for is scrolled into view.
+    await expect
+      .poll(() =>
+        root.evaluate((element) => {
+          const [range] = CSS.highlights.get('diffs-search-current') ?? [];
+          if (!(range instanceof Range)) return false;
+          const code =
+            range.startContainer.parentElement?.closest('[data-code]');
+          if (code == null) return false;
+          const match = range.getBoundingClientRect();
+          const column = code.getBoundingClientRect();
+          const view = element.getBoundingClientRect();
+          return (
+            match.left >= column.left - 1 &&
+            match.right <= column.right + 1 &&
+            match.top >= view.top - 1 &&
+            match.bottom <= view.bottom + 1
+          );
+        })
+      )
+      .toBe(true);
+  });
+}
+
 test('closing or resetting one viewer preserves another viewer’s ranges', async ({
   page,
 }) => {

@@ -1,4 +1,5 @@
 import { TextDocument } from '../src/editor/textDocument';
+import { LineCuts } from '../src/rows/LineCuts';
 import {
   MAX_SEARCH_MATCHES,
   type SearchPanelState,
@@ -202,6 +203,10 @@ function createFixtures(lines: number): BenchmarkFixtures {
 
 // Describe cases before preparing data so filters avoid unneeded large fixtures.
 function createCases(lines: number): BenchmarkCase[] {
+  const lineCuts = {
+    cutLength: 1000,
+    expandedLines: new LineCuts().expandedLines,
+  };
   const cases: BenchmarkCase[] = [
     {
       name: 'file',
@@ -213,6 +218,7 @@ function createCases(lines: number): BenchmarkCase[] {
             () => ({
               type: 'file',
               itemId: 'item',
+              lineCuts,
               contents: contents.after,
             }),
             params
@@ -233,6 +239,7 @@ function createCases(lines: number): BenchmarkCase[] {
             () => ({
               type: 'diff',
               itemId: 'item',
+              lineCuts,
               fileDiff,
               diffStyle,
               additionsOnly: false,

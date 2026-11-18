@@ -452,6 +452,25 @@ describe('CodeView incremental find', () => {
     );
   });
 
+  test('clearing the query with no current match removes the painted matches', async () => {
+    await withViewer(
+      [fileItem('file')],
+      async ({ viewer, root, states, finish }) => {
+        fillSearch(root, 'target');
+        await finish();
+        expect(getSearchState(viewer).current).toBeDefined();
+        // New contents move the only match, which leaves no current match.
+        viewer.updateItem({ ...fileItem('file', '---- target'), version: 1 });
+        await finish();
+        expect(getSearchState(viewer).current).toBeUndefined();
+        expect(getRenderedSearchMatches(root)).toHaveLength(1);
+        fillSearch(root, '');
+        await waitFor(() => states.at(-1)?.matchCount === 0);
+        expect(getRenderedSearchMatches(root)).toHaveLength(0);
+      }
+    );
+  });
+
   test('removal keeps later match objects and the current match at its new index', async () => {
     await withViewer(
       [

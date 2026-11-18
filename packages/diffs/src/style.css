@@ -1081,12 +1081,21 @@
     border-radius: 6px;
     padding: 0;
     border: 0;
-    background-color: var(--diffs-modified-base);
+    background-color: var(--diffs-fg);
     color: var(--diffs-bg);
     font: inherit;
     cursor: pointer;
     -webkit-user-select: none;
     user-select: none;
+
+    &[data-search-match] {
+      background-color: var(--diffs-search-match-color);
+      color: var(--diffs-search-text-color);
+    }
+
+    &[data-search-match='current'] {
+      background-color: var(--diffs-search-current-color);
+    }
 
     svg {
       display: block;

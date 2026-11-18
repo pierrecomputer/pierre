@@ -23,7 +23,7 @@ interface CutRow extends LineExpansion {
 // How many characters of a line to show when it is longer than `limit`, or
 // undefined when the whole line shows.
 export function cutLineLength(text: string, limit: number): number | undefined {
-  if (limit <= 0 || text.length <= limit) {
+  if (text.length <= limit) {
     return undefined;
   }
   // A stored line ends with its line break, which does not count.
@@ -76,7 +76,7 @@ function copyPrefix(
 // Cuts long lines off. Builds the row that shows only the start of a line,
 // with a button to show the rest, and remembers which lines were expanded.
 export class LineCuts {
-  #limit = 0;
+  #limit = Infinity;
   // Cut-off rows by the row they were cut from.
   #rows = new WeakMap<HASTElement, CutRow>();
   readonly #expanded = {
@@ -84,6 +84,11 @@ export class LineCuts {
     deletions: new Set<number>(),
   };
   #hasCutRows = false;
+
+  // Lines whose buttons have been expanded, by side and line number.
+  get expandedLines(): Readonly<Record<AnnotationSide, ReadonlySet<number>>> {
+    return this.#expanded;
+  }
 
   // Whether the last layout, or the one under way, was given a cut-off row.
   get hasCutRows(): boolean {
@@ -95,7 +100,7 @@ export class LineCuts {
     this.#hasCutRows = false;
   }
 
-  // Sets the length lines are cut at. 0 cuts nothing.
+  // Sets the length lines are cut at. Infinity cuts nothing.
   setLimit(limit: number): void {
     if (limit !== this.#limit) {
       this.#limit = limit;
