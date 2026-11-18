@@ -1,4 +1,5 @@
 import type { FileModel } from '../model/FileModel';
+import type { LineCuts } from '../rows/LineCuts';
 import type { RowSource } from '../rows/RowSource';
 import type { AnnotationSpan, LineAnnotation, RenderRange } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -16,6 +17,7 @@ import type { LineKey, RowSpec } from './RowSpec';
 export interface FileLayoutInput<LAnnotation> {
   model: FileModel;
   rows: RowSource;
+  editing: boolean;
   renderRange: RenderRange;
   /** Annotations by line number; line 0 holds the file-level ones. */
   annotations: Record<number, LineAnnotation<LAnnotation>[] | undefined>;
@@ -51,6 +53,7 @@ function sameInputs<LAnnotation>(
   return (
     last.model === next.model &&
     last.rows === next.rows &&
+    last.editing === next.editing &&
     last.annotations === next.annotations &&
     last.annotationSlotName === next.annotationSlotName &&
     areRenderRangesEqual(last.renderRange, next.renderRange)
@@ -72,6 +75,8 @@ export class FileLayout<LAnnotation = undefined> {
   // Lines whose text or tokens changed since the last walk.
   #marked: Set<number> | undefined;
 
+  constructor(private readonly lineCuts: LineCuts) {}
+
   /** Lines whose text or tokens changed; the next layout rebuilds their rows. */
   markLines(lines: Iterable<number>): void {
     const marked = (this.#marked ??= new Set());
@@ -91,6 +96,7 @@ export class FileLayout<LAnnotation = undefined> {
     const column = createColumn();
     const positions = new Map<LineKey, number>();
     let rowCount = 0;
+    this.lineCuts.startLayout();
     const names = (list: LineAnnotation<LAnnotation>[]) =>
       list.map((annotation) => input.annotationSlotName(annotation));
     const pushAnnotationRow = (
@@ -184,7 +190,7 @@ export class FileLayout<LAnnotation = undefined> {
   // A line's row: its base row from the row source, stamped with its line
   // attributes, with the gutter cell beside it.
   #lineRow(
-    { model, rows }: FileLayoutInput<LAnnotation>,
+    { model, rows, editing }: FileLayoutInput<LAnnotation>,
     line: number,
     key: LineKey
   ): RowSpec {
@@ -192,7 +198,8 @@ export class FileLayout<LAnnotation = undefined> {
     const lineIndexText = `${line}`;
     const base = rows.additionRow(model, line);
     const content = this.#cells.line(
-      base,
+      // A file being edited shows every line whole.
+      editing ? base : this.lineCuts.additionRow(base, model, line, lineNumber),
       { 'data-line-type': 'context' },
       lineNumber,
       undefined,

@@ -490,7 +490,8 @@ const instance = new FileDiff<ThreadMetadata>({
   // (default: false)
   disableErrorHandling: false,
 
-  // Skip syntax highlighting for lines exceeding this length
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 
   // Fires after hydration, after DOM-committing render updates, and before
@@ -784,7 +785,8 @@ const instance = new File<CommentMetadata>({
   // (default: false)
   disableErrorHandling: false,
 
-  // Skip syntax highlighting for lines exceeding this length
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 
   // Fires after hydration, after DOM-committing render updates, and before
@@ -1225,7 +1227,8 @@ instance.setOptions({
   disableFileHeader: false,
   // Starting line number (useful for showing snippets)
   startingLineNumber: 1,
-  // Skip syntax highlighting for very long lines
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 });
 

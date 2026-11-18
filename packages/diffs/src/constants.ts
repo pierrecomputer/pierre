@@ -73,6 +73,7 @@ export const DEFAULT_MESSAGES = {
   unknownUnmodifiedLines: 'More unchanged context may be available',
   /** Button that expands an entire collapsed region at once. */
   expandAll: 'Expand all',
+  expandLine: 'Show full line',
   /** Marker shown after a final line that has no trailing newline. */
   noNewlineAtEndOfFile: 'No newline at end of file',
   /** Merge conflict button that keeps the current (ours) side. */

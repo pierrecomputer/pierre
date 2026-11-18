@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { TextDocument } from '../src/editor/textDocument';
 import { FileLayout } from '../src/layout/FileLayout';
 import { FileModel } from '../src/model/FileModel';
+import { LineCuts } from '../src/rows/LineCuts';
 import { RowSource } from '../src/rows/RowSource';
 import type { FileContents, RenderRange } from '../src/types';
 import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
@@ -29,7 +30,7 @@ function makeDocument(file: FileContents): TextDocument<'file', undefined> {
 }
 
 function layoutFor(): FileLayout<undefined> {
-  return new FileLayout();
+  return new FileLayout(new LineCuts());
 }
 
 function plainRows(model: FileModel): RowSource {
@@ -156,6 +157,7 @@ describe('FileLayout', () => {
     const model = FileModel.fromFile(FILE);
     const { column, rowCount, totalLines } = layoutFor().layout({
       model,
+      editing: false,
       rows: plainRows(model),
       renderRange: ALL,
       annotations: {},
@@ -175,6 +177,7 @@ describe('FileLayout', () => {
     const model = FileModel.fromFile(FILE);
     const { column, rowCount } = layoutFor().layout({
       model,
+      editing: false,
       rows: plainRows(model),
       renderRange: ALL,
       annotations: {
@@ -201,6 +204,7 @@ describe('FileLayout', () => {
     const layout = layoutFor();
     const input = {
       model,
+      editing: true,
       rows: plainRows(model),
       renderRange: ALL,
       annotations: {},

@@ -37,6 +37,7 @@ import type {
   DocumentLineChange,
   DocumentLines,
 } from '../model/types';
+import { LineCuts, type LineExpansion } from '../rows/LineCuts';
 import { RowSource } from '../rows/RowSource';
 import type {
   AnnotationLineMap,
@@ -185,6 +186,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
 
+  public readonly lineCuts: LineCuts = new LineCuts();
   private expandedHunks = new Map<number, HunkExpansionRegion>();
 
   // The annotations last given, so setLineAnnotations can tell an unchanged
@@ -225,6 +227,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public cleanUp(): void {
     this.endEditSession();
     this.recycle();
+    this.lineCuts.clear();
     this.expandedHunks.clear();
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
@@ -598,6 +601,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.rowSource = undefined;
       this.model = undefined;
     }
+  }
+
+  public expandLine(target: LineExpansion): void {
+    this.lineCuts.expand(target);
+    this.layout?.invalidateLines();
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -1439,7 +1447,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.options.loadDiffFiles != null
       ),
     };
-    const layout = (this.layout ??= new DiffLayout(layoutOptions));
+    const layout = (this.layout ??= new DiffLayout(
+      layoutOptions,
+      this.lineCuts
+    ));
     layout.setOptions(layoutOptions);
     return layout;
   }
@@ -1495,7 +1506,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     rows: RowSource,
     renderRange: RenderRange
   ): DiffLayoutInput<LAnnotation> {
+    const { tokenizeMaxLineLength = 1000 } = this.getEffectiveCodeOptions();
+    this.lineCuts.setLimit(tokenizeMaxLineLength);
     return {
+      editing: this.editSessionActive,
       host: this,
       model,
       rows,

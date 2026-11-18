@@ -1073,6 +1073,36 @@
     grid-template-columns: 32px 32px auto;
   }
 
+  [data-expand-line] {
+    display: inline-block;
+    vertical-align: middle;
+    width: 2ch;
+    height: 2ch;
+    border-radius: 6px;
+    padding: 0;
+    border: 0;
+    background-color: var(--diffs-modified-base);
+    color: var(--diffs-bg);
+    font: inherit;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+
+    svg {
+      display: block;
+      width: 1.6ch;
+      height: 1.6ch;
+      margin: auto;
+      fill: currentColor;
+      transform: rotate(-90deg);
+    }
+
+    &:focus-visible {
+      outline: 1px solid currentColor;
+      outline-offset: -1px;
+    }
+  }
+
   [data-expand-button],
   [data-separator-content] {
     display: flex;

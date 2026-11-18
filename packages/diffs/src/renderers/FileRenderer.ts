@@ -21,6 +21,7 @@ import {
 } from '../layout/RowSpec';
 import { FileModel, type FileModelChange } from '../model/FileModel';
 import type { DocumentLineChange, DocumentLines } from '../model/types';
+import { LineCuts, type LineExpansion } from '../rows/LineCuts';
 import { RowSource } from '../rows/RowSource';
 import type {
   BaseCodeOptions,
@@ -145,6 +146,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private annotationList: LineAnnotation<LAnnotation>[] = [];
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
 
+  public readonly lineCuts: LineCuts = new LineCuts();
   private editSessionActive = false;
   // The model of the file that renders: the session's, created when the
   // session starts and updated in place by every change, or a read-only one
@@ -167,6 +169,11 @@ export class FileRenderer<LAnnotation = undefined> {
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {}
+
+  public expandLine(target: LineExpansion): void {
+    this.lineCuts.expand(target);
+    this.layout?.invalidateLines();
+  }
 
   public setOptions(options: FileRendererOptions): void {
     this.options = options;
@@ -198,6 +205,7 @@ export class FileRenderer<LAnnotation = undefined> {
   public cleanUp(): void {
     this.endEditSession();
     this.recycle();
+    this.lineCuts.clear();
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
   }
@@ -1003,7 +1011,10 @@ export class FileRenderer<LAnnotation = undefined> {
     rows: RowSource,
     renderRange: RenderRange
   ): FileLayoutInput<LAnnotation> {
+    const { tokenizeMaxLineLength = 1000 } = this.getEffectiveCodeOptions();
+    this.lineCuts.setLimit(tokenizeMaxLineLength);
     return {
+      editing: this.editSessionActive,
       model,
       rows,
       renderRange,
@@ -1021,7 +1032,7 @@ export class FileRenderer<LAnnotation = undefined> {
   ): FileRenderResult {
     const { themeStyles, baseThemeType } = result;
     const { disableFileHeader = false } = this.options;
-    const layout = (this.layout ??= new FileLayout());
+    const layout = (this.layout ??= new FileLayout(this.lineCuts));
     const model = this.modelFor(file);
     const previousResult = this.rowSource?.result;
     const rows = this.getRowSource(result, model, lines);

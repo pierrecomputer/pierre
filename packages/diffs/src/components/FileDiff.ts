@@ -58,6 +58,7 @@ import {
   type DiffHunksRendererOptions,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
+import type { LineExpansion } from '../rows/LineCuts';
 export type { FileDiffEditCompleteEvent } from '../editor/types';
 import type {
   AppliedThemeStyleCache,
@@ -462,6 +463,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       'diff',
       pluckInteractionOptions(
         options,
+        this.expandLine,
         typeof options.hunkSeparators === 'function' ||
           (options.hunkSeparators ?? 'line-info') === 'line-info' ||
           options.hunkSeparators === 'line-info-basic'
@@ -557,6 +559,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.interactionManager.setOptions(
       pluckInteractionOptions(
         this.options,
+        this.expandLine,
         typeof this.options.hunkSeparators === 'function' ||
           (this.options.hunkSeparators ?? 'line-info') === 'line-info' ||
           this.options.hunkSeparators === 'line-info-basic'
@@ -1079,6 +1082,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.flushManagers();
   }
 
+  public expandLine = (target: LineExpansion): void => {
+    this.hunksRenderer.expandLine(target);
+    this.rerender();
+  };
+
   public rerender(): void {
     if (
       !this.enabled ||
@@ -1357,6 +1365,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return false;
     }
     this.editor?.__assertOutsideChangeCallback('FileDiff.render');
+    this.hunksRenderer.lineCuts.clear();
     const previousAnnotations = this.getLatestAnnotations();
     this.fileDiff = incomingDiff;
     const { editSession } = this;
@@ -2127,6 +2136,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     if (installResult && acceptedDiff != null) {
+      this.hunksRenderer.lineCuts.clear();
       // Callers using the oldFile/newFile API get the stored pair
       // refreshed so their next render with the event's files does not
       // reparse over the accepted diff. Every editable pair has a new

@@ -3,6 +3,7 @@ import type { Element as HASTElement, Properties } from 'hast';
 import { i18n } from '../i18n/I18n';
 import type { DiffModel } from '../model/DiffModel';
 import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
+import type { LineCuts } from '../rows/LineCuts';
 import { LineDiffRangeCache, lineDiffRangesFor } from '../rows/lineDiffRanges';
 import { markRow } from '../rows/markRow';
 import type { RowSource } from '../rows/RowSource';
@@ -70,6 +71,7 @@ export interface DiffLayoutInput<LAnnotation> {
   host: DiffHunksRenderer<LAnnotation>;
   model: DiffModel;
   rows: RowSource;
+  editing: boolean;
   renderRange: RenderRange;
   expandedHunks: ExpandedHunksMap;
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
@@ -180,6 +182,7 @@ function sameInputs<LAnnotation>(
     last.host === next.host &&
     last.model === next.model &&
     last.rows === next.rows &&
+    last.editing === next.editing &&
     last.expandedHunks === next.expandedHunks &&
     last.deletionAnnotations === next.deletionAnnotations &&
     last.additionAnnotations === next.additionAnnotations &&
@@ -252,7 +255,10 @@ export class DiffLayout<LAnnotation = undefined> {
   // Lines whose text or tokens changed since the last walk.
   #marked: Set<number> | undefined;
 
-  constructor(private options: DiffLayoutOptions) {
+  constructor(
+    private options: DiffLayoutOptions,
+    private readonly lineCuts: LineCuts
+  ) {
     this.#ranges = new LineDiffRangeCache(
       options.lineDiffType,
       options.maxLineDiffLength,
@@ -363,6 +369,7 @@ export class DiffLayout<LAnnotation = undefined> {
     if (marked != null && last != null && sameInputs(last.input, input)) {
       return this.#patch(last, marked, input);
     }
+    this.lineCuts.startLayout();
     const {
       host,
       model,
@@ -1024,10 +1031,8 @@ export class DiffLayout<LAnnotation = undefined> {
 
   // A line's row: its base row from the row source, marked with its pair's
   // ranges, stamped with its line attributes, with the gutter cell beside it.
-  #lineRow(
-    { model, rows }: DiffLayoutInput<LAnnotation>,
-    row: LineRowInputs
-  ): RowSpec {
+  #lineRow(input: DiffLayoutInput<LAnnotation>, row: LineRowInputs): RowSpec {
+    const { model, rows } = input;
     const base =
       row.side === 'additions'
         ? rows.additionRow(model, row.lineIndex)
@@ -1035,17 +1040,7 @@ export class DiffLayout<LAnnotation = undefined> {
     const ranges = row.marked
       ? lineDiffRangesFor(model, row.side, row.lineIndex, this.#ranges)
       : NO_RANGES;
-    const content = this.#line(
-      base,
-      ranges,
-      row.contentProperties,
-      row.lineNumber,
-      row.altLineNumber,
-      row.lineIndexText,
-      // A unified view shows deleted lines among the lines being edited. The
-      // caret must not enter them.
-      row.column === 'unified' && row.side === 'deletions'
-    );
+    const content = this.#line(base, ranges, row, input);
     return {
       key: row.key,
       gutter: this.#cells.gutter(
@@ -1062,12 +1057,17 @@ export class DiffLayout<LAnnotation = undefined> {
   #line(
     base: HASTElement,
     ranges: readonly LineDiffRange[],
-    contentProperties: Properties | undefined,
-    lineNumber: number,
-    altLineNumber: number | undefined,
-    lineIndexText: string,
-    readOnly: boolean
+    row: LineRowInputs,
+    { model, editing }: DiffLayoutInput<LAnnotation>
   ): HASTElement {
+    const {
+      side,
+      lineIndex,
+      lineNumber,
+      altLineNumber,
+      contentProperties,
+      lineIndexText,
+    } = row;
     let marked = base;
     if (ranges.length > 0) {
       const cached = this.#markedRows.get(base);
@@ -1078,13 +1078,36 @@ export class DiffLayout<LAnnotation = undefined> {
         this.#markedRows.set(base, { ranges, row: marked });
       }
     }
+    // A diff being edited shows every line whole, on both sides.
+    const { lineCuts } = this;
+    let shown = marked;
+    if (!editing) {
+      shown =
+        side === 'additions'
+          ? lineCuts.additionRow(
+              marked,
+              model,
+              lineIndex,
+              lineNumber,
+              altLineNumber
+            )
+          : lineCuts.deletionRow(
+              marked,
+              model,
+              lineIndex,
+              lineNumber,
+              altLineNumber
+            );
+    }
     return this.#cells.line(
-      marked,
+      shown,
       contentProperties,
       lineNumber,
       altLineNumber,
       lineIndexText,
-      readOnly
+      // A unified view shows deleted lines among the lines being edited. The
+      // caret must not enter them.
+      row.column === 'unified' && side === 'deletions'
     );
   }
 

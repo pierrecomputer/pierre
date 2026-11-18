@@ -47,6 +47,7 @@ export * from './model/LineMap';
 export * from './model/documentLines';
 export * from './renderers/DiffHunksRenderer';
 export * from './renderers/FileRenderer';
+export * from './rows/LineCuts';
 export * from './rows/RowSource';
 export * from './rows/lineDiffRanges';
 export * from './rows/markRow';

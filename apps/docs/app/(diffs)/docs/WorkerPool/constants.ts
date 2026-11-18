@@ -433,7 +433,8 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //     How to diff lines (default: 'word-alt')
 //   - preferredDiffLib?: 'jsdiff' | '@pierre/patches' - Library for inline change highlights (default: 'jsdiff')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
-//   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
+//   - tokenizeMaxLineLength?: number - Max line length in characters to tokenize (default: 1000)
+//     Longer lines show only their start, with a button to show the rest
 //   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' | 'highlights' - Highlighter backend (default: 'shiki-js')
 //   - langs?: SupportedLanguages[] - Array of languages to preload
 
