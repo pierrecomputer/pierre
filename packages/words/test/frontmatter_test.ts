@@ -72,6 +72,8 @@ void test('a comment that holds a colon does not make a key', () => {
   assert.deepStrictEqual(meta('a: 1 # b: c\nd: 2'), { a: 1, d: 2 });
   // `#` inside a quoted key or without a space before it is no comment
   assert.deepStrictEqual(meta('"k # x": 1\nb#c: 2'), { 'k # x': 1, 'b#c': 2 });
+  // a quote that starts a plain scalar's later line opens no quoted scalar
+  assert.deepStrictEqual(meta('a: x\n  "y # c\nb: 1'), { a: 'x "y', b: 1 });
 });
 
 void test('a sequence may sit in its key column', () => {
@@ -146,6 +148,11 @@ void test('flow collections and block scalars', () => {
   assert.deepStrictEqual(meta('a: |\n\n  x'), { a: '\nx\n' });
   assert.deepStrictEqual(meta('a: >\n  x\n\n  y'), { a: 'x\ny\n' });
   assert.deepStrictEqual(meta('a: |+\n  x\n\nb: 1'), { a: 'x\n\n', b: 1 });
+  // spaces past the indentation are content, even on an otherwise blank line
+  assert.deepStrictEqual(meta('a: |\n  x\n   \nb: 1'), { a: 'x\n \n', b: 1 });
+  // `+` keeps blank lines even without content
+  assert.deepStrictEqual(meta('a: |+\n\n\nb: 1'), { a: '\n\n', b: 1 });
+  assert.deepStrictEqual(meta('a: >-\n\nb: 1'), { a: '', b: 1 });
   // an indentation indicator keeps deeper indentation
   assert.deepStrictEqual(meta('a: |2\n    x\n  y'), { a: '  x\ny\n' });
   assert.deepStrictEqual(meta('a: |-2\n    x\n  y'), { a: '  x\ny' });

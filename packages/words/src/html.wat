@@ -406,7 +406,16 @@
         (call $outRefId (local.get $n) (local.get $k))
         (out.str "\22 aria-label=\22Back to reference ")
         (call $outRefId (local.get $n) (local.get $k))
-        (out.str "\22>\e2\86\a9</a>")
+        (out.str "\22>\e2\86\a9")
+        ;; later back-links show their number, as cmark-gfm does
+        (if (i32.gt_u (local.get $k) (i32.const 1))
+          (then
+            (if (global.get $fmt)
+              (then (out.str "<sup data-markdown=\22sup\22 class=\22footnote-ref\22>"))
+              (else (out.str "<sup class=\22footnote-ref\22>")))
+            (call $outNum (local.get $k))
+            (out.str "</sup>")))
+        (out.str "</a>")
         (local.set $k (i32.add (local.get $k) (i32.const 1)))
         (br $l)))
     (if (local.get $inside) (then (out.str "</p>\n")))

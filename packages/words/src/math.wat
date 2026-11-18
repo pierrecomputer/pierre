@@ -8,8 +8,18 @@
   ;; list ends, then scripts attach and inter-atom spaces apply. Lengths are
   ;; thousandths of the surrounding em. Metrics come from STIX Two Math
   ;; (tables/math-metrics.txt); glyphs print as Unicode math alphanumerics.
-  (math-glyphs $mem.mathGlyphs $mem.mathGlyphsEnd)
-  (math-commands $mem.mathCmds $mem.mathCmdsEnd)
+  ;; glyph metrics in five columns of $MG.stride bytes, then the runs
+  (const $MG.stride 1400)
+  (const $MG.h $mem.mathGlyphs+1400)
+  (const $MG.ic $mem.mathGlyphs+2800)
+  (const $MG.w $mem.mathGlyphs+4200)
+  (const $MG.acc $mem.mathGlyphs+5600)
+  (const $mem.mathRuns $mem.mathGlyphs+7000)
+  (math-glyphs $mem.mathGlyphs $mem.mathGlyphsEnd $MG.stride)
+  ;; atoms use the first half of their area; command groups that do not fit
+  ;; their area and the macro bodies take the second
+  (const $m.atomsEnd $mem.mathAtoms+8192)
+  (math-commands $mem.mathCmds $mem.mathCmdsEnd $mem.mathNodes $mem.mathNodesEnd $m.atomsEnd $mem.mathAtomsEnd)
 
   (data (i32.const $mem.mathStatic) "mod\00#c00")
   (const $mem.mathEnvs $mem.mathStatic+8)
@@ -71,7 +81,7 @@
   (const $N.size 48)
   (const $N.max 2730)
   (const $N.kind 0)   ;; u8 $NK
-  (const $N.class 1)  ;; u8 atom class
+  (const $N.class 1)  ;; u8 atom class of a glyph; 1 on an accent over one glyph
   (const $N.scale 2)  ;; u16 font size, thousandths
   (const $N.x 4)
   (const $N.y 8)      ;; down is positive
@@ -92,12 +102,13 @@
   (const $NK.path 4)
   (const $NK.text 5)
 
-  (const $A.size 16)
-  (const $A.nuc 0)
-  (const $A.sup 4)
-  (const $A.sub 8)
-  (const $A.class 12)
-  (const $A.flags 13)
+  ;; node indexes of the nucleus and scripts (u16), class, flags; a \left
+  ;; delimiter keeps its code point in place of the scripts
+  (const $A.size 8)
+  (const $A.sup 2)
+  (const $A.sub 4)
+  (const $A.class 6)
+  (const $A.flags 7)
   (const $AF.limits 1)
   (const $AF.nolimits 2)
   (const $AF.displayLimits 4)
@@ -111,12 +122,19 @@
   (const $P.dollar 16)
   (const $P.right 32)
   (const $P.bracket 64)
+  ;; a macro body: its atoms join the list that is reading the command
+  (const $P.inline 128)
 
   ;; command kinds of tables/math.txt
-  (const $K.sym 0)
-  (const $K.cr 28)
-  (const $K.end 18)
+  (const $K.frac 8)
   (const $K.left 10)
+  (const $K.font 12)
+  (const $K.text 13)
+  (const $K.space 14)
+  (const $K.end 18)
+  (const $K.kern 27)
+  (const $K.cr 28)
+  (const $K.macro 31)
 
   (global $mN (mut i32) (i32.const 0))
   (global $mA (mut i32) (i32.const 0))
@@ -137,6 +155,18 @@
   (global $mHline (mut i32) (i32.const 0))
   (global $cmdP (mut i32) (i32.const 0))
   (global $cmdLen (mut i32) (i32.const 0))
+  ;; where the next macro expansion with an argument goes, past the source
+  (global $mTop (mut i32) (i32.const 0))
+  ;; the command tables are expanded
+  (global $mReady (mut i32) (i32.const 0))
+  ;; end of the last copied macro byte a node points to: text and colors
+  (global $mPin (mut i32) (i32.const 0))
+  ;; end of the pairs at $mem.mathInfix
+  (global $mInfix (mut i32) (i32.const $mem.mathInfix))
+  ;; numerators being parsed again
+  (global $mReparse (mut i32) (i32.const 0))
+  ;; a bit at $mem.mathInfixBits is set
+  (global $mBits (mut i32) (i32.const 0))
   (global $gD (mut i32) (i32.const 0))
   (global $gH (mut i32) (i32.const 0))
   (global $gI (mut i32) (i32.const 0))
@@ -182,9 +212,14 @@
         (local.set $i (i32.const 0)))
       (else (global.set $mN (local.get $i))))
     (local.set $p (call $m.nAt (local.get $i)))
-    (memory.fill (local.get $p) (i32.const 0) (i32.const $N.size))
-    (i32.store8 (local.get $p) (local.get $kind))
-    (i32.store16 offset=$N.scale (local.get $p) (global.get $mS))
+    ;; plain stores: V8 calls out of line for a small memory.fill
+    (i64.store (local.get $p) (i64.or (i64.extend_i32_u (local.get $kind))
+      (i64.shl (i64.extend_i32_u (global.get $mS)) (i64.const 16))))
+    (i64.store offset=8 (local.get $p) (i64.const 0))
+    (i64.store offset=16 (local.get $p) (i64.const 0))
+    (i64.store offset=24 (local.get $p) (i64.const 0))
+    (i64.store offset=32 (local.get $p) (i64.const 0))
+    (i64.store offset=40 (local.get $p) (i64.const 0))
     (local.get $i))
 
   (func $m.W (param $n i32) (result i32) (i32.load offset=$N.w (call $m.nAt (local.get $n))))
@@ -246,12 +281,12 @@
     (local $mid i32)
     (local $run i32)
     (local $p i32)
-    (local.set $hi (i32.load (i32.const $mem.mathGlyphs)))
+    (local.set $hi (i32.load (i32.const $mem.mathRuns)))
     (block $none
       (loop $search
         (br_if $none (i32.ge_u (local.get $lo) (local.get $hi)))
         (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $hi)) (i32.const 1)))
-        (local.set $run (i32.load offset=$mem.mathGlyphs+4 (i32.shl (local.get $mid) (i32.const 3))))
+        (local.set $run (i32.load offset=$mem.mathRuns+4 (i32.mul (local.get $mid) (i32.const 6))))
         (if (i32.lt_u (local.get $cp) (i32.and (local.get $run) (i32.const 0x1fffff)))
           (then
             (local.set $hi (local.get $mid))
@@ -262,15 +297,13 @@
             (local.set $lo (i32.add (local.get $mid) (i32.const 1)))
             (br $search)))
         (local.set $p (i32.add
-          (i32.add (i32.const $mem.mathGlyphs+4) (i32.shl (i32.load (i32.const $mem.mathGlyphs)) (i32.const 3)))
-          (i32.mul (i32.const 5) (i32.add
-            (i32.load offset=$mem.mathGlyphs+8 (i32.shl (local.get $mid) (i32.const 3)))
-            (i32.sub (local.get $cp) (i32.and (local.get $run) (i32.const 0x1fffff)))))))
-        (global.set $gD (i32.mul (i32.load8_s (local.get $p)) (i32.const 10)))
-        (global.set $gH (i32.mul (i32.load8_u offset=1 (local.get $p)) (i32.const 10)))
-        (global.set $gI (i32.mul (i32.load8_u offset=2 (local.get $p)) (i32.const 10)))
-        (global.set $gW (i32.mul (i32.load8_u offset=3 (local.get $p)) (i32.const 10)))
-        (global.set $gA (i32.mul (i32.load8_s offset=4 (local.get $p)) (i32.const 10)))
+          (i32.load16_u offset=$mem.mathRuns+8 (i32.mul (local.get $mid) (i32.const 6)))
+          (i32.sub (local.get $cp) (i32.and (local.get $run) (i32.const 0x1fffff)))))
+        (global.set $gD (i32.mul (i32.load8_s offset=$mem.mathGlyphs (local.get $p)) (i32.const 10)))
+        (global.set $gH (i32.mul (i32.load8_u offset=$MG.h (local.get $p)) (i32.const 10)))
+        (global.set $gI (i32.mul (i32.load8_u offset=$MG.ic (local.get $p)) (i32.const 10)))
+        (global.set $gW (i32.mul (i32.load8_u offset=$MG.w (local.get $p)) (i32.const 10)))
+        (global.set $gA (i32.mul (i32.load8_s offset=$MG.acc (local.get $p)) (i32.const 10)))
         (return (i32.const 1))))
     (i32.const 0))
 
@@ -292,6 +325,7 @@
   (func $m.glyph (param $cp i32) (param $class i32) (result i32)
     (local $n i32)
     (local $p i32)
+
     (call $m.metricsAny (local.get $cp))
     (local.set $n (call $m.node (i32.const $NK.glyph)))
     (local.set $p (call $m.nAt (local.get $n)))
@@ -335,15 +369,18 @@
   (data (i32.const $holes.bb)
     "\43\02\21\00\48\0d\21\00\4e\15\21\00\50\19\21\00\51\1a\21\00\52\1d\21\00\5a\24\21\00\00\00\00\00")
 
-  ;; the index of a Greek variant letter (ϵ ϑ ϰ ϕ ϱ ϖ), or -1
-  (func $m.greekVariant (param $cp i32) (result i32)
-    (if (i32.eq (local.get $cp) (i32.const 0x3f5)) (then (return (i32.const 0))))
-    (if (i32.eq (local.get $cp) (i32.const 0x3d1)) (then (return (i32.const 1))))
-    (if (i32.eq (local.get $cp) (i32.const 0x3f0)) (then (return (i32.const 2))))
-    (if (i32.eq (local.get $cp) (i32.const 0x3d5)) (then (return (i32.const 3))))
-    (if (i32.eq (local.get $cp) (i32.const 0x3f1)) (then (return (i32.const 4))))
-    (if (i32.eq (local.get $cp) (i32.const 0x3d6)) (then (return (i32.const 5))))
-    (i32.const -1))
+  ;; the u16 paired with $cp in a list of u16 pairs that ends with a 0 key, or 0
+  (func $m.pair (param $p i32) (param $cp i32) (result i32)
+    (loop $l
+      (if (i32.eq (i32.load16_u (local.get $p)) (local.get $cp))
+        (then (return (i32.load16_u offset=2 (local.get $p)))))
+      (local.set $p (i32.add (local.get $p) (i32.const 4)))
+      (br_if $l (i32.load16_u (local.get $p))))
+    (i32.const 0))
+
+  ;; Greek variant letters (ϵ ϑ ϰ ϕ ϱ ϖ) and their index plus one
+  (const $pairs.greek $mem.mathStatic+728)
+  (data (i32.const $pairs.greek) "\f5\03\01\00\d1\03\02\00\f0\03\03\00\d5\03\04\00\f1\03\05\00\d6\03\06\00\00\00")
 
   ;; A Greek letter in the block whose capital alpha is at $upper; lowercase
   ;; letters follow 26 later, and the variants 26 after the lowercase.
@@ -353,9 +390,9 @@
       (then (return (i32.add (local.get $upper) (i32.sub (local.get $cp) (i32.const 0x391))))))
     (if (i32.le_u (i32.sub (local.get $cp) (i32.const 0x3b1)) (i32.const 0x18))
       (then (return (i32.add (local.get $upper) (i32.sub (local.get $cp) (i32.const 0x397))))))
-    (local.set $v (call $m.greekVariant (local.get $cp)))
-    (if (i32.ge_s (local.get $v) (i32.const 0))
-      (then (return (i32.add (local.get $upper) (i32.add (local.get $v) (i32.const 0x34))))))
+    (local.set $v (call $m.pair (i32.const $pairs.greek) (local.get $cp)))
+    (if (local.get $v)
+      (then (return (i32.add (local.get $upper) (i32.add (local.get $v) (i32.const 0x33))))))
     (local.get $cp))
 
   ;; The code point that prints letter, digit or Greek letter $cp in the
@@ -369,9 +406,9 @@
     (local.set $v (global.get $mVariant))
     (local.set $upper (i32.le_u (i32.sub (local.get $cp) (i32.const "A")) (i32.const 25)))
     (local.set $lower (i32.le_u (i32.sub (local.get $cp) (i32.const "a")) (i32.const 25)))
-    (local.set $lowGreek (i32.or
-      (i32.le_u (i32.sub (local.get $cp) (i32.const 0x3b1)) (i32.const 0x18))
-      (i32.ge_s (call $m.greekVariant (local.get $cp)) (i32.const 0))))
+    (local.set $lowGreek (i32.le_u (i32.sub (local.get $cp) (i32.const 0x3b1)) (i32.const 0x18)))
+    (if (i32.gt_u (local.get $cp) (i32.const 0x3c9))
+      (then (local.set $lowGreek (call $m.pair (i32.const $pairs.greek) (local.get $cp)))))
     (local.set $greek (i32.or (local.get $lowGreek)
       (i32.le_u (i32.sub (local.get $cp) (i32.const 0x391)) (i32.const 0x18))))
     (if (call $isDigit (local.get $cp))
@@ -428,17 +465,9 @@
   (func $m.letter (param $cp i32) (result i32)
     (call $m.glyph (call $m.styled (local.get $cp)) (i32.const 0)))
 
-  ;; The negated form of relation $cp after \not, or 0.
-  (func $m.negated (param $cp i32) (result i32)
-    (local $p i32)
-    (local.set $p (i32.const $mem.mathStatic+320))
-    (loop $l
-      (if (i32.eq (i32.load16_u (local.get $p)) (local.get $cp))
-        (then (return (i32.load16_u offset=2 (local.get $p)))))
-      (local.set $p (i32.add (local.get $p) (i32.const 4)))
-      (br_if $l (i32.load16_u (local.get $p))))
-    (i32.const 0))
-  (data (i32.const $mem.mathStatic+320)
+  ;; relations and their negated forms after \not
+  (const $pairs.not $mem.mathStatic+320)
+  (data (i32.const $pairs.not)
     "\3d\00\60\22\08\22\09\22\3c\00\6e\22\3e\00\6f\22\61\22\62\22\82\22\84\22\83\22\85\22\86\22\88\22\87\22\89\22\3c\22\41\22\48\22\49\22\64\22\70\22\65\22\71\22\45\22\47\22\23\22\24\22\25\22\26\22\0b\22\0c\22\03\22\04\22\00\00")
 
   ;; A symbol glyph from the command table or the input, negated after \not.
@@ -453,7 +482,7 @@
           (then (return (call $m.letter (local.get $cp)))))))
     (if (global.get $mNot)
       (then
-        (local.set $neg (call $m.negated (local.get $cp)))
+        (local.set $neg (call $m.pair (i32.const $pairs.not) (local.get $cp)))
         (if (local.get $neg)
           (then
             (local.set $cp (local.get $neg))
@@ -470,12 +499,11 @@
   (func $m.push (param $nuc i32) (param $class i32) (param $flags i32)
     (local $a i32)
     (local.set $a (global.get $mA))
-    (if (i32.ge_u (local.get $a) (i32.const $mem.mathAtomsEnd))
+    (if (i32.ge_u (local.get $a) (i32.const $m.atomsEnd))
       (then (global.set $mFail (i32.const 1)) (return)))
-    (i32.store offset=$A.nuc (local.get $a) (local.get $nuc))
-    (i64.store offset=$A.sup (local.get $a) (i64.const 0))
-    (i32.store8 offset=$A.class (local.get $a) (local.get $class))
-    (i32.store8 offset=$A.flags (local.get $a) (local.get $flags))
+    (i64.store (local.get $a) (i64.or (i64.extend_i32_u (local.get $nuc))
+      (i64.shl (i64.extend_i32_u (i32.or (local.get $class) (i32.shl (local.get $flags) (i32.const 8))))
+        (i64.const 48))))
     (global.set $mNot (i32.const 0))
     (global.set $mA (i32.add (local.get $a) (i32.const $A.size))))
 
@@ -492,9 +520,9 @@
     (local $w i32)
     (local $x i32)
     (local $ic i32)
-    (local.set $nuc (i32.load offset=$A.nuc (local.get $a)))
-    (local.set $sup (i32.load offset=$A.sup (local.get $a)))
-    (local.set $sub (i32.load offset=$A.sub (local.get $a)))
+    (local.set $nuc (i32.load16_u (local.get $a)))
+    (local.set $sup (i32.load16_u offset=$A.sup (local.get $a)))
+    (local.set $sub (i32.load16_u offset=$A.sub (local.get $a)))
     (local.set $flags (i32.load8_u offset=$A.flags (local.get $a)))
     (if (i32.eqz (i32.or (local.get $sup) (local.get $sub))) (then (return (local.get $nuc))))
     (local.set $ic (call $m.IC (local.get $nuc)))
@@ -526,7 +554,8 @@
                   (i32.sub (call $m.sc (i32.const $MC.lowerDrop)) (call $m.H (local.get $sub))))))))
         (call $m.setW (local.get $l) (local.get $w))
         (return (local.get $l))))
-    (if (i32.ne (i32.load8_u (call $m.nAt (local.get $nuc))) (i32.const $NK.glyph))
+    (if (i32.and (i32.ne (i32.load8_u (call $m.nAt (local.get $nuc))) (i32.const $NK.glyph))
+          (i32.eqz (i32.load8_u offset=$N.class (call $m.nAt (local.get $nuc)))))
       (then
         (local.set $u (i32.sub (call $m.H (local.get $nuc)) (call $m.sc (i32.const $MC.supDrop))))
         (local.set $v (i32.add (call $m.D (local.get $nuc)) (call $m.sc (i32.const $MC.subDrop))))))
@@ -643,6 +672,8 @@
 
   ;; ---- reading the source
 
+  ;; the byte at $mp, 0 at the end. A NUL byte also reads 0: the list and
+  ;; text loops check $mp against $me and read it as U+FFFD.
   (func $m.peek (result i32)
     (if (i32.ge_u (global.get $mp) (global.get $me)) (then (return (i32.const 0))))
     (i32.load8_u (global.get $mp)))
@@ -661,31 +692,37 @@
             (else (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))
           (br $l)))))
 
-  ;; Look up the command name [$p, $p + $len): its value, or -1.
+  ;; Look up the command name [$p, $p + $len): its value, or -1. Each name
+  ;; length group is sorted, so this is a binary search.
   (func $m.lookup (param $p i32) (param $len i32) (result i32)
     (local $g i32)
+    (local $lo i32)
+    (local $hi i32)
+    (local $mid i32)
     (local $at i32)
-    (local $n i32)
     (local $i i32)
+    (local $d i32)
     (if (i32.or (i32.eqz (local.get $len)) (i32.gt_u (local.get $len) (i32.const 31)))
       (then (return (i32.const -1))))
     (local.set $g (i32.load offset=$mem.mathCmds (i32.shl (local.get $len) (i32.const 2))))
-    (local.set $at (i32.add (i32.const $mem.mathCmds) (i32.and (local.get $g) (i32.const 0xffff))))
-    (local.set $n (i32.shr_u (local.get $g) (i32.const 16)))
+    (local.set $hi (i32.shr_u (local.get $g) (i32.const 16)))
     (block $none
-      (loop $entry
-        (br_if $none (i32.eqz (local.get $n)))
+      (loop $search
+        (br_if $none (i32.ge_u (local.get $lo) (local.get $hi)))
+        (local.set $mid (i32.shr_u (i32.add (local.get $lo) (local.get $hi)) (i32.const 1)))
+        (local.set $at (i32.add (i32.add (i32.const $mem.mathCmds) (i32.and (local.get $g) (i32.const 0xffff)))
+          (i32.mul (local.get $mid) (i32.add (local.get $len) (i32.const 4)))))
         (local.set $i (i32.const 0))
-        (block $differ
-          (loop $byte
-            (br_if $differ (i32.ne (i32.load8_u (i32.add (local.get $at) (local.get $i)))
-              (i32.load8_u (i32.add (local.get $p) (local.get $i)))))
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br_if $byte (i32.lt_u (local.get $i) (local.get $len))))
-          (return (i32.load (i32.add (local.get $at) (local.get $len)))))
-        (local.set $at (i32.add (local.get $at) (i32.add (local.get $len) (i32.const 4))))
-        (local.set $n (i32.sub (local.get $n) (i32.const 1)))
-        (br $entry)))
+        (loop $byte
+          (local.set $d (i32.sub (i32.load8_u (i32.add (local.get $p) (local.get $i)))
+            (i32.load8_u (i32.add (local.get $at) (local.get $i)))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br_if $byte (i32.and (i32.eqz (local.get $d)) (i32.lt_u (local.get $i) (local.get $len)))))
+        (if (i32.eqz (local.get $d)) (then (return (i32.load (i32.add (local.get $at) (local.get $len))))))
+        (if (i32.lt_s (local.get $d) (i32.const 0))
+          (then (local.set $hi (local.get $mid)))
+          (else (local.set $lo (i32.add (local.get $mid) (i32.const 1)))))
+        (br $search)))
     (i32.const -1))
 
   ;; The value of the first symbol command that prints $cp, or -1.
@@ -737,13 +774,14 @@
                 (return (local.get $v))))))
         (call $m.skipSpace)
         (return (call $m.lookup (local.get $p) (global.get $cmdLen)))))
-    (if (i32.eqz (call $m.peek))
+    (if (i32.ge_u (global.get $mp) (global.get $me))
       (then
         (global.set $cmdLen (i32.const 0))
         (return (i32.const -1))))
-    (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
-    (global.set $cmdLen (i32.const 1))
-    (call $m.lookup (local.get $p) (i32.const 1)))
+    ;; a whole code point, so `\é` stays valid UTF-8
+    (drop (call $m.readCp))
+    (global.set $cmdLen (i32.sub (global.get $mp) (local.get $p)))
+    (call $m.lookup (local.get $p) (global.get $cmdLen)))
 
   ;; the UTF-8 code point at $mp, advancing past it
   (func $m.readCp (result i32)
@@ -760,7 +798,18 @@
     (call $m.skipSpace)
     (if (i32.ne (call $m.peek) (i32.const "{"))
       (then
+        ;; one token: a character or a command
         (local.set $p (global.get $mp))
+        (if (i32.eq (call $m.peek) (i32.const "\5c"))
+          (then
+            (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
+            (if (call $isAlpha (call $m.peek))
+              (then
+                (loop $name
+                  (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
+                  (br_if $name (call $isAlpha (call $m.peek))))
+                (global.set $cmdLen (i32.sub (global.get $mp) (local.get $p)))
+                (return (local.get $p))))))
         (if (call $m.peek) (then (drop (call $m.readCp))))
         (global.set $cmdLen (i32.sub (global.get $mp) (local.get $p)))
         (return (local.get $p))))
@@ -782,6 +831,10 @@
     (global.set $cmdLen (i32.sub (global.get $mp) (local.get $p)))
     (if (call $m.peek) (then (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))
     (local.get $p))
+
+  ;; units and their size in thousandths of a point (mu: of an em)
+  (const $pairs.units $mem.mathStatic+846)
+  (data (i32.const $pairs.units) "\65\6d\e8\03\65\78\af\01\70\74\64\00\6d\75\38\00\70\78\3f\00\63\6d\1d\0b\6d\6d\1d\01\69\6e\3b\1c\62\70\64\00\70\63\b0\04\00\00")
 
   ;; A dimension such as `2em`, `-3mu` or `{0.5cm}` in thousandths of an em.
   ;; Bare numbers are in mu when $mu is set, else in points.
@@ -808,7 +861,7 @@
         (local.set $c (call $m.peek))
         (if (call $isDigit (local.get $c))
           (then
-            (if (i32.lt_u (local.get $v) (i32.const 100000000))
+            (if (i32.lt_u (local.get $v) (i32.const 10000000))
               (then
                 (if (i32.lt_u (local.get $m.frac) (i32.const 1000))
                   (then
@@ -827,17 +880,9 @@
     ;; $v holds thousandths of the unit
     (call $m.skipSpace)
     (local.set $u (i32.or (call $m.peek) (i32.shl (i32.load8_u offset=1 (global.get $mp)) (i32.const 8))))
-    (local.set $c (select (i32.const 56) (i32.const 100) (local.get $mu)))
-    (if (i32.eq (local.get $u) (i32.const "em")) (then (local.set $c (i32.const 1000))))
-    (if (i32.eq (local.get $u) (i32.const "ex")) (then (local.set $c (i32.const 431))))
-    (if (i32.eq (local.get $u) (i32.const "pt")) (then (local.set $c (i32.const 100))))
-    (if (i32.eq (local.get $u) (i32.const "mu")) (then (local.set $c (i32.const 56))))
-    (if (i32.eq (local.get $u) (i32.const "px")) (then (local.set $c (i32.const 63))))
-    (if (i32.eq (local.get $u) (i32.const "cm")) (then (local.set $c (i32.const 2845))))
-    (if (i32.eq (local.get $u) (i32.const "mm")) (then (local.set $c (i32.const 285))))
-    (if (i32.eq (local.get $u) (i32.const "in")) (then (local.set $c (i32.const 7227))))
-    (if (i32.eq (local.get $u) (i32.const "bp")) (then (local.set $c (i32.const 100))))
-    (if (i32.eq (local.get $u) (i32.const "pc")) (then (local.set $c (i32.const 1200))))
+    (local.set $c (call $m.pair (i32.const $pairs.units) (local.get $u)))
+    (if (i32.eqz (local.get $c))
+      (then (local.set $c (select (i32.const 56) (i32.const 100) (local.get $mu)))))
     (if (i32.and (call $isAlpha (i32.and (local.get $u) (i32.const 0xff)))
           (call $isAlpha (i32.shr_u (local.get $u) (i32.const 8))))
       (then (global.set $mp (i32.add (global.get $mp) (i32.const 2)))))
@@ -849,7 +894,10 @@
               (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
               (br $close))))
         (if (call $m.peek) (then (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))))
-    (local.set $v (call $m.sc (i32.div_s (i32.mul (call $m.min (local.get $v) (i32.const 2000000)) (local.get $c)) (i32.const 1000))))
+    ;; at most 1000em, so sums of many kerns stay far from i32 overflow
+    (local.set $v (call $m.sc (call $m.min (i32.wrap_i64 (i64.div_u
+      (i64.mul (i64.extend_i32_u (local.get $v)) (i64.extend_i32_u (local.get $c))) (i64.const 1000)))
+      (i32.const 1000000))))
     (select (i32.sub (i32.const 0) (local.get $v)) (local.get $v) (local.get $neg)))
 
   ;; ---- parsing
@@ -899,14 +947,14 @@
     (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
     (local.set $a (i32.sub (global.get $mA) (i32.const $A.size)))
     (if (i32.or (i32.lt_u (local.get $a) (local.get $base))
-          (i32.load (i32.add (local.get $a) (select (i32.const $A.sup) (i32.const $A.sub) (local.get $sup)))))
+          (i32.load16_u (i32.add (local.get $a) (select (i32.const $A.sup) (i32.const $A.sub) (local.get $sup)))))
       (then
         (call $m.push (call $m.list) (i32.const 0) (i32.const 0))
         (local.set $a (i32.sub (global.get $mA) (i32.const $A.size)))))
     (local.set $n (call $m.argIn (i32.or (call $m.supStyle (global.get $mStyle))
       (select (i32.const 0) (i32.const 4) (local.get $sup)))))
-    (if (i32.ge_u (local.get $a) (i32.const $mem.mathAtomsEnd)) (then (return)))
-    (i32.store (i32.add (local.get $a) (select (i32.const $A.sup) (i32.const $A.sub) (local.get $sup)))
+    (if (i32.ge_u (local.get $a) (i32.const $m.atomsEnd)) (then (return)))
+    (i32.store16 (i32.add (local.get $a) (select (i32.const $A.sup) (i32.const $A.sub) (local.get $sup)))
       (local.get $n)))
 
   ;; Read a delimiter after \left, \right, \middle or \big: its code point,
@@ -929,27 +977,9 @@
     (if (i32.eq (local.get $c) (i32.const ">")) (then (return (i32.const 0x27e9))))
     (local.get $c))
 
-  ;; The shape of delimiter $cp drawn as a path: id | mirrored << 8, or 0.
-  (func $m.delimShape (param $cp i32) (result i32)
-    (block $found
-      (block $mirror
-        (if (i32.or (i32.eq (local.get $cp) (i32.const "(")) (i32.eq (local.get $cp) (i32.const 0x27ee))) (then (return (i32.const 1))))
-        (if (i32.or (i32.eq (local.get $cp) (i32.const ")")) (i32.eq (local.get $cp) (i32.const 0x27ef))) (then (return (i32.const 0x101))))
-        (if (i32.eq (local.get $cp) (i32.const "[")) (then (return (i32.const 2))))
-        (if (i32.eq (local.get $cp) (i32.const "]")) (then (return (i32.const 0x102))))
-        (if (i32.eq (local.get $cp) (i32.const "{")) (then (return (i32.const 3))))
-        (if (i32.eq (local.get $cp) (i32.const "}")) (then (return (i32.const 0x103))))
-        (if (i32.or (i32.eq (local.get $cp) (i32.const "|")) (i32.eq (local.get $cp) (i32.const 0x2223))) (then (return (i32.const 4))))
-        (if (i32.or (i32.eq (local.get $cp) (i32.const 0x2016)) (i32.eq (local.get $cp) (i32.const 0x2225))) (then (return (i32.const 5))))
-        (if (i32.or (i32.eq (local.get $cp) (i32.const 0x27e8)) (i32.eq (local.get $cp) (i32.const 0x2329))) (then (return (i32.const 6))))
-        (if (i32.or (i32.eq (local.get $cp) (i32.const 0x27e9)) (i32.eq (local.get $cp) (i32.const 0x232a))) (then (return (i32.const 0x106))))
-        (if (i32.eq (local.get $cp) (i32.const 0x230a)) (then (return (i32.const 7))))
-        (if (i32.eq (local.get $cp) (i32.const 0x230b)) (then (return (i32.const 0x107))))
-        (if (i32.eq (local.get $cp) (i32.const 0x2308)) (then (return (i32.const 8))))
-        (if (i32.eq (local.get $cp) (i32.const 0x2309)) (then (return (i32.const 0x108))))
-        (if (i32.eq (local.get $cp) (i32.const "/")) (then (return (i32.const 9))))
-        (if (i32.eq (local.get $cp) (i32.const "\5c")) (then (return (i32.const 10))))))
-    (i32.const 0))
+  ;; delimiters drawn as paths: shape id | mirrored << 8
+  (const $pairs.delim $mem.mathStatic+756)
+  (data (i32.const $pairs.delim) "\28\00\01\00\ee\27\01\00\29\00\01\01\ef\27\01\01\5b\00\02\00\5d\00\02\01\7b\00\03\00\7d\00\03\01\7c\00\04\00\23\22\04\00\16\20\05\00\25\22\05\00\e8\27\06\00\29\23\06\00\e9\27\06\01\2a\23\06\01\0a\23\07\00\0b\23\07\01\08\23\08\00\09\23\08\01\2f\00\09\00\5c\00\0a\00\00\00")
 
   ;; A delimiter at least $size tall (total height, base units), centered on
   ;; the axis when it has to grow.
@@ -965,7 +995,7 @@
     (if (i32.le_s (local.get $size)
           (i32.add (i32.add (call $m.H (local.get $n)) (call $m.D (local.get $n))) (call $m.sc (i32.const 20))))
       (then (return (local.get $n))))
-    (local.set $shape (call $m.delimShape (local.get $cp)))
+    (local.set $shape (call $m.pair (i32.const $pairs.delim) (local.get $cp)))
     (local.set $axis (call $m.sc (i32.const $MC.axis)))
     (local.set $p (call $m.nAt (local.get $n)))
     (if (i32.eqz (local.get $shape))
@@ -1054,7 +1084,7 @@
     (block $built
       (loop $each
         (br_if $built (i32.ge_u (local.get $a) (global.get $mA)))
-        (local.set $n (i32.load offset=$A.nuc (local.get $a)))
+        (local.set $n (i32.load16_u (local.get $a)))
         (if (i32.and (i32.load8_u offset=$A.flags (local.get $a)) (i32.const $AF.middle))
           (then (local.set $n (call $m.delim (i32.load offset=$A.sup (local.get $a))
             (local.get $size) (i32.const 0)))))
@@ -1066,15 +1096,9 @@
     (global.set $mA (local.get $base))
     (local.get $l))
 
-  ;; Text in \text{...}: runs of literal bytes, escapes, spaces, and $...$.
+  ;; Text in \text{...}: a brace group, or one character.
   (func $m.textArg (param $flags i32) (result i32)
-    (local $base i32)
     (local $start i32)
-    (local $c i32)
-    (local $depth i32)
-    (local $n i32)
-    (local $old i32)
-    (local.set $base (global.get $mA))
     (call $m.skipSpace)
     (if (i32.ne (call $m.peek) (i32.const "{"))
       (then
@@ -1082,11 +1106,28 @@
         (if (call $m.peek) (then (drop (call $m.readCp))))
         (return (call $m.textNode (local.get $start) (i32.sub (global.get $mp) (local.get $start)) (local.get $flags)))))
     (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
+    (call $m.textRun (local.get $flags)))
+
+  ;; The text of a group up to its closing brace: runs of literal bytes,
+  ;; escapes, spaces, $...$, symbols, spaces and kerns, and nested text
+  ;; commands. A font switch such as \bf sets the rest of the group.
+  (func $m.textRun (param $flags i32) (result i32)
+    (local $base i32)
+    (local $start i32)
+    (local $c i32)
+    (local $depth i32)
+    (local $n i32)
+    (local $old i32)
+    (local.set $base (global.get $mA))
+    (global.set $mDepth (i32.add (global.get $mDepth) (i32.const 1)))
+    (if (i32.gt_u (global.get $mDepth) (i32.const 48))
+      (then (global.set $mFail (i32.const 1))))
     (local.set $start (global.get $mp))
     (block $done
       (loop $l
+        (br_if $done (global.get $mFail))
         (local.set $c (call $m.peek))
-        (if (i32.or (i32.eqz (local.get $c))
+        (if (i32.or (i32.ge_u (global.get $mp) (global.get $me))
               (i32.or (i32.eq (local.get $c) (i32.const "\5c"))
                 (i32.or (i32.eq (local.get $c) (i32.const "$"))
                   (i32.or (i32.eq (local.get $c) (i32.const "{"))
@@ -1095,7 +1136,7 @@
             (if (i32.gt_u (global.get $mp) (local.get $start))
               (then (call $m.push (call $m.textNode (local.get $start)
                 (i32.sub (global.get $mp) (local.get $start)) (local.get $flags)) (i32.const 0) (i32.const 0))))
-            (br_if $done (i32.eqz (local.get $c)))
+            (br_if $done (i32.ge_u (global.get $mp) (global.get $me)))
             (if (i32.eq (local.get $c) (i32.const "}"))
               (then
                 (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
@@ -1125,37 +1166,76 @@
                 (local.set $c (call $m.peek))
                 (if (call $isAlpha (local.get $c))
                   (then
-                    ;; a nested text command keeps its argument; others print their name
                     (global.set $mp (i32.sub (global.get $mp) (i32.const 1)))
                     (local.set $n (call $m.readCmd))
-                    (if (i32.eq (i32.shr_u (local.get $n) (i32.const 24)) (i32.const 13))
-                      (then (call $m.push (call $m.textArg (call $m.textFlags (local.get $n))) (i32.const 0) (i32.const 0)))
-                      (else (call $m.push (call $m.textNode (i32.sub (global.get $cmdP) (i32.const 1))
-                        (i32.add (global.get $cmdLen) (i32.const 1)) (local.get $flags)) (i32.const 0) (i32.const 0)))))
+                    (local.set $c (i32.shr_u (local.get $n) (i32.const 24)))
+                    (block $cmd
+                      ;; a font switch: the rest of the group in its style
+                      (if (i32.and (i32.eq (local.get $c) (i32.const $K.font)) (i32.ne (i32.and (local.get $n) (i32.const 0x40)) (i32.const 0)))
+                        (then
+                          (call $m.push (call $m.textRun (call $m.textFlags (local.get $n))) (i32.const 0) (i32.const 0))
+                          (br_if $done (i32.eqz (local.get $depth)))
+                          (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+                          (br $cmd)))
+                      ;; text and font commands nest, adding their style
+                      (if (i32.or (i32.eq (local.get $c) (i32.const $K.text)) (i32.eq (local.get $c) (i32.const $K.font)))
+                        (then
+                          (call $m.push (call $m.textArg (i32.or (local.get $flags) (call $m.textFlags (local.get $n))))
+                            (i32.const 0) (i32.const 0))
+                          (br $cmd)))
+                      ;; symbols print as glyphs; spaces, kerns, boxes and macros run
+                      (if (i32.le_u (local.get $c) (i32.const 1))
+                        (then
+                          (call $m.push (call $m.glyph (i32.and (local.get $n) (i32.const 0x1fffff)) (i32.const 0)) (i32.const 0) (i32.const 0))
+                          (br $cmd)))
+                      (if (i32.or (i32.or (i32.eq (local.get $c) (i32.const $K.space)) (i32.eq (local.get $c) (i32.const $K.kern)))
+                            (i32.eq (local.get $c) (i32.const $K.macro)))
+                        (then
+                          (call $m.command (local.get $n) (local.get $base) (i32.const 0))
+                          (br $cmd)))
+                      ;; others print their name
+                      (call $m.push (call $m.textNode (i32.sub (global.get $cmdP) (i32.const 1))
+                        (i32.add (global.get $cmdLen) (i32.const 1)) (local.get $flags)) (i32.const 0) (i32.const 0))))
                   (else
+                    ;; a whole code point, so `\é` stays valid UTF-8
+                    (local.set $start (global.get $mp))
+                    (if (local.get $c) (then (drop (call $m.readCp))))
                     (if (i32.or (i32.eq (local.get $c) (i32.const " ")) (i32.eq (local.get $c) (i32.const ",")))
                       (then (call $m.push (call $m.kern (call $m.sc (select (i32.const 333) (i32.const 167)
                         (i32.eq (local.get $c) (i32.const " "))))) (i32.const 0) (i32.const 0)))
                       (else
                         (if (i32.and (i32.ne (local.get $c) (i32.const "\5c")) (i32.ne (local.get $c) (i32.const 0)))
-                          (then (call $m.push (call $m.textNode (global.get $mp) (i32.const 1) (local.get $flags))
-                            (i32.const 0) (i32.const 0))))))
-                    (if (local.get $c) (then (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))))))
+                          (then (call $m.push (call $m.textNode (local.get $start)
+                            (i32.sub (global.get $mp) (local.get $start)) (local.get $flags))
+                            (i32.const 0) (i32.const 0))))))))))
             (local.set $start (global.get $mp))
-            (br_if $done (global.get $mFail))
             (br $l)))
         (drop (call $m.readCp))
         (br $l)))
-    (local.set $n (call $m.finish (local.get $base)))
-    (local.get $n))
+    (global.set $mDepth (i32.sub (global.get $mDepth) (i32.const 1)))
+    (call $m.finish (local.get $base)))
 
   ;; the text flags of a \text command's value: 1 bold, 2 italic, 4 monospace
   (func $m.textFlags (param $v i32) (result i32)
-    (local.set $v (i32.and (local.get $v) (i32.const 0xff)))
+    (local.set $v (i32.and (local.get $v) (i32.const 0xf)))
     (select (i32.const 1)
       (select (i32.const 2) (select (i32.const 4) (i32.const 0) (i32.eq (local.get $v) (i32.const 8)))
         (i32.eq (local.get $v) (i32.const 1)))
       (i32.eq (local.get $v) (i32.const 2))))
+
+  ;; The code point that prints $cp in text of $flags. STIX Two Math has no
+  ;; bold face and Chromium fakes none, so bold letters, digits and Greek
+  ;; print as math bold ones.
+  (func $m.textCp (param $cp i32) (param $flags i32) (result i32)
+    (local $it i32)
+    (if (i32.ne (i32.and (local.get $flags) (i32.const 5)) (i32.const 1)) (then (return (local.get $cp))))
+    (local.set $it (i32.and (local.get $flags) (i32.const 2)))
+    (if (i32.le_u (i32.sub (local.get $cp) (i32.const "A")) (i32.const 25))
+      (then (return (i32.add (local.get $cp) (select (i32.const 0x1d427) (i32.const 0x1d3bf) (local.get $it))))))
+    (if (i32.le_u (i32.sub (local.get $cp) (i32.const "a")) (i32.const 25))
+      (then (return (i32.add (local.get $cp) (select (i32.const 0x1d421) (i32.const 0x1d3b9) (local.get $it))))))
+    (if (call $isDigit (local.get $cp)) (then (return (i32.add (local.get $cp) (i32.const 0x1d79e)))))
+    (call $m.greek (local.get $cp) (select (i32.const 0x1d71c) (i32.const 0x1d6a8) (local.get $it))))
 
   ;; A text run [$p, $p + $len) measured with the main fonts.
   (func $m.textNode (param $p i32) (param $len i32) (param $flags i32) (result i32)
@@ -1166,6 +1246,8 @@
     (local $h i32)
     (local $d i32)
     (local.set $end (i32.add (local.get $p) (local.get $len)))
+    (if (i32.lt_u (local.get $p) (i32.const $mem.mathSrcEnd))
+      (then (global.set $mPin (call $m.max (global.get $mPin) (local.get $end)))))
     (local.set $n (call $m.node (i32.const $NK.text)))
     (i32.store offset=$N.a (call $m.nAt (local.get $n)) (local.get $p))
     (i32.store offset=$N.e (call $m.nAt (local.get $n))
@@ -1179,7 +1261,7 @@
           (then
             (local.set $w (i32.add (local.get $w) (i32.const 333)))
             (br $l)))
-        (call $m.metricsAny (local.get $cp))
+        (call $m.metricsAny (call $m.textCp (local.get $cp) (local.get $flags)))
         (local.set $w (i32.add (local.get $w)
           (select (i32.const 525) (global.get $gW) (i32.and (local.get $flags) (i32.const 4)))))
         (local.set $h (call $m.max (local.get $h) (global.get $gH)))
@@ -1230,17 +1312,32 @@
       (i32.add (call $m.W (local.get $n)) (call $m.sc (i32.const 167))) (i32.const 0))
     (local.get $l))
 
-  ;; \frac, \dfrac, \tfrac, \binom and their kin
-  (func $m.frac (param $kind i32) (result i32)
+  ;; A delimiter in braces, as \genfrac takes them: its code point, or `.`.
+  (func $m.braceDelim (result i32)
+    (local $p i32)
+    (local $end i32)
+    (local.set $p (call $m.rawArg))
+    (if (i32.eqz (global.get $cmdLen)) (then (return (i32.const "."))))
+    (local.set $end (global.get $mp))
+    (global.set $mp (local.get $p))
+    (local.set $p (call $m.readDelim))
+    (global.set $mp (local.get $end))
+    (local.get $p))
+
+  ;; \frac, \binom, \genfrac and their kin. $x: style (0 the current one, 1
+  ;; display, 2 text) | an $m.envDelim pair << 2 | 16 without a rule | 32 for
+  ;; \genfrac, which reads its delimiters, rule and style first. A $num of -1
+  ;; reads both parts as arguments (`\over` passes the parts it parsed); a $t
+  ;; of -1 is the default rule.
+  (func $m.frac (param $x i32) (param $num i32) (param $den i32) (param $t i32) (result i32)
     (local $old i32)
     (local $fs i32)
-    (local $num i32)
-    (local $den i32)
     (local $binom i32)
     (local $disp i32)
     (local $u i32)
     (local $v i32)
-    (local $t i32)
+    (local $ld i32)
+    (local $rd i32)
     (local $clr i32)
     (local $axis i32)
     (local $w i32)
@@ -1251,18 +1348,39 @@
     (local $size i32)
     (local.set $old (global.get $mStyle))
     (local.set $fs (local.get $old))
-    (if (i32.or (i32.eq (local.get $kind) (i32.const 1)) (i32.eq (local.get $kind) (i32.const 4)))
-      (then (local.set $fs (i32.and (local.get $old) (i32.const 4)))))
-    (if (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.eq (local.get $kind) (i32.const 5)))
-      (then (local.set $fs (i32.or (i32.and (local.get $old) (i32.const 4)) (i32.const 1)))))
-    (local.set $binom (i32.ge_u (local.get $kind) (i32.const 3)))
-    (local.set $num (call $m.argIn (call $m.fracStyle (local.get $fs))))
-    (local.set $den (call $m.argIn (i32.or (call $m.fracStyle (local.get $fs)) (i32.const 4))))
+    (local.set $v (i32.and (local.get $x) (i32.const 3)))
+    (if (local.get $v)
+      (then (local.set $fs (i32.or (i32.and (local.get $old) (i32.const 4)) (i32.sub (local.get $v) (i32.const 1))))))
+    (local.set $v (i32.and (i32.shr_u (local.get $x) (i32.const 2)) (i32.const 3)))
+    (local.set $ld (call $m.envDelim (local.get $v) (i32.const 0)))
+    (local.set $rd (call $m.envDelim (local.get $v) (i32.const 1)))
+    (if (i32.and (local.get $x) (i32.const 16)) (then (local.set $t (i32.const 0))))
+    (if (i32.and (local.get $x) (i32.const 32))
+      (then
+        (local.set $ld (call $m.braceDelim))
+        (local.set $rd (call $m.braceDelim))
+        ;; an empty rule argument is the default rule
+        (call $m.skipSpace)
+        (if (i32.eq (i32.load16_u (global.get $mp)) (i32.const 0x7d7b))
+          (then (global.set $mp (i32.add (global.get $mp) (i32.const 2))))
+          (else (local.set $t (call $m.dimen (i32.const 0)))))
+        (local.set $u (call $m.rawArg))
+        (if (global.get $cmdLen)
+          (then (local.set $fs (i32.or (i32.and (local.get $old) (i32.const 4))
+            (i32.and (i32.sub (i32.load8_u (local.get $u)) (i32.const "0")) (i32.const 3))))))))
+    (if (i32.lt_s (local.get $num) (i32.const 0))
+      (then
+        (local.set $num (call $m.argIn (call $m.fracStyle (local.get $fs))))
+        (local.set $den (call $m.argIn (i32.or (call $m.fracStyle (local.get $fs)) (i32.const 4))))))
     (call $m.setStyle (local.get $fs))
     (local.set $disp (i32.eqz (i32.and (local.get $fs) (i32.const 3))))
-    (local.set $t (call $m.sc (i32.const $MC.rule)))
+    (if (i32.lt_s (local.get $t) (i32.const 0)) (then (local.set $t (call $m.sc (i32.const $MC.rule)))))
+    (local.set $binom (i32.eqz (local.get $t)))
     (local.set $axis (call $m.sc (i32.const $MC.axis)))
-        (if (local.get $binom)
+    ;; a fraction without delimiters has null delimiter spaces
+    (local.set $o (i32.or (i32.ne (local.get $ld) (i32.const ".")) (i32.ne (local.get $rd) (i32.const "."))))
+    (if (i32.eqz (local.get $o)) (then (local.set $nds (call $m.sc (i32.const 120)))))
+    (if (local.get $binom)
       (then
         (local.set $u (call $m.sc (select (i32.const $MC.stackTopDisplay) (i32.const $MC.stackTop) (local.get $disp))))
         (local.set $v (call $m.sc (select (i32.const $MC.stackBottomDisplay) (i32.const $MC.stackBottom) (local.get $disp))))
@@ -1285,8 +1403,7 @@
         (local.set $w (i32.sub (i32.sub (local.get $axis) (i32.shr_s (local.get $t) (i32.const 1)))
           (i32.sub (call $m.H (local.get $den)) (local.get $v))))
         (if (i32.lt_s (local.get $w) (local.get $clr))
-          (then (local.set $v (i32.add (local.get $v) (i32.sub (local.get $clr) (local.get $w))))))
-        (local.set $nds (call $m.sc (i32.const 120)))))
+          (then (local.set $v (i32.add (local.get $v) (i32.sub (local.get $clr) (local.get $w))))))))
     (local.set $w (call $m.max (call $m.W (local.get $num)) (call $m.W (local.get $den))))
     (local.set $l (call $m.list))
     (call $m.append (local.get $l) (local.get $num)
@@ -1302,16 +1419,16 @@
           (i32.sub (local.get $t) (i32.shr_s (local.get $t) (i32.const 1))))
         (call $m.append (local.get $l) (local.get $r) (local.get $nds) (i32.sub (i32.const 0) (local.get $axis)))))
     (call $m.setW (local.get $l) (i32.add (local.get $w) (i32.shl (local.get $nds) (i32.const 1))))
-    (if (local.get $binom)
+    (if (local.get $o)
       (then
         (local.set $size (call $m.sc (select (i32.const 2390) (i32.const 1010) (local.get $disp))))
         (local.set $o (call $m.list))
-        (local.set $r (call $m.delim (i32.const "(") (local.get $size) (i32.const 4)))
+        (local.set $r (call $m.delim (local.get $ld) (local.get $size) (i32.const 4)))
         (call $m.append (local.get $o) (local.get $r) (i32.const 0) (i32.const 0))
         (local.set $w (call $m.W (local.get $r)))
         (call $m.append (local.get $o) (local.get $l) (local.get $w) (i32.const 0))
         (local.set $w (i32.add (local.get $w) (call $m.W (local.get $l))))
-        (local.set $r (call $m.delim (i32.const ")") (local.get $size) (i32.const 5)))
+        (local.set $r (call $m.delim (local.get $rd) (local.get $size) (i32.const 5)))
         (call $m.append (local.get $o) (local.get $r) (local.get $w) (i32.const 0))
         (call $m.setW (local.get $o) (i32.add (local.get $w) (call $m.W (local.get $r))))
         (local.set $l (local.get $o))))
@@ -1376,13 +1493,17 @@
     (call $m.setBox (local.get $n) (local.get $w) (local.get $h) (i32.const 0))
     (local.get $n))
 
-  ;; \overline, \widehat, \overbrace and the other wide accents
-  (func $m.wide (param $shape i32) (param $body i32) (result i32)
+  ;; \overline, \widehat, \overbrace and the other wide accents. $x: the
+  ;; shape (1 and 2 are rules, 17 to 23 arrows, others path 20 + shape) | 32
+  ;; below the body | 64 limits.
+  (func $m.wide (param $x i32) (param $body i32) (result i32)
+    (local $shape i32)
     (local $l i32)
     (local $t i32)
     (local $n i32)
     (local $w i32)
     (local $h i32)
+    (local.set $shape (i32.and (local.get $x) (i32.const 31)))
     (local.set $t (call $m.sc (i32.const $MC.rule)))
     (local.set $l (call $m.wrap (local.get $body)))
     (local.set $w (call $m.W (local.get $body)))
@@ -1405,11 +1526,16 @@
     (local.set $h (call $m.sc (select (i32.const 250)
       (call $m.min (i32.add (i32.const 160) (i32.div_s (local.get $w) (i32.const 25))) (i32.const 320))
       (i32.ge_u (local.get $shape) (i32.const 5)))))
-    (local.set $n (call $m.pathNode (i32.add (local.get $shape) (i32.const 20)) (local.get $w) (local.get $h)
-      (call $m.sc (i32.const 50))))
-    (if (i32.eq (local.get $shape) (i32.const 8))
+    (local.set $t (call $m.sc (i32.const 50)))
+    (if (i32.ge_u (local.get $shape) (i32.const 17))
       (then
-        (call $m.append (local.get $l) (local.get $n) (i32.const 0)
+        (local.set $t (i32.or (i32.load8_u offset=$m.wideArrows-17 (local.get $shape)) (i32.shl (local.get $t) (i32.const 10))))
+        (local.set $shape (i32.const 5))))
+    (local.set $n (call $m.pathNode (i32.add (local.get $shape) (i32.const 20)) (local.get $w) (local.get $h) (local.get $t)))
+    (if (i32.and (local.get $x) (i32.const 32))
+      (then
+        (call $m.append (local.get $l) (local.get $n)
+          (i32.shr_s (i32.sub (call $m.W (local.get $body)) (local.get $w)) (i32.const 1))
           (i32.add (i32.add (call $m.D (local.get $body)) (local.get $h)) (call $m.sc (i32.const 100))))
         (call $m.setD (local.get $l) (i32.add (call $m.D (local.get $l)) (call $m.sc (i32.const 60)))))
       (else
@@ -1426,6 +1552,7 @@
     (local $a i32)
     (local $raise i32)
     (local $skew i32)
+    (local $i i32)
     (local.set $raise (i32.sub (call $m.H (local.get $body))
       (call $m.min (call $m.H (local.get $body)) (call $m.sc (i32.const $MC.accentBase)))))
     ;; the accent's attachment point goes over the base's
@@ -1434,9 +1561,20 @@
       (then
         (local.set $a (call $m.pathNode (i32.const 25)
           (call $m.min (call $m.max (call $m.W (local.get $body)) (call $m.sc (i32.const 380))) (call $m.sc (i32.const 560)))
-          (call $m.sc (i32.const 180)) (call $m.sc (i32.const 36))))
+          (call $m.sc (i32.const 180)) (i32.or (i32.const 1) (i32.shl (call $m.sc (i32.const 36)) (i32.const 10)))))
         (local.set $raise (i32.add (i32.add (local.get $raise) (call $m.sc (i32.const $MC.accentBase))) (call $m.sc (i32.const 60)))))
-      (else (local.set $a (call $m.glyph (local.get $cp) (i32.const 0)))))
+      (else
+        (local.set $a (call $m.glyph (local.get $cp) (i32.const 0)))
+        ;; \dddot and \ddddot: three or four dot accents in a row
+        (if (i32.le_u (i32.sub (local.get $cp) (i32.const 0x20db)) (i32.const 1))
+          (then
+            (local.set $a (call $m.list))
+            (local.set $i (i32.sub (local.get $cp) (i32.const 0x20d8)))
+            (loop $dot
+              (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+              (call $m.append (local.get $a) (call $m.glyph (i32.const 0x2d9) (i32.const 0))
+                (i32.mul (local.get $i) (call $m.sc (i32.const 210))) (i32.const 0))
+              (br_if $dot (local.get $i)))))))
     (local.set $l (call $m.wrap (local.get $body)))
     (call $m.append (local.get $l) (local.get $a)
       (i32.sub (i32.add (i32.shr_s (i32.sub (call $m.W (local.get $body)) (call $m.W (local.get $a))) (i32.const 1)) (local.get $skew))
@@ -1444,7 +1582,33 @@
       (i32.sub (i32.const 0) (local.get $raise)))
     (call $m.setW (local.get $l) (call $m.W (local.get $body)))
     (i32.store offset=$N.ic (call $m.nAt (local.get $l)) (call $m.IC (local.get $body)))
+    ;; An accent over one glyph takes scripts as the glyph does, as in KaTeX
+    ;; and MathJax: \hat{y}_c sets c as high as in y_c.
+    (if (i32.eq (i32.load8_u (call $m.nAt (call $m.core (local.get $body)))) (i32.const $NK.glyph))
+      (then (i32.store8 offset=$N.class (call $m.nAt (local.get $l)) (i32.const 1))))
     (local.get $l))
+
+  ;; the node inside lists that hold only one child each
+  (func $m.core (param $n i32) (result i32)
+    (local $p i32)
+    (loop $in
+      (local.set $p (call $m.nAt (local.get $n)))
+      (if (i32.and (i32.eq (i32.load8_u (local.get $p)) (i32.const $NK.list))
+            (i32.and (i32.ne (i32.load offset=$N.a (local.get $p)) (i32.const 0))
+              (i32.eq (i32.load offset=$N.a (local.get $p)) (i32.load offset=$N.tail (local.get $p)))))
+        (then
+          (local.set $n (i32.load offset=$N.a (local.get $p)))
+          (br $in))))
+    (local.get $n))
+
+  ;; heads of the wide arrows 17 to 23 (see the arrow path)
+  (const $m.wideArrows $mem.mathStatic+989)
+  (data (i32.const $m.wideArrows) "\01\02\03\05\11\12\28")
+
+  ;; arrow heads of the extensible arrows other than right (see the arrow path)
+  (const $pairs.arrows $mem.mathStatic+888)
+  (data (i32.const $pairs.arrows) "\90\21\02\00\a9\21\02\00\d0\21\06\00\d2\21\05\00\94\21\03\00\cc\21\93\00\d4\21\07\00\a6\21\09\00"
+    "\c0\21\11\00\c1\21\41\00\bc\21\12\00\bd\21\42\00\cb\21\93\01\c4\21\83\00\9e\21\02\00\3d\00\04\00\00\00")
 
   ;; \xrightarrow[below]{above} and the other extensible arrows
   (func $m.xarrow (param $cp i32) (result i32)
@@ -1459,18 +1623,11 @@
     (local.set $above (call $m.argIn (call $m.supStyle (global.get $mStyle))))
     (local.set $w (i32.add (call $m.max (call $m.W (local.get $above)) (call $m.W (local.get $below))) (call $m.sc (i32.const 560))))
     (local.set $w (call $m.max (local.get $w) (call $m.sc (i32.const 1000))))
-    (local.set $e (i32.const 1))
-    (if (i32.or (i32.eq (local.get $cp) (i32.const 0x2190)) (i32.eq (local.get $cp) (i32.const 0x21a9)))
-      (then (local.set $e (i32.const 2))))
-    (if (i32.eq (local.get $cp) (i32.const 0x21d0)) (then (local.set $e (i32.const 6))))
-    (if (i32.eq (local.get $cp) (i32.const 0x21d2)) (then (local.set $e (i32.const 5))))
-    (if (i32.or (i32.eq (local.get $cp) (i32.const 0x2194)) (i32.eq (local.get $cp) (i32.const 0x21cc)))
-      (then (local.set $e (i32.const 3))))
-    (if (i32.eq (local.get $cp) (i32.const 0x21d4)) (then (local.set $e (i32.const 7))))
-    (if (i32.eq (local.get $cp) (i32.const 0x21a6)) (then (local.set $e (i32.const 9))))
+    (local.set $e (call $m.pair (i32.const $pairs.arrows) (local.get $cp)))
+    (local.set $e (select (local.get $e) (i32.const 1) (local.get $e)))
     (local.set $axis (call $m.sc (i32.const $MC.axis)))
     (local.set $n (call $m.pathNode (i32.const 31) (local.get $w) (i32.add (local.get $axis) (call $m.sc (i32.const 130)))
-      (i32.or (local.get $e) (i32.shl (call $m.sc (i32.const 40)) (i32.const 8)))))
+      (i32.or (local.get $e) (i32.shl (call $m.sc (i32.const 40)) (i32.const 10)))))
     (call $m.setD (local.get $n) (i32.const 0))
     (local.set $l (call $m.wrap (local.get $n)))
     (call $m.append (local.get $l) (local.get $above) (i32.shr_s (i32.sub (local.get $w) (call $m.W (local.get $above))) (i32.const 1))
@@ -1549,6 +1706,8 @@
     (local $size i32)
     (local $rule i32)
     (local $hline i32)
+    (local $half i32)
+    (local $pad i32)
     (local.set $root (i32.lt_s (local.get $params) (i32.const 0)))
     (local.set $kind (select (i32.const 2) (i32.and (local.get $params) (i32.const 7)) (local.get $root)))
     (local.set $old (global.get $mStyle))
@@ -1659,6 +1818,10 @@
         (global.set $mC (local.get $base))
         (return (local.get $n))))
     (call $m.setStyle (local.get $cellStyle))
+    ;; script-style grids (smallmatrix, subarray) have half the row struts of
+    ;; others, and a subarray no padding, as in KaTeX
+    (local.set $half (i32.eq (i32.and (local.get $cellStyle) (i32.const 3)) (i32.const 2)))
+    (local.set $pad (i32.and (i32.eq (local.get $kind) (i32.const 4)) (i32.eqz (local.get $half))))
     ;; column widths, then row heights and depths, after the cells
     (local.set $at (local.get $cells))
     (block $sized
@@ -1698,8 +1861,9 @@
     (local.set $row (i32.const 0))
     (loop $r
       (local.set $a (i32.add (local.get $rh) (i32.mul (local.get $row) (i32.const 12))))
-      (i32.store (local.get $a) (call $m.max (i32.load (local.get $a)) (call $m.sc (i32.const 840))))
-      (i32.store offset=4 (local.get $a) (i32.add (call $m.max (i32.load offset=4 (local.get $a)) (call $m.sc (i32.const 360)))
+      (i32.store (local.get $a) (call $m.max (i32.load (local.get $a)) (call $m.sc (select (i32.const 600) (i32.const 840) (local.get $half)))))
+      (i32.store offset=4 (local.get $a) (i32.add (call $m.max (i32.load offset=4 (local.get $a))
+          (call $m.sc (select (i32.const 257) (i32.const 360) (local.get $half))))
         (i32.add (i32.load offset=8 (local.get $a))
           (select (call $m.sc (i32.const 300)) (i32.const 0)
             (i32.and (i32.le_u (i32.sub (local.get $kind) (i32.const 2)) (i32.const 1))
@@ -1710,7 +1874,7 @@
       (br_if $r (i32.lt_u (local.get $row) (local.get $nrows))))
     ;; column positions replace the widths' slots in a second array
     (local.set $l (call $m.list))
-    (local.set $x (select (call $m.sc (i32.const 500)) (i32.const 0) (i32.eq (local.get $kind) (i32.const 4))))
+    (local.set $x (select (call $m.sc (i32.const 500)) (i32.const 0) (local.get $pad)))
     (local.set $top (i32.sub (i32.const 0) (i32.add (i32.shr_s (local.get $total) (i32.const 1)) (call $m.sc (i32.const $MC.axis)))))
     (local.set $at (local.get $cells))
     (local.set $col (i32.const 0))
@@ -1741,7 +1905,7 @@
       (if (i32.lt_u (local.get $col) (local.get $ncols))
         (then (local.set $x (i32.add (local.get $x) (local.get $gap)))))
       (br_if $cx (i32.lt_u (local.get $col) (local.get $ncols))))
-    (if (i32.eq (local.get $kind) (i32.const 4))
+    (if (local.get $pad)
       (then (local.set $x (i32.add (local.get $x) (call $m.sc (i32.const 500))))))
     (if (i64.ne (i64.and (local.get $bars) (i64.shl (i64.const 1) (i64.extend_i32_u (local.get $ncols)))) (i64.const 0))
       (then
@@ -1825,15 +1989,22 @@
     (local $m i32)
     (local $old i32)
     (local $class i32)
+    (local $l i32)
+    (local $p i32)
+    (local $i i32)
+    (local $c i32)
+    (local $d i32)
+    (local $dst i32)
+    (local $depth i32)
     (local.set $k (i32.shr_u (local.get $v) (i32.const 24)))
     (local.set $class (i32.and (i32.shr_u (local.get $v) (i32.const 21)) (i32.const 7)))
     (local.set $x (i32.and (local.get $v) (i32.const 0x1fffff)))
-    (block $k30 (block $k29 (block $k28 (block $k27 (block $k26 (block $k25 (block $k24
+    (block $k31 (block $k30 (block $k29 (block $k28 (block $k27 (block $k26 (block $k25 (block $k24
     (block $k23 (block $k22 (block $k21 (block $k20 (block $k19 (block $k18 (block $k17
     (block $k16 (block $k15 (block $k14 (block $k13 (block $k12 (block $k11 (block $k10
     (block $k9 (block $k8 (block $k7 (block $k6 (block $k4 (block $k2 (block $k1 (block $k0
       (br_table $k0 $k1 $k2 $k2 $k4 $k4 $k6 $k7 $k8 $k9 $k10 $k11 $k12 $k13 $k14 $k15
-        $k16 $k17 $k18 $k19 $k20 $k21 $k22 $k23 $k24 $k25 $k26 $k27 $k28 $k29 $k30 $k30
+        $k16 $k17 $k18 $k19 $k20 $k21 $k22 $k23 $k24 $k25 $k26 $k27 $k28 $k29 $k30 $k31 $k31
         (local.get $k)))
       ;; sym
       (call $m.push (call $m.symbol (local.get $x) (local.get $class)) (local.get $class) (i32.const 0))
@@ -1854,12 +2025,12 @@
       (return))
       ;; wide accents; braces take limits like operators
       (local.set $n (call $m.wide (local.get $x) (call $m.arg)))
-      (if (i32.ge_u (local.get $x) (i32.const 7))
+      (if (i32.and (local.get $x) (i32.const 0x40))
         (then (call $m.push (local.get $n) (i32.const 1) (i32.const $AF.limits)))
         (else (call $m.push (local.get $n) (i32.const 0) (i32.const 0))))
       (return))
-      ;; frac
-      (call $m.push (call $m.frac (local.get $x)) (i32.const 7) (i32.const 0))
+      ;; frac: an ordinary atom, as in KaTeX and MathJax, not TeX's inner
+      (call $m.push (call $m.frac (local.get $x) (i32.const -1) (i32.const 0) (i32.const -1)) (i32.const 0) (i32.const 0))
       (return))
       ;; sqrt
       (call $m.push (call $m.sqrt) (i32.const 0) (i32.const 0))
@@ -1875,11 +2046,17 @@
         (call $m.sc (i32.add (i32.const 600) (i32.mul (local.get $x) (i32.const 600)))) (local.get $class))
         (local.get $class) (i32.const 0))
       (return))
-      ;; letter fonts
+      ;; letter fonts; \bf and the other old switches set the rest of the list
+      (if (i32.and (local.get $x) (i32.const 0x40))
+        (then
+          (global.set $mVariant (i32.and (local.get $x) (i32.const 0xf)))
+          (return)))
+      ;; \mathsfit (11) sets sans-serif, then slants it
       (local.set $old (global.get $mVariant))
-      (global.set $mVariant (local.get $x))
+      (global.set $mVariant (select (i32.const 7) (local.get $x) (i32.eq (local.get $x) (i32.const 11))))
       (local.set $n (call $m.arg))
       (global.set $mVariant (local.get $old))
+      (if (i32.eq (local.get $x) (i32.const 11)) (then (call $m.slant (local.get $n))))
       (call $m.push (local.get $n) (global.get $mLastClass) (i32.const 0))
       (return))
       ;; text
@@ -1892,19 +2069,16 @@
       ;; style switches set the rest of the list
       (local.set $old (global.get $mStyle))
       (call $m.setStyle (local.get $x))
-      (local.set $n (call $m.parseList (i32.and (local.get $flags) (i32.const 0xf9))))
+      (local.set $n (call $m.parseList (i32.and (local.get $flags) (i32.const 0x79))))
       (call $m.setStyle (local.get $old))
       (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
       (return))
       ;; \color{c} sets the rest of the list, \textcolor{c}{x} its argument
-      (local.set $m (call $m.rawArg))
-      (local.set $old (global.get $cmdLen))
+      (local.set $m (call $m.colorArg))
       (local.set $n (if (result i32) (local.get $x)
         (then (call $m.arg))
-        (else (call $m.parseList (i32.and (local.get $flags) (i32.const 0xf9))))))
-      (if (call $m.colorName (local.get $m) (local.get $old))
-        (then (i32.store offset=$N.e (call $m.nAt (local.get $n))
-          (i32.or (i32.sub (local.get $m) (i32.const $mem.mathSrc)) (i32.shl (local.get $old) (i32.const 16))))))
+        (else (call $m.parseList (i32.and (local.get $flags) (i32.const 0x79))))))
+      (if (local.get $m) (then (i32.store offset=$N.e (call $m.nAt (local.get $n)) (local.get $m))))
       (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
       (return))
       ;; \begin{name}
@@ -1919,7 +2093,7 @@
       (local.set $n (call $m.arg))
       (local.set $class (select (i32.const 3) (global.get $mLastClass) (i32.eq (local.get $x) (i32.const 2))))
       (call $m.push (local.get $n) (local.get $class) (i32.const $AF.limits))
-      (i32.store (i32.add (i32.sub (global.get $mA) (i32.const $A.size))
+      (i32.store16 (i32.add (i32.sub (global.get $mA) (i32.const $A.size))
         (select (i32.const $A.sub) (i32.const $A.sup) (i32.eq (local.get $x) (i32.const 1)))) (local.get $m))
       (return))
       ;; extensible arrows
@@ -1931,6 +2105,21 @@
           (local.set $n (call $m.kern (i32.const 0)))
           (call $m.setBox (local.get $n) (i32.const 0) (call $m.sc (i32.const 750)) (call $m.sc (i32.const $MC.axis)))
           (call $m.push (local.get $n) (i32.const 8) (i32.const 0))
+          (return)))
+      ;; \mathllap, \mathrlap, \mathclap; \llap and the others take text
+      (if (i32.ge_u (local.get $x) (i32.const 5))
+        (then
+          (local.set $m (if (result i32) (i32.and (local.get $x) (i32.const 8))
+            (then (call $m.textArg (i32.const 0))) (else (call $m.arg))))
+          (local.set $x (i32.and (local.get $x) (i32.const 7)))
+          (local.set $n (call $m.list))
+          (call $m.append (local.get $n) (local.get $m)
+            (select (i32.sub (i32.const 0) (call $m.W (local.get $m)))
+              (select (i32.const 0) (i32.div_s (call $m.W (local.get $m)) (i32.const -2)) (i32.eq (local.get $x) (i32.const 6)))
+              (i32.eq (local.get $x) (i32.const 5)))
+            (i32.const 0))
+          (call $m.setW (local.get $n) (i32.const 0))
+          (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
           (return)))
       (local.set $m (call $m.arg))
       (if (i32.eq (local.get $x) (i32.const 3))
@@ -1946,13 +2135,71 @@
               (call $m.setD (local.get $n) (call $m.D (local.get $m)))))))
       (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
       (return))
-      ;; \boxed, \fbox
-      (local.set $m (if (result i32) (local.get $x) (then (call $m.textArg (i32.const 0))) (else (call $m.arg))))
+      ;; \cancel, \bcancel, \xcancel: lines across the box that add no size,
+      ;; padded as KaTeX pads them; \sout: a rule at the axis
+      (if (i32.ge_u (local.get $x) (i32.const 4))
+        (then
+          (local.set $m (call $m.arg))
+          (local.set $n (call $m.wrap (local.get $m)))
+          (if (i32.eq (local.get $x) (i32.const 7))
+            (then
+              (local.set $l (call $m.node (i32.const $NK.rule)))
+              (local.set $old (call $m.sc (i32.const $MC.rule)))
+              (local.set $d (call $m.sc (i32.const $MC.axis)))
+              (call $m.setBox (local.get $l) (call $m.W (local.get $m))
+                (i32.add (local.get $d) (i32.shr_s (local.get $old) (i32.const 1)))
+                (i32.sub (i32.shr_s (local.get $old) (i32.const 1)) (local.get $d)))
+              (call $m.append (local.get $n) (local.get $l) (i32.const 0) (i32.const 0)))
+            (else
+              ;; one glyph gets vertical padding, anything else horizontal
+              (local.set $i (i32.eq (i32.load8_u (call $m.nAt (call $m.core (local.get $m)))) (i32.const $NK.glyph)))
+              (local.set $old (call $m.sc (i32.const 200)))
+              (local.set $p (select (i32.const 0) (local.get $old) (local.get $i)))
+              (local.set $d (select (local.get $old) (i32.const 0) (local.get $i)))
+              ;; path 9 is a slash, 10 a backslash
+              (local.set $c (i32.const 9))
+              (loop $line
+                (if (i32.or (i32.eq (local.get $x) (i32.const 6)) (i32.eq (i32.add (local.get $x) (i32.const 5)) (local.get $c)))
+                  (then
+                    (local.set $l (call $m.node (i32.const $NK.path)))
+                    (i32.store offset=$N.a (call $m.nAt (local.get $l)) (local.get $c))
+                    (call $m.setBox (local.get $l) (i32.add (call $m.W (local.get $m)) (i32.shl (local.get $p) (i32.const 1)))
+                      (i32.add (call $m.H (local.get $m)) (local.get $d)) (i32.add (call $m.D (local.get $m)) (local.get $d)))
+                    (call $m.append (local.get $n) (local.get $l) (i32.sub (i32.const 0) (local.get $p)) (i32.const 0))))
+                (local.set $c (i32.add (local.get $c) (i32.const 1)))
+                (br_if $line (i32.le_u (local.get $c) (i32.const 10))))))
+          (call $m.setBox (local.get $n) (call $m.W (local.get $m)) (call $m.H (local.get $m)) (call $m.D (local.get $m)))
+          (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
+          (return)))
+      ;; \boxed sets its argument in display style, as amsmath does; \fbox,
+      ;; \colorbox{bg} and \fcolorbox{frame}{bg} take text
+      (if (i32.ge_u (local.get $x) (i32.const 2)) (then (local.set $c (call $m.colorArg))))
+      (if (i32.eq (local.get $x) (i32.const 3)) (then (local.set $d (call $m.colorArg))))
+      (if (i32.eq (local.get $x) (i32.const 2))
+        (then
+          (local.set $d (local.get $c))
+          (local.set $c (i32.const 0))))
+      (local.set $m (if (result i32) (local.get $x) (then (call $m.textArg (i32.const 0))) (else (call $m.argIn (i32.const 0)))))
       (local.set $old (call $m.sc (i32.const 300)))
-      (local.set $n (call $m.pathNode (i32.const 32) (i32.add (call $m.W (local.get $m)) (i32.shl (local.get $old) (i32.const 1)))
-        (i32.add (call $m.H (local.get $m)) (local.get $old)) (call $m.sc (i32.const 40))))
-      (call $m.setD (local.get $n) (i32.add (call $m.D (local.get $m)) (local.get $old)))
-      (local.set $n (call $m.wrap (local.get $n)))
+      (local.set $n (call $m.list))
+      (if (local.get $d)
+        (then
+          (local.set $l (call $m.node (i32.const $NK.rule)))
+          (call $m.setBox (local.get $l) (i32.add (call $m.W (local.get $m)) (i32.shl (local.get $old) (i32.const 1)))
+            (i32.add (call $m.H (local.get $m)) (local.get $old)) (i32.add (call $m.D (local.get $m)) (local.get $old)))
+          (local.set $l (call $m.wrap (local.get $l)))
+          (i32.store offset=$N.e (call $m.nAt (local.get $l)) (local.get $d))
+          (call $m.append (local.get $n) (local.get $l) (i32.const 0) (i32.const 0))))
+      (if (i32.ne (local.get $x) (i32.const 2))
+        (then
+          (local.set $l (call $m.pathNode (i32.const 32) (i32.add (call $m.W (local.get $m)) (i32.shl (local.get $old) (i32.const 1)))
+            (i32.add (call $m.H (local.get $m)) (local.get $old)) (call $m.sc (i32.const 40))))
+          (call $m.setD (local.get $l) (i32.add (call $m.D (local.get $m)) (local.get $old)))
+          (if (local.get $c)
+            (then
+              (local.set $l (call $m.wrap (local.get $l)))
+              (i32.store offset=$N.e (call $m.nAt (local.get $l)) (local.get $c))))
+          (call $m.append (local.get $n) (local.get $l) (i32.const 0) (i32.const 0))))
       (call $m.append (local.get $n) (local.get $m) (local.get $old) (i32.const 0))
       (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
       (return))
@@ -1970,8 +2217,8 @@
       (local.set $m (i32.sub (global.get $mA) (i32.const $A.size)))
       (if (i32.ge_u (local.get $m) (local.get $base))
         (then (i32.store8 offset=$A.flags (local.get $m) (i32.or
-          (i32.and (i32.load8_u offset=$A.flags (local.get $m)) (i32.const 0xfc))
-          (select (i32.const 0) (i32.add (local.get $x) (i32.const 1)) (i32.eq (local.get $x) (i32.const 2)))))))
+          (i32.and (i32.load8_u offset=$A.flags (local.get $m)) (i32.const 0xf8))
+          (i32.shl (i32.const 1) (local.get $x))))))
       (return))
       ;; \bmod, \pmod, \mod, \pod
       (if (i32.eqz (local.get $x))
@@ -1990,6 +2237,38 @@
       (if (i32.ne (local.get $x) (i32.const 2))
         (then (call $m.push (call $m.symbol (i32.const ")") (i32.const 5)) (i32.const 5) (i32.const 0))))
       (return))
+      ;; \rule[raise]{width}{height}
+      (if (i32.eq (local.get $x) (i32.const 2))
+        (then
+          (call $m.skipSpace)
+          (if (i32.eq (call $m.peek) (i32.const "["))
+            (then
+              (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
+              (local.set $old (call $m.dimen (i32.const 0)))
+              (if (i32.eq (call $m.peek) (i32.const "]"))
+                (then (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))))
+          (local.set $m (call $m.max (call $m.dimen (i32.const 0)) (i32.const 0)))
+          (local.set $n (call $m.node (i32.const $NK.rule)))
+          (call $m.setBox (local.get $n) (local.get $m)
+            (i32.add (local.get $old) (call $m.max (call $m.dimen (i32.const 0)) (i32.const 0)))
+            (i32.sub (i32.const 0) (local.get $old)))
+          (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
+          (return)))
+      ;; \raisebox{lift}{text}; \vcenter{math} centers its box on the axis
+      (if (i32.ge_u (local.get $x) (i32.const 3))
+        (then
+          (if (i32.eq (local.get $x) (i32.const 3))
+            (then
+              (local.set $old (i32.sub (i32.const 0) (call $m.dimen (i32.const 0))))
+              (local.set $m (call $m.textArg (i32.const 0))))
+            (else
+              (local.set $m (call $m.arg))
+              (local.set $old (i32.sub (i32.shr_s (i32.sub (call $m.H (local.get $m)) (call $m.D (local.get $m))) (i32.const 1))
+                (call $m.sc (i32.const $MC.axis))))))
+          (local.set $n (call $m.list))
+          (call $m.append (local.get $n) (local.get $m) (i32.const 0) (local.get $old))
+          (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
+          (return)))
       ;; \hspace, \kern, \mkern
       (call $m.push (call $m.kern (call $m.dimen (local.get $x))) (i32.const 8) (i32.const 0))
       (return))
@@ -2005,12 +2284,118 @@
         (then (drop (call $m.rawArg))))
       (if (i32.eq (local.get $x) (i32.const 3)) (then (global.set $mHline (i32.const 1))))
       (return))
-    ;; \mathop, \mathbin and the other class commands
-    (local.set $n (call $m.arg))
-    (call $m.push (local.get $n)
-      (select (i32.const 1) (select (i32.const 0) (local.get $x) (i32.eq (local.get $x) (i32.const 8)))
-        (i32.eqz (local.get $x)))
-      (select (i32.const $AF.displayLimits) (i32.const 0) (i32.eqz (local.get $x)))))
+      ;; \mathop, \mathbin and the other class commands
+      (local.set $n (call $m.arg))
+      (call $m.push (local.get $n)
+        (select (i32.const 1) (select (i32.const 0) (local.get $x) (i32.eq (local.get $x) (i32.const 8)))
+          (i32.eqz (local.get $x)))
+        (select (i32.const $AF.displayLimits) (i32.const 0) (i32.eqz (local.get $x))))
+      (return))
+    ;; Macros: the body's TeX parses here as if it were the source. A body
+    ;; with an argument is copied past the source first, with the argument's
+    ;; source for #1 to #4 (see tables/math.txt).
+    (local.set $m (i32.add (i32.const $mem.mathCmds+1) (local.get $x)))
+    (local.set $n (i32.add (local.get $m) (i32.load8_u offset=$mem.mathCmds (local.get $x))))
+    (if (local.get $class)
+      (then
+        (local.set $p (call $m.rawArg))
+        (local.set $l (i32.add (local.get $p) (global.get $cmdLen)))
+        (local.set $dst (global.get $mTop))
+        (block $copied
+          (loop $copy
+            (br_if $copied (i32.ge_u (local.get $m) (local.get $n)))
+            (local.set $c (i32.load8_u (local.get $m)))
+            (local.set $m (i32.add (local.get $m) (i32.const 1)))
+            (if (i32.ne (local.get $c) (i32.const "#"))
+              (then
+                (i32.store8 (local.get $dst) (local.get $c))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 1))))
+              (else
+                (local.set $d (i32.load8_u (local.get $m)))
+                (local.set $m (i32.add (local.get $m) (i32.const 1)))
+                (local.set $i (local.get $p))
+                (local.set $depth (i32.const 0))
+                (block $arg
+                  (loop $a
+                    (br_if $arg (i32.ge_u (local.get $i) (local.get $l)))
+                    ;; a pass writes up to 12 bytes; the area's last 32 stay free
+                    (if (i32.ge_u (local.get $dst) (i32.const $mem.mathSrcEnd-32))
+                      (then (global.set $mFail (i32.const 1)) (return)))
+                    (local.set $c (i32.load8_u (local.get $i)))
+                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                    (if (i32.eq (local.get $c) (i32.const "\5c"))
+                      (then
+                        (i32.store8 (local.get $dst) (local.get $c))
+                        (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+                        (local.set $c (i32.load8_u (local.get $i)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1))))
+                      (else
+                        (local.set $depth (i32.sub (i32.add (local.get $depth) (i32.eq (local.get $c) (i32.const "{")))
+                          (i32.eq (local.get $c) (i32.const "}"))))
+                        (if (i32.and (i32.eq (local.get $c) (i32.const "|"))
+                              (i32.and (i32.eqz (local.get $depth)) (i32.ne (local.get $d) (i32.const "1"))))
+                          (then
+                            (memory.copy (local.get $dst)
+                              (i32.add (i32.const $m.bars) (i32.mul (i32.sub (i32.const "4") (local.get $d)) (i32.const 12)))
+                              (i32.const 12))
+                            (local.set $dst (i32.add (local.get $dst)
+                              (select (i32.const 5) (i32.const 12) (i32.eq (local.get $d) (i32.const "2")))))
+                            (br $a)))))
+                    (i32.store8 (local.get $dst) (local.get $c))
+                    (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+                    (br $a)))))
+            (if (i32.ge_u (local.get $dst) (i32.const $mem.mathSrcEnd-32))
+              (then (global.set $mFail (i32.const 1)) (return)))
+            (br $copy)))
+        (i64.store (local.get $dst) (i64.const 0))
+        (local.set $m (global.get $mTop))
+        (local.set $n (local.get $dst))
+        (global.set $mTop (i32.add (local.get $dst) (i32.const 8)))))
+    (local.set $old (global.get $mp))
+    (local.set $l (global.get $me))
+    (global.set $mp (local.get $m))
+    (global.set $me (local.get $n))
+    (local.set $i (global.get $mInfix))
+    (drop (call $m.parseList (i32.const $P.inline)))
+    (global.set $mp (local.get $old))
+    (global.set $me (local.get $l))
+    ;; No node points into the copied body, so its space and the splits found
+    ;; in it are free again.
+    (if (i32.and (i32.ne (local.get $class) (i32.const 0)) (i32.le_u (global.get $mPin) (local.get $m)))
+      (then
+        (global.set $mTop (local.get $m))
+        (global.set $mInfix (local.get $i)))))
+
+  ;; what #2, #4 and #3 of a macro put in place of a top-level |
+  (const $m.bars $mem.mathStatic+960)
+  (data (i32.const $m.bars) "\5c;\5cmiddle|\5c;\5c,\5cmiddle|\5c,\5cmid ")
+
+  ;; Read a color argument: its source offset | length << 16, as a list's
+  ;; color, or 0 when it is not a safe color name.
+  (func $m.colorArg (result i32)
+    (local $p i32)
+    (local.set $p (call $m.rawArg))
+    (global.set $mPin (call $m.max (global.get $mPin) (i32.add (local.get $p) (global.get $cmdLen))))
+    (select (i32.or (i32.sub (local.get $p) (i32.const $mem.mathSrc)) (i32.shl (global.get $cmdLen) (i32.const 16)))
+      (i32.const 0) (call $m.colorName (local.get $p) (global.get $cmdLen))))
+
+  ;; Print the sans-serif letters in box $n as sans-serif italic ones. They
+  ;; keep the upright metrics: the font table has no slanted ones.
+  (func $m.slant (param $n i32)
+    (local $p i32)
+    (local.set $p (call $m.nAt (local.get $n)))
+    (if (i32.and (i32.eq (i32.load8_u (local.get $p)) (i32.const $NK.glyph))
+          (i32.lt_u (i32.sub (i32.load offset=$N.a (local.get $p)) (i32.const 0x1d5a0)) (i32.const 52)))
+      (then (i32.store offset=$N.a (local.get $p) (i32.add (i32.load offset=$N.a (local.get $p)) (i32.const 0x68)))))
+    (if (i32.eq (i32.load8_u (local.get $p)) (i32.const $NK.list))
+      (then
+        (local.set $n (i32.load offset=$N.a (local.get $p)))
+        (loop $child
+          (if (local.get $n)
+            (then
+              (call $m.slant (local.get $n))
+              (local.set $n (i32.load offset=$N.next (call $m.nAt (local.get $n))))
+              (br $child)))))))
 
   ;; Whether [$p, $p + $len) can go in an attribute as a color: ASCII letters,
   ;; digits and `#`, up to 32 bytes.
@@ -2045,20 +2430,57 @@
     (local $k i32)
     (local $n i32)
     (local $old i32)
-    (local $oldVariant i32)
+    (local $start i32)
+    (local $style i32)
+    (local $variant i32)
+    (local $end i32)
+    (local $t i32)
+    (local $nodes i32)
+    (local $top i32)
+    (local $pin i32)
+    (local $splits i32)
     (local.set $base (global.get $mA))
+    (local.set $start (global.get $mp))
+    (local.set $style (global.get $mStyle))
+    (local.set $variant (global.get $mVariant))
+    (local.set $nodes (global.get $mN))
+    (local.set $top (global.get $mTop))
+    (local.set $pin (global.get $mPin))
+    (local.set $splits (global.get $mInfix))
     (global.set $mDepth (i32.add (global.get $mDepth) (i32.const 1)))
     (if (i32.gt_u (global.get $mDepth) (i32.const 48))
       (then (global.set $mFail (i32.const 1))))
     (if (i32.and (local.get $flags) (i32.const $P.leadOrd))
       (then (call $m.push (call $m.list) (i32.const 0) (i32.const 0))))
     (block $stop
+     (block $infix
+      ;; A list that a pass before found split by `\over` splits again at once,
+      ;; so nested numerators are not searched once per enclosing split. The
+      ;; pairs are searched only when the start's bit is set.
+      (local.set $t (i32.sub (local.get $start) (i32.const $mem.mathCmds)))
+      (if (i32.lt_u (local.get $t) (i32.const 24576))
+        (then
+          (if (i32.and (i32.load8_u offset=$mem.mathInfixBits (i32.shr_u (local.get $t) (i32.const 3)))
+                (i32.shl (i32.const 1) (i32.and (local.get $t) (i32.const 7))))
+            (then
+              (local.set $t (global.get $mInfix))
+              (block $search
+                (loop $find
+                  (br_if $search (i32.le_u (local.get $t) (i32.const $mem.mathInfix)))
+                  (local.set $t (i32.sub (local.get $t) (i32.const 8)))
+                  (if (i32.and (i32.eq (i32.load (local.get $t)) (local.get $start))
+                        (i32.lt_u (i32.load offset=4 (local.get $t)) (global.get $me)))
+                    (then
+                      (global.set $mp (local.tee $save (i32.load offset=4 (local.get $t))))
+                      (local.set $v (call $m.readCmd))
+                      (br $infix)))
+                  (br $find)))))))
       (loop $l
         (br_if $stop (global.get $mFail))
         (if (i32.and (local.get $flags) (i32.const $P.single))
           (then (br_if $stop (i32.gt_u (global.get $mA) (local.get $base)))))
         (local.set $c (call $m.peek))
-        (br_if $stop (i32.eqz (local.get $c)))
+        (br_if $stop (i32.ge_u (global.get $mp) (global.get $me)))
         (block $next
           (if (i32.or (call $isWhiteByte (local.get $c)) (i32.eq (local.get $c) (i32.const "%")))
             (then (call $m.skipSpace) (br $next)))
@@ -2093,10 +2515,8 @@
             (then
               (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
               (local.set $old (global.get $mStyle))
-              (local.set $oldVariant (global.get $mVariant))
               (local.set $n (call $m.parseList (i32.const $P.brace)))
               (call $m.setStyle (local.get $old))
-              (global.set $mVariant (local.get $oldVariant))
               (if (i32.eq (call $m.peek) (i32.const "}"))
                 (then (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))
               (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
@@ -2125,6 +2545,32 @@
                   (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
                   (br $next)))
               (local.set $k (i32.shr_u (local.get $v) (i32.const 24)))
+              ;; `\over` and the other infix fractions split the group
+              (if (i32.and (i32.eq (local.get $k) (i32.const $K.frac)) (i32.ne (i32.and (local.get $v) (i32.const 0x40)) (i32.const 0)))
+                (then
+                  ;; Macro copies of the first pass are free again, unless a
+                  ;; pair points into them.
+                  (if (i32.eq (global.get $mInfix) (local.get $splits))
+                    (then
+                      (global.set $mTop (local.get $top))
+                      (global.set $mPin (local.get $pin))))
+                  (local.set $t (i32.sub (local.get $start) (i32.const $mem.mathCmds)))
+                  (if (i32.and (i32.lt_u (global.get $mInfix) (i32.const $mem.mathInfixEnd))
+                        (i32.lt_u (local.get $t) (i32.const 24576)))
+                    (then
+                      (i32.store (global.get $mInfix) (local.get $start))
+                      (i32.store offset=4 (global.get $mInfix) (local.get $save))
+                      (global.set $mInfix (i32.add (global.get $mInfix) (i32.const 8)))
+                      (global.set $mBits (i32.const 1))
+                      (i32.store8 offset=$mem.mathInfixBits (i32.shr_u (local.get $t) (i32.const 3))
+                        (i32.or (i32.load8_u offset=$mem.mathInfixBits (i32.shr_u (local.get $t) (i32.const 3)))
+                          (i32.shl (i32.const 1) (i32.and (local.get $t) (i32.const 7))))))
+                    (else
+                      ;; Without a pair, each enclosing numerator parsed again
+                      ;; would search this list again, doubling the work per
+                      ;; level: fail instead.
+                      (if (global.get $mReparse) (then (global.set $mFail (i32.const 1))))))
+                  (br $infix)))
               (if (i32.and (i32.ne (i32.and (local.get $flags) (i32.const $P.cell)) (i32.const 0))
                     (i32.or (i32.eq (local.get $k) (i32.const $K.cr)) (i32.eq (local.get $k) (i32.const $K.end))))
                 (then
@@ -2137,8 +2583,8 @@
                   (br $stop)))
               (call $m.command (local.get $v) (local.get $base) (local.get $flags))
               (br $next)))
-          ;; a character
-          (if (i32.ge_u (local.get $c) (i32.const 0x80))
+          ;; a character; $utf8At reads NUL as U+FFFD
+          (if (i32.ge_u (i32.sub (local.get $c) (i32.const 1)) (i32.const 0x7f))
             (then
               (local.set $c (call $m.readCp))
               ;; Unicode symbols take the class their command has
@@ -2161,46 +2607,87 @@
           (if (i32.eq (local.get $c) (i32.const "*")) (then (local.set $c (i32.const 0x2217))))
           (call $m.push (call $m.symbol (local.get $c) (local.get $k)) (local.get $k) (i32.const 0)))
         (br $l)))
-    (local.set $n (call $m.finish (local.get $base)))
+     ;; The atoms before the split were laid out in the wrong style, so they
+     ;; are parsed again as the numerator. No atom keeps the nodes of the
+     ;; first pass, so they are free again.
+     (global.set $mN (local.get $nodes))
+     (local.set $t (i32.const -1))
+     (if (i32.and (local.get $v) (i32.const 0x20)) (then (local.set $t (call $m.dimen (i32.const 0)))))
+     (local.set $end (global.get $me))
+     (local.set $k (global.get $mp))
+     (global.set $mA (local.get $base))
+     (global.set $me (local.get $save))
+     (global.set $mp (local.get $start))
+     (global.set $mVariant (local.get $variant))
+     (call $m.setStyle (call $m.fracStyle (local.get $style)))
+     (global.set $mReparse (i32.add (global.get $mReparse) (i32.const 1)))
+     (local.set $n (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
+     (global.set $mReparse (i32.sub (global.get $mReparse) (i32.const 1)))
+     (global.set $me (local.get $end))
+     (global.set $mp (local.get $k))
+     (call $m.setStyle (i32.or (call $m.fracStyle (local.get $style)) (i32.const 4)))
+     (local.set $k (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
+     (call $m.setStyle (local.get $style))
+     (global.set $mA (local.get $base))
+     (call $m.push (call $m.frac (i32.and (local.get $v) (i32.const 0x1f)) (local.get $n) (local.get $k) (local.get $t))
+       (i32.const 0) (i32.const 0)))
     (global.set $mDepth (i32.sub (global.get $mDepth) (i32.const 1)))
-    (local.get $n))
+    ;; \bf and the other font switches end with the group
+    (global.set $mVariant (local.get $variant))
+    (if (i32.and (local.get $flags) (i32.const $P.inline)) (then (return (i32.const 0))))
+    (call $m.finish (local.get $base)))
 
   ;; ---- SVG output
 
   ;; $v thousandths as a decimal number
   (func $m.outMilli (param $v i32)
+    (local $o i32)
     (local $f i32)
-    (if (i32.lt_s (local.get $v) (i32.const 0))
-      (then
-        (call $outByte (i32.const "-"))
-        (local.set $v (i32.sub (i32.const 0) (local.get $v)))))
-    (call $outNum (i32.div_u (local.get $v) (i32.const 1000)))
+    (call $ensureOut (i32.const 16))
+    (local.set $o (call $m.signAt (global.get $out) (local.get $v)))
+    (local.set $v (call $m.abs (local.get $v)))
+    (local.set $o (call $numAt (local.get $o) (i32.div_u (local.get $v) (i32.const 1000))))
     (local.set $f (i32.rem_u (local.get $v) (i32.const 1000)))
     (if (local.get $f)
       (then
-        (call $outByte (i32.const "."))
-        (call $outByte (i32.add (i32.const "0") (i32.div_u (local.get $f) (i32.const 100))))
-        (local.set $f (i32.rem_u (local.get $f) (i32.const 100)))
-        (if (local.get $f)
-          (then
-            (call $outByte (i32.add (i32.const "0") (i32.div_u (local.get $f) (i32.const 10))))
-            (local.set $f (i32.rem_u (local.get $f) (i32.const 10)))
-            (if (local.get $f)
-              (then (call $outByte (i32.add (i32.const "0") (local.get $f))))))))))
+        ;; ".ddd" without its trailing zeros
+        (i32.store8 offset=3 (local.get $o) (i32.add (i32.const "0") (i32.rem_u (local.get $f) (i32.const 10))))
+        (i32.store8 offset=2 (local.get $o)
+          (i32.add (i32.const "0") (i32.rem_u (i32.div_u (local.get $f) (i32.const 10)) (i32.const 10))))
+        (i32.store8 offset=1 (local.get $o) (i32.add (i32.const "0") (i32.div_u (local.get $f) (i32.const 100))))
+        (i32.store8 (local.get $o) (i32.const "."))
+        (local.set $o (i32.add (local.get $o) (i32.const 4)))
+        (loop $trim
+          (if (i32.eq (i32.load8_u (i32.sub (local.get $o) (i32.const 1))) (i32.const "0"))
+            (then
+              (local.set $o (i32.sub (local.get $o) (i32.const 1)))
+              (br $trim))))))
+    (global.set $out (local.get $o)))
+
+  ;; write "-" at $o when $v is negative; return the position after it
+  (func $m.signAt (param $o i32) (param $v i32) (result i32)
+    (i32.store8 (local.get $o) (i32.const "-"))
+    (i32.add (local.get $o) (i32.shr_u (local.get $v) (i32.const 31))))
+
+  (func $m.abs (param $v i32) (result i32)
+    (select (i32.sub (i32.const 0) (local.get $v)) (local.get $v) (i32.lt_s (local.get $v) (i32.const 0))))
+
+  ;; $v as a signed decimal at $o, which has room for eleven bytes; return the end
+  (func $m.intAt (param $o i32) (param $v i32) (result i32)
+    (call $numAt (call $m.signAt (local.get $o) (local.get $v)) (call $m.abs (local.get $v))))
 
   (func $m.outInt (param $v i32)
-    (if (i32.lt_s (local.get $v) (i32.const 0))
-      (then
-        (call $outByte (i32.const "-"))
-        (local.set $v (i32.sub (i32.const 0) (local.get $v)))))
-    (call $outNum (local.get $v)))
+    (call $ensureOut (i32.const 11))
+    (global.set $out (call $m.intAt (global.get $out) (local.get $v))))
 
   ;; a path command letter and a point
   (func $m.pt (param $cmd i32) (param $x i32) (param $y i32)
-    (call $outByte (local.get $cmd))
-    (call $m.outInt (local.get $x))
-    (call $outByte (i32.const " "))
-    (call $m.outInt (local.get $y)))
+    (local $o i32)
+    (call $ensureOut (i32.const 24))
+    (i32.store8 (global.get $out) (local.get $cmd))
+    (local.set $o (call $m.intAt (i32.add (global.get $out) (i32.const 1)) (local.get $x)))
+    (i32.store8 (local.get $o) (i32.const " "))
+    (global.set $out (call $m.intAt (i32.add (local.get $o) (i32.const 1)) (local.get $y))))
 
   ;; code point $cp as escaped UTF-8 text
   (func $m.outCp (param $cp i32)
@@ -2208,29 +2695,21 @@
     (if (i32.eq (local.get $cp) (i32.const ">")) (then (out.str "&gt;") (return)))
     (if (i32.eq (local.get $cp) (i32.const "&")) (then (out.str "&amp;") (return)))
     (call $ensureOut (i32.const 4))
-    (if (i32.lt_u (local.get $cp) (i32.const 0x80))
-      (then (call $outByte (local.get $cp)) (return)))
-    (if (i32.lt_u (local.get $cp) (i32.const 0x800))
-      (then
-        (call $outByte (i32.or (i32.const 0xc0) (i32.shr_u (local.get $cp) (i32.const 6))))
-        (call $outByte (i32.or (i32.const 0x80) (i32.and (local.get $cp) (i32.const 0x3f))))
-        (return)))
-    (if (i32.lt_u (local.get $cp) (i32.const 0x10000))
-      (then (call $outByte (i32.or (i32.const 0xe0) (i32.shr_u (local.get $cp) (i32.const 12)))))
-      (else
-        (call $outByte (i32.or (i32.const 0xf0) (i32.shr_u (local.get $cp) (i32.const 18))))
-        (call $outByte (i32.or (i32.const 0x80) (i32.and (i32.shr_u (local.get $cp) (i32.const 12)) (i32.const 0x3f))))))
-    (call $outByte (i32.or (i32.const 0x80) (i32.and (i32.shr_u (local.get $cp) (i32.const 6)) (i32.const 0x3f))))
-    (call $outByte (i32.or (i32.const 0x80) (i32.and (local.get $cp) (i32.const 0x3f)))))
+    (global.set $out (i32.add (global.get $out) (call $utf8Encode (global.get $out) (local.get $cp)))))
 
   ;; `<text x=".." y=".."` and a font size other than the formula's
   (func $m.textOpen (param $n i32) (param $x i32) (param $y i32)
     (local $s i32)
-    (out.str "<text x=\22")
-    (call $m.outInt (local.get $x))
-    (out.str "\22 y=\22")
-    (call $m.outInt (local.get $y))
-    (out.str "\22")
+    (local $o i32)
+    (call $ensureOut (i32.const 40))
+    (local.set $o (global.get $out))
+    (i64.store (local.get $o) (i64.const "<text x="))
+    (i32.store8 offset=8 (local.get $o) (i32.const "\22"))
+    (local.set $o (call $m.intAt (i32.add (local.get $o) (i32.const 9)) (local.get $x)))
+    (i64.store (local.get $o) (i64.const "\22 y=\22"))
+    (local.set $o (call $m.intAt (i32.add (local.get $o) (i32.const 5)) (local.get $y)))
+    (i32.store8 (local.get $o) (i32.const "\22"))
+    (global.set $out (i32.add (local.get $o) (i32.const 1)))
     (local.set $s (i32.load16_u offset=$N.scale (call $m.nAt (local.get $n))))
     (if (i32.ne (local.get $s) (i32.const 1000))
       (then
@@ -2261,6 +2740,8 @@
     (local $r i32)
     (local $e i32)
     (local $s i32)
+    (local $i i32)
+    (local $hy i32)
     (local.set $p (call $m.nAt (local.get $n)))
     (local.set $shape (i32.and (i32.load offset=$N.a (local.get $p)) (i32.const 0xff)))
     (local.set $m (i32.and (i32.load offset=$N.a (local.get $p)) (i32.const 0x100)))
@@ -2280,11 +2761,12 @@
         (call $m.outInt (i32.add (i32.shl (local.get $x) (i32.const 1)) (local.get $w)))
         (out.str " 0)\22>")))
     (block $drawn
-      (block $s32 (block $s31 (block $s30 (block $s29 (block $s28 (block $s27 (block $s26 (block $s25
-      (block $s24 (block $s23 (block $s11 (block $s10 (block $s9 (block $s8 (block $s7 (block $s6
+      (block $s32 (block $s31 (block $s30 (block $s28 (block $s27
+      (block $s24 (block $s23 (block $s11 (block $s10 (block $s9 (block $s6
       (block $s5 (block $s4 (block $s3 (block $s2 (block $s1
-        (br_table $drawn $s1 $s2 $s3 $s4 $s5 $s6 $s7 $s8 $s9 $s10 $s11 $drawn $drawn $drawn $drawn
-          $drawn $drawn $drawn $drawn $drawn $drawn $drawn $s23 $s24 $s25 $s26 $s27 $s28 $s29 $s30 $s31 $s32 $drawn
+        (br_table $drawn $s1 $s2 $s3 $s4 $s5 $s6 $s2 $s2 $s9 $s10 $s11 $drawn $drawn $drawn $drawn
+          $drawn $drawn $drawn $drawn $drawn $drawn $drawn $s23 $s24 $s31 $drawn $s27 $s28 $drawn $s30 $s31 $s32
+          $s27 $s28 $s27 $s28 $drawn
           (local.get $shape)))
         ;; parenthesis: two curves, thick in the middle
         (local.set $ax (i32.sub (i32.add (local.get $x) (local.get $w)) (i32.div_s (local.get $w) (i32.const 6))))
@@ -2304,19 +2786,25 @@
         (call $m.pt (i32.const " ") (i32.add (local.get $ax) (i32.shr_s (local.get $t) (i32.const 2))) (local.get $top))
         (out.str "Z\22/>")
         (br $drawn))
-        ;; bracket
+        ;; bracket; a floor has no top arm and a ceiling no bottom arm
         (local.set $ax (i32.sub (i32.add (local.get $x) (local.get $w)) (i32.div_s (local.get $w) (i32.const 8))))
         (local.set $cx (i32.add (local.get $x) (i32.div_s (local.get $w) (i32.const 3))))
         (local.set $k (call $m.max (i32.div_s (local.get $t) (i32.const 2)) (i32.const 36)))
+        (local.set $r (i32.ne (local.get $shape) (i32.const 7)))
+        (local.set $e2 (i32.ne (local.get $shape) (i32.const 8)))
         (out.str "<path d=\22")
-        (call $m.pt (i32.const "M") (local.get $ax) (local.get $top))
-        (call $m.pt (i32.const "L") (local.get $cx) (local.get $top))
+        (call $m.pt (i32.const "M") (select (local.get $ax) (local.get $cx) (local.get $r)) (local.get $top))
+        (if (local.get $r) (then (call $m.pt (i32.const "L") (local.get $cx) (local.get $top))))
         (call $m.pt (i32.const "L") (local.get $cx) (local.get $bot))
-        (call $m.pt (i32.const "L") (local.get $ax) (local.get $bot))
-        (call $m.pt (i32.const "L") (local.get $ax) (i32.sub (local.get $bot) (local.get $k)))
-        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t)) (i32.sub (local.get $bot) (local.get $k)))
-        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t)) (i32.add (local.get $top) (local.get $k)))
-        (call $m.pt (i32.const "L") (local.get $ax) (i32.add (local.get $top) (local.get $k)))
+        (if (local.get $e2)
+          (then
+            (call $m.pt (i32.const "L") (local.get $ax) (local.get $bot))
+            (call $m.pt (i32.const "L") (local.get $ax) (i32.sub (local.get $bot) (local.get $k)))))
+        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t))
+          (select (i32.sub (local.get $bot) (local.get $k)) (local.get $bot) (local.get $e2)))
+        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t))
+          (select (i32.add (local.get $top) (local.get $k)) (local.get $top) (local.get $r)))
+        (if (local.get $r) (then (call $m.pt (i32.const "L") (local.get $ax) (i32.add (local.get $top) (local.get $k)))))
         (out.str "Z\22/>")
         (br $drawn))
         ;; brace
@@ -2354,32 +2842,6 @@
         (call $m.pt (i32.const "L") (i32.add (local.get $x) (i32.div_s (local.get $w) (i32.const 5))) (local.get $mid))
         (call $m.pt (i32.const "L") (i32.sub (i32.add (local.get $x) (local.get $w)) (i32.div_s (local.get $w) (i32.const 5))) (local.get $bot))
         (out.str "\22/>")
-        (br $drawn))
-        ;; floor: a bracket without its top arm
-        (local.set $ax (i32.sub (i32.add (local.get $x) (local.get $w)) (i32.div_s (local.get $w) (i32.const 8))))
-        (local.set $cx (i32.add (local.get $x) (i32.div_s (local.get $w) (i32.const 3))))
-        (local.set $k (call $m.max (i32.div_s (local.get $t) (i32.const 2)) (i32.const 36)))
-        (out.str "<path d=\22")
-        (call $m.pt (i32.const "M") (local.get $cx) (local.get $top))
-        (call $m.pt (i32.const "L") (local.get $cx) (local.get $bot))
-        (call $m.pt (i32.const "L") (local.get $ax) (local.get $bot))
-        (call $m.pt (i32.const "L") (local.get $ax) (i32.sub (local.get $bot) (local.get $k)))
-        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t)) (i32.sub (local.get $bot) (local.get $k)))
-        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t)) (local.get $top))
-        (out.str "Z\22/>")
-        (br $drawn))
-        ;; ceiling
-        (local.set $ax (i32.sub (i32.add (local.get $x) (local.get $w)) (i32.div_s (local.get $w) (i32.const 8))))
-        (local.set $cx (i32.add (local.get $x) (i32.div_s (local.get $w) (i32.const 3))))
-        (local.set $k (call $m.max (i32.div_s (local.get $t) (i32.const 2)) (i32.const 36)))
-        (out.str "<path d=\22")
-        (call $m.pt (i32.const "M") (local.get $ax) (local.get $top))
-        (call $m.pt (i32.const "L") (local.get $cx) (local.get $top))
-        (call $m.pt (i32.const "L") (local.get $cx) (local.get $bot))
-        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t)) (local.get $bot))
-        (call $m.pt (i32.const "L") (i32.add (local.get $cx) (local.get $t)) (i32.add (local.get $top) (local.get $k)))
-        (call $m.pt (i32.const "L") (local.get $ax) (i32.add (local.get $top) (local.get $k)))
-        (out.str "Z\22/>")
         (br $drawn))
         ;; slash
         (call $m.strokeOpen (i32.shr_s (local.get $t) (i32.const 1)))
@@ -2426,19 +2888,13 @@
         (call $m.pt (i32.const " ") (i32.add (local.get $x) (local.get $w)) (i32.add (local.get $top) (i32.shr_s (local.get $size) (i32.const 3))))
         (out.str "\22/>")
         (br $drawn))
-        ;; right arrow above
-        (local.set $e (i32.or (i32.const 1) (i32.shl (local.get $e) (i32.const 8))))
-        (br $s31))
-        ;; left arrow above
-        (local.set $e (i32.or (i32.const 2) (i32.shl (local.get $e) (i32.const 8))))
-        (br $s31))
-        ;; overbrace
+        ;; overbrace, overbracket, overgroup
         (local.set $r (local.get $size))
         (local.set $k (local.get $y))
         (local.set $mid (local.get $top))
         (br $s28))
-        ;; underbrace: the same, upside down
-        (if (i32.eq (local.get $shape) (i32.const 28))
+        ;; the shapes below the body: the same, upside down
+        (if (i32.eqz (i32.and (local.get $shape) (i32.const 1)))
           (then
             (local.set $r (i32.sub (i32.const 0) (local.get $size)))
             (local.set $k (local.get $top))
@@ -2448,6 +2904,22 @@
         (local.set $e2 (i32.shr_s (i32.add (local.get $k) (local.get $mid)) (i32.const 1)))
         (call $m.strokeOpen (local.get $e))
         (call $m.pt (i32.const "M") (local.get $x) (local.get $k))
+        ;; a bracket has square ends, a group round ones
+        (if (i32.ge_u (local.get $shape) (i32.const 33))
+          (then
+            (if (i32.lt_u (local.get $shape) (i32.const 35))
+              (then
+                (call $m.pt (i32.const "L") (local.get $x) (local.get $mid))
+                (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (local.get $mid)))
+              (else
+                (call $m.pt (i32.const "Q") (local.get $x) (local.get $mid))
+                (call $m.pt (i32.const " ") (i32.add (local.get $x) (local.get $ax)) (local.get $mid))
+                (call $m.pt (i32.const "L") (i32.sub (i32.add (local.get $x) (local.get $w)) (local.get $ax)) (local.get $mid))
+                (call $m.pt (i32.const "Q") (i32.add (local.get $x) (local.get $w)) (local.get $mid))))
+            (call $m.pt (select (i32.const " ") (i32.const "L") (i32.ge_u (local.get $shape) (i32.const 35)))
+              (i32.add (local.get $x) (local.get $w)) (local.get $k))
+            (out.str "\22/>")
+            (br $drawn)))
         (call $m.pt (i32.const "Q") (local.get $x) (local.get $e2))
         (call $m.pt (i32.const " ") (i32.add (local.get $x) (local.get $ax)) (local.get $e2))
         (call $m.pt (i32.const "L") (i32.sub (local.get $cx) (local.get $ax)) (local.get $e2))
@@ -2460,9 +2932,6 @@
         (call $m.pt (i32.const " ") (i32.add (local.get $x) (local.get $w)) (local.get $k))
         (out.str "\22/>")
         (br $drawn))
-        ;; left and right arrow above
-        (local.set $e (i32.or (i32.const 3) (i32.shl (local.get $e) (i32.const 8))))
-        (br $s31))
         ;; widecheck
         (call $m.strokeOpen (local.get $e))
         (call $m.pt (i32.const "M") (local.get $x) (local.get $top))
@@ -2470,40 +2939,56 @@
         (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (local.get $top))
         (out.str "\22/>")
         (br $drawn))
-        ;; arrows: e = heads (1 right, 2 left) | 4 double | 8 bar at the tail,
-        ;; with the stroke width above bit 8; the shaft is at the axis
-        (local.set $t (i32.shr_u (local.get $e) (i32.const 8)))
+        ;; arrows: e = heads (1 right, 2 left) | 4 double | 8 bar at the left
+        ;; end | 16 harpoon with the upper barb | 32 bar at the right end | 64
+        ;; harpoon with the lower barb | 128 two arrows, the right one on top
+        ;; (256: below), harpoons with the outer barb; the stroke width above
+        ;; bit 10. The shaft of an extensible arrow (31) is at the axis.
+        (local.set $t (i32.shr_u (local.get $e) (i32.const 10)))
         (local.set $mid (i32.add (local.get $top) (i32.shr_s (local.get $size) (i32.const 1))))
         (if (i32.eq (local.get $shape) (i32.const 31))
           (then (local.set $mid (i32.sub (local.get $y) (i32.div_s (i32.mul (i32.const $MC.axis) (local.get $s)) (i32.const 1000))))))
         (local.set $k (i32.div_s (i32.mul (i32.const 130) (local.get $s)) (i32.const 1000)))
-        (local.set $r (i32.and (local.get $e) (i32.const 4)))
+        (local.set $r (select (i32.shr_s (local.get $k) (i32.const 1)) (i32.const 0) (i32.and (local.get $e) (i32.const 4))))
+        (if (i32.and (local.get $e) (i32.const 128)) (then (local.set $r (local.get $k))))
         (call $m.strokeOpen (local.get $t))
-        (call $m.pt (i32.const "M") (local.get $x) (i32.sub (local.get $mid) (select (local.get $k) (i32.const 0) (local.get $r))))
-        (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (i32.sub (local.get $mid) (select (local.get $k) (i32.const 0) (local.get $r))))
+        (call $m.pt (i32.const "M") (local.get $x) (i32.sub (local.get $mid) (local.get $r)))
+        (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (i32.sub (local.get $mid) (local.get $r)))
         (if (local.get $r)
           (then
-            (local.set $k (i32.shr_s (local.get $k) (i32.const 1)))
-            (call $m.pt (i32.const "M") (local.get $x) (i32.sub (local.get $mid) (local.get $k)))
-            (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (i32.sub (local.get $mid) (local.get $k)))
-            (call $m.pt (i32.const "M") (local.get $x) (i32.add (local.get $mid) (local.get $k)))
-            (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (i32.add (local.get $mid) (local.get $k)))
-            (local.set $k (i32.shl (local.get $k) (i32.const 1)))))
-        (local.set $k (i32.div_s (i32.mul (i32.const 130) (local.get $s)) (i32.const 1000)))
-        (if (i32.and (local.get $e) (i32.const 1))
-          (then
-            (call $m.pt (i32.const "M") (i32.sub (i32.add (local.get $x) (local.get $w)) (local.get $k)) (i32.sub (local.get $mid) (local.get $k)))
-            (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (local.get $mid))
-            (call $m.pt (i32.const "L") (i32.sub (i32.add (local.get $x) (local.get $w)) (local.get $k)) (i32.add (local.get $mid) (local.get $k)))))
-        (if (i32.and (local.get $e) (i32.const 2))
-          (then
-            (call $m.pt (i32.const "M") (i32.add (local.get $x) (local.get $k)) (i32.sub (local.get $mid) (local.get $k)))
-            (call $m.pt (i32.const "L") (local.get $x) (local.get $mid))
-            (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $k)) (i32.add (local.get $mid) (local.get $k)))))
+            (call $m.pt (i32.const "M") (local.get $x) (i32.add (local.get $mid) (local.get $r)))
+            (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (i32.add (local.get $mid) (local.get $r)))))
+        ;; the right head, then the left one
+        (loop $head
+          (if (i32.and (i32.shr_u (local.get $e) (local.get $i)) (i32.const 1))
+            (then
+              (local.set $ax (select (local.get $x) (i32.add (local.get $x) (local.get $w)) (local.get $i)))
+              (local.set $cx (select (i32.add (local.get $x) (local.get $k)) (i32.sub (i32.add (local.get $x) (local.get $w)) (local.get $k)) (local.get $i)))
+              ;; $e2: the head's offset below the middle
+              (local.set $e2 (i32.const 0))
+              (if (i32.and (local.get $e) (i32.const 128))
+                (then (local.set $e2 (select (local.get $r) (i32.sub (i32.const 0) (local.get $r))
+                  (i32.xor (local.get $i) (i32.and (i32.shr_u (local.get $e) (i32.const 8)) (i32.const 1)))))))
+              (local.set $hy (i32.add (local.get $mid) (local.get $e2)))
+              (if (i32.or (i32.ne (i32.and (local.get $e) (i32.const 64)) (i32.const 0))
+                    (i32.and (i32.ne (i32.and (local.get $e) (i32.const 16)) (i32.const 0)) (i32.gt_s (local.get $e2) (i32.const 0))))
+                (then (call $m.pt (i32.const "M") (local.get $ax) (local.get $hy)))
+                (else
+                  (call $m.pt (i32.const "M") (local.get $cx) (i32.sub (local.get $hy) (local.get $k)))
+                  (call $m.pt (i32.const "L") (local.get $ax) (local.get $hy))))
+              (if (i32.eqz (i32.and (i32.ne (i32.and (local.get $e) (i32.const 16)) (i32.const 0)) (i32.le_s (local.get $e2) (i32.const 0))))
+                (then (call $m.pt (i32.const "L") (local.get $cx) (i32.add (local.get $hy) (local.get $k)))))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br_if $head (i32.lt_u (local.get $i) (i32.const 2))))
+        ;; bars at the ends, as in \mapsto
         (if (i32.and (local.get $e) (i32.const 8))
           (then
             (call $m.pt (i32.const "M") (local.get $x) (i32.sub (local.get $mid) (local.get $k)))
             (call $m.pt (i32.const "L") (local.get $x) (i32.add (local.get $mid) (local.get $k)))))
+        (if (i32.and (local.get $e) (i32.const 32))
+          (then
+            (call $m.pt (i32.const "M") (i32.add (local.get $x) (local.get $w)) (i32.sub (local.get $mid) (local.get $k)))
+            (call $m.pt (i32.const "L") (i32.add (local.get $x) (local.get $w)) (i32.add (local.get $mid) (local.get $k)))))
         (out.str "\22/>")
         (br $drawn))
       ;; \boxed frame
@@ -2535,6 +3020,9 @@
     (local $c i32)
     (local $e i32)
     (local $cp i32)
+    (local $f i32)
+    (local $b i32)
+    (local $open i32)
     (local.set $p (call $m.nAt (local.get $n)))
     (block $done
       (block $text
@@ -2579,20 +3067,40 @@
         (call $m.emitPath (local.get $n) (local.get $x) (local.get $y))
         (br $done))
       (call $m.textOpen (local.get $n) (local.get $x) (local.get $y))
-      (local.set $e (i32.shr_u (i32.load offset=$N.e (local.get $p)) (i32.const 24)))
-      (if (i32.and (local.get $e) (i32.const 1)) (then (out.str " font-weight=\22bold\22")))
-      (if (i32.and (local.get $e) (i32.const 2)) (then (out.str " font-style=\22italic\22")))
-      (if (i32.and (local.get $e) (i32.const 4)) (then (out.str " font-family=\22monospace\22")))
+      (local.set $f (i32.shr_u (i32.load offset=$N.e (local.get $p)) (i32.const 24)))
+      ;; monospace keeps the font's bold and italic; others print bold (and
+      ;; bold italic) as $m.textCp does
+      (if (i32.eq (i32.and (local.get $f) (i32.const 5)) (i32.const 5)) (then (out.str " font-weight=\22bold\22")))
+      (if (i32.and (i32.ne (i32.and (local.get $f) (i32.const 2)) (i32.const 0)) (i32.ne (i32.and (local.get $f) (i32.const 5)) (i32.const 1)))
+        (then (out.str " font-style=\22italic\22")))
+      (if (i32.and (local.get $f) (i32.const 4)) (then (out.str " font-family=\22monospace\22")))
       (out.str " style=\22white-space:pre\22>")
       (local.set $c (i32.load offset=$N.a (local.get $p)))
       (local.set $e (i32.add (local.get $c) (i32.and (i32.load offset=$N.e (local.get $p)) (i32.const 0xffffff))))
+      (local.set $b (i32.eq (i32.and (local.get $f) (i32.const 5)) (i32.const 1)))
       (block $end
         (loop $char
           (br_if $end (i32.ge_u (local.get $c) (local.get $e)))
           (local.set $cp (call $utf8At (local.get $c) (local.get $e)))
           (local.set $c (global.get $utf8Next))
-          (call $m.outCp (local.get $cp))
+          (if (local.get $b)
+            (then
+              ;; other characters in bold get a stroke, one tspan per run;
+              ;; a space keeps the run
+              (local.set $b (call $m.textCp (local.get $cp) (local.get $f)))
+              (if (i32.ne (local.get $cp) (i32.const 32))
+                (then
+                  (if (i32.ne (local.get $open) (i32.eq (local.get $b) (local.get $cp)))
+                    (then
+                      (if (local.get $open)
+                        (then (out.str "</tspan>"))
+                        (else (out.str "<tspan stroke=\22currentColor\22 stroke-width=\2230\22>")))
+                      (local.set $open (i32.eqz (local.get $open)))))))
+              (call $m.outCp (local.get $b))
+              (local.set $b (i32.const 1)))
+            (else (call $m.outCp (local.get $cp))))
           (br $char)))
+      (if (local.get $open) (then (out.str "</tspan>")))
       (out.str "</text>")))
 
   ;; a color from the source, or red for unknown commands (gray while the block is open)
@@ -2612,7 +3120,53 @@
     (local $w i32)
     (local $h i32)
     (local $d i32)
+    (local $n i32)
+    (local $i i32)
+    (local $src i32)
+    (local $c i32)
+    (local $at i32)
+    (local $dst i32)
+    ;; The first formula expands the packed commands at $mem.mathNodes into
+    ;; their name length groups (see math-commands in scripts/build.ts), before
+    ;; nodes overwrite them. The previous name stays in $mem.mathCells for the
+    ;; shared prefix; group cursors are at $mem.mathAtoms.
+    (if (i32.eqz (global.get $mReady))
+      (then
+        (global.set $mReady (i32.const 1))
+        (local.set $root (local.get $len))
+        (local.set $len (i32.const 0))
+        (loop $cursor
+          (local.set $len (i32.add (local.get $len) (i32.const 4)))
+          (i32.store offset=$mem.mathAtoms (local.get $len)
+            (i32.add (i32.const $mem.mathCmds) (i32.load16_u offset=$mem.mathCmds (local.get $len))))
+          (br_if $cursor (i32.lt_u (local.get $len) (i32.const 124))))
+        (local.set $n (i32.load16_u (i32.const $mem.mathNodes)))
+        (local.set $src (i32.add (i32.const $mem.mathNodes+2) (i32.mul (local.get $n) (i32.const 3))))
+        (loop $name
+          (local.set $len (i32.load8_u (local.get $src)))
+          (loop $byte
+            (local.set $src (i32.add (local.get $src) (i32.const 1)))
+            (local.set $c (i32.load8_u (local.get $src)))
+            (if (i32.gt_u (local.get $c) (i32.const 0x20))
+              (then
+                (i32.store8 offset=$mem.mathCells (local.get $len) (local.get $c))
+                (local.set $len (i32.add (local.get $len) (i32.const 1)))
+                (br $byte))))
+          (local.set $at (i32.add (i32.const $mem.mathAtoms) (i32.shl (local.get $len) (i32.const 2))))
+          (local.set $dst (i32.load (local.get $at)))
+          (memory.copy (local.get $dst) (i32.const $mem.mathCells) (local.get $len))
+          (local.set $c (i32.add (i32.const $mem.mathNodes+2) (local.get $i)))
+          (local.set $c (i32.or (i32.load8_u (local.get $c))
+            (i32.or (i32.shl (i32.load8_u (i32.add (local.get $c) (local.get $n))) (i32.const 8))
+              (i32.shl (i32.load8_u (i32.add (local.get $c) (i32.shl (local.get $n) (i32.const 1)))) (i32.const 21)))))
+          (i32.store (i32.add (local.get $dst) (local.get $len)) (local.get $c))
+          (i32.store (local.get $at) (i32.add (i32.add (local.get $dst) (local.get $len)) (i32.const 4)))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br_if $name (i32.lt_u (local.get $i) (local.get $n))))
+        (local.set $len (local.get $root))))
     (global.set $mN (i32.const 0))
+    ;; node 0 stands for "no box" (W, H, D read 0); an overflow writes it
+    (memory.fill (i32.const $mem.mathNodes) (i32.const 0) (i32.const $N.size))
     (global.set $mA (i32.const $mem.mathAtoms))
     (global.set $mC (i32.const $mem.mathCells))
     (global.set $mFail (i32.const 0))
@@ -2624,6 +3178,16 @@
     ;; the decoders may read a few bytes past the end
     (i64.store (global.get $me) (i64.const 0))
     (call $m.setStyle (select (i32.const 0) (i32.const 1) (local.get $display)))
+    (global.set $mTop (i32.add (global.get $me) (i32.const 8)))
+    (global.set $mPin (i32.const 0))
+    (global.set $mReparse (i32.const 0))
+    ;; A pair dropped with its macro copy leaves its bit set, which only
+    ;; costs a search until here.
+    (if (global.get $mBits)
+      (then
+        (global.set $mBits (i32.const 0))
+        (memory.fill (i32.const $mem.mathInfixBits) (i32.const 0) (i32.const 3072))))
+    (global.set $mInfix (i32.const $mem.mathInfix))
     (local.set $root (call $m.grid (i32.const -1)))
     (if (global.get $mFail) (then (return (i32.const 0))))
     (local.set $w (call $m.max (call $m.W (local.get $root)) (i32.const 1)))

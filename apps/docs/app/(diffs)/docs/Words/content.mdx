@@ -146,7 +146,9 @@ for incremental updates.
 
 Each `plugins.renderers` entry has `language`, a string or string array, and
 `render({ code, language, isIncomplete })`. Its result replaces the entire code
-block. Custom renderers take priority over the code highlighter.
+block, or sits in the code block frame with its header and buttons when the
+entry sets `frame: true`. Custom renderers take priority over the code
+highlighter.
 
 ### HTML safety
 

@@ -533,6 +533,8 @@ export function createHtmlSession(): {
           // last character shows that it left nothing waiting to close.
           !/\s/.test(tail.slice(-1)) &&
           !/[&<>@:]/.test(word) &&
+          // A trailing `$$` line is text, but `$$x` opens display math.
+          ((ext & 2) === 0 || !word.endsWith('$')) &&
           !/www\./i.test(word) &&
           body.endsWith(word) &&
           // Only digits or only marker characters can still become a list

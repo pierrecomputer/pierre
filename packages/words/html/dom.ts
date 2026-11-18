@@ -669,7 +669,10 @@ export function createDomRenderer(
     );
     if (button == null || button.disabled || !root.contains(button)) return;
     const block = button.closest('[data-markdown="code-block"]');
-    const code = block?.querySelector('pre code')?.textContent ?? '';
+    const code =
+      (block as HTMLElement | null)?.dataset.code ??
+      block?.querySelector('pre code')?.textContent ??
+      '';
     if (button.dataset.codeAction === 'copy') {
       void document.defaultView?.navigator.clipboard
         ?.writeText(code)
@@ -734,6 +737,7 @@ export function createDomRenderer(
           left.every(
             (renderer, at) =>
               renderer.render === right[at].render &&
+              renderer.frame === right[at].frame &&
               String(renderer.language) === String(right[at].language)
           )
         );

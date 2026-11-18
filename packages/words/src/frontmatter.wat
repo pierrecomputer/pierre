@@ -79,10 +79,15 @@
   ;; The `:` that ends the key on the current line, or $ylEnd. A comment before
   ;; it ends the search: `- a # b: c` is a scalar.
   (func $yKeyEnd (result i32)
+    (local $p i32)
     (local $q i32)
-    (local.set $q (call $yFind (global.get $ylBeg) (global.get $ylEnd) (i32.const ":")))
+    ;; a quoted key may hold either
+    (local.set $p (global.get $ylBeg))
+    (if (call $yIsQuote (i32.load8_u (local.get $p)))
+      (then (local.set $p (call $yQuoteEnd (local.get $p) (global.get $ylEnd)))))
+    (local.set $q (call $yFind (local.get $p) (global.get $ylEnd) (i32.const ":")))
     (select (global.get $ylEnd) (local.get $q)
-      (i32.lt_u (call $yFind (global.get $ylBeg) (local.get $q) (i32.const "#")) (local.get $q))))
+      (i32.lt_u (call $yFind (local.get $p) (local.get $q) (i32.const "#")) (local.get $q))))
 
   (func $yIsSeqItem (result i32)
     (i32.and (i32.eq (i32.load8_u (global.get $ylBeg)) (i32.const "-"))
@@ -208,6 +213,11 @@
         (br_if $done (i32.lt_u (local.get $end) (global.get $ylEnd)))
         (local.set $e (call $findLineEnd (local.get $q)))
         (local.set $s (call $skipSpace (local.get $q) (local.get $e)))
+        ;; spaces past a block scalar's indentation are content, even alone
+        (if (i32.and (local.get $block) (i32.ge_s (local.get $base) (i32.const 0)))
+          (then
+            (if (i32.gt_s (i32.sub (local.get $s) (local.get $q)) (local.get $base))
+              (then (local.set $s (i32.add (local.get $q) (local.get $base)))))))
         (if (i32.lt_u (local.get $s) (local.get $e))
           (then
             (if (i32.le_s (i32.sub (local.get $s) (local.get $q)) (local.get $indent))
@@ -269,9 +279,11 @@
         (if (i32.and (local.get $first) (i32.eqz (local.get $block)))
           (then (call $yValue (local.get $p) (local.get $end)))
           (else
-            (if (i32.and (local.get $block) (i32.eqz (local.get $first)))
-              (then (call $yNewlines (select (i32.add (local.get $n) (i32.const 1))
-                (local.get $chomp) (i32.eq (local.get $chomp) (i32.const 2))))))
+            ;; keep chomping keeps trailing blank lines, even with no content
+            (if (local.get $block)
+              (then (call $yNewlines (select (i32.add (local.get $n) (i32.eqz (local.get $first)))
+                (select (i32.const 0) (local.get $chomp) (local.get $first))
+                (i32.eq (local.get $chomp) (i32.const 2))))))
             (call $outByte (i32.const "\22"))))))
     (call $yTakeLine))
 
@@ -311,15 +323,10 @@
     (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
 
   ;; The first separating $ch in [$p, $end), or $end: a `#` after a space or
-  ;; tab starts a comment, and a `:` before one or the end ends a key. A
-  ;; quoted scalar at $p may hold either.
+  ;; tab starts a comment, and a `:` before one or the end ends a key.
   (func $yFind (param $p i32) (param $end i32) (param $ch i32) (result i32)
     (local $q i32)
     (local.set $q (local.get $p))
-    (if (i32.lt_u (local.get $p) (local.get $end))
-      (then
-        (if (call $yIsQuote (i32.load8_u (local.get $p)))
-          (then (local.set $q (call $yQuoteEnd (local.get $p) (local.get $end)))))))
     (block $done
       (loop $l
         (local.set $q (call $findByte (local.get $q) (local.get $end) (local.get $ch)))

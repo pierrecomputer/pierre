@@ -222,7 +222,10 @@
             (i32.and (i32.eq (i32.sub (local.get $i) (local.get $p)) (i32.const 2))
               (i32.ge_u (call $findByte (local.get $i) (global.get $lineEnd) (i32.const "$"))
                 (global.get $lineEnd)))
-            (then (call $mathCloses (global.get $lineEnd)))
+            ;; a lone `$$` needs a later line
+            (then (i32.and (call $mathCloses (global.get $lineEnd))
+              (i32.or (i32.lt_u (call $lineAfter (global.get $lineEnd)) (global.get $eof))
+                (i32.lt_u (call $skipSpace (local.get $i) (global.get $lineEnd)) (global.get $lineEnd)))))
             (else (i32.const 0)))
           (i32.const 1)))))
     (local.set $i (call $runEnd (local.get $p) (global.get $lineEnd) (local.get $c)))
@@ -253,33 +256,107 @@
     (select (i32.const 0) (local.get $end)
       (i32.and (i32.sub (local.get $end) (local.get $q)) (i32.const 1))))
 
-  ;; Whether the math block opened on the line ending at $p closes before a
-  ;; blank line, or reaches EOF and stays open while streaming. As in TeX,
-  ;; display math holds no blank line, so a stray `$$` line stays text. The
-  ;; answer holds for every opener before the stopping line, so a run of `$$`
-  ;; lines scans once; $analyze clears $mathTo.
-  (global $mathFrom (mut i32) (i32.const 0))
+  ;; Whether the math block opened on the line ending at $p closes on a later
+  ;; line before a blank line, or reaches EOF and stays open while streaming.
+  ;; As in TeX, display math holds no blank line, so a stray `$$` line stays
+  ;; text. Later lines must continue the opener's containers: a line that
+  ;; does not ends the block unclosed, so the opener stays text too. An
+  ;; opener before the line that stopped a failed scan continues the same
+  ;; containers and finds no closer either, so $mathTo keeps that line and
+  ;; each line is scanned once; $analyze clears it.
   (global $mathTo (mut i32) (i32.const 0))
-  (global $mathOk (mut i32) (i32.const 0))
   (func $mathCloses (param $p i32) (result i32)
+    (local $d i32)
     (local $end i32)
-    (if (i32.and (i32.ge_u (local.get $p) (global.get $mathFrom))
-          (i32.lt_u (local.get $p) (global.get $mathTo)))
-      (then (return (global.get $mathOk))))
-    (global.set $mathFrom (local.get $p))
+    (local $q i32)
+    (local $pcol i32)
+    (local $col i32)
+    (local $f i32)
+    (local $fcol i32)
+    (local $i i32)
+    (local $e i32)
+    (local $c i32)
+    (local $ok i32)
+    (if (i32.lt_u (local.get $p) (global.get $mathTo)) (then (return (i32.const 0))))
+    (local.set $d (call $spineDepth))
     (block $done
-      (loop $l
-        (global.set $mathOk (i32.const 1))
+      (loop $line
+        (local.set $ok (i32.const 0))
         (local.set $p (call $lineAfter (local.get $p)))
-        (br_if $done (i32.ge_u (local.get $p) (global.get $eof)))
+        (if (i32.ge_u (local.get $p) (global.get $eof))
+          (then
+            (local.set $ok (i32.const 1))
+            (br $done)))
         (local.set $end (call $findLineEnd (local.get $p)))
-        (global.set $mathOk (i32.lt_u (call $skipSpace (local.get $p) (local.get $end)) (local.get $end)))
-        (br_if $done (i32.eqz (global.get $mathOk)))
-        (br_if $done (call $mathFenceEnd (local.get $p) (local.get $end)))
+        ;; match the containers; $pcol is the column where byte $q starts and
+        ;; $col the column consumed, past it inside a partly used tab
+        (local.set $q (local.get $p))
+        (local.set $pcol (i32.const 0))
+        (local.set $col (i32.const 0))
+        (local.set $i (i32.const 0))
+        (loop $level
+          (local.set $f (local.get $q))
+          (local.set $fcol (local.get $pcol))
+          (block $found
+            (loop $space
+              (br_if $found (i32.ge_u (local.get $f) (local.get $end)))
+              (local.set $c (i32.load8_u (local.get $f)))
+              (if (i32.eq (local.get $c) (i32.const 9))
+                (then (local.set $fcol (i32.add (i32.or (local.get $fcol) (i32.const 3)) (i32.const 1))))
+                (else
+                  (br_if $found (i32.ne (local.get $c) (i32.const 32)))
+                  (local.set $fcol (i32.add (local.get $fcol) (i32.const 1)))))
+              (local.set $f (i32.add (local.get $f) (i32.const 1)))
+              (br $space)))
+          ;; a blank line ends the block unclosed
+          (br_if $done (i32.ge_u (local.get $f) (local.get $end)))
+          (if (i32.lt_u (local.get $i) (local.get $d))
+            (then
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (local.set $e (call $containerAt (local.get $i)))
+              (local.set $c (i32.load8_u (local.get $e)))
+              (if (i32.eq (local.get $c) (enum.get $Blk.quote))
+                (then
+                  (br_if $done (i32.or
+                    (i32.gt_u (i32.sub (local.get $fcol) (local.get $col)) (i32.const 3))
+                    (i32.ne (i32.load8_u (local.get $f)) (i32.const ">"))))
+                  (local.set $q (i32.add (local.get $f) (i32.const 1)))
+                  (local.set $pcol (i32.add (local.get $fcol) (i32.const 1)))
+                  (local.set $col (local.get $pcol))
+                  ;; one column of a following space or tab
+                  (local.set $c (i32.load8_u (local.get $q)))
+                  (if (i32.and (i32.lt_u (local.get $q) (local.get $end))
+                        (call $isSpaceByte (local.get $c)))
+                    (then
+                      (local.set $col (i32.add (local.get $col) (i32.const 1)))
+                      (if (i32.or (i32.eq (local.get $c) (i32.const 32))
+                            (i32.eqz (i32.and (local.get $col) (i32.const 3))))
+                        (then
+                          (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                          (local.set $pcol (local.get $col)))))))
+                (else
+                  ;; items and footnotes need their content indent
+                  (if (i32.gt_u (i32.sub (local.get $c) (enum.get $Blk.ul)) (i32.const 1))
+                    (then
+                      (local.set $e (i32.add (local.get $col) (i32.load offset=$CS.indent (local.get $e))))
+                      (br_if $done (i32.lt_u (local.get $fcol) (local.get $e)))
+                      (block $moved
+                        (loop $move
+                          (local.set $c (i32.add (local.get $pcol) (i32.const 1)))
+                          (if (i32.eq (i32.load8_u (local.get $q)) (i32.const 9))
+                            (then (local.set $c (i32.add (i32.or (local.get $pcol) (i32.const 3)) (i32.const 1)))))
+                          (br_if $moved (i32.gt_u (local.get $c) (local.get $e)))
+                          (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                          (local.set $pcol (local.get $c))
+                          (br $move)))
+                      (local.set $col (local.get $e))))))
+              (br $level))))
+        (local.set $ok (i32.const 1))
+        (br_if $done (call $mathFenceEnd (local.get $f) (local.get $end)))
         (local.set $p (local.get $end))
-        (br $l)))
-    (global.set $mathTo (local.get $p))
-    (global.get $mathOk))
+        (br $line)))
+    (if (i32.eqz (local.get $ok)) (then (global.set $mathTo (local.get $p))))
+    (local.get $ok))
 
   ;; a bullet or ordered list marker; returns its width in bytes and leaves the
   ;; kind in $lmOrdered / $lmChar / $lmStart

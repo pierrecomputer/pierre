@@ -142,13 +142,17 @@ reserve output space for batches of text and tags.
 
 With the math option, `$` joins the inline syntax bytes and `$$` the fence
 markers. A `$$` fence has no info string: text after the opening `$$` is its
-first line, and it closes at a line that ends with an unescaped `$$`. It opens
-only when that line comes before a blank line or EOF; one scan answers a whole
-run of `$$` lines. With the option off, `$` starts no block. Streaming
-completion skips closed math and repairs nothing after an opener that can still
-close. A math mark or block copies its TeX to a fixed buffer, because output
-growth can move scratch content. [`math.wat`](./src/math.wat) then parses and
-lays out the formula in one pass, as TeX's appendix G does:
+first line, and it closes at a later line that ends with an unescaped `$$`. It
+opens only when that line comes before a blank line or EOF, and every line up to
+it continues the opener's containers (quote markers, item indents). A lone `$$`
+with nothing after it stays text. Only failed scans are memoized, so each line
+is scanned once. With the option off, `$` starts no block. Streaming completion
+skips closed math and repairs nothing after an opener that can still close, but
+it reads past the opener as the parser does. With math on, a repaired paragraph
+ends in a blank line, so completion text cannot turn a `$$` line into a block. A
+math mark or block copies its TeX to a fixed buffer, because output growth can
+move scratch content. [`math.wat`](./src/math.wat) then parses and lays out the
+formula in one pass, as TeX's appendix G does:
 
 - Atoms collect on a stack until their list ends. Then scripts attach, binary
   operators without operands become ordinary, and inter-atom spaces apply.
@@ -158,7 +162,24 @@ lays out the formula in one pass, as TeX's appendix G does:
   system math font draws them. Delimiters that must grow, radicals, braces, and
   wide accents are SVG paths.
 - Glyph metrics and layout constants come from the MATH table of STIX Two Math
-  (`scripts/gen-math-metrics.py`). The commands are in `tables/math.txt`.
+  (`scripts/gen-math-metrics.py`). The commands are in `tables/math.txt`; the
+  build front-codes them into the node area, and the first formula unpacks them
+  before it takes nodes, so a document without math skips that work. Name groups
+  that do not fit their area, and the macro bodies, go to the second half of the
+  atom area (atoms are 8 bytes, so the first half holds 1024 of them).
+- A macro (`\argmax`, `\bra`, `\TeX`, ...) is TeX in the table that parses in
+  place of the command, so its atoms join the list that reads it. A body with an
+  argument is first copied past the source with the argument's text. The copy is
+  freed after it parses unless a text or color node points into it; the
+  remaining space runs out like the other limits.
+- An infix `\over` is found after its numerator was laid out in the wrong style,
+  so the list is parsed again, and the first pass's nodes are freed. A table of
+  (start, split) pairs lets a numerator parsed again split its inner groups at
+  once, so nested splits cost linear work; once the table is full, a split that
+  would be searched again fails the formula.
+- Font switches (`\bf`, `\rm`, ...) set the letter font until their group ends.
+  STIX Two Math has no bold face, so bold text prints math bold letters, digits
+  and Greek, and strokes other characters.
 
 A formula that overflows the node arena, the atom or cell stacks, 48 levels of
 nesting, or 16,000 bytes of source writes nothing, and the caller shows its

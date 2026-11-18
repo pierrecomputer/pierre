@@ -477,7 +477,8 @@
     (if (i32.or (i32.gt_u (local.get $n) (i32.const 2)) (i32.ge_u (local.get $q) (local.get $end)))
       (then (return (local.get $q))))
     (if (i32.and (i32.eq (local.get $n) (i32.const 1))
-          (call $isWhiteByte (i32.load8_u (i32.add (local.get $base) (local.get $q)))))
+          (call $isWhiteCp (call $utf8At (i32.add (local.get $base) (local.get $q))
+            (i32.add (local.get $base) (local.get $end)))))
       (then (return (local.get $q))))
     (local.set $i (local.get $q))
     (block $none
@@ -487,29 +488,24 @@
             (global.set $mathAtEnd (i32.const 1))
             (br $none)))
         (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (if (i32.eq (local.get $c) (i32.const "\5c"))
           (then
-            (local.set $i (i32.add (local.get $i) (i32.const 2)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $scan)))
-        (if (i32.eq (local.get $c) (i32.const "$"))
-          (then
-            (local.set $c (select (i32.load8_u offset=1 (i32.add (local.get $base) (local.get $i))) (i32.const 0)
-              (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $end))))
-            (if (i32.eq (local.get $n) (i32.const 2))
-              (then
-                (if (i32.eq (local.get $c) (i32.const "$"))
-                  (then
-                    (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x20000))
-                      (local.get $p) (i32.add (local.get $i) (i32.const 2)) (local.get $q)))
-                    (return (i32.add (local.get $i) (i32.const 2))))))
-              (else
-                (br_if $none (i32.or (call $isDigit (local.get $c))
-                  (call $isWhiteByte (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))))))
-                (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.const 0x10000))
-                  (local.get $p) (i32.add (local.get $i) (i32.const 1)) (local.get $q)))
-                (return (i32.add (local.get $i) (i32.const 1)))))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $scan)))
+        (br_if $scan (i32.ne (local.get $c) (i32.const "$")))
+        ;; $i is past a `$`, and $c becomes the byte after it
+        (local.set $c (select (i32.load8_u (i32.add (local.get $base) (local.get $i))) (i32.const 0)
+          (i32.lt_u (local.get $i) (local.get $end))))
+        (if (i32.eq (local.get $n) (i32.const 2))
+          (then (br_if $scan (i32.ne (local.get $c) (i32.const "$"))))
+          (else (br_if $none (i32.or (call $isDigit (local.get $c))
+            (call $isWhiteCp (call $utf8Before (i32.sub (i32.add (local.get $base) (local.get $i)) (i32.const 1))
+              (i32.add (local.get $base) (local.get $q))))))))
+        (local.set $i (i32.add (local.get $i) (i32.sub (local.get $n) (i32.const 1))))
+        (drop (call $markNew (i32.or (enum.get $Mk.math) (i32.shl (local.get $n) (i32.const 16)))
+          (local.get $p) (local.get $i) (local.get $q)))
+        (return (local.get $i))))
     (local.get $q))
 
   (func $handleDelim (param $p i32) (param $end i32) (result i32)
@@ -557,12 +553,9 @@
         (if (i32.lt_u (local.get $q) (local.get $end))
           (then (local.set $flags (call $utf8At (i32.add (local.get $base) (local.get $q))
             (i32.add (local.get $base) (local.get $end))))))
-        ;; `_` keeps the CommonMark rules
-        (if (i32.and (i32.and (global.get $ext) (i32.const 1)) (i32.ne (local.get $c) (i32.const "_")))
-          (then
-            (local.set $k (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
-              (local.get $k) (local.get $flags)))
-            (local.set $cjk (i32.const 1))))
+        (if (local.tee $cjk (i32.and (global.get $ext) (i32.const 1)))
+          (then (local.set $k (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
+            (local.get $k) (local.get $flags) (local.get $c)))))
         (local.set $k (i32.or
           (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $k)) (call $isWhiteCp (local.get $k)))
             (i32.const 2))

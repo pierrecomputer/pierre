@@ -132,6 +132,16 @@
 [data-markdown='caret'][data-shape='circle']::after {
   content: '\25cf';
 }
+/* STIX Two has a small x-height; scale math up to match sans-serif text, as KaTeX does. */
+[data-markdown='root']
+  :is([data-markdown='math'], [data-markdown='math-display']) {
+  font-size: 1.3em;
+}
+/* Content-box keeps the padding from shrinking the drawing set by width and height. */
+[data-markdown='math-display'] {
+  box-sizing: content-box;
+  padding-block: 0.5em;
+}
 [data-markdown='img'] {
   max-width: 100%;
   height: auto;
@@ -160,6 +170,8 @@
   }
 }
 [data-markdown='mermaid'] {
-  margin-block: 1.25em;
+  display: flex;
+  justify-content: safe center;
   overflow-x: auto;
+  padding: 1rem;
 }

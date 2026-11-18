@@ -421,13 +421,15 @@ table('unicode-range-tables', (_, inner) => {
   return Uint8Array.from(bytes);
 });
 
-// (math-glyphs <base> <end>): glyph metrics of STIX Two Math for src/math.wat,
-// from tables/math-metrics.txt. A u32 run count, then per run of consecutive
-// code points a u32 (first | count - 1 << 21) and a u32 index of its first
-// glyph, then five bytes per glyph: depth (i8), height, italic correction,
+// (math-glyphs <base> <end> <stride>): glyph metrics of STIX Two Math for
+// src/math.wat, from tables/math-metrics.txt. Five columns of one byte per
+// glyph, each <stride> bytes apart: depth (i8), height, italic correction,
 // width (u8), and the top accent position less half the width (i8), all in
-// hundredths of an em.
-table('math-glyphs', () => {
+// hundredths of an em. Columns gzip better than rows. Then a u32 run count
+// and per run of consecutive code points a u32 (first | count - 1 << 21) and
+// a u16 index of its first glyph.
+table('math-glyphs', (_, inner) => {
+  const stride = Number(inner.match(/^\s*\d+\s+\d+\s+(\d+)/)![1]);
   const rows = fs
     .readFileSync(
       new URL('../tables/math-metrics.txt', import.meta.url),
@@ -436,6 +438,10 @@ table('math-glyphs', () => {
     .trim()
     .split('\n')
     .map((line) => line.split(' ').map(Number));
+  if (rows.length > stride)
+    throw new Error(
+      `math-glyphs: ${rows.length} glyphs exceed stride ${stride}`
+    );
   const runs: number[][] = [];
   for (const [i, [cp]] of rows.entries()) {
     const last = runs.at(-1);
@@ -443,13 +449,13 @@ table('math-glyphs', () => {
       last[1]++;
     else runs.push([cp, 1, i]);
   }
-  const at = 4 + runs.length * 8;
-  const bytes = new Uint8Array(at + rows.length * 5);
+  const at = stride * 5;
+  const bytes = new Uint8Array(at + 4 + runs.length * 6);
   const dv = new DataView(bytes.buffer);
-  dv.setUint32(0, runs.length, true);
+  dv.setUint32(at, runs.length, true);
   runs.forEach(([cp, n, i], r) => {
-    dv.setUint32(4 + r * 8, cp | ((n - 1) << 21), true);
-    dv.setUint32(8 + r * 8, i, true);
+    dv.setUint32(at + 4 + r * 6, cp | ((n - 1) << 21), true);
+    dv.setUint16(at + 8 + r * 6, i, true);
   });
   rows.forEach(([, ...m], i) =>
     m.forEach((v, j) => {
@@ -457,63 +463,118 @@ table('math-glyphs', () => {
       const signed = j === 0 || j === 4;
       if (q < (signed ? -128 : 0) || q > (signed ? 127 : 255))
         throw new Error(`math-glyphs metric out of range: ${rows[i][0]} ${v}`);
-      dv.setUint8(at + i * 5 + j, q & 0xff);
+      dv.setUint8(j * stride + i, q & 0xff);
     })
   );
   return bytes;
 });
 
-// (math-commands <base> <end>): the TeX commands of tables/math.txt. A u32 per
-// name length up to 31: group offset (u16) and count (u16). A group holds its
-// entries back to back: the name, then a u32 value of kind << 24, atom class
-// << 21, and a 21-bit value.
+// (math-commands <base> <end> <packed> <packedEnd> <spill> <spillEnd>): the TeX
+// commands of tables/math.txt. At <base>, a u32 per name length up to 31:
+// group offset from <base> (u16) and count (u16). The first $mathSvg fills
+// the groups: each entry is the name, then a u32 value of
+// kind << 24, atom class << 21, and a 16-bit value. Groups that do not fit
+// before <end> go to <spill>, and so do the macro bodies, each a length byte
+// and its UTF-8 TeX; a macro's value is the offset of its body from <base>,
+// and its class is 1 when the body takes an argument. At <packed>, which the
+// math nodes reuse later: a u16 name count, three planes of one value byte
+// per name (value, then class | kind << 3 in the third), then the names
+// sorted and front-coded: a byte below 0x20 with the length shared with the
+// previous name, then the rest.
 const mathKinds =
-  'sym ital op opl fn fnl accent wide frac sqrt left big font text space style color begin end over xarrow phantom boxed not opname limits mod kern cr ignore mathop'.split(
+  'sym ital op opl fn fnl accent wide frac sqrt left big font text space style color begin end over xarrow phantom boxed not opname limits mod kern cr ignore mathop macro'.split(
     ' '
   );
-table('math-commands', () => {
+code = replaceForm(code, 'math-commands', (inner) => {
+  const [base, end, packed, packedEnd, spill, spillEnd] = inner
+    .trim()
+    .split(/\s+/)
+    .map(Number);
   const entries = new Map<string, number>();
+  const macros = new Map<string, number>();
+  const spillBytes: number[] = [];
+  // Reserve [at, at + size) in the spill area; its offset from <base>.
+  const toSpill = (bytes: number[]) => {
+    const at = spill + spillBytes.length - base;
+    spillBytes.push(...bytes);
+    if (spill + spillBytes.length > spillEnd || at > 0xffff)
+      throw new Error(`math-commands spill needs ${spillBytes.length} bytes`);
+    return at;
+  };
   for (const line of fs
     .readFileSync(new URL('../tables/math.txt', import.meta.url), 'utf-8')
     .split('\n')) {
     if (line.startsWith('#') || line.trim() === '') continue;
     const [kind, cls, ...items] = line.trim().split(/\s+/);
     const k = mathKinds.indexOf(kind);
-    const c = 'oObr()pi'.indexOf(cls);
+    let c = 'oObr()pi'.indexOf(cls);
     if (k < 0 || c < 0) throw new Error(`math.txt: bad line ${line}`);
     for (const item of items) {
-      const at = item.lastIndexOf(':');
+      const at = kind === 'macro' ? item.indexOf('=') : item.lastIndexOf(':');
       const name = at > 0 ? item.slice(0, at) : item;
-      const value = at > 0 ? parseInt(item.slice(at + 1), 16) : 0;
+      let value = at > 0 ? parseInt(item.slice(at + 1), 16) : 0;
+      if (kind === 'macro') {
+        const body = item.slice(at + 1);
+        const bytes = [...Buffer.from(body, 'utf-8')];
+        if (at <= 0 || bytes.length > 255)
+          throw new Error(`math.txt: bad macro ${item}`);
+        value = macros.get(body) ?? toSpill([bytes.length, ...bytes]);
+        macros.set(body, value);
+        c = body.includes('#') ? 1 : 0;
+      }
       // sym, ital, op and opl print their value as a glyph, so it cannot be 0.
       if (
         entries.has(name) ||
         name.length > 31 ||
-        !(value < 1 << 21) ||
-        (k < 4 && value === 0)
+        !(value < 1 << 16) ||
+        (k < 4 && value === 0) ||
+        [...name].some(
+          (ch) => ch.charCodeAt(0) <= 0x20 || ch.charCodeAt(0) > 0x7e
+        )
       )
         throw new Error(`math.txt: bad entry ${item}`);
-      entries.set(name, (k << 24) | (c << 21) | value);
+      entries.set(name, (k << 19) | (c << 16) | value);
     }
   }
   const header = 32 * 4;
-  const names = [...entries.keys()];
-  const parts: number[] = [];
+  const names = [...entries.keys()].sort();
   const head = new Uint8Array(header);
   const hv = new DataView(head.buffer);
+  let size = header;
   for (let len = 1; len < 32; len++) {
-    const of = names.filter((n) => n.length === len);
-    hv.setUint16(len * 4, header + parts.length, true);
-    hv.setUint16(len * 4 + 2, of.length, true);
-    for (const n of of) {
-      for (let i = 0; i < len; i++) parts.push(n.charCodeAt(i));
-      const v = entries.get(n)!;
-      parts.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, v >>> 24);
-    }
+    const n = names.filter((name) => name.length === len).length;
+    let at = size;
+    if (base + size + n * (len + 4) > end)
+      at = toSpill(new Array(n * (len + 4)).fill(0));
+    else size += n * (len + 4);
+    hv.setUint16(len * 4, at, true);
+    hv.setUint16(len * 4 + 2, n, true);
   }
-  if (header + parts.length > 0xffff)
-    throw new Error('math-commands exceeds u16 offsets');
-  return Uint8Array.from([...head, ...parts]);
+  const bytes = [names.length & 0xff, names.length >> 8];
+  for (let plane = 0; plane < 3; plane++)
+    for (const name of names)
+      bytes.push((entries.get(name)! >> (plane * 8)) & 0xff);
+  let prev = '';
+  for (const name of names) {
+    let shared = 0;
+    while (shared < prev.length && prev[shared] === name[shared]) shared++;
+    bytes.push(shared);
+    for (const ch of name.slice(shared)) bytes.push(ch.charCodeAt(0));
+    prev = name;
+  }
+  bytes.push(0);
+  if (packed + bytes.length > packedEnd)
+    throw new Error(`math-commands packed needs ${bytes.length} bytes`);
+  // the spilled groups are zeros until $mathSvg fills them
+  let used = spillBytes.length;
+  while (used > 0 && spillBytes[used - 1] === 0) used--;
+  return (
+    dataSegment(base, head) +
+    '\n' +
+    dataSegment(packed, bytes) +
+    '\n' +
+    dataSegment(spill, spillBytes.slice(0, used))
+  );
 });
 
 // (out.str "...") writes a literal to the output. Short literals become one

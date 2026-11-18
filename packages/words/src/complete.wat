@@ -64,7 +64,7 @@
     (local $esc i32) (local $at i32) (local $low i32) (local $dirty i32)
     (local $depth i32) (local $top i32) (local $remaining i32)
     (local $links i32) (local $extra i32) (local $meta i32) (local $open i32) (local $openDepth i32)
-    (local $tick i32) (local $cut i32)
+    (local $tick i32) (local $cut i32) (local $math i32) (local $blank i32)
     (local $closeAt i32) (local $from i32) (local $to i32)
     (local.set $r (global.get $leafRec))
     (if (i32.eqz (local.get $r)) (then (return (i32.const 0))))
@@ -167,7 +167,7 @@
             ;; An unfinished tag on the last line is dropped with what follows
             ;; it. A `<` right after a word is more likely a comparison or a
             ;; generic type, whose words would look like attributes.
-            (if (global.get $tagAtEnd)
+            (if (i32.and (global.get $tagAtEnd) (i32.eqz (local.get $math)))
               (then
                 (if (i32.and
                       (i32.eqz (i32.and (i32.ne (local.get $p) (i32.const 0))
@@ -209,16 +209,17 @@
           (then
             ;; Entry: offset after the `[`, then the emphasis depth there | bit 8
             ;; image | bit 9 cannot be a link (inside a link) | bit 10 `[^`
-            ;; (maybe a footnote, never a pending link). Past the limit brackets
-            ;; are only counted.
+            ;; (maybe a footnote, never a pending link) | bit 12 after open
+            ;; math (never repaired). Past the limit brackets are only counted.
             (if (i32.lt_u (local.get $links) (i32.const 64))
               (then
                 (local.set $top (i32.add (i32.const $mem.completeLinks) (i32.shl (local.get $links) (i32.const 3))))
                 (i32.store (local.get $top) (i32.add (local.get $p) (i32.const 1)))
                 (i32.store offset=4 (local.get $top) (i32.or (local.get $depth) (i32.or
-                  (i32.shl (i32.and (i32.ne (local.get $p) (local.get $esc))
-                    (i32.eq (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $p)) (i32.const 1))) (i32.const "!")))
-                    (i32.const 8))
+                  (i32.or (i32.shl (local.get $math) (i32.const 12))
+                    (i32.shl (i32.and (i32.ne (local.get $p) (local.get $esc))
+                      (i32.eq (i32.load8_u (i32.sub (i32.add (local.get $base) (local.get $p)) (i32.const 1))) (i32.const "!")))
+                      (i32.const 8)))
                   (i32.shl (i32.eq (i32.load8_u offset=1 (i32.add (local.get $base) (local.get $p))) (i32.const "^"))
                     (i32.const 10)))))
                 (local.set $links (i32.add (local.get $links) (i32.const 1))))
@@ -279,6 +280,7 @@
                             (local.set $t (i32.sub (i32.add (local.get $t) (i32.const 1)) (local.get $base)))
                             (br $closed))
                           ;; The label keeps a placeholder for its unfinished destination.
+                          (br_if $notLink (i32.and (local.get $meta) (i32.const 0x1000)))
                           (local.set $cut (local.get $p))
                           (br $done))
                         ;; A title byte in $c must not read as the next check's `[`.
@@ -291,6 +293,7 @@
                           (then
                             (if (i32.ge_u (call $findByte (local.get $t) (local.get $n) (i32.const "[")) (local.get $n))
                               (then
+                                (br_if $notLink (i32.and (local.get $meta) (i32.const 0x1000)))
                                 (local.set $cut (local.get $p))
                                 (br $done)))))))
                     ;; A reference, found as inline analysis finds it. A resolved
@@ -304,7 +307,7 @@
                     ;; analysis repairs that label if nothing else resolves it, but
                     ;; a label inside another bracket leaves that bracket unusable.
                     (if (i32.and (i32.and (i32.ge_u (local.get $q) (local.get $e))
-                          (i32.eqz (i32.and (local.get $meta) (i32.const 0x500))))
+                          (i32.eqz (i32.and (local.get $meta) (i32.const 0x1500))))
                           (i32.eq (global.get $contentInputEnd) (global.get $eof)))
                       (then
                         (if (i32.gt_u (local.get $links) (i32.const 1))
@@ -349,16 +352,17 @@
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             ;; Math is skipped whole. An opener the content ends in can still
-            ;; become math, so nothing after it is repaired, unless it is a lone
-            ;; `$` before a digit (likely a price).
+            ;; become math, unless it is a lone `$` before a digit (likely a
+            ;; price). For now the parser reads it as text, so the scan goes on
+            ;; to pair what follows, but $math keeps it from being repaired.
             (if (i32.and (global.get $ext) (i32.const 2))
               (then
                 (global.set $nSlots (i32.const 0))
-                (local.set $t (call $handleDollar (local.get $p) (local.get $e)))
-                (br_if $done (i32.and (global.get $mathAtEnd)
-                  (i32.eqz (i32.and (i32.eq (local.get $n) (i32.const 1))
-                    (call $isDigit (i32.load8_u (i32.add (local.get $base) (local.get $q))))))))
-                (local.set $q (local.get $t))))
+                (local.set $q (call $handleDollar (local.get $p) (local.get $e)))
+                (if (i32.and (global.get $mathAtEnd)
+                      (i32.eqz (i32.and (i32.eq (local.get $n) (i32.const 1))
+                        (call $isDigit (i32.load8_u (i32.add (local.get $base) (local.get $q)))))))
+                  (then (local.set $math (i32.const 1))))))
             (local.set $p (local.get $q))
             (br $scan)))
         (if (i32.eq (local.get $c) (i32.const "`"))
@@ -369,9 +373,10 @@
                 (local.set $p (local.get $t))
                 (br $scan)))
             ;; Without a closing run the rest is code and gets closing ticks.
-            ;; A run over 255 never pairs, and closing ticks would join a tick
-            ;; that ends the content: then the run is text and the scan goes on.
-            (if (i32.le_u (local.get $n) (i32.const 255))
+            ;; A run over 255 never pairs, closing ticks would join a tick that
+            ;; ends the content, and after open math nothing is repaired: then
+            ;; the run is text and the scan goes on.
+            (if (i32.and (i32.le_u (local.get $n) (i32.const 255)) (i32.eqz (local.get $math)))
               (then
                 (if (i32.ne (i32.load8_u (i32.sub (call $trimSpaceBack
                       (i32.add (local.get $base) (local.get $e)) (i32.add (local.get $base) (local.get $q)))
@@ -393,9 +398,9 @@
         ;; whitespace, 1 for punctuation, else 0. Bit 0 says it can open, bit 1
         ;; that it can close. $k is 0 inside a word.
         (global.set $cjkSide (i32.const 0))
-        (if (i32.and (i32.and (global.get $ext) (i32.const 1)) (i32.ne (local.get $c) (i32.const "_")))
+        (if (i32.and (global.get $ext) (i32.const 1))
           (then (local.set $prev (call $cjkPrev (i32.add (local.get $base) (local.get $p)) (local.get $base)
-            (local.get $prev) (local.get $next)))))
+            (local.get $prev) (local.get $next) (local.get $c)))))
         (local.set $k (i32.or
           (i32.shl (select (i32.const 2) (call $isPunctCp (local.get $prev)) (call $isWhiteCp (local.get $prev)))
             (i32.const 2))
@@ -494,10 +499,11 @@
             ;; run length % 3 << 16, then delimiters left, then the content
             ;; offset after the run. Not repaired: intraword runs (often
             ;; arithmetic, unless next to CJK with the cjk option), runs over
-            ;; three, a lone `~` (usually "about"), and what a closer left.
+            ;; three, a lone `~` (usually "about"), what a closer left, and
+            ;; runs after open math.
             (local.set $t (i32.or
-              (i32.or (i32.and (i32.eqz (local.get $k)) (i32.eqz (global.get $cjkSide)))
-                (i32.gt_u (local.get $n) (i32.const 3)))
+              (i32.or (i32.or (i32.and (i32.eqz (local.get $k)) (i32.eqz (global.get $cjkSide)))
+                (i32.gt_u (local.get $n) (i32.const 3))) (local.get $math))
               (i32.or (i32.ne (local.get $m) (local.get $n))
                 (i32.and (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $n) (i32.const 1))))))
             (local.set $top (i32.add (i32.const $mem.completeDelims) (i32.shl (local.get $depth) (i32.const 4))))
@@ -533,7 +539,7 @@
         (local.set $top (i32.add (i32.const $mem.completeLinks) (i32.shl (local.get $links) (i32.const 3))))
         (local.set $meta (i32.load offset=4 (local.get $top)))
         (local.set $openDepth (i32.and (local.get $meta) (i32.const 255)))
-        (if (i32.and (local.get $meta) (i32.const 256))
+        (if (i32.eq (i32.and (local.get $meta) (i32.const 0x1100)) (i32.const 256))
           (then
             (local.set $cut (i32.sub (i32.load (local.get $top)) (i32.const 2)))
             ;; The stack lost an opener to a closer in the image (bit 11): it
@@ -542,7 +548,7 @@
               (then (local.set $depth (i32.const 0))))
             (local.set $tick (i32.const 0))
             (br $images)))
-        (if (i32.eqz (i32.and (local.get $meta) (i32.const 0x600)))
+        (if (i32.eqz (i32.and (local.get $meta) (i32.const 0x1600)))
           (then
             (local.set $open (i32.load (local.get $top)))
             ;; A closer in this bracket's text took an opener before it, which
@@ -797,6 +803,12 @@
         (if (i32.ge_u (i32.add (local.get $q) (call $parseListMarker (local.get $q) (i32.const 0)))
               (local.get $from))
           (then (local.set $to (local.get $from))))))
+    ;; With the math option, a `$$` line opens a math block unless a blank
+    ;; line comes before EOF, and the scan for it reads raw lines, also those
+    ;; of later blocks. Text after the trailing blank lines, or a cut that
+    ;; drops them, could open one: $blank ends the input with a blank line.
+    (local.set $blank (i32.and (i32.ne (i32.and (global.get $ext) (i32.const 2)) (i32.const 0))
+      (i32.eq (local.get $type) (enum.get $Blk.p))))
     ;; Only closers written right after the `\` turn it into an escape. Before
     ;; whitespace it stays as text, and before a line break it is a hard break.
     (if (i32.and (i32.eqz (local.get $remaining))
@@ -833,6 +845,16 @@
         (global.set $completePlaceholder (i32.add (local.get $to) (i32.const 3)))
         (local.set $to (call $completeClosers (i32.add (local.get $to) (i32.const 30))
           (i32.const $mem.completeDelims) (i32.const 0) (local.get $prev)))))
+    ;; A last line of spaces is blank already. After a line break, or with no
+    ;; input left, a space makes one: a second line break would end a blank
+    ;; line, which is a safe append boundary.
+    (local.set $q (call $trimSpaceBack (local.get $to) (i32.const $mem.input)))
+    (local.set $c (i32.load8_u (i32.sub (local.get $q) (i32.const 1))))
+    (local.set $c (i32.or (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+      (i32.eq (local.get $q) (i32.const $mem.input))))
+    (i32.store16 (local.get $to) (select (i32.const " ") (i32.const "\n ") (local.get $c)))
+    (local.set $to (i32.add (local.get $to) (i32.mul (local.get $blank)
+      (select (i32.eq (local.get $q) (local.get $to)) (i32.const 2) (local.get $c)))))
     ;; the NUL sentinel and the slack the SIMD scans read into
     (memory.fill (local.get $to) (i32.const 0) (i32.const 32))
     (i32.store (i32.const 2) (i32.sub (local.get $to) (i32.const $mem.input)))

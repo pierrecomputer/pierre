@@ -172,29 +172,34 @@
 
   ;; The cjk option lets a `*` or `~` run between other characters flank a
   ;; CJK neighbor, as markdown-it-cjk-friendly does. $prev ends at $at and
-  ;; $next follows the run. A variation selector after a non-space stands for
-  ;; the character before it, which this returns in place of $prev. Sets
-  ;; $cjkSide when either neighbor is CJK.
+  ;; $next follows the run of $c. A variation selector after a character
+  ;; other than a space separator stands for that character, which this
+  ;; returns in place of $prev, for `_` too. Sets $cjkSide when either
+  ;; neighbor is CJK and $c is not `_`.
   (global $cjkSide (mut i32) (i32.const 0))
-  (func $cjkPrev (param $at i32) (param $base i32) (param $prev i32) (param $next i32) (result i32)
+  (func $cjkPrev (param $at i32) (param $base i32) (param $prev i32) (param $next i32) (param $c i32) (result i32)
     (local $two i32)
-    (global.set $cjkSide (call $isCjkCp (local.get $next)))
+    (local $side i32)
+    (local.set $side (call $isCjkCp (local.get $next)))
     (if (i32.le_u (i32.sub (local.get $prev) (i32.const 0xfe00)) (i32.const 14))
       (then
         (local.set $two (call $utf8Before (i32.sub (local.get $at) (i32.const 3)) (local.get $base)))
-        (if (i32.and (i32.ne (local.get $two) (i32.const 0))
-              (i32.eqz (call $isWhiteCp (local.get $two))))
-          (then
-            (global.set $cjkSide (i32.or (global.get $cjkSide) (i32.or
-              (call $isCjkCp (local.get $two))
-              ;; a quotation mark with VS2 is the full-width form
-              (i32.and (i32.eq (local.get $prev) (i32.const 0xfe01))
-                (i32.eq (i32.and (i32.sub (local.get $two) (i32.const 0x2018)) (i32.const -6)) (i32.const 0))))))
-            (return (local.get $two))))))
-    (global.set $cjkSide (i32.or (global.get $cjkSide) (i32.or
-      (call $isCjkCp (local.get $prev))
-      ;; an ideographic variation selector follows a CJK character
-      (i32.le_u (i32.sub (local.get $prev) (i32.const 0xe0100)) (i32.const 0xef)))))
+        (local.set $side (i32.or (local.get $side) (i32.or
+          (call $isCjkCp (local.get $two))
+          ;; a quotation mark with VS2 is the full-width form
+          (i32.and (i32.eq (local.get $prev) (i32.const 0xfe01))
+            (i32.eqz (i32.and (i32.sub (local.get $two) (i32.const 0x2018)) (i32.const -6)))))))
+        ;; tab and line breaks are not space separators (Zs); 0 is the start
+        (if (select (i32.lt_u (i32.sub (local.get $two) (i32.const 1)) (i32.const 31))
+              (i32.eqz (call $isWhiteCp (local.get $two)))
+              (i32.lt_u (local.get $two) (i32.const 32)))
+          (then (local.set $prev (local.get $two)))))
+      (else
+        (local.set $side (i32.or (local.get $side) (i32.or
+          (call $isCjkCp (local.get $prev))
+          ;; an ideographic variation selector follows a CJK character
+          (i32.le_u (i32.sub (local.get $prev) (i32.const 0xe0100)) (i32.const 0xef)))))))
+    (global.set $cjkSide (i32.and (local.get $side) (i32.ne (local.get $c) (i32.const "_"))))
     (local.get $prev))
 
   ;; The end of the sequence $utf8At decoded last.
@@ -376,21 +381,19 @@
 
   ;; the next $c in [$p,$end), or $end - 16 bytes per step
   (func $findByte (param $p i32) (param $end i32) (param $c i32) (result i32)
-    (local $lane i32)
     (local $w v128)
     (local $cv v128)
-    (local $pack v128)
-    (local.set $pack (v128.load (i32.const $mem.lanePack)))
     (local.set $cv (i8x16.splat (local.get $c)))
     (block $done
       (loop $wide
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
-        (local.set $w (v128.load (local.get $p)))
-        (local.set $lane (call $firstLane
-          (i8x16.eq (local.get $w) (local.get $cv)) (local.get $pack)))
-        (if (i32.lt_u (local.get $lane) (i32.const 16))
+        (local.set $w (i8x16.eq (v128.load (local.get $p)) (local.get $cv)))
+        (if (i64.ne (i64.or
+              (i64x2.extract_lane 0 (local.get $w))
+              (i64x2.extract_lane 1 (local.get $w))) (i64.const 0))
           (then
-            (local.set $p (i32.add (local.get $p) (local.get $lane)))
+            (local.set $p (i32.add (local.get $p)
+              (call $firstLane (local.get $w) (v128.load (i32.const $mem.lanePack)))))
             (br $done)))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
         (br $wide)))

@@ -156,9 +156,10 @@
     (if (local.get $close)
       (then
         ;; $close is 1 for a code fence, and the closing `$$` of a math block
-        (if (i32.gt_u (local.get $close) (call $skipSpace (local.get $line) (local.get $end)))
+        (local.set $q (call $skipSpace (local.get $line) (local.get $end)))
+        (if (i32.gt_u (local.get $close) (local.get $q))
           (then
-            (global.set $pos (local.get $line))
+            (global.set $pos (local.get $q))
             (global.set $lineEnd (local.get $close))
             (call $addLine)))
         (call $closeLeaf)
@@ -467,12 +468,9 @@
           (local.set $beg (call $lineBeg (local.get $line)))
           (local.set $end (call $lineEndOf (local.get $line)))
           (br_if $task (i32.gt_u (i32.add (local.get $beg) (i32.const 3)) (local.get $end)))
-          (br_if $task (i32.ne (i32.load8_u (local.get $beg)) (i32.const "[")))
-          (local.set $c (i32.load8_u offset=1 (local.get $beg)))
-          (br_if $task (i32.eqz (i32.or
-            (i32.eq (local.get $c) (i32.const 32))
-            (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "x")))))
-          (br_if $task (i32.ne (i32.load8_u offset=2 (local.get $beg)) (i32.const "]")))
+          (local.set $c (i32.and (i32.load (local.get $beg)) (i32.const 0xffffff)))
+          (br_if $task (i32.and (i32.ne (local.get $c) (i32.const "[ ]"))
+            (i32.ne (i32.or (local.get $c) (i32.const 0x2000)) (i32.const "[x]"))))
           ;; The trimmed first line may end at the marker only if more lines follow.
           (br_if $task (select
             (i32.lt_u (local.get $n) (i32.const 2))
@@ -480,7 +478,7 @@
             (i32.eq (i32.add (local.get $beg) (i32.const 3)) (local.get $end))))
           (call $recFlag (i32.load offset=$CS.rec (local.get $e))
             (i32.or (i32.const $F.task)
-              (i32.mul (i32.ne (local.get $c) (i32.const 32)) (i32.const $F.taskDone))))
+              (i32.mul (i32.ne (local.get $c) (i32.const "[ ]")) (i32.const $F.taskDone))))
           (i32.store (local.get $line) (i32.add (local.get $beg) (i32.const 3))))
         (if (i32.eqz (i32.load offset=$R.nLines (global.get $leafRec)))
           (then (i32.store8 (global.get $leafRec) (enum.get $Blk.none))))))
@@ -907,39 +905,37 @@
 
           ;; GFM footnote definition
           (local.set $m (call $scanFootnoteDef (global.get $fns)))
-          (if (if (result i32) (local.get $m)
-                (then (i32.lt_u (call $spineDepth) (i32.const $Nest)))
-                (else (i32.const 0)))
+          (if (i32.and (i32.ne (local.get $m) (i32.const 0))
+                (i32.lt_u (call $spineDepth) (i32.const $Nest)))
             (then
               (call $closeUnmatched (i32.const 1))
               (call $advanceToFns (local.get $m))
               (call $skipMarkerSpace)
               (call $prepareLeafParent)
               ;; A footnote container record doubles as its normalized label.
-              (block $footDone
-                (br_if $footDone (i32.ge_u (global.get $sp) (i32.const $Nest)))
-                (call $pushContainer (enum.get $Blk.footnote) (i32.const 0) (i32.const 4) (i32.const 0))
-                (local.set $footR (i32.sub (global.get $rec) (i32.const $R.header)))
-                (call $ensureRec (i32.add (i32.const 72)
-                  (i32.mul (i32.sub (local.get $m) (i32.const 4)) (i32.const 3))))
-                (call $noteDefinition (local.get $footR))
-                (global.set $fnTotal (i32.add (global.get $fnTotal) (i32.const 1)))
-                (local.set $footDst
-                  (i32.add (local.get $footR) (i32.const $R.labelBytes)))
-                (local.set $footNormalized (call $normalizeLabel
-                  (i32.add (global.get $fns) (i32.const 2))
-                  (i32.sub (i32.add (global.get $fns) (local.get $m)) (i32.const 2))
-                  (local.get $footDst) (i32.const 1)))
-                (local.set $footLen (i32.wrap_i64 (local.get $footNormalized)))
-                (i32.store offset=$R.labelLen (local.get $footR) (local.get $footLen))
-                (i32.store offset=$R.hash (local.get $footR)
-                  (i32.wrap_i64 (i64.shr_u (local.get $footNormalized) (i64.const 32))))
-                (local.set $footDst (i32.and
-                  (i32.add (i32.add (local.get $footDst) (local.get $footLen)) (i32.const 7))
-                  (i32.const -8)))
-                (i32.store offset=4 (local.get $footR)
-                  (i32.sub (local.get $footDst) (local.get $footR)))
-                (global.set $rec (local.get $footDst)))
+              ;; The depth check above leaves room for it.
+              (call $pushContainer (enum.get $Blk.footnote) (i32.const 0) (i32.const 4) (i32.const 0))
+              (local.set $footR (i32.sub (global.get $rec) (i32.const $R.header)))
+              (call $ensureRec (i32.add (i32.const 72)
+                (i32.mul (i32.sub (local.get $m) (i32.const 4)) (i32.const 3))))
+              (call $noteDefinition (local.get $footR))
+              (global.set $fnTotal (i32.add (global.get $fnTotal) (i32.const 1)))
+              (local.set $footDst
+                (i32.add (local.get $footR) (i32.const $R.labelBytes)))
+              (local.set $footNormalized (call $normalizeLabel
+                (i32.add (global.get $fns) (i32.const 2))
+                (i32.sub (i32.add (global.get $fns) (local.get $m)) (i32.const 2))
+                (local.get $footDst) (i32.const 1)))
+              (local.set $footLen (i32.wrap_i64 (local.get $footNormalized)))
+              (i32.store offset=$R.labelLen (local.get $footR) (local.get $footLen))
+              (i32.store offset=$R.hash (local.get $footR)
+                (i32.wrap_i64 (i64.shr_u (local.get $footNormalized) (i64.const 32))))
+              (local.set $footDst (i32.and
+                (i32.add (i32.add (local.get $footDst) (local.get $footLen)) (i32.const 7))
+                (i32.const -8)))
+              (i32.store offset=4 (local.get $footR)
+                (i32.sub (local.get $footDst) (local.get $footR)))
+              (global.set $rec (local.get $footDst))
               (local.set $contType (enum.get $Blk.footnote))
               (local.set $maybeLazy (i32.const 0))
               (br $try))))
