@@ -235,6 +235,14 @@ moonx words:test-spec
 moonx words:bench --ignore-ci-checks
 ```
 
+An app that renders no TeX can build a module without math, about a third
+smaller (64 KB instead of 98 KB), and load it with `init()`. With the `math`
+option, it shows formulas as code.
+
+```bash
+node packages/words/scripts/build.ts --no-math --out words.wasm
+```
+
 [Benchmarks](./benchmark/README.md) · [Architecture](./ARCHITECTURE.md)
 
 ## License

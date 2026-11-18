@@ -17,7 +17,16 @@ import {
   wat2wasm,
 } from '@pierre/wat-tools';
 import * as fs from 'node:fs';
+import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
+
+// --no-math builds src/math-none.wat in place of src/math.wat, for apps that
+// render no TeX: the module is about a third smaller, and the math option
+// shows formulas as code. --out <file> writes only the module to that file and
+// leaves dist/ alone, so a variant never replaces the published build.
+const { values: args } = parseArgs({
+  options: { 'no-math': { type: 'boolean' }, out: { type: 'string' } },
+});
 
 // East Asian Wide and Fullwidth code points (EastAsianWidth.txt, EAW in {W, F}).
 const WIDE_RANGES =
@@ -42,10 +51,14 @@ const source = new URL('../src/words.wat', import.meta.url);
 const path = source.pathname;
 const enumMap: EnumMap = new Map();
 const bitsetMap: BitsetMap = new Map();
-let code = expandEnums(
-  flattenWat(source, fs.readFileSync(source, 'utf-8')).code,
-  enumMap
-);
+let words = fs.readFileSync(source, 'utf-8');
+if (args['no-math'] === true) {
+  const mathImport = '(import "./math.wat")';
+  if (!words.includes(mathImport))
+    throw new Error(`--no-math: ${path} has no ${mathImport}`);
+  words = words.replace(mathImport, '(import "./math-none.wat")');
+}
+let code = expandEnums(flattenWat(source, words).code, enumMap);
 code = resolveConsts(code, path).code;
 code = expandBitsets(code, enumMap, bitsetMap, path);
 code = expandBitsetGets(code, bitsetMap, path);
@@ -643,18 +656,22 @@ const wasmBytes = optimizeWasm(wat2wasm(path, code), {
   shrinkLevel: 1,
 });
 
-// tsdown runs next with `clean: false`, so remove old chunks here.
-const dist = new URL('../dist/', import.meta.url);
-fs.rmSync(dist, { recursive: true, force: true });
-fs.mkdirSync(dist, { recursive: true });
-fs.writeFileSync(new URL('words.wasm', dist), wasmBytes);
-fs.writeFileSync(
-  new URL('words.wasm.mjs', dist),
-  `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
-    `const b = new Uint8Array(s.length);\n` +
-    `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
-    `export default b;\n`
-);
+if (args.out !== undefined) {
+  fs.writeFileSync(args.out, wasmBytes);
+} else {
+  // tsdown runs next with `clean: false`, so remove old chunks here.
+  const dist = new URL('../dist/', import.meta.url);
+  fs.rmSync(dist, { recursive: true, force: true });
+  fs.mkdirSync(dist, { recursive: true });
+  fs.writeFileSync(new URL('words.wasm', dist), wasmBytes);
+  fs.writeFileSync(
+    new URL('words.wasm.mjs', dist),
+    `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
+      `const b = new Uint8Array(s.length);\n` +
+      `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
+      `export default b;\n`
+  );
+}
 console.log(
   `Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${wasmBytes.length} bytes, gzipped: ${gzipSync(wasmBytes, { level: 9 }).length} bytes)`
 );
