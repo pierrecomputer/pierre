@@ -383,6 +383,10 @@ void test('math fractions: infix forms and \\genfrac', () => {
   assert.match(svg('{a \\above 2pt b}'), /<rect [^>]*height="200"\/>/);
   // an \over in a macro argument splits only that argument
   assert.match(svg('\\set{a \\over b}'), /<rect /);
+  // nested numerators are split once each, not once per enclosing split
+  let nested = 'a';
+  for (let i = 0; i < 16; i++) nested = `{${nested}\\over b}`;
+  assert.equal(svg(nested).match(/<rect /g)?.length, 16);
 });
 
 void test('math boxes, lines and laps', () => {
@@ -688,6 +692,26 @@ void test('the Mermaid plugin renders mermaid fences', () => {
   assert.equal(
     renderer.render('```mermaid\nbad\nx', true, true).html.trim(),
     ''
+  ); // the source in data-code stays escaped
+  assert.match(
+    renderer.render('```mermaid\ngraph "<&>"\n```\n', false, false).html,
+    /^<div data-markdown="code-block" data-code="graph &quot;&lt;&amp;&gt;&quot;\n" data-language="mermaid">/
+  );
+  // other renderers sit in the frame only when they ask for it
+  const note = { language: 'note', render: () => '<aside></aside>' };
+  assert.equal(
+    createHtmlRenderer({ plugins: { renderers: [note] } }).render(
+      '```note\nn\n```\n',
+      false,
+      false
+    ).html,
+    '<aside></aside>\n'
+  );
+  assert.match(
+    createHtmlRenderer({
+      plugins: { renderers: [{ ...note, frame: true }] },
+    }).render('```note\nn\n```\n', false, false).html,
+    /^<div data-markdown="code-block" data-code="n\n" data-language="note"><div data-markdown="code-header">[^]*<\/div><aside><\/aside><\/div>\n$/
   );
 });
 

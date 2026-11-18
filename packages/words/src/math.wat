@@ -157,6 +157,10 @@
   (global $cmdLen (mut i32) (i32.const 0))
   ;; where the next macro expansion with an argument goes, past the source
   (global $mTop (mut i32) (i32.const 0))
+  ;; end of the last copied macro byte a node points to: text and colors
+  (global $mPin (mut i32) (i32.const 0))
+  ;; end of the pairs at $mem.mathInfix
+  (global $mInfix (mut i32) (i32.const 0))
   (global $gD (mut i32) (i32.const 0))
   (global $gH (mut i32) (i32.const 0))
   (global $gI (mut i32) (i32.const 0))
@@ -1276,6 +1280,8 @@
     (local $h i32)
     (local $d i32)
     (local.set $end (i32.add (local.get $p) (local.get $len)))
+    (if (i32.lt_u (local.get $p) (i32.const $mem.mathSrcEnd))
+      (then (global.set $mPin (call $m.max (global.get $mPin) (local.get $end)))))
     (local.set $n (call $m.node (i32.const $NK.text)))
     (i32.store offset=$N.a (call $m.nAt (local.get $n)) (local.get $p))
     (i32.store offset=$N.e (call $m.nAt (local.get $n))
@@ -2383,9 +2389,16 @@
     (local.set $l (global.get $me))
     (global.set $mp (local.get $m))
     (global.set $me (local.get $n))
+    (local.set $i (global.get $mInfix))
     (drop (call $m.parseList (i32.const $P.inline)))
     (global.set $mp (local.get $old))
-    (global.set $me (local.get $l)))
+    (global.set $me (local.get $l))
+    ;; No node points into the copied body, so its space and the splits found
+    ;; in it are free again.
+    (if (i32.and (i32.ne (local.get $class) (i32.const 0)) (i32.le_u (global.get $mPin) (local.get $m)))
+      (then
+        (global.set $mTop (local.get $m))
+        (global.set $mInfix (local.get $i)))))
 
   ;; what #2, #4 and #3 of a macro put in place of a top-level |
   (const $m.bars $mem.mathStatic+960)
@@ -2396,6 +2409,7 @@
   (func $m.colorArg (result i32)
     (local $p i32)
     (local.set $p (call $m.rawArg))
+    (global.set $mPin (call $m.max (global.get $mPin) (i32.add (local.get $p) (global.get $cmdLen))))
     (select (i32.or (i32.sub (local.get $p) (i32.const $mem.mathSrc)) (i32.shl (global.get $cmdLen) (i32.const 16)))
       (i32.const 0) (call $m.colorName (local.get $p) (global.get $cmdLen))))
 
@@ -2450,7 +2464,6 @@
     (local $k i32)
     (local $n i32)
     (local $old i32)
-    (local $oldVariant i32)
     (local $start i32)
     (local $style i32)
     (local $variant i32)
@@ -2466,6 +2479,21 @@
     (if (i32.and (local.get $flags) (i32.const $P.leadOrd))
       (then (call $m.push (call $m.list) (i32.const 0) (i32.const 0))))
     (block $stop
+     (block $infix
+      ;; A list that a pass before found split by `\over` splits again at once,
+      ;; so nested numerators are not searched once per enclosing split.
+      (local.set $t (i32.const $mem.mathInfix))
+      (block $search
+        (loop $find
+          (br_if $search (i32.ge_u (local.get $t) (global.get $mInfix)))
+          (if (i32.and (i32.eq (i32.load (local.get $t)) (local.get $start))
+                (i32.lt_u (i32.load offset=4 (local.get $t)) (global.get $me)))
+            (then
+              (global.set $mp (local.tee $save (i32.load offset=4 (local.get $t))))
+              (local.set $v (call $m.readCmd))
+              (br $infix)))
+          (local.set $t (i32.add (local.get $t) (i32.const 8)))
+          (br $find)))
       (loop $l
         (br_if $stop (global.get $mFail))
         (if (i32.and (local.get $flags) (i32.const $P.single))
@@ -2506,10 +2534,8 @@
             (then
               (global.set $mp (i32.add (global.get $mp) (i32.const 1)))
               (local.set $old (global.get $mStyle))
-              (local.set $oldVariant (global.get $mVariant))
               (local.set $n (call $m.parseList (i32.const $P.brace)))
               (call $m.setStyle (local.get $old))
-              (global.set $mVariant (local.get $oldVariant))
               (if (i32.eq (call $m.peek) (i32.const "}"))
                 (then (global.set $mp (i32.add (global.get $mp) (i32.const 1)))))
               (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
@@ -2538,31 +2564,15 @@
                   (call $m.push (local.get $n) (i32.const 0) (i32.const 0))
                   (br $next)))
               (local.set $k (i32.shr_u (local.get $v) (i32.const 24)))
-              ;; `\over` and the other infix fractions split the group. The
-              ;; atoms before it were laid out in the wrong style, so they are
-              ;; parsed again. Each pass takes new nodes, so the node limit
-              ;; bounds the work of nested numerators.
+              ;; `\over` and the other infix fractions split the group
               (if (i32.and (i32.eq (local.get $k) (i32.const $K.frac)) (i32.ne (i32.and (local.get $v) (i32.const 0x40)) (i32.const 0)))
                 (then
-                  (local.set $t (i32.const -1))
-                  (if (i32.and (local.get $v) (i32.const 0x20)) (then (local.set $t (call $m.dimen (i32.const 0)))))
-                  (local.set $end (global.get $me))
-                  (local.set $k (global.get $mp))
-                  (global.set $mA (local.get $base))
-                  (global.set $me (local.get $save))
-                  (global.set $mp (local.get $start))
-                  (global.set $mVariant (local.get $variant))
-                  (call $m.setStyle (call $m.fracStyle (local.get $style)))
-                  (local.set $n (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
-                  (global.set $me (local.get $end))
-                  (global.set $mp (local.get $k))
-                  (call $m.setStyle (i32.or (call $m.fracStyle (local.get $style)) (i32.const 4)))
-                  (local.set $k (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
-                  (call $m.setStyle (local.get $style))
-                  (global.set $mA (local.get $base))
-                  (call $m.push (call $m.frac (i32.and (local.get $v) (i32.const 0x1f)) (local.get $n) (local.get $k) (local.get $t))
-                    (i32.const 0) (i32.const 0))
-                  (br $stop)))
+                  (if (i32.lt_u (global.get $mInfix) (i32.const $mem.mathInfixEnd))
+                    (then
+                      (i32.store (global.get $mInfix) (local.get $start))
+                      (i32.store offset=4 (global.get $mInfix) (local.get $save))
+                      (global.set $mInfix (i32.add (global.get $mInfix) (i32.const 8)))))
+                  (br $infix)))
               (if (i32.and (i32.ne (i32.and (local.get $flags) (i32.const $P.cell)) (i32.const 0))
                     (i32.or (i32.eq (local.get $k) (i32.const $K.cr)) (i32.eq (local.get $k) (i32.const $K.end))))
                 (then
@@ -2599,6 +2609,27 @@
           (if (i32.eq (local.get $c) (i32.const "*")) (then (local.set $c (i32.const 0x2217))))
           (call $m.push (call $m.symbol (local.get $c) (local.get $k)) (local.get $k) (i32.const 0)))
         (br $l)))
+     ;; The atoms before the split were laid out in the wrong style, so they
+     ;; are parsed again as the numerator. Each pass takes new nodes, so the
+     ;; node limit bounds the work of numerators the pairs do not cover.
+     (local.set $t (i32.const -1))
+     (if (i32.and (local.get $v) (i32.const 0x20)) (then (local.set $t (call $m.dimen (i32.const 0)))))
+     (local.set $end (global.get $me))
+     (local.set $k (global.get $mp))
+     (global.set $mA (local.get $base))
+     (global.set $me (local.get $save))
+     (global.set $mp (local.get $start))
+     (global.set $mVariant (local.get $variant))
+     (call $m.setStyle (call $m.fracStyle (local.get $style)))
+     (local.set $n (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
+     (global.set $me (local.get $end))
+     (global.set $mp (local.get $k))
+     (call $m.setStyle (i32.or (call $m.fracStyle (local.get $style)) (i32.const 4)))
+     (local.set $k (call $m.parseList (i32.and (local.get $flags) (i32.const 0x7f))))
+     (call $m.setStyle (local.get $style))
+     (global.set $mA (local.get $base))
+     (call $m.push (call $m.frac (i32.and (local.get $v) (i32.const 0x1f)) (local.get $n) (local.get $k) (local.get $t))
+       (i32.const 0) (i32.const 0)))
     (global.set $mDepth (i32.sub (global.get $mDepth) (i32.const 1)))
     ;; \bf and the other font switches end with the group
     (global.set $mVariant (local.get $variant))
@@ -3097,6 +3128,8 @@
     (i64.store (global.get $me) (i64.const 0))
     (call $m.setStyle (select (i32.const 0) (i32.const 1) (local.get $display)))
     (global.set $mTop (i32.add (global.get $me) (i32.const 8)))
+    (global.set $mPin (i32.const 0))
+    (global.set $mInfix (i32.const $mem.mathInfix))
     (local.set $root (call $m.grid (i32.const -1)))
     (if (global.get $mFail) (then (return (i32.const 0))))
     (local.set $w (call $m.max (call $m.W (local.get $root)) (i32.const 1)))

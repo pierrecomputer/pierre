@@ -108,6 +108,9 @@
   ;; $unpackRanges expands these into $mem.punct, $mem.width, $mem.wide.
   (const $mem.packed $mem.itemIndent+256)
   (const $mem.packedEnd $mem.packed+2048)
+  ;; 64 (start, split) pairs of math lists that `\over` splits. See $m.parseList.
+  (const $mem.mathInfix $mem.packedEnd)
+  (const $mem.mathInfixEnd $mem.mathInfix+512)
   ;; Already escaped; written by the host.
   (const $mem.idPrefix 61440)
   ;; Math box nodes (pages 3-4) are 48 bytes each.

@@ -737,6 +737,7 @@ export function createDomRenderer(
           left.every(
             (renderer, at) =>
               renderer.render === right[at].render &&
+              renderer.frame === right[at].frame &&
               String(renderer.language) === String(right[at].language)
           )
         );

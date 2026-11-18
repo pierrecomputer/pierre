@@ -114,7 +114,7 @@ function hookHtml(html: unknown): string {
 const rendererFor = (
   plugins: PluginConfig | undefined,
   language: string
-): Pick<MermaidPlugin, 'render'> | undefined =>
+): (MermaidPlugin & { frame?: boolean }) | undefined =>
   (language === 'mermaid' ? plugins?.mermaid : undefined) ??
   plugins?.renderers?.find((renderer) =>
     typeof renderer.language === 'string'
@@ -448,10 +448,16 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           block = hookHtml(block);
           // A diagram sits in the code block frame: its header and buttons,
           // which are disabled while the fence streams. The buttons take the
-          // source from `data-code`.
-          if (block !== '' && custom === options.plugins?.mermaid) {
+          // source from `data-code`; Wasm escapes `"` in code, so the slot
+          // content is a safe attribute value.
+          if (
+            block !== '' &&
+            (custom === options.plugins?.mermaid || custom.frame === true)
+          ) {
             const start = open + 1 + codeBlockOpen.length;
-            block = `${codeBlockOpen} data-code="${escapeHtml(code)}"${input.slice(start, input.indexOf('<pre', start))}${block}</div>`;
+            const pre = input.indexOf('<pre', start);
+            if (pre !== -1 && pre < tag)
+              block = `${codeBlockOpen} data-code="${isIncomplete && partial ? content.slice(0, -1) : content}"${input.slice(start, pre)}${block}</div>`;
           }
           html += block;
           fences?.push(cursor, html.length, index);

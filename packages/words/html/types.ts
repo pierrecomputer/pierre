@@ -60,6 +60,8 @@ export interface PluginConfig {
    */
   renderers?: {
     language: string | string[];
+    /** Show the output in the code block frame, with its header and buttons. */
+    frame?: boolean;
     render(options: CodeOptions): string | null;
   }[];
 }
