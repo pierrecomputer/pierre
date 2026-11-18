@@ -1366,7 +1366,8 @@ test('find opens empty when the selection spans lines or sits outside the code',
     .getByRole('textbox', { name: 'Search' });
   const firstLine = root.locator('[data-line="1"]').first();
   const secondLine = root.locator('[data-line="2"]').first();
-  await expect(secondLine).toBeVisible();
+  // Highlighting replaces the rows; wait for it before measuring them.
+  await expect(root.getByText('value', { exact: true }).first()).toBeVisible();
 
   // A selection that starts on one line and ends on the next.
   const from = await firstLine.boundingBox();
