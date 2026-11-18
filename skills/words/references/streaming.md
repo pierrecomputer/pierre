@@ -1,71 +1,55 @@
-# Streaming
+# Stream Markdown
 
-All Words update APIs accept the full accumulated Markdown string. They do not
-accept a `ReadableStream` or append individual chunks. Decode byte chunks with a
-persistent `TextDecoder` and `{ stream: true }` so UTF-8 characters can cross
-chunk boundaries.
+Keep the full source string and pass it on each update. If a transport supplies
+UTF-8 byte chunks, use one `TextDecoder` with `{ stream: true }` and flush it at
+the end so a character can span chunks.
 
-## Core HTML sessions
+## Streaming UI
+
+Use [Markdown](react.md) or [the DOM renderer](html.md#update-a-dom-container)
+to reuse completed nodes across updates. For `createHtmlRenderer().render()` or
+`createDomRenderer().update()`, `incomplete` enables syntax repair and `active`
+enables stream behavior. They are separate flags. For example, if the app
+disables repair, pass `false, true` while text arrives. On the final update,
+pass `false, false`. React derives both flags from its props.
+
+Repair can complete unfinished emphasis, code, and links for display and hide
+unfinished images. It leaves the source string intact. An incomplete link can
+have `data-markdown-incomplete` in place of a destination.
+
+## Read incremental HTML yourself
+
+Use `createHtmlSession()` for parsing without UI or formatting plugins. The
+session omits raw HTML. Sanitize its output before using it to display untrusted
+Markdown, since Markdown URLs pass through it. `render(source, options)` takes a
+string only, and `incomplete`, `math`, and `cjk` options.
 
 ```ts
 import { createHtmlSession } from '@pierre/words';
 
 const session = createHtmlSession();
 let source = 'First paragraph.\n\n**Sec';
-const first = session.render(source, { incomplete: true });
+const partial = session.render(source, { incomplete: true });
 
 source += 'ond paragraph.**';
-const next = session.render(source, { incomplete: true });
 const final = session.render(source, { incomplete: false });
 ```
 
-Keep the session between updates. Create a separate session for each document.
-It returns owned HTML strings and needs no `dispose()` call.
+The session returns owned strings. Keep the instance between updates to reuse
+completed blocks. Edits, option changes, or a link or footnote definition can
+require a reparse. The formatted HTML renderer exposes these same update fields.
 
-| `HtmlUpdate` field | Meaning                                          |
-| ------------------ | ------------------------------------------------ |
-| `html`             | Full HTML, built on first read                   |
-| `stable`           | HTML of completed blocks                         |
-| `addition`         | HTML completed since the preceding revision      |
-| `pending`          | HTML that can still change                       |
-| `reset`            | The previous completed prefix is no longer valid |
-| `revision`         | Output version                                   |
+| Field      | Meaning                                                |
+| ---------- | ------------------------------------------------------ |
+| `html`     | Full `stable + pending` HTML, assembled on first read. |
+| `stable`   | Completed blocks.                                      |
+| `addition` | HTML completed since the previous revision.            |
+| `pending`  | The tail that can still change.                        |
+| `reset`    | Invalidate the previously completed prefix.            |
+| `revision` | Output version for this renderer or session.           |
 
-`html` equals `stable + pending`. For a custom incremental consumer, replace the
-`pending` part on each changed revision. Append `addition` only for a
-consecutive revision without `reset`. On reset or a skipped revision, use
-`stable` for the completed prefix. Identical source and options return the same
-result and revision. Do not append `addition` twice for that result.
-
-Sessions omit raw HTML, but they do not filter URL schemes. Use
-[`createHtmlRenderer()` or `createDomRenderer()`](html.md) for page output with
-URL checks, code controls, and hooks.
-
-## Completion and reuse
-
-`incomplete: true` repairs a display copy of common unfinished emphasis, code,
-and links. It hides unfinished images and does not change the source. A
-unfinished link has `data-markdown-incomplete` instead of a destination.
-Sessions mark an open code fence with `data-markdown-incomplete` even when
-repair is off.
-
-Appended text can reuse completed top-level blocks. An edit, a change to
-`incomplete`, or a link or footnote definition can require a full render. A long
-open paragraph still requires a parse on each update.
-
-## UI streams
-
-React uses `isAnimating` for active state. The HTML and DOM APIs accept separate
-`incomplete` and `active` arguments. For an HTML renderer:
-
-```ts
-renderer.render(source, true, true);
-renderer.render(source, false, false);
-```
-
-For a DOM renderer, use `update()` with the same arguments.
-
-Use `incomplete = active && parseIncompleteMarkdown` when the app has a repair
-option. Active state controls the live code highlighter and stream UI.
-Completion controls Markdown repair. Set both to `false` when the stream ends or
-is canceled. An unfinished final marker then renders as ordinary Markdown.
+The same source and options return the same result and revision. For a custom
+incremental consumer, skip a revision you already applied. On first use, a
+reset, or a gap in revisions, replace the completed HTML with `stable`.
+Otherwise, append `addition` once. Replace the pending HTML with `pending` on
+each changed revision. Read `html` instead when you need the full result.

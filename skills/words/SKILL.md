@@ -1,47 +1,32 @@
 ---
 name: words
 description:
-  Use when an app uses @pierre/words to render Markdown as HTML or ANSI, display
-  streamed Markdown in React or the DOM, customize generated HTML, or highlight
-  fenced code with @pierre/highlights.
+  Use when integrating @pierre/words to render or stream Markdown in React, in
+  the DOM, as HTML, or in a terminal.
 ---
 
 # `@pierre/words`
 
-Use Words for CommonMark and GFM Markdown. Choose the core API for HTML or
-terminal bytes, `Markdown` for React, or the HTML and DOM renderers for other
-frameworks. Use one session or renderer per document that receives updates.
+Words supports CommonMark, GFM, and footnotes. Install `@pierre/words` with the
+app's package manager. The package initializes WebAssembly on import. Install
+React for the React entry point, `@pierre/highlights` for syntax colors, or
+`pele` for Mermaid diagrams as needed.
 
-## Install
+## Choose an API
 
-```bash
-pnpm add @pierre/words
-```
+| Task                                                               | API and import                                                        | Reference                              |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------- |
+| Render Markdown in React                                           | `Markdown` from `@pierre/words/react`                                 | [React](references/react.md)           |
+| Generate HTML strings with URL checks or patch an existing element | `createHtmlRenderer` or `createDomRenderer` from `@pierre/words/html` | [HTML and DOM](references/html.md)     |
+| Generate UTF-8 HTML or ANSI bytes, or read YAML frontmatter        | `renderToHtml` or `renderToAnsi` from `@pierre/words`                 | [Core](references/core.md)             |
+| Consume completed and pending HTML yourself                        | `createHtmlSession` from `@pierre/words`                              | [Streaming](references/streaming.md)   |
+| Add math, CJK emphasis, Mermaid, syntax colors, or custom fences   | Parser options or renderer plugins                                    | [Extensions](references/extensions.md) |
 
-The package initializes WebAssembly on import in Node.js, browsers, and
-Cloudflare Workers. Normal use needs no `init()` call. The core entry point has
-no runtime dependencies. React and `@pierre/highlights` are optional peers.
+Use one renderer or session per document that receives updates. Pass the full
+accumulated Markdown string each time. See [Streaming](references/streaming.md)
+for final updates and incremental results.
 
-## Select a reference
-
-| Task                                                                 | Reference                              |
-| -------------------------------------------------------------------- | -------------------------------------- |
-| Render HTML or ANSI bytes, or extract YAML frontmatter               | [Core API](references/core.md)         |
-| Update a Markdown document from a stream or consume incremental HTML | [Streaming](references/streaming.md)   |
-| Use the React component, animation, or a caret                       | [React](references/react.md)           |
-| Update the DOM, customize HTML, filter URLs, or highlight code       | [HTML and plugins](references/html.md) |
-
-## Integration rules
-
-- Decode or copy core output bytes before another render. The bytes share
-  WebAssembly memory.
-- Pass the full accumulated source on each update, not the latest chunk.
-- Finish a stream with incomplete repair and active state set to `false`.
-- Core HTML and sessions do not sanitize URLs. Use the formatted HTML, DOM, or
-  React API for its URL checks and element filters.
-- `components` hooks and plugins return HTML strings, not React elements. They
-  are trusted code. Escape untrusted text that they add.
-- Math (`math: true`) and CJK-friendly emphasis (`cjk: true`) are built-in
-  options. Mermaid needs Pele through `@pierre/words/mermaid`. Remark and rehype
-  plugins are not supported. Use a custom code renderer for other fence
-  languages.
+Prefer the React, HTML, or DOM renderer for untrusted Markdown in a page. These
+omit raw HTML and check Markdown URLs. Core HTML and core sessions require an
+application sanitizer for that use. Treat hooks and plugin output as trusted
+HTML and escape any untrusted text they insert.

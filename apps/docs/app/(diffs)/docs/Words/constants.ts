@@ -42,6 +42,24 @@ export function Message({ text, active }: { text: string; active: boolean }) {
 }`
 );
 
+export const WORDS_MERMAID = docsCodeSnippet(
+  'diagram-message.tsx',
+  `import { createMermaidPlugin } from '@pierre/words/mermaid';
+import { Markdown } from '@pierre/words/react';
+import { render } from 'pele';
+import '@pierre/words/styles.css';
+
+const plugins = { mermaid: createMermaidPlugin({ render }) };
+
+export function Message({ text, active }: { text: string; active: boolean }) {
+  return (
+    <Markdown plugins={plugins} isAnimating={active}>
+      {text}
+    </Markdown>
+  );
+}`
+);
+
 export const WORDS_HTML = docsCodeSnippet(
   'html.ts',
   `import { createHtmlRenderer } from '@pierre/words/html';
@@ -88,16 +106,23 @@ try {
 }`
 );
 
-export const WORDS_CORE = docsCodeSnippet(
-  'core.ts',
-  `import { renderToAnsi, renderToHtml } from '@pierre/words';
+export const WORDS_HTML_BYTES = docsCodeSnippet(
+  'html-bytes.ts',
+  `import { renderToHtml } from '@pierre/words';
 
 const source = '# Hello, **world**!';
 const html = new TextDecoder().decode(renderToHtml(source));
-const ansi = renderToAnsi(source, { width: 80 }).slice();
+console.log(html);`
+);
 
-console.log(html);
-process.stdout.write(ansi);`
+export const WORDS_ANSI = docsCodeSnippet(
+  'terminal.ts',
+  `import { renderToAnsi } from '@pierre/words';
+
+const bytes = renderToAnsi('# Hello, **world**!', {
+  width: process.stdout.columns ?? 80,
+});
+process.stdout.write(bytes.slice());`
 );
 
 export const WORDS_FRONTMATTER = docsCodeSnippet(
@@ -130,10 +155,12 @@ export const WORDS_DOC_FILES = {
   wordsSkill: WORDS_SKILL,
   wordsReact: WORDS_REACT,
   wordsHighlights: WORDS_HIGHLIGHTS,
+  wordsMermaid: WORDS_MERMAID,
   wordsHtml: WORDS_HTML,
   wordsDom: WORDS_DOM,
   wordsHooks: WORDS_HOOKS,
-  wordsCore: WORDS_CORE,
+  wordsHtmlBytes: WORDS_HTML_BYTES,
+  wordsAnsi: WORDS_ANSI,
   wordsFrontmatter: WORDS_FRONTMATTER,
   wordsSession: WORDS_SESSION,
 };

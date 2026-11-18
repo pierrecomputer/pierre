@@ -119,7 +119,7 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     HighlightsHighlighter:
       'Highlights installation, agent skill, APIs, themes, languages, streaming, and incremental editing',
     Words:
-      'Markdown to HTML and ANSI, React and DOM renderers, streaming, code plugins, and content controls',
+      'Markdown to HTML and ANSI, React and DOM renderers, streaming, code plugins, Mermaid, math, and CJK emphasis',
   },
   trees: {
     Overview:

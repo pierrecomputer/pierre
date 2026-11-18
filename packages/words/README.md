@@ -37,7 +37,7 @@ render.
 | `skipHtml`    | `false` | Omit raw HTML.                                                                         |
 | `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
 | `math`        | `false` | Render math as SVG. See [Math](#math).                                                 |
-| `cjk`         | `false` | Let emphasis open and close next to Chinese, Japanese, and Korean text.                |
+| `cjk`         | `false` | Enable [CJK-friendly emphasis](#cjk-support).                                          |
 
 `renderToAnsi()` takes `width`, the wrap column. With the default, `0`, the
 terminal wraps the text. Control characters print as U+FFFD, so a document
@@ -159,10 +159,21 @@ STIX Two Math, which Apple systems include; other math fonts work with small
 spacing differences. A formula that it cannot lay out shows as code. An unknown
 command shows in red, or in gray while its block is still open.
 
+## CJK support
+
+Set `cjk: true` to let asterisks and tildes mark emphasis and strikethrough next
+to Chinese, Japanese, and Korean text. For example, `**重要。**请阅读。`
+produces `<strong>重要。</strong>请阅读。` inside a paragraph. Use asterisks for
+emphasis next to CJK punctuation.
+
+The option works in `renderToHtml()`, `renderToAnsi()`, HTML sessions, and the
+HTML and DOM renderers. In React, pass `<Markdown cjk>`.
+
 ## Mermaid
 
 `@pierre/words/mermaid` renders `mermaid` code blocks with
-[Pele](https://pele.run), which you install and pass in:
+[Pele](https://pele.run). Install `pele` and pass its `render` function to the
+plugin.
 
 ```tsx
 import { render } from 'pele';
@@ -173,7 +184,8 @@ const plugins = { mermaid: createMermaidPlugin({ render }) };
 <Markdown plugins={plugins}>{text}</Markdown>;
 ```
 
-The second argument holds Pele's render options. While the fence is open, the
+Use `plugins` with `createHtmlRenderer()` or `createDomRenderer()` too. The
+second argument holds Pele's render options. While the fence is open, the
 diagram grows with each complete line, and a line that does not parse keeps the
 last diagram. An open fence with no diagram yet shows nothing. A closed diagram
 that does not parse shows as code.

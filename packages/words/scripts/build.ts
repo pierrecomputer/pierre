@@ -528,9 +528,7 @@ code = replaceForm(code, 'math-commands', (inner) => {
         name.length > 31 ||
         !(value < 1 << 16) ||
         (k < 4 && value === 0) ||
-        [...name].some(
-          (ch) => ch.charCodeAt(0) <= 0x20 || ch.charCodeAt(0) > 0x7e
-        )
+        /[^\x21-\x7e]/.test(name)
       )
         throw new Error(`math.txt: bad entry ${item}`);
       entries.set(name, (k << 19) | (c << 16) | value);
