@@ -265,6 +265,13 @@ output moves forward without a lookup cache for previously rendered code.
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.
 
+When islands are configured, the host formatter uses the existing slots for
+closed, registered fences and emits a portal target and text fallback. The DOM
+patcher treats each island as opaque, moves portal targets by id when
+surrounding Markdown changes, and reports the active targets after each
+structural patch. React mounts the components through portals so they retain
+application context.
+
 ## Constraints
 
 - Keep Markdown syntax and output backends in WAT, and the markup of the HTML

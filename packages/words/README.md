@@ -76,6 +76,7 @@ normal Markdown.
 | `math`, `cjk`                           | Render math as SVG, and CJK-friendly emphasis. Default: `false`.                              |
 | `plugins.code`                          | Code highlighter.                                                                             |
 | `plugins.mermaid`                       | Mermaid diagram renderer. See [Mermaid](#mermaid).                                            |
+| `islands`                               | Registered React components for reactive islands.                                             |
 | `plugins.renderers`                     | Custom code block renderers, selected by language.                                            |
 | `controls`                              | Code copy/download buttons. Use a boolean or `{ code: { copy, download } }`. Default: `true`. |
 | `lineNumbers`                           | Show code line numbers. Default: `true`.                                                      |
@@ -103,6 +104,70 @@ images, so use `urlTransform` or element filters to block them. Hooks and
 plugins are trusted code: escape any untrusted text they add.
 
 Remark and rehype plugins are not supported.
+
+### Reactive islands
+
+Pass an `islands` registry to mount React components from fenced blocks. The
+language is `island-NAME` and the body is a JSON object with a nonempty string
+`id`. Keep that id stable across edits to preserve component state. Use unique
+ids within each Markdown instance. If an id repeats, the first accepted block
+mounts and later blocks show their fallback.
+
+````markdown
+```island-counter
+{"id":"article-votes","label":"Votes"}
+```
+````
+
+````
+
+```tsx
+import { Markdown, type ReactiveIslands } from '@pierre/words/react';
+import { useState } from 'react';
+
+function Counter({ label }: { label: string }) {
+  const [count, setCount] = useState(0);
+  return (
+    <button type="button" onClick={() => setCount((value) => value + 1)}>
+      {label} ({count})
+    </button>
+  );
+}
+
+const islands: ReactiveIslands = {
+  counter: {
+    fallback: 'Loading counter…',
+    render: ({ label }) =>
+      typeof label === 'string' ? <Counter label={label} /> : null,
+  },
+};
+
+export function Message({
+  source,
+  streaming,
+}: {
+  source: string;
+  streaming: boolean;
+}) {
+  return (
+    <Markdown islands={islands} isAnimating={streaming}>
+      {source}
+    </Markdown>
+  );
+}
+````
+
+By default, Words leaves a registered fence out of the preview while it streams.
+Set `pending` to plain text or to `{ className, label? }` for a CSS-styled
+skeleton with an optional accessible label. For example, add
+`pending: { className: 'counter-skeleton', label: 'Loading counter' }` to the
+registry and style `.counter-skeleton` to reserve the button’s space.
+
+A closed, accepted fence uses `fallback` on the server and mounts on the client
+while the rest of the Markdown continues streaming. A paused open fence, invalid
+payload, or unregistered name is displayed as code. The `render` function is a
+pure factory that validates data and returns an element or `null`. Put hooks in
+the component it returns.
 
 ### Syntax highlighting
 

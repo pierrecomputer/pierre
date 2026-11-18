@@ -26,6 +26,7 @@ export default defineConfig([
         '@pierre/words',
         '@pierre/highlights',
         'react',
+        'react-dom',
         'react/jsx-runtime',
       ],
     },

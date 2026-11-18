@@ -4,7 +4,14 @@ import { createHtmlSession, renderToHtml } from '@pierre/words';
 import { afterEach, describe, expect, expectTypeOf, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
-import { act, StrictMode } from 'react';
+import {
+  act,
+  createContext,
+  StrictMode,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
@@ -14,7 +21,7 @@ import { createHtmlRenderer } from '../html/render';
 import { createHighlightsPlugin } from '../react/highlights';
 import { Markdown } from '../react/react';
 import { defaultUrlTransform } from '../react/react';
-import type { Components, HtmlOptions } from '../react/react';
+import type { Components, HtmlOptions, ReactiveIslands } from '../react/react';
 
 const decoder = new TextDecoder();
 const html = (
@@ -2755,4 +2762,186 @@ test('the DOM renderer keeps math SVG placed by a large first render', () => {
   // not a plain append, so the update walks the SVG
   renderer.update(source + 'b*', true, true, false);
   expect(root.querySelector('svg')).toBe(svg);
+});
+
+describe('reactive islands', () => {
+  const open = '~~~island-counter\n{"id":"votes","label":"Votes"}\n';
+  const closed = open + '~~~\n';
+  const registry: ReactiveIslands = {
+    counter: {
+      fallback: 'Loading <counter>',
+      render: ({ label }) =>
+        typeof label === 'string' ? <button>{label}</button> : null,
+    },
+  };
+
+  test('renders an escaped server fallback only for accepted closed fences', () => {
+    expect(html(closed, { islands: registry })).toContain(
+      'Loading &lt;counter&gt;'
+    );
+    for (const source of [
+      open,
+      closed.replace('counter', 'unknown'),
+      closed.replace('"Votes"', '4'),
+      closed.replace('"id":"votes",', ''),
+      closed.replace('"Votes"', 'oops'),
+    ]) {
+      const output = html(source, { islands: registry });
+      expect(output).toContain('<pre');
+      expect(output).not.toContain('data-words-island=');
+    }
+    expect(html(closed)).toContain('<pre');
+  });
+
+  test('hydrates a counter and preserves its state and context through streamed text and edits', async () => {
+    const Context = createContext('Default');
+    let unmounts = 0;
+    function Counter({ label }: { label: string }) {
+      const context = useContext(Context);
+      const [count, setCount] = useState(0);
+      useEffect(
+        () => () => {
+          unmounts++;
+        },
+        []
+      );
+      return (
+        <button type="button" onClick={() => setCount((n) => n + 1)}>
+          {context} {label} {count}
+        </button>
+      );
+    }
+
+    const islands: ReactiveIslands = {
+      counter: {
+        fallback: 'Loading counter',
+        render: ({ label }) =>
+          typeof label === 'string' ? <Counter label={label} /> : null,
+      },
+    };
+    const element = (source: string) => (
+      <Context.Provider value="Live">
+        <Markdown animated caret="block" islands={islands} isAnimating>
+          {source}
+        </Markdown>
+      </Context.Provider>
+    );
+    const container = mountDOM(renderToString(element(closed)));
+    const fallback = container.querySelector<HTMLElement>(
+      '[data-words-island-fallback]'
+    )!;
+    expect(fallback.hidden).toBe(false);
+    const errors: unknown[] = [];
+    await flush(() => {
+      root = hydrateRoot(container, element(closed), {
+        onRecoverableError: (error) => errors.push(error),
+      });
+    });
+    expect(errors).toEqual([]);
+    const button = container.querySelector('button')!;
+    expect(fallback.hidden).toBe(true);
+    expect(button.textContent).toBe('Live Votes 0');
+    await flush(() => button.click());
+    await flush(() => root!.render(element(closed + '\nMore Markdown')));
+    await flush(() =>
+      root!.render(element('A new heading.\n\n' + closed + '\nMore Markdown'))
+    );
+    expect(container.querySelector('button')).toBe(button);
+    expect(button.textContent).toBe('Live Votes 1');
+    await flush(() =>
+      root!.render(element(closed.replace('"Votes"', '"Choices"') + closed))
+    );
+    expect([...container.querySelectorAll('button')]).toEqual([button]);
+    expect(button.textContent).toBe('Live Choices 1');
+    expect(
+      container.querySelectorAll('[data-words-island-fallback]:not([hidden])')
+    ).toHaveLength(1);
+
+    await flush(() => root!.render(element('The fence was removed.')));
+    expect(container.querySelector('button')).toBeNull();
+    expect(unmounts).toBe(1);
+  });
+
+  test('shows an opted-in pending state separately from the server fallback', async () => {
+    const islands: ReactiveIslands = {
+      counter: {
+        ...registry.counter,
+        pending: { className: 'counter-skeleton', label: 'Loading votes' },
+      },
+    };
+    expect(html(closed, { islands })).toContain('Loading &lt;counter&gt;');
+    expect(html(closed, { islands })).not.toContain('counter-skeleton');
+    expect(
+      html(open, {
+        isAnimating: true,
+        islands: {
+          counter: { ...registry.counter, pending: 'Loading <votes>' },
+        },
+      })
+    ).toContain('Loading &lt;votes&gt;');
+
+    const container = mountDOM();
+    const render = (source: string) =>
+      flush(() => {
+        root ??= createRoot(container);
+        root.render(
+          <Markdown islands={islands} isAnimating>
+            {source}
+          </Markdown>
+        );
+      });
+
+    await render('~~~island-counter\n');
+    const skeleton = container.querySelector('.counter-skeleton');
+    expect(skeleton?.getAttribute('aria-label')).toBe('Loading votes');
+    expect(container.querySelector('pre, [data-words-island]')).toBeNull();
+    await render(open);
+    expect(container.querySelector('.counter-skeleton')).toBe(skeleton);
+    await render(closed);
+    expect(container.querySelector('.counter-skeleton')).toBeNull();
+    expect(
+      container.querySelector('[data-words-island] button')?.textContent
+    ).toBe('Votes');
+    await render(closed.replace('"Votes"', '4'));
+    expect(container.querySelector('.counter-skeleton')).toBeNull();
+    expect(container.querySelector('pre')).not.toBeNull();
+  });
+
+  test('omits a streaming island and mounts it when the fence closes', async () => {
+    const container = mountDOM();
+    const render = (source: string, active: boolean) =>
+      flush(() => {
+        root ??= createRoot(container);
+        root.render(
+          <Markdown islands={registry} isAnimating={active}>
+            {source}
+          </Markdown>
+        );
+      });
+    await render('~~~i', true);
+    expect(container.querySelector('pre')).toBeNull();
+    const partial = open.slice(0, open.indexOf('"Votes"'));
+    await render(partial, true);
+    expect(
+      container.querySelector('[data-markdown="root"]')?.childElementCount
+    ).toBe(0);
+    await render(open, true);
+    expect(
+      container.querySelector('[data-markdown="root"]')?.childElementCount
+    ).toBe(0);
+    await render(open, false);
+    expect(container.querySelector('pre')?.textContent).toContain(
+      '"id":"votes"'
+    );
+    await render(closed, true);
+    expect(
+      container.querySelector('[data-words-island] button')?.textContent
+    ).toBe('Votes');
+    await render(closed + '\n~~~text\nMore code', true);
+    expect(
+      container.querySelector('[data-words-island] button')?.textContent
+    ).toBe('Votes');
+    await render(open, false);
+    expect(container.querySelector('[data-words-island]')).toBeNull();
+  });
 });

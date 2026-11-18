@@ -16,6 +16,7 @@ import {
   isNameCode,
   unchangedEnd,
 } from '../lib/utils';
+import { formatIsland, formatIslandPending, islandFor } from './islands';
 import type {
   CodeHighlighterSession,
   CodeHighlightUpdate,
@@ -428,6 +429,25 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       const language =
         open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
       const number = index++;
+      const island =
+        filtered && excluded('div')
+          ? undefined
+          : islandFor(options.islands, language);
+      if (island !== undefined) {
+        if (isIncomplete) {
+          html += formatIslandPending(island.pending);
+          continue;
+        }
+        // A paused but still open fence stays code.
+        if (input.charCodeAt(at + 1) === 48) {
+          const block = formatIsland(island, language, decodeHtml(content));
+          if (block !== undefined) {
+            html += block;
+            fences?.push(cursor, html.length, index);
+            continue;
+          }
+        }
+      }
       const custom = rendererFor(options.plugins, language);
       if (custom !== undefined) {
         let code = decodeHtml(content);
@@ -615,7 +635,11 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const end = input.indexOf('\0', body);
     const language =
       open === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, open));
-    if (rendererFor(options.plugins, language) !== undefined) return;
+    if (
+      islandFor(options.islands, language) !== undefined ||
+      rendererFor(options.plugins, language) !== undefined
+    )
+      return;
     const plugin = options.plugins?.code;
     const prefix = input.slice(0, start);
     const suffix = input.slice(end + 1 + codeEnd.length);
@@ -811,6 +835,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         const plugins = options.plugins;
         // Plugins and filters need code blocks in slots.
         allSlots =
+          options.islands !== undefined ||
           plugins?.code !== undefined ||
           plugins?.mermaid !== undefined ||
           (plugins?.renderers?.length ?? 0) > 0 ||

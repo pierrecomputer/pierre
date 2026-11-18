@@ -1,5 +1,6 @@
 import { delta, type InternalHtmlUpdate } from '../lib/internal';
 import { decodeHtml } from '../lib/utils';
+import { collectIslands, isIsland, type MountedIsland } from './islands';
 import type { InternalCodeUpdate } from './render';
 import { controlFlags, createHtmlRenderer, rewritesElements } from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
@@ -9,7 +10,7 @@ const isFade = (node: Node): node is HTMLElement =>
   (node as Element).getAttribute('data-markdown') === 'token';
 const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
-  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], svg';
+  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], [data-words-island], svg';
 
 // The source HTML of each math SVG that patchHtml placed, to reuse equal ones.
 const svgSources = new WeakMap<Node, string>();
@@ -86,6 +87,7 @@ function createFades(root: HTMLElement) {
   const animate = (text: Text): void => {
     if (!enabled() || text.data.trim() === '' || text.parentElement === null)
       return;
+    if (text.parentElement.closest(passiveText) !== null) return;
     // An open fence line ends with LF. Keep the LF outside the span, so the
     // next chunk can extend the same line.
     if (
@@ -94,7 +96,6 @@ function createFades(root: HTMLElement) {
       text.parentElement.closest('pre code') !== null
     )
       text.splitText(text.data.length - 1);
-    if (text.parentElement.closest(passiveText) !== null) return;
     const span = document.createElement('span');
     span.dataset.markdown = 'token';
     span.dataset.animated = 'true';
@@ -149,6 +150,7 @@ function createFades(root: HTMLElement) {
           const element = node as HTMLElement;
           const kind = element.getAttribute('data-markdown');
           if (
+            element.hasAttribute('data-words-island') ||
             kind === 'code-header' ||
             kind === 'line-numbers' ||
             kind === 'caret' ||
@@ -511,6 +513,28 @@ function patchChildren(
         }
       }
       current = end;
+    } else if (isIsland(current) || isIsland(target)) {
+      // Replacing a shell must leave its portal children intact until React
+      // unmounts them. A matching shell keeps its target and fallback nodes.
+      if (
+        isIsland(current) &&
+        isIsland(target) &&
+        current.dataset.wordsIsland === target.dataset.wordsIsland &&
+        current.dataset.wordsIslandId === target.dataset.wordsIslandId
+      ) {
+        current.dataset.wordsIslandData = target.dataset.wordsIslandData!;
+        const fallback = current.lastElementChild!;
+        const text = target.lastElementChild!.textContent;
+        if (fallback.textContent !== text) fallback.textContent = text;
+        actual = current;
+        current = current.nextSibling;
+      } else {
+        actual = target;
+        const next = current?.nextSibling ?? null;
+        parent.insertBefore(target, current);
+        if (current !== null) parent.removeChild(current);
+        current = next;
+      }
     } else if (
       current?.nodeType === 1 &&
       target.nodeType === 1 &&
@@ -643,6 +667,7 @@ export function createDomRenderer(
   const caret = document.createElement('span');
   const fades = createFades(root);
   let revision = 0;
+  let islands: readonly MountedIsland[] = [];
   let initialized = false;
   let previousCaret: 'block' | 'circle' | undefined;
   let codeState:
@@ -706,6 +731,7 @@ export function createDomRenderer(
   };
 
   return {
+    getIslands: () => islands,
     connect(): void {
       fades.connect();
       root.addEventListener('click', click);
@@ -796,6 +822,8 @@ export function createDomRenderer(
       const direct =
         animated === false &&
         options.plugins === undefined &&
+        options.islands === undefined &&
+        islands.length === 0 &&
         !rewritesElements(options);
       if (
         changed &&
@@ -1025,6 +1053,8 @@ export function createDomRenderer(
           initialized && reset
         );
         pending = firstPending;
+        if (options.islands !== undefined || islands.length !== 0)
+          islands = collectIslands(root, islands);
         // Root-level text can merge when fade wrappers finish. Keep a physical
         // boundary only there; ordinary block nodes are stable references.
         if (firstPending !== null && isText(firstPending))
@@ -1072,7 +1102,7 @@ export function createDomRenderer(
             continue;
           }
           let block = false;
-          if (node.nodeType === 1)
+          if (node.nodeType === 1 && !isIsland(node))
             switch (node.nodeName) {
               case 'BLOCKQUOTE':
               case 'DIV':

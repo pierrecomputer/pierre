@@ -70,7 +70,23 @@ export interface ControlsConfig {
   code?: boolean | { copy?: boolean; download?: boolean };
 }
 
+export type IslandData = Readonly<{ id: string; [key: string]: unknown }>;
+
+/** Plain loading text or a CSS-styled skeleton with an optional accessible label. */
+export type IslandPending = string | { className: string; label?: string };
+
+export interface HtmlIsland {
+  /** Displayed while a registered fence is streaming. Defaults to no content. */
+  pending?: IslandPending;
+  /** Text shown before the island mounts. */
+  fallback?: string;
+  /** Return false to show the original fence. */
+  accepts(data: IslandData): boolean;
+}
+
 export interface HtmlOptions {
+  /** Registered island-NAME fences, keyed by NAME. */
+  islands?: Readonly<Record<string, HtmlIsland>>;
   /** CJK-friendly emphasis. See `HtmlSessionOptions.cjk`. */
   cjk?: boolean;
   /** Math as SVG. See `HtmlSessionOptions.math`. */
