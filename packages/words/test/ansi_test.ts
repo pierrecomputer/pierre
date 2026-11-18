@@ -123,6 +123,13 @@ void test('tables align to the widest cell', () => {
     plain('| a  b | *c* | d&amp;e | f |\n|-|-|-|-|\n| xxx | xx | xxx | x |'),
     'a b │ c  │ d&e │ f\n────┼────┼─────┼──\nxxx │ xx │ xxx │ x\n'
   );
+  // with the math option `$` is syntax too
+  assert.equal(
+    dec
+      .decode(renderToAnsi('| a | b |\n|-|-|\n| $x$ | y |', { math: true }))
+      .replace(/\x1b\[[0-9;]*m/g, ''),
+    'a │ b\n──┼──\nx │ y\n'
+  );
 });
 
 void test('wide tables align every column and cell', () => {

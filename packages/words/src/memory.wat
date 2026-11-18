@@ -124,7 +124,7 @@
   ;; static strings and the environment names of math.wat
   (const $mem.mathStatic $mem.mathCellsEnd)
   ;; pooled output string literals
-  (const $mem.strings $mem.mathStatic+768)
+  (const $mem.strings $mem.mathStatic+1024)
   (const $mem.stringsEnd 131072)
   (const $mem.mathStaticEnd $mem.strings)
   (const $mem.mathNodes 131072)

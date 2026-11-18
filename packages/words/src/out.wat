@@ -179,17 +179,19 @@
   ;; fill them backwards. Reading digits back with a wide load right after
   ;; byte stores would stall store forwarding.
   (func $outNum (param $v i32)
-    (local $p i32)
-    (local $t i32)
     (call $ensureOut (i32.const 10))
-    (local.set $p (global.get $out))
+    (global.set $out (call $numAt (global.get $out) (local.get $v))))
+
+  ;; Write $v in decimal at $p, which has room for ten bytes; return the end.
+  (func $numAt (param $p i32) (param $v i32) (result i32)
+    (local $t i32)
     (local.set $t (local.get $v))
     (loop $count
       (local.set $p (i32.add (local.get $p) (i32.const 1)))
       (local.set $t (i32.div_u (local.get $t) (i32.const 10)))
       (br_if $count (local.get $t)))
-    (global.set $out (local.get $p))
-    (drop (call $digitsBefore (local.get $p) (local.get $v))))
+    (drop (call $digitsBefore (local.get $p) (local.get $v)))
+    (local.get $p))
 
   ;; Reserve, then copy [$lhs,$rhs) as escaped text. The worst case is six
   ;; output bytes per byte. Reserve it for 64 KiB of text at a time: for a

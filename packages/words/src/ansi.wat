@@ -653,9 +653,9 @@
     (local $saveLive i32)
     (local $q i32)
     (local $c i32)
-    ;; Printable ASCII without inline syntax (& * < [ \ _ ` ~) or repeated
-    ;; spaces renders as itself, so its width is its trimmed length. Bit c-32
-    ;; of the masks (mod 64) marks the syntax.
+    ;; Printable ASCII without inline syntax (& * < [ \ _ ` ~, and $ with the
+    ;; math option) or repeated spaces renders as itself, so its width is its
+    ;; trimmed length. Bit c-32 of the masks (mod 64) marks the syntax.
     (local.set $beg (call $skipSpace (local.get $beg) (local.get $end)))
     (local.set $end (call $trimSpaceBack (local.get $end) (local.get $beg)))
     (local.set $q (local.get $beg))
@@ -667,7 +667,9 @@
         (br_if $marked (i32.ge_u (local.get $c) (i32.const 95)))
         (br_if $marked (i32.wrap_i64 (i64.and (i64.const 1)
           (i64.shr_u
-            (select (i64.const 0x9800000010000440) (i64.const 0x40000001)
+            (select (i64.or (i64.const 0x9800000010000440)
+                (i64.extend_i32_u (i32.shl (i32.and (global.get $ext) (i32.const 2)) (i32.const 3))))
+              (i64.const 0x40000001)
               (i32.lt_u (local.get $c) (i32.const 64)))
             (i64.extend_i32_u (local.get $c))))))
         (br_if $marked (i32.eq (i32.load16_u (local.get $q)) (i32.const 0x2020)))

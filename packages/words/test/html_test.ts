@@ -1200,6 +1200,11 @@ void test('GFM footnotes', () => {
     /id="fnref-1-2"/,
     'repeated references are numbered'
   );
+  assert.match(
+    html('a[^1] b[^1]\n\n[^1]: note'),
+    /aria-label="Back to reference 1">↩<\/a> <a href="#fnref-1-2" [^>]*>↩<sup class="footnote-ref">2<\/sup><\/a><\/p>/,
+    'later back references show their number'
+  );
 });
 
 void test('footnote definition labels hold at most 999 characters, like link labels', () => {

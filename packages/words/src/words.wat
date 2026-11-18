@@ -260,6 +260,7 @@
   ;; Expand the immutable lookup tables once, at instantiation.
   (func $init
     (call $unpackEntities)
+    (call $m.unpackCmds)
     (drop (call $unpackRanges
       (call $unpackRanges
         (call $unpackRanges
