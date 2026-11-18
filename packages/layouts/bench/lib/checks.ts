@@ -41,8 +41,8 @@ export interface CheckResult {
   limit: string;
   pass: boolean | null;
   /**
-   * The lower and the upper quartile of the value over the measured runs, for
-   * a check of a metric of the runs, or null.
+   * The smallest and the largest value over the measured runs, for a check of
+   * a metric of the runs, or null.
    */
   spread?: [number, number] | null;
   /**
@@ -57,7 +57,7 @@ type Metric = keyof Sample;
 interface Evaluation {
   value: number;
   pass: boolean;
-  /** The quartiles of the value over the runs, and the numeric limit. */
+  /** The range of the value over the runs, and the numeric limit. */
   spread?: [number, number];
   bound?: number;
 }
@@ -84,25 +84,18 @@ type RepeatFinder = (
 // Allowed growth when a cost must not depend on content or on the number of panes.
 const GROWTH = 1.25;
 
-// A quantile of the values of the runs, with linear interpolation: with five
-// runs, the lower quartile is the second smallest value.
-function quantile(values: readonly number[], q: number): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const at = (sorted.length - 1) * q;
-  const below = Math.floor(at);
-  const above = Math.ceil(at);
-  return sorted[below] + (sorted[above] - sorted[below]) * (at - below);
-}
-
-// The lower and the upper quartile of a metric over the runs of a record.
-function quartiles(
+// The smallest and the largest value of a metric over the runs of a record.
+// Two runs of one revision a few minutes apart moved the median of a zoom at
+// 16 light panes by 1.7 ms, more than the quartiles of either run covered, so
+// the spread takes the whole range of the runs.
+function range(
   record: RecordSummary,
   metric: Metric,
   divide = 1
 ): [number, number] | undefined {
   const values = record.samples?.[metric];
   if (values === undefined || values.length === 0) return undefined;
-  return [quantile(values, 0.25) / divide, quantile(values, 0.75) / divide];
+  return [Math.min(...values) / divide, Math.max(...values) / divide];
 }
 
 function atMost(
@@ -121,7 +114,7 @@ function atMost(
     return {
       value,
       pass: value <= limit,
-      spread: quartiles(record, metric, divide),
+      spread: range(record, metric, divide),
       bound: limit,
     };
   };
@@ -161,10 +154,10 @@ function ratio(
     const value =
       Math.max(top.median[metric], floor) /
       Math.max(bottom.median[metric], floor);
-    // The spread of the ratio: the low quartile of the numerator over the
-    // high quartile of the denominator, and the reverse.
-    const high = quartiles(top, metric);
-    const low = quartiles(bottom, metric);
+    // The spread of the ratio: the smallest numerator over the largest
+    // denominator, and the reverse.
+    const high = range(top, metric);
+    const low = range(bottom, metric);
     const spread: [number, number] | undefined =
       high === undefined || low === undefined
         ? undefined

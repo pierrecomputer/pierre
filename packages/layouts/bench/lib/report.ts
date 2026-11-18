@@ -252,6 +252,6 @@ export function formatChecks(checks: CheckResult[]): string {
     )
     .join('\n');
   return checks.some((check) => check.near === true)
-    ? `${table}\n\n~ The limit lies between the quartiles of the runs: another run can give the other result.`
+    ? `${table}\n\n~ The limit lies inside the range of the runs: another run can give the other result.`
     : table;
 }

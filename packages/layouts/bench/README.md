@@ -294,12 +294,14 @@ report holds them. A check that compares two parameter sets, for example heavy
 over light content, passes when the ratio is at most 1.25.
 
 A check of a metric of the runs passes or fails on the median, and also gives
-the `spread` of its value over the runs: the lower and the upper quartile, with
-five runs the second smallest and the second largest value. For a ratio, the
-spread is the lower quartile of the numerator over the upper quartile of the
-denominator, and the reverse. When the limit lies inside the spread, the check
-is `near` (`~` in the printed table): another run can give the other result, so
-a change of that check between two reports is not a change of the code.
+the `spread` of its value over the runs: the smallest and the largest value. For
+a ratio, the spread is the smallest numerator over the largest denominator, and
+the reverse. When the limit lies inside the spread, the check is `near` (`~` in
+the printed table): another run can give the other result, so a change of that
+check between two reports is not a change of the code. The spread takes the
+whole range, not the quartiles: on 2026-11-17, two runs of one revision a few
+minutes apart moved the median of a zoom at 16 light panes from 9.2 to 11.0 ms,
+and the quartiles of either run did not reach the other median.
 
 The `time` checks compare main-thread time with the time budgets of the intent,
 with light content at 4 and 16 panes: 2 ms per pointer move of a resize drag or
