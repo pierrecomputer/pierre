@@ -12,10 +12,12 @@ export interface SearchMatchProbe {
 }
 
 export interface SearchStateProbe {
-  searchState: {
-    scope: { itemId: string } | undefined;
-    matches: SearchMatchProbe[];
-    current: SearchMatchProbe | undefined;
+  search: {
+    state: {
+      scope: { itemId: string } | undefined;
+      matches: SearchMatchProbe[];
+      current: SearchMatchProbe | undefined;
+    };
   };
 }
 
@@ -183,8 +185,8 @@ export function getEditorContent(viewer: CodeView, id: string): HTMLElement {
 
 export function getSearchState(
   viewer: CodeView
-): SearchStateProbe['searchState'] {
-  return (viewer as unknown as SearchStateProbe).searchState;
+): SearchStateProbe['search']['state'] {
+  return (viewer as unknown as SearchStateProbe).search.state;
 }
 
 export function getRenderedSearchMatches(root: HTMLElement): Range[] {

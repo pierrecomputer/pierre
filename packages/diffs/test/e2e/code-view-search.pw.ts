@@ -1189,12 +1189,14 @@ for (const kind of ['file', 'split', 'unified']) {
 
       const measureRepaint = () =>
         page.evaluate(() => {
-          const view = window.__codeView as unknown as {
-            searchState: { matches: { endCharacter: number }[] };
-            paintSearchHighlights(): void;
+          const { search } = window.__codeView as unknown as {
+            search: {
+              state: { matches: { endCharacter: number }[] };
+              paintHighlights(): void;
+            };
           };
           let reads = 0;
-          const matches = view.searchState.matches;
+          const matches = search.state.matches;
           const ends = matches.map((match) => match.endCharacter);
           try {
             for (const [index, match] of matches.entries()) {
@@ -1206,7 +1208,7 @@ for (const kind of ['file', 'split', 'unified']) {
                 },
               });
             }
-            view.paintSearchHighlights();
+            search.paintHighlights();
             const ranges = [
               ...CSS.highlights.get('diffs-search-match')!,
               ...CSS.highlights.get('diffs-search-current')!,
