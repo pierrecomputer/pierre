@@ -1624,3 +1624,33 @@ void test('a nested footnote definition renders only under its own number', () =
   assert.match(both, /<li id="fn-2">\n<p>y /);
   assert.ok(!html('[^a]\n\n[^a]: x\n\n    [^b]: y').includes('y'));
 });
+
+void test('escapeHtml shows raw HTML as escaped text', () => {
+  const escaped = (md: string, options?: { skipHtml?: boolean }) =>
+    dec.decode(renderToHtml(md, { ...options, escapeHtml: true }));
+  assert.equal(
+    escaped('x <b>bold</b> & <!-- y -->'),
+    '<p>x &lt;b&gt;bold&lt;/b&gt; &amp; &lt;!-- y --&gt;</p>\n'
+  );
+  // An HTML block is a paragraph of its lines, with no Markdown inside it.
+  assert.equal(
+    escaped('<div class="a">\n  *b*\n</div>\n\nc'),
+    '<p>&lt;div class=&quot;a&quot;&gt;\n*b*\n&lt;/div&gt;</p>\n<p>c</p>\n'
+  );
+  assert.equal(
+    escaped('<div>\r\nx\r\n</div>'),
+    '<p>&lt;div&gt;\nx\n&lt;/div&gt;</p>\n'
+  );
+  // A tight list item's text has no paragraph tags.
+  assert.equal(
+    escaped('- <div>a</div>\n- b'),
+    '<ul>\n<li>&lt;div&gt;a&lt;/div&gt;</li>\n<li>b</li>\n</ul>\n'
+  );
+  assert.equal(escaped('x <a b="\0">'), '<p>x &lt;a b=&quot;�&quot;&gt;</p>\n');
+  // Indented code was never raw HTML.
+  assert.equal(escaped('    <b>'), '<pre><code>&lt;b&gt;\n</code></pre>\n');
+  assert.equal(
+    escaped('<b>a</b>\n\n<div>', { skipHtml: true }),
+    escaped('<b>a</b>\n\n<div>')
+  );
+});

@@ -44,6 +44,13 @@ export interface HtmlSessionOptions {
   cjk?: boolean;
   /** Render `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as SVG. */
   math?: boolean;
+  /**
+   * Show raw HTML as escaped text, instead of omitting it (sessions,
+   * `skipHtml`) or keeping it as markup (`renderToHtml()`). An HTML block
+   * becomes a paragraph of its source lines, without Markdown inside it.
+   * Takes precedence over `skipHtml`.
+   */
+  escapeHtml?: boolean;
 }
 
 /** The result of one session render. */

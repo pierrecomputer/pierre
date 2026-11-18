@@ -35,6 +35,7 @@ render.
 | ------------- | ------- | -------------------------------------------------------------------------------------- |
 | `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. `meta` is `null` if there is none. |
 | `skipHtml`    | `false` | Omit raw HTML.                                                                         |
+| `escapeHtml`  | `false` | Show raw HTML as escaped text. See [Raw HTML as text](#raw-html-as-text).              |
 | `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
 | `math`        | `false` | Render math as SVG. See [Math](#math).                                                 |
 | `cjk`         | `false` | Enable [CJK-friendly emphasis](#cjk-support).                                          |
@@ -74,6 +75,7 @@ normal Markdown.
 | `caret`                                 | Show a `block` or `circle` caret while the stream is active.                                  |
 | `components`                            | HTML hooks for generated elements, including `inlineCode`.                                    |
 | `math`, `cjk`                           | Render math as SVG, and CJK-friendly emphasis. Default: `false`.                              |
+| `escapeHtml`                            | Show raw HTML as text instead of omitting it. Default: `false`.                               |
 | `plugins.code`                          | Code highlighter.                                                                             |
 | `plugins.mermaid`                       | Mermaid diagram renderer. See [Mermaid](#mermaid).                                            |
 | `plugins.renderers`                     | Custom code block renderers, selected by language.                                            |
@@ -98,9 +100,10 @@ const components = {
 <Markdown components={components}>{text}</Markdown>;
 ```
 
-The component omits raw HTML and rejects unsafe URL schemes. It allows external
-images, so use `urlTransform` or element filters to block them. Hooks and
-plugins are trusted code: escape any untrusted text they add.
+The component omits raw HTML, or shows it as text with `escapeHtml`, and rejects
+unsafe URL schemes. It allows external images, so use `urlTransform` or element
+filters to block them. Hooks and plugins are trusted code: escape any untrusted
+text they add.
 
 Remark and rehype plugins are not supported.
 
@@ -209,7 +212,8 @@ session.render('First paragraph.\n\nSecond paragraph.');
 ```
 
 `stable` holds completed blocks, `pending` holds the part that can still change,
-and `html` holds both. Sessions omit raw HTML.
+and `html` holds both. Sessions omit raw HTML, or show it as text with
+`{ escapeHtml: true }`.
 
 Pass `{ incomplete: true }` as the second argument to complete unfinished
 syntax. A link with no destination yet renders as
@@ -225,6 +229,14 @@ open blocks return to the parser.
 `@pierre/words/html` exports `createHtmlRenderer()` for formatted HTML and
 `createDomRenderer()` for DOM updates without React. See
 [`html/types.ts`](./html/types.ts) for their options.
+
+## Raw HTML as text
+
+With `escapeHtml: true`, raw HTML shows as the text the source holds, as in a
+chat that displays a model's markup literally. Inline HTML becomes escaped text.
+An HTML block becomes a paragraph of its source lines, without Markdown inside
+it. `renderToHtml()`, sessions, `createHtmlRenderer()`, `createDomRenderer()`,
+and `<Markdown>` take the option. It takes precedence over `skipHtml`.
 
 ## Development
 

@@ -108,13 +108,14 @@ into UTF-8 HTML. The input can be a string, a UTF-8 `Uint8Array`, or an
 The returned `Uint8Array` shares WebAssembly memory. Decode it or copy it before
 another render can overwrite the bytes or detach the view.
 
-| HTML option   | Default | Behavior                                            |
-| ------------- | ------- | --------------------------------------------------- |
-| `skipHtml`    | `false` | Omit raw HTML.                                      |
-| `incomplete`  | `false` | Repair common unfinished inline syntax for display. |
-| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. |
-| `math`        | `false` | Render [TeX as SVG](#words-math-rendering).         |
-| `cjk`         | `false` | Enable [CJK-friendly emphasis](#words-cjk-support). |
+| HTML option   | Default | Behavior                                             |
+| ------------- | ------- | ---------------------------------------------------- |
+| `skipHtml`    | `false` | Omit raw HTML.                                       |
+| `escapeHtml`  | `false` | Show raw HTML as escaped text. Wins over `skipHtml`. |
+| `incomplete`  | `false` | Repair common unfinished inline syntax for display.  |
+| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`.  |
+| `math`        | `false` | Render [TeX as SVG](#words-math-rendering).          |
+| `cjk`         | `false` | Enable [CJK-friendly emphasis](#words-cjk-support).  |
 
 `renderToHtml()` preserves raw HTML by default. Sanitize output from untrusted
 Markdown before inserting it into a page. Links and images still need URL
@@ -160,8 +161,8 @@ Use `createHtmlSession()` from `@pierre/words` to consume incremental HTML
 yourself. Keep one session per document and pass the full source string to
 `session.render(source, options)`. Sessions do not accept bytes. Use
 `incomplete: true` to repair unfinished syntax in previews. Set it to `false` on
-the final update. The `incomplete`, `math`, and `cjk` options all default to
-`false`.
+the final update. The `incomplete`, `math`, `cjk`, and `escapeHtml` options all
+default to `false`.
 
 <DocsCodeExample {...wordsSession} />
 
@@ -180,8 +181,9 @@ replace the pending part with `pending`. The DOM renderer handles this for you.
 
 Sessions reuse completed blocks. Edits, changes to parser options, and link or
 footnote definitions can require a full render. Session results are strings that
-stay valid after later calls. Sessions omit raw HTML and preserve Markdown URLs.
-Sanitize the output before inserting untrusted content into a page.
+stay valid after later calls. Sessions omit raw HTML, or show it as text with
+`escapeHtml: true`, and preserve Markdown URLs. Sanitize the output before
+inserting untrusted content into a page.
 
 ### Syntax highlighting
 
@@ -282,6 +284,7 @@ output by default.
 | `plugins.renderers`  | None                        | Custom code block renderers, selected by language.                           |
 | `math`               | `false`                     | Render [TeX as SVG](#words-math-rendering).                                  |
 | `cjk`                | `false`                     | Enable [CJK-friendly emphasis](#words-cjk-support).                          |
+| `escapeHtml`         | `false`                     | Show raw HTML as escaped text instead of omitting it.                        |
 | `controls`           | `true`                      | Code copy and download buttons. Also accepts `{ code: { copy, download } }`. |
 | `lineNumbers`        | `true`                      | Code line numbers.                                                           |
 | `allowedElements`    | None                        | Allow only these element names.                                              |

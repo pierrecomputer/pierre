@@ -22,7 +22,8 @@
       [28:30)         byte length of the id prefix at $mem.idPrefix (u16 LE)
       [30]            document contains global definitions
       [31]            extension flags (u8): bit 0 = CJK-friendly emphasis,
-                      bit 1 = math
+                      bit 1 = math, bit 2 = write raw HTML that option bit 1
+                      skips as escaped text
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch

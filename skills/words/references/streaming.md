@@ -20,9 +20,10 @@ have `data-markdown-incomplete` in place of a destination.
 ## Read incremental HTML yourself
 
 Use `createHtmlSession()` for parsing without UI or formatting plugins. The
-session omits raw HTML. Sanitize its output before using it to display untrusted
-Markdown, since Markdown URLs pass through it. `render(source, options)` takes a
-string only, and `incomplete`, `math`, and `cjk` options.
+session omits raw HTML, or shows it as escaped text with `escapeHtml: true`.
+Sanitize its output before using it to display untrusted Markdown, since
+Markdown URLs pass through it. `render(source, options)` takes a string only,
+and `incomplete`, `math`, `cjk`, and `escapeHtml` options.
 
 ```ts
 import { createHtmlSession } from '@pierre/words';

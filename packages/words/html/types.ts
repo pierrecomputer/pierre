@@ -75,6 +75,8 @@ export interface HtmlOptions {
   cjk?: boolean;
   /** Math as SVG. See `HtmlSessionOptions.math`. */
   math?: boolean;
+  /** Raw HTML as escaped text. See `HtmlSessionOptions.escapeHtml`. */
+  escapeHtml?: boolean;
   components?: Components;
   plugins?: PluginConfig;
   controls?: boolean | ControlsConfig;

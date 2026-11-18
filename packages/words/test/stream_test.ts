@@ -1343,3 +1343,31 @@ void test('every conformance-example prefix matches full parsing in both complet
     }
   }
 });
+
+void test('sessions show raw HTML as text with escapeHtml', () => {
+  const source =
+    'Some <b>bold</b> & <i\n\n<div class="a">\n*b*\n</div>\n\n- <span>c</span>\n- d';
+  for (const incomplete of [false, true]) {
+    const options = { incomplete, escapeHtml: true };
+    const session = createHtmlSession();
+    let stable = '';
+    for (let end = 0; end <= source.length; end++) {
+      const input = source.slice(0, end);
+      const update = session.render(input, options);
+      stable = (update.reset ? '' : stable) + update.addition;
+      assert.equal(update.stable, stable, JSON.stringify(input));
+      assert.equal(
+        update.html,
+        full(input, options),
+        JSON.stringify({ input, incomplete })
+      );
+    }
+    assert.match(session.render(source, options).html, /&lt;b&gt;bold/);
+  }
+  // Changing the option renders the document again.
+  const session = createHtmlSession();
+  assert.equal(session.render('a <b>c</b>').html, '<p>a c</p>\n');
+  const update = session.render('a <b>c</b>', { escapeHtml: true });
+  assert.equal(update.reset, true);
+  assert.equal(update.html, '<p>a &lt;b&gt;c&lt;/b&gt;</p>\n');
+});

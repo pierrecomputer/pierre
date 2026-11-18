@@ -88,7 +88,8 @@
         (drop (call $blockContent (local.get $r))))
       (else
         ;; Headings, table rows, and HTML lines end at their line break. Raw
-        ;; HTML that skipHtml drops needs no repair.
+        ;; HTML that skipHtml drops, or escapeHtml shows as text, needs no
+        ;; repair.
         (if (i32.or (i32.lt_u (call $findLineEnd (local.get $last)) (global.get $eof))
               (i32.and (i32.eq (local.get $type) (enum.get $Blk.html))
                 (i32.ne (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (i32.const 0))))

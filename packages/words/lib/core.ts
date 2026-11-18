@@ -162,14 +162,16 @@ class Renderer {
     this.dv.setUint8(
       1,
       (options?.frontmatter === true ? 1 : 0) |
-        (options?.skipHtml === true ? 2 : 0) |
+        (options?.skipHtml === true || options?.escapeHtml === true ? 2 : 0) |
         (options?.boundary === true ? 8 : 0) |
         (mode === 1 && typeof input !== 'string' ? 32 : 0) |
         (options?.incomplete === true ? 64 : 0)
     );
     this.dv.setUint8(
       31,
-      (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0)
+      (options?.cjk === true ? 1 : 0) |
+        (options?.math === true ? 2 : 0) |
+        (options?.escapeHtml === true ? 4 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
     const format = options?.format;
@@ -314,7 +316,9 @@ export function createHtmlSession(): {
         throw new TypeError('session input must be a string');
       const wanted = options?.incomplete === true;
       const ext =
-        (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);
+        (options?.cjk === true ? 1 : 0) |
+        (options?.math === true ? 2 : 0) |
+        (options?.escapeHtml === true ? 4 : 0);
       const form = options?.[format];
       const sameMode =
         incomplete === wanted &&
@@ -476,6 +480,7 @@ export function createHtmlSession(): {
         incomplete: wanted,
         cjk: (ext & 1) !== 0,
         math: (ext & 2) !== 0,
+        escapeHtml: (ext & 4) !== 0,
         boundary: true,
         format: form,
       };

@@ -187,3 +187,13 @@ void test('an id prefix that does not fit Wasm memory throws', () => {
   assert.throws(() => renderer.render('x[^1]\n\n[^1]: y', false), RangeError);
   assert.match(good.render('x[^1]\n\n[^1]: z', false).html, / id="good-fn-1"/);
 });
+
+void test('escapeHtml shows raw HTML as text in formatted output', () => {
+  const renderer = createHtmlRenderer({ escapeHtml: true });
+  assert.equal(
+    renderer.render('a <b>c</b>\n\n<div>\nd\n</div>', false).html,
+    '<p data-markdown="p">a &lt;b&gt;c&lt;/b&gt;</p>\n' +
+      '<p data-markdown="p">&lt;div&gt;\nd\n&lt;/div&gt;</p>\n'
+  );
+  renderer.dispose();
+});

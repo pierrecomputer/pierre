@@ -57,6 +57,7 @@ These options also work as `Markdown` props.
 | Option                                  | Behavior                                                                                                                                                   |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `math`, `cjk`, `plugins`                | See [Extensions](extensions.md).                                                                                                                           |
+| `escapeHtml`                            | Show raw HTML as escaped text instead of omitting it. Defaults to `false`.                                                                                 |
 | `components`                            | Map HTML tag names to HTML string transformations. Use `inlineCode` for inline code.                                                                       |
 | `controls`                              | Code copy and download controls. Defaults to `true`. Accepts `false`, `{ code: false }`, or `{ code: { copy, download } }`.                                |
 | `lineNumbers`                           | Defaults to `true`.                                                                                                                                        |

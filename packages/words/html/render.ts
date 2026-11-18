@@ -820,6 +820,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           incomplete,
           cjk: options.cjk,
           math: options.math,
+          escapeHtml: options.escapeHtml,
           [formatKey]: {
             flags:
               formatFlags.on |
