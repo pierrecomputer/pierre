@@ -818,7 +818,7 @@ describe('CodeViewSearchScan', () => {
     }
   });
 
-  test('publishes complete items, prepares lazily once, and joins constructor item order', () => {
+  test('publishes complete items, prepares lazily once, and joins matches from the starting item', () => {
     const contents = `line${' '.repeat(65_536)}\nline${' '.repeat(65_536)}`;
     const documents = new Map([
       ['a', new TextDocument('file:///a', contents)],
@@ -849,7 +849,7 @@ describe('CodeViewSearchScan', () => {
       while (!scan.finished) scan.advance(1);
       expect(prepared).toEqual(['a', 'b']);
       const matches = scan.getMatches();
-      expect(matches.map(({ itemId }) => itemId)).toEqual(['b', 'a', 'a']);
+      expect(matches.map(({ itemId }) => itemId)).toEqual(['a', 'a', 'b']);
       expect(scan.getMatches()).toBe(matches);
       const lines = scan.getLineMatches(1, 1);
       expect(lines).toEqual({ lineNumber: 1, startIndex: 0, endIndex: 1 });
@@ -866,7 +866,7 @@ describe('CodeViewSearchScan', () => {
     });
   });
 
-  test('joins matched items across the wrap and adjusts indices after earlier matches arrive', () => {
+  test('joins matched items across the wrap and finds them by document position', () => {
     const contents = [
       'line before first',
       'missing',
@@ -903,13 +903,13 @@ describe('CodeViewSearchScan', () => {
       expect(scan.hasPendingItems(4, 8)).toBe(false);
       while (!scan.finished) scan.advance(1);
       expect(scan.getMatches().map(({ itemId }) => itemId)).toEqual([
-        'item-0',
-        'item-2',
         'item-4',
         'item-7',
+        'item-0',
+        'item-2',
       ]);
-      expect(scan.getMatchIndex(7, later)).toBe(3);
-      expect(scan.getMatchIndex(7, { ...later })).toBe(3);
+      expect(scan.getMatchIndex(7, later)).toBe(1);
+      expect(scan.getMatchIndex(7, { ...later })).toBe(1);
       expect(scan.getFirstMatchedEntryAtOrAfter(0)?.position).toBe(0);
       expect(scan.getFirstMatchedEntryAtOrAfter(1)?.position).toBe(2);
       expect(scan.getFirstMatchedEntryAtOrAfter(3)?.position).toBe(4);
@@ -920,6 +920,45 @@ describe('CodeViewSearchScan', () => {
       expect(scan.getItemMatches(3)).toBeUndefined();
       expect(scan.getItemMatches(5)).toBeUndefined();
       expect(scan.getItemMatches(6)).toBeUndefined();
+    });
+  });
+
+  test('matches in the starting item keep their indexes when the scan wraps', () => {
+    withClock(() => {
+      const ids = ['first', 'second', 'middle', 'last'];
+      const contents = `line line${' '.repeat(65_536)}`;
+      const scan = new CodeViewSearchScan(
+        params,
+        ids.length,
+        (position) => ({ type: 'file', itemId: ids[position], contents }),
+        MAX_SEARCH_MATCHES,
+        2
+      );
+      while (scan.getMatches().length === 0 && !scan.finished) scan.advance(1);
+      const startingMatches = scan.getMatches();
+      expect(startingMatches.map(({ itemId }) => itemId)).toEqual([
+        'middle',
+        'middle',
+      ]);
+      for (const [index, match] of startingMatches.entries()) {
+        expect(scan.getMatchIndex(2, match)).toBe(index);
+      }
+
+      while (!scan.finished) scan.advance(1);
+      expect(scan.getMatches().map(({ itemId }) => itemId)).toEqual([
+        'middle',
+        'middle',
+        'last',
+        'last',
+        'first',
+        'first',
+        'second',
+        'second',
+      ]);
+      for (const [index, match] of startingMatches.entries()) {
+        expect(scan.getMatches()[index]).toBe(match);
+        expect(scan.getMatchIndex(2, match)).toBe(index);
+      }
     });
   });
 

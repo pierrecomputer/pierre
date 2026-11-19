@@ -807,7 +807,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
           );
         }
       } else {
-        jumpTarget = this.getStartingMatch(matches, scan);
+        jumpTarget = this.getStartingMatch(scan);
       }
     }
 
@@ -1077,9 +1077,9 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     };
   }
 
-  // The first fully visible match, then the first below, then the first overall.
+  // The first fully visible match, then the first below, then the first in
+  // the first item that has any.
   private getStartingMatch(
-    matches: CodeViewSearchMatch[],
     scan: CodeViewSearchScan
   ): CodeViewSearchMatch | undefined {
     const { state, view } = this;
@@ -1096,7 +1096,9 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
         : (anchoredItem?.index ?? 0);
     const first = scan.getFirstMatchedEntryAtOrAfter(position);
     if (first == null) {
-      return scan.finished ? matches[0] : undefined;
+      return scan.finished
+        ? scan.getFirstMatchedEntryAtOrAfter(0)?.matches[0]
+        : undefined;
     }
     if (scan.hasPendingItems(position, first.position + 1)) {
       return undefined;
@@ -1116,7 +1118,9 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
       }
       const next = scan.getFirstMatchedEntryAtOrAfter(first.position + 1);
       if (next == null) {
-        return scan.finished ? matches[0] : undefined;
+        return scan.finished
+          ? scan.getFirstMatchedEntryAtOrAfter(0)?.matches[0]
+          : undefined;
       }
       return scan.hasPendingItems(first.position + 1, next.position + 1)
         ? undefined

@@ -147,7 +147,55 @@ describe('CodeView search indices', () => {
     );
   });
 
-  test('earlier arrivals and changed items update the index while retaining the chosen match', async () => {
+  test('the current match keeps its number as find wraps to items above the viewport', async () => {
+    const padding = `blank ${'x'.repeat(80)}\n`.repeat(1000);
+    const contents = `target\n${padding}target\n${padding}`;
+    const items = ['before', 'middle', 'after'].map(
+      (id): CodeViewItem<undefined> => ({
+        id,
+        type: 'file',
+        file: { name: `${id}.txt`, contents },
+      })
+    );
+    await withViewer(items, async ({ viewer, states, slice, finish }) => {
+      viewer.closeSearch();
+      viewer.scrollTo({
+        type: 'line',
+        id: 'middle',
+        lineNumber: 1002,
+        align: 'start',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      await wait(0);
+      slice();
+      viewer.openSearch({ scope: 'all', query: 'target' });
+      await waitFor(() => getSearchState(viewer).current != null);
+      await finish();
+
+      const first = states.findIndex(
+        ({ currentMatchIndex }) => currentMatchIndex != null
+      );
+      expect(states[first]).toMatchObject({
+        searching: true,
+        currentMatchIndex: 1,
+        matchCount: 2,
+      });
+      let previousCount = 2;
+      for (const { currentMatchIndex, matchCount } of states.slice(first)) {
+        expect(currentMatchIndex).toBe(1);
+        expect(matchCount).toBeGreaterThanOrEqual(previousCount);
+        previousCount = matchCount;
+      }
+      expect(previousCount).toBe(6);
+      expect(getSearchState(viewer).current).toMatchObject({
+        itemId: 'middle',
+        lineNumber: 1002,
+      });
+    });
+  });
+
+  test('changing matches above the starting item retains the chosen match and its index', async () => {
     const before = (count: number): CodeViewItem<undefined> => ({
       id: 'before',
       type: 'file',
@@ -196,15 +244,15 @@ describe('CodeView search indices', () => {
         expect(getSearchState(viewer).current?.itemId).toBe('edge');
         expect(getSearchState(viewer).current?.startCharacter).toBe(14);
         await finish();
-        expect(states.at(-1)?.currentMatchIndex).toBe(14);
-        expect(label(root)).toBe('15 of 52');
+        expect(states.at(-1)?.currentMatchIndex).toBe(2);
+        expect(label(root)).toBe('3 of 52');
         expect(getSearchState(viewer).current?.itemId).toBe('edge');
         expect(getSearchState(viewer).current?.startCharacter).toBe(14);
         viewer.updateItem({ ...before(24), version: 1 });
         viewer.render(true);
         await finish();
-        expect(states.at(-1)?.currentMatchIndex).toBe(26);
-        expect(label(root)).toBe('27 of 64');
+        expect(states.at(-1)?.currentMatchIndex).toBe(2);
+        expect(label(root)).toBe('3 of 64');
         expect(getSearchState(viewer).current?.itemId).toBe('edge');
         expect(getSearchState(viewer).current?.startCharacter).toBe(14);
         viewer.updateItem({ ...edge('gone'), version: 1 });
@@ -290,8 +338,8 @@ describe('CodeView search indices', () => {
       expect(getSearchState(viewer).current).toBeUndefined();
       await finish();
       expect(getSearchState(viewer).current?.itemId).toBe('item-4000');
-      expect(states.at(-1)?.currentMatchIndex).toBe(1);
-      expect(label(root)).toBe('2 of 2');
+      expect(states.at(-1)?.currentMatchIndex).toBe(0);
+      expect(label(root)).toBe('1 of 2');
 
       fillSearch(root, '');
       viewer.scrollTo({
@@ -322,8 +370,8 @@ describe('CodeView search indices', () => {
         partial.every(({ currentMatchIndex }) => currentMatchIndex === 0)
       ).toBe(true);
       expect(getSearchState(viewer).current?.itemId).toBe('item-1000');
-      expect(states.at(-1)?.currentMatchIndex).toBe(0);
-      expect(label(root)).toBe('1 of 2');
+      expect(states.at(-1)?.currentMatchIndex).toBe(1);
+      expect(label(root)).toBe('2 of 2');
     });
   });
 });

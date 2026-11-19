@@ -183,9 +183,9 @@ describe('CodeView incremental find', () => {
             });
             viewer.render(true);
             await wait(0);
-            expect(
-              viewer.getRenderedItems().some(({ id }) => id === 'diff-15')
-            ).toBe(true);
+            const rendered = viewer.getRenderedItems();
+            expect(rendered.some(({ id }) => id === 'diff-15')).toBe(true);
+            const start = items.findIndex(({ id }) => id === rendered[0].id);
             slice();
             fillSearch(root, 'target');
             expect(states.at(-1)?.searching).toBe(true);
@@ -244,7 +244,8 @@ describe('CodeView incremental find', () => {
                 diffStyle,
                 additionsOnly: false,
               }),
-              MAX_SEARCH_MATCHES
+              MAX_SEARCH_MATCHES,
+              start
             );
             fresh.advance();
             expect(getSearchState(viewer).matches).toEqual(fresh.getMatches());

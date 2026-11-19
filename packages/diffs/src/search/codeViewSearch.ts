@@ -517,12 +517,14 @@ export class CodeViewSearchScan {
     return true;
   }
 
-  // The matches found so far in item order.
+  // The matches found so far, in item order from the starting item, with the
+  // items before it last. Searching on past the end of the list then only
+  // adds to the end, so the matches already found keep their numbers.
   getMatches(): CodeViewSearchMatch[] {
     const { beforeStart, afterStart, matches: cachedMatches } = this;
     if (cachedMatches != null) return cachedMatches;
     const matches: CodeViewSearchMatch[] = [];
-    for (const entries of [beforeStart, afterStart]) {
+    for (const entries of [afterStart, beforeStart]) {
       for (const entry of entries) {
         entry.startIndex = matches.length;
         for (const match of entry.matches) matches.push(match);
