@@ -9,7 +9,7 @@ import tokenTypes from './token-types';
 export const defaultCssVariablePrefix = '--hls-';
 
 /**
- * Bytes of one packed Wasm theme table: 73 five-byte records padded for the
+ * Bytes of one packed Wasm theme table: 75 five-byte records padded for the
  * emitter's SIMD comparisons. Mirrors `$mem.themeTable` in src/memory.wat.
  */
 export const themeTableBytes = 384;
@@ -22,8 +22,9 @@ const displayP3Reg =
 /** One theme slot's resolved styling for a token type. */
 export interface TokenStyle {
   color: string | undefined;
-  italic: boolean;
+  fontStyle: number;
   weight: number;
+  fontCss?: Record<string, string>;
 }
 
 /**
@@ -152,6 +153,15 @@ export function resolveThemeSyntax(
   syntax: Record<string, string | ThemeSyntaxSettings>,
   name: string
 ): ThemeSyntaxSettings | undefined {
+  if (name === 'emphasis.strong.italic' && syntax[name] == null) {
+    const strong = resolveThemeSyntax(syntax, 'emphasis.strong');
+    const emphasis = resolveThemeSyntax(syntax, 'emphasis');
+    return {
+      color: strong?.color ?? emphasis?.color,
+      font_style: emphasis?.font_style ?? 'italic',
+      font_weight: strong?.font_weight ?? 700,
+    };
+  }
   let settings: ThemeSyntaxSettings | undefined;
   for (let k = name; k !== ''; ) {
     const v = syntax[k];
@@ -166,6 +176,58 @@ export function resolveThemeSyntax(
   return settings;
 }
 
+export function themeFontWeight(weight: number | undefined): number {
+  return typeof weight === 'number' && weight >= 100 && weight <= 900
+    ? Math.round(weight / 100) * 100
+    : 0;
+}
+
+export type FontProperty = 'font-style' | 'font-weight' | 'text-decoration';
+
+export function fontVariable(
+  color: string,
+  property: FontProperty,
+  fallback?: string
+): string {
+  const comma = color.indexOf(',');
+  return (
+    color.slice(0, comma < 0 ? -1 : comma) +
+    '-' +
+    property +
+    (fallback === undefined ? ')' : ',' + fallback + ')')
+  );
+}
+
+function tokenStyle(
+  name: string,
+  color?: string,
+  fontStyle?: string,
+  fontWeight?: number,
+  variable = false
+): TokenStyle {
+  const weight = themeFontWeight(fontWeight);
+  const italic = fontStyle === 'italic';
+  const strike = name === 'markup.strikethrough';
+  const style: TokenStyle = {
+    color,
+    weight,
+    fontStyle: Number(italic) | (weight >= 600 ? 2 : 0) | (strike ? 8 : 0),
+  };
+  if (italic || weight !== 0 || strike) {
+    const css: Record<string, string> = {};
+    if (italic) css['font-style'] = 'italic';
+    if (weight !== 0) css['font-weight'] = String(weight);
+    if (strike) css['text-decoration'] = 'line-through';
+    if (variable && color !== undefined) {
+      for (const property of Object.keys(css) as FontProperty[]) {
+        css[property] = fontVariable(color, property, css[property]);
+      }
+    }
+    style.fontCss = css;
+  }
+  return style;
+}
+
 /** Resolve identical colors and font settings for Wasm and JavaScript output. */
 export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
   let color: string | undefined;
@@ -176,7 +238,11 @@ export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
   else {
     ({ color, font_style, font_weight } =
       resolveThemeSyntax(style.syntax ?? {}, name) ?? {});
-    if (font_style != null || font_weight != null)
+    if (
+      font_style != null ||
+      font_weight != null ||
+      name === 'markup.strikethrough'
+    )
       color ??= themeForeground(style);
   }
   if (isThemeColor(color)) {
@@ -190,14 +256,7 @@ export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
   } else {
     color = undefined;
   }
-  return {
-    color,
-    italic: font_style === 'italic',
-    weight:
-      font_weight != null && font_weight >= 100 && font_weight <= 900
-        ? Math.round(font_weight / 100) * 100
-        : 0,
-  };
+  return tokenStyle(name, color, font_style, font_weight);
 }
 
 /** A prefixed CSS variable for a token slot, matching the Wasm emitter. */
@@ -300,14 +359,12 @@ function prepareCssPalette(theme: Theme): PreparedTheme {
   const syntax = theme.style.syntax ?? {};
   for (let i = 1; i < tokenTypes.length; i++) {
     const setting = resolveThemeSyntax(syntax, tokenTypes[i]);
-    styles[i] = {
-      color: variable(setting?.color ?? 'foreground'),
-      italic: setting?.font_style === 'italic',
-      weight:
-        setting?.font_weight === undefined
-          ? 0
-          : Math.round(setting.font_weight / 100) * 100,
-    };
+    styles[i] = tokenStyle(
+      tokenTypes[i],
+      variable(setting?.color ?? 'foreground'),
+      setting?.font_style,
+      setting?.font_weight
+    );
   }
   const fg = variable(themeForeground(theme.style) ?? 'foreground');
   const bg = variable(themeBackground(theme.style) ?? 'background');
@@ -374,11 +431,15 @@ function cssVariableStyles(
 ): Pick<PreparedTheme, 'styles' | 'fg' | 'bg'> {
   const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
   for (let i = 1; i < tokenTypes.length; i++) {
-    styles[i] = {
-      color: cssVariable(tokenTypes[i], cssVariablePrefix),
-      italic: false,
-      weight: 0,
-    };
+    const scope = tokenTypes[i];
+    const combined = scope === 'emphasis.strong.italic';
+    styles[i] = tokenStyle(
+      scope,
+      cssVariable(scope, cssVariablePrefix),
+      scope === 'emphasis' || combined ? 'italic' : undefined,
+      scope === 'emphasis.strong' || combined ? 700 : 0,
+      true
+    );
   }
   return {
     styles,
@@ -403,7 +464,7 @@ function prepareStyles(theme: Theme): PreparedTheme {
   for (let i = 1; i < tokenTypes.length; i++) {
     const name = tokenTypes[i];
     const style = resolveThemeStyle(themeStyle, name);
-    const { color, italic, weight } = style;
+    const { color, fontStyle, weight } = style;
     const o = i * 5;
     if (color !== undefined) {
       if (color.startsWith('#')) {
@@ -417,8 +478,9 @@ function prepareStyles(theme: Theme): PreparedTheme {
         usesDisplayP3 = true;
       }
     }
-    table[o + 4] = (italic ? 0x10 : 0) | (weight / 100);
-    if (color === undefined && !italic && weight === 0) continue;
+    table[o + 4] =
+      ((fontStyle & 1) << 4) | ((fontStyle & 8) << 2) | (weight / 100);
+    if (color === undefined && fontStyle === 0 && weight === 0) continue;
     if (name === 'foreground') fg = color;
     else if (name === 'background') bg = color;
     else styles[i] = style;
@@ -458,12 +520,9 @@ function themeHtmlOpeners(
   ];
   for (let i = 1; i < tokenTypes.length; i++) {
     const style = styles[i];
-    const css =
-      `color:${style?.color ?? 'inherit'}` +
-      (style?.italic === true ? ';font-style:italic' : '') +
-      (style != null && style.weight !== 0
-        ? `;font-weight:${style.weight}`
-        : '');
+    let css = `color:${style?.color ?? 'inherit'}`;
+    for (const property in style?.fontCss)
+      css += `;${property}:${style.fontCss[property]}`;
     openers.push(`<span style="${escapeAttribute(css)}">`);
   }
   return packHtmlOpeners(openers);
