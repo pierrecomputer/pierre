@@ -102,8 +102,12 @@ async function withViewer(
 }
 
 // The result count labels are inside the panel's shadow root.
+function matches(root: HTMLElement): HTMLElement | null {
+  return getSearchPanelRoot(root).querySelector('[data-matches]');
+}
+
 function label(root: HTMLElement): string | null | undefined {
-  return getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent;
+  return matches(root)?.textContent;
 }
 
 describe('CodeView sliced find', () => {
@@ -154,7 +158,10 @@ describe('CodeView sliced find', () => {
           await wait(0);
           fillSearch(root, 'target');
           expect(states.at(-1)?.searching).toBe(true);
-          expect(label(root)).toBe('Searching…');
+          expect(matches(root)?.ariaLabel).toBe('Searching…');
+          expect(
+            matches(root)?.querySelector('use')?.getAttribute('href')
+          ).toBe('#diffs-editor-icon-loader');
           await finish();
           const scan = new CodeViewSearchScan(
             {
@@ -193,7 +200,7 @@ describe('CodeView sliced find', () => {
             .filter(({ text }) => text === 'target')
             .map(({ matchCount }) => matchCount);
           expect(counts).toEqual([...counts].sort((a, b) => a - b));
-          expect(label(root)).not.toBe('Searching…');
+          expect(matches(root)?.hasAttribute('data-searching')).toBe(false);
           expect(label(root)).toContain(i18n.formatNumber(counts.at(-1) ?? 0));
           expect(
             states.filter(
@@ -974,7 +981,8 @@ describe('CodeView sliced find', () => {
         },
       });
       fillSearch(root, 'missing');
-      expect(label(root)).toBe('Recherche…');
+      expect(matches(root)?.ariaLabel).toBe('Recherche…');
+      expect(matches(root)?.hasAttribute('data-searching')).toBe(true);
       expect(
         getSearchPanelRoot(root).querySelector('[data-no-matches]')
       ).toBeNull();

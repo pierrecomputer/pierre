@@ -281,6 +281,35 @@
     );
   }
 
+  [data-matches][data-searching] {
+    display: flex;
+    align-items: center;
+  }
+
+  [data-matches][data-searching] > svg {
+    --spokes: 8;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    transform-origin: 50% 50%;
+    animation: search-spinner-turn 960ms steps(var(--spokes), end) infinite;
+  }
+
+  @keyframes search-spinner-turn {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-matches][data-searching] > svg {
+      animation: none;
+    }
+  }
+
   [data-replace-actions],
   [data-search-nav] {
     display: flex;

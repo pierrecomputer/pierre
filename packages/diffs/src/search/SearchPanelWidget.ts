@@ -146,17 +146,29 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     let searching = defaultQuery !== '';
 
     const matchResultElement = h('div', { dataset: { matches: '' } });
+    const clearSearchingIndicator = () => {
+      delete matchResultElement.dataset.searching;
+      matchResultElement.removeAttribute('aria-label');
+    };
     // Use a stable zero position when there are no matches. Searching remains
     // visible because it communicates an in-progress result rather than a
     // settled empty result.
     const showNoMatches = () => {
-      matchResultElement.textContent = searching ? i18n.t('searching') : '0/0';
+      if (searching) {
+        matchResultElement.dataset.searching = '';
+        matchResultElement.ariaLabel = i18n.t('searching');
+        matchResultElement.innerHTML = getEditorIconSvg('loader', 16);
+      } else {
+        clearSearchingIndicator();
+        matchResultElement.textContent = '0/0';
+      }
       matchResultElement.toggleAttribute('data-no-matches', !searching);
     };
     // Shown on open, before any search runs.
     showNoMatches();
 
     const updateCurrentMatch = (currentIndex: number | undefined) => {
+      clearSearchingIndicator();
       matchResultElement.textContent =
         currentIndex != null
           ? i18n.t('searchResultPosition', {
