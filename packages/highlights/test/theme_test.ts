@@ -204,6 +204,26 @@ void test('span cache: direct theme writes invalidate colors, alpha, and fonts',
   }
 });
 
+void test('theme: bold italic takes fonts only from the emphasis scopes', () => {
+  const style = (syntax: Record<string, object>) =>
+    resolveThemeStyle({ syntax }, 'emphasis.strong.italic');
+  const plain = style({
+    emphasis: { color: '#ff0000' },
+    'emphasis.strong': { color: '#00ff00' },
+  });
+  assert.equal(plain.fontStyle, 0);
+  assert.equal(plain.fontCss, undefined);
+  const both = style({
+    emphasis: { font_style: 'italic' },
+    'emphasis.strong': { font_weight: 700 },
+  });
+  assert.equal(both.fontStyle, 3);
+  assert.deepEqual(both.fontCss, {
+    'font-style': 'italic',
+    'font-weight': '700',
+  });
+});
+
 void test('token types: syntax captures are sorted and complete', () => {
   // One alphabetical run, then the rarely emitted members in a second run so
   // every common member keeps a one-byte Wasm constant (see src/token.wat).

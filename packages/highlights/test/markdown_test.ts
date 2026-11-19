@@ -565,12 +565,38 @@ void t.test(
         ['~~see `~~` here~~', 'markup.strikethrough'],
         ['after', null],
         ['***first *** last***', 'emphasis.strong.italic'],
-        ['~one~ and ~~ open ~~ and ~~unclosed', null],
+        ['~one~', 'markup.strikethrough'],
+        ['and ~~ open ~~ and ~~unclosed', null],
         ['`***literal*** ~~literal~~`', 'text.literal'],
         ['\\~\\~', 'string.escape'],
         ['escaped', null],
         ['\\~\\~', 'string.escape'],
       ]
+    );
+  }
+);
+
+void t.test('markdown: mixed-width emphasis runs still pair', () => {
+  assert.deepEqual(
+    tokenKinds('markdown', '***foo** bar*\n**a*\n****b****\nx ~~~c~~~'),
+    [
+      ['***foo**', 'emphasis.strong'],
+      ['bar*', null],
+      ['**a*', 'emphasis'],
+      ['****b***', 'emphasis.strong.italic'],
+      ['*', null],
+      ['x ~~~c~~~', null],
+    ]
+  );
+});
+
+void t.test(
+  'markdown: a cached emphasis miss does not hide later closers',
+  () => {
+    const kinds = tokenKinds('markdown', '*a <x y="`"> *b* `c`');
+    assert.deepEqual(
+      kinds.find(([text]) => text === '*b*'),
+      ['*b*', 'emphasis']
     );
   }
 );

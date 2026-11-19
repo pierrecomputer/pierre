@@ -158,8 +158,8 @@ export function resolveThemeSyntax(
     const emphasis = resolveThemeSyntax(syntax, 'emphasis');
     return {
       color: strong?.color ?? emphasis?.color,
-      font_style: emphasis?.font_style ?? 'italic',
-      font_weight: strong?.font_weight ?? 700,
+      font_style: emphasis?.font_style,
+      font_weight: strong?.font_weight,
     };
   }
   let settings: ThemeSyntaxSettings | undefined;
@@ -176,6 +176,7 @@ export function resolveThemeSyntax(
   return settings;
 }
 
+/** Round a theme font weight to a CSS weight from 100 to 900, or 0 if unset. */
 export function themeFontWeight(weight: number | undefined): number {
   return typeof weight === 'number' && weight >= 100 && weight <= 900
     ? Math.round(weight / 100) * 100
@@ -184,6 +185,11 @@ export function themeFontWeight(weight: number | undefined): number {
 
 export type FontProperty = 'font-style' | 'font-weight' | 'text-decoration';
 
+/**
+ * Turn a color `var(--x)` or `var(--x,fallback)` into the matching font
+ * variable `var(--x-<property>[,fallback])`, so CSS-variable themes can set
+ * font settings per token the same way they set colors.
+ */
 export function fontVariable(
   color: string,
   property: FontProperty,
@@ -198,6 +204,12 @@ export function fontVariable(
   );
 }
 
+/**
+ * Build a token style from resolved theme settings: the Shiki font bits
+ * (1 italic, 2 bold, 8 strikethrough) and the CSS font declarations for HTML.
+ * With `variable`, each declaration reads a font variable with the literal
+ * value as its fallback.
+ */
 function tokenStyle(
   name: string,
   color?: string,

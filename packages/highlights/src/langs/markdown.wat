@@ -883,9 +883,14 @@
       (i32.add (local.get $rhs) (i32.const 1))))
 
   ;; Remember delimiter widths with no closer on this line so repeated
-  ;; unmatched openers only scan to the end once.
+  ;; unmatched openers only scan to the end once. A cached miss holds only
+  ;; for scans that start in [$markdownNoCloseFrom, $markdownNoCloseTick]:
+  ;; a backtick between two scan starts can pair into a different code span,
+  ;; which may hide or reveal a closer.
   (global $markdownNoCloseLine (mut i32) (i32.const 0))
   (global $markdownNoCloseMask (mut i32) (i32.const 0))
+  (global $markdownNoCloseFrom (mut i32) (i32.const 0))
+  (global $markdownNoCloseTick (mut i32) (i32.const 0))
 
   ;; The next $c or backtick in [$p,$stop), or $stop - one SIMD comparison
   ;; pair per 16 bytes. Wide loads may pass $stop into the buffer slack;
@@ -912,17 +917,20 @@
     (select (local.get $p) (local.get $stop) (i32.lt_u (local.get $p) (local.get $stop))))
 
   ;; End of the emphasis opened at $lhs by $count (1 to 3) `$c` markers
-  ;; (`*`, `_` or `~`) and closed by an equal run on the line [.., $lineEnd), or
-  ;; 0. A marker inside a code span never closes, and a `_` run neither opens
-  ;; glued to a preceding alphanumeric byte nor closes before one.
-  (func $markdownEmphasisEnd (param $lhs i32) (param $c i32) (param $count i32) (param $lineEnd i32) (result i32)
+  ;; (`*`, `_` or `~`) and closed by a run of at least $count markers (exactly
+  ;; $count for `~`) on the line [.., $lineEnd), or 0. $open is the end of the
+  ;; opener run, which may be longer than $count. A marker inside a code span
+  ;; never closes, and a `_` run neither opens glued to a preceding
+  ;; alphanumeric byte nor closes before one.
+  (func $markdownEmphasisEnd (param $lhs i32) (param $c i32) (param $count i32) (param $open i32) (param $lineEnd i32) (result i32)
     (local $p i32)
     (local $q i32)
     (local $run i32)
     (local $slashes i32)
     (local $flanking i32)
     (local $mask i32)
-    (local.set $p (i32.add (local.get $lhs) (local.get $count)))
+    (local $tick i32)
+    (local.set $p (local.get $open))
     (local.set $flanking (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $count) (i32.const 3))))
     (if (i32.and (local.get $flanking) (call $lexIsSpace (i32.load8_u (local.get $p))))
       (then (return (i32.const 0))))
@@ -945,23 +953,35 @@
       (select (i32.const 3)
         (select (i32.const 6) (i32.const 0) (i32.eq (local.get $c) (i32.const "~")))
         (i32.eq (local.get $c) (i32.const "_"))))))
-    (if (i32.ne (global.get $markdownNoCloseLine) (local.get $lineEnd))
+    (if (i32.or
+          (i32.ne (global.get $markdownNoCloseLine) (local.get $lineEnd))
+          (i32.or
+            (i32.lt_u (local.get $p) (global.get $markdownNoCloseFrom))
+            (i32.gt_u (local.get $p) (global.get $markdownNoCloseTick))))
       (then
         (global.set $markdownNoCloseLine (local.get $lineEnd))
-        (global.set $markdownNoCloseMask (i32.const 0))))
+        (global.set $markdownNoCloseMask (i32.const 0))
+        (global.set $markdownNoCloseFrom (local.get $p))
+        (global.set $markdownNoCloseTick (local.get $lineEnd))))
     (if (i32.and (global.get $markdownNoCloseMask) (local.get $mask))
       (then (return (i32.const 0))))
+    (local.set $tick (local.get $lineEnd))
     (loop $em
       ;; hop to the next marker or backtick with SIMD, bounded to the line
       (local.set $p (call $markdownFindEither (local.get $p) (local.get $lineEnd) (local.get $c)))
       (if (i32.ge_u (local.get $p) (local.get $lineEnd))
         (then
           (global.set $markdownNoCloseMask (i32.or (global.get $markdownNoCloseMask) (local.get $mask)))
+          (global.set $markdownNoCloseFrom (local.get $open))
+          (if (i32.lt_u (local.get $tick) (global.get $markdownNoCloseTick))
+            (then (global.set $markdownNoCloseTick (local.get $tick))))
           (return (i32.const 0))))
       ;; A code span hides the markers inside it: resume after the span, or
       ;; after an unmatched backtick run, which is literal text.
       (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "`"))
         (then
+          (if (i32.eq (local.get $tick) (local.get $lineEnd))
+            (then (local.set $tick (local.get $p))))
           (local.set $q (call $markdownCodeSpanEnd (local.get $p) (local.get $lineEnd)))
           (local.set $p
             (if (result i32) (local.get $q)
@@ -1466,23 +1486,34 @@
               (then
                 (local.set $p (call $markdownRunEnd (local.get $lhs) (local.get $lineCache)))
                 (local.set $count (i32.sub (local.get $p) (local.get $lhs)))
-                (if (i32.and (i32.le_u (local.get $count) (i32.const 3))
-                      (i32.or (i32.ne (local.get $c) (i32.const "~")) (i32.eq (local.get $count) (i32.const 2))))
-                  (then
+                ;; `~` pairs one or two tildes of equal width. A `*`/`_` run
+                ;; tries widths 3, 2, 1 so one part of a mixed run such as
+                ;; `***a** b*` still pairs.
+                (local.set $count
+                  (if (result i32) (i32.eq (local.get $c) (i32.const "~"))
+                    (then (select (local.get $count) (i32.const 0) (i32.le_u (local.get $count) (i32.const 2))))
+                    (else (select (i32.const 3) (local.get $count) (i32.gt_u (local.get $count) (i32.const 3))))))
+                (block $plain
+                  (loop $width
+                    (br_if $plain (i32.eqz (local.get $count)))
                     (local.set $close (call $markdownEmphasisEnd
-                      (local.get $lhs) (local.get $c) (local.get $count) (local.get $lineCache)))
-                    (if (local.get $close)
+                      (local.get $lhs) (local.get $c) (local.get $count) (local.get $p) (local.get $lineCache)))
+                    (if (i32.eqz (local.get $close))
                       (then
-                        (call $emitTok
-                          (select (enum.get $Token.markup.strikethrough)
-                            (select (enum.get $Token.emphasis.strong.italic)
-                              (select (enum.get $Token.emphasis.strong) (enum.get $Token.emphasis)
-                                (i32.eq (local.get $count) (i32.const 2)))
-                              (i32.eq (local.get $count) (i32.const 3)))
-                            (i32.eq (local.get $c) (i32.const "~")))
-                          (local.get $lhs) (local.get $close))
-                        (global.set $ptr (local.get $close))
-                        (br $next)))))
+                        (local.set $count
+                          (select (i32.sub (local.get $count) (i32.const 1)) (i32.const 0)
+                            (i32.ne (local.get $c) (i32.const "~"))))
+                        (br $width)))
+                    (call $emitTok
+                      (select (enum.get $Token.markup.strikethrough)
+                        (select (enum.get $Token.emphasis.strong.italic)
+                          (select (enum.get $Token.emphasis.strong) (enum.get $Token.emphasis)
+                            (i32.eq (local.get $count) (i32.const 2)))
+                          (i32.eq (local.get $count) (i32.const 3)))
+                        (i32.eq (local.get $c) (i32.const "~")))
+                      (local.get $lhs) (local.get $close))
+                    (global.set $ptr (local.get $close))
+                    (br $next)))
                 (global.set $ptr (local.get $p))
                 (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
                 (br $next)))

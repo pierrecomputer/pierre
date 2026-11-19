@@ -154,7 +154,8 @@
   ;; [46224:49296) stream checkpoints.
   (const $mem.streamState 46224)             ;; 3072
 
-  ;; [49296:62464) keyword tables added later, one block per group, then free.
+  ;; [49296:60384) keyword tables added later, one block per group, then
+  ;; [60384:62128) free. [62128:62464) is taken by the buffers below.
   ;; group A
   (const $mem.rosmsgWords 49296)             ;; 384
   ;; group B
