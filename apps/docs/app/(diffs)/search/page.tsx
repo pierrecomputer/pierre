@@ -64,7 +64,23 @@ function setSyntheticSearching(container: ParentNode): void {
     const panel = getPanelRoot(container);
     const matches = panel?.querySelector('[data-matches]');
     if (panel != null && matches != null) {
-      matches.textContent = 'Searching…';
+      const svg = matches.ownerDocument.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'svg'
+      );
+      svg.setAttribute('width', '16');
+      svg.setAttribute('height', '16');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('focusable', 'false');
+      const use = matches.ownerDocument.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'use'
+      );
+      use.setAttribute('href', '#diffs-editor-icon-loader');
+      svg.append(use);
+      matches.replaceChildren(svg);
+      matches.setAttribute('data-searching', '');
+      matches.setAttribute('aria-label', 'Searching…');
       matches.removeAttribute('data-no-matches');
       for (const button of panel.querySelectorAll<HTMLButtonElement>(
         '[data-search-nav] button'
