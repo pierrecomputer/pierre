@@ -243,7 +243,7 @@ describe('SearchPanelWidget', () => {
       setInputValue(harness.replaceInput, 'replacement');
       expect(harness.widget.hasQuery()).toBe(false);
       setInputValue(harness.input, 'missing');
-      expect(harness.matchesText()).toBe('');
+      expect(harness.matchesText()).toBe('0/0');
       expect(harness.widget.hasQuery()).toBe(true);
       setInputValue(harness.input, '');
       expect(harness.widget.hasQuery()).toBe(false);
@@ -287,7 +287,7 @@ describe('SearchPanelWidget', () => {
         expect(updates).toEqual([defaultQuery === '' ? [] : matches]);
         expect(
           getSearchPanelRoot().querySelector('[data-matches]')?.textContent
-        ).toBe(defaultQuery === '' ? '' : '2/2');
+        ).toBe(defaultQuery === '' ? '0/0' : '2/2');
         await waitForAnimationFrame();
         expect(updates).toHaveLength(1);
       } finally {
@@ -409,7 +409,7 @@ describe('SearchPanelWidget', () => {
       setInputValue(harness.input, 'foo');
       setInputValue(harness.input, '');
 
-      expect(harness.matchesText()).toBe('');
+      expect(harness.matchesText()).toBe('0/0');
       // An empty query pushes an empty match set so the editor drops its
       // highlights, and the prev/next arrows go disabled.
       expect(harness.updates.at(-1)).toEqual([]);
@@ -873,7 +873,7 @@ describe('regex replace capture references', () => {
 
       expect(host.appliedBatches).toEqual([]);
       expect(host.textDocument.getText()).toBe('gray goose');
-      expect(host.matchesLabel()).toBe('');
+      expect(host.matchesLabel()).toBe('0/0');
     } finally {
       host.dispose();
     }
@@ -1079,7 +1079,7 @@ describe('replace progression through the search panel', () => {
       expect(host.appliedBatches).toEqual([[{ start: 4, end: 7, text: '' }]]);
       expect(host.textDocument.getText()).toBe('oak  fir');
       expect(host.scrolled.at(-1)).toEqual([4, 4]);
-      expect(host.matchesLabel()).toBe('');
+      expect(host.matchesLabel()).toBe('0/0');
     } finally {
       host.dispose();
     }
@@ -1338,11 +1338,11 @@ describe('SearchPanelWidget', () => {
       expect(count.textContent).toBe('1/1');
       setInputValue(input, 'missing');
       expect(updates.at(-1)).toBe(results.missing);
-      expect(count.textContent).toBe('');
+      expect(count.textContent).toBe('0/0');
       setInputValue(input, 'foo');
       setInputValue(input, '');
       expect(updates.at(-1)).toEqual({ matches: [] });
-      expect(count.textContent).toBe('');
+      expect(count.textContent).toBe('0/0');
     } finally {
       widget?.cleanup();
       dom.cleanup();
@@ -1579,7 +1579,7 @@ describe('SearchPanelWidget messages', () => {
         const panel = harness.widget.getHostElement().shadowRoot!;
         expect(harness.input.placeholder).toBe('Rechercher');
         expect(harness.replaceInput.placeholder).toBe('Remplacer');
-        expect(harness.matchesText()).toBe('');
+        expect(harness.matchesText()).toBe('0/0');
         expect(
           panel.querySelector<HTMLButtonElement>('[data-replace-toggle]')
             ?.ariaLabel

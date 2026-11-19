@@ -271,7 +271,7 @@
   [data-matches][data-no-matches] {
     color: color-mix(
       in lab,
-      var(--diffs-search-panel-fg) 35%,
+      var(--diffs-search-panel-fg) 30%,
       var(--diffs-search-panel-bg)
     );
   }

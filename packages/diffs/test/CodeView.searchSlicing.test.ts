@@ -270,7 +270,7 @@ describe('CodeView sliced find', () => {
         const start = states.length;
         await finish();
         expect(getSearchState(viewer).matches).toEqual([]);
-        expect(label(root)).toBe('');
+        expect(label(root)).toBe('0/0');
         expect(
           states.slice(start).every(({ text }) => text === 'missing')
         ).toBe(true);
@@ -979,7 +979,7 @@ describe('CodeView sliced find', () => {
         getSearchPanelRoot(root).querySelector('[data-no-matches]')
       ).toBeNull();
       await finish();
-      expect(label(root)).toBe('');
+      expect(label(root)).toBe('0/0');
     });
   });
 

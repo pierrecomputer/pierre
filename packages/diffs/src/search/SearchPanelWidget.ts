@@ -146,11 +146,11 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     let searching = defaultQuery !== '';
 
     const matchResultElement = h('div', { dataset: { matches: '' } });
-    // Keep the count slot empty when there are no matches. Searching remains
-    // visible because it communicates an in-progress result rather than an
-    // empty result.
+    // Use a stable zero position when there are no matches. Searching remains
+    // visible because it communicates an in-progress result rather than a
+    // settled empty result.
     const showNoMatches = () => {
-      matchResultElement.textContent = searching ? i18n.t('searching') : '';
+      matchResultElement.textContent = searching ? i18n.t('searching') : '0/0';
       matchResultElement.toggleAttribute('data-no-matches', !searching);
     };
     // Shown on open, before any search runs.

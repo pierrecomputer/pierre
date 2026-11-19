@@ -637,7 +637,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
     await panel
       .getByRole('button', { name: 'Replace All', exact: true })
       .click();
-    await expect(panel.locator('[data-matches]')).toBeEmpty();
+    await expect(panel.locator('[data-matches]')).toHaveText('0/0');
     await expect
       .poll(() =>
         page.evaluate(() => window.__codeView?.getEditor('item')?.getText())
@@ -811,7 +811,7 @@ for (const diffStyle of ['split', 'unified'] as const) {
     await replacement.fill('changed');
     await replacement.press('Enter');
     await expect(hiddenLine).toContainText('hidden changed');
-    await expect(root.locator('[data-matches]')).toBeEmpty();
+    await expect(root.locator('[data-matches]')).toHaveText('0/0');
     await expect(replacement).toBeFocused();
     await page.evaluate(() => window.__codeView?.getEditor('diff')?.undo());
     await expect(hiddenLine).toContainText('hidden target');
@@ -924,7 +924,7 @@ test('scoped replacement advances past inserted matches and replace all is one u
   await replacement.fill('new');
   await panel.getByRole('button', { name: 'Replace All', exact: true }).click();
   await expect(content).toContainText('new newnew newnew');
-  await expect(count).toBeEmpty();
+  await expect(count).toHaveText('0/0');
   await expectSearchHighlights(root, 0);
   await expect
     .poll(() =>

@@ -115,7 +115,7 @@ describe('CodeView search', () => {
       expect(getSearchState(viewer).matches).toEqual([]);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('');
+      ).toBe('0/0');
     } finally {
       search.mockRestore();
       render.mockRestore();

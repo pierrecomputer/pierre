@@ -139,7 +139,7 @@ test.describe('find and replace', () => {
     ).toHaveCount(0);
 
     await page.locator(SEARCH_INPUT).fill('nope');
-    await expect(page.locator(MATCHES)).toBeEmpty();
+    await expect(page.locator(MATCHES)).toHaveText('0/0');
   });
 
   test('switching to replace mode and Replace All rewrites every match', async ({
@@ -201,10 +201,10 @@ test.describe('find and replace', () => {
     await expect(page.locator(MATCHES)).toContainText('4');
     await expectNativeHighlights(page, 4);
 
-    // Emptying the query clears the result count; the
+    // Emptying the query returns the result count to zero; the
     // highlights must clear with it rather than linger over an empty box.
     await page.locator(SEARCH_INPUT).fill('');
-    await expect(page.locator(MATCHES)).toBeEmpty();
+    await expect(page.locator(MATCHES)).toHaveText('0/0');
     await expectNativeHighlights(page, 0);
   });
 
