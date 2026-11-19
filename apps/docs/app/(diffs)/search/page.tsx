@@ -56,6 +56,31 @@ function setSyntheticCount(container: ParentNode, count: string): void {
   update();
 }
 
+// Freezes the panel in its in-progress presentation so the design can be
+// reviewed without depending on machine speed or a deliberately slow search.
+function setSyntheticSearching(container: ParentNode): void {
+  let attempts = 0;
+  const update = () => {
+    const panel = getPanelRoot(container);
+    const matches = panel?.querySelector('[data-matches]');
+    if (panel != null && matches != null) {
+      matches.textContent = 'Searching…';
+      matches.removeAttribute('data-no-matches');
+      for (const button of panel.querySelectorAll<HTMLButtonElement>(
+        '[data-search-nav] button'
+      )) {
+        button.disabled = true;
+      }
+      return;
+    }
+    attempts += 1;
+    if (attempts < 60) {
+      window.requestAnimationFrame(update);
+    }
+  };
+  update();
+}
+
 function openEditorSearch(
   container: HTMLElement,
   mode: 'find' | 'replace',
@@ -157,11 +182,13 @@ function CodeViewCase({
   mode = 'find',
   syntheticCount,
   activeOptions = false,
+  searching = false,
 }: {
   query: string;
   mode?: 'find' | 'replace';
   syntheticCount?: string;
   activeOptions?: boolean;
+  searching?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<undefined, undefined>>(null);
@@ -172,9 +199,12 @@ function CodeViewCase({
       if (syntheticCount != null && containerRef.current != null) {
         setSyntheticCount(containerRef.current, syntheticCount);
       }
+      if (searching && containerRef.current != null) {
+        setSyntheticSearching(containerRef.current);
+      }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [mode, query, syntheticCount]);
+  }, [mode, query, searching, syntheticCount]);
 
   return (
     <div ref={containerRef}>
@@ -291,9 +321,16 @@ export default function SearchPanelTestPage() {
 
         <Case
           title="CodeView · no matches"
-          description="The count area stays empty while navigation is disabled."
+          description="The muted count reads 0/0 while navigation is disabled."
         >
           <CodeViewCase query="missing-result" />
+        </Case>
+
+        <Case
+          title="CodeView · actively searching"
+          description="Frozen in-progress state for a scan across thousands of files."
+        >
+          <CodeViewCase query="target" searching />
         </Case>
 
         <Case
