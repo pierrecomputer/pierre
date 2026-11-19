@@ -98,7 +98,7 @@ The counter appears when its fence closes. The “Show details” label shimmers
 {"id":"demo-details","text":"Votes are local to this preview. Editing the prose keeps your vote in place as long as the counter keeps the same id. Replay starts a fresh stream."}
 ~~~
 
-Both controls are ready to use before this last paragraph finishes streaming.`;
+The parser lives in :file[inline.wat]{path="packages/words/src/inline.wat"}. Click the filename to see its path.`;
 
 function Counter({ label }: { label: string }) {
   const [count, setCount] = useState(0);
@@ -131,7 +131,28 @@ function Details({ text }: { text: string }) {
   );
 }
 
+function FileReference({ label, path }: { label: string; path: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <button
+      type="button"
+      className="font-mono underline decoration-dotted underline-offset-4"
+      aria-expanded={expanded}
+      onClick={() => setExpanded(!expanded)}
+    >
+      {expanded ? path : label}
+    </button>
+  );
+}
+
 const demoIslands: ReactiveIslands = {
+  file: {
+    inline: true,
+    render: ({ label, path }) =>
+      typeof label === 'string' && typeof path === 'string' ? (
+        <FileReference label={label} path={path} />
+      ) : null,
+  },
   counter: {
     fallback: '',
     render: ({ label }) =>
@@ -712,7 +733,7 @@ export function WordsDemo({
           <>
             Replay to see “Show details” shimmer while its fence streams. Cast a
             vote, then edit the prose above the counter to see its state
-            persist.
+            persist. Click the inline file reference to expand its path.
           </>
         }
       />

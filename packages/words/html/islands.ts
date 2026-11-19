@@ -1,4 +1,4 @@
-import { escapeHtml } from '../lib/utils';
+import { decodeHtml, escapeHtml } from '../lib/utils';
 import type {
   HtmlIsland,
   HtmlOptions,
@@ -7,7 +7,7 @@ import type {
 } from './types';
 
 const islandSelector = '[data-words-island]';
-export const islandHostStart = '<div data-words-island="';
+export const islandHostStart = ' data-words-island="';
 
 function readIslandData(code: string): IslandData | undefined {
   let data: unknown;
@@ -40,12 +40,13 @@ export function islandFor(
 
 /** Show an app-defined placeholder without reading the incomplete fence payload. */
 export function formatIslandPending(
-  pending: IslandPending | undefined
+  pending: IslandPending | undefined,
+  tag: 'div' | 'span' = 'div'
 ): string {
   if (pending === undefined || pending === '') return '';
-  const open = '<div data-markdown="island-pending"';
+  const open = `<${tag} data-markdown="island-pending"`;
   if (typeof pending === 'string')
-    return open + ' role="status">' + escapeHtml(pending) + '</div>';
+    return open + ' role="status">' + escapeHtml(pending) + `</${tag}>`;
   const accessibility = pending.label
     ? ' role="status" aria-label="' + escapeHtml(pending.label) + '"'
     : ' aria-hidden="true"';
@@ -55,7 +56,7 @@ export function formatIslandPending(
     escapeHtml(pending.className) +
     '"' +
     accessibility +
-    '></div>'
+    `></${tag}>`
   );
 }
 
@@ -68,20 +69,104 @@ export function formatIsland(
   const name = language.slice('island-'.length);
   const data = readIslandData(code);
   if (data === undefined || !island.accepts(data)) return;
-  // JSON encoding preserves ids that contain line breaks or control characters.
-  const key = escapeHtml(JSON.stringify(data.id));
+  return islandHost(
+    'div',
+    name,
+    JSON.stringify(data.id),
+    code,
+    island.fallback ?? 'Interactive content'
+  );
+}
+
+/** Serialize the same portal and fallback nodes for server and client rendering. */
+function islandHost(
+  tag: 'div' | 'span',
+  name: string,
+  key: string,
+  code: string,
+  fallback: string
+): string {
   return (
+    '<' +
+    tag +
     islandHostStart +
     escapeHtml(name) +
     '" data-words-island-id="' +
-    key +
+    escapeHtml(key) +
     '" data-words-island-data="' +
     escapeHtml(code) +
     '">' +
-    '<div data-words-island-content></div>' +
-    '<div data-words-island-fallback>' +
-    escapeHtml(island.fallback ?? 'Interactive content') +
-    '</div></div>'
+    `<${tag} data-words-island-content></${tag}><${tag} data-words-island-fallback>` +
+    escapeHtml(fallback) +
+    `</${tag}></${tag}>`
+  );
+}
+
+/** Pack the registry once so ordinary colons stay on the parser's literal path. */
+export function inlineIslandNames(islands: HtmlOptions['islands']): string {
+  let packed = '';
+  for (const [name, definition] of Object.entries(islands ?? {})) {
+    if (definition.inline !== true) continue;
+    if (name.length > 255 || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(name))
+      throw new TypeError(`Invalid inline island name: ${name}`);
+    packed += String.fromCharCode(name.length) + name;
+  }
+  return packed;
+}
+
+const punctuationEscape = /\\([!-/:-@[-`{-~])/g;
+const attribute =
+  /[ \t]*([A-Za-z_][\w-]*)(?:[ \t]*=[ \t]*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|((?:\\.|[^\s"'={}`\\])+)))?(?=[ \t]|$)/y;
+
+/** Expand only opaque spans identified by the inline parser. Labels are plain text. */
+export function formatInlineIslands(
+  html: string,
+  islands: NonNullable<HtmlOptions['islands']>
+): string {
+  return html.replace(
+    /<w-i ([lp])="([^"]*)">([^<]*)<\/w-i>/g,
+    (_, kind: string, head: string, attrs: string) => {
+      const open = head.indexOf('[');
+      const name = head.slice(1, open);
+      const raw = head + attrs;
+      if (!Object.hasOwn(islands, name) || islands[name].inline !== true)
+        return raw;
+      const island = islands[name];
+      if (kind === 'p') return formatIslandPending(island.pending, 'span');
+      const label = decodeHtml(head.slice(open + 1, -1)).replace(
+        punctuationEscape,
+        '$1'
+      );
+      const fields: Record<string, string> = Object.create(null);
+      const body = decodeHtml(attrs.slice(1, -1)).trim();
+      let at = 0;
+      while (at < body.length) {
+        attribute.lastIndex = at;
+        const match = attribute.exec(body);
+        if (
+          match === null ||
+          match[1] === 'label' ||
+          Object.hasOwn(fields, match[1])
+        )
+          return raw;
+        fields[match[1]] = (match[2] ?? match[3] ?? match[4] ?? '').replace(
+          punctuationEscape,
+          '$1'
+        );
+        at = attribute.lastIndex;
+      }
+      if (fields.id?.trim() === '') return raw;
+      const id = fields.id ?? JSON.stringify([name, label, fields]);
+      const data = { ...fields, label, id };
+      if (!island.accepts(data)) return raw;
+      return islandHost(
+        'span',
+        name,
+        fields.id === undefined ? id : JSON.stringify(id),
+        JSON.stringify(data),
+        island.fallback ?? label
+      );
+    }
   );
 }
 
@@ -134,6 +219,7 @@ export function collectIslands(
   const next: MountedIsland[] = [];
   const old = new Map(previous.map((island) => [island.key, island]));
   const seen = new Set<string>();
+  const occurrences = new Map<string, number>();
   const enclosingIsland = root.closest(islandSelector);
   for (const host of hosts) {
     // Ignore descendants owned by an island, including nested Markdown renderers.
@@ -141,7 +227,13 @@ export function collectIslands(
       continue;
     if (host.closest('[data-markdown="root"]') !== root) continue;
     const name = host.dataset.wordsIsland!;
-    const key = host.dataset.wordsIslandId!;
+    let key = host.dataset.wordsIslandId;
+    // Explicit ids are JSON strings. Identical anonymous directives are separate occurrences.
+    if (key?.startsWith('[') === true) {
+      const count = occurrences.get(key) ?? 0;
+      occurrences.set(key, count + 1);
+      key += ':' + count;
+    }
     const source = host.dataset.wordsIslandData!;
     if (key === undefined || source === undefined || seen.has(key)) continue;
     let content = host.firstElementChild as HTMLElement | null;
@@ -152,7 +244,10 @@ export function collectIslands(
     )
       continue;
     const existing = old.get(key);
-    const prior = existing?.name === name ? existing : undefined;
+    const prior =
+      existing?.name === name && existing.content.tagName === content.tagName
+        ? existing
+        : undefined;
     const data = source === prior?.source ? prior.data : readIslandData(source);
     if (data === undefined) continue;
     seen.add(key);

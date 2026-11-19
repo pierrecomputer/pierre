@@ -2806,6 +2806,147 @@ describe('reactive islands', () => {
     expect(html(closed)).toContain('<pre');
   });
 
+  test('parses opted-in inline islands only in Markdown text', () => {
+    const islands: HtmlOptions['islands'] = {
+      file: { inline: true, accepts: ({ label }) => label !== 'reject' },
+      block: { accepts: () => true },
+    };
+    const renderer = createHtmlRenderer({ islands });
+    const container = mountDOM();
+    const source = String.raw`A **:file[lib[2]\] <x>]{id=ref path='src/a } b' flag}**.`;
+    container.innerHTML = renderer.render(source, false).html;
+    const host = container.querySelector<HTMLElement>('p > strong > span')!;
+    expect(JSON.parse(host.dataset.wordsIslandData!)).toEqual({
+      id: 'ref',
+      label: 'lib[2]] <x>',
+      path: 'src/a } b',
+      flag: '',
+    });
+    expect(container.querySelector('x')).toBeNull();
+    expect(container.textContent?.trim()).toBe('A lib[2]] <x>.');
+    for (const literal of [
+      ':file[reject]',
+      ':file[x]{id=""}',
+      ':file[x]{x=1 x=2}',
+      ':file[x]{path="unfinished}',
+      ':file[x]{label=override}',
+      ':file[unfinished',
+    ]) {
+      container.innerHTML = renderer.render(literal, false).html;
+      expect(container.querySelector('[data-words-island]')).toBeNull();
+      expect(container.textContent?.trim()).toBe(literal);
+    }
+    for (const ordinary of [
+      ':unknown[hi]',
+      ':block[hi]',
+      '::file[hi]',
+      String.raw`\:file[hi]`,
+      '`:file[hi]`',
+      '~~~md\n:file[hi]\n~~~',
+      '[read](https://example.com/:file[x])',
+    ])
+      expect(renderer.render(ordinary, false).html).toBe(
+        createHtmlRenderer().render(ordinary, false).html
+      );
+    renderer.configure({});
+    expect(renderer.render(source, false).html).toBe(
+      createHtmlRenderer().render(source, false).html
+    );
+    renderer.configure({ islands });
+    expect(renderer.render(source, false).html).toContain(
+      'data-words-island="file"'
+    );
+  });
+
+  test('keeps a streaming directive pending until its attributes or label are settled', () => {
+    const islands = {
+      file: { inline: true, pending: 'Reading', accepts: () => true },
+    };
+    const directive = ':file[parse [v2]]{path="a } b" id=one}';
+    const start = directive.indexOf('[') + 1;
+    for (const repair of [false, true]) {
+      const renderer = createHtmlRenderer({ islands });
+      for (let at = start; at < directive.length; at++) {
+        const source = 'Read **' + directive.slice(0, at);
+        const update = renderer.render(source, repair, true);
+        expect(update.html).toBe(
+          createHtmlRenderer({ islands }).render(source, repair, true).html
+        );
+        expect(update.html).toContain('>Reading</span>');
+        expect(update.html).not.toContain(':file');
+        expect(update.html).not.toContain('data-words-island=');
+      }
+      expect(
+        renderer.render('Read **' + directive, repair, true).html
+      ).toContain('data-words-island="file"');
+      expect(renderer.render(':file[done]', repair, true).html).toContain(
+        '>Reading</span>'
+      );
+      for (const next of [' ', '.', '\n', ' after']) {
+        expect(
+          renderer.render(':file[done]' + next, repair, true).html
+        ).toContain('>done</span>');
+      }
+      expect(renderer.render(':file[done]', repair, false).html).toContain(
+        '>done</span>'
+      );
+      expect(renderer.render(':file[unfinished', repair, false).html).toContain(
+        ':file[unfinished'
+      );
+    }
+    expect(
+      createHtmlRenderer({
+        islands: { file: { inline: true, accepts: () => true } },
+      }).render('Read :file[in', true, true).html
+    ).toBe('<p data-markdown="p">Read </p>\n');
+  });
+
+  test('hydrates inline portals, mounts anonymous repeats, and preserves an explicit id on edits', async () => {
+    function Chip({ label }: { label: string }) {
+      const [count, setCount] = useState(0);
+      return (
+        <button onClick={() => setCount(count + 1)}>
+          {label} {count}
+        </button>
+      );
+    }
+    const islands: ReactiveIslands = {
+      file: {
+        inline: true,
+        render: ({ label }) => <Chip label={String(label)} />,
+      },
+    };
+    const element = (source: string) => (
+      <Markdown islands={islands}>{source}</Markdown>
+    );
+    const first = 'Read :file[one]{id=ref}, :file[two], and :file[two].';
+    const container = mountDOM(renderToString(element(first)));
+    expect(
+      container.querySelectorAll('p > span[data-words-island]')
+    ).toHaveLength(3);
+    const errors: unknown[] = [];
+    await flush(() => {
+      root = hydrateRoot(container, element(first), {
+        onRecoverableError: (e) => errors.push(e),
+      });
+    });
+    const [chip, repeat1, repeat2] = container.querySelectorAll('button');
+    await flush(() => chip.click());
+    await flush(() => repeat2.click());
+    await flush(() =>
+      root!.render(element('Intro.\n\n' + first.replace('one', 'edited')))
+    );
+    expect([...container.querySelectorAll('button')]).toEqual([
+      chip,
+      repeat1,
+      repeat2,
+    ]);
+    expect(chip.textContent).toBe('edited 1');
+    expect(repeat1.textContent).toBe('two 0');
+    expect(repeat2.textContent).toBe('two 1');
+    expect(errors).toEqual([]);
+  });
+
   test('discovers new hosts without searching the root or revisiting committed blocks', () => {
     const container = mountDOM();
     const renderer = createDomRenderer(container, {

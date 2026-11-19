@@ -83,7 +83,7 @@ normal Markdown.
 | `allowedElements`, `disallowedElements` | Element filters. Use only one of these props.                                                 |
 | `unwrapDisallowed`                      | Keep the children of filtered elements.                                                       |
 | `urlTransform`                          | Change link and image URLs before validation.                                                 |
-| `idPrefix`                              | Prefix for generated ids, up to 4,096 bytes. Default: a unique React id.                      |
+| `idPrefix`                              | Id prefix. Shares 4,096 bytes with inline island names. Default: a unique React id.           |
 | `onAnimationStart`, `onAnimationEnd`    | Called when the stream starts and ends.                                                       |
 
 Fades and the caret need `styles.css`. Fades run only during a stream. Reduced
@@ -117,8 +117,6 @@ mounts and later blocks show their fallback.
 ```island-counter
 {"id":"article-votes","label":"Votes"}
 ```
-````
-
 ````
 
 ```tsx
@@ -155,7 +153,27 @@ export function Message({
     </Markdown>
   );
 }
-````
+```
+
+For a component embedded in a sentence, set `inline: true` on its registry entry
+and return inline content such as a button or link.
+
+```markdown
+The parser lives in :file[inline.wat]{path="src/inline.wat"}.
+```
+
+Words passes the plain-text bracketed label as `data.label` and each attribute
+as a string, so this example supplies `label: 'inline.wat'` and
+`path: 'src/inline.wat'`. Attributes are optional. Quote values containing
+spaces and use a backslash to escape punctuation. Use an explicit `id` to
+preserve state when the label or attributes change. Otherwise Words derives
+identity from the directive content and its occurrence among identical copies.
+
+During a stream, the same `pending` option applies from the opening bracket
+until the attributes close, or until the next character or end of stream
+confirms there are no attributes. The default server fallback is the label.
+Unknown names retain their usual Markdown behavior. Rejected or unfinished
+directives display their source when the stream ends.
 
 By default, Words leaves a registered fence out of the preview while it streams.
 Set `pending` to plain text or to `{ className, label? }` for a CSS-styled

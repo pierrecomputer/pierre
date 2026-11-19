@@ -100,6 +100,7 @@ class Renderer {
   pages!: number;
   idPrefix = '';
   idPrefixLength = 0;
+  inlineNames = '';
 
   constructor(wasmModule: WebAssembly.Module) {
     const instance = new WebAssembly.Instance(wasmModule, {});
@@ -175,8 +176,12 @@ class Renderer {
     const format = options?.format;
     // The byte after the flags tells whether a code block is in slots.
     this.dv.setUint16(26, format?.flags ?? 0, true);
+    const names = format?.inlineNames ?? '';
+    // Also clear the inline-output flag at byte 34 for this render.
+    this.dv.setUint32(32, names.length, true);
     if (format !== undefined) {
       if (format.idPrefix !== this.idPrefix) {
+        this.inlineNames = ''; // A longer prefix may overwrite the previous names.
         const { read, written } = enc.encodeInto(
           format.idPrefix,
           this.buffer.subarray(idPrefixAt, idPrefixAt + idPrefixRoom)
@@ -191,6 +196,16 @@ class Renderer {
         }
         this.idPrefix = format.idPrefix;
         this.idPrefixLength = written;
+      }
+      if (names.length + this.idPrefixLength > idPrefixRoom)
+        throw new RangeError(
+          'Inline island names and idPrefix exceed 4096 bytes'
+        );
+      if (names !== this.inlineNames) {
+        const start = idPrefixAt + idPrefixRoom - names.length;
+        for (let i = 0; i < names.length; i++)
+          this.buffer[start + i] = names.charCodeAt(i);
+        this.inlineNames = names;
       }
       this.dv.setUint16(28, this.idPrefixLength, true);
     }
@@ -291,6 +306,7 @@ export function createHtmlSession(): {
   let extensions: number | undefined;
   let flags: number | undefined;
   let idPrefix: string | undefined;
+  let inlineNames: string | undefined;
   let result: InternalHtmlUpdate | undefined;
   let revision = 0;
   let paragraph:
@@ -320,7 +336,8 @@ export function createHtmlSession(): {
         incomplete === wanted &&
         extensions === ext &&
         flags === form?.flags &&
-        idPrefix === form?.idPrefix;
+        idPrefix === form?.idPrefix &&
+        inlineNames === form?.inlineNames;
       if (input === previous && sameMode && result != null) return result;
       // V8 compares slices with memcmp, but its startsWith reads each character.
       let reset =
@@ -508,6 +525,7 @@ export function createHtmlSession(): {
       extensions = ext;
       flags = form?.flags;
       idPrefix = form?.idPrefix;
+      inlineNames = form?.inlineNames;
       const completedHtml = stable;
       paragraph = undefined;
       const open = form === undefined ? '<p>' : '<p data-markdown="p">';
@@ -625,6 +643,7 @@ export function createHtmlSession(): {
       };
       // A computed key would slow every literal: add this one only when set.
       if (slots) result[format] = true;
+      if (shared.dv.getUint8(34) !== 0) result.hasInlineIslands = true;
       return result;
     },
   };

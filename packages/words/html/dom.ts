@@ -526,6 +526,7 @@ function patchChildren(
       if (
         isIsland(current) &&
         isIsland(target) &&
+        current.tagName === target.tagName &&
         current.dataset.wordsIsland === target.dataset.wordsIsland &&
         current.dataset.wordsIslandId === target.dataset.wordsIslandId
       ) {

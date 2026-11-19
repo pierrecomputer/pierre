@@ -27,9 +27,9 @@ export type * from '../html/types';
 
 export interface ReactiveIsland extends Pick<
   HtmlIsland,
-  'fallback' | 'pending'
+  'fallback' | 'pending' | 'inline'
 > {
-  /** Return a React element, or null to keep the original code fence. */
+  /** Return a React element, or null to keep the original source. */
   render(data: IslandData): ReactElement | null;
 }
 
@@ -39,7 +39,7 @@ export interface MarkdownProps
   extends
     Omit<HTMLAttributes<HTMLDivElement>, 'children'>,
     Omit<HtmlOptions, 'islands'> {
-  /** Components available to island-NAME fences. */
+  /** Components available to island-NAME fences and opted-in inline directives. */
   islands?: ReactiveIslands;
   children?: string;
   mode?: 'streaming' | 'static';
@@ -118,6 +118,7 @@ export function Markdown({
             Object.entries(islands).map(([name, definition]) => [
               name,
               {
+                inline: definition.inline,
                 fallback: definition.fallback,
                 pending: definition.pending,
                 accepts: (data: IslandData) => definition.render(data) !== null,

@@ -47,6 +47,7 @@
     "extlink"    ;; a GFM extended autolink; data = 0 verbatim, 1 http://, 2 mailto:
     "footnote"   ;; a GFM footnote reference; data = the definition record
     "math"       ;; `$` or `$$` math; data = content begin, ch = dollar count
+    "directive"  ;; data = offset after label, negated offset after opening bracket if pending, 0 literal
   )
 
   (const $T.em 1)
@@ -253,7 +254,9 @@
                 (local.set $p (if (result i32) (i32.eq
                       (i32.load16_u offset=1 (i32.add (local.get $base) (local.get $p))) (i32.const "//"))
                   (then (call $tryUrlAutolink (local.get $p) (local.get $end)))
-                  (else (i32.add (local.get $p) (i32.const 1)))))
+                  (else (if (result i32) (i32.load16_u (i32.const 32))
+                    (then (call $scanDirective (local.get $p) (local.get $end) (i32.const 1)))
+                    (else (i32.add (local.get $p) (i32.const 1)))))))
                 (br $dispatched)))
             ;; These bytes are literal text, but prevent copying unmarked gaps
             ;; without HTML escaping. Once that is required, stop finding them.
@@ -781,6 +784,127 @@
     (i32.store offset=8 (local.get $b) (i32.or (local.get $image) (i32.const 0x100)))
     (global.set $bracketSp (i32.add (global.get $bracketSp) (i32.const 1)))
     (local.get $end))
+
+  ;; The end of a directive name at $p: a letter, then letters, digits, `-`
+  ;; and `_`. Returns $p when no name starts there.
+  (func $dirNameEnd (param $p i32) (param $e i32) (result i32)
+    (local $q i32)
+    (local $c i32)
+    (if (i32.ge_u (local.get $p) (local.get $e)) (then (return (local.get $p))))
+    (if (i32.eqz (call $isAlpha (i32.load8_u (local.get $p)))) (then (return (local.get $p))))
+    (local.set $q (i32.add (local.get $p) (i32.const 1)))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $q) (local.get $e)))
+        (local.set $c (i32.load8_u (local.get $q)))
+        (br_if $done (i32.eqz (i32.or (call $isAlnum (local.get $c))
+          (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "_"))))))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (br $l)))
+    (local.get $q))
+
+  ;; Whether [$p, $e) is one of the names the host wrote below $mem.idPrefixEnd.
+  (func $directiveListed (param $p i32) (param $e i32) (result i32)
+    (local $at i32)
+    (local $n i32)
+    (local $i i32)
+    (local.set $n (i32.sub (local.get $e) (local.get $p)))
+    (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+    (local.set $at (i32.sub (i32.const $mem.idPrefixEnd) (i32.load16_u (i32.const 32))))
+    (block $none
+      (loop $names
+        (br_if $none (i32.ge_u (local.get $at) (i32.const $mem.idPrefixEnd)))
+        (if (i32.eq (i32.load8_u (local.get $at)) (local.get $n))
+          (then
+            (local.set $i (i32.const 0))
+            (block $differ
+              (loop $bytes
+                (if (i32.ge_u (local.get $i) (local.get $n)) (then (return (i32.const 1))))
+                (br_if $differ (i32.ne (i32.load8_u offset=1 (i32.add (local.get $at) (local.get $i)))
+                  (i32.load8_u (i32.add (local.get $p) (local.get $i)))))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br $bytes)))))
+        (local.set $at (i32.add (local.get $at) (i32.add (i32.load8_u (local.get $at)) (i32.const 1))))
+        (br $names)))
+    (i32.const 0))
+
+  ;; Consume one registered :name[label]{attributes} on this line. Both the
+  ;; completion pass and the inline parser skip its payload as an opaque span.
+  ;; A closed label at the live end waits one byte for optional attributes.
+  (func $scanDirective (param $start i32) (param $end i32) (param $mark i32) (result i32)
+    (local $base i32) (local $p i32) (local $name i32) (local $limit i32)
+    (local $c i32) (local $depth i32) (local $quote i32) (local $closed i32) (local $label i32) (local $labelStart i32)
+    (local.set $base (global.get $contentBase))
+    (local.set $name (i32.add (call $contentAt (local.get $start)) (i32.const 1)))
+    (local.set $limit (call $contentAt (local.get $end)))
+    (local.set $p (call $dirNameEnd (local.get $name) (local.get $limit)))
+    (if (i32.or (i32.ge_u (local.get $p) (local.get $limit))
+          (i32.or (i32.ne (i32.load8_u (local.get $p)) (i32.const "["))
+            (i32.and (i32.ne (local.get $start) (i32.const 0))
+              (i32.eq (i32.load8_u (i32.sub (local.get $name) (i32.const 2))) (i32.const ":")))))
+      (then (return (i32.add (local.get $start) (i32.const 1)))))
+    (if (i32.eqz (call $directiveListed (local.get $name) (local.get $p)))
+      (then (return (i32.add (local.get $start) (i32.const 1)))))
+    (local.set $depth (i32.const 1))
+    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+    (local.set $labelStart (i32.sub (local.get $p) (local.get $base)))
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $p) (local.get $limit)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $done (i32.eq (local.get $c) (i32.const 10)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (if (i32.eq (local.get $c) (i32.const "\5c"))
+          (then
+            (if (i32.and (i32.lt_u (local.get $p) (local.get $limit))
+                  (call $isAsciiPunct (i32.load8_u (local.get $p))))
+              (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+            (br $scan)))
+        (if (local.get $depth)
+          (then
+            (if (i32.eq (local.get $c) (i32.const "["))
+              (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+            (if (i32.eq (local.get $c) (i32.const "]"))
+              (then
+                (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+                (if (i32.eqz (local.get $depth))
+                  (then
+                    (local.set $label (i32.sub (local.get $p) (local.get $base)))
+                    (br_if $done (i32.ge_u (local.get $p) (local.get $limit)))
+                    (br_if $done (i32.ne (i32.load8_u (local.get $p)) (i32.const "{")))
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+            (br $scan)))
+        (if (local.get $quote)
+          (then
+            (if (i32.eq (local.get $quote) (local.get $c))
+              (then (local.set $quote (i32.const 0)))))
+          (else
+            (if (i32.eq (local.get $c) (i32.const "}"))
+              (then (local.set $closed (i32.const 1)) (br $done)))
+            (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
+              (then (local.set $quote (local.get $c))))))
+        (br $scan)))
+    (if (i32.eqz (local.get $closed))
+      (then
+        ;; A trimmed space settles a closed label, but an open attribute value
+        ;; or label can still receive more text after that space.
+        (if (i32.ne (local.get $label) (i32.sub (local.get $p) (local.get $base)))
+          (then (local.set $label (i32.const 0))))
+        (if (i32.and (i32.eq (local.get $p) (local.get $limit))
+              (i32.ne (i32.and (global.get $fmt) (i32.const $Fmt.active)) (i32.const 0)))
+          (then
+            (if (i32.eq (if (result i32) (local.get $label)
+                  (then (global.get $contentInputEnd))
+                  (else (call $skipSpace (global.get $contentInputEnd) (global.get $eof))))
+                (global.get $eof))
+              (then
+                ;; Repair must not append synthetic punctuation to a pending directive.
+                (if (i32.eqz (local.get $mark)) (then (return (i32.const -1))))
+                (local.set $label (i32.sub (i32.const 0) (local.get $labelStart)))))))))
+    (if (local.get $mark)
+      (then (drop (call $markNew (enum.get $Mk.directive) (local.get $start)
+        (i32.sub (local.get $p) (local.get $base)) (local.get $label)))))
+    (i32.sub (local.get $p) (local.get $base)))
 
   (func $handleCloseBracket (param $p i32) (param $end i32) (result i32)
     (local $base i32)

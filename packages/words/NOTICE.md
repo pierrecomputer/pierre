@@ -3,6 +3,12 @@
 `@pierre/words` is licensed under Apache 2.0. The material below keeps its
 original license.
 
+## Inline directive parsing
+
+The directive name scanner and allowlist lookup in `src/inline.wat` are adapted
+from T3’s Apache-2.0-licensed
+[Words fork](https://github.com/pingdotgg/pierre/commit/387b15e5089906479786c99ae193b5739135b8c6).
+
 ## Data in the published package
 
 | Data                             | Location                                                     | Source                                                                         | License                                                   |

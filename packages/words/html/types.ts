@@ -76,11 +76,13 @@ export type IslandData = Readonly<{ id: string; [key: string]: unknown }>;
 export type IslandPending = string | { className: string; label?: string };
 
 export interface HtmlIsland {
-  /** Displayed while a registered fence is streaming. Defaults to no content. */
+  /** Also accept :name[label]{key="value"} in prose. Render phrasing content. */
+  inline?: boolean;
+  /** Displayed while an island is streaming. Defaults to no content. */
   pending?: IslandPending;
   /** Text shown before the island mounts. */
   fallback?: string;
-  /** Return false to show the original fence. */
+  /** Return false to show the original source. */
   accepts(data: IslandData): boolean;
 }
 

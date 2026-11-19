@@ -16,7 +16,13 @@ import {
   isNameCode,
   unchangedEnd,
 } from '../lib/utils';
-import { formatIsland, formatIslandPending, islandFor } from './islands';
+import {
+  formatInlineIslands,
+  formatIsland,
+  formatIslandPending,
+  inlineIslandNames,
+  islandFor,
+} from './islands';
 import type {
   CodeHighlighterSession,
   CodeHighlightUpdate,
@@ -247,6 +253,8 @@ function transformUrls(html: string, options: HtmlOptions): string {
 /** Format session output with HTML options. Keeps at most one live highlighter. */
 export function createHtmlRenderer(options: HtmlOptions = {}) {
   let parser = createHtmlSession();
+  let inlineNames = inlineIslandNames(options.islands);
+  let sawInlineIsland = false;
   // Formatted completed HTML and the Wasm HTML it was formatted from.
   let stable = '';
   let stableRaw = '';
@@ -312,6 +320,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   const resetState = (): void => {
     dispose();
     parser = createHtmlSession();
+    sawInlineIsland = false;
     stable = '';
     stableRaw = '';
     nextCode = 0;
@@ -361,6 +370,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     let dropped = 0;
     /** Apply the element filters, then the URL hook, to HTML between code blocks. */
     const pass = (html: string): string => {
+      if (sawInlineIsland && options.islands !== undefined)
+        html = formatInlineIslands(html, options.islands);
       if (filtered) {
         let result = '';
         let from = 0;
@@ -820,6 +831,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     /** Change options. A reset discards completed output and reformats it. */
     configure(next: HtmlOptions, reset = true): void {
       if (reset) resetState();
+      if (next.islands !== options.islands)
+        inlineNames = inlineIslandNames(next.islands);
       options = next;
     },
     render(
@@ -859,12 +872,17 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
                   : 0) |
               (options.urlTransform === undefined ? 0 : formatFlags.rawUrls),
             idPrefix: escapeHtml(options.idPrefix ?? ''),
+            inlineNames,
           },
         };
-        const update = parser.render(source, sessionOptions);
-        const change = (update as InternalHtmlUpdate)[delta];
-        const slots =
-          closedSlots || (update as InternalHtmlUpdate)[formatKey] === true;
+        const update = parser.render(
+          source,
+          sessionOptions
+        ) as InternalHtmlUpdate;
+        // Cached prefixes can still contain earlier markers after the tail turns literal.
+        if (update.hasInlineIslands === true) sawInlineIsland = true;
+        const change = update[delta];
+        const slots = closedSlots || update[formatKey] === true;
         const fenceDelta = typeof change === 'object' ? change : undefined;
         const paragraphDelta = typeof change === 'string' ? change : undefined;
         if (
