@@ -194,16 +194,26 @@ function CodeViewCase({
   const viewerRef = useRef<CodeViewHandle<undefined, undefined>>(null);
 
   useEffect(() => {
+    let searchingTimer: number | undefined;
     const frame = window.requestAnimationFrame(() => {
       viewerRef.current?.openSearch({ mode, query, scope: 'all' });
       if (syntheticCount != null && containerRef.current != null) {
         setSyntheticCount(containerRef.current, syntheticCount);
       }
-      if (searching && containerRef.current != null) {
-        setSyntheticSearching(containerRef.current);
+      if (searching) {
+        searchingTimer = window.setTimeout(() => {
+          if (containerRef.current != null) {
+            setSyntheticSearching(containerRef.current);
+          }
+        }, 500);
       }
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (searchingTimer != null) {
+        window.clearTimeout(searchingTimer);
+      }
+    };
   }, [mode, query, searching, syntheticCount]);
 
   return (
