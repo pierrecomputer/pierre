@@ -1428,7 +1428,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.containerHeight = -1;
     this.windowSpecs = { top: 0, bottom: 0 };
     this.pendingLayoutAnchor = undefined;
-    this.finishPendingScroll('cancelled');
+    this.cancelScroll();
     this.shouldFixContainerFocus = false;
     this.height = 0;
     this.scrollTop = 0;
