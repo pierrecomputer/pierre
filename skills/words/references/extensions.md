@@ -24,6 +24,9 @@ const html = new TextDecoder().decode(
 - Math produces SVG in HTML and TeX source in ANSI. During a stream, inline math
   stays text until its closing delimiter arrives. An open display block can show
   a partial formula.
+- An app that renders no TeX can import `renderToHtml()`, `renderToAnsi()`, and
+  `createHtmlSession()` from `@pierre/words/no-math`: a WebAssembly module about
+  a third smaller, where the `math` option shows formulas as code.
 - CJK mode lets `*`, `**`, and `~~` mark emphasis or strikethrough where
   punctuation meets Chinese, Japanese, or Korean text. `**重要。**请阅读。`
   renders as `<strong>重要。</strong>请阅读。` inside a paragraph. Prefer

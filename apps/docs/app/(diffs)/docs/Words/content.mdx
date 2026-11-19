@@ -245,6 +245,11 @@ block without blank lines, or a `math` code fence.
 During a stream, inline math stays as text until the closing delimiter. Open
 display blocks can show partial formulas.
 
+An app that renders no TeX can import `renderToHtml()`, `renderToAnsi()`, and
+`createHtmlSession()` from `@pierre/words/no-math` instead of `@pierre/words`.
+Its WebAssembly module is about a third smaller, and the `math` option shows
+formulas as code.
+
 ### CJK support
 
 Set `cjk` on `<Markdown>` or use `{ cjk: true }` in the render options. This

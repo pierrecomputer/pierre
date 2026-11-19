@@ -19,6 +19,12 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./no-math": {
+      "types": "./dist/no-math.d.ts",
+      "workerd": "./dist/no-math-workerd.js",
+      "import": "./dist/no-math.js",
+      "default": "./dist/no-math.js"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",

@@ -20,12 +20,13 @@ import * as fs from 'node:fs';
 import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
 
-// --no-math builds src/math-none.wat in place of src/math.wat, for apps that
-// render no TeX: the module is about a third smaller, and the math option
-// shows formulas as code. --out <file> writes only the module to that file and
-// leaves dist/ alone, so a variant never replaces the published build.
+// --no-math builds the module of `@pierre/words/no-math` (lib/no-math.ts), for
+// apps that render no TeX: src/math-none.wat in place of src/math.wat, about a
+// third smaller, and the math option shows formulas as code. It adds
+// words-no-math.wasm to dist/, so it runs after the default build, which starts
+// dist/ anew (`build` in moon.yml).
 const { values: args } = parseArgs({
-  options: { 'no-math': { type: 'boolean' }, out: { type: 'string' } },
+  options: { 'no-math': { type: 'boolean' } },
 });
 
 // East Asian Wide and Fullwidth code points (EastAsianWidth.txt, EAW in {W, F}).
@@ -656,22 +657,21 @@ const wasmBytes = optimizeWasm(wat2wasm(path, code), {
   shrinkLevel: 1,
 });
 
-if (args.out !== undefined) {
-  fs.writeFileSync(args.out, wasmBytes);
-} else {
+const dist = new URL('../dist/', import.meta.url);
+const name = args['no-math'] === true ? 'words-no-math' : 'words';
+if (name === 'words') {
   // tsdown runs next with `clean: false`, so remove old chunks here.
-  const dist = new URL('../dist/', import.meta.url);
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(dist, { recursive: true });
-  fs.writeFileSync(new URL('words.wasm', dist), wasmBytes);
-  fs.writeFileSync(
-    new URL('words.wasm.mjs', dist),
-    `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
-      `const b = new Uint8Array(s.length);\n` +
-      `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
-      `export default b;\n`
-  );
 }
+fs.writeFileSync(new URL(`${name}.wasm`, dist), wasmBytes);
+fs.writeFileSync(
+  new URL(`${name}.wasm.mjs`, dist),
+  `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
+    `const b = new Uint8Array(s.length);\n` +
+    `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +
+    `export default b;\n`
+);
 console.log(
   `Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${wasmBytes.length} bytes, gzipped: ${gzipSync(wasmBytes, { level: 9 }).length} bytes)`
 );

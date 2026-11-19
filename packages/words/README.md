@@ -159,6 +159,14 @@ STIX Two Math, which Apple systems include; other math fonts work with small
 spacing differences. A formula that it cannot lay out shows as code. An unknown
 command shows in red, or in gray while its block is still open.
 
+An app that renders no TeX can import `@pierre/words/no-math` in place of
+`@pierre/words`: the same API, with a module about a third smaller (64 KB
+instead of 98 KB). With the `math` option, it shows formulas as code.
+
+```ts
+import { renderToHtml } from '@pierre/words/no-math';
+```
+
 ## CJK support
 
 Set `cjk: true` to let asterisks and tildes mark emphasis and strikethrough next
@@ -233,14 +241,6 @@ moonx words:build
 moonx words:test
 moonx words:test-spec
 moonx words:bench --ignore-ci-checks
-```
-
-An app that renders no TeX can build a module without math, about a third
-smaller (64 KB instead of 98 KB), and load it with `init()`. With the `math`
-option, it shows formulas as code.
-
-```bash
-node packages/words/scripts/build.ts --no-math --out words.wasm
 ```
 
 [Benchmarks](./benchmark/README.md) · [Architecture](./ARCHITECTURE.md)
