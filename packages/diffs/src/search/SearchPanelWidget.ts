@@ -154,11 +154,13 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // visible because it communicates an in-progress result rather than a
     // settled empty result.
     const showNoMatches = () => {
-      if (searching) {
+      // Keep a spinner that is already showing. A new one starts turning
+      // from the beginning, so replacing it on every update freezes it.
+      if (searching && matchResultElement.dataset.searching == null) {
         matchResultElement.dataset.searching = '';
         matchResultElement.ariaLabel = i18n.t('searching');
         matchResultElement.innerHTML = getEditorIconSvg('loader', 16);
-      } else {
+      } else if (!searching) {
         clearSearchingIndicator();
         matchResultElement.textContent = '0/0';
       }

@@ -991,6 +991,22 @@ describe('CodeView sliced find', () => {
     });
   });
 
+  test('the searching spinner is kept, not re-created, while find refreshes', async () => {
+    await withViewer([fileItem('a')], async ({ viewer, root, finish }) => {
+      fillSearch(root, 'missing');
+      const spinner = matches(root)?.querySelector('svg');
+      expect(spinner).not.toBeNull();
+      // New items make the panel read its matches again while the search is
+      // still running. The spinner must stay the same element.
+      viewer.addItems([fileItem('b')]);
+      viewer.render(true);
+      expect(matches(root)?.hasAttribute('data-searching')).toBe(true);
+      expect(matches(root)?.querySelector('svg') === spinner).toBe(true);
+      await finish();
+      expect(label(root)).toBe('0/0');
+    });
+  });
+
   test('a hidden match can fill the last place at the cap', async () => {
     const cutLength = 'target '.length * (MAX_SEARCH_MATCHES - 1);
     await withViewer(
