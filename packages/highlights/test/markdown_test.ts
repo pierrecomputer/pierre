@@ -477,9 +477,9 @@ void t.test(
   }
 );
 
-void t.test('markdown: lines of many `<` or `[` stay linear', () => {
+void t.test('markdown: repeated unmatched inline markers stay linear', () => {
   // each `<` used to rescan to the line end: 80k of them took ~760ms
-  for (const line of ['<a', '[', '[a](', '[a] ', '<a "x>" ']) {
+  for (const line of ['<a', '[', '[a](', '[a] ', '<a "x>" ', '~~a ']) {
     const code = line.repeat(80000) + '\n';
     const start = performance.now();
     const out = checkInvariants(markdown.hl, code);
@@ -543,6 +543,33 @@ void t.test(
         ['\\*', 'string.escape'],
         ['escaped', null],
         ['\\*', 'string.escape'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'markdown: paired tildes and triple emphasis respect inline boundaries',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'markdown',
+        'before ___both___ ~~see `~~` here~~ after\n' +
+          '***first *** last***\n' +
+          '~one~ and ~~ open ~~ and ~~unclosed\n' +
+          '`***literal*** ~~literal~~` \\~\\~escaped\\~\\~'
+      ),
+      [
+        ['before', null],
+        ['___both___', 'emphasis.strong.italic'],
+        ['~~see `~~` here~~', 'markup.strikethrough'],
+        ['after', null],
+        ['***first *** last***', 'emphasis.strong.italic'],
+        ['~one~ and ~~ open ~~ and ~~unclosed', null],
+        ['`***literal*** ~~literal~~`', 'text.literal'],
+        ['\\~\\~', 'string.escape'],
+        ['escaped', null],
+        ['\\~\\~', 'string.escape'],
       ]
     );
   }

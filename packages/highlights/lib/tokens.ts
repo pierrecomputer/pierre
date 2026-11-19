@@ -199,10 +199,7 @@ export function rangeToToken(
     const { styles, fg } = themes[0];
     const style = styles[hl];
     token.color = style?.color ?? fg;
-    let bits = 0;
-    if (style?.italic === true) bits |= 1;
-    if ((style?.weight ?? 0) >= 600) bits |= 2;
-    token.fontStyle = bits;
+    token.fontStyle = style?.fontStyle ?? 0;
   } else {
     token.htmlStyle = themeHtmlStyle(themes, hl, cssVariablePrefix);
   }
@@ -254,15 +251,10 @@ export function themeHtmlStyle(
         const plain = role === 'default';
         htmlStyle[plain ? 'color' : cssVariablePrefix + color] =
           style?.color ?? fg ?? 'inherit';
-        if (style?.italic === true) {
+        for (const property in style?.fontCss) {
           htmlStyle[
-            plain ? 'font-style' : `${cssVariablePrefix}${color}-font-style`
-          ] = 'italic';
-        }
-        if (style != null && style.weight !== 0) {
-          htmlStyle[
-            plain ? 'font-weight' : `${cssVariablePrefix}${color}-font-weight`
-          ] = String(style.weight);
+            plain ? property : `${cssVariablePrefix}${color}-${property}`
+          ] = style.fontCss[property];
         }
       }
     }
@@ -318,10 +310,10 @@ export function multiThemeBlob(
   let prologueReserve = 128;
   let nameBytes = 0;
   for (const { length } of names) {
-    // per slot: `NAME:#rrggbbaa;`, `NAME-font-style:italic;`, and
-    // `NAME-font-weight:N00;` (or the light-dark() forms) for a span;
+    // A span can have four declarations per slot: color, font style,
+    // font weight, and text decoration (or their light-dark() forms);
     // `NAME-bg:#rrggbbaa;` and `NAME:#rrggbbaa;` for the root
-    spanReserve += 64 + 3 * length;
+    spanReserve += 96 + 4 * length;
     prologueReserve += 48 + 2 * length;
     nameBytes += length;
   }
@@ -400,21 +392,16 @@ function lightDarkStyle(
   const htmlStyle: Record<string, string> = {
     color: ac === bc ? ac : `light-dark(${ac}, ${bc})`,
   };
-  const ai = a?.italic === true;
-  const bi = b?.italic === true;
-  if (ai && bi) htmlStyle['font-style'] = 'italic';
-  else {
-    if (ai) htmlStyle[`${cssVariablePrefix}light-font-style`] = 'italic';
-    if (bi) htmlStyle[`${cssVariablePrefix}dark-font-style`] = 'italic';
-  }
-  const aw = a?.weight ?? 0;
-  const bw = b?.weight ?? 0;
-  if (aw !== 0 && aw === bw) htmlStyle['font-weight'] = String(aw);
-  else {
-    if (aw !== 0)
-      htmlStyle[`${cssVariablePrefix}light-font-weight`] = String(aw);
-    if (bw !== 0)
-      htmlStyle[`${cssVariablePrefix}dark-font-weight`] = String(bw);
+  for (const property of ['font-style', 'font-weight', 'text-decoration']) {
+    const av = a?.fontCss?.[property];
+    const bv = b?.fontCss?.[property];
+    if (av !== undefined && av === bv) htmlStyle[property] = av;
+    else {
+      if (av !== undefined)
+        htmlStyle[`${cssVariablePrefix}light-${property}`] = av;
+      if (bv !== undefined)
+        htmlStyle[`${cssVariablePrefix}dark-${property}`] = bv;
+    }
   }
   return htmlStyle;
 }
@@ -465,9 +452,7 @@ export function lineRecordsToTokens(
               content: code.slice(start, end),
               offset: start + offsetBase,
               color: style?.color ?? fg,
-              fontStyle:
-                (style?.italic === true ? 1 : 0) |
-                ((style?.weight ?? 0) >= 600 ? 2 : 0),
+              fontStyle: style?.fontStyle ?? 0,
             };
           } else {
             token = {
