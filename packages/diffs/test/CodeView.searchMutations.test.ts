@@ -527,10 +527,18 @@ describe('CodeView incremental find', () => {
   }
 
   test('an edit at the match limit finds the rest of the item the limit cut short', async () => {
+    // The first item holds about 60% of the limit and the second about 70%, so
+    // the limit is reached part way through the second.
+    const matchesPerLine = 100;
+    const line = `${'target '.repeat(matchesPerLine)}\n`;
+    const editedLines = Math.ceil((MAX_SEARCH_MATCHES * 0.6) / matchesPerLine);
+    const cutLines = Math.ceil((MAX_SEARCH_MATCHES * 0.7) / matchesPerLine);
+    const editedCount = editedLines * matchesPerLine;
+    const cutCount = cutLines * matchesPerLine;
     await withViewer(
       [
-        fileItem('edited', 'target\n'.repeat(60_000)),
-        fileItem('cut', 'target\n'.repeat(70_000)),
+        fileItem('edited', line.repeat(editedLines)),
+        fileItem('cut', line.repeat(cutLines)),
         fileItem('later'),
       ],
       async ({ viewer, root, states, finish }) => {
@@ -539,17 +547,17 @@ describe('CodeView incremental find', () => {
         const before = getSearchState(viewer).matches;
         expect(before).toHaveLength(MAX_SEARCH_MATCHES);
         expect(before.filter(({ itemId }) => itemId === 'cut')).toHaveLength(
-          40_000
+          MAX_SEARCH_MATCHES - editedCount
         );
         viewer.updateItem({ ...fileItem('edited', 'missing'), version: 1 });
         await finish();
         const matches = getSearchState(viewer).matches;
         expect(matches.filter(({ itemId }) => itemId === 'cut')).toHaveLength(
-          70_000
+          cutCount
         );
         expect(matches.at(-1)?.itemId).toBe('later');
-        expect(matches).toHaveLength(70_001);
-        expect(states.at(-1)?.matchCount).toBe(70_001);
+        expect(matches).toHaveLength(cutCount + 1);
+        expect(states.at(-1)?.matchCount).toBe(cutCount + 1);
       }
     );
   });
