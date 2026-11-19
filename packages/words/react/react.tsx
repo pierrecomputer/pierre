@@ -13,7 +13,7 @@ import type { HTMLAttributes, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { createDomRenderer } from '../html/dom';
-import type { MountedIsland } from '../html/islands';
+import { type MountedIsland, noIslands } from '../html/islands';
 import { createHtmlRenderer } from '../html/render';
 import type {
   AnimateOptions,
@@ -54,27 +54,6 @@ export interface MarkdownProps
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 const subscribe = (): (() => void) => () => {};
-const noIslands: readonly MountedIsland[] = [];
-
-/** Report new portal targets after the imperative DOM renderer has patched. */
-function createIslandStore() {
-  let current = noIslands;
-  let notify: (() => void) | undefined;
-  return {
-    subscribe(listener: () => void) {
-      notify = listener;
-      return () => {
-        notify = undefined;
-      };
-    },
-    snapshot: () => current,
-    update(next: readonly MountedIsland[]) {
-      if (next === current) return;
-      current = next;
-      notify?.();
-    },
-  };
-}
 
 function IslandPortal({
   island,
@@ -130,12 +109,7 @@ export function Markdown({
     () => true,
     () => false
   );
-  const [islandStore] = useState(createIslandStore);
-  const mountedIslands = useSyncExternalStore(
-    islandStore.subscribe,
-    islandStore.snapshot,
-    () => noIslands
-  );
+  const [mountedIslands, setMountedIslands] = useState(noIslands);
   const islandOptions = useMemo<HtmlOptions['islands']>(
     () =>
       islands === undefined
@@ -200,8 +174,10 @@ export function Markdown({
       hydrated ? animated : false,
       caret
     );
-    if (islands !== undefined || mountedIslands.length !== 0)
-      islandStore.update(renderer.current?.getIslands() ?? noIslands);
+    if (islands !== undefined || mountedIslands.length !== 0) {
+      const next = renderer.current?.getIslands() ?? noIslands;
+      if (next !== mountedIslands) setMountedIslands(next);
+    }
   });
   const callbacks = useRef({ onAnimationStart, onAnimationEnd });
   useEffect(() => {
@@ -212,17 +188,21 @@ export function Markdown({
     callbacks.current.onAnimationStart?.();
     return () => callbacks.current.onAnimationEnd?.();
   }, [active]);
+  const container = (
+    <div
+      {...props}
+      ref={root}
+      data-markdown="root"
+      data-streaming={active || undefined}
+      dangerouslySetInnerHTML={initial.markup}
+    />
+  );
+  if (mountedIslands.length === 0 || islands === undefined) return container;
   return (
     <>
-      <div
-        {...props}
-        ref={root}
-        data-markdown="root"
-        data-streaming={active || undefined}
-        dangerouslySetInnerHTML={initial.markup}
-      />
+      {container}
       {mountedIslands.map((island) =>
-        islands !== undefined && Object.hasOwn(islands, island.name) ? (
+        Object.hasOwn(islands, island.name) ? (
           <IslandPortal
             key={island.key}
             island={island}

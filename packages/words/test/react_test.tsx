@@ -1,7 +1,14 @@
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
 import pierreLight from '@pierre/highlights/themes/pierre-light';
 import { createHtmlSession, renderToHtml } from '@pierre/words';
-import { afterEach, describe, expect, expectTypeOf, test } from 'bun:test';
+import {
+  afterEach,
+  describe,
+  expect,
+  expectTypeOf,
+  spyOn,
+  test,
+} from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import {
@@ -2779,6 +2786,12 @@ describe('reactive islands', () => {
     expect(html(closed, { islands: registry })).toContain(
       'Loading &lt;counter&gt;'
     );
+    const ordinary = '~~~js\nconst n = 1;\n~~~\n\n';
+    expect(html(ordinary, { islands: registry })).toBe(html(ordinary));
+    const encoded = closed.replace('island-', 'island&#45;');
+    expect(html(ordinary + encoded + ordinary, { islands: registry })).toBe(
+      html(ordinary + closed + ordinary, { islands: registry })
+    );
     for (const source of [
       open,
       closed.replace('counter', 'unknown'),
@@ -2791,6 +2804,50 @@ describe('reactive islands', () => {
       expect(output).not.toContain('data-words-island=');
     }
     expect(html(closed)).toContain('<pre');
+  });
+
+  test('discovers new hosts without searching the root or revisiting committed blocks', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, {
+      islands: { counter: { accepts: () => true } },
+    });
+    const searches = spyOn(container, 'querySelectorAll');
+    const render = (source: string) =>
+      renderer.update(source, true, true, false);
+    const prose = 'Intro.\n\n~~~js\n1\n~~~\n\n';
+    const quote = closed
+      .trimEnd()
+      .split('\n')
+      .map((line) => '> ' + line)
+      .join('\n');
+    try {
+      render(prose);
+      expect(renderer.getIslands()).toHaveLength(0);
+      render(prose + quote + '\n\nTail\n\n');
+      const [first] = renderer.getIslands();
+      expect(first.data.id).toBe('votes');
+
+      const committed = container.querySelector('blockquote')!;
+      const previousSearches = spyOn(committed, 'querySelectorAll');
+      const next =
+        prose + quote + '\n\nTail\n\n' + closed.replace('votes', 'second');
+      render(next);
+      expect(renderer.getIslands().map((island) => island.data.id)).toEqual([
+        'votes',
+        'second',
+      ]);
+      expect(renderer.getIslands()[0]).toBe(first);
+      render(next + '\nMore prose\n\n');
+      expect(previousSearches).not.toHaveBeenCalled();
+
+      renderer.configure({});
+      render(next);
+      expect(renderer.getIslands()).toHaveLength(0);
+      expect(container.querySelector('[data-words-island]')).toBeNull();
+      expect(searches).not.toHaveBeenCalledWith('[data-words-island]');
+    } finally {
+      renderer.disconnect();
+    }
   });
 
   test('hydrates a counter and preserves its state and context through streamed text and edits', async () => {

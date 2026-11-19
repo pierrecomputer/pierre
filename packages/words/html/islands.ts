@@ -6,7 +6,8 @@ import type {
   IslandPending,
 } from './types';
 
-export const islandSelector = '[data-words-island]';
+const islandSelector = '[data-words-island]';
+export const islandHostStart = '<div data-words-island="';
 
 function readIslandData(code: string): IslandData | undefined {
   let data: unknown;
@@ -70,7 +71,7 @@ export function formatIsland(
   // JSON encoding preserves ids that contain line breaks or control characters.
   const key = escapeHtml(JSON.stringify(data.id));
   return (
-    '<div data-words-island="' +
+    islandHostStart +
     escapeHtml(name) +
     '" data-words-island-id="' +
     key +
@@ -93,22 +94,48 @@ export interface MountedIsland {
   source: string;
 }
 
+export const noIslands: readonly MountedIsland[] = [];
+
 export function isIsland(node: Node | null): node is HTMLElement {
   return (
     node?.nodeType === 1 && (node as Element).hasAttribute('data-words-island')
   );
 }
 
+/** Collect hosts only from the top-level siblings just patched into the document. */
+export function appendIslandHosts(
+  hosts: HTMLElement[],
+  first: Node | null,
+  end: Node | null
+): void {
+  for (
+    let node = first;
+    node !== end && node !== null;
+    node = node.nextSibling
+  ) {
+    if (node.nodeType !== 1) continue;
+    if (isIsland(node)) {
+      hosts.push(node);
+      continue;
+    }
+    const nested = (node as Element).querySelectorAll<HTMLElement>(
+      islandSelector
+    );
+    for (const host of nested) hosts.push(host);
+  }
+}
+
 /** Resolve hosts in document order and move portal targets only if an island moved. */
 export function collectIslands(
   root: HTMLElement,
+  hosts: readonly HTMLElement[],
   previous: readonly MountedIsland[]
 ): readonly MountedIsland[] {
   const next: MountedIsland[] = [];
   const old = new Map(previous.map((island) => [island.key, island]));
   const seen = new Set<string>();
   const enclosingIsland = root.closest(islandSelector);
-  for (const host of root.querySelectorAll<HTMLElement>(islandSelector)) {
+  for (const host of hosts) {
     // Ignore descendants owned by an island, including nested Markdown renderers.
     if (host.parentElement?.closest(islandSelector) !== enclosingIsland)
       continue;

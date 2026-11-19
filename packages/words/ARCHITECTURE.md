@@ -265,12 +265,13 @@ output moves forward without a lookup cache for previously rendered code.
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.
 
-When islands are configured, the host formatter uses the existing slots for
-closed, registered fences and emits a portal target and text fallback. The DOM
-patcher treats each island as opaque, moves portal targets by id when
-surrounding Markdown changes, and reports the active targets after each
-structural patch. React mounts the components through portals so they retain
-application context.
+With an island registry, Wasm passes fences whose language starts with `island-`
+to the host formatter. Ordinary closed fences stay in Wasm unless a plugin or
+filter needs their contents. For an accepted island, the formatter emits a
+portal target and text fallback. The DOM patcher keeps the hosts in committed
+blocks and looks for new hosts only in patched blocks whose HTML contains an
+island. When an edit moves an island, the patcher preserves its portal target by
+id so the React component retains its state and context.
 
 ## Constraints
 

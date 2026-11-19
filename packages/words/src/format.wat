@@ -20,6 +20,7 @@
   (const $Fmt.active 16)   ;; the stream is active, so the open fence shows as incomplete
   (const $Fmt.slots 32)    ;; every code block is in slots (see $htmlCodeBlockFmt)
   (const $Fmt.rawUrls 64)  ;; the host checks URLs and prefixes footnote links
+  (const $Fmt.islands 128) ;; the host handles fences whose language starts with island-
   (global $fmt (mut i32) (i32.const 0))
   ;; Where a formatted image started when its URL failed the rules, or 0.
   (global $imgDrop (mut i32) (i32.const 0))
@@ -343,16 +344,27 @@
       (i32.ne (i32.and (global.get $fmt) (i32.const $Fmt.active)) (i32.const 0))))
     (local.set $slots (i32.or (local.get $open)
       (i32.and (global.get $fmt) (i32.const $Fmt.slots))))
-    (if (local.get $slots)
+    (if (i32.or (local.get $slots) (i32.and (global.get $fmt) (i32.const $Fmt.islands)))
       (then
-        ;; tell the host, which then has no need to search for slots
-        (i32.store8 (i32.const 27) (i32.const 1))
+        (local.set $at (global.get $out))
         (call $outSmall
           (i64.extend_i32_u (i32.shl
             (i32.add (i32.const "0") (i32.add (local.get $open) (local.get $live))) (i32.const 8)))
           (i32.const 2))
         (call $htmlInfoWord (local.get $r))
-        (call $outByte (i32.const 0))))
+        ;; Test the decoded language after its two-byte state header. Ordinary
+        ;; closed fences discard that header and write their final HTML here.
+        (if (i32.eqz (local.get $slots))
+          (then (local.set $slots (i32.and
+            (i32.ge_u (i32.sub (global.get $out) (local.get $at)) (i32.const 9))
+            (i32.and
+              (i32.eq (i32.load offset=2 (local.get $at)) (i32.const "isla"))
+              (i32.eq (i32.load offset=5 (local.get $at)) (i32.const "and-")))))))
+        (if (local.get $slots)
+          (then
+            (i32.store8 (i32.const 27) (i32.const 1))
+            (call $outByte (i32.const 0)))
+          (else (global.set $out (local.get $at))))))
     (out.str "<div data-markdown=\22code-block\22 data-language=\22")
     (call $htmlLanguage (local.get $r))
     (if (local.get $live) (then (out.str "\22 data-incomplete=\22true")))

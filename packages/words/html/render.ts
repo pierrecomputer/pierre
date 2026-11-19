@@ -272,8 +272,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let pendingHtml = '';
   let pendingParagraph: { body: string } | undefined;
   let pendingFence: InternalCodeUpdate | undefined;
-  // Whether Wasm writes every code block in slots, not only the open fence.
-  let allSlots = false;
+  // Whether completed output can contain slots as well as the open fence.
+  let closedSlots = false;
   // Raw end, formatted end, and next code index at fences in the current pending output.
   let pendingFences: number[] = [];
   // Completed fence output by language and code: highlighted HTML, or what a
@@ -608,13 +608,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           input.slice(pendingFences[at]),
           pendingFences[at + 2],
           undefined,
-          allSlots
+          closedSlots
         );
         return [pendingHtml.slice(0, pendingFences[at + 1]) + tail, next];
       }
     }
     // Completed output never holds the open fence.
-    return format(input, firstCode, undefined, allSlots);
+    return format(input, firstCode, undefined, closedSlots);
   };
 
   /**
@@ -653,7 +653,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       codeTag !== fence.code ||
       firstCode !== fence.firstCode
     ) {
-      const [before, index] = format(prefix, firstCode, undefined, allSlots);
+      const [before, index] = format(prefix, firstCode, undefined, closedSlots);
       fence = {
         key: ++fenceKey,
         prefix,
@@ -663,7 +663,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         firstCode,
         index,
         before,
-        after: format(suffix, index + 1, undefined, allSlots)[0],
+        after: format(suffix, index + 1, undefined, closedSlots)[0],
         highlighted: false,
         escaped: undefined,
         start: 0,
@@ -834,13 +834,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         const controls = controlFlags(options.controls);
         const plugins = options.plugins;
         // Plugins and filters need code blocks in slots.
-        allSlots =
-          options.islands !== undefined ||
+        const allSlots =
           plugins?.code !== undefined ||
           plugins?.mermaid !== undefined ||
           (plugins?.renderers?.length ?? 0) > 0 ||
           options.allowedElements !== undefined ||
           options.disallowedElements !== undefined;
+        closedSlots = allSlots || options.islands !== undefined;
         const sessionOptions: InternalSessionOptions = {
           incomplete,
           cjk: options.cjk,
@@ -852,7 +852,11 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               ((controls & 1) === 0 ? 0 : formatFlags.copy) |
               ((controls & 2) === 0 ? 0 : formatFlags.download) |
               (active ? formatFlags.active : 0) |
-              (allSlots ? formatFlags.slots : 0) |
+              (allSlots
+                ? formatFlags.slots
+                : options.islands !== undefined
+                  ? formatFlags.islands
+                  : 0) |
               (options.urlTransform === undefined ? 0 : formatFlags.rawUrls),
             idPrefix: escapeHtml(options.idPrefix ?? ''),
           },
@@ -860,7 +864,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         const update = parser.render(source, sessionOptions);
         const change = (update as InternalHtmlUpdate)[delta];
         const slots =
-          allSlots || (update as InternalHtmlUpdate)[formatKey] === true;
+          closedSlots || (update as InternalHtmlUpdate)[formatKey] === true;
         const fenceDelta = typeof change === 'object' ? change : undefined;
         const paragraphDelta = typeof change === 'string' ? change : undefined;
         if (
@@ -998,7 +1002,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             if (pendingSource !== undefined) {
               pendingRaw = pendingSource.pending;
               pendingSlots =
-                allSlots ||
+                closedSlots ||
                 (pendingSource as InternalHtmlUpdate)[formatKey] === true;
               pendingSource = undefined;
             }

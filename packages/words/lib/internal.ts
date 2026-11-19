@@ -21,6 +21,7 @@ export const formatFlags = {
   active: 16,
   slots: 32,
   rawUrls: 64,
+  islands: 128,
 };
 
 export interface FenceDelta {
