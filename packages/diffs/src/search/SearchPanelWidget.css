@@ -117,6 +117,7 @@
 
   [data-input-box][data-find] {
     grid-area: find;
+    box-sizing: border-box;
     color: var(--diffs-search-panel-fg);
     background-color: var(--diffs-search-panel-bg);
     border: 1px solid
@@ -190,9 +191,11 @@
     flex-grow: 1;
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
     font-size: 13px;
-    line-height: 24px;
+    line-height: 16px;
     padding-inline: 6px;
+    padding-block: 4px;
     color: var(--diffs-search-panel-fg);
     background-color: var(--diffs-search-panel-bg);
     border: 1px solid
@@ -215,6 +218,7 @@
 
   [data-input-box] input:focus-visible {
     outline: 1px solid var(--diffs-search-panel-modified);
+    outline-offset: -1px;
   }
 
   [data-input-box][data-find] input {
@@ -228,6 +232,7 @@
 
   [data-input-box][data-find]:focus-within {
     outline: 1px solid var(--diffs-search-panel-modified);
+    outline-offset: -1px;
   }
 
   [data-input-box][data-find] input:focus-visible {
@@ -306,12 +311,16 @@
       color 0.1s ease-in-out;
   }
 
+  [data-search-icon] > svg {
+    pointer-events: none;
+  }
+
   [data-search-icon]:disabled {
     opacity: 0.25;
     cursor: default;
   }
 
-  [data-search-icon]:not(:disabled):hover {
+  [data-search-icon]:not(:disabled, [aria-pressed='true']):hover {
     color: var(--diffs-search-panel-fg);
   }
 
@@ -354,6 +363,7 @@
       var(--diffs-widget-fg) 50%,
       var(--diffs-search-panel-bg)
     );
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
   }
 
   [data-search-close]:not(:disabled):hover {
