@@ -1,4 +1,5 @@
 import type { SelectionSide } from '../types';
+import { findRangeAtPoint } from './findRangeAtPoint';
 
 export interface SearchHighlightRange {
   startCharacter: number;
@@ -11,7 +12,32 @@ interface SearchHighlights {
   current: Highlight;
 }
 
+// One painted match: its range, the highlight it was added to, the row it is
+// in, and the character it starts at in that row's line.
+interface PaintedRange {
+  range: Range;
+  highlight: Highlight;
+  row: HTMLElement;
+  startCharacter: number;
+}
+
 const highlightsByDocument = new WeakMap<Document, SearchHighlights>();
+
+// The browser's own hit test for highlights. It is missing from the DOM types;
+// Chrome 140, Firefox 150 and Safari 27.3 have it.
+interface HighlightHitTest {
+  highlightsFromPoint(
+    x: number,
+    y: number,
+    options?: { shadowRoots?: ShadowRoot[] }
+  ): { highlight: Highlight; ranges: AbstractRange[] }[];
+}
+
+function canHitTest(
+  registry: HighlightRegistry
+): registry is HighlightRegistry & HighlightHitTest {
+  return 'highlightsFromPoint' in registry;
+}
 
 function isAlreadyRegisteredError(error: unknown): boolean {
   return error instanceof Error && error.name === 'InvalidModificationError';
@@ -20,12 +46,6 @@ function isAlreadyRegisteredError(error: unknown): boolean {
 // Paint matches over existing text nodes. Each surface owns its ranges, while
 // the document shares two registry entries styled inside every code shadow root.
 export class SearchHighlighter {
-  private ranges: { range: Range; highlight: Highlight }[] = [];
-  private readonly markedButtons: HTMLButtonElement[] = [];
-  private currentRange: Range | undefined;
-
-  private constructor(private readonly highlights: SearchHighlights) {}
-
   static create(document: Document): SearchHighlighter | undefined {
     const view = document.defaultView;
     if (
@@ -72,6 +92,24 @@ export class SearchHighlighter {
     return new SearchHighlighter(highlights);
   }
 
+  static getLineNumber(row: HTMLElement): number {
+    return Number(row.dataset.line);
+  }
+
+  // Unchanged rows on the old side of a split diff belong to deletions too.
+  static getLineSide(row: HTMLElement): SelectionSide {
+    return row.dataset.lineType === 'change-deletion' ||
+      row.closest('[data-deletions]') != null
+      ? 'deletions'
+      : 'additions';
+  }
+
+  private ranges: PaintedRange[] = [];
+  private readonly markedButtons: HTMLButtonElement[] = [];
+  private currentRange: Range | undefined;
+
+  private constructor(private readonly highlights: SearchHighlights) {}
+
   clear(): void {
     const { ranges, markedButtons } = this;
     for (const button of markedButtons) {
@@ -90,6 +128,39 @@ export class SearchHighlighter {
     return this.currentRange;
   }
 
+  // The start character of the painted match under a point in a row, if there
+  // is one. The browser says which highlight is at the point; where it cannot,
+  // the row's ranges are measured instead.
+  getMatchStartAtPoint(
+    row: HTMLElement,
+    clientX: number,
+    clientY: number
+  ): number | undefined {
+    const { ranges, highlights } = this;
+    const registry = row.ownerDocument.defaultView?.CSS.highlights;
+    if (registry == null || !canHitTest(registry)) {
+      return findRangeAtPoint(ranges, row, clientX, clientY)?.startCharacter;
+    }
+    const root = row.getRootNode();
+    const hits = registry.highlightsFromPoint(clientX, clientY, {
+      shadowRoots: root instanceof ShadowRoot ? [root] : [],
+    });
+    for (const { highlight, ranges: hitRanges } of hits) {
+      if (highlight !== highlights.match && highlight !== highlights.current) {
+        continue;
+      }
+      for (const hitRange of hitRanges) {
+        const entry = ranges.find(
+          (painted) => painted.range === hitRange && painted.row === row
+        );
+        if (entry != null) {
+          return entry.startCharacter;
+        }
+      }
+    }
+    return undefined;
+  }
+
   // Look up matches only for mounted rows, including each side of a split
   // diff. Hosts supply line lookups so painting never regroups offscreen hits.
   paint(
@@ -102,12 +173,10 @@ export class SearchHighlighter {
     for (const row of root.querySelectorAll<HTMLElement>(
       '[data-line][data-line-type]'
     )) {
-      const side =
-        row.dataset.lineType === 'change-deletion' ||
-        row.closest('[data-deletions]') != null
-          ? 'deletions'
-          : 'additions';
-      const lineMatches = getMatches(Number(row.dataset.line), side);
+      const lineMatches = getMatches(
+        SearchHighlighter.getLineNumber(row),
+        SearchHighlighter.getLineSide(row)
+      );
       if (lineMatches != null) {
         this.paintLine(row, lineMatches);
       }
@@ -120,6 +189,7 @@ export class SearchHighlighter {
     row: HTMLElement,
     matches: readonly SearchHighlightRange[]
   ): void {
+    const { highlights, ranges } = this;
     const document = row.ownerDocument;
     const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
     let offset = 0;
@@ -137,11 +207,14 @@ export class SearchHighlighter {
         }
         if (match.endCharacter > end) break;
         range.setEnd(node, match.endCharacter - offset);
-        const highlight = match.current
-          ? this.highlights.current
-          : this.highlights.match;
+        const highlight = match.current ? highlights.current : highlights.match;
         highlight.add(range);
-        this.ranges.push({ range, highlight });
+        ranges.push({
+          range,
+          highlight,
+          row,
+          startCharacter: match.startCharacter,
+        });
         if (match.current) this.currentRange ??= range;
         range = undefined;
         index++;

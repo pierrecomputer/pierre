@@ -92,7 +92,8 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
   public open(options?: CodeViewOpenSearchOptions): void {
     const { view } = this;
     const { container } = view;
-    if (view.getContainerElement() == null || container == null) {
+    const root = view.getContainerElement();
+    if (root == null || container == null) {
       return;
     }
     const { mode = 'replace', scope = 'focused', query } = options ?? {};
@@ -163,9 +164,8 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     if (this.panel !== panel) {
       return;
     }
-    this.view
-      .getContainerElement()
-      ?.ownerDocument.addEventListener('focusin', this.handleFocusIn);
+    root.addEventListener('click', this.handleMatchClick);
+    root.ownerDocument.addEventListener('focusin', this.handleFocusIn);
     panel.getHostElement().addEventListener('focusout', this.handlePanelBlur);
     // The panel overlays the code without blocking clicks on it.
     panel.getHostElement().dataset.searchPanelOverlay = '';
@@ -176,7 +176,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     const { panel } = this;
     const panelHadFocus = this.isPanelFocused();
     const { scope } = this.state;
-    this.removeFocusListeners();
+    this.removeListeners();
     this.panel = undefined;
     this.resetState();
     if (panel == null) {
@@ -344,12 +344,61 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     );
   };
 
-  private removeFocusListeners(): void {
+  // A click on highlighted text picks the match without scrolling to it.
+  private handleMatchClick = (event: MouseEvent): void => {
+    const { highlighter, state, view } = this;
+    const { current, matches, scan } = state;
+    if (scan == null || highlighter == null || this.ownsEvent(event)) return;
+    const row = getClickedCodeRow(event);
+    if (row == null) return;
+    const root = row.getRootNode();
+    if (
+      !(root instanceof ShadowRoot) ||
+      getComposedSelectionRange(root)?.collapsed === false
+    ) {
+      return;
+    }
+    const item = view
+      .getRenderedItems()
+      .find(({ element }) => element === root.host);
+    const position = item != null ? this.getItemPosition(item.id) : undefined;
+    if (position == null) return;
+    const start = highlighter.getMatchStartAtPoint(
+      row,
+      event.clientX,
+      event.clientY
+    );
+    if (start == null) return;
+    const lineNumber = SearchHighlighter.getLineNumber(row);
+    const match = scan.getFirstMatchAtOrAfter(
+      position,
+      lineNumber,
+      start,
+      SearchHighlighter.getLineSide(row)
+    );
+    if (
+      match?.lineNumber !== lineNumber ||
+      match.startCharacter !== start ||
+      areOptionalCodeViewSearchMatchesEqual(match, current)
+    ) {
+      return;
+    }
+
+    dequeueRender(this.revealCurrentMatch);
+    state.pendingNavigation = undefined;
+    state.pendingHorizontalReveal = false;
+    this.setResults(matches, match);
+    this.matchesDirty = true;
+    this.flushMatches();
+  };
+
+  private removeListeners(): void {
+    const { view, panel } = this;
+    const root = view.getContainerElement();
     dequeueRender(this.syncFocus);
-    this.view
-      .getContainerElement()
-      ?.ownerDocument.removeEventListener('focusin', this.handleFocusIn);
-    this.panel
+    root?.removeEventListener('click', this.handleMatchClick);
+    root?.ownerDocument.removeEventListener('focusin', this.handleFocusIn);
+    panel
       ?.getHostElement()
       .removeEventListener('focusout', this.handlePanelBlur);
   }
@@ -1175,6 +1224,20 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     }
     return matches[start];
   }
+}
+
+// Find the clicked row, leaving its buttons to handle their own clicks.
+function getClickedCodeRow(event: MouseEvent): HTMLElement | undefined {
+  for (const target of event.composedPath()) {
+    if (target instanceof HTMLButtonElement) return undefined;
+    if (
+      target instanceof HTMLElement &&
+      target.matches('[data-line][data-line-type]')
+    ) {
+      return target;
+    }
+  }
+  return undefined;
 }
 
 // The code line row a node sits in, if any.

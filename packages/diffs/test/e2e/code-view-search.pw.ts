@@ -1,4 +1,4 @@
-import { expect, type Locator, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 import type { CodeViewOptions } from '../../src/components/CodeView';
 import {
@@ -31,6 +31,148 @@ async function expectSearchHighlights(container: Locator, count: number) {
     )
     .toBe(count);
 }
+
+// Wait for the first match to be current and the text ranges to be painted before clicking.
+async function openHighlightedMatches(
+  page: Page,
+  fixture: string,
+  query: string,
+  count: number
+) {
+  await page.goto(`/test/e2e/fixtures/code-view-search.html?${fixture}`);
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill(query);
+  await expect(root.locator('[data-matches]')).toHaveText(`1 of ${count}`);
+  await expectSearchHighlights(root, count);
+  return root;
+}
+
+// Return the center of each painted piece of the first matching range in this row.
+function getHighlightPoints(row: Locator, highlight: 'match' | 'current') {
+  return row.evaluate((element, highlight) => {
+    for (const range of CSS.highlights.get(`diffs-search-${highlight}`) ?? []) {
+      if (range instanceof Range && element.contains(range.startContainer)) {
+        return Array.from(
+          range.getClientRects(),
+          ({ left, top, width, height }) => ({
+            x: left + width / 2,
+            y: top + height / 2,
+          })
+        );
+      }
+    }
+    return [];
+  }, highlight);
+}
+
+for (const kind of ['file', 'split']) {
+  const name =
+    kind === 'file'
+      ? 'clicking a later file match sets the current match'
+      : 'clicking an old-side match in a split diff sets the current match';
+  test(name, async ({ page }) => {
+    const count = kind === 'file' ? 3 : 6;
+    const root = await openHighlightedMatches(
+      page,
+      `highlight&kind=${kind}`,
+      'target',
+      count
+    );
+    const code = root.locator('diffs-container').first();
+    const firstLine = '[data-line="1"][data-line-type]';
+    const row = code.locator(
+      kind === 'file' ? firstLine : `[data-deletions] ${firstLine}`
+    );
+    // Highlighting replaces the rows; wait for it before measuring them.
+    await expect(row.getByText('value', { exact: true })).toBeVisible();
+    const points = await getHighlightPoints(row, 'match');
+    const [point] = points;
+    await page.mouse.click(point.x, point.y);
+    await expect(root.locator('[data-matches]')).toHaveText(`2 of ${count}`);
+    await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+
+    await page.keyboard.press('ControlOrMeta+g');
+    await expect(root.locator('[data-matches]')).toHaveText(`3 of ${count}`);
+    const nextRow = code.locator(
+      kind === 'file'
+        ? '[data-line="2"][data-line-type]'
+        : `[data-additions] ${firstLine}`
+    );
+    await expect
+      .poll(() => getHighlightPoints(nextRow, 'current'))
+      .not.toHaveLength(0);
+  });
+}
+
+test('clicking the wrapped part of a match sets the current match', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 440, height: 800 });
+  const root = await openHighlightedMatches(
+    page,
+    'horizontal&kind=file&wrap',
+    'x'.repeat(100),
+    3
+  );
+  const row = root.locator('[data-line="8"][data-line-type]');
+  const points = await getHighlightPoints(row, 'match');
+  const last = points[points.length - 1];
+  expect(last.y).toBeGreaterThan(points[0].y);
+  await page.mouse.click(last.x, last.y);
+  await expect(root.locator('[data-matches]')).toHaveText('2 of 3');
+  await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+});
+
+test('clicking text outside a match keeps the current match', async ({
+  page,
+}) => {
+  const root = await openHighlightedMatches(
+    page,
+    'highlight&kind=file',
+    'target',
+    3
+  );
+  const row = root
+    .locator('diffs-container')
+    .first()
+    .locator('[data-line="1"][data-line-type]');
+  const token = row.getByText('value', { exact: true });
+  await expect(token).toBeVisible();
+  const points = await getHighlightPoints(row, 'current');
+  await token.click();
+  await expect(root.locator('[data-matches]')).toHaveText('1 of 3');
+  await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+});
+
+test('dragging a text selection across a match keeps the current match', async ({
+  page,
+}) => {
+  const root = await openHighlightedMatches(
+    page,
+    'highlight&kind=file',
+    'target',
+    3
+  );
+  const row = root
+    .locator('diffs-container')
+    .first()
+    .locator('[data-line="1"][data-line-type]');
+  await expect(row.getByText('value', { exact: true })).toBeVisible();
+  const points = await getHighlightPoints(row, 'current');
+  const [from] = points;
+  const [to] = await getHighlightPoints(row, 'match');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  expect(
+    await page.evaluate(() => document.getSelection()?.toString())
+  ).toMatch(/\w+ \w+/);
+  await expect(root.locator('[data-matches]')).toHaveText('1 of 3');
+  await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+});
 
 test('time-sliced find grows the match count, then settles', async ({
   page,
