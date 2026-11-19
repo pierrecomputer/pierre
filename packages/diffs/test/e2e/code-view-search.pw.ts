@@ -44,10 +44,43 @@ async function openHighlightedMatches(
   await root.focus();
   await page.keyboard.press('ControlOrMeta+f');
   await root.getByRole('textbox', { name: 'Search' }).fill(query);
-  await expect(root.locator('[data-matches]')).toHaveText(`1 of ${count}`);
+  await expect(root.locator('[data-matches]')).toHaveText(`1/${count}`);
   await expectSearchHighlights(root, count);
   return root;
 }
+
+test('larger result counts shrink the input without shifting controls', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?highlight&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+
+  const input = root.getByRole('textbox', { name: 'Search' });
+  const toggles = root.locator('[data-search-toggles]');
+  const inputBox = root.locator('[data-input-box][data-find]');
+  const before = {
+    input: await input.boundingBox(),
+    toggles: await toggles.boundingBox(),
+    inputBox: await inputBox.boundingBox(),
+  };
+
+  await root.locator('[data-matches]').evaluate((element) => {
+    element.textContent = '1/100,000';
+  });
+  const after = {
+    input: await input.boundingBox(),
+    toggles: await toggles.boundingBox(),
+    inputBox: await inputBox.boundingBox(),
+  };
+
+  expect(after.inputBox).toEqual(before.inputBox);
+  expect(after.toggles).toEqual(before.toggles);
+  expect(after.input!.width).toBeLessThan(before.input!.width);
+});
 
 // Return the center of each painted piece of the first matching range in this row.
 function getHighlightPoints(row: Locator, highlight: 'match' | 'current') {
@@ -90,11 +123,11 @@ for (const kind of ['file', 'split']) {
     const points = await getHighlightPoints(row, 'match');
     const [point] = points;
     await page.mouse.click(point.x, point.y);
-    await expect(root.locator('[data-matches]')).toHaveText(`2 of ${count}`);
+    await expect(root.locator('[data-matches]')).toHaveText(`2/${count}`);
     await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
 
     await page.keyboard.press('ControlOrMeta+g');
-    await expect(root.locator('[data-matches]')).toHaveText(`3 of ${count}`);
+    await expect(root.locator('[data-matches]')).toHaveText(`3/${count}`);
     const nextRow = code.locator(
       kind === 'file'
         ? '[data-line="2"][data-line-type]'
@@ -121,7 +154,7 @@ test('clicking the wrapped part of a match sets the current match', async ({
   const last = points[points.length - 1];
   expect(last.y).toBeGreaterThan(points[0].y);
   await page.mouse.click(last.x, last.y);
-  await expect(root.locator('[data-matches]')).toHaveText('2 of 3');
+  await expect(root.locator('[data-matches]')).toHaveText('2/3');
   await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
 });
 
@@ -142,7 +175,7 @@ test('clicking text outside a match keeps the current match', async ({
   await expect(token).toBeVisible();
   const points = await getHighlightPoints(row, 'current');
   await token.click();
-  await expect(root.locator('[data-matches]')).toHaveText('1 of 3');
+  await expect(root.locator('[data-matches]')).toHaveText('1/3');
   await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
 });
 
@@ -170,7 +203,7 @@ test('dragging a text selection across a match keeps the current match', async (
   expect(
     await page.evaluate(() => document.getSelection()?.toString())
   ).toMatch(/\w+ \w+/);
-  await expect(root.locator('[data-matches]')).toHaveText('1 of 3');
+  await expect(root.locator('[data-matches]')).toHaveText('1/3');
   await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
 });
 
@@ -183,7 +216,7 @@ test('time-sliced find grows the match count, then settles', async ({
   await root.focus();
   await page.keyboard.press('ControlOrMeta+f');
   await root.getByRole('textbox', { name: 'Search' }).fill('target');
-  await expect(root.locator('[data-matches]')).toHaveText('1 of 7,200');
+  await expect(root.locator('[data-matches]')).toHaveText('1/7,200');
 
   const states = await page.evaluate(() =>
     (window.__searchStates ?? []).filter(({ text }) => text === 'target')
@@ -235,7 +268,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
     const input = root.getByRole('textbox', { name: 'Search' });
     await input.fill('target');
     await input.press('Enter');
-    await expect(root.locator('[data-matches]')).toHaveText('2 of 2');
+    await expect(root.locator('[data-matches]')).toHaveText('2/2');
     await expect(selection).toHaveCount(1);
     expect(
       await page.evaluate(
@@ -318,7 +351,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       return { state, observer };
     });
     await input.press('Enter');
-    await expect(root.locator('[data-matches]')).toHaveText(`2 of ${count}`);
+    await expect(root.locator('[data-matches]')).toHaveText(`2/${count}`);
     await expectSearchHighlights(root, count);
     await input.fill('value = "target');
     await expectSearchHighlights(root, kind === 'split' ? 2 : 1);
@@ -419,7 +452,7 @@ for (const kind of ['file', 'split', 'unified']) {
           .toBeGreaterThan(initialTop);
         await input.fill('xxxxxxxx target');
         await expectCurrentMatchHorizontallyVisible(page);
-        await expect(root.locator('[data-matches]')).toHaveText('1 of 1');
+        await expect(root.locator('[data-matches]')).toHaveText('1/1');
         await resetCurrentMatchHorizontalScroll(page);
         await input.press('Enter');
         await expectCurrentMatchHorizontallyVisible(page);
@@ -471,7 +504,7 @@ for (const overflow of ['scroll', 'wrap']) {
     const count = root.locator('[data-matches]');
     const button = root.getByRole('button', { name: 'Show full line' });
     await input.fill('updated');
-    await expect(count).toHaveText('1 of 1');
+    await expect(count).toHaveText('1/1');
 
     // Moving the only match leaves the panel open with no current match.
     await page.evaluate(() =>
@@ -493,7 +526,7 @@ for (const overflow of ['scroll', 'wrap']) {
     await expect(button).toHaveCSS('background-color', 'rgb(230, 190, 45)');
     await expect(button).not.toBeInViewport();
     await input.press('Enter');
-    await expect(count).toHaveText('1 of 1');
+    await expect(count).toHaveText('1/1');
     await expect(button).toHaveAttribute('data-search-match', 'current');
     await expect(button).toHaveCSS('background-color', 'rgb(75, 155, 240)');
     // The sideways scroll lands within a pixel of the button's far edge.
@@ -510,10 +543,10 @@ for (const overflow of ['scroll', 'wrap']) {
     await root.focus();
     await page.keyboard.press('ControlOrMeta+f');
     await input.fill('updated');
-    await expect(count).toHaveText('1 of 1');
+    await expect(count).toHaveText('1/1');
     await button.click();
     await expect(button).toHaveCount(0);
-    await expect(count).toHaveText('1 of 3');
+    await expect(count).toHaveText('1/3');
     await expectSearchHighlights(root, 3);
     // The match the button stood for is scrolled into view.
     await expect
@@ -604,7 +637,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
     await panel
       .getByRole('button', { name: 'Replace All', exact: true })
       .click();
-    await expect(panel.locator('[data-matches]')).toHaveText('No results');
+    await expect(panel.locator('[data-matches]')).toBeEmpty();
     await expect
       .poll(() =>
         page.evaluate(() => window.__codeView?.getEditor('item')?.getText())
@@ -731,7 +764,7 @@ test('ending edit mode with replacement input focused leaves find usable', async
   await search.click();
   await expect(search).toBeFocused();
   await search.fill('readonly');
-  await expect(panel.locator('[data-matches]')).toHaveText('1 of 1');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/1');
 });
 
 for (const diffStyle of ['split', 'unified'] as const) {
@@ -756,7 +789,7 @@ for (const diffStyle of ['split', 'unified'] as const) {
     await page.keyboard.press('ControlOrMeta+f');
     const input = root.getByRole('textbox', { name: 'Search' });
     await input.fill('target');
-    await expect(root.locator('[data-matches]')).toHaveText('1 of 1');
+    await expect(root.locator('[data-matches]')).toHaveText('1/1');
     await expect(hiddenLine).toBeInViewport();
     await expect(input).toBeFocused();
     await expect
@@ -778,7 +811,7 @@ for (const diffStyle of ['split', 'unified'] as const) {
     await replacement.fill('changed');
     await replacement.press('Enter');
     await expect(hiddenLine).toContainText('hidden changed');
-    await expect(root.locator('[data-matches]')).toHaveText('No results');
+    await expect(root.locator('[data-matches]')).toBeEmpty();
     await expect(replacement).toBeFocused();
     await page.evaluate(() => window.__codeView?.getEditor('diff')?.undo());
     await expect(hiddenLine).toContainText('hidden target');
@@ -807,7 +840,7 @@ test('search scope follows focus across editors, the panel, and outside CodeView
   await expect(replacement).toBeVisible();
   await replacement.fill('changed');
   await input.fill('target');
-  await expect(count).toHaveText('1 of 1');
+  await expect(count).toHaveText('1/1');
   await expectSearchHighlights(root.locator('[data-deletions]'), 0);
 
   await second.click();
@@ -817,16 +850,16 @@ test('search scope follows focus across editors, the panel, and outside CodeView
   const matchCase = panel.getByRole('button', { name: 'Match Case' });
   await matchCase.click();
   await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
-  await expect(count).toContainText('of 2');
+  await expect(count).toContainText('/2');
   await input.click();
   await page.keyboard.press('ControlOrMeta+f');
   await input.press('Enter');
-  await expect(count).toContainText('of 2');
+  await expect(count).toContainText('/2');
   await expect(input).toBeFocused();
   await expect(input).toHaveValue('target');
 
   await page.locator('[data-outside]').click();
-  await expect(count).toContainText('of 5');
+  await expect(count).toContainText('/5');
   await expectSearchHighlights(root.locator('[data-deletions]'), 1);
   await expect(page.locator('[data-outside]')).toBeFocused();
   await expect(replacement).toBeHidden();
@@ -879,11 +912,11 @@ test('scoped replacement advances past inserted matches and replace all is one u
   const count = panel.locator('[data-matches]');
   await input.fill('target');
   await input.press('Enter');
-  await expect(count).toHaveText('2 of 3');
+  await expect(count).toHaveText('2/3');
   await replacement.fill('targettarget');
   await replacement.press('Enter');
   await expect(content).toContainText('target targettarget target');
-  await expect(count).toHaveText('4 of 4');
+  await expect(count).toHaveText('4/4');
   await expect(replacement).toBeFocused();
   await replacement.press('Enter');
   await expect(content).toContainText('target targettarget targettarget');
@@ -891,7 +924,7 @@ test('scoped replacement advances past inserted matches and replace all is one u
   await replacement.fill('new');
   await panel.getByRole('button', { name: 'Replace All', exact: true }).click();
   await expect(content).toContainText('new newnew newnew');
-  await expect(count).toHaveText('No results');
+  await expect(count).toBeEmpty();
   await expectSearchHighlights(root, 0);
   await expect
     .poll(() =>
@@ -913,7 +946,7 @@ test('unified edit highlights follow reconciled rows', async ({ page }) => {
   await content.focus();
   await page.keyboard.press('ControlOrMeta+f');
   await root.getByRole('textbox', { name: 'Search' }).fill('target');
-  await expect(root.locator('[data-matches]')).toHaveText('1 of 2');
+  await expect(root.locator('[data-matches]')).toHaveText('1/2');
   const line = content.locator(
     '[data-line="1"]:not([data-line-type="change-deletion"])'
   );
@@ -993,7 +1026,7 @@ test('refreshes search after typing and undo without a host update', async ({
   await page.keyboard.press('ControlOrMeta+f');
   const panel = root.locator('[data-search-panel-overlay]');
   await panel.getByRole('textbox', { name: 'Search' }).fill('github');
-  await expect(panel.locator('[data-matches]')).toHaveText('1 of 4');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/4');
 
   const line = content.locator('[data-line="125"]');
   await line.click();
@@ -1025,10 +1058,10 @@ test('find from an editable CodeView uses its panel and reaches offscreen matche
   await expect(input).toBeFocused();
   await expect(root.getByRole('textbox', { name: 'Search' })).toHaveCount(1);
   await input.fill('github');
-  await expect(panel.locator('[data-matches]')).toHaveText('1 of 4');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/4');
   for (let match = 2; match <= 4; match++) {
     await input.press('Enter');
-    await expect(panel.locator('[data-matches]')).toHaveText(`${match} of 4`);
+    await expect(panel.locator('[data-matches]')).toHaveText(`${match}/4`);
   }
 
   const line201 = content.locator('[data-line="201"]');
@@ -1045,10 +1078,10 @@ test('find from an editable CodeView uses its panel and reaches offscreen matche
   // Returning focus to an editor must keep find-again on the CodeView panel.
   await line201.click();
   await page.keyboard.press('ControlOrMeta+Shift+g');
-  await expect(panel.locator('[data-matches]')).toHaveText('3 of 4');
+  await expect(panel.locator('[data-matches]')).toHaveText('3/4');
   await expect(content.locator('[data-line="128"]')).toBeInViewport();
   await page.keyboard.press('ControlOrMeta+g');
-  await expect(panel.locator('[data-matches]')).toHaveText('4 of 4');
+  await expect(panel.locator('[data-matches]')).toHaveText('4/4');
   await expect(line201).toBeInViewport();
 
   // User scrolling must remain usable after visiting the offscreen match.
@@ -1058,7 +1091,7 @@ test('find from an editable CodeView uses its panel and reaches offscreen matche
   await page.keyboard.press('ControlOrMeta+f');
   await expect(input).toBeFocused();
   await input.press('Enter');
-  await expect(panel.locator('[data-matches]')).toHaveText('1 of 4');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/4');
   await expect(content.locator('[data-line="125"]')).toBeInViewport();
 
   await content.locator('[data-line="125"]').click();
@@ -1153,20 +1186,20 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       await page.keyboard.press('ControlOrMeta+f');
       const input = root.getByRole('textbox', { name: 'Search' });
       await input.fill('target');
-      await expect(root.locator('[data-matches]')).toHaveText('2 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('2/4');
       await expect
         .poll(() => root.evaluate((element) => element.scrollTop))
         .toBe(scrollTop);
       await input.press('Enter');
-      await expect(root.locator('[data-matches]')).toHaveText('3 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('3/4');
       expect(await root.evaluate((element) => element.scrollTop)).toBe(
         scrollTop
       );
       await input.press('Enter');
-      await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
       await expectCentered(161);
       await input.press('Shift+Enter');
-      await expect(root.locator('[data-matches]')).toHaveText('3 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('3/4');
       await expectCentered(101);
       if (edit) {
         await page.evaluate(() =>
@@ -1180,9 +1213,9 @@ for (const kind of ['file', 'split', 'unified'] as const) {
             },
           ])
         );
-        await expect(root.locator('[data-matches]')).toHaveText('3 of 5');
+        await expect(root.locator('[data-matches]')).toHaveText('3/5');
         await page.evaluate(() => window.__codeView!.getEditor('item')!.undo());
-        await expect(root.locator('[data-matches]')).toHaveText('3 of 4');
+        await expect(root.locator('[data-matches]')).toHaveText('3/4');
       }
       // These adjacent results are already visible, but centering now persists
       // in both directions and through background match refreshes.
@@ -1200,32 +1233,32 @@ for (const kind of ['file', 'split', 'unified'] as const) {
         await root
           .getByRole('textbox', { name: 'Replace', exact: true })
           .fill('new');
-        await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+        await expect(root.locator('[data-matches]')).toHaveText('4/4');
         expect(await root.evaluate((element) => element.scrollTop)).toBe(
           centeredScroll
         );
       }
       // A fresh query stays on the first visible result, even with earlier hits.
       await input.fill('TARGET');
-      await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
       expect(await root.evaluate((element) => element.scrollTop)).toBe(
         centeredScroll
       );
       await input.press('Enter');
-      await expect(root.locator('[data-matches]')).toHaveText('1 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('1/4');
       await expectCentered(20);
       await expect
         .poll(() => root.evaluate((element) => element.scrollTop))
         .toBeLessThan(centeredScroll);
       await input.press('Shift+Enter');
-      await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
       await expectCentered(161);
       await offsetViewport();
       const beforeOption = await root.evaluate((element) => element.scrollTop);
       await root
         .getByRole('button', { name: 'Whole Word', exact: true })
         .click();
-      await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
       expect(await root.evaluate((element) => element.scrollTop)).toBe(
         beforeOption
       );
@@ -1288,7 +1321,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       await page.keyboard.press('ControlOrMeta+f');
       let input = root.getByRole('textbox', { name: 'Search' });
       await input.fill('target');
-      await expect(root.locator('[data-matches]')).toHaveText('2 of 3');
+      await expect(root.locator('[data-matches]')).toHaveText('2/3');
       await expect(row(1000)).toBeInViewport();
       await input.press('Escape');
       // A hit mounted above the viewport loses to the next hit below it.
@@ -1298,7 +1331,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       await page.keyboard.press('ControlOrMeta+f');
       input = root.getByRole('textbox', { name: 'Search' });
       await input.fill('target');
-      await expect(root.locator('[data-matches]')).toHaveText('3 of 3');
+      await expect(root.locator('[data-matches]')).toHaveText('3/3');
       await expect(row(1800)).toBeInViewport();
       await input.press('Escape');
       await prepare(2800);
@@ -1306,7 +1339,7 @@ for (const kind of ['file', 'split', 'unified'] as const) {
       await page.keyboard.press('ControlOrMeta+f');
       input = root.getByRole('textbox', { name: 'Search' });
       await input.fill('target');
-      await expect(root.locator('[data-matches]')).toHaveText('1 of 3');
+      await expect(root.locator('[data-matches]')).toHaveText('1/3');
       await expect(row(10)).toBeInViewport();
     });
   }
@@ -1326,7 +1359,7 @@ for (const kind of ['file', 'split', 'unified']) {
       await page.keyboard.press('ControlOrMeta+f');
       await root.getByRole('textbox', { name: 'Search' }).fill('target');
       await expect(root.locator('[data-matches]')).toHaveText(
-        /[\d,]+ of \d{2},\d{3}/
+        /[\d,]+\/\d{2},\d{3}/
       );
 
       const measureRepaint = () =>
@@ -1447,7 +1480,7 @@ for (const diffStyle of ['split', 'unified']) {
     // separator at the top of the view.
     await page.keyboard.press('ControlOrMeta+f');
     await root.getByRole('textbox', { name: 'Search' }).fill('target');
-    await expect(root.locator('[data-matches]')).toHaveText('1 of 10,000');
+    await expect(root.locator('[data-matches]')).toHaveText('1/10,000');
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -1494,7 +1527,7 @@ for (const kind of ['file', 'split'] as const) {
       .getByRole('textbox', { name: 'Search' });
     await expect(input).toBeFocused();
     await expect(input).toHaveValue('value');
-    await expect(root.locator('[data-matches]')).toContainText('of');
+    await expect(root.locator('[data-matches]')).toContainText('/');
   });
 }
 
@@ -1561,7 +1594,7 @@ test('a match under the find panel is moved out from under it', async ({
     .locator('[data-search-panel-overlay]')
     .getByRole('textbox', { name: 'Search' });
   await input.fill('target');
-  await expect(root.locator('[data-matches]')).toHaveText('1 of 4');
+  await expect(root.locator('[data-matches]')).toHaveText('1/4');
 
   // Line 20 was at the top of the viewport, where the panel sits.
   await expect
@@ -1642,10 +1675,10 @@ test('a match in the last row of a tall wrapped line is brought into view', asyn
     .locator('[data-search-panel-overlay]')
     .getByRole('textbox', { name: 'Search' });
   await input.fill('target');
-  await expect(root.locator('[data-matches]')).toHaveText('1 of 4');
+  await expect(root.locator('[data-matches]')).toHaveText('1/4');
   // Wrap around to the last match: the end of line 201, far below.
   await input.press('Shift+Enter');
-  await expect(root.locator('[data-matches]')).toHaveText('4 of 4');
+  await expect(root.locator('[data-matches]')).toHaveText('4/4');
 
   await expect
     .poll(() =>
@@ -1686,6 +1719,6 @@ test('two quick steps in split view leave the last match scrolled into view', as
     window.__codeView!.navigateSearch('next');
     window.__codeView!.navigateSearch('next');
   });
-  await expect(root.locator('[data-matches]')).toContainText('3 of');
+  await expect(root.locator('[data-matches]')).toContainText('3/');
   await expectCurrentMatchHorizontallyVisible(page);
 });

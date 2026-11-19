@@ -492,7 +492,7 @@ describe('CodeView incremental find', () => {
           expect(getSearchState(viewer).matches[index]).toBe(kept[index]);
         expect(getSearchState(viewer).current).toBe(current);
         expect(states.at(-1)?.currentMatchIndex).toBe(1);
-        expect(label(root)).toBe('2 of 3');
+        expect(label(root)).toBe('2/3');
       }
     );
   });

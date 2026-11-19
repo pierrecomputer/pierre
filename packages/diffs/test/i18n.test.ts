@@ -257,7 +257,7 @@ describe('i18n', () => {
     );
     expect(i18n.t('searchResultCount', { count: 1234 })).toBe('1,234 results');
     expect(i18n.t('searchResultPosition', { index: 1000, count: 1234 })).toBe(
-      '1,000 of 1,234'
+      '1,000/1,234'
     );
 
     i18n.set({ locale: 'de' });

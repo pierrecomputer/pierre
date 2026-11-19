@@ -115,7 +115,7 @@ describe('CodeView search', () => {
       expect(getSearchState(viewer).matches).toEqual([]);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('No results');
+      ).toBe('');
     } finally {
       search.mockRestore();
       render.mockRestore();
@@ -1483,7 +1483,7 @@ describe('CodeView search', () => {
       ]);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('1 of 3');
+      ).toBe('1/3');
     } finally {
       viewer.cleanUp();
       dom.cleanup();
@@ -1684,20 +1684,20 @@ describe('CodeView search', () => {
       expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('1 of 2');
+      ).toBe('1/2');
 
       const firstEnter = pressSearchEnter(root);
       expect(firstEnter.defaultPrevented).toBe(true);
       expect(getSearchState(viewer).current?.lineNumber).toBe(3);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('2 of 2');
+      ).toBe('2/2');
 
       pressSearchEnter(root);
       expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('1 of 2');
+      ).toBe('1/2');
 
       fillSearch(root, '');
       expect(getSearchState(viewer).matches).toEqual([]);

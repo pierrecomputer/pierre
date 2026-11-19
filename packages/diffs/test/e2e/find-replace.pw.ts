@@ -67,13 +67,13 @@ for (const nested of [false, true]) {
     await page.keyboard.press('ControlOrMeta+f');
     const input = page.locator(SEARCH_INPUT);
     await input.fill('target');
-    await expect(page.locator(MATCHES)).toHaveText('1 of 4');
+    await expect(page.locator(MATCHES)).toHaveText('1/4');
     await expectCurrentMatchHorizontallyVisible(page);
     const initialTop = await scrollTop();
     const probe = await trackHorizontalSearchScrolls(page);
     try {
       await input.press('Enter');
-      await expect(page.locator(MATCHES)).toHaveText('2 of 4');
+      await expect(page.locator(MATCHES)).toHaveText('2/4');
       await expectCurrentMatchHorizontallyVisible(page);
       expect(await scrollTop()).toBe(initialTop);
       await resetCurrentMatchHorizontalScroll(page);
@@ -99,7 +99,7 @@ for (const nested of [false, true]) {
       await expectCurrentMatchHorizontallyVisible(page);
       expect(await scrollTop()).toBe(initialTop);
       await input.press('Enter');
-      await expect(page.locator(MATCHES)).toHaveText('4 of 4');
+      await expect(page.locator(MATCHES)).toHaveText('4/4');
       await expectCurrentMatchHorizontallyVisible(page);
       expect(await scrollTop()).toBeGreaterThan(initialTop);
       const calls = await probe.evaluate(({ calls }) => calls);
@@ -139,7 +139,7 @@ test.describe('find and replace', () => {
     ).toHaveCount(0);
 
     await page.locator(SEARCH_INPUT).fill('nope');
-    await expect(page.locator(MATCHES)).toContainText('No results');
+    await expect(page.locator(MATCHES)).toBeEmpty();
   });
 
   test('switching to replace mode and Replace All rewrites every match', async ({
@@ -201,10 +201,10 @@ test.describe('find and replace', () => {
     await expect(page.locator(MATCHES)).toContainText('4');
     await expectNativeHighlights(page, 4);
 
-    // Emptying the query returns the panel to its "No results" state; the
+    // Emptying the query clears the result count; the
     // highlights must clear with it rather than linger over an empty box.
     await page.locator(SEARCH_INPUT).fill('');
-    await expect(page.locator(MATCHES)).toContainText('No results');
+    await expect(page.locator(MATCHES)).toBeEmpty();
     await expectNativeHighlights(page, 0);
   });
 
@@ -273,7 +273,7 @@ test('native editor highlights cross tokens and track typing, undo, and row repl
     return nodes;
   });
   await input.press('Enter');
-  await expect(page.locator(MATCHES)).toContainText('of 4');
+  await expect(page.locator(MATCHES)).toContainText('/4');
   await expect
     .poll(() =>
       page.evaluate(() => CSS.highlights.get('diffs-search-current')?.size)
@@ -562,17 +562,17 @@ for (const nested of [false, true]) {
     const input = page.locator(SEARCH_INPUT);
     // Earlier matches are offscreen; find starts at the first visible occurrence.
     await expect(input).toHaveValue('target');
-    await expect(page.locator(MATCHES)).toHaveText('2 of 4');
+    await expect(page.locator(MATCHES)).toHaveText('2/4');
     expect(await getScroll()).toBe(initialScroll);
     await input.press('Enter');
-    await expect(page.locator(MATCHES)).toHaveText('3 of 4');
+    await expect(page.locator(MATCHES)).toHaveText('3/4');
     expect(await getScroll()).toBe(initialScroll);
     await input.press('Enter');
-    await expect(page.locator(MATCHES)).toHaveText('4 of 4');
+    await expect(page.locator(MATCHES)).toHaveText('4/4');
     // The editor reserves space above the centered result for the search panel.
     await expectCentered(161);
     await input.press('Shift+Enter');
-    await expect(page.locator(MATCHES)).toHaveText('3 of 4');
+    await expect(page.locator(MATCHES)).toHaveText('3/4');
     await expectCentered(101);
     const centered101 = await getScroll();
     await page.evaluate(() =>
@@ -586,9 +586,9 @@ for (const nested of [false, true]) {
         },
       ])
     );
-    await expect(page.locator(MATCHES)).toHaveText('3 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('3/5');
     await input.press('Shift+Enter');
-    await expect(page.locator(MATCHES)).toHaveText('2 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('2/5');
     await expect.poll(getScroll).toBeLessThan(centered101 - 10);
     await expectCentered(100);
     await input.press('Enter');
@@ -599,19 +599,19 @@ for (const nested of [false, true]) {
     const centeredScroll = await getScroll();
     await page.keyboard.press('ControlOrMeta+Alt+f');
     await page.locator(REPLACE_INPUT).fill('new');
-    await expect(page.locator(MATCHES)).toHaveText('4 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('4/5');
     expect(await getScroll()).toBe(centeredScroll);
     await input.fill('TARGET');
-    await expect(page.locator(MATCHES)).toHaveText('4 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('4/5');
     expect(await getScroll()).toBe(centeredScroll);
     // Wrap backward from the first match after wrapping forward past the last.
     await input.press('Enter');
-    await expect(page.locator(MATCHES)).toHaveText('5 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('5/5');
     await input.press('Enter');
-    await expect(page.locator(MATCHES)).toHaveText('1 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('1/5');
     await expectCentered(20);
     await input.press('Shift+Enter');
-    await expect(page.locator(MATCHES)).toHaveText('5 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('5/5');
     await expect(
       page.locator(CONTENT).locator('[data-line="191"]')
     ).toBeInViewport();
@@ -623,7 +623,7 @@ for (const nested of [false, true]) {
       .locator('[data-search-panel]')
       .getByRole('button', { name: 'Whole Word', exact: true })
       .click();
-    await expect(page.locator(MATCHES)).toHaveText('4 of 5');
+    await expect(page.locator(MATCHES)).toHaveText('4/5');
     expect(await getScroll()).toBe(beforeOption);
     expect(
       await page.evaluate(() => window.__editor?.getViewState().selections)
@@ -650,7 +650,7 @@ test('first-visible lookup keeps full-document results with bounded DOM work', a
     () => window.__editor?.getViewState().selections
   );
   await page.keyboard.press('ControlOrMeta+f');
-  await expect(page.locator(MATCHES)).toContainText('of 10,000');
+  await expect(page.locator(MATCHES)).toContainText('/10,000');
   const result = await page.locator(SEARCH_INPUT).evaluate((input) => {
     const rect = Element.prototype.getBoundingClientRect;
     const query = ShadowRoot.prototype.querySelector;
@@ -688,7 +688,7 @@ test('first-visible lookup keeps full-document results with bounded DOM work', a
   expect(result.rowMeasurements).toBeLessThan(100);
   expect(result.headerQueries).toBeLessThan(5);
   expect(result.scrollAfter).toBe(result.scrollBefore);
-  await expect(page.locator(MATCHES)).toContainText('of 10,000');
+  await expect(page.locator(MATCHES)).toContainText('/10,000');
   expect(
     await page.evaluate(() => window.__editor?.getViewState().selections)
   ).toEqual(selected);
@@ -704,10 +704,10 @@ test('initial search indexes results after the mounted editor window before wrap
   await page.keyboard.press('ControlOrMeta+f');
   const input = page.locator(SEARCH_INPUT);
   await input.fill('target');
-  await expect(page.locator(MATCHES)).toHaveText('2 of 3');
+  await expect(page.locator(MATCHES)).toHaveText('2/3');
   await page.evaluate(() => window.__renderEditorWindow?.(2500));
   await input.fill('TARGET');
-  await expect(page.locator(MATCHES)).toHaveText('1 of 3');
+  await expect(page.locator(MATCHES)).toHaveText('1/3');
 });
 
 test('unsafeCSS reaches the search panel and wins over its own styles', async ({

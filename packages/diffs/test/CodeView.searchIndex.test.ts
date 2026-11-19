@@ -107,7 +107,7 @@ describe('CodeView search indices', () => {
           expect(states.at(-1)?.matchCount).toBe(100_000);
           expect(getSearchState(viewer).current?.lineIndex).toBe(index);
           expect(label(root)).toBe(
-            `${new Intl.NumberFormat('en-US').format(index + 1)} of 100,000`
+            `${new Intl.NumberFormat('en-US').format(index + 1)}/100,000`
           );
           expect(currentLine(root)).toBe(index + 1);
         };
@@ -240,19 +240,19 @@ describe('CodeView search indices', () => {
         viewer.navigateSearch('next');
         expect(states.at(-1)?.searching).toBe(true);
         expect(states.at(-1)?.currentMatchIndex).toBe(2);
-        expect(label(root)).toBe('3 of 40');
+        expect(label(root)).toBe('3/40');
         expect(getSearchState(viewer).current?.itemId).toBe('edge');
         expect(getSearchState(viewer).current?.startCharacter).toBe(14);
         await finish();
         expect(states.at(-1)?.currentMatchIndex).toBe(2);
-        expect(label(root)).toBe('3 of 52');
+        expect(label(root)).toBe('3/52');
         expect(getSearchState(viewer).current?.itemId).toBe('edge');
         expect(getSearchState(viewer).current?.startCharacter).toBe(14);
         viewer.updateItem({ ...before(24), version: 1 });
         viewer.render(true);
         await finish();
         expect(states.at(-1)?.currentMatchIndex).toBe(2);
-        expect(label(root)).toBe('3 of 64');
+        expect(label(root)).toBe('3/64');
         expect(getSearchState(viewer).current?.itemId).toBe('edge');
         expect(getSearchState(viewer).current?.startCharacter).toBe(14);
         viewer.updateItem({ ...edge('gone'), version: 1 });
@@ -282,7 +282,7 @@ describe('CodeView search indices', () => {
         fillSearch(root, 'target');
         viewer.navigateSearch('next');
         expect(states.at(-1)?.currentMatchIndex).toBe(1);
-        expect(label(root)).toBe('2 of 3');
+        expect(label(root)).toBe('2/3');
         expect(getSearchState(viewer).current?.lineIndex).toBe(1);
         const editor = viewer.getEditor('edit');
         if (editor == null) throw new Error('Missing actual editor');
@@ -339,7 +339,7 @@ describe('CodeView search indices', () => {
       await finish();
       expect(getSearchState(viewer).current?.itemId).toBe('item-4000');
       expect(states.at(-1)?.currentMatchIndex).toBe(0);
-      expect(label(root)).toBe('1 of 2');
+      expect(label(root)).toBe('1/2');
 
       fillSearch(root, '');
       viewer.scrollTo({
@@ -371,7 +371,7 @@ describe('CodeView search indices', () => {
       ).toBe(true);
       expect(getSearchState(viewer).current?.itemId).toBe('item-1000');
       expect(states.at(-1)?.currentMatchIndex).toBe(1);
-      expect(label(root)).toBe('2 of 2');
+      expect(label(root)).toBe('2/2');
     });
   });
 });

@@ -146,11 +146,11 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     let searching = defaultQuery !== '';
 
     const matchResultElement = h('div', { dataset: { matches: '' } });
-    // Shows that there are no matches: none found yet, or none at all.
+    // Keep the count slot empty when there are no matches. Searching remains
+    // visible because it communicates an in-progress result rather than an
+    // empty result.
     const showNoMatches = () => {
-      matchResultElement.textContent = i18n.t(
-        searching ? 'searching' : 'noSearchResults'
-      );
+      matchResultElement.textContent = searching ? i18n.t('searching') : '';
       matchResultElement.toggleAttribute('data-no-matches', !searching);
     };
     // Shown on open, before any search runs.
@@ -398,16 +398,18 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       updateSearchParam('text', text);
     };
 
-    // The three search-option toggles are overlaid on the right edge of the
-    // find input instead of sitting beside it.
+    // Search options occupy the grid cell that previously held the count.
     const searchTogglesElement = h('div', {
       dataset: 'searchToggles',
       children: [caseSensitiveToggle, wholeWordToggle, regexToggle],
     });
 
+    // The result count shares the fixed-width find box with the input. Its
+    // intrinsic width reduces the input's available space without moving any
+    // controls as counts gain digits.
     const findInputBox = h('div', {
       dataset: { inputBox: '', find: '' },
-      children: [this.#inputElement, searchTogglesElement],
+      children: [this.#inputElement, matchResultElement],
     });
 
     // Held so the no-results state can toggle their native disabled flag.
@@ -506,7 +508,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     // Cells are positioned by CSS grid-template-areas (see SearchPanelWidget.css), so DOM
     // order here only drives tab/reading order, not layout. Keep the replace
-    // input directly after the find input (and its toggles) so Tab walks
+    // input directly after the find input so Tab walks
     // chevron -> find -> replace before reaching the nav arrows and close
     // button.
     const gridElement = h('div', {
@@ -516,7 +518,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         findInputBox,
         replaceInputBox,
         replaceActionsElement,
-        matchResultElement,
+        searchTogglesElement,
         navElement,
         closeElement,
       ],

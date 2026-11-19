@@ -97,7 +97,7 @@
     --diffs-search-panel-column-gap: 6px;
     display: grid;
     grid-template-columns: auto auto auto;
-    grid-template-areas: 'find matches nav';
+    grid-template-areas: 'find toggles nav';
     align-items: center;
     gap: 4px var(--diffs-search-panel-column-gap);
     width: 100%;
@@ -106,17 +106,26 @@
   /* A panel that can replace has a leading column for the replace toggle. */
   [data-search-grid][data-can-replace] {
     grid-template-columns: auto auto auto auto;
-    grid-template-areas: 'toggle find matches nav';
+    grid-template-areas: 'toggle find toggles nav';
   }
 
   [data-search-grid][data-mode='replace'] {
     grid-template-areas:
-      'toggle find    matches nav'
+      'toggle find    toggles nav'
       '.      replace actions .';
   }
 
   [data-input-box][data-find] {
     grid-area: find;
+    color: var(--diffs-search-panel-fg);
+    background-color: var(--diffs-search-panel-bg);
+    border: 1px solid
+      color-mix(
+        in lab,
+        var(--diffs-search-panel-fg) 12%,
+        var(--diffs-search-panel-bg)
+      );
+    border-radius: 6px;
   }
 
   [data-search-nav] {
@@ -144,21 +153,21 @@
       grid-template-columns: auto 1fr auto;
       grid-template-areas:
         'find find    find'
-        'nav  matches matches';
+        'nav  toggles toggles';
     }
 
     [data-search-grid][data-can-replace] {
       grid-template-columns: auto auto 1fr auto;
       grid-template-areas:
         'toggle find find    find'
-        '.      nav  matches matches';
+        '.      nav  toggles toggles';
     }
 
     [data-search-grid][data-mode='replace'] {
       grid-template-areas:
         'toggle find    find    find'
         '.      replace replace replace'
-        '.      nav     matches actions';
+        '.      nav     toggles actions';
     }
 
     [data-replace-actions] {
@@ -209,29 +218,45 @@
   }
 
   [data-input-box][data-find] input {
-    padding-inline-end: 72px;
+    border: 0;
+    background: none;
   }
 
   [data-input-box] [data-search-icon] {
     --diffs-search-icon-size: 20px;
   }
 
+  [data-input-box][data-find]:focus-within {
+    outline: 1px solid var(--diffs-search-panel-modified);
+  }
+
+  [data-input-box][data-find] input:focus-visible {
+    outline: none;
+  }
+
   [data-search-toggles] {
-    position: absolute;
-    top: 50%;
-    right: 4px;
-    transform: translateY(-50%);
+    position: relative;
+    grid-area: toggles;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 1px;
+  }
+  [data-search-toggles]::after {
+    display: block;
+    flex-shrink: 0;
+    width: 1px;
+    height: 16px;
+    content: '';
+    margin-inline-start: 4px;
+    background-color: var(--diffs-widget-border);
   }
 
   [data-matches] {
     contain: layout paint style;
     font-variant-numeric: tabular-nums;
-    grid-area: matches;
     flex-shrink: 0;
-    min-width: 50px;
+    padding-inline-end: 6px;
     font-size: 12px;
     font-weight: 500;
     line-height: 20px;

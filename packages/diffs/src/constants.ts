@@ -96,7 +96,7 @@ export const DEFAULT_MESSAGES = {
    * Search panel status for the selected match. Receives the 1-based `index`
    * and the `count` of matches.
    */
-  searchResultPosition: '{index} of {count}',
+  searchResultPosition: '{index}/{count}',
   /** Search option toggle for case-sensitive matching. */
   matchCase: 'Match Case',
   /** Search option toggle for whole-word matching. */

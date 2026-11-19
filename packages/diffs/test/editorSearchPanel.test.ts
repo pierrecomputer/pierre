@@ -166,6 +166,24 @@ function createWidget(
 }
 
 describe('SearchPanelWidget', () => {
+  test('puts the result count inside the find box and options beside it', () => {
+    const harness = createWidget('foo');
+    try {
+      const panel = harness.widget.getHostElement().shadowRoot!;
+      const findBox = panel.querySelector<HTMLElement>(
+        '[data-input-box][data-find]'
+      )!;
+      const count = panel.querySelector('[data-matches]')!;
+      const toggles = panel.querySelector('[data-search-toggles]')!;
+      const grid = panel.querySelector<HTMLElement>('[data-search-grid]')!;
+
+      expect(count.parentElement).toBe(findBox);
+      expect(toggles.parentElement).toBe(grid);
+    } finally {
+      harness.cleanup();
+    }
+  });
+
   test('reports query changes separately from replacement text and background refreshes', () => {
     const dom = installDom();
     let widget: SearchPanelWidget<MatchRange> | undefined;
@@ -225,7 +243,7 @@ describe('SearchPanelWidget', () => {
       setInputValue(harness.replaceInput, 'replacement');
       expect(harness.widget.hasQuery()).toBe(false);
       setInputValue(harness.input, 'missing');
-      expect(harness.matchesText()).toBe('No results');
+      expect(harness.matchesText()).toBe('');
       expect(harness.widget.hasQuery()).toBe(true);
       setInputValue(harness.input, '');
       expect(harness.widget.hasQuery()).toBe(false);
@@ -269,7 +287,7 @@ describe('SearchPanelWidget', () => {
         expect(updates).toEqual([defaultQuery === '' ? [] : matches]);
         expect(
           getSearchPanelRoot().querySelector('[data-matches]')?.textContent
-        ).toBe(defaultQuery === '' ? 'No results' : '2 of 2');
+        ).toBe(defaultQuery === '' ? '' : '2/2');
         await waitForAnimationFrame();
         expect(updates).toHaveLength(1);
       } finally {
@@ -309,7 +327,7 @@ describe('SearchPanelWidget', () => {
               [4, 7],
             ],
           ]);
-          expect(harness.matchesText()).toBe('2 of 2');
+          expect(harness.matchesText()).toBe('2/2');
           expect(harness.input.value).toBe('foo');
           expect(harness.input.selectionStart).toBe(3);
           expect(harness.input.selectionEnd).toBe(3);
@@ -364,10 +382,10 @@ describe('SearchPanelWidget', () => {
     try {
       await wait(0);
       setInputValue(harness.input, 'foo');
-      // onUpdate selects the first match, so the panel reads "1 of 3".
-      expect(harness.matchesText()).toBe('1 of 3');
+      // onUpdate selects the first match, so the panel reads "1/3".
+      expect(harness.matchesText()).toBe('1/3');
       pressKey(harness.input, 'Enter');
-      expect(harness.matchesText()).toBe('2 of 3');
+      expect(harness.matchesText()).toBe('2/3');
     } finally {
       harness.cleanup();
     }
@@ -391,7 +409,7 @@ describe('SearchPanelWidget', () => {
       setInputValue(harness.input, 'foo');
       setInputValue(harness.input, '');
 
-      expect(harness.matchesText()).toBe('No results');
+      expect(harness.matchesText()).toBe('');
       // An empty query pushes an empty match set so the editor drops its
       // highlights, and the prev/next arrows go disabled.
       expect(harness.updates.at(-1)).toEqual([]);
@@ -540,7 +558,7 @@ describe('SearchPanelWidget', () => {
     try {
       await wait(0);
       setInputValue(harness.input, 'foo'); // case-insensitive: two matches
-      expect(harness.matchesText()).toBe('1 of 2');
+      expect(harness.matchesText()).toBe('1/2');
 
       const caseToggle = harness.button('search-toggles', 0);
       expect(caseToggle.ariaPressed).toBe('false');
@@ -548,7 +566,7 @@ describe('SearchPanelWidget', () => {
 
       // Case sensitivity now excludes "Foo", leaving a single match.
       expect(caseToggle.ariaPressed).toBe('true');
-      expect(harness.matchesText()).toBe('1 of 1');
+      expect(harness.matchesText()).toBe('1/1');
     } finally {
       harness.cleanup();
     }
@@ -855,7 +873,7 @@ describe('regex replace capture references', () => {
 
       expect(host.appliedBatches).toEqual([]);
       expect(host.textDocument.getText()).toBe('gray goose');
-      expect(host.matchesLabel()).toBe('No results');
+      expect(host.matchesLabel()).toBe('');
     } finally {
       host.dispose();
     }
@@ -988,7 +1006,7 @@ describe('replace progression through the search panel', () => {
       await wait(0);
       setInputValue(host.queryInput, 'ash');
       expect(host.scrolled).toEqual([[0, 3]]);
-      expect(host.matchesLabel()).toBe('1 of 2');
+      expect(host.matchesLabel()).toBe('1/2');
 
       setInputValue(host.replaceInput, 'ashash');
       pressKey(host.replaceInput, 'Enter');
@@ -1006,7 +1024,7 @@ describe('replace progression through the search panel', () => {
         [6, 6],
         [11, 14],
       ]);
-      expect(host.matchesLabel()).toBe('3 of 3');
+      expect(host.matchesLabel()).toBe('3/3');
 
       pressKey(host.replaceInput, 'Enter');
       expect(host.textDocument.getText()).toBe('ashash elm ashash');
@@ -1044,7 +1062,7 @@ describe('replace progression through the search panel', () => {
         [6, 6],
         [6, 9],
       ]);
-      expect(host.matchesLabel()).toBe('3 of 5');
+      expect(host.matchesLabel()).toBe('3/5');
     } finally {
       host.dispose();
     }
@@ -1061,7 +1079,7 @@ describe('replace progression through the search panel', () => {
       expect(host.appliedBatches).toEqual([[{ start: 4, end: 7, text: '' }]]);
       expect(host.textDocument.getText()).toBe('oak  fir');
       expect(host.scrolled.at(-1)).toEqual([4, 4]);
-      expect(host.matchesLabel()).toBe('No results');
+      expect(host.matchesLabel()).toBe('');
     } finally {
       host.dispose();
     }
@@ -1314,17 +1332,17 @@ describe('SearchPanelWidget', () => {
 
       setInputValue(input, 'foo');
       expect(updates.at(-1)).toBe(results.foo);
-      expect(count.textContent).toBe('2 of 2');
+      expect(count.textContent).toBe('2/2');
       setInputValue(input, 'bar');
       expect(updates.at(-1)).toBe(results.bar);
-      expect(count.textContent).toBe('1 of 1');
+      expect(count.textContent).toBe('1/1');
       setInputValue(input, 'missing');
       expect(updates.at(-1)).toBe(results.missing);
-      expect(count.textContent).toBe('No results');
+      expect(count.textContent).toBe('');
       setInputValue(input, 'foo');
       setInputValue(input, '');
       expect(updates.at(-1)).toEqual({ matches: [] });
-      expect(count.textContent).toBe('No results');
+      expect(count.textContent).toBe('');
     } finally {
       widget?.cleanup();
       dom.cleanup();
@@ -1561,7 +1579,7 @@ describe('SearchPanelWidget messages', () => {
         const panel = harness.widget.getHostElement().shadowRoot!;
         expect(harness.input.placeholder).toBe('Rechercher');
         expect(harness.replaceInput.placeholder).toBe('Remplacer');
-        expect(harness.matchesText()).toBe('Aucun résultat');
+        expect(harness.matchesText()).toBe('');
         expect(
           panel.querySelector<HTMLButtonElement>('[data-replace-toggle]')
             ?.ariaLabel

@@ -270,7 +270,7 @@ describe('CodeView sliced find', () => {
         const start = states.length;
         await finish();
         expect(getSearchState(viewer).matches).toEqual([]);
-        expect(label(root)).toBe('No results');
+        expect(label(root)).toBe('');
         expect(
           states.slice(start).every(({ text }) => text === 'missing')
         ).toBe(true);
@@ -599,7 +599,7 @@ describe('CodeView sliced find', () => {
         );
         await wait(20);
         expect(states.at(-1)?.currentMatchIndex).toBe(0);
-        expect(label(root)).toBe('1 of 1');
+        expect(label(root)).toBe('1/1');
         expect(viewer.getScrollTop()).toBe(scrollTop);
       } finally {
         viewer.cleanUp();
@@ -636,7 +636,7 @@ describe('CodeView sliced find', () => {
         viewer.getRenderedItems().some(({ id }) => id === 'two')
       );
       expect(viewer.getRenderedItems().map(({ id }) => id)).toContain('two');
-      expect(label(root)).toBe('2 of 2');
+      expect(label(root)).toBe('2/2');
     } finally {
       viewer.cleanUp();
       dom.cleanup();
@@ -655,7 +655,7 @@ describe('CodeView sliced find', () => {
         async ({ viewer, root, finish }) => {
           fillSearch(root, 'target');
           await finish();
-          expect(label(root)).toBe('1 of 3');
+          expect(label(root)).toBe('1/3');
 
           // The step selects the match in `two` and starts scrolling to it.
           viewer.navigateSearch('next');
@@ -677,7 +677,7 @@ describe('CodeView sliced find', () => {
               );
           }
           viewer.render(true);
-          expect(label(root)).toBe('2 of 3');
+          expect(label(root)).toBe('2/3');
           if (scroll === 'panel click') {
             // The view reached the match, so the next step moves on.
             expect(viewer.getRenderedItems().map(({ id }) => id)).toContain(
@@ -685,7 +685,7 @@ describe('CodeView sliced find', () => {
             );
             viewer.navigateSearch('next');
             expect(getSearchState(viewer).current?.itemId).toBe('three');
-            expect(label(root)).toBe('3 of 3');
+            expect(label(root)).toBe('3/3');
             return;
           }
           expect(viewer.getRenderedItems().map(({ id }) => id)).not.toContain(
@@ -695,14 +695,14 @@ describe('CodeView sliced find', () => {
           viewer.navigateSearch('next');
           viewer.render(true);
           expect(getSearchState(viewer).current?.itemId).toBe('two');
-          expect(label(root)).toBe('2 of 3');
+          expect(label(root)).toBe('2/3');
           expect(viewer.getRenderedItems().map(({ id }) => id)).toContain(
             'two'
           );
 
           viewer.navigateSearch('next');
           expect(getSearchState(viewer).current?.itemId).toBe('three');
-          expect(label(root)).toBe('3 of 3');
+          expect(label(root)).toBe('3/3');
         }
       );
     });
@@ -736,7 +736,7 @@ describe('CodeView sliced find', () => {
           expect(getSearchState(viewer).current?.itemId).toBe('third');
           expect(getSearchState(viewer).current?.lineNumber).toBe(1);
           expect(states.at(-1)?.currentMatchIndex).toBe(0);
-          expect(label(root)).toBe('1 of 2');
+          expect(label(root)).toBe('1/2');
           expect(viewer.getScrollTop()).toBe(scrollTop);
           expect(viewer.getRenderedItems().map(({ id }) => id)).not.toContain(
             'third'
@@ -745,14 +745,14 @@ describe('CodeView sliced find', () => {
           viewer.navigateSearch('next');
           viewer.render(true);
           expect(getSearchState(viewer).current?.lineNumber).toBe(1);
-          expect(label(root)).toBe('1 of 2');
+          expect(label(root)).toBe('1/2');
           expect(viewer.getRenderedItems().map(({ id }) => id)).toContain(
             'third'
           );
 
           viewer.navigateSearch('next');
           expect(getSearchState(viewer).current?.lineNumber).toBe(2);
-          expect(label(root)).toBe('2 of 2');
+          expect(label(root)).toBe('2/2');
         }
       );
     });
@@ -979,7 +979,7 @@ describe('CodeView sliced find', () => {
         getSearchPanelRoot(root).querySelector('[data-no-matches]')
       ).toBeNull();
       await finish();
-      expect(label(root)).toBe('Aucun résultat');
+      expect(label(root)).toBe('');
     });
   });
 

@@ -220,7 +220,7 @@ describe('Editor initial search navigation', () => {
       },
       ({ current, label }) => {
         expect(current().line).toBe(1001);
-        expect(label()).toBe('2 of 4');
+        expect(label()).toBe('2/4');
       }
     );
   });
@@ -236,7 +236,7 @@ describe('Editor initial search navigation', () => {
       },
       ({ current, label }) => {
         expect(current().line).toBe(1010);
-        expect(label()).toBe('2 of 3');
+        expect(label()).toBe('2/3');
       }
     );
   });
@@ -250,7 +250,7 @@ describe('Editor initial search navigation', () => {
         ]),
       },
       ({ label }) => {
-        expect(label()).toBe('1 of 2');
+        expect(label()).toBe('1/2');
       }
     );
   });
@@ -373,7 +373,7 @@ describe('Editor initial search navigation', () => {
         ]),
       },
       ({ label }) => {
-        expect(label()).toBe('2 of 2');
+        expect(label()).toBe('2/2');
       }
     );
   });
