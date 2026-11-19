@@ -195,7 +195,7 @@ export class LineCuts {
     row.children.push({
       type: 'element',
       tagName: 'button',
-      children: [createIconElement({ name: 'diffs-icon-expand' })],
+      children: [createIconElement({ name: 'diffs-icon-ellipsis' })],
       properties: {
         type: 'button',
         'data-expand-line': '',

@@ -5,6 +5,7 @@ export type SVGSpriteNames =
   | 'diffs-icon-chevrons-narrow'
   | 'diffs-icon-diff-split'
   | 'diffs-icon-diff-unified'
+  | 'diffs-icon-ellipsis'
   | 'diffs-icon-expand'
   | 'diffs-icon-expand-all'
   | 'diffs-icon-eye-slash'
@@ -55,6 +56,9 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="diffs-icon-diff-unified" viewBox="0 0 16 16">
     <path fill-rule="evenodd" d="M16 14a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V8.5h16zm-8-4a.5.5 0 0 0-.5.5v1h-1a.5.5 0 0 0 0 1h1v1a.5.5 0 0 0 1 0v-1h1a.5.5 0 0 0 0-1h-1v-1A.5.5 0 0 0 8 10" clip-rule="evenodd"/><path fill-rule="evenodd" d="M14 0a2 2 0 0 1 2 2v5.5H0V2a2 2 0 0 1 2-2zM6.5 3.5a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1z" clip-rule="evenodd" opacity=".4"/>
+  </symbol>
+  <symbol id="diffs-icon-ellipsis" viewBox="0 0 16 16">
+    <path d="M4 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0M10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0M16 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/>
   </symbol>
   <symbol id="diffs-icon-expand" viewBox="0 0 16 16">
     <path d="M3.47 5.47a.75.75 0 0 1 1.06 0L8 8.94l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06"/>

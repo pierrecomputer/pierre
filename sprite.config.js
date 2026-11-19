@@ -6,6 +6,7 @@ export const spriteConfig = {
     'IconChevron',
     'IconDiffSplit',
     'IconDiffUnified',
+    'IconEllipsis',
     'IconExpand',
     'IconExpandAll',
     'IconEyeSlash',

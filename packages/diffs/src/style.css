@@ -1076,21 +1076,22 @@
   [data-expand-line] {
     display: inline-block;
     vertical-align: middle;
-    width: 2ch;
+    width: 3ch;
     height: 2ch;
-    border-radius: 6px;
     padding: 0;
-    border: 0;
-    background-color: var(--diffs-fg);
-    color: var(--diffs-bg);
+    margin-inline: 0.5ch;
     font: inherit;
+    color: var(--diffs-bg);
+    background-color: var(--diffs-fg);
+    border: 0;
+    border-radius: 6px;
     cursor: pointer;
     -webkit-user-select: none;
     user-select: none;
 
     &[data-search-match] {
-      background-color: var(--diffs-search-match-color);
       color: var(--diffs-search-text-color);
+      background-color: var(--diffs-search-match-color);
     }
 
     &[data-search-match='current'] {
@@ -1099,11 +1100,10 @@
 
     svg {
       display: block;
-      width: 1.6ch;
+      width: 2ch;
       height: 1.6ch;
       margin: auto;
       fill: currentColor;
-      transform: rotate(-90deg);
     }
 
     &:focus-visible {

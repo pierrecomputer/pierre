@@ -695,6 +695,9 @@ for (const kind of ['file', 'diff']) {
       const button = shadow.querySelector('button[data-expand-line]');
       if (!(button instanceof HTMLButtonElement))
         throw new Error('Missing prerendered button');
+      expect(button.querySelector('use')?.getAttribute('href')).toBe(
+        '#diffs-icon-ellipsis'
+      );
       const expected = kind === 'file' ? '12345' : 'old suffix';
       expect(button.parentElement?.textContent).toBe(expected.slice(0, 4));
       const instance =
