@@ -49,6 +49,33 @@ async function openHighlightedMatches(
   return root;
 }
 
+test('Escape restores the scroll position from before the query', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?candidates&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.evaluate(() =>
+    window.__codeView!.scrollTo({
+      type: 'position',
+      position: 1237,
+      behavior: 'instant',
+    })
+  );
+  const scrollTop = () => root.evaluate((element) => element.scrollTop);
+  await expect.poll(scrollTop).toBe(1237);
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root.getByRole('textbox', { name: 'Search' });
+  await input.fill('target 1000');
+  await expect(root.locator('[data-line="1000"]')).toBeInViewport();
+  await expect.poll(scrollTop).toBeGreaterThan(1237);
+  await input.press('Escape');
+  await expect(input).toHaveCount(0);
+  await expect.poll(scrollTop).toBe(1237);
+});
+
 test('larger result counts shrink the input without shifting controls', async ({
   page,
 }) => {
@@ -99,6 +126,49 @@ function getHighlightPoints(row: Locator, highlight: 'match' | 'current') {
     return [];
   }, highlight);
 }
+
+test('Escape keeps the viewport after clicking a different match', async ({
+  page,
+}) => {
+  const root = await openHighlightedMatches(
+    page,
+    'viewport&kind=file',
+    'target 10',
+    2
+  );
+  const row = root.locator('[data-line="101"][data-line-type]');
+  await expect(row).toBeInViewport();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__codeView!.pendingScrollTarget == null)
+    )
+    .toBe(true);
+  const before = await root.evaluate((element) => element.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  const [point] = await getHighlightPoints(row, 'match');
+  // The view ignores the pointer for a moment after it scrolls. Wait until
+  // the row is what sits under the point again.
+  await expect
+    .poll(() =>
+      row.evaluate(
+        (element, [x, y]) => {
+          const shadowRoot = element.getRootNode();
+          return (
+            shadowRoot instanceof ShadowRoot &&
+            element.contains(shadowRoot.elementFromPoint(x, y))
+          );
+        },
+        [point.x, point.y]
+      )
+    )
+    .toBe(true);
+  await page.mouse.click(point.x, point.y);
+  await expect(root.locator('[data-matches]')).toHaveText('2/2');
+  await page.keyboard.press('Escape');
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+  await page.evaluate(() => window.__codeView!.render(true));
+  expect(await root.evaluate((element) => element.scrollTop)).toBe(before);
+});
 
 for (const kind of ['file', 'split']) {
   const name =

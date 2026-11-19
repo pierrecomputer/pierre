@@ -154,7 +154,7 @@ export interface LineAnchor {
   viewportOffset: number;
 }
 
-type ScrollAnchor = ItemAnchor | LineAnchor;
+export type ScrollAnchor = ItemAnchor | LineAnchor;
 
 export interface LineScrollPosition {
   top: number;
@@ -1376,7 +1376,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   public reset(): void {
     dequeueRender(this.computeRenderRangeAndEmit);
     this.clearReadySubscription();
-    this.search.close();
+    this.search.closeInPlace();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     const { items: discardedItems } = this;
@@ -4326,8 +4326,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   /** @internal Public for internal classes to utilize. */
   public clearPendingScroll = (event?: Event): void => {
     if (event != null) {
-      // Input in the find panel is not the user scrolling the view.
-      if (!isUserScrollInput(event) || this.search.ownsEvent(event)) {
+      // Typing and pressing in the find panel is not the user scrolling the
+      // view. A wheel over it is.
+      if (
+        !isUserScrollInput(event) ||
+        (event.type !== 'wheel' && this.search.ownsEvent(event))
+      ) {
         return;
       }
       this.search.userScrolled();
@@ -4645,6 +4649,40 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     const absoluteLineTop = itemTopOffset + item.top + linePosition.top;
     return this.clampScrollTop(absoluteLineTop - anchor.viewportOffset);
+  }
+
+  /**
+   * An external API so CodeView can be given an existing scroll anchor from an
+   * external source
+   */
+  public scrollToAnchor(
+    anchor: ScrollAnchor,
+    behavior?: CodeViewScrollBehavior
+  ): void {
+    const { id, viewportOffset } = anchor;
+    this.requestScroll(
+      anchor.type === 'line'
+        ? {
+            type: 'line',
+            id,
+            lineNumber: anchor.lineNumber,
+            side: anchor.side,
+            align: 'start',
+            // A line target starts below the sticky file header.
+            offset: viewportOffset - this.getStickyHeaderOffset(),
+            behavior,
+          }
+        : { type: 'item', id, align: 'start', offset: viewportOffset, behavior }
+    );
+  }
+
+  /**
+   * Whether the anchor's item or line is still where it was when the anchor
+   * was taken.
+   */
+  public isAtScrollAnchor(anchor: ScrollAnchor): boolean {
+    const top = this.resolveAnchoredScrollTop(anchor);
+    return top != null && Math.abs(top - this.getScrollTop()) < 1;
   }
 
   /**

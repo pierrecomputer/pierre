@@ -15,9 +15,18 @@ import type { CodeViewItem, FileDiffMetadata } from '../src/types';
 import { getLineIndexForDiff } from '../src/utils/getLineIndexForDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
-import { fillSearch, getSearchState } from './codeViewSearchHarness';
+import {
+  dispatchEscape,
+  fillReplace,
+  fillSearch,
+  getSearchInput,
+  getSearchState,
+  pressSearchEnter,
+  replaceFromPanel,
+} from './codeViewSearchHarness';
 import {
   createRoot,
+  dispatchScroll,
   installDom,
   renderItems,
   wait,
@@ -174,6 +183,548 @@ function checkDiffRows(
 }
 
 describe('CodeView viewport search', () => {
+  const file: CodeViewItem<undefined> = {
+    id: 'file',
+    type: 'file',
+    file: {
+      name: 'matches.txt',
+      contents: [
+        'line\n'.repeat(150),
+        'target\n',
+        'line\n'.repeat(150),
+        'target again\n',
+        'line\n'.repeat(80),
+        'target again later\n',
+        'line\n'.repeat(80),
+      ].join(''),
+    },
+  };
+
+  // Finishes the scroll before find reads the viewport.
+  function scrollToPosition(
+    viewer: CodeView,
+    root: HTMLElement,
+    position: number
+  ): void {
+    root.scrollTop = position;
+    dispatchScroll(root);
+    viewer.render(true);
+    expect(viewer.getScrollTop()).toBe(position);
+  }
+
+  // Types the query and checks that find actually moved the viewport.
+  function findTarget(viewer: CodeView, root: HTMLElement): void {
+    const before = viewer.getScrollTop();
+    fillSearch(root, 'target');
+    viewer.render(true);
+    expect(getSearchState(viewer).current?.lineNumber).toBe(151);
+    expect(viewer.getScrollTop()).toBeGreaterThan(before);
+    expect(viewer.pendingScrollTarget).toBeUndefined();
+  }
+
+  for (const stickyHeaders of [false, true]) {
+    describe(`returning to the viewport with stickyHeaders=${stickyHeaders}`, () => {
+      test('Escape returns to the original line after find opens a collapsed file above it', async () => {
+        await withViewer(
+          [
+            { ...file, collapsed: true },
+            {
+              id: 'after',
+              type: 'file',
+              file: { name: 'after.txt', contents: 'end\n'.repeat(200) },
+            },
+          ],
+          ({ viewer, root }) => {
+            scrollToPosition(viewer, root, 517);
+            const before = viewer.getTopForItem('after')!;
+            findTarget(viewer, root);
+            const after = viewer.getTopForItem('after')!;
+            expect(after).toBeGreaterThan(before);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(517 + after - before);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('clearing the query restores the viewport and keeps find open', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            scrollToPosition(viewer, root, 517);
+            findTarget(viewer, root);
+            fillSearch(root, '');
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(517);
+            expect(getSearchInput(root).value).toBe('');
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('closeSearch restores the viewport after opening with a query', async () => {
+        await withViewer(
+          [file],
+          async ({ viewer, root }) => {
+            viewer.closeSearch();
+            scrollToPosition(viewer, root, 517);
+            viewer.openSearch({ query: 'target' });
+            await waitFor(() => viewer.getScrollTop() > 517);
+            expect(viewer.getScrollTop()).toBeGreaterThan(517);
+            viewer.closeSearch();
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(517);
+            expect(root.querySelector('[data-search-panel]')).toBeNull();
+          },
+          { stickyHeaders }
+        );
+      });
+
+      for (const surface of ['code', 'find panel']) {
+        test(`Escape keeps the position after a wheel scroll over the ${surface}`, async () => {
+          await withViewer(
+            [file],
+            ({ viewer, root }) => {
+              scrollToPosition(viewer, root, 517);
+              findTarget(viewer, root);
+              const target = surface === 'code' ? root : getSearchInput(root);
+              target.dispatchEvent(
+                new window.Event('wheel', { bubbles: true, composed: true })
+              );
+              root.scrollTop = 1203;
+              dispatchScroll(root);
+              viewer.render(true);
+              expect(viewer.getScrollTop()).toBe(1203);
+              dispatchEscape(root);
+              viewer.render(true);
+              expect(viewer.getScrollTop()).toBe(1203);
+            },
+            { stickyHeaders }
+          );
+        });
+      }
+
+      test('Escape returns to the wheel position after a refined query jumps', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            findTarget(viewer, root);
+            root.dispatchEvent(new window.Event('wheel', { bubbles: true }));
+            scrollToPosition(viewer, root, 1203);
+            fillSearch(root, 'target again later');
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBeGreaterThan(1203);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(1203);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape returns to the hand-scrolled position after a cut line is expanded', async () => {
+        const cut: CodeViewItem<undefined> = {
+          id: 'cut',
+          type: 'file',
+          file: {
+            name: 'cut.txt',
+            contents: `${'line\n'.repeat(150)}----target\n${'line\n'.repeat(150)}`,
+          },
+        };
+        await withViewer(
+          [cut],
+          async ({ viewer, root }) => {
+            const start = viewer.getScrollTop();
+            fillSearch(root, 'target');
+            viewer.render(true);
+            // The match is in the hidden part of line 151, on its button.
+            expect(getSearchState(viewer).current).toMatchObject({
+              lineNumber: 151,
+              cutOff: true,
+            });
+            const jumped = viewer.getScrollTop();
+            expect(jumped).toBeGreaterThan(start);
+            root.dispatchEvent(new window.Event('wheel', { bubbles: true }));
+            scrollToPosition(viewer, root, jumped + 80);
+            const placed = viewer.getScrollTop();
+            viewer.getRenderedItems()[0].instance.expandLine({
+              additionLineNumber: 151,
+            });
+            await waitFor(
+              () => getSearchState(viewer).current?.cutOff !== true
+            );
+            viewer.render(true);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(placed);
+          },
+          { stickyHeaders, tokenizeMaxLineLength: 4 }
+        );
+      });
+
+      for (const change of ['typing', 'openSearch']) {
+        test(`Escape returns to the stepped match after ${change} refines the query`, async () => {
+          await withViewer(
+            [file],
+            ({ viewer, root }) => {
+              findTarget(viewer, root);
+              pressSearchEnter(root);
+              viewer.render(true);
+              expect(getSearchState(viewer).current?.lineNumber).toBe(302);
+              const second = viewer.getScrollTop();
+              if (change === 'typing') {
+                fillSearch(root, 'target again later');
+              } else {
+                viewer.openSearch({
+                  scope: 'all',
+                  query: 'target again later',
+                });
+              }
+              viewer.render(true);
+              expect(viewer.getScrollTop()).toBeGreaterThan(second);
+              dispatchEscape(root);
+              viewer.render(true);
+              expect(viewer.getScrollTop()).toBe(second);
+            },
+            { stickyHeaders }
+          );
+        });
+      }
+
+      test('Escape keeps the caret revealed by setSelections', async () => {
+        await withViewer(
+          [{ ...file, edit: true }],
+          ({ viewer, root }) => {
+            findTarget(viewer, root);
+            const first = viewer.getScrollTop();
+            const caret = { line: 350, character: 0 };
+            viewer
+              .getEditor('file')!
+              .setSelections([{ start: caret, end: caret, direction: 'none' }]);
+            viewer.render(true);
+            const top = viewer.getScrollTop();
+            expect(top).toBeGreaterThan(first);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(top);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape keeps the position set by a host scrollTo', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            findTarget(viewer, root);
+            const first = viewer.getScrollTop();
+            viewer.scrollTo({
+              type: 'position',
+              position: 1203,
+              behavior: 'instant',
+            });
+            viewer.render(true);
+            const top = viewer.getScrollTop();
+            expect(top).toBeGreaterThan(0);
+            expect(top).toBeLessThan(first);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(top);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape returns after a pointer press in the code that did not scroll', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            scrollToPosition(viewer, root, 517);
+            findTarget(viewer, root);
+            const row = viewer
+              .getRenderedItems()[0]
+              .element.shadowRoot!.querySelector('[data-line="151"]')!;
+            row.dispatchEvent(
+              new window.Event('pointerdown', { bubbles: true, composed: true })
+            );
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(517);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape returns during a smooth scroll to the first match', async () => {
+        await withViewer(
+          [file],
+          async ({ viewer, root, slice }) => {
+            scrollToPosition(viewer, root, 517);
+            fillSearch(root, 'target');
+            slice();
+            await waitFor(() => viewer.getScrollTop() > 517);
+            expect(viewer.getScrollTop()).toBeGreaterThan(517);
+            expect(viewer.pendingScrollTarget).toMatchObject({
+              type: 'line',
+              searchMatch: true,
+            });
+            dispatchEscape(root);
+            await waitFor(() => viewer.pendingScrollTarget == null);
+            expect(viewer.getScrollTop()).toBe(517);
+          },
+          { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
+        );
+      });
+
+      test('Escape returns after a pointer press interrupts a smooth find scroll', async () => {
+        await withViewer(
+          [file],
+          async ({ viewer, root, slice }) => {
+            scrollToPosition(viewer, root, 517);
+            fillSearch(root, 'target');
+            slice();
+            await waitFor(() => viewer.getScrollTop() > 517);
+            const stopped = viewer.getScrollTop();
+            expect(stopped).toBeGreaterThan(517);
+            expect(viewer.pendingScrollTarget).toMatchObject({
+              searchMatch: true,
+            });
+            root.dispatchEvent(
+              new window.Event('pointerdown', { bubbles: true })
+            );
+            expect(viewer.pendingScrollTarget).toBeUndefined();
+            expect(viewer.getScrollTop()).toBe(stopped);
+            dispatchEscape(root);
+            await waitFor(() => viewer.pendingScrollTarget == null);
+            expect(viewer.getScrollTop()).toBe(517);
+          },
+          { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
+        );
+      });
+
+      test('Escape keeps the wheel position after a panel wheel interrupts a smooth find scroll', async () => {
+        await withViewer(
+          [file],
+          async ({ viewer, root, slice }) => {
+            scrollToPosition(viewer, root, 517);
+            fillSearch(root, 'target');
+            slice();
+            await waitFor(() => viewer.getScrollTop() > 517);
+            expect(viewer.pendingScrollTarget).toMatchObject({
+              searchMatch: true,
+            });
+            getSearchInput(root).dispatchEvent(
+              new window.Event('wheel', { bubbles: true, composed: true })
+            );
+            expect(viewer.pendingScrollTarget).toBeUndefined();
+            scrollToPosition(viewer, root, 1203);
+            dispatchEscape(root);
+            await waitFor(() => viewer.pendingScrollTarget == null);
+            expect(viewer.getScrollTop()).toBe(1203);
+          },
+          { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
+        );
+      });
+
+      test('Escape returns to the start after typing during a smooth find scroll', async () => {
+        await withViewer(
+          [file],
+          async ({ viewer, root, slice }) => {
+            scrollToPosition(viewer, root, 517);
+            fillSearch(root, 'target');
+            slice();
+            await waitFor(() => viewer.getScrollTop() > 517);
+            expect(viewer.getScrollTop()).toBeGreaterThan(517);
+            expect(viewer.pendingScrollTarget).toMatchObject({
+              searchMatch: true,
+              lineNumber: 151,
+            });
+            fillSearch(root, 'target again later');
+            await waitFor(() => viewer.pendingScrollTarget == null);
+            expect(getSearchState(viewer).current?.lineNumber).toBe(383);
+            expect(viewer.getScrollTop()).toBeGreaterThan(517);
+            dispatchEscape(root);
+            await waitFor(() => viewer.pendingScrollTarget == null);
+            expect(viewer.getScrollTop()).toBe(517);
+          },
+          { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
+        );
+      });
+
+      test('Escape returns into the item renamed by updateItemId', async () => {
+        await withViewer(
+          [{ ...file }],
+          ({ viewer, root }) => {
+            scrollToPosition(viewer, root, 517);
+            findTarget(viewer, root);
+            expect(viewer.updateItemId('file', 'renamed')).toBe(true);
+            viewer.render(true);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(517);
+            expect(viewer.getScrollAnchor(517)?.id).toBe('renamed');
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape leaves an already visible first match in place', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            viewer.scrollTo({
+              type: 'line',
+              id: 'file',
+              lineNumber: 151,
+              align: 'center',
+              behavior: 'instant',
+            });
+            viewer.render(true);
+            const before = viewer.getScrollTop();
+            fillSearch(root, 'target');
+            expect(getSearchState(viewer).current?.lineNumber).toBe(151);
+            expect(viewer.getScrollTop()).toBe(before);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(before);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape keeps the next match in view after a find step', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            findTarget(viewer, root);
+            const first = viewer.getScrollTop();
+            pressSearchEnter(root);
+            viewer.render(true);
+            const second = viewer.getScrollTop();
+            expect(second).toBeGreaterThan(first);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(second);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      for (const { name, position } of [
+        {
+          name: 'Escape returns to the original offset after a longer query jumps again',
+          position: 517,
+        },
+        {
+          name: 'Escape returns to the top after a longer query jumps again',
+          position: 0,
+        },
+      ]) {
+        test(name, async () => {
+          await withViewer(
+            [file],
+            ({ viewer, root }) => {
+              scrollToPosition(viewer, root, position);
+              findTarget(viewer, root);
+              const first = viewer.getScrollTop();
+              fillSearch(root, 'target again');
+              viewer.render(true);
+              expect(viewer.getScrollTop()).toBeGreaterThan(first);
+              dispatchEscape(root);
+              viewer.render(true);
+              expect(viewer.getScrollTop()).toBe(position);
+            },
+            { stickyHeaders }
+          );
+        });
+      }
+
+      test('Escape keeps the next match in view after replacing a match', async () => {
+        await withViewer(
+          [{ ...file, edit: true }],
+          ({ viewer, root }) => {
+            viewer.openSearch({ scope: { itemId: 'file' }, mode: 'replace' });
+            findTarget(viewer, root);
+            const first = viewer.getScrollTop();
+            fillReplace(root, 'changed');
+            replaceFromPanel(root);
+            viewer.render(true);
+            expect(getSearchState(viewer).current?.lineNumber).toBe(302);
+            expect(viewer.getEditor('file')?.getText()).toContain('changed');
+            const second = viewer.getScrollTop();
+            expect(second).toBeGreaterThan(first);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(second);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape keeps the viewport after Replace All', async () => {
+        await withViewer(
+          [{ ...file, edit: true }],
+          ({ viewer, root }) => {
+            viewer.openSearch({ scope: { itemId: 'file' }, mode: 'replace' });
+            findTarget(viewer, root);
+            fillReplace(root, 'changed');
+            replaceFromPanel(root, true);
+            viewer.render(true);
+            expect(viewer.getEditor('file')!.getText()).not.toContain('target');
+            const after = viewer.getScrollTop();
+            expect(after).toBeGreaterThan(0);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(after);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('Escape returns to where Replace All was pressed when find jumps to text that still matches', async () => {
+        await withViewer(
+          [{ ...file, edit: true }],
+          ({ viewer, root }) => {
+            viewer.openSearch({ scope: { itemId: 'file' }, mode: 'replace' });
+            findTarget(viewer, root);
+            scrollToPosition(viewer, root, 1203);
+            const before = viewer.getScrollTop();
+            fillReplace(root, 'changed target');
+            replaceFromPanel(root, true);
+            viewer.render(true);
+            expect(viewer.getEditor('file')!.getText()).toContain(
+              'changed target'
+            );
+            expect(viewer.getScrollTop()).not.toBe(before);
+            dispatchEscape(root);
+            viewer.render(true);
+            expect(viewer.getScrollTop()).toBe(before);
+          },
+          { stickyHeaders }
+        );
+      });
+
+      test('reset closes find without requesting a return scroll', async () => {
+        await withViewer(
+          [file],
+          ({ viewer, root }) => {
+            findTarget(viewer, root);
+            const scroll = spyOn(viewer, 'requestScroll');
+            try {
+              viewer.reset();
+              expect(scroll).not.toHaveBeenCalled();
+              expect(root.querySelector('[data-search-panel]')).toBeNull();
+            } finally {
+              scroll.mockRestore();
+            }
+          },
+          { stickyHeaders }
+        );
+      });
+    });
+  }
+
   const views: { kind: 'file' | 'diff'; diffStyle: 'split' | 'unified' }[] = [
     { kind: 'file', diffStyle: 'split' },
     { kind: 'diff', diffStyle: 'split' },

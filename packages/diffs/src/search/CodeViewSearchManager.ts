@@ -8,6 +8,7 @@ import type {
   LineAnchor,
   LineScrollPosition,
   PendingLineTarget,
+  ScrollAnchor,
 } from '../components/CodeView';
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import { resolveSearchShortcut } from '../editor/command';
@@ -47,7 +48,15 @@ import {
   type SearchResult,
 } from './SearchPanelWidget';
 
+// Where the view was scrolled to: the item or line at its top and how far
+// down the viewport it sat, or the very top of the view.
+export type CodeViewSearchViewport = ScrollAnchor | 'top';
+
 export interface CodeViewSearchState {
+  // Where to go back to: the view's place before find's automatic jumps.
+  originalViewport: CodeViewSearchViewport | undefined;
+  // Where find's own scroll last left the view.
+  matchViewport: CodeViewSearchViewport | undefined;
   scope: { itemId: string } | undefined;
   matches: CodeViewSearchMatch[];
   scan: CodeViewSearchScan | undefined;
@@ -74,6 +83,8 @@ export interface CodeViewSearchState {
 // creates one and tells it when items, focus or the scroll position change.
 export class CodeViewSearchManager<LAnnotation, Caret> {
   public readonly state: CodeViewSearchState = {
+    originalViewport: undefined,
+    matchViewport: undefined,
     scope: undefined,
     matches: [],
     scan: undefined,
@@ -129,6 +140,9 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
         onSearchStateChange?.(state);
       },
       onQueryChange: () => {
+        if (this.panel?.hasQuery() === false) {
+          this.restoreViewport();
+        }
         this.invalidateScan();
         this.setResults(this.state.matches, undefined);
         this.state.pendingNavigation = undefined;
@@ -136,6 +150,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
       },
       search: (searchParams) => this.search(searchParams),
       scrollToMatch: (match) => {
+        this.forgetViewport();
         this.state.pendingNavigation = undefined;
         this.scrollToMatch(match);
       },
@@ -173,6 +188,12 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
   }
 
   public close(): void {
+    this.restoreViewport();
+    this.closeInPlace();
+  }
+
+  // Closes find at the current scroll position.
+  public closeInPlace(): void {
     const { panel } = this;
     const panelHadFocus = this.isPanelFocused();
     const { scope } = this.state;
@@ -273,6 +294,12 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     if (state.scope?.itemId === oldId) {
       state.scope = { itemId: newId };
     }
+    state.originalViewport = renameViewport(
+      state.originalViewport,
+      oldId,
+      newId
+    );
+    state.matchViewport = renameViewport(state.matchViewport, oldId, newId);
     this.invalidateScan();
     this.markMatchesDirty();
   }
@@ -385,6 +412,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     }
 
     dequeueRender(this.revealCurrentMatch);
+    this.forgetViewport();
     state.pendingNavigation = undefined;
     state.pendingHorizontalReveal = false;
     this.setResults(matches, match);
@@ -477,6 +505,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     dequeueRender(this.paintHighlights);
     dequeueRender(this.revealCurrentMatch);
     this.highlighter?.clear();
+    this.forgetViewport();
     this.state.scope = undefined;
     this.state.matches = [];
     this.invalidateScan();
@@ -486,6 +515,74 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     this.matchesDirty = false;
     this.state.pendingHorizontalReveal = false;
     this.state.currentPosition = undefined;
+  }
+
+  // Remembers where the view is as the place to go back to, unless find's own
+  // jump is what put it there.
+  private rememberViewport(): void {
+    const { state } = this;
+    if (state.originalViewport != null && this.isAtMatchViewport()) return;
+    state.originalViewport = this.getViewport();
+    state.matchViewport = undefined;
+  }
+
+  // Takes the item or line at the top of the view, or the top itself.
+  private getViewport(): CodeViewSearchViewport | undefined {
+    const { view } = this;
+    const scrollTop = view.getScrollTop();
+    return scrollTop > 0 ? view.getScrollAnchor(scrollTop) : 'top';
+  }
+
+  // Drops both places when find no longer has a return to make.
+  private forgetViewport(): void {
+    const { state } = this;
+    state.originalViewport = undefined;
+    state.matchViewport = undefined;
+  }
+
+  // Notes where find's own scroll left the view, while there is a place to
+  // go back to.
+  private recordMatchViewport(): void {
+    const { state } = this;
+    if (state.originalViewport != null) {
+      state.matchViewport = this.getViewport();
+    }
+  }
+
+  // Whether the view is at a remembered place.
+  private isAtViewport(viewport: CodeViewSearchViewport | undefined): boolean {
+    const { view } = this;
+    return viewport === 'top'
+      ? view.getScrollTop() <= 0
+      : viewport != null && view.isAtScrollAnchor(viewport);
+  }
+
+  // Whether find is scrolling to a match or the view is still where it stopped.
+  private isAtMatchViewport(): boolean {
+    const { state, view } = this;
+    const { pendingScrollTarget } = view;
+    return (
+      (pendingScrollTarget?.type === 'line' &&
+        pendingScrollTarget.searchMatch === true) ||
+      this.isAtViewport(state.matchViewport)
+    );
+  }
+
+  // Undoes find's automatic jumps since the view was last placed by the user.
+  private restoreViewport(): void {
+    const { state, view } = this;
+    const { originalViewport } = state;
+    const shouldReturn = this.isAtMatchViewport();
+    this.forgetViewport();
+    if (originalViewport == null || !shouldReturn) {
+      return;
+    }
+    const behavior = view.options.searchOptions?.scrollBehavior ?? 'instant';
+    if (originalViewport === 'top') {
+      view.requestScroll({ type: 'position', position: 0, behavior });
+    } else {
+      view.scrollToAnchor(originalViewport, behavior);
+    }
   }
 
   // Check whether the match's line is visible in the viewport below the sticky
@@ -535,6 +632,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
           : this.isMatchInView(match);
       if (visible && !this.state.centerNavigation) {
         this.view.clearPendingScroll();
+        this.recordMatchViewport();
         return;
       }
     }
@@ -551,7 +649,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
       behavior: this.view.options.searchOptions?.scrollBehavior ?? 'instant',
       searchMatch: true,
     };
-    this.view.requestScroll(target);
+    this.view.requestScroll(target, () => this.recordMatchViewport());
   }
 
   // The user or the host has scrolled, so find leaves the view where it was
@@ -711,6 +809,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     ];
     return {
       replaceMatch: (match, params) => {
+        this.forgetViewport();
         const next = editor.replaceSearchMatches([toOffsets(match)], params);
         if (next == null) {
           return undefined;
@@ -725,6 +824,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
         };
       },
       replaceAll: (matches, params) => {
+        this.forgetViewport();
         editor.replaceSearchMatches(matches.map(toOffsets), params);
       },
     };
@@ -885,6 +985,9 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
       scan?.isItemPending(position) === true;
     this.setResults(matches, currentItemPending ? current : nextCurrent);
     if (jumpTarget != null && pending === 'jump') {
+      if (replacementEnd == null) {
+        this.rememberViewport();
+      }
       this.scrollToMatch(jumpTarget);
     } else if (
       current?.cutOff === true &&
@@ -903,6 +1006,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
   private revealCurrentMatch = (): void => {
     const { current } = this.state;
     if (current != null) {
+      this.rememberViewport();
       this.scrollToMatch(current);
     }
   };
@@ -1224,6 +1328,17 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     }
     return matches[start];
   }
+}
+
+// Keeps a remembered place attached to its item when its id changes.
+function renameViewport(
+  viewport: CodeViewSearchViewport | undefined,
+  oldId: string,
+  newId: string
+): CodeViewSearchViewport | undefined {
+  return viewport != null && viewport !== 'top' && viewport.id === oldId
+    ? { ...viewport, id: newId }
+    : viewport;
 }
 
 // Find the clicked row, leaving its buttons to handle their own clicks.

@@ -9,6 +9,7 @@ export interface SearchMatchProbe {
   lineIndex: number;
   startCharacter: number;
   endCharacter: number;
+  cutOff?: true;
 }
 
 export interface SearchStateProbe {
