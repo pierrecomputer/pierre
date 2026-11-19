@@ -66,7 +66,7 @@ export interface SearchableDocument {
   getLineStartOffset(line: number): number;
 }
 
-export const MAX_SEARCH_MATCHES = 100000;
+export const MAX_SEARCH_MATCHES = 900_001;
 
 // Collects matches in document order, stopping after the accepted cap.
 export function searchDocument(
