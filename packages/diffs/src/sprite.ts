@@ -9,6 +9,7 @@ export type SVGSpriteNames =
   | 'diffs-icon-expand-all'
   | 'diffs-icon-eye-slash'
   | 'diffs-icon-file-code'
+  | 'diffs-icon-loader'
   | 'diffs-icon-plus'
   | 'diffs-icon-symbol-added'
   | 'diffs-icon-symbol-added-duo'
@@ -66,6 +67,9 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="diffs-icon-file-code" viewBox="0 0 16 16">
     <path d="M10.75 0c.199 0 .39.08.53.22l3.5 3.5c.14.14.22.331.22.53v9A2.75 2.75 0 0 1 12.25 16h-8.5A2.75 2.75 0 0 1 1 13.25V2.75A2.75 2.75 0 0 1 3.75 0zm-7 1.5c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V5h-1.25A2.25 2.25 0 0 1 10 2.75V1.5z"/><path d="M7.248 6.19a.75.75 0 0 1 .063 1.058L5.753 9l1.558 1.752a.75.75 0 0 1-1.122.996l-2-2.25a.75.75 0 0 1 0-.996l2-2.25a.75.75 0 0 1 1.06-.063M8.69 7.248a.75.75 0 1 1 1.12-.996l2 2.25a.75.75 0 0 1 0 .996l-2 2.25a.75.75 0 1 1-1.12-.996L10.245 9z"/>
+  </symbol>
+  <symbol id="diffs-icon-loader" viewBox="0 0 16 16">
+    <path d="M7.25 4V1a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-1.5 0"/><path d="M4.641 5.702 2.521 3.58A.75.75 0 1 1 3.58 2.52l2.121 2.121a.75.75 0 0 1-1.06 1.06" opacity=".8"/><path d="M1 7.25h3a.75.75 0 0 1 0 1.5H1a.75.75 0 0 1 0-1.5" opacity=".6"/><path d="m2.52 12.42 2.121-2.122a.75.75 0 1 1 1.061 1.06L3.581 13.48a.75.75 0 0 1-1.061-1.06" opacity=".5"/><path d="M7.25 15v-3a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-1.5 0" opacity=".4"/><path d="m12.42 13.48-2.122-2.121a.75.75 0 0 1 1.06-1.061l2.122 2.121a.75.75 0 1 1-1.06 1.061" opacity=".3"/><path d="M12 7.25h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5" opacity=".2"/><path d="M10.298 4.641 12.42 2.52a.75.75 0 1 1 1.061 1.06l-2.121 2.122a.75.75 0 1 1-1.06-1.06" opacity=".1"/>
   </symbol>
   <symbol id="diffs-icon-plus" viewBox="0 0 16 16">
     <path d="M8 3a.75.75 0 0 1 .75.75v3.5h3.5a.75.75 0 0 1 0 1.5h-3.5v3.5a.75.75 0 0 1-1.5 0v-3.5h-3.5a.75.75 0 0 1 0-1.5h3.5v-3.5A.75.75 0 0 1 8 3"/>

@@ -10,6 +10,7 @@ export const spriteConfig = {
     'IconExpandAll',
     'IconEyeSlash',
     'IconFileCode',
+    'IconLoader',
     'IconSymbolDiffstat',
     'IconSymbolAdded',
     'IconSymbolDeleted',
@@ -45,5 +46,8 @@ export const spriteConfig = {
 
   source: {
     extension: '.svg',
+    files: {
+      IconLoader: 'beta/svg/IconLoader/outline-16px.svg',
+    },
   },
 };

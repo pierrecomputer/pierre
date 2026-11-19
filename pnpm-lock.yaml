@@ -13,8 +13,8 @@ catalogs:
       specifier: 2.3.3
       version: 2.3.3
     '@pierre/icons':
-      specifier: 0.9.0
-      version: 0.9.0
+      specifier: 2.0.0-beta.5
+      version: 2.0.0-beta.5
     '@pierre/vscode-icons':
       specifier: 0.0.9
       version: 0.0.9
@@ -281,7 +281,7 @@ importers:
         version: 2.3.3
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.9.0(react@19.2.7)
+        version: 2.0.0-beta.5(react@19.2.7)
       '@types/bun':
         specifier: 'catalog:'
         version: 1.4.0
@@ -320,7 +320,7 @@ importers:
         version: link:../../packages/diffs
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.9.0(react@19.2.7)
+        version: 2.0.0-beta.5(react@19.2.7)
       '@pierre/patches':
         specifier: workspace:*
         version: link:../../packages/patches
@@ -360,7 +360,7 @@ importers:
         version: link:../../packages/highlights
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.9.0(react@19.2.7)
+        version: 2.0.0-beta.5(react@19.2.7)
       '@pierre/theme':
         specifier: workspace:*
         version: link:../../packages/theme
@@ -460,7 +460,7 @@ importers:
         version: link:../../packages/highlights
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.9.0(react@19.2.7)
+        version: 2.0.0-beta.5(react@19.2.7)
       '@pierre/pipes':
         specifier: workspace:*
         version: link:../../packages/pipes
@@ -2056,8 +2056,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@pierre/icons@0.9.0':
-    resolution: {integrity: sha512-lsvXfhb0ynOaQ+eFM54h8n3jS39Glh6Mng8VNFnxdwJTh0Mo8OGmU27mA3u8Ayha7bZNsAqhNw3jaflnPQEH/Q==}
+  '@pierre/icons@2.0.0-beta.5':
+    resolution: {integrity: sha512-kumG9opG2HLKUbz7awoWTo2yP54OprvrRLsMJ1BuhdHYtmpnurTEL2wS6MkQYZIuuA+5Iaz3d+ataTdR3Rvs+A==}
     peerDependencies:
       react: 19.2.7
 
@@ -7875,7 +7875,7 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.80.0':
     optional: true
 
-  '@pierre/icons@0.9.0(react@19.2.7)':
+  '@pierre/icons@2.0.0-beta.5(react@19.2.7)':
     dependencies:
       react: 19.2.7
 
