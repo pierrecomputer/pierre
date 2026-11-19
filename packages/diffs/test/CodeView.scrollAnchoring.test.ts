@@ -2,7 +2,11 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_CODE_VIEW_LAYOUT } from '../src/constants';
-import type { CodeViewItem, FileContents } from '../src/types';
+import type {
+  CodeViewDiffItem,
+  CodeViewItem,
+  FileContents,
+} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   createRoot,
@@ -97,7 +101,7 @@ function getScrollToTop(
 function makeReplacementDiffItem(
   id: string,
   lineCount: number
-): CodeViewItem<undefined> {
+): CodeViewDiffItem {
   const oldFile = makeFile('src/replaced.ts', lineCount);
   const newFile: FileContents = {
     name: oldFile.name,
@@ -115,6 +119,113 @@ function makeReplacementDiffItem(
 }
 
 describe('CodeView scroll anchoring', () => {
+  test('preserves the visible comment when an earlier inline reply collapses', async () => {
+    const { cleanup, triggerResizeObserver } = installDom();
+    const reply = document.createElement('div');
+    const viewer = new CodeView({
+      diffStyle: 'split',
+      disableFileHeader: true,
+      // Keep the offscreen thread mounted while scrolling to the second comment.
+      itemMetrics: { hunkLineCount: 48 },
+      renderAnnotation({ lineNumber }) {
+        const comment = document.createElement('div');
+        if (lineNumber === 12) comment.append(reply);
+        return comment;
+      },
+    });
+    const root = createRoot({ height: 420 });
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          ...makeReplacementDiffItem('settings', 48),
+          annotations: [
+            { side: 'additions', lineNumber: 12 },
+            { side: 'additions', lineNumber: 24 },
+          ],
+        },
+      ]);
+      const [item] = viewer.getRenderedItems();
+      const shadow = item?.element.shadowRoot;
+      const sticky = item?.element.parentElement;
+      const column = shadow?.querySelector('[data-additions] [data-content]');
+      const annotationAfter = (line: number) =>
+        column?.querySelector<HTMLElement>(
+          `[data-line="${line}"] + [data-line-annotation]`
+        );
+      const thread = annotationAfter(12);
+      const reading = annotationAfter(24);
+      const content = thread?.firstElementChild;
+      if (
+        column == null ||
+        sticky == null ||
+        thread == null ||
+        content == null ||
+        reading == null
+      ) {
+        throw new Error('Expected both inline comments in the split diff');
+      }
+
+      // Supply the box heights jsdom cannot measure. Read the thread's reserved
+      // height back from the DOM so an early layout write moves the reader.
+      const rect = (height: number) => new window.DOMRect(0, 0, 500, height);
+      content.getBoundingClientRect = () =>
+        rect(reply.hidden === true ? 36 : 100);
+      thread.getBoundingClientRect = () =>
+        rect(
+          parseFloat(
+            thread.style.getPropertyValue('--diffs-annotation-min-height')
+          )
+        );
+      reading.getBoundingClientRect = () => rect(54);
+      for (const row of column.querySelectorAll('[data-line]')) {
+        row.getBoundingClientRect = () => rect(20);
+      }
+      const rows = Array.from(column.children);
+      const heightOf = (elements: Element[]) =>
+        elements.reduce(
+          (height, row) => height + row.getBoundingClientRect().height,
+          0
+        );
+      sticky.getBoundingClientRect = () => rect(heightOf(rows));
+      const rowsAboveComment = rows.slice(0, rows.indexOf(reading));
+      const commentTop = () => heightOf(rowsAboveComment) - root.scrollTop;
+
+      triggerResizeObserver(content);
+      await wait();
+      triggerResizeObserver(sticky);
+      viewer.scrollTo({
+        type: 'line',
+        id: 'settings',
+        lineNumber: 24,
+        side: 'additions',
+        align: 'center',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      expect(thread.getBoundingClientRect().height).toBe(100);
+      const before = commentTop();
+      expect(before).toBeGreaterThan(0);
+      expect(before).toBeLessThan(root.getBoundingClientRect().height);
+      expect(heightOf(rows.slice(0, rows.indexOf(thread) + 1))).toBeLessThan(
+        root.scrollTop
+      );
+
+      reply.hidden = true;
+      triggerResizeObserver(content);
+      expect(commentTop()).toBe(before);
+
+      await wait();
+      triggerResizeObserver(sticky);
+      expect(thread.getBoundingClientRect().height).toBe(36);
+      expect(commentTop()).toBe(before);
+    } finally {
+      viewer.cleanUp();
+      await wait();
+      cleanup();
+    }
+  });
+
   test('keeps an item anchor fixed when split to unified grows past the old scroll range', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({ diffStyle: 'split' });

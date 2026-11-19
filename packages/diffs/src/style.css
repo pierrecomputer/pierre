@@ -1336,6 +1336,12 @@
     z-index: 2;
   }
 
+  /* Both halves of a measured annotation row must grow in the same frame.
+   * Its child still sizes naturally for ResizeManager to measure. */
+  [data-overflow='scroll'] [data-line-annotation*=','] {
+    height: var(--diffs-annotation-min-height, auto);
+  }
+
   [data-merge-conflict-actions] {
     z-index: 2;
   }

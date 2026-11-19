@@ -37,6 +37,13 @@ export interface DomHandle {
   triggerResizeObserver(target: Element): void;
 }
 
+// ResizeManager can reuse an observer created in an earlier installDom call.
+// Register it with the document whose elements it now observes.
+const resizeObserversByDocument = new WeakMap<
+  Document,
+  Set<{ trigger(target: Element): void }>
+>();
+
 // Installs a jsdom-backed DOM environment on globalThis for component tests.
 // Always installs the same superset of globals: per-file subsets drifted apart
 // in the past and caused harness bugs, while unused extras are harmless. The
@@ -115,16 +122,19 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   }
 
   const resizeObservers = new Set<MockResizeObserver>();
+  resizeObserversByDocument.set(dom.window.document, resizeObservers);
   class MockResizeObserver {
     #callback: ResizeObserverCallback;
     #targets = new Set<Element>();
 
     constructor(callback: ResizeObserverCallback) {
       this.#callback = callback;
-      resizeObservers.add(this);
     }
 
     observe(target: Element): void {
+      const observers =
+        resizeObserversByDocument.get(target.ownerDocument) ?? resizeObservers;
+      observers.add(this);
       this.#targets.add(target);
     }
 
@@ -335,6 +345,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       }
       frames.clear();
       intersectionObservers.clear();
+      resizeObserversByDocument.delete(dom.window.document);
       resizeObservers.clear();
 
       for (const [key, value] of Object.entries(originalValues)) {
