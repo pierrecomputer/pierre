@@ -20,15 +20,17 @@ overwrite or detach it.
 
 ## HTML
 
-`renderToHtml(input, options?)` accepts `skipHtml`, `incomplete`, `frontmatter`,
-`math`, and `cjk`. All default to `false`. Set `incomplete: true` for a preview
-of unfinished inline syntax. See [Extensions](extensions.md) for `math` and
-`cjk`.
+`renderToHtml(input, options?)` accepts `skipHtml`, `allowedHtml`, `incomplete`,
+`frontmatter`, `math`, and `cjk`. All default to `false`. Set `incomplete: true`
+for a preview of unfinished inline syntax. See [Extensions](extensions.md) for
+`math` and `cjk`.
 
 Core output preserves raw HTML by default. `skipHtml: true` drops raw HTML.
-Sanitize output from untrusted Markdown before placing it in a page, including
-link and image URLs. The [HTML renderer](html.md) checks Markdown URLs and omits
-raw HTML by default.
+`allowedHtml` keeps only the listed tags and attributes, drops unsafe ones such
+as `on*` and `javascript:` URLs, and closes open tags itself. Sanitize output
+from untrusted Markdown before placing it in a page, including link and image
+URLs. The [HTML renderer](html.md) checks Markdown URLs and omits raw HTML by
+default.
 
 ## Frontmatter
 

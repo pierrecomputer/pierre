@@ -27,6 +27,7 @@ accumulated Markdown string each time. See [Streaming](references/streaming.md)
 for final updates and incremental results.
 
 Prefer the React, HTML, or DOM renderer for untrusted Markdown in a page. These
-omit raw HTML and check Markdown URLs. Core HTML and core sessions require an
-application sanitizer for that use. Treat hooks and plugin output as trusted
-HTML and escape any untrusted text they insert.
+omit raw HTML, except tags listed in `allowedHtml`, and check Markdown URLs.
+Core HTML and core sessions require an application sanitizer for that use. Treat
+hooks and plugin output as trusted HTML and escape any untrusted text they
+insert.

@@ -90,8 +90,9 @@ and `xmpp`. It rejects network paths such as `//host/path`. Invalid links lose
 their destination. Images with a rejected URL disappear. External images are
 allowed by default. Use `disallowedElements: ['img']` to remove all images.
 
-Raw HTML from Markdown is dropped. Filtering applies to generated Markdown
-before hooks and plugins add their own markup. Use `escapeHtml()` from
-`@pierre/words/html` for untrusted text inside a hook's output. For custom URLs,
-use `defaultUrlTransform()` and HTML-escape the validated attribute value.
-`defaultUrlTransform()` is also exported from `@pierre/words/react`.
+Raw HTML from Markdown is dropped, except tags listed in `allowedHtml`.
+Filtering applies to generated Markdown before hooks and plugins add their own
+markup. Use `escapeHtml()` from `@pierre/words/html` for untrusted text inside a
+hook's output. For custom URLs, use `defaultUrlTransform()` and HTML-escape the
+validated attribute value. `defaultUrlTransform()` is also exported from
+`@pierre/words/react`.
