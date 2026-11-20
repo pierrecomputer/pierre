@@ -30,16 +30,18 @@ export async function expectCurrentMatchHorizontallyVisible(
         const current = (
           window.__codeView as unknown as
             | {
-                searchState: {
-                  current?: {
-                    lineNumber: number;
-                    startCharacter: number;
-                    side?: string;
+                search: {
+                  state: {
+                    current?: {
+                      lineNumber: number;
+                      startCharacter: number;
+                      side?: string;
+                    };
                   };
                 };
               }
             | undefined
-        )?.searchState.current;
+        )?.search.state.current;
         if (current != null) {
           const prefix = document.createRange();
           prefix.selectNodeContents(row);

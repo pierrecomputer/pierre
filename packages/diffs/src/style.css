@@ -1073,6 +1073,50 @@
     grid-template-columns: 32px 32px auto;
   }
 
+  [data-expand-line] {
+    display: inline-block;
+    width: 1.1lh;
+    height: 0.6lh;
+    padding: 0;
+    margin-inline: 0.5ch;
+    vertical-align: -0.1lh;
+    font: inherit;
+    color: var(--diffs-bg);
+    background-color: var(--diffs-fg);
+    border: 0;
+    border-radius: 6px;
+    opacity: 0.75;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+
+    &:hover {
+      opacity: 1;
+    }
+
+    &[data-search-match] {
+      color: var(--diffs-search-text-color);
+      background-color: var(--diffs-search-match-color);
+    }
+
+    &[data-search-match='current'] {
+      background-color: var(--diffs-search-current-color);
+    }
+
+    svg {
+      display: block;
+      width: 0.8lh;
+      height: 0.5lh;
+      margin: auto;
+      fill: currentColor;
+    }
+
+    &:focus-visible {
+      outline: 1px solid currentColor;
+      outline-offset: -1px;
+    }
+  }
+
   [data-expand-button],
   [data-separator-content] {
     display: flex;

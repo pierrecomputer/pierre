@@ -204,6 +204,13 @@ interface ViewportBounds {
   bottom: number;
 }
 
+interface EditableLineRanges {
+  rendered: [first: number, last: number][];
+  visible: [first: number, last: number][];
+  // The first editable line that starts at or below the top of the viewport.
+  anchorLine: number | undefined;
+}
+
 interface EditorAttachState {
   generation: number;
   callback: (() => void) | undefined;
@@ -6756,8 +6763,6 @@ export class Editor<
       },
       search: (searchParams) =>
         this.#searchWithNavigationTarget(textDocument, searchParams),
-      isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
-        aStart === bStart && aEnd === bEnd,
       scrollToMatch,
       replace: {
         replaceMatch: (match, searchParams) =>
@@ -6769,33 +6774,53 @@ export class Editor<
       onUpdate: (
         { matches: allMatches, preferredMatch }: SearchResult<MatchRange>,
         options?: { skipNavigation?: boolean }
-      ): MatchRange | undefined => {
+      ): number | undefined => {
         const previous = this.#currentSearchMatch;
         this.#matches = allMatches.length > 0 ? allMatches : undefined;
+        // The first match at or after an offset. Matches are sorted by start.
+        const indexAtOrAfter = (offset: number): number | undefined => {
+          let start = 0;
+          let end = allMatches.length;
+          while (start < end) {
+            const middle = Math.floor((start + end) / 2);
+            if (allMatches[middle][0] < offset) start = middle + 1;
+            else end = middle;
+          }
+          return start < allMatches.length ? start : undefined;
+        };
+
         if (options?.skipNavigation === true) {
-          const current = allMatches.find(
-            ([start, end]) => start === previous?.[0] && end === previous[1]
-          );
-          this.#currentSearchMatch = current;
-          if (current == null) this.#pendingSearchHorizontalReveal = false;
+          // A refresh keeps the current match only if it is still in the list.
+          const index =
+            previous != null ? indexAtOrAfter(previous[0]) : undefined;
+          const current = index != null ? allMatches[index] : undefined;
+          const kept =
+            current != null &&
+            previous != null &&
+            current[0] === previous[0] &&
+            current[1] === previous[1];
+          this.#currentSearchMatch = kept ? current : undefined;
+          if (!kept) this.#pendingSearchHorizontalReveal = false;
           this.#renderSearchMatches();
-          return current;
+          return kept ? index : undefined;
         }
 
         // Replacement leaves a collapsed marker at its end; advance past it.
-        const current =
+        const index =
           previous != null && previous[0] === previous[1]
-            ? allMatches.find(([start]) => start >= previous[1])
-            : preferredMatch;
-        if (current == null) {
+            ? indexAtOrAfter(previous[1])
+            : preferredMatch != null
+              ? indexAtOrAfter(preferredMatch[0])
+              : undefined;
+        if (index == null) {
           this.#currentSearchMatch = undefined;
           this.#pendingSearchHorizontalReveal = false;
           this.#renderSearchMatches();
-          return;
+          return undefined;
         }
 
-        scrollToMatch(current, true);
-        return current;
+        scrollToMatch(allMatches[index], true);
+        return index;
       },
       onClose: () => {
         this.#searchPanel = undefined;
@@ -6812,60 +6837,63 @@ export class Editor<
     searchPanel.mount();
   }
 
-  // Choose the starting match during collection so navigation needs neither
-  // another match scan nor intermediate state shared with the panel callbacks.
+  // Searches the document and picks the match a new query starts on: the first
+  // fully visible one, else the first after the visible area, else the first.
   #searchWithNavigationTarget(
     textDocument: TextDocument<EType, LAnnotation>,
     searchParams: SearchParams
   ): SearchResult<MatchRange> {
     const viewport = this.#getSearchViewportBounds();
-    const { rendered, visible } = this.#getEditableLineRanges(viewport);
-    const toOffsets = ([first, last]: [number, number]): MatchRange => [
-      textDocument.offsetAt({ line: first, character: 0 }),
-      textDocument.offsetAt({
-        line: last,
-        character: textDocument.getLineLength(last),
-      }),
-    ];
-    const offsets = rendered.map(toOffsets);
-    const visibleOffsets = visible.map(toOffsets);
-    let rangeIndex = 0;
+    const { visible, anchorLine } = this.#getEditableLineRanges(viewport);
+    const firstAfterOffset =
+      anchorLine != null
+        ? textDocument.offsetAt({
+            line: anchorLine,
+            character: 0,
+          })
+        : undefined;
+    const visibleOffsets = visible.map(
+      ([first, last]): MatchRange => [
+        textDocument.offsetAt({ line: first, character: 0 }),
+        textDocument.offsetAt({
+          line: last,
+          character: textDocument.getLineLength(last),
+        }),
+      ]
+    );
     let visibleRangeIndex = 0;
-    const lastEnd = offsets.at(-1)?.[1];
     let firstVisible: number | undefined;
-    let firstRendered: number | undefined;
-    let firstAfterRendered: number | undefined;
+    let firstAfterVisible: number | undefined;
     const matches = textDocument.search(
       searchParams,
       undefined,
       (match, index) => {
         const [start] = match;
-        while (rangeIndex < offsets.length && start > offsets[rangeIndex][1])
-          rangeIndex++;
         while (
           visibleRangeIndex < visibleOffsets.length &&
           start > visibleOffsets[visibleRangeIndex][1]
         )
           visibleRangeIndex++;
-        if (rangeIndex < offsets.length && start >= offsets[rangeIndex][0]) {
-          firstRendered ??= index;
-          if (
-            firstVisible == null &&
-            visibleRangeIndex < visibleOffsets.length &&
-            start >= visibleOffsets[visibleRangeIndex][0] &&
-            this.#isSearchMatchInView(match, viewport)
-          ) {
-            firstVisible = index;
-          }
+        if (
+          firstVisible == null &&
+          visibleRangeIndex < visibleOffsets.length &&
+          start >= visibleOffsets[visibleRangeIndex][0] &&
+          this.#isSearchMatchInView(match, viewport)
+        ) {
+          firstVisible = index;
         }
-        if (firstAfterRendered == null && lastEnd != null && start > lastEnd)
-          firstAfterRendered = index;
+        if (
+          firstAfterVisible == null &&
+          firstAfterOffset != null &&
+          start >= firstAfterOffset
+        ) {
+          firstAfterVisible = index;
+        }
       }
     );
     return {
       matches,
-      preferredMatch:
-        matches[firstVisible ?? firstRendered ?? firstAfterRendered ?? 0],
+      preferredMatch: matches[firstVisible ?? firstAfterVisible ?? 0],
     };
   }
 
@@ -7333,14 +7361,12 @@ export class Editor<
   // Collect mounted and visible source-line ranges in one walk, preserving
   // collapsed gaps. Full-file searches can use the document's rendered range
   // directly and only visit rows around the viewport.
-  #getEditableLineRanges(viewport?: ViewportBounds): {
-    rendered: [first: number, last: number][];
-    visible: [first: number, last: number][];
-  } {
+  #getEditableLineRanges(viewport?: ViewportBounds): EditableLineRanges {
     const rendered: [number, number][] = [];
     const visible: [number, number][] = [];
+    let anchorLine: number | undefined;
     const rows = this.#contentElement?.children;
-    if (rows == null) return { rendered, visible };
+    if (rows == null) return { rendered, visible, anchorLine };
     const textDocument = this.#editSession?.document;
     const useDocumentRange =
       viewport != null &&
@@ -7385,6 +7411,7 @@ export class Editor<
       if (viewport == null || pastViewport || rowIndex < firstVisibleRow)
         continue;
       const rect = row.getBoundingClientRect();
+      if (rect.top >= viewport.top) anchorLine ??= line;
       if (rect.top >= viewport.bottom) {
         pastViewport = true;
         if (useDocumentRange) break;
@@ -7392,7 +7419,7 @@ export class Editor<
         appendLine(visible, line);
       }
     }
-    return { rendered, visible };
+    return { rendered, visible, anchorLine };
   }
 
   // Whether the File or FileDiff component this editor is attached to

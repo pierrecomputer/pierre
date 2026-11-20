@@ -311,7 +311,6 @@ export class PieceTable {
     const lineOffsets = computeLineOffsets(documentText);
     return searchDocument(
       {
-        textLength: documentText.length,
         lineCount: lineOffsets.length,
         getLineText: (line) => {
           const start = lineOffsets[line] ?? documentText.length;
@@ -322,7 +321,6 @@ export class PieceTable {
           return documentText.slice(start, end);
         },
         getLineStartOffset: (line) => lineOffsets[line] ?? documentText.length,
-        charAt: (offset) => documentText.charAt(offset),
       },
       searchParams,
       limit,

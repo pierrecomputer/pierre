@@ -45,7 +45,7 @@ classes.
    `DiffModel.fromDiff`, which never changes the diff it wraps.
 2. `RowSource` binds the highlight result's rows: old lines by index, new lines
    by index too for a diff that is not being edited.
-3. `DiffLayout.layout` walks the window once with `iterateOverDiff`. In the same
+3. `DiffLayout.layout` walks the window once with `DiffRowCursor`. In the same
    visit it asks the model which old line a changed line is paired with
    (`pairFor`), takes the base row from the row source, marks it with the pair's
    word diff ranges, stamps the line attributes and builds the gutter cell. Each
@@ -238,7 +238,7 @@ position only when a reconciler is created over a result that did not change.
 
 | To change                                    | Start at                                                                                |
 | -------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Which rows a diff shows, separators, buffers | `layout/DiffLayout.ts`, `utils/iterateOverDiff.ts`                                      |
+| Which rows a diff shows, separators, buffers | `layout/DiffLayout.ts`, `utils/DiffRowCursor.ts`                                        |
 | A row's content or marks                     | `rows/RowSource.ts`, `rows/markRow.ts`                                                  |
 | How the DOM is patched                       | `dom/ColumnReconciler.ts`                                                               |
 | Session line and hunk rules                  | `model/DiffModel.ts`, `utils/editSessionHunks.ts`                                       |

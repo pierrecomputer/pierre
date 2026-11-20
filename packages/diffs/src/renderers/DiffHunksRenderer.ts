@@ -37,6 +37,7 @@ import type {
   DocumentLineChange,
   DocumentLines,
 } from '../model/types';
+import { LineCuts, type LineExpansion } from '../rows/LineCuts';
 import { RowSource } from '../rows/RowSource';
 import type {
   AnnotationLineMap,
@@ -70,6 +71,7 @@ import { createAnnotationElement as createDefaultAnnotationElement } from '../ut
 import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
+import { endsWithNewline } from '../utils/endsWithNewline';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
@@ -78,7 +80,6 @@ import { createGutterWrapper, createHastElement } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
-import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { reportEditWithoutTokenTransformer } from '../utils/reportEditWithoutTokenTransformer';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
@@ -185,6 +186,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
 
+  public readonly lineCuts: LineCuts = new LineCuts();
   private expandedHunks = new Map<number, HunkExpansionRegion>();
 
   // The annotations last given, so setLineAnnotations can tell an unchanged
@@ -225,6 +227,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public cleanUp(): void {
     this.endEditSession();
     this.recycle();
+    this.lineCuts.clear();
     this.expandedHunks.clear();
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
@@ -600,6 +603,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
+  public expandLine(target: LineExpansion): void {
+    this.lineCuts.expand(target);
+    this.layout?.invalidateLines();
+  }
+
   public setOptions(options: DiffHunksRendererOptions): void {
     this.options = options;
   }
@@ -890,10 +898,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
   }
 
-  public getEffectiveCodeOptions(): Pick<
-    BaseCodeOptions,
-    'theme' | 'tokenizeMaxLineLength'
-  > {
+  // The length this renderer cuts long lines at: the highlighter's line limit.
+  // Infinity when nothing is cut: the limit is off, or the item is being
+  // edited and every line shows whole.
+  public getLineCutLength(options: BaseCodeOptions = this.options): number {
+    if (this.editSessionActive) {
+      return Infinity;
+    }
+    const { tokenizeMaxLineLength = 1000 } =
+      this.getEffectiveCodeOptions(options);
+    return tokenizeMaxLineLength > 0 ? tokenizeMaxLineLength : Infinity;
+  }
+
+  public getEffectiveCodeOptions(
+    options: BaseCodeOptions = this.options
+  ): Pick<BaseCodeOptions, 'theme' | 'tokenizeMaxLineLength'> {
     const poolOptions =
       this.workerManager?.isWorkingPool() === true
         ? this.workerManager.getDiffRenderOptions()
@@ -901,8 +920,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return {
       theme: this.getLocalHighlightTheme(),
       tokenizeMaxLineLength:
-        poolOptions?.tokenizeMaxLineLength ??
-        this.options.tokenizeMaxLineLength,
+        poolOptions?.tokenizeMaxLineLength ?? options.tokenizeMaxLineLength,
     };
   }
 
@@ -1439,7 +1457,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.options.loadDiffFiles != null
       ),
     };
-    const layout = (this.layout ??= new DiffLayout(layoutOptions));
+    const layout = (this.layout ??= new DiffLayout(
+      layoutOptions,
+      this.lineCuts
+    ));
     layout.setOptions(layoutOptions);
     return layout;
   }
@@ -1495,6 +1516,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     rows: RowSource,
     renderRange: RenderRange
   ): DiffLayoutInput<LAnnotation> {
+    this.lineCuts.setLimit(this.getLineCutLength());
     return {
       host: this,
       model,

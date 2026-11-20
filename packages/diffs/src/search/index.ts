@@ -1,3 +1,8 @@
+import { compileSearchQuery, matchSearchLine } from './lineSearch';
+
+export * from './lineSearch';
+export * from './codeViewSearch';
+
 export type MatchRange = [startOffset: number, endOffset: number];
 
 export interface SearchParams {
@@ -21,6 +26,8 @@ export interface SearchPanelState extends SearchParams {
   mode: SearchPanelMode;
   /** Whether the host bound replacement for the current scope. */
   canReplace: boolean;
+  /** True while the search is still running and more matches may arrive. */
+  searching: boolean;
   matchCount: number;
   /** Zero-based index of the current match, or undefined when none is current. */
   currentMatchIndex: number | undefined;
@@ -53,51 +60,51 @@ export interface ReplacementDocument {
  * time, so patterns that span a newline never match.
  */
 export interface SearchableDocument {
-  readonly textLength: number;
   readonly lineCount: number;
+  /** Returns the line's text without its line ending. */
   getLineText(line: number): string;
   getLineStartOffset(line: number): number;
-  charAt(offset: number): string;
 }
 
-export const MAX_SEARCH_MATCHES = 100000;
+export const MAX_SEARCH_MATCHES = 900_001;
 
-// TODO(ije): use Intl.Segmenter instead of regex for word separators
-const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
-
+// Collects matches in document order, stopping after the accepted cap.
 export function searchDocument(
   document: SearchableDocument,
   searchParams: SearchParams,
   limit: number = MAX_SEARCH_MATCHES,
   onMatch?: SearchMatchVisitor
 ): MatchRange[] {
-  if (searchParams.text.length === 0 || document.textLength === 0) {
+  const pattern = compileSearchQuery(searchParams);
+  if (pattern == null) {
     return [];
   }
 
-  // Search currently operates line-by-line, so newline-spanning patterns are unsupported.
-  if (isNewlineSpanningSearch(searchParams.text, searchParams.regex)) {
-    return [];
-  }
+  const out: MatchRange[] = [];
+  const { wholeWord } = searchParams;
+  let line = 0;
+  let lineStart = 0;
+  const visitMatch = (
+    startCharacter: number,
+    endCharacter: number
+  ): boolean => {
+    const range: MatchRange = [
+      lineStart + startCharacter,
+      lineStart + endCharacter,
+    ];
+    out.push(range);
+    onMatch?.(range, out.length - 1, line, startCharacter, endCharacter);
+    return out.length >= limit;
+  };
 
-  let pattern: RegExp;
-  try {
-    pattern = compileSearchRegExp(
-      searchParams.text,
-      searchParams.regex,
-      searchParams.caseSensitive
-    );
-  } catch {
-    return [];
+  for (; line < document.lineCount; line++) {
+    const lineText = document.getLineText(line);
+    lineStart = document.getLineStartOffset(line);
+    if (matchSearchLine(pattern, lineText, wholeWord, visitMatch)) {
+      break;
+    }
   }
-
-  return collectSearchMatchesLineByLine(
-    document,
-    pattern,
-    searchParams.wholeWord,
-    limit,
-    onMatch
-  );
+  return out;
 }
 
 /** Expands `$&`, `$1`, `$$`, etc. in a regex replace string using a match. */
@@ -116,14 +123,8 @@ export function buildSearchReplacementText(
   const lineStart = document.offsetAt({ line: position.line, character: 0 });
   const relStart = matchStart - lineStart;
 
-  let pattern: RegExp;
-  try {
-    pattern = compileSearchRegExp(
-      searchParams.text,
-      true,
-      searchParams.caseSensitive
-    );
-  } catch {
+  const pattern = compileSearchQuery(searchParams);
+  if (pattern == null) {
     return searchParams.replaceText;
   }
 
@@ -132,7 +133,7 @@ export function buildSearchReplacementText(
   pattern.lastIndex = relStart;
   const match = pattern.exec(lineText);
   if (
-    match === null ||
+    match == null ||
     match.index !== relStart ||
     match[0].length !== matchEnd - matchStart
   ) {
@@ -141,111 +142,7 @@ export function buildSearchReplacementText(
   return expandReplaceString(searchParams.replaceText, match);
 }
 
-function isNewlineSpanningSearch(text: string, isRegex: boolean): boolean {
-  return (
-    text.includes('\n') ||
-    text.includes('\r') ||
-    (isRegex && (text.includes('\\n') || text.includes('\\r')))
-  );
-}
-
-function collectSearchMatchesLineByLine(
-  document: SearchableDocument,
-  pattern: RegExp,
-  wholeWord: boolean,
-  limit: number,
-  onMatch?: SearchMatchVisitor
-): MatchRange[] {
-  const out: MatchRange[] = [];
-  const charAt = (offset: number) => document.charAt(offset);
-
-  // Reuse the single compiled pattern across every line, resetting its
-  // lastIndex before each line, instead of allocating a fresh RegExp per line.
-  // The pattern is global, so lastIndex tracks progress within a line.
-  for (let line = 0; line < document.lineCount; line++) {
-    const lineText = document.getLineText(line);
-    const lineStart = document.getLineStartOffset(line);
-    pattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(lineText)) !== null) {
-      const rel = match.index;
-      const fragment = match[0];
-      if (fragment.length === 0) {
-        pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
-        continue;
-      }
-      const docStart = lineStart + rel;
-      if (
-        !wholeWord ||
-        isWholeWordAtDocOffsets(
-          docStart,
-          fragment.length,
-          document.textLength,
-          charAt
-        )
-      ) {
-        const range: MatchRange = [docStart, docStart + fragment.length];
-        out.push(range);
-        onMatch?.(range, out.length - 1, line, rel, rel + fragment.length);
-        if (out.length >= limit) {
-          return out;
-        }
-      }
-      if (rel === pattern.lastIndex) {
-        pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
-      }
-    }
-  }
-  return out;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function compileSearchRegExp(
-  source: string,
-  isRegex: boolean,
-  caseSensitive: boolean
-): RegExp {
-  const body = isRegex ? source : escapeRegExp(source);
-  const flags = `g${caseSensitive ? '' : 'i'}${isRegex ? 'm' : ''}`;
-  return new RegExp(body, flags);
-}
-
-function isWordSeparatorCharCode(charCode: number): boolean {
-  if (charCode <= 32 || charCode === 127) {
-    return true;
-  }
-  const ch = String.fromCharCode(charCode);
-  return WORD_SEPARATORS.includes(ch);
-}
-
-// Checks if the given text is a whole word by checking if the
-// characters before and after are word separators.
-function isWholeWordAtDocOffsets(
-  docStart: number,
-  length: number,
-  docLength: number,
-  charAt: (offset: number) => string
-): boolean {
-  const beforeOk =
-    docStart <= 0 ||
-    isWordSeparatorCharCode(charCodeUnitAt(charAt, docStart - 1));
-  const afterOk =
-    docStart + length >= docLength ||
-    isWordSeparatorCharCode(charCodeUnitAt(charAt, docStart + length));
-  return beforeOk && afterOk;
-}
-
-function charCodeUnitAt(
-  charAt: (offset: number) => string,
-  offset: number
-): number {
-  const unit = charAt(offset);
-  return unit.length === 0 ? 0 : unit.charCodeAt(0);
-}
-
+// Expands replacement tokens using the captures from the accepted regex match.
 function expandReplaceString(
   replacement: string,
   match: RegExpExecArray
@@ -260,20 +157,4 @@ function expandReplaceString(
     const index = Number(group);
     return match[index] ?? '';
   });
-}
-
-function advancePastEmptyMatch(text: string, index: number): number {
-  if (index + 1 < text.length) {
-    const first = text.charCodeAt(index);
-    const second = text.charCodeAt(index + 1);
-    if (
-      first >= 0xd800 &&
-      first <= 0xdbff &&
-      second >= 0xdc00 &&
-      second <= 0xdfff
-    ) {
-      return index + 2;
-    }
-  }
-  return index + 1;
 }

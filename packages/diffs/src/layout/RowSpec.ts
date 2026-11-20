@@ -1,7 +1,6 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
 import type { LineTypes } from '../types';
-import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 
 /**
  * One rendered row of a code column: its gutter cell and its content cell,
@@ -104,6 +103,15 @@ export interface UnifiedInjectedRowPlacement {
 export interface SplitInjectedRowPlacement {
   before?: SplitInjectedRow[];
   after?: SplitInjectedRow[];
+}
+
+/** One side of a rendered row: where its line sits in the file and in each view. */
+export interface DiffLineMetadata {
+  unifiedLineIndex: number;
+  splitLineIndex: number;
+  lineIndex: number;
+  lineNumber: number;
+  noEOFCR: boolean;
 }
 
 /** Where a line sits in the rendered diff, for hosts that inject rows. */

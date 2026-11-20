@@ -304,7 +304,7 @@ export interface IsDiffLineInCollapsedContextProps {
  * context under the given expansion state, so it has no row. False for every
  * other line, including lines outside the diff's modeled range, which leaves
  * callers their existing missing-row handling. Computed from the same inputs
- * as `iterateOverDiff` so layout math and this check cannot diverge.
+ * as `DiffRowCursor` so layout math and this check cannot diverge.
  */
 export function isDiffLineInCollapsedContext({
   fileDiff,
