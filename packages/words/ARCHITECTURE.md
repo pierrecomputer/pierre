@@ -28,6 +28,7 @@ UTF-8 input
 | `src/format.wat`                             | Final markup for the HTML renderer             |
 | `src/frontmatter.wat`, `complete.wat`        | YAML frontmatter and unfinished syntax         |
 | `src/math.wat`                               | TeX math to SVG                                |
+| `src/math-none.wat`                          | Replaces `math.wat` in `@pierre/words/no-math` |
 | `tables/`                                    | Entity names, TeX commands, and glyph metrics  |
 | `scripts/build.ts`                           | WAT preprocessor and compiler                  |
 | `lib/`                                       | Wasm loaders, byte APIs, and HTML sessions     |

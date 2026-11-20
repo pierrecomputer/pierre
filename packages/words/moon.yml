@@ -7,7 +7,8 @@ tags: ['publishable']
 tasks:
   build:
     script:
-      'node scripts/build.ts && tsdown && cp react/styles.css dist/styles.css'
+      'node scripts/build.ts && node scripts/build.ts --no-math && tsdown && cp
+      react/styles.css dist/styles.css'
     deps:
       - '^:build'
     inputs:
