@@ -43,6 +43,7 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   h: 'objective-cpp',
   cs: 'csharp',
   cpp: 'cpp',
+  cppm: 'cpp',
   hpp: 'cpp',
   cc: 'cpp',
   cxx: 'cpp',
