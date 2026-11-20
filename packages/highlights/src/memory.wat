@@ -12,18 +12,18 @@
       [18:22)         CSS-variable prefix or theme blob byte length (u32 LE)
       [22:64)         reserved space
       [64:448)        theme table written by JavaScript, five bytes per token
-      [448:1360)      CSS-variable name table
-      [1360:1424)     lowercase word copy for case-insensitive keyword lookups
+      [448:1424)      CSS-variable name table
       [1424:8592)     byte-set bitmaps (byteset.get)
-      [8592:8744)     emitter HTML fragments
-      [8744:13568)    emitter span-open fragment cache
+      [8592:13568)    emitter span-open fragment cache
       [13568:13952)   saved theme bytes for the emitter span cache
       [13952:13984)   streaming delimiter
       [13984:28416)   language keyword tables (displacements and descriptors)
       [28416:36608)   language keyword tables added later
       [36608:46224)   per-language stacks and lookup tables
       [46224:49296)   streaming lexer checkpoints
-      [49296:62464)   language keyword tables added later, then free
+      [49296:60384)   language keyword tables added later
+      [60384:62128)   free
+      [62128:62464)   lowercase word buffer, HTML fragments and Markdown font flags
       [62464:65536)   language names
     [] page 2
       [65536:81920)   keyword pool: the word bytes every table shares
@@ -35,18 +35,16 @@
   ;;)
   (memory (export "memory") 3)
 
-  ;; [64:1360) per-token theme and CSS-variable name tables.
+  ;; [64:1424) per-token theme and CSS-variable name tables.
   ;; lib/highlighter.ts mirrors the theme-table address and size.
   (const $mem.themeTable 64)                 ;; 384
-  (const $mem.tokenCssTable 448)             ;; 912
+  (const $mem.tokenCssTable 448)             ;; 976
 
-  ;; [1360:8592) lowercase word buffer and byte-set bitmaps.
-  (const $mem.lexLowerScratch 1360)          ;; 64
+  ;; [1424:8592) byte-set bitmaps.
   (const $mem.byteSets 1424)                 ;; 7168: 224 sets
 
-  ;; [8592:13984) emitter HTML fragments, caches, and the streaming delimiter.
-  (const $mem.emitterHtml 8592)              ;; 152
-  (const $mem.emitterSpanCache 8744)         ;; 4824: single-theme slots or a multi-theme arena
+  ;; [8592:13984) emitter caches and the streaming delimiter.
+  (const $mem.emitterSpanCache 8592)         ;; 4976: single-theme slots or a multi-theme arena
   (const $mem.emitterThemeCache 13568)       ;; 384
   (const $mem.streamDelimiter 13952)         ;; 32
 
@@ -156,7 +154,8 @@
   ;; [46224:49296) stream checkpoints.
   (const $mem.streamState 46224)             ;; 3072
 
-  ;; [49296:62464) keyword tables added later, one block per group, then free.
+  ;; [49296:60384) keyword tables added later, one block per group, then
+  ;; [60384:62128) free. [62128:62464) is taken by the buffers below.
   ;; group A
   (const $mem.rosmsgWords 49296)             ;; 384
   ;; group B
@@ -195,6 +194,10 @@
   (const $mem.moonbitWords 59920)            ;; 352
   (const $mem.promqlWords 60272)             ;; 112
   (const $mem.laterWordsFree 60384)
+
+  (const $mem.lexLowerScratch 62128)         ;; 64
+  (const $mem.emitterHtml 62192)             ;; 192
+  (const $mem.markdownFont 62384)            ;; 80
 
   ;; [62464:65536) language names for Markdown fences.
   (const $mem.languageNames 62464)           ;; 3072
