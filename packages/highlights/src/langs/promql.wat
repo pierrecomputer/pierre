@@ -4,7 +4,7 @@
   ;; Matched without case, like the Prometheus lexer. Functions are not listed:
   ;; any other name before `(` is a call. Token in the low byte; 256 marks the
   ;; grouping words whose next `(` opens a label list.
-  (keyword-table $promqlWords $mem.promqlWords $mem.laterWordsFree
+  (keyword-table $promqlWords $mem.promqlWords $mem.silkWords
     (group $Token.keyword+256 "by" "without" "on" "ignoring" "group_left" "group_right")
     (group $Token.keyword
       "bool" "offset" "sum" "min" "max" "avg" "group" "stddev" "stdvar" "count" "count_values"
