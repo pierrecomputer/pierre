@@ -260,7 +260,12 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let stableRaw = '';
   let nextCode = 0;
   let live:
-    | { session: CodeHighlighterSession; index: number; language: string }
+    | {
+        session: CodeHighlighterSession;
+        index: number;
+        language: string;
+        meta: string;
+      }
     | undefined;
   let liveUses = 0;
   let previousUpdate: HtmlUpdate | undefined;
@@ -284,8 +289,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let closedSlots = false;
   // Raw end, formatted end, and next code index at fences in the current pending output.
   let pendingFences: number[] = [];
-  // Completed fence output by language and code: highlighted HTML, or what a
-  // renderer returned. Resets keep only the fences they reuse.
+  // Completed fence output by language, meta, and code: highlighted HTML, or
+  // what a renderer returned. Resets keep only the fences they reuse.
   let codeCache = new Map<string, string | null>();
   let oldCodeCache = new Map<string, string | null>();
   // The open fence, the formatted HTML around it, and its previous escaped and decoded code.
@@ -437,8 +442,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         continue;
       }
       const isIncomplete = input.charCodeAt(at + 1) === 50;
+      // The language, then a space and the meta when the block has one.
+      const space = input.indexOf(' ', at + 2);
+      const split = space === -1 || space > open ? open : space;
       const language =
-        open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
+        split === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, split));
+      const meta =
+        split === open ? '' : decodeHtml(input.slice(split + 1, open));
       const number = index++;
       const island =
         filtered && excluded('div')
@@ -465,14 +475,14 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         // Open code ends with an added LF. Drop it from a partial line.
         if (isIncomplete && partial) code = code.slice(0, -1);
         // The leading NUL keeps these keys apart from the highlighter's.
-        const key = '\0' + language + '\0' + code;
+        const key = '\0' + language + '\0' + meta + '\0' + code;
         let block = isIncomplete
           ? undefined
           : codeCache.has(key)
             ? codeCache.get(key)
             : oldCodeCache.get(key);
         if (block === undefined)
-          block = custom.render({ code, language, isIncomplete });
+          block = custom.render({ code, language, meta, isIncomplete });
         if (!isIncomplete) codeCache.set(key, block);
         // A renderer that returns null shows the code block.
         if (block !== null) {
@@ -496,17 +506,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         }
       }
       const plugin = options.plugins?.code;
-      // Only a different open fence replaces the live highlighter.
+      // A new open fence, language, or meta replaces the live highlighter.
       if (isIncomplete) {
         if (
           live !== undefined &&
-          (live.index !== number || live.language !== language)
+          (live.index !== number ||
+            live.language !== language ||
+            live.meta !== meta)
         )
           dispose();
         if (live === undefined) {
           const session = plugin?.createSession?.();
           if (session !== undefined)
-            live = { session, index: number, language };
+            live = { session, index: number, language, meta };
         }
       }
       let highlighted: string | null | undefined;
@@ -515,16 +527,22 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         highlighted = live.session.highlight({
           code: decodeHtml(content),
           language,
+          meta,
           isIncomplete,
         });
       } else if (plugin !== undefined) {
         const code = decodeHtml(content);
-        const key = language + '\0' + code;
+        const key = language + '\0' + meta + '\0' + code;
         highlighted = isIncomplete
           ? undefined
           : (codeCache.get(key) ?? oldCodeCache.get(key));
         if (highlighted === undefined) {
-          highlighted = plugin.highlight({ code, language, isIncomplete });
+          highlighted = plugin.highlight({
+            code,
+            language,
+            meta,
+            isIncomplete,
+          });
           if (!isIncomplete && typeof highlighted === 'string')
             codeCache.set(key, highlighted);
         } else codeCache.set(key, highlighted);
@@ -644,8 +662,11 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const tag = input.indexOf('\0', open + 1);
     const body = input.indexOf('\0', tag + 1) + 1;
     const end = input.indexOf('\0', body);
+    const space = input.indexOf(' ', start + 2);
+    const split = space === -1 || space > open ? open : space;
     const language =
-      open === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, open));
+      split === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, split));
+    const meta = split === open ? '' : decodeHtml(input.slice(split + 1, open));
     if (
       islandFor(options.islands, language) !== undefined ||
       rendererFor(options.plugins, language) !== undefined
@@ -685,13 +706,15 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (
       live !== undefined &&
-      (live.index !== fence.index || live.language !== language)
+      (live.index !== fence.index ||
+        live.language !== language ||
+        live.meta !== meta)
     )
       dispose();
     if (live === undefined && plugin !== undefined) {
       const session = plugin.createSession?.();
       if (session !== undefined)
-        live = { session, index: fence.index, language };
+        live = { session, index: fence.index, language, meta };
     }
     // Plugins without line updates re-highlight the whole fence through format().
     if (plugin !== undefined && live?.session.highlightLines === undefined)
@@ -729,8 +752,12 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (live !== undefined) liveUses++;
     let lines =
-      live?.session.highlightLines?.({ code, language, isIncomplete: true }) ??
-      null;
+      live?.session.highlightLines?.({
+        code,
+        language,
+        meta,
+        isIncomplete: true,
+      }) ?? null;
     // Highlighted and plain lines are different markup for the same code.
     if (fence.highlighted !== (lines !== null)) {
       fence.highlighted = lines !== null;

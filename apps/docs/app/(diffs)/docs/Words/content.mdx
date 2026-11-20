@@ -308,15 +308,16 @@ target inline code. This example adds CSS classes and removes image URLs.
 
 **Fenced code.** To replace a whole block, add an entry to `plugins.renderers`
 with a `language` string or array and a
-`render({ code, language, isIncomplete })` method. Return HTML, or return `null`
-to use the code block. Set `frame: true` to keep its header and buttons. Custom
-renderers run before the code highlighter. Use these hooks for extensions. Words
-has no remark or rehype plugin pipeline.
+`render({ code, language, meta, isIncomplete })` method. Return HTML, or return
+`null` to use the code block. Set `frame: true` to keep its header and buttons.
+Custom renderers run before the code highlighter. Use these hooks for
+extensions. Words has no remark or rehype plugin pipeline.
 
-For syntax colors, `plugins.code.highlight({ code, language, isIncomplete })`
-returns escaped HTML for the contents of `<code>`, or `null` for plain text. A
-highlighter can supply `createSession()` with `highlight()` and `dispose()` to
-reuse work across updates.
+For syntax colors,
+`plugins.code.highlight({ code, language, meta, isIncomplete })` returns escaped
+HTML for the contents of `<code>`, or `null` for plain text. A highlighter can
+supply `createSession()` with `highlight()` and `dispose()` to reuse work across
+updates.
 
 <span id="words-html-safety" />
 

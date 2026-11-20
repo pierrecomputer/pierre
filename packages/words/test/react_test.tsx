@@ -1944,6 +1944,7 @@ describe('incremental streaming', () => {
       const options = {
         code: code.slice(0, end),
         language: 'ansi',
+        meta: '',
         isIncomplete: true,
       };
       const update = session.highlightLines!(options)!;
@@ -1956,7 +1957,12 @@ describe('incremental streaming', () => {
         update.lineCount - (options.code.endsWith('\n') ? 2 : 1)
       );
     }
-    const rewrite = { code: 'other\n', language: 'ansi', isIncomplete: false };
+    const rewrite = {
+      code: 'other\n',
+      language: 'ansi',
+      meta: '',
+      isIncomplete: false,
+    };
     expect(session.highlightLines!(rewrite)!.firstLine).toBe(0);
     expect(session.highlight(rewrite)).toBe(plugin.highlight(rewrite));
     session.dispose();
@@ -1977,7 +1983,7 @@ describe('incremental streaming', () => {
     expect(element.textContent).toBe('red\ngreen\nstill <green>\nend\n');
     expect(element.innerHTML).toContain(
       plugin
-        .highlight({ code, language: 'ansi', isIncomplete: false })!
+        .highlight({ code, language: 'ansi', meta: '', isIncomplete: false })!
         .split('\n')[0]
     );
     renderer.disconnect();
@@ -2265,7 +2271,7 @@ describe('incremental streaming', () => {
         'const greeting = `é 🥳\n${name}`;\r\n\r\n/* comment\r\nends */\r\n';
       for (let end = 0; end <= source.length; end++) {
         const code = source.slice(0, end);
-        const options = { code, language: 'ts', isIncomplete: true };
+        const options = { code, language: 'ts', meta: '', isIncomplete: true };
         const update = session.highlightLines!(options)!;
         const prefix = previous.split('\n').slice(0, update.firstLine);
         const reconstructed =
@@ -2285,7 +2291,7 @@ describe('incremental streaming', () => {
         previous = reconstructed;
       }
       for (const code of ['const replaced = 1;\n', 'const replaced = 12;\n']) {
-        const options = { code, language: 'ts', isIncomplete: true };
+        const options = { code, language: 'ts', meta: '', isIncomplete: true };
         const update = session.highlightLines!(options)!;
         const fresh = plugin.createSession!();
         try {
@@ -2299,6 +2305,7 @@ describe('incremental streaming', () => {
         session.highlightLines!({
           code: 'literal',
           language: 'unknown-language',
+          meta: '',
           isIncomplete: true,
         })
       ).toBeNull();
@@ -2306,6 +2313,7 @@ describe('incremental streaming', () => {
         session.highlightLines!({
           code: '.x { color: red; }\n',
           language: 'css',
+          meta: '',
           isIncomplete: true,
         })?.fullHtml
       ).toContain('color:');
@@ -2345,7 +2353,12 @@ describe('incremental streaming', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
     const lines = (code: string) =>
-      session.highlightLines!({ code, language: 'ts', isIncomplete: true })!;
+      session.highlightLines!({
+        code,
+        language: 'ts',
+        meta: '',
+        isIncomplete: true,
+      })!;
     lines('a\nb\n\n');
     // Line 1 is now the last line with content, so the update starts there.
     expect(lines('a\nb\n').firstLine).toBe(1);
@@ -2716,7 +2729,12 @@ describe('incremental streaming', () => {
     for (let end = 0; end <= source.length; end++) {
       const code = source.slice(0, end);
       container.innerHTML =
-        session.highlight({ code, language: 'ts', isIncomplete: true }) ?? '';
+        session.highlight({
+          code,
+          language: 'ts',
+          meta: '',
+          isIncomplete: true,
+        }) ?? '';
       expect(container.textContent).toBe(code);
     }
     session.dispose();
@@ -2724,6 +2742,7 @@ describe('incremental streaming', () => {
       session.highlight({
         code: 'let x = 1;',
         language: 'ts',
+        meta: '',
         isIncomplete: false,
       })
     ).toContain('color:');
@@ -2731,6 +2750,7 @@ describe('incremental streaming', () => {
       session.highlight({
         code: 'unknown',
         language: 'unknown-language',
+        meta: '',
         isIncomplete: false,
       })
     ).toBeNull();

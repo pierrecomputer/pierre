@@ -86,6 +86,7 @@ export function createHighlightsPlugin(
           ansiLines = highlight({
             code,
             language: nextLanguage,
+            meta: '',
             isIncomplete,
           })!.split('\n');
           const head = previous.endsWith('\n')

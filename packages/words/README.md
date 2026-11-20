@@ -283,9 +283,25 @@ that does not parse shows as code.
 
 A renderer in `plugins.renderers` can return `null` the same way to show the
 code block. The renderer keeps the output of a closed block and reuses it while
-the language and code stay the same. Set `frame: true` on a renderer to show its
-output in the code block frame, with the header and Copy/Download buttons, as
-Mermaid diagrams do.
+the language, meta, and code stay the same. Set `frame: true` on a renderer to
+show its output in the code block frame, with the header and Copy/Download
+buttons, as Mermaid diagrams do.
+
+### Code options
+
+`plugins.code.highlight()` and `plugins.renderers[].render()` receive
+`CodeOptions`:
+
+| Field          | Purpose                                                                       |
+| -------------- | ----------------------------------------------------------------------------- |
+| `code`         | Code lines, each ending with LF.                                              |
+| `language`     | First word of the fence info string, or `text`.                               |
+| `meta`         | Rest of the info string after the language, trimmed. `''` when there is none. |
+| `isIncomplete` | The fence is still open.                                                      |
+
+For ` ```ts title="a.ts" {3-5} `, `language` is `ts` and `meta` is
+`title="a.ts" {3-5}`. The default code block shows a non-empty meta in a
+`data-meta` attribute, so plain CSS can use it too.
 
 ## HTML sessions
 
