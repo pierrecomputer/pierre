@@ -794,15 +794,17 @@ export function createDomRenderer(
                 hooks(value as HtmlOptions['components'])
               : key === 'urlTransform'
                 ? (previous === undefined) === (value === undefined)
-                : key === 'plugins'
-                  ? samePlugins(
-                      previous as PluginConfig | undefined,
-                      value as PluginConfig | undefined
-                    )
-                  : Array.isArray(previous) &&
-                    Array.isArray(value) &&
-                    previous.length === value.length &&
-                    previous.every((tag, at) => tag === value[at]))
+                : key === 'allowedHtml'
+                  ? JSON.stringify(previous) === JSON.stringify(value)
+                  : key === 'plugins'
+                    ? samePlugins(
+                        previous as PluginConfig | undefined,
+                        value as PluginConfig | undefined
+                      )
+                    : Array.isArray(previous) &&
+                      Array.isArray(value) &&
+                      previous.length === value.length &&
+                      previous.every((tag, at) => tag === value[at]))
         );
       }
       formatter.configure(next, reset);

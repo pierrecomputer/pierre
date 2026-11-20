@@ -45,6 +45,58 @@ const format: typeof protocolFormat = Symbol.for(
   '@pierre/words/html-format/v1'
 ) as typeof protocolFormat;
 
+const voidElements = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
+const packedLists = new WeakMap<object, string>();
+
+/**
+ * Pack `allowedHtml` for Wasm (see `$allowAt` in src/html.wat): per tag, the
+ * name length, a void flag, the lowercase name, the attribute list length
+ * (u16), then each attribute name after its length. Unsafe names are left out.
+ */
+function packAllowedHtml(
+  list: Readonly<Record<string, readonly string[]>>
+): string {
+  let packed = packedLists.get(list);
+  if (packed !== undefined) return packed;
+  packed = '';
+  for (const [tag, attributes] of Object.entries(list)) {
+    const name = tag.toLowerCase();
+    if (!/^[a-z][a-z\d-]{0,254}$/.test(name) || !Array.isArray(attributes))
+      throw new TypeError(`allowedHtml: invalid entry "${tag}"`);
+    if (name === 'script') continue;
+    let names = '';
+    for (const attribute of attributes) {
+      const key = attribute.toLowerCase();
+      if (!/^[a-z_:][a-z\d:._-]{0,254}$/.test(key))
+        throw new TypeError(`allowedHtml: invalid attribute "${key}"`);
+      if (!/^(?:on|srcdoc$|data-markdown)/.test(key))
+        names += String.fromCharCode(key.length) + key;
+    }
+    packed +=
+      String.fromCharCode(name.length, voidElements.has(name) ? 1 : 0) +
+      name +
+      String.fromCharCode(names.length & 255, names.length >> 8) +
+      names;
+  }
+  packedLists.set(list, packed);
+  return packed;
+}
+
 // oxlint-disable-next-line no-control-regex -- Control bytes require parser normalization.
 const paragraphSyntax = /[\u0000-\u001f"&<>@\\[\]`*_~:\uD800-\uDFFF]/u;
 
@@ -160,10 +212,14 @@ class Renderer {
       inputLength = input.length;
     }
     this.dv.setUint8(0, mode);
+    const allowed =
+      options?.allowedHtml === undefined
+        ? undefined
+        : packAllowedHtml(options.allowedHtml);
     this.dv.setUint8(
       1,
       (options?.frontmatter === true ? 1 : 0) |
-        (options?.skipHtml === true ? 2 : 0) |
+        (options?.skipHtml === true || allowed !== undefined ? 2 : 0) |
         (options?.boundary === true ? 8 : 0) |
         (mode === 1 && typeof input !== 'string' ? 32 : 0) |
         (options?.incomplete === true ? 64 : 0)
@@ -197,9 +253,12 @@ class Renderer {
         this.idPrefix = format.idPrefix;
         this.idPrefixLength = written;
       }
-      if (names.length + this.idPrefixLength > idPrefixRoom)
+      if (
+        names.length + this.idPrefixLength + (allowed?.length ?? 0) >
+        idPrefixRoom
+      )
         throw new RangeError(
-          'Inline island names and idPrefix exceed 4096 bytes'
+          'Inline island names, allowedHtml, and idPrefix exceed 4096 bytes'
         );
       if (names !== this.inlineNames) {
         const start = idPrefixAt + idPrefixRoom - names.length;
@@ -209,6 +268,23 @@ class Renderer {
       }
       this.dv.setUint16(28, this.idPrefixLength, true);
     }
+    // The list follows the id prefix. Without a format, the cached prefix
+    // and names give way to it.
+    let allowedAt = this.idPrefixLength;
+    if (allowed) {
+      if (allowedAt + allowed.length > idPrefixRoom) {
+        if (allowed.length > idPrefixRoom)
+          throw new RangeError('allowedHtml exceeds 4096 bytes');
+        this.idPrefix = '';
+        this.idPrefixLength = allowedAt = 0;
+      }
+      if (allowedAt + allowed.length > idPrefixRoom - this.inlineNames.length)
+        this.inlineNames = '';
+      for (let i = 0; i < allowed.length; i++)
+        this.buffer[idPrefixAt + allowedAt + i] = allowed.charCodeAt(i);
+    }
+    this.dv.setUint16(44, allowedAt, true);
+    this.dv.setUint16(46, allowed?.length ?? 0, true);
     this.dv.setUint32(
       22,
       options?.width != null && options.width > 0
@@ -307,6 +383,7 @@ export function createHtmlSession(): {
   let flags: number | undefined;
   let idPrefix: string | undefined;
   let inlineNames: string | undefined;
+  let allowed: string | undefined;
   let result: InternalHtmlUpdate | undefined;
   let revision = 0;
   let paragraph:
@@ -332,7 +409,12 @@ export function createHtmlSession(): {
       const ext =
         (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);
       const form = options?.[format];
+      const list =
+        options?.allowedHtml === undefined
+          ? undefined
+          : packAllowedHtml(options.allowedHtml);
       const sameMode =
+        allowed === list &&
         incomplete === wanted &&
         extensions === ext &&
         flags === form?.flags &&
@@ -495,6 +577,7 @@ export function createHtmlSession(): {
         math: (ext & 2) !== 0,
         boundary: true,
         format: form,
+        allowedHtml: options?.allowedHtml,
       };
       let tail = input.slice(nextOffset);
       let rendered = shared.render(tail, 0, renderOptions);
@@ -526,6 +609,7 @@ export function createHtmlSession(): {
       flags = form?.flags;
       idPrefix = form?.idPrefix;
       inlineNames = form?.inlineNames;
+      allowed = list;
       const completedHtml = stable;
       paragraph = undefined;
       const open = form === undefined ? '<p>' : '<p data-markdown="p">';

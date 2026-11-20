@@ -205,9 +205,17 @@ and renderer bundles; public result types and enumerable string keys stay
 unchanged. Each result still provides independent full HTML through lazy
 getters.
 
-An edit, a changed `incomplete` option, a BOM at the boundary, or a link or
-footnote definition resets the session. Definitions can change earlier output,
-so those documents always render in full.
+With an `allowedHtml` list, an allowed element can stay open across a blank
+line, so block analysis cannot place the boundary alone. It writes an empty
+record at each candidate, and the renderer takes the last one where no allowed
+element is open. Open elements close with their leaf, container, or the
+document, so pending HTML is always balanced and the boundary output matches a
+full render. The host packs the list after the id prefix (control bytes 44 to
+47); without it, none of this runs.
+
+An edit, a changed `incomplete` or `allowedHtml` option, a BOM at the boundary,
+or a link or footnote definition resets the session. Definitions can change
+earlier output, so those documents always render in full.
 
 [`complete.wat`](./src/complete.wat) repairs a display copy of unfinished
 syntax. It never changes the source. It runs after block analysis and looks only
@@ -297,8 +305,9 @@ id so the React component retains its state and context.
 - Limits: 250 container levels, 999 characters per link or footnote label, nine
   digits per ordered-list start, 512 table columns, 255 backticks per code span,
   256 open brackets per leaf, 64 open delimiter runs in the block that
-  completion repairs, 4,096 bytes shared by the escaped id prefix and inline
-  island registry, and 1,073,414,144 bytes (2^30 − 320 KiB) of input.
+  completion repairs, 4,096 bytes shared by the escaped id prefix, the packed
+  `allowedHtml` list, and inline island registry, 32 open allowed elements, and
+  1,073,414,144 bytes (2^30 − 320 KiB) of input.
 - A table closes after a row takes it past 524,288 auto-filled cells, matching
   cmark-gfm. Later lines parse as normal Markdown. Supplied cells do not count
   toward this limit.

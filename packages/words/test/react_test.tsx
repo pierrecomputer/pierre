@@ -425,6 +425,32 @@ describe('HTML rendering and the React wrapper', () => {
     await render(source + 'Tail grows more', ['p', 'a']);
     expect(container.querySelectorAll('a[class]')).toHaveLength(20);
   });
+  test('allowed raw HTML streams inside its element and keeps completed output', async () => {
+    const source =
+      '<details>\n<summary>Title</summary>\n\nBody\n\n</details>\n\nAfter';
+    const markup = html(source, { allowedHtml: { details: [], summary: [] } });
+    expect(markup).toContain(
+      '<details>\n<summary>Title</summary>\n<p data-markdown="p">Body</p>\n</details>'
+    );
+    expect(markup).not.toContain('allowedhtml');
+    const container = mountDOM();
+    root = createRoot(container);
+    const render = (value: string): Promise<void> =>
+      flush(() => {
+        root?.render(
+          <Markdown allowedHtml={{ details: [], summary: [] }} isAnimating>
+            {value}
+          </Markdown>
+        );
+      });
+    await render(source.slice(0, 50));
+    expect(container.querySelector('details > p')?.textContent).toBe('Body');
+    await render(source);
+    const first = container.querySelector('details');
+    await render(source + ' more');
+    expect(container.querySelector('details')).toBe(first);
+    expect(container.querySelector('details > p')?.textContent).toBe('Body');
+  });
   test('hydration effects reuse the client formatting pass', async () => {
     let calls = 0;
     const components: Components = {

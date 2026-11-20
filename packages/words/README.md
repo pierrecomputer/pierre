@@ -35,6 +35,7 @@ render.
 | ------------- | ------- | -------------------------------------------------------------------------------------- |
 | `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. `meta` is `null` if there is none. |
 | `skipHtml`    | `false` | Omit raw HTML.                                                                         |
+| `allowedHtml` |         | Keep only these raw HTML tags. See [Raw HTML](#raw-html).                              |
 | `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
 | `math`        | `false` | Render math as SVG. See [Math](#math).                                                 |
 | `cjk`         | `false` | Enable [CJK-friendly emphasis](#cjk-support).                                          |
@@ -74,6 +75,7 @@ normal Markdown.
 | `caret`                                 | Show a `block` or `circle` caret while the stream is active.                                  |
 | `components`                            | HTML hooks for generated elements, including `inlineCode`.                                    |
 | `math`, `cjk`                           | Render math as SVG, and CJK-friendly emphasis. Default: `false`.                              |
+| `allowedHtml`                           | Raw HTML tags to keep. See [Raw HTML](#raw-html).                                             |
 | `plugins.code`                          | Code highlighter.                                                                             |
 | `plugins.mermaid`                       | Mermaid diagram renderer. See [Mermaid](#mermaid).                                            |
 | `islands`                               | Registered React components for reactive islands.                                             |
@@ -99,9 +101,10 @@ const components = {
 <Markdown components={components}>{text}</Markdown>;
 ```
 
-The component omits raw HTML and rejects unsafe URL schemes. It allows external
-images, so use `urlTransform` or element filters to block them. Hooks and
-plugins are trusted code: escape any untrusted text they add.
+The component omits raw HTML, except the tags in `allowedHtml`, and rejects
+unsafe URL schemes. It allows external images, so use `urlTransform` or element
+filters to block them. Hooks and plugins are trusted code: escape any untrusted
+text they add.
 
 Remark and rehype plugins are not supported.
 
@@ -243,8 +246,8 @@ spacing differences. A formula that it cannot lay out shows as code. An unknown
 command shows in red, or in gray while its block is still open.
 
 An app that renders no TeX can import `@pierre/words/no-math` in place of
-`@pierre/words`: the same API, with a module about a third smaller (64 KB
-instead of 98 KB). With the `math` option, it shows formulas as code.
+`@pierre/words`: the same API, with a module about a third smaller (66 KB
+instead of 100 KB). With the `math` option, it shows formulas as code.
 
 ```ts
 import { renderToHtml } from '@pierre/words/no-math';
@@ -259,6 +262,40 @@ emphasis next to CJK punctuation.
 
 The option works in `renderToHtml()`, `renderToAnsi()`, HTML sessions, and the
 HTML and DOM renderers. In React, pass `<Markdown cjk>`.
+
+## Raw HTML
+
+`allowedHtml` keeps a list of raw HTML tags, each with the attributes it keeps.
+It works in `renderToHtml()`, HTML sessions, the HTML and DOM renderers, and
+React, and it overrides `skipHtml`:
+
+```tsx
+const allowedHtml = { details: ['open'], summary: [], ref: ['id'] };
+
+<Markdown allowedHtml={allowedHtml}>{text}</Markdown>;
+```
+
+- Tag and attribute names match in any case, and the output is lowercase, so
+  `<Ref>` is `<ref>`.
+- Other tags, comments, and attributes are dropped. Text of an HTML block shows
+  only inside a kept element, without the content of `script`, `style`, and the
+  other raw text elements.
+- `on*`, `srcdoc`, and `data-markdown*` attributes, `javascript:` and
+  `vbscript:` values, and `script` tags never pass, even when listed.
+- `/>` closes any element, so `<x-widget />` is empty. Void elements such as
+  `br` and `img` need no closing tag.
+- A paragraph, heading, or table cell closes the inline elements it opened. An
+  element opened by an HTML block closes with its list item, quote, or the
+  document. A closing tag without an open element in the same place is dropped.
+
+While a kept element is open, a stream keeps everything after it pending, so
+`<details>`, a blank line, and Markdown inside it render as one element. The
+pending HTML closes the element until its closing tag arrives.
+
+Element filters and hooks apply to kept tags as to generated ones.
+
+**Warning:** Listed attributes keep their values, and `urlTransform` does not
+see them. List only tags and attributes you trust.
 
 ## Mermaid
 
@@ -300,7 +337,8 @@ session.render('First paragraph.\n\nSecond paragraph.');
 ```
 
 `stable` holds completed blocks, `pending` holds the part that can still change,
-and `html` holds both. Sessions omit raw HTML.
+and `html` holds both. Sessions omit raw HTML, except the tags in
+[`allowedHtml`](#raw-html).
 
 Pass `{ incomplete: true }` as the second argument to complete unfinished
 syntax. A link with no destination yet renders as
