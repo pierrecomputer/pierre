@@ -1,6 +1,5 @@
 'use client';
 
-import { DEFAULT_THEMES } from '@pierre/diffs';
 import { WorkerPoolContext } from '@pierre/diffs/react';
 import {
   getOrCreateWorkerPoolSingleton,
@@ -10,7 +9,9 @@ import {
 } from '@pierre/diffs/worker';
 import { type ReactNode, useState } from 'react';
 
+import { themeController } from '@/components/themeController';
 import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
+import { diffThemeProps } from '@/lib/theme/diffThemeProps';
 
 // Files and diffs up to this many characters highlight on the main thread,
 // where highlights finishes faster than a worker round trip.
@@ -82,9 +83,17 @@ function getPoolOptions(): WorkerPoolOptions {
   };
 }
 
+// Start with the persisted theme so the viewer's first theme sync does not
+// invalidate highlight tasks that were just queued against the pool.
 function getHighlighterOptions(): WorkerInitializationRenderOptions {
+  const { darkThemeName, lightThemeName, resolvedColorScheme } =
+    themeController.getState();
   return {
-    theme: DEFAULT_THEMES,
+    theme: diffThemeProps({
+      colorScheme: resolvedColorScheme,
+      darkThemeName,
+      lightThemeName,
+    }).theme,
     langs: [
       'cpp',
       'css',

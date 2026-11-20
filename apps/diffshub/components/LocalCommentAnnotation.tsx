@@ -8,19 +8,19 @@ import { annotationCardBase } from '@/lib/annotation';
 import { cn } from '@/lib/cn';
 import type { SavedCommentMetadata } from '@/lib/types';
 
-interface ExampleAnnotationProps {
+interface LocalCommentAnnotationProps {
   annotation: DiffLineAnnotation<SavedCommentMetadata>;
   itemId: string;
   onDelete(itemId: string, key: string): void;
   onToggleSelection(selection: CodeViewLineSelection): void;
 }
 
-export const ExampleAnnotation = memo(function ExampleAnnotation({
+export const LocalCommentAnnotation = memo(function LocalCommentAnnotation({
   annotation,
   itemId,
   onDelete,
   onToggleSelection,
-}: ExampleAnnotationProps) {
+}: LocalCommentAnnotationProps) {
   const selection = { id: itemId, range: annotation.metadata.range };
   return (
     <div

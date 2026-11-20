@@ -2,30 +2,18 @@ import { insertCommentInLineOrder } from './insertCommentInLineOrder';
 import type {
   DiffsHubCommentFileByItemId,
   DiffsHubSavedCommentEntry,
-  DiffsHubSavedCommentEvent,
   DiffsHubSavedCommentItem,
 } from './types';
 
 export function upsertSavedCommentSidebarEntry(
   sections: readonly DiffsHubSavedCommentItem[],
   commentFileByItemId: DiffsHubCommentFileByItemId | null,
-  entry: DiffsHubSavedCommentEvent
+  entry: DiffsHubSavedCommentEntry
 ): DiffsHubSavedCommentItem[] {
   const file = commentFileByItemId?.get(entry.itemId);
   if (file == null) {
     return [...sections];
   }
-
-  const nextEntry: DiffsHubSavedCommentEntry = {
-    author: entry.author,
-    itemId: entry.itemId,
-    key: entry.key,
-    lineNumber: entry.lineNumber,
-    lineType: entry.lineType,
-    message: entry.message,
-    range: entry.range,
-    side: entry.side,
-  };
 
   const nextSections = [...sections];
   let sectionIndex = -1;
@@ -38,7 +26,7 @@ export function upsertSavedCommentSidebarEntry(
 
   if (sectionIndex === -1) {
     const nextSection: DiffsHubSavedCommentItem = {
-      comments: [nextEntry],
+      comments: [entry],
       fileOrder: file.fileOrder,
       itemId: entry.itemId,
       path: file.path,
@@ -64,7 +52,7 @@ export function upsertSavedCommentSidebarEntry(
 
   nextSections[sectionIndex] = {
     ...section,
-    comments: insertCommentInLineOrder(section.comments, nextEntry),
+    comments: insertCommentInLineOrder(section.comments, entry),
   };
   return nextSections;
 }

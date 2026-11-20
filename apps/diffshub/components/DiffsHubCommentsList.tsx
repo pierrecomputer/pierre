@@ -1,10 +1,11 @@
 'use client';
 
 import type { AnnotationSide } from '@pierre/diffs';
-import { IconConvoFill, IconPlus } from '@pierre/icons';
-import { memo, type MouseEvent } from 'react';
+import { IconChevronSm, IconConvoFill, IconPlus } from '@pierre/icons';
+import { memo, type MouseEvent, useState } from 'react';
 
 import { CommentAuthorAvatar } from './CommentAuthorAvatar';
+import { GitHubThreadComment } from './GitHubAnnotation';
 import { cn } from '@/lib/cn';
 import type {
   CommentLineType,
@@ -13,21 +14,26 @@ import type {
 } from '@/lib/types';
 
 interface DiffsHubCommentsListProps {
+  // Whether saved drafts post to the pull request on GitHub; only changes
+  // the empty-state copy.
+  canPostToGitHub?: boolean;
   commentSections: readonly DiffsHubSavedCommentItem[];
   onSelectComment?(comment: DiffsHubSavedCommentEntry): void;
   onSelectItem?(itemId: string): void;
 }
 
-function getCommentLineLabel(
-  side: AnnotationSide,
-  lineNumber: number,
-  lineType: CommentLineType
-): string {
-  if (lineType === 'context') {
-    return `Line ${lineNumber}`;
+function getCommentLineLabel(comment: DiffsHubSavedCommentEntry): string {
+  if (comment.anchor === 'file') {
+    return 'File';
   }
-  const sigil = side === 'additions' ? '+' : '-';
-  return `Line ${sigil}${lineNumber}`;
+  if (comment.anchor === 'outdated') {
+    return comment.lineNumber > 0 ? `Line ${comment.lineNumber}` : 'a line';
+  }
+  if (comment.lineType === 'context') {
+    return `Line ${comment.lineNumber}`;
+  }
+  const sigil = comment.side === 'additions' ? '+' : '-';
+  return `Line ${sigil}${comment.lineNumber}`;
 }
 
 function getCommentLineClassName(
@@ -78,10 +84,27 @@ function handleRowClick(
 }
 
 export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
+  canPostToGitHub,
   commentSections,
   onSelectComment,
   onSelectItem,
 }: DiffsHubCommentsListProps) {
+  // Keys of outdated rows currently expanded to show their full thread.
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  const toggleExpanded = (key: string) => {
+    setExpandedKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   if (commentSections.length === 0) {
     return (
       <div className="text-muted-foreground flex h-full min-h-0 flex-col items-center justify-center gap-2 px-7 text-center text-sm">
@@ -93,7 +116,10 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
             <span className="light:text-white light:bg-[rgb(0,159,255)] inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] align-top dark:bg-[rgb(0,159,255)] dark:text-black">
               <IconPlus />
             </span>{' '}
-            button to add fake code comments.
+            button to{' '}
+            {canPostToGitHub === true
+              ? 'comment on this pull request.'
+              : 'add fake code comments.'}
           </p>
         </div>
       </div>
@@ -125,53 +151,140 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
             </div>
           )}
           <div className="rounded-lg border border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]">
-            {section.comments.map((comment) => (
-              <button
-                key={comment.key}
-                type="button"
-                // Card surface, hover, and border come from the themed
-                // chrome (set on the sidebar wrapper) so cards stay
-                // on-palette for mixed-light/dark themes like slack-ochin
-                // (light-typed but uses a dark navy sidebar). The
-                // hardcoded fallbacks cover the brief window before the
-                // Shiki theme resolves on first render.
-                // No `transition-colors` here: the bg / border / text
-                // colors are driven by CSS variables that flip the entire
-                // chrome on every theme swap, so a smooth color transition
-                // on each card visibly trails the rest of the UI (header,
-                // file tree, diff body) which snap instantly. Hover bg is
-                // snappy enough without an interpolated transition.
-                className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
-                onClick={(event) =>
-                  handleRowClick(event, () => onSelectComment?.(comment))
-                }
-              >
-                <CommentAuthorAvatar seed={comment.author} className="size-5" />
-                <div className="flex flex-col items-start gap-0.5 select-text">
-                  <div className="text-muted-foreground flex gap-1">
-                    {comment.author} commented on{' '}
-                    <span
-                      className={cn(
-                        getCommentLineClassName(comment.side, comment.lineType),
-                        'font-medium'
-                      )}
-                    >
-                      {getCommentLineLabel(
-                        comment.side,
-                        comment.lineNumber,
-                        comment.lineType
-                      )}
-                    </span>
-                  </div>
-                  <p className="text-foreground w-full break-words whitespace-pre-wrap">
-                    {comment.message}
-                  </p>
-                </div>
-              </button>
-            ))}
+            {section.comments.map((comment) =>
+              comment.anchor === 'outdated' ? (
+                <OutdatedCommentRow
+                  key={comment.key}
+                  comment={comment}
+                  expanded={expandedKeys.has(comment.key)}
+                  onToggle={() => toggleExpanded(comment.key)}
+                />
+              ) : (
+                <button
+                  key={comment.key}
+                  type="button"
+                  // Card surface, hover, and border come from the themed
+                  // chrome (set on the sidebar wrapper) so cards stay
+                  // on-palette for mixed-light/dark themes like slack-ochin
+                  // (light-typed but uses a dark navy sidebar). The
+                  // hardcoded fallbacks cover the brief window before the
+                  // Shiki theme resolves on first render.
+                  // No `transition-colors` here: the bg / border / text
+                  // colors are driven by CSS variables that flip the entire
+                  // chrome on every theme swap, so a smooth color transition
+                  // on each card visibly trails the rest of the UI (header,
+                  // file tree, diff body) which snap instantly. Hover bg is
+                  // snappy enough without an interpolated transition.
+                  className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
+                  onClick={(event) =>
+                    handleRowClick(event, () => onSelectComment?.(comment))
+                  }
+                >
+                  <CommentRowContent comment={comment} />
+                </button>
+              )
+            )}
           </div>
         </section>
       ))}
     </div>
   );
 });
+
+// The avatar + text column shared by every sidebar comment row. `expanded`
+// is undefined for rows that navigate on click; expandable (outdated) rows
+// pass their current state, which unclamps the message and shows a chevron.
+function CommentRowContent({
+  comment,
+  expanded,
+}: {
+  comment: DiffsHubSavedCommentEntry;
+  expanded?: boolean;
+}) {
+  return (
+    <>
+      <CommentAuthorAvatar
+        seed={comment.author}
+        avatarUrl={comment.avatarUrl}
+        className="size-5"
+      />
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 select-text">
+        <div className="text-muted-foreground w-full break-words">
+          {comment.author} commented on{' '}
+          <span
+            className={cn(
+              getCommentLineClassName(comment.side, comment.lineType),
+              'font-medium whitespace-nowrap'
+            )}
+          >
+            {getCommentLineLabel(comment)}
+          </span>
+          {comment.replyCount != null && comment.replyCount > 0 && (
+            <span className="whitespace-nowrap">
+              {' '}
+              · {comment.replyCount}{' '}
+              {comment.replyCount === 1 ? 'reply' : 'replies'}
+            </span>
+          )}
+          {comment.anchor === 'outdated' && (
+            <span className="ml-1.5 rounded-full border border-current/30 px-1.5 py-px align-middle text-[10px] leading-none tracking-wide uppercase">
+              Outdated
+            </span>
+          )}
+        </div>
+        <p
+          className={cn(
+            'text-foreground w-full break-words whitespace-pre-wrap',
+            expanded !== true && 'line-clamp-2'
+          )}
+        >
+          {comment.message}
+        </p>
+      </div>
+      {expanded != null && (
+        <IconChevronSm
+          aria-hidden="true"
+          className={cn(
+            'text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform',
+            !expanded && '-rotate-90'
+          )}
+        />
+      )}
+    </>
+  );
+}
+
+// An outdated GitHub comment has no line (and therefore no inline card) in
+// the current diff, so its row expands in place to show the full thread
+// instead of navigating anywhere. The replies live outside the toggle button
+// because they contain links, which cannot nest inside a button.
+function OutdatedCommentRow({
+  comment,
+  expanded,
+  onToggle,
+}: {
+  comment: DiffsHubSavedCommentEntry;
+  expanded: boolean;
+  onToggle(): void;
+}) {
+  const replies = comment.thread?.replies ?? [];
+  return (
+    <div className="overflow-hidden border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] first:rounded-t-lg last:rounded-b-lg last:border-b-0 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 p-3 text-left text-sm outline-none hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2"
+        onClick={(event) => handleRowClick(event, onToggle)}
+      >
+        <CommentRowContent comment={comment} expanded={expanded} />
+      </button>
+      {expanded && replies.length > 0 && (
+        <div className="flex flex-col gap-2.5 px-3 pb-3 text-sm">
+          {replies.map((reply) => (
+            <GitHubThreadComment key={reply.id} comment={reply} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
