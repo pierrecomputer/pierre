@@ -97,11 +97,12 @@ const plugins: PluginConfig = {
 };
 ```
 
-Each hook receives `{ code, language, isIncomplete }`. A custom renderer can
-return `null` to use the code block or set `frame: true` to keep its header and
-controls. Words caches the result of a closed block for the same language and
-source. `configure(next)` on the HTML renderer clears this cache. The DOM
-renderer clears it only when a renderer, plugin, or option value changes.
+Each hook receives `{ code, language, meta, isIncomplete }`. `meta` is the rest
+of the fence info string after the language, trimmed, or `''`. A custom renderer
+can return `null` to use the code block or set `frame: true` to keep its header
+and controls. Words caches the result of a closed block for the same language,
+meta, and source. `configure(next)` on the HTML renderer clears this cache. The
+DOM renderer clears it only when a renderer, plugin, or option value changes.
 
 A custom `CodeHighlighterPlugin` returns escaped HTML for the contents of
 `<code>` from `highlight(options)`, or `null` for plain code. Implement

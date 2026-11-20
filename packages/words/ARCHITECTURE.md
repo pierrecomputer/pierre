@@ -232,8 +232,8 @@ bits (control byte 26) and the escaped id prefix. Public sessions and
 - A URL hook (`urlTransform`). Wasm then leaves URLs unchecked, and the host
   checks the result of the hook.
 - Element filters, code plugins, and custom code renderers. Wasm then writes
-  each code block in slots: the language, the markup before `<code>`, the
-  `<code>` tag, and the escaped code, each after a NUL. The output holds no
+  each code block in slots: the language and meta, the markup before `<code>`,
+  the `<code>` tag, and the escaped code, each after a NUL. The output holds no
   other NUL, so a single-character search finds every block.
 - Element hooks, which run last on the finished HTML.
 

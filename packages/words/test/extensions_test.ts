@@ -787,3 +787,73 @@ void test('closed renderer blocks render once while the tail streams', () => {
     /data-language="note"/
   );
 });
+
+void test('code blocks expose the info string after the language as meta', () => {
+  const metaOf = (source: string): string | undefined =>
+    /^<div data-markdown="code-block" data-language="[^"]*"(?: data-meta="([^"]*)")?>/.exec(
+      createHtmlRenderer().render(source, false, false).html
+    )?.[1];
+  assert.equal(metaOf('```ts\nx\n```\n'), undefined);
+  assert.equal(metaOf('```ts   \nx\n```\n'), undefined);
+  assert.equal(metaOf('```ts &#32;\nx\n```\n'), undefined);
+  assert.equal(
+    metaOf('```ts  title="debounce.ts" {3-5}  \nx\n```\n'),
+    'title=&quot;debounce.ts&quot; {3-5}'
+  );
+  assert.equal(metaOf('~~~ py\tname=`a`\nx\n~~~\n'), 'name=`a`');
+  assert.equal(metaOf("``` js <b>&amp;\\*'\nx\n```\n"), "&lt;b&gt;&amp;*'");
+  // CommonMark HTML keeps only the language
+  assert.equal(
+    dec.decode(renderToHtml('```ts a="1"\nx\n```\n')),
+    '<pre><code class="language-ts">x\n</code></pre>\n'
+  );
+
+  const seen: string[] = [];
+  const hook =
+    (from: string) =>
+    (options: { language: string; meta: string; isIncomplete: boolean }) => {
+      seen.push(
+        `${from} ${options.language}|${options.meta}|${options.isIncomplete}`
+      );
+      return null;
+    };
+  const renderer = createHtmlRenderer({
+    plugins: {
+      code: {
+        highlight: hook('highlight'),
+        createSession: () => ({
+          highlight: hook('session'),
+          highlightLines: hook('lines'),
+          dispose() {},
+        }),
+      },
+      renderers: [{ language: 'note', render: hook('render') }],
+    },
+  });
+  const source =
+    '```note a "b"\nn\n```\n\n~~~ts\nx\n~~~\n\n```js x=&lt;1&gt;\nlet a';
+  renderer.render(source, true, false);
+  renderer.render(source + '\n', true, true);
+  renderer.render(source + '\n```\n', false, false);
+  // a renderer that returns null falls back to the highlighter
+  assert.deepEqual([...new Set(seen)].sort(), [
+    'highlight js|x=<1>|false',
+    'highlight note|a "b"|false',
+    'highlight ts||false',
+    'lines js|x=<1>|true',
+    'render note|a "b"|false',
+    'session js|x=<1>|false',
+  ]);
+  renderer.dispose();
+
+  // an island name sits in the language, so meta leaves islands working
+  const islands = { card: { accepts: () => true, fallback: 'Card' } };
+  assert.match(
+    createHtmlRenderer({ islands }).render(
+      '```island-card name="x"\n{"id":"a"}\n```\n',
+      false,
+      false
+    ).html,
+    /data-words-island="card"/
+  );
+});

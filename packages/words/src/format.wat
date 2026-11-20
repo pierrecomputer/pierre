@@ -112,6 +112,9 @@
       (then (call $outByte (i32.const 34)))
       (else (global.set $out (local.get $at)))))
 
+  ;; Where the first word of the last info string written by $htmlInfoWord ends.
+  (global $infoWordEnd (mut i32) (i32.const 0))
+
   ;; Write the first word of code block $r's info string, escaped, with entities
   ;; and escapes resolved first as cmark does. Literal whitespace ends the word;
   ;; decoded whitespace is trimmed before it and ends it after. Escaping never
@@ -132,6 +135,7 @@
         (local.set $k (i32.or (local.get $k) (i32.eq (local.get $c) (i32.const "&"))))
         (local.set $e (i32.add (local.get $e) (i32.const 1)))
         (br $l)))
+    (global.set $infoWordEnd (local.get $e))
     (call $ensureOut (i32.add
       (i32.mul (i32.sub (local.get $e) (local.get $p)) (i32.const 12)) (i32.const 64)))
     (local.set $start (global.get $out))
@@ -149,6 +153,42 @@
             (br $l)))
         (memory.copy (local.get $start) (local.get $p) (i32.sub (local.get $e) (local.get $p)))
         (global.set $out (i32.add (local.get $start) (i32.sub (local.get $e) (local.get $p)))))))
+
+  ;; Write the meta of code block $r: the info string after its first word,
+  ;; cleaned and escaped as the word is, and trimmed. As in micromark, literal
+  ;; whitespace splits the word from the meta. A space comes before it, or with
+  ;; $attr, `" data-meta="`. An empty meta writes nothing. Call this after
+  ;; $htmlInfoWord wrote the word of the same block.
+  (func $htmlInfoMeta (param $r i32) (param $attr i32)
+    (local $p i32)
+    (local $e i32)
+    (local $at i32)
+    (local $start i32)
+    (local.set $e (i32.load offset=12 (local.get $r)))
+    (local.set $p (call $skipWs (global.get $infoWordEnd) (local.get $e)))
+    (if (i32.ge_u (local.get $p) (local.get $e)) (then (return)))
+    (local.set $at (global.get $out))
+    (if (local.get $attr)
+      (then (out.str "\22 data-meta=\22"))
+      (else (call $outByte (i32.const 32))))
+    (call $ensureOut (i32.add
+      (i32.mul (i32.sub (local.get $e) (local.get $p)) (i32.const 12)) (i32.const 64)))
+    (local.set $start (global.get $out))
+    (call $outCleanText (local.get $p) (local.get $e) (i32.const 3))
+    ;; only entities can decode to whitespace
+    (local.set $p (call $skipWs (local.get $start) (global.get $out)))
+    (local.set $e (global.get $out))
+    (block $trim
+      (loop $l
+        (br_if $trim (i32.le_u (local.get $e) (local.get $p)))
+        (br_if $trim (i32.eqz (call $isWhiteByte
+          (i32.load8_u (i32.sub (local.get $e) (i32.const 1))))))
+        (local.set $e (i32.sub (local.get $e) (i32.const 1)))
+        (br $l)))
+    (if (i32.eq (local.get $e) (local.get $p))
+      (then (global.set $out (local.get $at)) (return)))
+    (memory.copy (local.get $start) (local.get $p) (i32.sub (local.get $e) (local.get $p)))
+    (global.set $out (i32.add (local.get $start) (i32.sub (local.get $e) (local.get $p)))))
 
   ;; Write the lines of code block $r, each with its line feed.
   (func $htmlCodeLines (param $r i32)
@@ -326,7 +366,8 @@
   ;; updates one by one. Such a block is in slots, each after a NUL, which no
   ;; other output holds:
   ;;
-  ;;   NUL state, language   state is "0" closed, "1" open, "2" open and active
+  ;;   NUL state, language   state is "0" closed, "1" open, "2" open and active;
+  ;;                         a space and the meta follow when the block has one
   ;;   NUL markup up to <code>; the host adds the gutter of an open fence
   ;;   NUL the <code> tag
   ;;   NUL the escaped code, not in groups
@@ -363,10 +404,13 @@
         (if (local.get $slots)
           (then
             (i32.store8 (i32.const 27) (i32.const 1))
+            ;; A space, which the language never holds, comes before the meta.
+            (call $htmlInfoMeta (local.get $r) (i32.const 0))
             (call $outByte (i32.const 0)))
           (else (global.set $out (local.get $at))))))
     (out.str "<div data-markdown=\22code-block\22 data-language=\22")
     (call $htmlLanguage (local.get $r))
+    (call $htmlInfoMeta (local.get $r) (i32.const 1))
     (if (local.get $live) (then (out.str "\22 data-incomplete=\22true")))
     (out.str "\22><div data-markdown=\22code-header\22><span>")
     (call $htmlLanguage (local.get $r))

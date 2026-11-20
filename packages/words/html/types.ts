@@ -12,7 +12,13 @@ export interface CodeOptions {
    * last line of an open fence has no LF while it is still being written.
    */
   code: string;
+  /** The first word of the info string, or `text` when it has none. */
   language: string;
+  /**
+   * The rest of the info string after the language, trimmed, or `''`. For
+   * ```` ```ts title="a.ts" {3-5} ```` it is `title="a.ts" {3-5}`.
+   */
+  meta: string;
   isIncomplete: boolean;
 }
 
@@ -56,7 +62,7 @@ export interface PluginConfig {
   mermaid?: MermaidPlugin;
   /**
    * Renderers return HTML for a code block, or null to show the code. A closed
-   * block's output is reused while its language and code stay the same.
+   * block's output is reused while its language, meta, and code stay the same.
    */
   renderers?: {
     language: string | string[];
