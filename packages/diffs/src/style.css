@@ -1075,22 +1075,24 @@
 
   [data-expand-line] {
     display: inline-block;
-    width: 3ch;
-    height: 2ch;
+    width: 1.1lh;
+    height: 0.6lh;
     padding: 0;
     margin-inline: 0.5ch;
-    vertical-align: text-bottom;
+    vertical-align: -0.1lh;
     font: inherit;
     color: var(--diffs-bg);
-    background-color: var(--diffs-fg-number);
+    background-color: var(--diffs-fg);
     border: 0;
     border-radius: 6px;
+    opacity: 0.75;
     cursor: pointer;
     -webkit-user-select: none;
     user-select: none;
+    transition: opacity 0.15s ease-in-out;
 
     &:hover {
-      background-color: var(--diffs-fg);
+      opacity: 1;
     }
 
     &[data-search-match] {
@@ -1104,8 +1106,8 @@
 
     svg {
       display: block;
-      width: 2ch;
-      height: 1.6ch;
+      width: 0.8lh;
+      height: 0.5lh;
       margin: auto;
       fill: currentColor;
     }
