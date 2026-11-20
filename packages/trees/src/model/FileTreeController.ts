@@ -1,4 +1,3 @@
-import { PathStore } from '@pierre/path-store';
 import type {
   PathStoreEvent,
   PathStorePathInfo,
@@ -18,6 +17,8 @@ import {
   isSelfOrDescendantDrop,
   resolveDraggedPathsForStart,
 } from './dragAndDrop';
+import { resolveFileTreeEngine } from './engine';
+import type { FileTreeEngineImpl, FileTreeStore } from './engine';
 import { resolveFileTreeInput } from './inputResolution';
 import type {
   FileTreeControllerListener,
@@ -229,8 +230,9 @@ export class FileTreeController
 
   readonly #baseOptions: Omit<
     FileTreeControllerOptions,
-    'dragAndDrop' | 'paths' | 'preparedInput'
+    'dragAndDrop' | 'engine' | 'paths' | 'preparedInput'
   >;
+  readonly #engine: FileTreeEngineImpl;
   readonly #listeners = new Set<FileTreeControllerListener>();
   readonly #mutationListeners: MutationListenerByType = new Map();
   #dragAndDropConfig: FileTreeDragAndDropConfig | null = null;
@@ -273,7 +275,7 @@ export class FileTreeController
   #selectionAnchorPath: string | null = null;
   #selectedPaths = new Set<string>();
   #selectionVersion = 0;
-  #store: PathStore;
+  #store: FileTreeStore;
   #storeVisibleCount = 0;
   #suppressStoreNotifications = false;
   #visibleCount = 0;
@@ -282,6 +284,7 @@ export class FileTreeController
   public constructor(options: FileTreeControllerOptions) {
     const {
       dragAndDrop,
+      engine,
       fileTreeSearchMode,
       initialSearchQuery,
       initialSelectedPaths,
@@ -297,6 +300,7 @@ export class FileTreeController
       baseOptions.sort
     );
     this.#baseOptions = baseOptions;
+    this.#engine = resolveFileTreeEngine(engine);
     if (dragAndDrop != null && dragAndDrop !== false) {
       this.#dragAndDropConfig = dragAndDrop === true ? {} : dragAndDrop;
     }
@@ -562,7 +566,7 @@ export class FileTreeController
       );
       const visibleRowByProjectionIndex = new Map<
         number,
-        ReturnType<PathStore['getVisibleSlice']>[number]
+        ReturnType<FileTreeStore['getVisibleSlice']>[number]
       >();
       let runStartIndex = projectionIndices[0] ?? -1;
       let runEndIndex = runStartIndex;
@@ -1608,8 +1612,8 @@ export class FileTreeController
     paths: readonly string[],
     preparedInput?: FileTreePreparedInput,
     initialExpandedPathsOverride?: readonly string[]
-  ): PathStore {
-    return new PathStore({
+  ): FileTreeStore {
+    return this.#engine.createStore({
       ...this.#baseOptions,
       paths,
       preparedInput,

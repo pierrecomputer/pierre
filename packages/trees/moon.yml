@@ -25,6 +25,8 @@ tasks:
       - 'tsdown.config.ts'
       - 'tsconfig.json'
       - '/packages/path-store/src/**/*'
+      - '/packages/path-store-wat/lib/**/*'
+      - '/packages/path-store-wat/src/**/*'
     outputs:
       - 'dist'
     options:

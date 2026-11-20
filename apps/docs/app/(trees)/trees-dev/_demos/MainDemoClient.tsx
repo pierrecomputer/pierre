@@ -7,6 +7,7 @@ import {
   type FileTreeDropResult,
   type FileTreeMutationEvent,
 } from '@pierre/trees';
+import { wasmEngine } from '@pierre/trees/wasm';
 import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
 import { useWindowScrollLock } from '@trees/_lib/useWindowScrollLock';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -31,6 +32,7 @@ import {
 } from '../_lib/getFloatingContextMenuTriggerStyle';
 import {
   FILE_TREE_PROOF_VIEWPORT_HEIGHT,
+  type TreesEngineMode,
   type TreesWorkloadDataPayload,
   type TreesWorkloadName,
   type TreesWorkloadOption,
@@ -57,6 +59,7 @@ import { useResettableState } from '@/lib/useResettableState';
 interface MainDemoClientProps {
   children: ReactNode;
   defaultWorkloadName: TreesWorkloadName;
+  engineMode: TreesEngineMode;
   expansionMode: 'all' | 'collapsed' | 'workload';
   treeMountId: string;
   workloadData: TreesWorkloadDataPayload;
@@ -459,6 +462,7 @@ const HydratedMainDemoController = memo(function HydratedMainDemoController({
 export function MainDemoClient({
   children,
   defaultWorkloadName,
+  engineMode,
   expansionMode,
   treeMountId,
   workloadData,
@@ -502,6 +506,7 @@ export function MainDemoClient({
         },
       },
       dragAndDrop: true,
+      engine: engineMode === 'wasm' ? wasmEngine : undefined,
       flattenEmptyDirectories: true,
       fileTreeSearchMode: 'hide-non-matches',
       initialExpandedPaths: workloadData.initialExpandedPaths,
@@ -510,7 +515,7 @@ export function MainDemoClient({
       stickyFolders: true,
       initialVisibleRowCount: FILE_TREE_PROOF_VIEWPORT_HEIGHT / 30,
     }),
-    [workloadData]
+    [engineMode, workloadData]
   );
   const currentPaths = sharedOptions.paths ?? workloadData.paths;
   const demoTargets = useMemo(
@@ -556,6 +561,22 @@ export function MainDemoClient({
       const nextSearchParams = new URLSearchParams(searchParams.toString());
       nextSearchParams.set('expansion', nextExpansionMode);
       const nextUrl = `${pathname}?${nextSearchParams.toString()}`;
+      startDemoStateTransition(() => {
+        router.replace(nextUrl, { scroll: false });
+      });
+    },
+    [pathname, router, searchParams, startDemoStateTransition]
+  );
+  const handleEngineChange = useCallback(
+    (nextEngineMode: TreesEngineMode) => {
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      if (nextEngineMode === 'js') {
+        nextSearchParams.delete('engine');
+      } else {
+        nextSearchParams.set('engine', nextEngineMode);
+      }
+      const query = nextSearchParams.toString();
+      const nextUrl = query.length === 0 ? pathname : `${pathname}?${query}`;
       startDemoStateTransition(() => {
         router.replace(nextUrl, { scroll: false });
       });
@@ -1004,6 +1025,20 @@ export function MainDemoClient({
               }}
             >
               Collapse all
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1.5 text-sm font-medium"
+              aria-pressed={engineMode === 'wasm'}
+              disabled={isNavigatingDemoState}
+              data-tree-demo-engine-action="toggle"
+              onClick={() => {
+                handleEngineChange(engineMode === 'wasm' ? 'js' : 'wasm');
+              }}
+            >
+              {engineMode === 'wasm'
+                ? 'Engine: WebAssembly'
+                : 'Engine: JavaScript'}
             </button>
           </div>
         </div>

@@ -44,6 +44,10 @@
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",
       "import": "./dist/ssr/index.js"
+    },
+    "./wasm": {
+      "types": "./dist/wasm.d.ts",
+      "import": "./dist/wasm.js"
     }
   },
   "publishConfig": {
@@ -54,6 +58,7 @@
   },
   "dependencies": {
     "@pierre/path-store": "workspace:*",
+    "@pierre/path-store-wat": "workspace:*",
     "@pierre/theming": "workspace:*",
     "preact": "catalog:",
     "preact-render-to-string": "catalog:"
