@@ -1,0 +1,11 @@
+# Languages whose lexers build without PGO: PGO measured neutral or slower
+# for them than a plain release build. One language per line; each name maps
+# to src/langs/<name>.wat, whose functions are dropped from the profile.
+# Shared helpers (scans, the emitter) stay profiled for every language.
+#
+# Measured 2026-10-21, median of three runs, PGO vs no PGO (token records).
+toml        # 0.88×
+dockerfile  # 0.96×
+wat         # 0.96×
+xml         # 0.97×
+yaml        # 0.98×
