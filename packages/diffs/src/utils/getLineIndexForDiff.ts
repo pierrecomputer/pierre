@@ -1,7 +1,8 @@
 import type { FileDiffMetadata, SelectionSide } from '../types';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 
-// The row a line sits on in a diff, as `[unifiedIndex, splitIndex]`.
+// The row a line sits on in a diff, as `[unifiedIndex, splitIndex]`. A partial
+// diff only has rows for the lines in its hunks; any other line has none.
 export function getLineIndexForDiff(
   fileDiff: FileDiffMetadata | undefined,
   lineNumber: number,
@@ -25,6 +26,7 @@ export function getLineIndexForDiff(
     // If we've selected a line between or before a hunk,
     // we should grab its index here
     if (lineNumber < currentLineNumber) {
+      if (fileDiff.isPartial) return undefined;
       const difference = currentLineNumber - lineNumber;
       targetUnifiedIndex = Math.max(unifiedIndex - difference, 0);
       targetSplitIndex = Math.max(splitIndex - difference, 0);
@@ -33,6 +35,7 @@ export function getLineIndexForDiff(
 
     if (lineNumber >= currentLineNumber + hunkCount) {
       if (hunk === lastHunk) {
+        if (fileDiff.isPartial) return undefined;
         const difference = lineNumber - (currentLineNumber + hunkCount);
         targetUnifiedIndex = unifiedIndex + hunk.unifiedLineCount + difference;
         targetSplitIndex = splitIndex + hunk.splitLineCount + difference;

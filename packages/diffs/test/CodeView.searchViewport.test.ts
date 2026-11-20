@@ -948,8 +948,10 @@ describe('CodeView viewport search', () => {
       const partial = parsed[0]?.files[0];
       if (partial == null) throw new Error('Missing partial diff');
       checkDiffRows(partial, diffStyle);
-      expect(getLineIndexForDiff(partial, 1, 'additions')).toBeDefined();
-      expect(getLineIndexForDiff(partial, 100, 'deletions')).toBeDefined();
+      // A partial diff has no rows for lines outside its hunks.
+      expect(getLineIndexForDiff(partial, 1, 'additions')).toBeUndefined();
+      expect(getLineIndexForDiff(partial, 100, 'deletions')).toBeUndefined();
+      expect(getLineIndexForDiff(partial, 11, 'additions')).toEqual([11, 10]);
       await withViewer(
         [{ ...item, edit: true }],
         ({ viewer }) => {
