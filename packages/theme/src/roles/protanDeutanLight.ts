@@ -24,6 +24,7 @@ export const protanDeutanLight: Roles = {
     subtle: blue['100'],
     contrastOnAccent: '#ffffff',
   },
+  search: light.search,
   states: {
     success: blue['700'], // added/positive → blue pole (diff-add bg, git "A")
     danger: orange['700'], // deleted/error → orange pole (diff-del bg, git "D")

@@ -1,4 +1,4 @@
-import { UNSAFE_CSS_ATTRIBUTE } from '../constants';
+import { THEME_CSS_ATTRIBUTE, UNSAFE_CSS_ATTRIBUTE } from '../constants';
 import {
   resolveFindAgainShortcut,
   resolveSearchShortcut,
@@ -40,6 +40,7 @@ export interface SearchPanelReplaceHandlers<TMatch> {
 
 export interface SearchPanelOptions<TMatch = MatchRange> {
   containerElement: HTMLElement;
+  themeCSS?: string;
   unsafeCSS?: string;
   defaultQuery: string;
   defaults?: SearchOptionDefaults;
@@ -76,6 +77,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
   #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
+  #themeStyle?: HTMLStyleElement;
   #initializeMatches: () => void;
   #mount?: () => void;
   #closed = false;
@@ -92,6 +94,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   constructor(options: SearchPanelOptions<TMatch>) {
     const {
       containerElement,
+      themeCSS,
       unsafeCSS,
       defaultQuery,
       defaults,
@@ -579,6 +582,10 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       shadowRoot.appendChild(spriteElement);
     }
     h('style', { textContent: searchPanelCSS }, shadowRoot);
+    if (themeCSS != null) {
+      this.#themeStyle = h('style', { textContent: themeCSS }, shadowRoot);
+      this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
+    }
     if (unsafeCSS != null) {
       h(
         'style',
@@ -632,6 +639,28 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
   getBounds(): DOMRect {
     return this.#widgetElement.getBoundingClientRect();
+  }
+
+  setThemeCSS(themeCSS: string | undefined): void {
+    if (themeCSS == null) {
+      this.#themeStyle?.remove();
+      this.#themeStyle = undefined;
+      return;
+    }
+    if (this.#themeStyle == null) {
+      const shadowRoot = this.#host.shadowRoot;
+      if (shadowRoot == null) {
+        return;
+      }
+      this.#themeStyle = h('style', { textContent: themeCSS });
+      this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
+      const unsafeStyle = shadowRoot.querySelector(
+        `style[${UNSAFE_CSS_ATTRIBUTE}]`
+      );
+      shadowRoot.insertBefore(this.#themeStyle, unsafeStyle);
+    } else {
+      this.#themeStyle.textContent = themeCSS;
+    }
   }
 
   hasQuery(): boolean {

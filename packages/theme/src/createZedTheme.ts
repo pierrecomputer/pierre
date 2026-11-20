@@ -340,7 +340,7 @@ function makeZedTheme(
       'renamed.border': alpha(c.states.info, 0.3),
 
       // Search
-      'search.match_background': alpha(c.states.warn, 0.3),
+      'search.match_background': c.search.matchBackground,
 
       // Tabs
       'tab_bar.background': c.bg.window,

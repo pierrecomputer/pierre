@@ -125,6 +125,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
       // Ahead of a CodeView header, so the panel stays pinned to the top of the
       // scroll view instead of starting below the header.
       containerElement: view.getHeaderElement() ?? container,
+      themeCSS: view.getSearchPanelThemeCSS(),
       unsafeCSS: view.options.unsafeCSS,
       defaultQuery: query ?? this.getQueryFromScope(),
       defaults: view.options.searchOptions?.defaults,
@@ -310,10 +311,15 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     previousOptions: CodeViewOptions<LAnnotation, Caret>,
     nextOptions: CodeViewOptions<LAnnotation, Caret>
   ): void {
+    this.syncTheme();
     if (hasSearchIndexOptionChanged(previousOptions, nextOptions)) {
       this.invalidateScan();
       this.markMatchesDirty();
     }
+  }
+
+  public syncTheme(): void {
+    this.panel?.setThemeCSS(this.view.getSearchPanelThemeCSS());
   }
 
   // An item's editor drew its rows again.

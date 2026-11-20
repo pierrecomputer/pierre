@@ -48,6 +48,11 @@ export const darkSoft: Roles = {
     subtle: blue['900'],
     contrastOnAccent: neutral['1000'],
   },
+  search: {
+    matchBackground: yellow['300'],
+    currentBackground: blue['300'],
+    foreground: neutral['1040'],
+  },
   states: {
     merge: indigo['400'],
     success: jade['400'],

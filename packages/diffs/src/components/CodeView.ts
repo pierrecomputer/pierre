@@ -61,7 +61,9 @@ import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { wrapThemeCSS } from '../utils/cssWrappers';
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
+import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isUserScrollInput } from '../utils/isUserScrollInput';
@@ -2108,6 +2110,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   public onThemeChange(): void {
     this.invalidateElementPool();
+    this.search.syncTheme();
   }
 
   public setOptions(
@@ -2230,6 +2233,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         }
 
         this.clearReadySubscription();
+        this.search.syncTheme();
         this.render(true);
       }
     );
@@ -2280,6 +2284,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             return;
           }
           this.clearReadySubscription();
+          this.search.syncTheme();
           this.render(true);
         },
         (error: unknown) => {
@@ -2330,6 +2335,25 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   public getContainerElement(): HTMLElement | undefined {
     return this.root;
+  }
+
+  // The search panel lives outside item shadow roots, so it needs its own copy
+  // of the active theme variables rather than inheriting them from an item.
+  public getSearchPanelThemeCSS(): string | undefined {
+    const theme =
+      this.workerManager?.getFileRenderOptions().theme ??
+      this.options.theme ??
+      DEFAULT_THEMES;
+    const highlighter = getHighlighterIfLoaded({ theme });
+    if (highlighter == null) {
+      return undefined;
+    }
+    const baseThemeType =
+      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
+    return wrapThemeCSS(
+      getHighlighterThemeStyles({ theme, highlighter }),
+      baseThemeType ?? this.options.themeType ?? 'system'
+    );
   }
 
   // The always-rendered header/footer host elements, or undefined when the
