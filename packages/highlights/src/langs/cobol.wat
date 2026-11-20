@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cobolWords 672)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Bits 8-9 capture the next word: 1 a paragraph after
   ;; PERFORM, THRU, or GO TO, 3 a PIC string. Bit 10 (IS, TO) keeps a capture
   ;; armed. `than`, `indexed`, and `returning` collide and are matched directly.
-  (keyword-table $cobolWords $mem.cobolWords $mem.adaWords
+  (keyword-table $cobolWords $mem.cobolWords $mem.cobolWords+672
     (group $Token.keyword.control
       "if" "else" "evaluate" "when" "other" "until" "varying" "stop" "run" "exit" "goback"
       "continue" "next" "sentence" "call" "then" "invalid")
@@ -83,10 +87,46 @@
       (then (return (enum.get $Token.keyword.declaration))))
     (i32.const -1))
 
+  ;; The free-format flag after the line at $p: 1 for a word in columns 1-6,
+  ;; 1 or 0 for `>>SOURCE ... FREE` or `FIXED`, else $free.
+  (func $cobolSourceFormat (param $p i32) (param $free i32) (result i32)
+    (local $w i32)
+    (local $eol i32)
+    (local.set $w (i32.sub (call $lexSkipSpaceAt (local.get $p)) (local.get $p)))
+    (local.set $p (i32.add (local.get $p) (local.get $w)))
+    (local.set $eol (call $templateByte (local.get $p)))
+    (if
+      (i32.and (i32.lt_u (local.get $w) (i32.const 6))
+        (i32.le_u (i32.sub (i32.or (local.get $eol) (i32.const 32)) (i32.const "a")) (i32.const 25)))
+      (then (return (i32.const 1))))
+    (if (i32.ne (local.get $eol) (i32.const ">"))
+      (then (return (local.get $free))))
+    (local.set $eol (call $lexFindEither (local.get $p) (i32.const 10) (i32.const 13)))
+    (if
+      (i32.or
+        (i32.gt_u (i32.add (local.get $p) (i32.const 8)) (local.get $eol))
+        (i64.ne
+          (i64.and
+            (i64.or (i64.load (local.get $p)) (i64.const 0x2020202020202020))
+            (i64.const 0xffffffffffffffff))
+          (i64.const ">>source")))
+      (then (return (local.get $free))))
+    (block $done
+      (loop $word
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $done (i32.gt_u (i32.add (local.get $p) (i32.const 4)) (local.get $eol)))
+        (local.set $w (i32.or (i32.load (local.get $p)) (i32.const 0x20202020)))
+        (if (i32.eq (local.get $w) (i32.const "free"))
+          (then (return (i32.const 1))))
+        (if (i32.eq (local.get $w) (i32.const "fixe"))
+          (then (return (i32.const 0))))
+        (br $word)))
+    (local.get $free))
+
   ;; A line is fixed format when columns 1-6 hold digits or blanks and column 7
   ;; an indicator; then columns 1-6 and 73+ are comments. $col: 0 at a line
   ;; start, 1 before a first token in area A, 2 else. $area: the end of the
-  ;; fixed-format code area, or 0.
+  ;; fixed-format code area, or 0. $freeForm: 1 when no line is fixed format.
   (func $hlCobol
     (local $c i32)
     (local $c2 i32)
@@ -103,6 +143,7 @@
     (local $col i32)
     (local $area i32)
     (local $expect i32)
+    (local $freeForm i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -129,6 +170,7 @@
             (local.set $p (local.get $lhs))
             (local.set $n (i32.const 0))
             (block $free
+              (br_if $free (local.get $freeForm))
               (loop $sequence
                 (local.set $c2 (call $templateByte (local.get $p)))
                 (br_if $free
@@ -170,6 +212,7 @@
                       (i32.sub (call $lexSkipSpaceAt (global.get $ptr)) (local.get $lhs))
                       (i32.const 10)))))
               (br $next))
+            (local.set $freeForm (call $cobolSourceFormat (local.get $lhs) (local.get $freeForm)))
             (local.set $col
               (select
                 (i32.const 1)
@@ -200,6 +243,8 @@
               (i32.const 2)
               (select (enum.get $Token.comment) (enum.get $Token.preproc) (i32.eq (local.get $c) (i32.const "*"))))
             (local.set $expect (local.get $want))
+            (if (i32.eq (local.get $c) (i32.const ">"))
+              (then (local.set $freeForm (call $cobolSourceFormat (local.get $lhs) (local.get $freeForm)))))
             (br $next)))
 
         ;; a period, comma, or semicolon after a PIC string is a separator

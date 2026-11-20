@@ -1,12 +1,8 @@
 import assert from 'node:assert';
 
-import type { Lang, Theme, ThemedToken, ThemeFamily } from '../lib/index';
-import {
-  codeToTokens,
-  createHighlighter,
-  init,
-  StreamTokenizer,
-} from '../lib/index';
+import type { Lang, Theme, ThemedToken, ThemeFamily } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
+import { HighlightsHighlighter } from '../lib/highlighter';
 import { prepareTheme } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { listTokenTypes, transformWat, wat2wasm } from '../scripts/build';
@@ -74,7 +70,7 @@ export function loadLang(
       : name === 'sparql' || name === 'turtle'
         ? 'rdf'
         : name;
-  let highlighter: TestHighlighter;
+  let highlighter: HighlightsHighlighter;
   let enumMap: Map<string, Record<string, number>>;
   let setSplit: ((splitBytes: number) => void) | undefined;
   if (splitBytes === undefined) {
@@ -89,7 +85,7 @@ export function loadLang(
     const transformed = transformWat(watUrl, src);
     enumMap = transformed.enumMap;
     // Do not replace the shared highlighter used by token tests.
-    highlighter = createHighlighter(
+    highlighter = new HighlightsHighlighter(
       new WebAssembly.Module(wat2wasm(watUrl.href, transformed.code))
     );
   } else {
@@ -116,10 +112,8 @@ export function loadLang(
   };
 }
 
-type TestHighlighter = ReturnType<typeof createHighlighter>;
-
 interface SplitLexer {
-  highlighter: TestHighlighter;
+  highlighter: HighlightsHighlighter;
   enumMap: Map<string, Record<string, number>>;
   setSplit(splitBytes: number): void;
 }
@@ -150,15 +144,14 @@ function compileSplitLexer(
     (call ${entry})
     (call $hlEnd)))`;
   const { code, enumMap } = transformWat(watUrl, src);
-  const highlighter = createHighlighter(
+  const highlighter = new HighlightsHighlighter(
     new WebAssembly.Module(wat2wasm(watUrl.href, code))
   );
   // Read dv on every call because memory growth replaces the DataView.
-  const internals = highlighter as unknown as { dv: DataView };
   const lexer: SplitLexer = {
     highlighter,
     enumMap,
-    setSplit: (splitBytes) => internals.dv.setUint32(32, splitBytes, true),
+    setSplit: (splitBytes) => highlighter.dv.setUint32(32, splitBytes, true),
   };
   splitLexers.set(key, lexer);
   return lexer;
@@ -170,30 +163,64 @@ export type TestSplitHl = (
   splitBytes: number
 ) => string;
 
+// A language ID that differs from the name of its lexer file and
+// function needs an entry here, or loadSplitLang finds no lexer.
+const lexerNames: Record<string, string> = {
+  bat: 'batch',
+  'common-lisp': 'lisp',
+  docker: 'dockerfile',
+  'fortran-free-form': 'fortran',
+  javascript: 'js',
+  make: 'makefile',
+  'objective-c': 'objc',
+  shellscript: 'bash',
+  typescript: 'ts',
+  wasm: 'wat',
+};
+
+// A language that shares another language's file needs an entry
+// here, or loadSplitLang looks for a file that does not exist.
+const splitLexerFiles: Record<string, string> = {
+  js: 'tsx',
+  jsx: 'tsx',
+  ts: 'tsx',
+  less: 'css',
+  sass: 'css',
+  scss: 'css',
+  stylus: 'css',
+  'fortran-fixed-form': 'fortran',
+  json5: 'json',
+  jsonl: 'json',
+  tsv: 'csv',
+  sparql: 'rdf',
+  turtle: 'rdf',
+  cue: 'schema',
+  pkl: 'schema',
+  smithy: 'schema',
+  wit: 'schema',
+  zenscript: 'schema',
+  sdbl: 'bsl',
+  ballerina: 'curly',
+  cadence: 'curly',
+  chapel: 'curly',
+  move: 'curly',
+  v: 'curly',
+  cairo: 'rust',
+  'glimmer-js': 'glimmer',
+  'glimmer-ts': 'glimmer',
+};
+
 /**
  * Scan [0, splitBytes) and then the remainder to detect lost bytes or
  * unbalanced spans at chunk and embedded-language boundaries.
  */
 export function loadSplitLang(name: Lang): TestSplitHl {
+  const lexer = lexerNames[name] ?? name;
   const entry =
-    name === 'angular-html'
-      ? '$hlAngularHtml'
-      : name === 'fortran-fixed-form'
-        ? '$hlFortranFixed'
-        : `$hl${name[0].toUpperCase()}${name.slice(1)}`;
-  const file = ['js', 'jsx', 'ts'].includes(name)
-    ? 'tsx'
-    : ['less', 'sass', 'scss', 'stylus'].includes(name)
-      ? 'css'
-      : name === 'fortran-fixed-form'
-        ? 'fortran'
-        : name === 'json5' || name === 'jsonl'
-          ? 'json'
-          : name === 'tsv'
-            ? 'csv'
-            : name === 'sparql' || name === 'turtle'
-              ? 'rdf'
-              : name;
+    name === 'fortran-fixed-form'
+      ? '$hlFortranFixed'
+      : `$hl${lexer.replace(/(?:^|-)(\w)/g, (_, c: string) => c.toUpperCase())}`;
+  const file = splitLexerFiles[lexer] ?? lexer;
   const { highlighter, setSplit } = compileSplitLexer(name, file, entry);
   return (input, splitBytes) => {
     setSplit(splitBytes);

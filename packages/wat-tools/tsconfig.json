@@ -1,11 +1,14 @@
 {
   "extends": "../../tsconfig.options.json",
-  "include": ["index.ts", "package.json"],
-  "exclude": ["node_modules"],
+  "include": ["*.ts", "test/**/*.ts", "package.json"],
+  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "allowJs": false,
     "checkJs": false,
     "isolatedDeclarations": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": ".",
     "lib": ["ES2023"],
     "types": ["bun"],
     "tsBuildInfoFile": "tsconfig.tsbuildinfo"

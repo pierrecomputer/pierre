@@ -1,26 +1,26 @@
 // Published string-I/O results from packages/highlights/benchmark/README.md,
-// recorded October 5, 2026. Keep the reported ratios rather than deriving
+// recorded November 13, 2026. Keep the reported ratios rather than deriving
 // them from the table's independently rounded throughput values.
 export const HIGHLIGHTS_LARGE_FILE_RESULTS = [
   {
     language: 'TypeScript',
     size: '517 KiB',
-    speedup: 298,
+    speedup: 310,
   },
   {
     language: 'HTML',
     size: '474 KiB',
-    speedup: 220,
+    speedup: 210,
   },
   {
     language: 'CSS',
     size: '379 KiB',
-    speedup: 244,
+    speedup: 231,
   },
   {
     language: 'JSONC',
     size: '292 KiB',
-    speedup: 157,
+    speedup: 139,
   },
 ] as const;
 

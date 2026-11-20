@@ -198,3 +198,7 @@ test('apex: Java keeps its own dialect after an Apex run', () => {
     'type',
   ]);
 });
+
+test('apex: a `>` that starts a line ends a pending type', () => {
+  assertLineFedParity('apex', 'A\n> d(');
+});

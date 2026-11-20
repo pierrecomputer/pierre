@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.groqWords 64)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $groqByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -8,7 +12,7 @@
   ;; identifier (1: the function a `fn` declaration defines). The word
   ;; operators are contextual: `in`, `match`, `asc`, and `desc` follow an
   ;; operand, so after `{`, `,`, or `.` the same spelling is an attribute.
-  (keyword-table $groqWords $mem.groqWords $mem.groovyWords
+  (keyword-table $groqWords $mem.groqWords $mem.groqWords+64
     (group $Token.keyword.operator "in" "match" "asc" "desc")
     (group $Token.keyword.declaration+256 "fn")
     (group $Token.boolean "true" "false")

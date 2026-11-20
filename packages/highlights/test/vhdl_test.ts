@@ -118,3 +118,45 @@ test('vhdl: comments, including block comments that stream by line', () => {
   ]);
   assertLineFedParity('vhdl', code);
 });
+
+test('vhdl: `on` and other reserved words', () => {
+  expect(tokenKinds('vhdl', 'wait on clk;').slice(0, 3)).toEqual([
+    ['wait', 'keyword.control'],
+    ['on', 'keyword'],
+    ['clk', 'variable'],
+  ]);
+  expect(
+    tokenKinds('vhdl', 'unaffected force release linkage register bus guarded')
+  ).toEqual([
+    ['unaffected force release linkage register bus guarded', 'keyword'],
+  ]);
+  expect(tokenKinds('vhdl', 'protected group label disconnect')).toEqual([
+    ['protected group label disconnect', 'keyword.declaration'],
+  ]);
+});
+
+test('vhdl: attribute specifications name an entity, not a type', () => {
+  const code =
+    'attribute keep of cnt : signal is true;\nattribute w : integer;\ntype a is array (0 to 3) of bit;';
+  expect(
+    tokenKinds('vhdl', code).filter(([, kind]) => kind === 'type')
+  ).toEqual([['a', 'type']]);
+  expect(tokenKinds('vhdl', code)[3]).toEqual(['cnt', 'variable']);
+  assertLineFedParity('vhdl', 'attribute keep\n  of cnt : signal is true;\n');
+  expect(tokenKinds('vhdl', 'attribute x of y : entity is z;').at(-2)).toEqual([
+    'z',
+    'variable',
+  ]);
+});
+
+test('vhdl: extended identifiers', () => {
+  expect(tokenKinds('vhdl', 'signal \\bus name\\, \\a\\\\b\\ : bit;')).toEqual([
+    ['signal', 'keyword.declaration'],
+    ['\\bus name\\', 'variable'],
+    [',', 'punctuation.delimiter'],
+    ['\\a\\\\b\\', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['bit', 'type.builtin'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

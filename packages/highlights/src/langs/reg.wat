@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Windows Registry Editor files: a version header, `[HKEY_…]` keys (`[-…]`
   ;; deletes one), `"name"` or `@` values, and string, `dword:`, `qword:`, or

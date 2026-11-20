@@ -1,11 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.glslWords 288)
+  (memory-region $mem.gdshaderWords 832)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Exact keyword words live in a shared perfect-hash table; the families with
   ;; open-ended dimensional suffixes stay as prefix checks below, and the few
   ;; words the table hash cannot separate get direct compares in $glslWordHl.
   ;; Group order is the dispatch order in $glslWordHl.
-  (keyword-table $glslWords $mem.glslWords $mem.goWords
+  (keyword-table $glslWords $mem.glslWords $mem.glslWords+288
     (group $Token.boolean "true" "false") ;; 1: booleans
     (group $Token.keyword.control ;; 2: control flow, including the ray-tracing control statements
       "break" "case" "continue" "default" "do" "else" "for" "if" "return" "switch" "while"
@@ -167,7 +172,7 @@
 
   ;; Keep mode names out of this table: `sky` and `fog` also name functions.
   ;; The +256 flag starts a mode list in $hlGlslImpl.
-  (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdresourceWords
+  (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdshaderWords+832
     (group $Token.keyword+256 "shader_type" "render_mode")
     (group $Token.keyword
       "group_uniforms" "global" "instance"
@@ -330,6 +335,22 @@
                 (call $lexIsDigit (i32.load8_u offset=1 (global.get $ptr))))))
           (then
             (call $lexScanHexNumber (i32.const 0))
+            (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
+              (then
+                (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                (if
+                  (i32.or
+                    (i32.eqz (call $lexIsIdentContinue (local.get $c)))
+                    (i32.or
+                      (i32.le_u
+                        (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "e"))
+                        (i32.const 1))
+                      (i32.or
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "h"))
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "l")))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $lexScanNumberBody (i32.const 0))))))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $include (i32.const 0))
             (local.set $afterDot (i32.const 0))

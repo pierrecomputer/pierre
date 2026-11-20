@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.nixWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $nixByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $hlNix. Every group carries its
   ;; token, so the lookup returns it directly, or -1 for an ordinary name.
-  (keyword-table $nixWords $mem.nixWords $mem.objcWords
+  (keyword-table $nixWords $mem.nixWords $mem.nixWords+128
     (group $Token.keyword "let" "in" "with" "rec" "inherit" "assert")  ;; 1
     (group $Token.keyword.control "if" "then" "else")                  ;; 2
     (group $Token.boolean "true" "false")                              ;; 3
@@ -75,8 +79,8 @@
   ;; `'''`, `''$`, and `''\`. Both span lines and carry `${` splices.
   ;; Returns 1 past the closer, 2 past a `${` that opens a splice - emitted
   ;; as punctuation.special, the caller lexes the expression - and 0 at
-  ;; $end. $nested is nonzero inside a splice, where a nested string keeps
-  ;; `${` plain.
+  ;; $end. $nested is nonzero when no deeper splice fits, where a nested
+  ;; string keeps `${` plain. `$$` is two plain bytes, so `$${` is no splice.
   (func $nixStringBody (param $kind i32) (param $nested i32) (param $seg i32) (result i32)
     (local $c i32)
     (local $c2 i32)
@@ -136,7 +140,8 @@
             (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
             (return (i32.const 2))))
-        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (global.set $ptr
+          (i32.add (local.get $p) (i32.add (i32.const 1) (i32.eq (local.get $c2) (i32.const "$")))))
         (br $scan))
         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
         (return (i32.const 1)))
@@ -152,8 +157,10 @@
     (byteset.get "!&*+-/<=>?@|:" (local.get $c)))
 
   ;; $strKind is 1 inside a `"` body and 2 inside an `''` body, with $seg the
-  ;; start of the bytes not yet emitted; $interp counts braces inside a `${`
-  ;; splice and $interpKind remembers which body to return to. $afterValue
+  ;; start of the bytes not yet emitted. Splices nest four deep: $interp
+  ;; counts the braces of each open `${` splice, a byte per level, and
+  ;; $interpKind the body each returns to, two bits per level, the
+  ;; innermost lowest. A splice pushes bracket kind 0 on $brackets. $afterValue
   ;; is 1 after a value - a name, a literal, or a closer - so the head of an
   ;; application can be told from its arguments; $member is 1 after `.`;
   ;; $inherit is 1 from `inherit` to its `;`. $brackets is a stack of open
@@ -197,12 +204,18 @@
             (if (i32.eqz (local.get $seg))
               (then (local.set $seg (global.get $ptr))))
             (local.set $status
-              (call $nixStringBody (local.get $strKind) (local.get $interp) (local.get $seg)))
+              (call $nixStringBody
+                (local.get $strKind)
+                (i32.ge_u (local.get $interp) (i32.const 0x1000000))
+                (local.get $seg)))
             (local.set $seg (global.get $ptr))
             (if (i32.eq (local.get $status) (i32.const 2))
               (then
-                (local.set $interpKind (local.get $strKind))
-                (local.set $interp (i32.const 1))
+                (local.set $interpKind
+                  (i32.or (i32.shl (local.get $interpKind) (i32.const 2)) (local.get $strKind)))
+                (local.set $interp (i32.or (i32.shl (local.get $interp) (i32.const 8)) (i32.const 1)))
+                (local.set $brackets (i32.shl (local.get $brackets) (i32.const 2)))
+                (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
                 (local.set $strKind (i32.const 0))
                 (local.set $seg (i32.const 0))
                 (local.set $afterValue (i32.const 0)))
@@ -423,15 +436,20 @@
                 (if (i32.eq (local.get $c) (i32.const "}"))
                   (then
                     (local.set $interp (i32.sub (local.get $interp) (i32.const 1)))
-                    (if (i32.eqz (local.get $interp))
+                    (if (i32.eqz (i32.and (local.get $interp) (i32.const 255)))
                       (then
                         ;; the brace matching `${` returns to the string body
                         (call $emitTok
                           (enum.get $Token.punctuation.special)
                           (local.get $lhs)
                           (global.get $ptr))
-                        (local.set $strKind (local.get $interpKind))
-                        (local.set $interpKind (i32.const 0))
+                        (local.set $strKind (i32.and (local.get $interpKind) (i32.const 3)))
+                        (local.set $interpKind (i32.shr_u (local.get $interpKind) (i32.const 2)))
+                        (local.set $interp (i32.shr_u (local.get $interp) (i32.const 8)))
+                        (if (local.get $depth)
+                          (then
+                            (local.set $brackets (i32.shr_u (local.get $brackets) (i32.const 2)))
+                            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
                         (local.set $seg (global.get $ptr))
                         (local.set $member (i32.const 0))
                         (br $next)))))))

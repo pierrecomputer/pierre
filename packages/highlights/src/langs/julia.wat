@@ -1,14 +1,46 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.juliaWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $jlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
+
+  ;; Whether the UTF-8 character at $p is an operator: U+2190-21FF, U+2208-22FF
+  ;; but `∏ ∐ ∑ ∞ ∫`-`∳`, U+2A00-2AFF, `± ¬ × ÷`. Two rare paths share it.
+  (func $jlIsUniOp (param $p i32) (result i32)
+    (local $e i32)
+    (local.set $e
+      (i32.or
+        (i32.or
+          (i32.shl (call $jlByte (local.get $p)) (i32.const 16))
+          (i32.shl (call $jlByte (i32.add (local.get $p) (i32.const 1))) (i32.const 8)))
+        (call $jlByte (i32.add (local.get $p) (i32.const 2)))))
+    (i32.or
+      (i32.or
+        (i32.le_u (i32.sub (local.get $e) (i32.const 0xe28690)) (i32.const 0x12f))
+        (i32.le_u (i32.sub (local.get $e) (i32.const 0xe2a880)) (i32.const 0x33f)))
+      (i32.or
+        (i32.and
+          (i32.le_u (i32.sub (local.get $e) (i32.const 0xe28888)) (i32.const 0x337))
+          (i32.and
+            (i32.and
+              (i32.gt_u (i32.sub (local.get $e) (i32.const 0xe2888f)) (i32.const 2))
+              (i32.ne (local.get $e) (i32.const 0xe2889e)))
+            (i32.gt_u (i32.sub (local.get $e) (i32.const 0xe288ab)) (i32.const 8))))
+        (i32.or
+          (i32.or
+            (i32.eq (i32.shr_u (local.get $e) (i32.const 8)) (i32.const 0xc2b1))
+            (i32.eq (i32.shr_u (local.get $e) (i32.const 8)) (i32.const 0xc2ac)))
+          (i32.eq (i32.or (i32.shr_u (local.get $e) (i32.const 8)) (i32.const 0x20)) (i32.const 0xc3b7))))))
 
   ;; Group order is the dispatch order in $hlJulia. The high byte of a
   ;; declaration value names the next name's capture: 1 a function, 2 a
   ;; type, 3 a module. `where` shares its hash features with `while` and is
   ;; matched directly.
-  (keyword-table $juliaWords $mem.juliaWords $mem.kotlinWords
+  (keyword-table $juliaWords $mem.juliaWords $mem.juliaWords+192
     (group $Token.keyword.control ;; 1: control flow and blocks
       "if" "elseif" "else" "for" "while" "break" "continue" "return" "try" "catch" "finally" "do"
       "begin" "end" "let" "quote")
@@ -235,6 +267,7 @@
     (local $stmtHead i32)
     (local $afterValue i32)
     (local $depth i32)
+    (local $mask i32)
     (local.set $stmtHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -390,6 +423,43 @@
         (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
           (then
             (call $scanIdentRun (i32.const "_"))
+            ;; one SIMD test keeps ASCII names on the fast path; names over 16
+            ;; bytes or with UTF-8 bytes look for an operator such as `∈ ≤ ÷ →`
+            (local.set $p (i32.sub (global.get $ptr) (local.get $lhs)))
+            (if
+              (i32.or
+                (i32.gt_u (local.get $p) (i32.const 16))
+                (i32.and
+                  (i8x16.bitmask (v128.load (local.get $lhs)))
+                  (i32.sub (i32.shl (i32.const 1) (local.get $p)) (i32.const 1))))
+              (then
+                (local.set $p (local.get $lhs))
+                (block $uniDone
+                  (loop $uni
+                    (local.set $mask (i8x16.bitmask (v128.load (local.get $p))))
+                    (if (i32.eqz (local.get $mask))
+                      (then
+                        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+                        (br_if $uni (i32.lt_u (local.get $p) (global.get $ptr)))
+                        (br $uniDone)))
+                    (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+                    (br_if $uniDone (i32.ge_u (local.get $p) (global.get $ptr)))
+                    (if (call $jlIsUniOp (local.get $p))
+                      (then
+                        (global.set $ptr (local.get $p))
+                        (br $uniDone)))
+                    (local.set $p
+                      (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 1)) (global.get $end)))
+                    (br_if $uni (i32.lt_u (local.get $p) (global.get $ptr)))))
+                (if (i32.eq (global.get $ptr) (local.get $lhs))
+                  (then
+                    (global.set $ptr
+                      (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+                    (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                    (local.set $member (i32.const 0))
+                    (local.set $afterValue (i32.const 0))
+                    (local.set $stmtHead (i32.const 0))
+                    (br $next)))))
             ;; `push!` and other mutating names end in `!`
             (if
               (i32.and
@@ -576,6 +646,18 @@
         (if
           (i32.and (i32.eq (local.get $c) (i32.const ".")) (i32.eqz (call $jlIsOp (local.get $c2))))
           (then
+            (if
+              (i32.and
+                (i32.ge_u (local.get $c2) (i32.const 0x80))
+                (call $jlIsUniOp (i32.add (local.get $lhs) (i32.const 1))))
+              (then
+                (global.set $ptr
+                  (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                (local.set $member (i32.const 0))
+                (local.set $afterValue (i32.const 0))
+                (local.set $stmtHead (i32.const 0))
+                (br $next)))
             (if (i32.eq (local.get $c2) (i32.const "."))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))

@@ -1,4 +1,6 @@
 (module
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
   (import "./ini.wat")
 
   ;; A one-digit back reference cannot run into another digit, so `%20` stays text.

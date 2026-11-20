@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.haskellWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; A character literal starts at the tick $p when a single character - an
   ;; escape, or one code point - sits between it and a closing tick. Any other
@@ -24,7 +28,7 @@
 
   ;; Each group's value is its token; bit 8 marks `let` and `where`, which
   ;; prime the next name as a definition.
-  (keyword-table $hsWords $mem.haskellWords $mem.hlslWords
+  (keyword-table $hsWords $mem.haskellWords $mem.haskellWords+224
     (group $Token.boolean "True" "False")
     (group $Token.keyword.import "module" "import" "qualified" "hiding")
     (group $Token.keyword.declaration "data" "newtype" "type" "class" "instance")
@@ -41,6 +45,173 @@
 
   (func $hsIsSymbol (param $c i32) (result i32)
     (byteset.get "!#$%&*+-./:<=>?@\5c^|~" (local.get $c)))
+
+  (func $hsEscapeEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local $q i32)
+    (local $n i32)
+    (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+    (local.set $q (i32.add (local.get $p) (i32.const 2)))
+    (if (i32.eq (local.get $c) (i32.const "x"))
+      (then (return (call $scanHexRun (local.get $q) (i32.const 64)))))
+    (if (i32.or (i32.eq (local.get $c) (i32.const "o")) (call $lexIsDigit (local.get $c)))
+      (then
+        (loop $digits
+          (if (call $lexIsDigit (call $templateByte (local.get $q)))
+            (then
+              (local.set $q (i32.add (local.get $q) (i32.const 1)))
+              (br $digits))))
+        (return (local.get $q))))
+    (if
+      (i32.and
+        (i32.eq (local.get $c) (i32.const "^"))
+        (i32.le_u (i32.sub (call $templateByte (local.get $q)) (i32.const "@")) (i32.const 31)))
+      (then (return (i32.add (local.get $q) (i32.const 1)))))
+    (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
+      (then
+        (local.set $n (i32.const 2))
+        (loop $name
+          (local.set $c (call $templateByte (local.get $q)))
+          (if
+            (i32.and
+              (i32.ne (local.get $n) (i32.const 0))
+              (i32.or
+                (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
+                (call $lexIsDigit (local.get $c))))
+            (then
+              (local.set $q (i32.add (local.get $q) (i32.const 1)))
+              (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+              (br $name))))
+        (return (local.get $q))))
+    (call $lexEscapeEnd (local.get $p)))
+
+  ;; $seg starts the bytes not yet emitted as $hl. Returns the quote when $end
+  ;; follows an escaped line break (a string gap), else 0.
+  (func $hsString (param $quote i32) (param $hl i32) (param $seg i32) (result i32)
+    (local $c i32)
+    (local $status i32)
+    (block $done
+      (loop $l
+        (global.set $ptr
+          (call $scanFindSpecial (global.get $ptr) (global.get $end) (local.get $quote) (i32.const 1) (i32.const 1)))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (local.get $quote))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br $done)))
+        (br_if $done (i32.ne (local.get $c) (i32.const 92)))
+        (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+        (local.set $seg (call $hsEscapeEnd (global.get $ptr)))
+        (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $seg))
+        (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (global.set $ptr (local.get $seg))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
+          (then
+            (loop $ws
+              (local.set $c (call $templateByte (global.get $ptr)))
+              (if (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
+                (then
+                  (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                  (br $ws))))
+            (local.set $status
+              (select (local.get $quote) (i32.const 0) (i32.ge_u (global.get $ptr) (global.get $end))))
+            (if (i32.eq (local.get $c) (i32.const 92))
+              (then
+                (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+                (local.set $seg (i32.add (global.get $ptr) (i32.const 1)))
+                (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $seg))
+                (global.set $ptr (local.get $seg))))))
+        (br $l)))
+    (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+    (local.get $status))
+
+  ;; Returns 1 when open at $end, 0 when closed, -1 with $ptr unchanged when
+  ;; $ptr opens none. Decided on the opener's line, so stream chunks agree.
+  ;; Keep two callers (opener and resume); inlined into $hlHaskell
+  ;; it made JavaScriptCore 8% slower.
+  (func $hsQuasiQuote (param $resume i32) (result i32)
+    (local $p i32)
+    (local $q i32)
+    (local $e i32)
+    (local $c i32)
+    (local $bracket i32)
+    (local $lhs i32)
+    (if (i32.eqz (local.get $resume))
+      (then
+        (local.set $p (global.get $ptr))
+        (local.set $q (i32.add (local.get $p) (i32.const 1)))
+        (block $nameDone
+          (loop $name
+            (br_if $nameDone (i32.ge_u (local.get $q) (global.get $end)))
+            (local.set $c (i32.load8_u (local.get $q)))
+            (br_if $nameDone
+              (i32.eqz
+                (i32.or
+                  (call $lexIsIdentContinue (local.get $c))
+                  (i32.or (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $c) (i32.const 39))))))
+            (local.set $q (i32.add (local.get $q) (i32.const 1)))
+            (br $name)))
+        (if (i32.ne (call $templateByte (local.get $q)) (i32.const "|"))
+          (then (return (i32.const -1))))
+        (if (i32.eq (local.get $q) (i32.add (local.get $p) (i32.const 2)))
+          (then
+            (local.set $c (i32.load8_u offset=1 (local.get $p)))
+            (if
+              (i32.or
+                (i32.or (i32.eq (local.get $c) (i32.const "e")) (i32.eq (local.get $c) (i32.const "d")))
+                (i32.or (i32.eq (local.get $c) (i32.const "p")) (i32.eq (local.get $c) (i32.const "t"))))
+              (then (return (i32.const -1))))))
+        (local.set $e (i32.add (local.get $q) (i32.const 1)))
+        (block $lineDone
+          (loop $line
+            (local.set $e
+              (call $scanFindSpecial (local.get $e) (global.get $end) (i32.const "]") (i32.const 0) (i32.const 1)))
+            (br_if $lineDone (i32.ne (call $templateByte (local.get $e)) (i32.const "]")))
+            (if
+              (i32.and
+                (i32.gt_u (local.get $e) (i32.add (local.get $q) (i32.const 1)))
+                (i32.eq (i32.load8_u (i32.sub (local.get $e) (i32.const 1))) (i32.const "|")))
+              (then (br $lineDone)))
+            (local.set $bracket (i32.const 1))
+            (local.set $e (i32.add (local.get $e) (i32.const 1)))
+            (br $line)))
+        (if (i32.ne (call $templateByte (local.get $e)) (i32.const "]"))
+          (then
+            (if (local.get $bracket)
+              (then (return (i32.const -1))))
+            (local.set $c (i32.add (local.get $q) (i32.const 1)))
+            (block $genDone
+              (loop $gen
+                (local.set $c
+                  (call $scanFindSpecial (local.get $c) (local.get $e) (i32.const "<") (i32.const 0) (i32.const 0)))
+                (br_if $genDone (i32.ge_u (local.get $c) (local.get $e)))
+                (local.set $c (i32.add (local.get $c) (i32.const 1)))
+                (if (i32.eq (call $templateByte (local.get $c)) (i32.const "-"))
+                  (then (return (i32.const -1))))
+                (br $gen)))))
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
+        (call $emitTok (enum.get $Token.function) (global.get $ptr) (local.get $q))
+        (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
+        (call $emitTok (enum.get $Token.punctuation.special) (local.get $q) (global.get $ptr))))
+    (local.set $lhs (global.get $ptr))
+    (local.set $p (global.get $ptr))
+    (block $open
+      (loop $scan
+        (local.set $p (call $lexFindByte (local.get $p) (i32.const "|")))
+        (br_if $open (i32.ge_u (local.get $p) (global.get $end)))
+        (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "]"))
+          (then
+            (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $p))
+            (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+            (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
+            (return (i32.const 0))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $scan)))
+    (global.set $ptr (global.get $end))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (i32.const 1))
 
   (func $hlHaskell
     (local $atHead i32)
@@ -59,8 +230,37 @@
     (local $typeMode i32)
     (local $wantFunction i32)
     (local $wantType i32)
+    ;; the quote of a string continued by a gap, or 1 inside a quasi-quote
+    (local $open i32)
     (call $lexEmitLeadingContinuation)
     (local.set $lineHead (i32.const 1))
+    (if (local.get $open)
+      (then
+        (if (i32.eq (local.get $open) (i32.const 1))
+          (then (local.set $open (call $hsQuasiQuote (i32.const 1))))
+          (else
+            (local.set $hl
+              (select
+                (enum.get $Token.string.special)
+                (enum.get $Token.string)
+                (i32.eq (local.get $open) (i32.const 39))))
+            (local.set $p (global.get $ptr))
+            (loop $ws
+              (local.set $c (call $templateByte (local.get $p)))
+              (if (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
+                (then
+                  (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                  (br $ws))))
+            (call $emitTok (local.get $hl) (global.get $ptr) (local.get $p))
+            (global.set $ptr (local.get $p))
+            (if (i32.lt_u (local.get $p) (global.get $end))
+              (then
+                (if (i32.eq (local.get $c) (i32.const 92))
+                  (then
+                    (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.string.escape) (local.get $p) (global.get $ptr))))
+                (local.set $open (call $hsString (local.get $open) (local.get $hl) (global.get $ptr)))))))
+        (local.set $lineHead (i32.const 0))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -163,14 +363,16 @@
               (br $next))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $open (call $hsString (i32.const 34) (enum.get $Token.string) (local.get $lhs)))
             (br $next)))
         (if
           (if (result i32) (i32.eq (local.get $c) (i32.const 39))
             (then (call $hsIsCharLiteral (global.get $ptr)))
             (else (i32.const 0)))
           (then
-            (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string.special))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $open (call $hsString (i32.const 39) (enum.get $Token.string.special) (local.get $lhs)))
             (br $next)))
         ;; a name-quoting tick: the constructor or name after it lexes as usual
         (if (i32.eq (local.get $c) (i32.const 39))
@@ -259,6 +461,15 @@
         ;; inside a tuple type keeps it
         (if (byteset.get "()[]{}" (local.get $c))
           (then
+            (if (i32.eq (local.get $c) (i32.const "["))
+              (then
+                (if (call $lexIsIdentStart (local.get $c2))
+                  (then
+                    (local.set $n (call $hsQuasiQuote (i32.const 0)))
+                    (if (i32.ge_s (local.get $n) (i32.const 0))
+                      (then
+                        (local.set $open (local.get $n))
+                        (br $next)))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (if (byteset.get ")]}" (local.get $c))

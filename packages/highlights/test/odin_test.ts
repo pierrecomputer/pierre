@@ -14,6 +14,7 @@ import {
   makeRand,
   spansOf,
   textOf,
+  tokenKinds,
   wordColor,
 } from './_util';
 
@@ -330,4 +331,14 @@ void t.test('odin: multi-line constructs resume line-fed', () => {
   ]) {
     assertLineFedParity('odin', code);
   }
+});
+
+void t.test('odin: an alias to an array or pointer type is a type', () => {
+  const kinds = tokenKinds(
+    'odin',
+    'Vec3 :: [3]f32\nPtr :: ^Node\nArr :: [3]int{1, 2, 3}\n'
+  ).filter(([, kind]) => kind !== 'punctuation.delimiter');
+  assert.deepEqual(kinds[0], ['Vec3', 'type']);
+  assert.deepEqual(kinds[5], ['Ptr', 'type']);
+  assert.deepEqual(kinds[8], ['Arr', 'constant']);
 });

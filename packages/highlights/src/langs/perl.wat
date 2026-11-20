@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.perlWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $perlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -11,7 +15,7 @@
   ;; shares its hash features with `require` and stays out, and `undef` and
   ;; `splice` share slot bits with `not` and `return` in every geometry that
   ;; fits the range.
-  (keyword-table $perlWords $mem.perlWords $mem.phpWords
+  (keyword-table $perlWords $mem.perlWords $mem.perlWords+256
     (group ;; 1: control
       "do" "if" "for" "else" "last" "next" "redo" "goto" "until" "elsif" "while" "unless" "return"
       "foreach")
@@ -24,12 +28,14 @@
     (group ;; 7: built-in functions
       "lc" "uc" "die" "map" "pop" "ref" "chop" "each" "eval" "exit" "grep" "join" "keys" "open"
       "push" "sort" "warn" "bless" "chomp" "close" "defined" "delete" "exists" "index" "print"
-      "shift" "split" "length" "printf" "scalar" "substr" "values" "unshift" "sprintf" "wantarray")
+      "shift" "split" "length" "printf" "scalar" "substr" "values" "unshift" "sprintf")
     (group "BEGIN" "END") ;; 8: special blocks
-    (group "say")) ;; 9: say, its own group so the table hash stays sparse
+    (group "say") ;; 9: say, its own group so the table hash stays sparse
+    (group "time" "wantarray")) ;; 10: built-ins that take no argument
 
   ;; The token for a bare word, or -1 for an ordinary identifier. Bit 8 marks
-  ;; `sub` and bit 9 `package`, whose next name is a definition.
+  ;; `sub` and bit 9 `package`, whose next name is a definition; bit 10 a
+  ;; built-in without arguments, after which `/` divides.
   (func $perlWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $g i32)
     (local $n i32)
@@ -41,7 +47,18 @@
           (i32.and
             (i32.eq (local.get $n) (i32.const 1))
             (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "x")))
-          (then (return (enum.get $Token.keyword.operator))))
+          (then
+            (local.set $n (call $lexSkipSpaceAt (local.get $rhs)))
+            (if
+              (i32.or
+                (i32.and
+                  (i32.lt_u (i32.add (local.get $n) (i32.const 1)) (global.get $end))
+                  (i32.eq (i32.load16_u (local.get $n)) (i32.const "=>")))
+                (i32.and
+                  (i32.eq (call $perlByte (local.get $n)) (i32.const "}"))
+                  (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "{"))))
+              (then (return (i32.const -1))))
+            (return (enum.get $Token.keyword.operator))))
         ;; the wide load stays inside the input slack
         (if
           (i32.and
@@ -72,6 +89,8 @@
       (then (return (enum.get $Token.keyword.operator))))
     (if (i32.eq (local.get $g) (i32.const 8))
       (then (return (enum.get $Token.keyword))))
+    (if (i32.eq (local.get $g) (i32.const 10))
+      (then (return (i32.or (enum.get $Token.function) (i32.const 1024)))))
     (enum.get $Token.function))
 
   ;; The quote-like operator spelled by the word [lhs,rhs): 1 for `q`/`qw`,
@@ -118,8 +137,10 @@
   ;; up to the $close byte at nesting depth zero, where $open is the byte
   ;; that nests - zero when none - and $depth the nesting already open.
   ;; $flags bit 0 enables escapes and `$name`/`@name` interpolation, bit 1
-  ;; colors the body as a regex. Returns 1 past the closer, 0 at $end, in
-  ;; the low bit, and the nesting depth still open in the bits above.
+  ;; colors the body as a regex, and bit 2 skips a backslash and the next
+  ;; character as text (`'...'`, `q`, `qw`). Returns 1 past the closer, 0
+  ;; at $end, in the low bit, and the nesting depth still open in the bits
+  ;; above.
   (func $perlQuoteBody
     (param $close i32)
     (param $open i32)
@@ -170,7 +191,7 @@
                 (global.get $ptr)
                 (global.get $end)
                 (local.get $close)
-                (i32.and (local.get $flags) (i32.const 1))
+                (i32.and (local.get $flags) (i32.const 5))
                 (i32.const 0)))))
         (global.set $ptr
           (select
@@ -198,8 +219,12 @@
             (br $scan)))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
+            (if (i32.and (local.get $flags) (i32.const 4))
+              (then
+                (global.set $ptr (local.get $e))
+                (br $scan)))
+            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
             (local.set $seg (global.get $ptr))
@@ -218,9 +243,14 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (i32.eq (local.get $c2) (i32.const "{"))
               (then
-                (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "}")))
-                (if (i32.lt_u (global.get $ptr) (global.get $end))
-                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
+                (local.set $c2
+                  (call $scanFind3
+                    (i32.add (global.get $ptr) (i32.const 1))
+                    (i32.const "}")
+                    (i32.const "{")
+                    (i32.const 10)))
+                (if (i32.eq (call $perlByte (local.get $c2)) (i32.const "}"))
+                  (then (global.set $ptr (i32.add (local.get $c2) (i32.const 1))))))
               (else (call $lexScanIdent)))
             (call $emitTok (enum.get $Token.variable) (local.get $e) (global.get $ptr))
             (local.set $seg (global.get $ptr))
@@ -353,28 +383,30 @@
             (br $done)))
         (if (local.get $hdLen)
           (then
-            ;; the pending heredoc body starts after this line's break, so
-            ;; skip blanks only and consume just the LF or CRLF
-            (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
-            (local.set $c (call $perlByte (global.get $ptr)))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+            (if (i32.eqz (local.get $sActive))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if
-                  (i32.and
-                    (i32.eq (local.get $c) (i32.const 13))
-                    (i32.eq (call $perlByte (global.get $ptr)) (i32.const 10)))
-                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-                (call $emitGap (local.get $gap) (global.get $ptr))
-                (call $perlLineDelimited
-                  (local.get $hdDelim)
-                  (local.get $hdLen)
-                  (local.get $hdStrip)
-                  (enum.get $Token.string))
-                (local.set $hdLen (i32.const 0))
-                (local.set $lineHead (i32.const 1))
-                (local.set $operand (i32.const 1))
-                (br $next)))))
+              ;; the pending heredoc body starts after this line's break, so
+              ;; skip blanks only and consume just the LF or CRLF
+              (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
+              (local.set $c (call $perlByte (global.get $ptr)))
+              (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+                (then
+                  (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                  (if
+                    (i32.and
+                      (i32.eq (local.get $c) (i32.const 13))
+                      (i32.eq (call $perlByte (global.get $ptr)) (i32.const 10)))
+                    (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                  (call $emitGap (local.get $gap) (global.get $ptr))
+                  (call $perlLineDelimited
+                    (local.get $hdDelim)
+                    (local.get $hdLen)
+                    (local.get $hdStrip)
+                    (enum.get $Token.string))
+                  (local.set $hdLen (i32.const 0))
+                  (local.set $lineHead (i32.const 1))
+                  (local.set $operand (i32.const 1))
+                  (br $next)))))))
 
         ;; an open quoted body; $seg is zero across a chunk boundary, where
         ;; the body resumes at the chunk start
@@ -535,15 +567,24 @@
                     (i32.eq (local.get $kind) (i32.const 39)))
                   (then
                     (local.set $hdDelim (i32.add (local.get $p) (i32.const 1)))
-                    (global.set $ptr (call $lexFindByte (local.get $hdDelim) (local.get $kind)))
+                    (global.set $ptr
+                      (call $scanFindSpecial
+                        (local.get $hdDelim)
+                        (global.get $end)
+                        (local.get $kind)
+                        (i32.const 0)
+                        (i32.const 1)))
                     (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))
-                    (if (i32.lt_u (global.get $ptr) (global.get $end))
+                    (if (i32.eq (call $perlByte (global.get $ptr)) (local.get $kind))
                       (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
                   (else
                     (local.set $hdDelim (local.get $p))
                     (global.set $ptr (local.get $p))
                     (call $lexScanIdent)
                     (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))))
+                ;; a stream checkpoint holds at most 32 delimiter bytes
+                (if (i32.gt_u (local.get $hdLen) (i32.const 32))
+                  (then (local.set $hdLen (i32.const 0))))
                 (local.set $hl (enum.get $Token.string))
                 (br $valueTok)))))
 
@@ -557,7 +598,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (local.set $sClose (local.get $c))
             (local.set $sOpen (i32.const 0))
-            (local.set $sFlags (i32.ne (local.get $c) (i32.const 39)))
+            (local.set $sFlags (select (i32.const 1) (i32.const 4) (i32.ne (local.get $c) (i32.const 39))))
             (local.set $sSecond (i32.const 0))
             (br $literal)))
         ;; `/regex/` in operand position
@@ -622,9 +663,14 @@
                   (else
                     (if (i32.eq (local.get $kind) (i32.const "{"))
                       (then
-                        (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "}")))
-                        (if (i32.lt_u (global.get $ptr) (global.get $end))
-                          (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
+                        (local.set $p
+                          (call $scanFind3
+                            (i32.add (global.get $ptr) (i32.const 1))
+                            (i32.const "}")
+                            (i32.const "{")
+                            (i32.const 10)))
+                        (if (i32.eq (call $perlByte (local.get $p)) (i32.const "}"))
+                          (then (global.set $ptr (i32.add (local.get $p) (i32.const 1))))))
                       (else (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
                 (local.set $hl
                   (select
@@ -650,7 +696,7 @@
               (then
                 (local.set $sOpen (call $perlByte (local.get $p)))
                 ;; the delimiter is any punctuation except `,`, `;`, `=`,
-                ;; and `)`, which follow a name used as a word instead
+                ;; `)`, and `}`, which follow a name used as a word instead
                 (if
                   (i32.and
                     (i32.and
@@ -666,7 +712,9 @@
                           (i32.or
                             (i32.or
                               (i32.eq (local.get $sOpen) (i32.const "="))
-                              (i32.eq (local.get $sOpen) (i32.const ")")))
+                              (i32.or
+                                (i32.eq (local.get $sOpen) (i32.const ")"))
+                                (i32.eq (local.get $sOpen) (i32.const "}"))))
                             (i32.and
                               (i32.eq (local.get $sOpen) (i32.const "#"))
                               (i32.gt_u (local.get $p) (local.get $rhs))))))))
@@ -677,7 +725,7 @@
                       (then (local.set $sOpen (i32.const 0))))
                     (local.set $sFlags
                       (select
-                        (i32.const 0)
+                        (i32.const 4)
                         (select
                           (i32.const 3)
                           (i32.const 1)
@@ -692,8 +740,11 @@
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
-                (local.set $decl (i32.shr_u (local.get $kind) (i32.const 8)))
-                (local.set $operand (i32.ne (local.get $hl) (enum.get $Token.variable.special))))
+                (local.set $decl (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3)))
+                (local.set $operand
+                  (i32.and
+                    (i32.ne (local.get $hl) (enum.get $Token.variable.special))
+                    (i32.lt_u (local.get $kind) (i32.const 1024)))))
               (else
                 (local.set $pc (call $perlByte (local.get $p)))
                 (local.set $path

@@ -1,4 +1,10 @@
-import type { CodeToHtmlOptions, ThemedToken, TokensResult } from './index';
+import type {
+  CodeToHtmlOptions,
+  Theme,
+  ThemedToken,
+  ThemeFamily,
+  TokensResult,
+} from './core';
 import type { PreparedTheme } from './theme';
 import {
   escapeAttribute,
@@ -119,7 +125,7 @@ function tagTheme(
  * Reuse cached list objects so their style caches remain available.
  */
 export function resolveOptionThemes(
-  options: CodeToHtmlOptions
+  options: CodeToHtmlOptions<Theme | ThemeFamily, string>
 ): ResolvedTheme[] {
   const { cssVariablePrefix } = options;
   if (options.themes == null) {
@@ -273,7 +279,7 @@ export function themeHtmlStyle(
 
 /**
  * Pack a theme set for Wasm HTML mode 2. The emitter writes each theme's
- * colors and font settings into spans. Layout (see `$multiRec` in emit.wat):
+ * colors and font settings into spans. Layout (see `$multiRec` in emitter.wat):
  *
  *     0   u8  slot count       1  u8  kind: 0 custom properties, 1 light-dark()
  *     4   u32 tables offset    8  u32 span reserve    12  u32 prologue reserve
@@ -433,10 +439,13 @@ export function lineRecordsToTokens(
   const { styles, fg, role } = themes[0];
   const htmlStyles =
     role === 'single' ? undefined : themeHtmlStyles(themes, cssVariablePrefix);
+  // Read the line marker as -1. JSC compiles a `Uint32Array` read as int32,
+  // and 0xffffffff makes its optimized code exit on every call.
+  const types = new Int32Array(recs.buffer, recs.byteOffset, recs.length);
   let start = 0;
   for (let rec = 0; ; rec += 2) {
     const first = rec;
-    while (rec < recs.length && recs[rec + 1] !== 0xffffffff) rec += 2;
+    while (rec < recs.length && types[rec + 1] !== -1) rec += 2;
     const end = rec === first ? start : recs[rec - 2];
     let line: ThemedToken[];
     if (max > 0 && end - start >= max) {

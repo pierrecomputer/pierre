@@ -188,3 +188,59 @@ void t.test('angular-html: Markdown fences use the Angular lexer', () => {
   );
   assertLineFedParity('markdown', '```angular-html\n' + body + '```\n');
 });
+
+void t.test(
+  'angular-html: expression strings stop at the line end and the attribute quote',
+  () => {
+    for (const code of [
+      "<p>{{ 'a\\\nb' }}</p>\n<p>x</p>\n",
+      "<p>{{ 'abc\n}}</p>\n<p>x</p>\n",
+      '<i>{{ `a\nb` }}</i>\n',
+    ]) {
+      assertLineFedParity('angular-html', code);
+    }
+    assert.deepEqual(
+      tokenKinds(
+        'angular-html',
+        '<button (click)="go(\'x)">a</button>\n<p>b</p>'
+      ).slice(4, 12),
+      [
+        ['"', 'string'],
+        ['go', 'function'],
+        ['(', 'punctuation.bracket'],
+        ['\'x)"', 'string'],
+        ['>', 'punctuation.bracket.html'],
+        ['a', null],
+        ['</', 'punctuation.bracket.html'],
+        ['button', 'tag'],
+      ]
+    );
+    const code = '<a title="{{ \'x }}">y</a>\n<b>z</b>\n';
+    assertLineFedParity('angular-html', code);
+    assert.deepEqual(tokenKinds('angular-html', code).slice(5, 8), [
+      ['{{', 'punctuation.special'],
+      ['\'x }}"', 'string'],
+      ['>', 'punctuation.bracket.html'],
+    ]);
+  }
+);
+
+void t.test(
+  'ts: an html template value filled by ${} ends at the next blank',
+  () => {
+    const kinds = tokenKinds(
+      'ts',
+      'x = html`<b a=${x} b=${y} c=${z}px d="q">t</b>`;'
+    );
+    for (const name of ['a', 'b', 'c', 'd'])
+      assert.ok(
+        kinds.some(([text, kind]) => text === name && kind === 'attribute'),
+        name
+      );
+    assert.ok(kinds.some(([text, kind]) => text === 'px' && kind === 'string'));
+    assertLineFedParity(
+      'ts',
+      'x = html`<b a=${x} b=${y}\n c=\n${z} d>t</b>`;\n'
+    );
+  }
+);

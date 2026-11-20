@@ -1,13 +1,17 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.matlabWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./abap.wat")
 
   ;; Group order is the dispatch order in $hlMatlab. The high byte of a
   ;; declaration value names what follows: 1 a function head, 2 a class name.
-  (keyword-table $matlabWords $mem.matlabWords $mem.nimWords
+  (keyword-table $matlabWords $mem.matlabWords $mem.matlabWords+160
     (group $Token.keyword.control ;; 1: control flow and block ends
       "if" "elseif" "else" "end" "for" "parfor" "while" "switch" "case" "otherwise" "break"
-      "continue" "return" "try" "catch" "spmd")
+      "continue" "return" "try" "catch" "spmd" "endif" "endfor" "endwhile" "endswitch")
     (group $Token.keyword.declaration+256 "function") ;; 2
     (group $Token.keyword.declaration+512 "classdef") ;; 3
     (group $Token.keyword.declaration ;; 4: class sections and storage
@@ -18,9 +22,21 @@
       "pi" "Inf" "inf" "NaN" "nan" "eps" "NaT"))
 
   ;; Token in the low byte and the head capture in the high byte, or -1 for
-  ;; an ordinary name.
+  ;; an ordinary name. `endfunction` shares its hash with `enumeration`, so it is matched here.
   (func $matWordHl (param $lhs i32) (param $rhs i32) (result i32)
-    (keyword-table.value $matlabWords (local.get $lhs) (local.get $rhs)))
+    (local $v i32)
+    (local.set $v (keyword-table.value $matlabWords (local.get $lhs) (local.get $rhs)))
+    (if
+      (i32.and
+        (i32.lt_s (local.get $v) (i32.const 0))
+        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 11)))
+      (then
+        (if
+          (i32.and
+            (i64.eq (i64.load (local.get $lhs)) (i64.const "endfunct"))
+            (i32.eq (i32.load offset=7 (local.get $lhs)) (i32.const "tion")))
+          (then (local.set $v (enum.get $Token.keyword.control))))))
+    (local.get $v))
 
   ;; Whether only blanks separate $p from the end of its line.
   (func $matRestBlank (param $p i32) (result i32)
@@ -31,11 +47,9 @@
       (i32.ge_u (local.get $p) (global.get $end))
       (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
 
-  ;; A `%{` block comment whose opener sits alone on its line at $ptr. It
-  ;; runs through the line holding a lone `%}`; an unterminated body runs to
-  ;; $end and, in streaming, checkpoints the closer so the next chunk keeps
-  ;; looking for it.
-  (func $matBlockComment
+  ;; A `%{` block comment at $ptr ($q is `%`, or `#` for Octave). An unterminated
+  ;; body runs to $end and checkpoints the closer for the next chunk.
+  (func $matBlockComment (param $q i32)
     (local $lhs i32)
     (local $line i32)
     (local.set $lhs (global.get $ptr))
@@ -48,7 +62,7 @@
         (local.set $line (call $lexSkipSpaceAt (global.get $ptr)))
         (if
           (i32.and
-            (i32.eq (call $templateByte (local.get $line)) (i32.const "%"))
+            (i32.eq (call $templateByte (local.get $line)) (local.get $q))
             (i32.and
               (i32.eq (call $templateByte (i32.add (local.get $line) (i32.const 1))) (i32.const "}"))
               (call $matRestBlank (i32.add (local.get $line) (i32.const 2)))))
@@ -59,12 +73,14 @@
         (call $scanToLineEnd)
         (br $lines)))
     (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
-    (i32.store16 (i32.const $mem.streamDelimiter) (i32.const "%}"))
+    (i32.store16 (i32.const $mem.streamDelimiter) (i32.or (local.get $q) (i32.const 0x7d00)))
     (call $streamSetLine
       (i32.const $mem.streamDelimiter)
       (i32.const 2)
       (i32.const 2)
       (enum.get $Token.comment)))
+
+  (func-variant $matHashBlockComment $matBlockComment)
 
   (func $matIsOp (param $c i32) (result i32)
     (byteset.get "!&*+-/:<=>\5c^|~" (local.get $c)))
@@ -96,8 +112,8 @@
     (local $member i32)
     (local $atHead i32)
     (local $classLine i32)
-    (local.set $lineHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
+    (local.set $lineHead (i32.const 1))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -134,7 +150,7 @@
               (i32.and
                 (i32.and (local.get $atHead) (i32.eq (local.get $c2) (i32.const "{")))
                 (call $matRestBlank (i32.add (global.get $ptr) (i32.const 2))))
-              (then (call $matBlockComment))
+              (then (call $matBlockComment (i32.const "%")))
               (else (call $lexLineComment (i32.const 1) (enum.get $Token.comment))))
             (br $next)))
         ;; `...` continues the statement; the rest of the line is a comment
@@ -319,6 +335,14 @@
 
         (if (call $matIsOp (local.get $c))
           (then
+            (if (i32.and (local.get $atHead) (i32.eq (local.get $c) (i32.const "!")))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
+                (local.set $lhs (global.get $ptr))
+                (call $scanToLineEnd)
+                (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
+                (br $next)))
             (block $opDone
               (loop $op
                 (br_if $opDone (i32.eqz (call $matIsOp (call $templateByte (global.get $ptr)))))
@@ -329,6 +353,15 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
+        (if (i32.eq (local.get $c) (i32.const "#"))
+          (then
+            (if
+              (i32.and
+                (i32.and (local.get $atHead) (i32.eq (local.get $c2) (i32.const "{")))
+                (call $matRestBlank (i32.add (global.get $ptr) (i32.const 2))))
+              (then (call $matHashBlockComment (i32.const "#")))
+              (else (call $lexLineComment (i32.const 1) (enum.get $Token.comment))))
+            (br $next)))
         (global.set $ptr
           (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

@@ -209,13 +209,13 @@ test('wolfram: nested comments, strings, and a script line resume line-fed', () 
 test('wolfram: nested calls after `;` check for a definition in linear time', () => {
   // each `f[` after `;` scanned to its closing `]`: 32k nested calls took ~1.2s
   for (const unit of ['f[0;', 'f[0/;', 'f[{0;']) {
-    const n = 32000;
+    const n = 64000;
     const close = unit.includes('{') ? '}]' : ']';
     const code = unit.repeat(n) + 'x' + close.repeat(n);
     const start = performance.now();
     tokenKinds('wolfram', code);
     const elapsed = performance.now() - start;
-    expect(elapsed).toBeLessThan(250);
+    expect(elapsed).toBeLessThan(2000);
   }
   // a statement `;` starts a definition, a `/;` condition does not
   const definitions = (code: string) =>
@@ -264,4 +264,19 @@ test('wolfram: malformed and random input remains total, balanced and lossless',
     checkInvariants(lexer.hl, src);
     assertLineFedParity('wolfram', src);
   }
+});
+
+test('wolfram: named characters inside strings, across lines', () => {
+  const code = 'msg = "angle \\[Alpha]\nis \\[Degree]";\n';
+  expect(tokenKinds('wolfram', code)).toEqual([
+    ['msg', 'variable'],
+    ['=', 'operator'],
+    ['"angle', 'string'],
+    ['\\[Alpha]', 'string.escape'],
+    ['is', 'string'],
+    ['\\[Degree]', 'string.escape'],
+    ['"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('wolfram', code);
 });

@@ -1,20 +1,20 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { HighlightsHighlighter, inputPtr, LANGS } from '../lib/highlighter';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
   Theme,
   ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import {
   codeToHtml,
   codeToTokens,
   init,
   LiveTokenizer,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
+import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
 import tokenTypes from '../lib/token-types';
 import {
   lineRecordsToTokens,
@@ -162,10 +162,10 @@ void t.test(
       const length = hl.writeInput(code);
       assert.equal(length, expected.length);
       assert.deepEqual(
-        hl.buffer.subarray(inputPtr, inputPtr + length),
+        hl.buffer.subarray(hl.inputPtr, hl.inputPtr + length),
         expected
       );
-      assert.ok(hl.buffer.length >= inputPtr + length + 96);
+      assert.ok(hl.buffer.length >= hl.inputPtr + length + 96);
     }
   }
 );

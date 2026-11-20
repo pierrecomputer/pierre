@@ -151,3 +151,37 @@ test('solidity: string prefixes and comment markers stay in their literals', () 
     ['/* plain */', 'comment'],
   ]);
 });
+
+test('solidity: from outside an import and SCREAMING_CASE constants', () => {
+  const code =
+    'function f(address from) public {\n  g(from);\n}\nimport {A} from "./a.sol";\nuint256 constant MAX_SUPPLY = 1;\n';
+  expect(tokenKinds('solidity', code)).toEqual([
+    ['function', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['address', 'type.builtin'],
+    ['from', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['public', 'keyword'],
+    ['{', 'punctuation.bracket'],
+    ['g', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['from', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['}', 'punctuation.bracket'],
+    ['import', 'keyword.import'],
+    ['{', 'punctuation.bracket'],
+    ['A', 'type'],
+    ['}', 'punctuation.bracket'],
+    ['from', 'keyword.import'],
+    ['"./a.sol"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['uint256', 'type.builtin'],
+    ['constant', 'keyword'],
+    ['MAX_SUPPLY', 'constant'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});

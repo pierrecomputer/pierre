@@ -42,4 +42,5 @@ no runtime dependencies. React and `@pierre/highlights` are optional peers.
 - `components` hooks and plugins return HTML strings, not React elements. They
   are trusted code. Escape untrusted text that they add.
 - Math, Mermaid, CJK extensions, and remark or rehype plugins are not built in.
-  Use a custom code renderer when the app needs a special fence language.
+  Use a custom code renderer when the app needs a special fence language, or
+  register a custom Highlights lexer when it needs only token colors.

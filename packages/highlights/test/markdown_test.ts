@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import languages from '../lib/languages';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -931,4 +931,66 @@ void t.test('markdown: quoted fences preserve multiline lexer state', () => {
     'markdown',
     '> ```js\n> /* open\n> ```\n> ```js\n> const x = 1;\n> ```\n'
   );
+});
+
+void t.test(
+  'markdown: a backtick in a backtick fence info is a code span',
+  () => {
+    assert.deepEqual(
+      tokenKinds('markdown', '```hello``` world\n\n# Heading\n'),
+      [
+        ['```hello```', 'text.literal'],
+        ['world', null],
+        ['# Heading', 'title'],
+      ]
+    );
+    assertLineFedParity('markdown', '```hello``` world\n\n# Heading\n');
+  }
+);
+
+void t.test('markdown: an unmatched backtick run is literal text', () => {
+  assert.deepEqual(tokenKinds('markdown', 'Use ` for ticks and **bold**\n'), [
+    ['Use ` for ticks and', null],
+    ['**bold**', 'emphasis.strong'],
+  ]);
+});
+
+void t.test('markdown: `*` runs next to blanks do not pair', () => {
+  assert.deepEqual(
+    tokenKinds('markdown', 'a * b * c and 2 ** 3 ** 4 *x* **y**\n'),
+    [
+      ['a * b * c and 2 ** 3 ** 4', null],
+      ['*x*', 'emphasis'],
+      ['**y**', 'emphasis.strong'],
+    ]
+  );
+});
+
+void t.test('markdown: link destinations keep balanced parentheses', () => {
+  assert.deepEqual(
+    tokenKinds('markdown', '[Foo](https://x.org/wiki/Foo_(bar)) here\n'),
+    [
+      ['[', 'punctuation.bracket'],
+      ['Foo', 'link_text'],
+      ['](', 'punctuation.bracket'],
+      ['https://x.org/wiki/Foo_(bar)', 'link_uri'],
+      [')', 'punctuation.bracket'],
+      ['here', null],
+    ]
+  );
+  assert.deepEqual(tokenKinds('markdown', '[a](x( [b](y)\n'), [
+    ['[a](x(', null],
+    ['[', 'punctuation.bracket'],
+    ['b', 'link_text'],
+    ['](', 'punctuation.bracket'],
+    ['y', 'link_uri'],
+    [')', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('markdown: `<!-->` and `<!--->` are complete comments', () => {
+  for (const code of ['<!-->\n<!x', '<!--->\n<!x']) {
+    assertLineFedParity('markdown', code);
+    assert.deepEqual(tokenKinds('markdown', code).at(-1), ['<!x', null]);
+  }
 });
