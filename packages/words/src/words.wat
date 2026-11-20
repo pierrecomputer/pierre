@@ -57,6 +57,11 @@
     (global.set $mode (i32.load8_u (i32.const 0)))
     (global.set $fmt (i32.load8_u (i32.const 26)))
     (global.set $ext (i32.load8_u (i32.const 31)))
+    (global.set $allowAt (select
+      (i32.add (i32.const $mem.idPrefix) (i32.load16_u (i32.const 44)))
+      (i32.const 0)
+      (i32.and (i32.ne (i32.load16_u (i32.const 46)) (i32.const 0)) (i32.eqz (global.get $mode)))))
+    (global.set $allowEnd (i32.add (global.get $allowAt) (i32.load16_u (i32.const 46))))
     ;; with the math option the scan tables mark `$` (low nibble 4, class 2),
     ;; and `$` (bit 4 of byte 4) may start a block
     (local.set $start (i32.and (global.get $ext) (i32.const 2)))
@@ -215,9 +220,13 @@
                   (br $boundary)))))
           (local.set $blockStart (call $lineAfter (local.get $blockEnd)))
           (br $blockLine))
-        ;; a blank line at document depth is a safe append boundary
+        ;; A blank line at document depth is a safe append boundary. An
+        ;; allowed HTML element can stay open across it, so with a list the
+        ;; renderer decides, at an empty record with flags 3 that holds it.
         (local.set $safeEnd (i32.sub (local.get $blockStart) (i32.const $mem.input)))
-        (global.set $boundaryRec (global.get $rec))
+        (if (global.get $allowAt)
+          (then (i32.store offset=8 (call $recNew (i32.const 0x300)) (local.get $safeEnd)))
+          (else (global.set $boundaryRec (global.get $rec))))
         (br $blockLine)))
     ;; the code leaf left open at EOF, so nested/footnote code shows as incomplete
     (global.set $incompleteCodeRec (i32.const 0))
@@ -296,6 +305,7 @@
           (i32.eqz (global.get $linkHash)))
       (then
         (i32.store (i32.const 36) (call $utf16Length (i32.const $mem.input)
-          (i32.add (i32.const $mem.input) (i32.and (local.get $safeEnd) (i32.const 0x7fffffff)))))
+          (i32.add (i32.const $mem.input) (select (global.get $allowSafe)
+            (i32.and (local.get $safeEnd) (i32.const 0x7fffffff)) (global.get $allowAt)))))
         (i32.store (i32.const 40) (call $utf16Length (global.get $outBase) (global.get $boundaryOut))))))
 )

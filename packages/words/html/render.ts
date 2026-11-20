@@ -165,7 +165,8 @@ function mapElements(
   tag: string,
   transform: (html: string) => string
 ): string {
-  const expression = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'g');
+  // Kept raw tags such as `<a-card>` may start with the name.
+  const expression = new RegExp(`<(/?)${tag}(?=[ />])[^>]*>`, 'g');
   const voidTag = voidTags.has(tag);
   const open: string[] = [];
   let result = '';
@@ -569,12 +570,14 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     html += pass(input.slice(cursor));
     for (const [tag, render] of Object.entries(options.components ?? {})) {
-      // An element hook has a tag name: lowercase letters, then digits too.
+      // An element hook has a tag name: a lowercase letter, then lowercase
+      // letters, digits, or `-`, as in `allowedHtml`.
       let named = tag !== '';
       for (let at = 0; named && at < tag.length; at++) {
         const code = tag.charCodeAt(at);
         named =
-          (code >= 97 && code <= 122) || (at > 0 && code >= 48 && code <= 57);
+          (code >= 97 && code <= 122) ||
+          (at > 0 && ((code >= 48 && code <= 57) || code === 45));
       }
       if (render === undefined || (!named && tag !== 'inlineCode')) continue;
       const inline = tag === 'inlineCode';
@@ -885,6 +888,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           incomplete,
           cjk: options.cjk,
           math: options.math,
+          allowedHtml: options.allowedHtml,
           [formatKey]: {
             flags:
               formatFlags.on |

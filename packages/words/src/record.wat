@@ -51,8 +51,8 @@
   (func $linePad (param $line i32) (result i32)
     (i32.shr_u (i32.load offset=4 (local.get $line)) (i32.const 30)))
 
-  ;; Paragraph or heading only (no tab padding). Aliases the input span when
-  ;; lines are LF-joined; otherwise rebuilds it in scratch.
+  ;; Block content without tab padding. Aliases the input span when lines are
+  ;; LF-joined; otherwise rebuilds it in scratch.
   (func $blockContent (param $r i32) (result i32)
     (local $n i32)
     (local $i i32)
@@ -76,7 +76,7 @@
         (local.set $line (i32.add (local.get $lines)
           (i32.mul (local.get $i) (i32.const $R.line))))
         (local.set $beg (call $lineBeg (local.get $line)))
-        (local.set $end (i32.load offset=4 (local.get $line)))
+        (local.set $end (call $lineEndOf (local.get $line)))
         (local.set $total (i32.add (local.get $total) (i32.add
           (i32.sub (local.get $end) (local.get $beg)) (i32.const 1))))
         (if (i32.eqz (local.get $i))
@@ -107,7 +107,7 @@
         (local.set $line (i32.add (local.get $lines)
           (i32.mul (local.get $i) (i32.const $R.line))))
         (local.set $beg (call $lineBeg (local.get $line)))
-        (local.set $end (i32.load offset=4 (local.get $line)))
+        (local.set $end (call $lineEndOf (local.get $line)))
         (memory.copy (i32.add (local.get $dst) (local.get $total)) (local.get $beg)
           (i32.sub (local.get $end) (local.get $beg)))
         (local.set $total (i32.add (local.get $total)

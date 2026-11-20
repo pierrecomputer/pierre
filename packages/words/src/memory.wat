@@ -27,6 +27,8 @@
       [34]            output contains an inline island marker
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
+      [44:46)         offset of the allowed HTML list from $mem.idPrefix (u16 LE)
+      [46:48)         byte length of the allowed HTML list, 0 for none (u16 LE)
       [48:64)         decimal conversion scratch
       [64:80)         hex digits
       [80:65536)      static tables and work areas, in this order: CJK ranges,
@@ -36,7 +38,8 @@
                       counters, container stack (reused by render and
                       completion), table column widths, ansi line prefix and
                       pending marker, ansi list state, packed range tables,
-                      id prefix
+                      math infix memo, open allowed HTML elements, id prefix,
+                      allowed HTML list, inline island names
     [] pages 2 to 4: math glyph metrics, TeX commands, math work areas,
        pooled output string literals, and math box nodes
     [] pages 5..N (text buffer)
@@ -117,7 +120,11 @@
   (const $mem.mathInfixEnd $mem.mathInfix+1024)
   (const $mem.mathInfixBits $mem.mathInfixEnd)
   (const $mem.mathInfixBitsEnd $mem.mathInfixBits+3072)
-  ;; Already escaped; written by the host.
+  ;; 32 open elements of the allowed HTML list (see $allowTop)
+  (const $mem.allowStack $mem.mathInfixBitsEnd)
+  (const $mem.allowStackEnd $mem.allowStack+128)
+  ;; Already escaped; written by the host. The allowed HTML list follows the
+  ;; id prefix, and the inline island names end the area.
   (const $mem.idPrefix 61440)
   (const $mem.idPrefixEnd 65536)
   ;; Math box nodes (pages 3-4) are 48 bytes each.

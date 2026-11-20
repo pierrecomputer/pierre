@@ -44,6 +44,16 @@ export interface HtmlSessionOptions {
   cjk?: boolean;
   /** Render `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as SVG. */
   math?: boolean;
+  /**
+   * Raw HTML tags to keep, each with the attributes it keeps, for example
+   * `{ details: ['open'], summary: [] }`. Names match in any case. Other
+   * tags, comments, and attributes are dropped, and so are `on*`, `srcdoc`,
+   * `data-markdown*`, and `data-words*` attributes, `javascript:` and
+   * `vbscript:` values, and `script` tags. Formatted output also checks URL
+   * attributes such as `href` and `src` with `defaultUrlTransform` rules.
+   * Overrides `skipHtml`.
+   */
+  allowedHtml?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** The result of one session render. */

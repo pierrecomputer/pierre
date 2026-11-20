@@ -261,12 +261,13 @@ function patchHtml(
         } else if (at >= committed && firstPending === null)
           firstPending = fragment.firstChild;
         // Record math SVG sources as the walk below does, so patches keep them.
-        if (html.includes('<svg', at)) {
+        // Kept raw tags such as `<svg-icon>` also start with `<svg`.
+        if (html.includes('<svg ', at)) {
           const svgs = fragment.querySelectorAll('svg');
-          for (let open = html.indexOf('<svg', at), index = 0; open >= 0; ) {
+          for (let open = html.indexOf('<svg ', at), index = 0; open >= 0; ) {
             const end = html.indexOf('</svg>', open) + 6;
             svgSources.set(svgs[index++], html.slice(open, end));
-            open = html.indexOf('<svg', end);
+            open = html.indexOf('<svg ', end);
           }
         }
         parent.appendChild(fragment);
@@ -334,7 +335,7 @@ function patchHtml(
           }
         } else actual = document.createTextNode(value);
         at = end;
-      } else if (html.startsWith('<svg', at)) {
+      } else if (html.startsWith('<svg ', at)) {
         // Math SVG is one unit: keep an equal one, else let the parser build it.
         const end = html.indexOf('</svg>', at) + 6;
         const source = html.slice(at, end);
@@ -348,6 +349,8 @@ function patchHtml(
         at = end;
       } else {
         const end = html.indexOf('>', at);
+        // Kept raw void tags end with ` />`.
+        const selfClosing = html.charCodeAt(end - 1) === 47;
         let nameEnd = html.indexOf(' ', at);
         if (nameEnd < 0 || nameEnd > end) nameEnd = end;
         const name = html.slice(at + 1, nameEnd);
@@ -356,7 +359,7 @@ function patchHtml(
             ? (current as Element)
             : document.createElement(name);
         const names: string[] = [];
-        for (let pos = nameEnd; pos < end; ) {
+        for (let pos = nameEnd; pos < end - (selfClosing ? 1 : 0); ) {
           if (html.charCodeAt(pos) === 32) {
             pos++;
             continue;
@@ -385,6 +388,7 @@ function patchHtml(
         }
         at = end + 1;
         if (
+          !selfClosing &&
           name !== 'br' &&
           name !== 'hr' &&
           name !== 'img' &&
@@ -794,15 +798,17 @@ export function createDomRenderer(
                 hooks(value as HtmlOptions['components'])
               : key === 'urlTransform'
                 ? (previous === undefined) === (value === undefined)
-                : key === 'plugins'
-                  ? samePlugins(
-                      previous as PluginConfig | undefined,
-                      value as PluginConfig | undefined
-                    )
-                  : Array.isArray(previous) &&
-                    Array.isArray(value) &&
-                    previous.length === value.length &&
-                    previous.every((tag, at) => tag === value[at]))
+                : key === 'allowedHtml'
+                  ? JSON.stringify(previous) === JSON.stringify(value)
+                  : key === 'plugins'
+                    ? samePlugins(
+                        previous as PluginConfig | undefined,
+                        value as PluginConfig | undefined
+                      )
+                    : Array.isArray(previous) &&
+                      Array.isArray(value) &&
+                      previous.length === value.length &&
+                      previous.every((tag, at) => tag === value[at]))
         );
       }
       formatter.configure(next, reset);

@@ -82,7 +82,8 @@ container to release event listeners and the live highlighter.
 <span id="words-html-and-dom" />
 
 Use `createHtmlRenderer()` from `@pierre/words/html` to produce HTML strings on
-the server or in the browser. It omits raw HTML, checks URLs, and supports
+the server or in the browser. It omits raw HTML, except tags listed in
+`allowedHtml`, checks URLs, and supports
 [hooks and plugins](#words-api-reference-customize-the-output). For a complete
 document, call `renderer.render(source, false).html`.
 
@@ -111,6 +112,7 @@ another render can overwrite the bytes or detach the view.
 | HTML option   | Default | Behavior                                            |
 | ------------- | ------- | --------------------------------------------------- |
 | `skipHtml`    | `false` | Omit raw HTML.                                      |
+| `allowedHtml` |         | Keep only these raw HTML tags and attributes.       |
 | `incomplete`  | `false` | Repair common unfinished inline syntax for display. |
 | `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. |
 | `math`        | `false` | Render [TeX as SVG](#words-math-rendering).         |
@@ -180,8 +182,9 @@ replace the pending part with `pending`. The DOM renderer handles this for you.
 
 Sessions reuse completed blocks. Edits, changes to parser options, and link or
 footnote definitions can require a full render. Session results are strings that
-stay valid after later calls. Sessions omit raw HTML and preserve Markdown URLs.
-Sanitize the output before inserting untrusted content into a page.
+stay valid after later calls. Sessions omit raw HTML, except tags listed in
+`allowedHtml`, and preserve Markdown URLs. Sanitize the output before inserting
+untrusted content into a page.
 
 ### Syntax highlighting
 
@@ -321,11 +324,11 @@ updates.
 
 <span id="words-html-safety" />
 
-**Untrusted Markdown.** The React, HTML string, and DOM renderers omit raw HTML
-and check link and image URLs. The check allows relative URLs and the `http`,
-`https`, `ftp`, `mailto`, `tel`, and `xmpp` schemes. It blocks network paths
-such as `//host`. Invalid links lose their destination. Invalid images
-disappear.
+**Untrusted Markdown.** The React, HTML string, and DOM renderers omit raw HTML,
+except tags listed in `allowedHtml`, and check link and image URLs. The check
+allows relative URLs and the `http`, `https`, `ftp`, `mailto`, `tel`, and `xmpp`
+schemes. It blocks network paths such as `//host`. Invalid links lose their
+destination. Invalid images disappear.
 
 `urlTransform(url, key)` receives the decoded URL and `'href'` or `'src'`. The
 built-in check still runs on its result. Return `null` or `undefined` to remove

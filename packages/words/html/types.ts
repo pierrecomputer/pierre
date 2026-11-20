@@ -99,6 +99,8 @@ export interface HtmlOptions {
   cjk?: boolean;
   /** Math as SVG. See `HtmlSessionOptions.math`. */
   math?: boolean;
+  /** Raw HTML tags to keep. See `HtmlSessionOptions.allowedHtml`. */
+  allowedHtml?: Readonly<Record<string, readonly string[]>>;
   components?: Components;
   plugins?: PluginConfig;
   controls?: boolean | ControlsConfig;
