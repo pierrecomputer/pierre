@@ -265,6 +265,20 @@ output moves forward without a lookup cache for previously rendered code.
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.
 
+For inline islands the host sends a length-prefixed list of opted-in names. The
+inline scanner and the completion pass use the same directive boundaries, so
+incomplete-Markdown repair cannot turn part of a label into a link. The
+formatter receives escaped label and attribute spans, checks the island’s
+payload, and emits inline portal targets inside the surrounding paragraph.
+
+With an island registry, Wasm passes fences whose language starts with `island-`
+to the host formatter. Ordinary closed fences stay in Wasm unless a plugin or
+filter needs their contents. For an accepted island, the formatter emits a
+portal target and text fallback. The DOM patcher keeps the hosts in committed
+blocks and looks for new hosts only in patched blocks whose HTML contains an
+island. When an edit moves an island, the patcher preserves its portal target by
+id so the React component retains its state and context.
+
 ## Constraints
 
 - Keep Markdown syntax and output backends in WAT, and the markup of the HTML
@@ -282,8 +296,8 @@ does not reconcile individual Markdown nodes.
 - Limits: 250 container levels, 999 characters per link or footnote label, nine
   digits per ordered-list start, 512 table columns, 255 backticks per code span,
   256 open brackets per leaf, 64 open delimiter runs in the block that
-  completion repairs, 4,096 bytes of escaped id prefix, and 1,073,414,144 bytes
-  (2^30 − 320 KiB) of input.
+  completion repairs, 4,096 bytes shared by the escaped id prefix and inline
+  island registry, and 1,073,414,144 bytes (2^30 − 320 KiB) of input.
 - A table closes after a row takes it past 524,288 auto-filled cells, matching
   cmark-gfm. Later lines parse as normal Markdown. Supplied cells do not count
   toward this limit.

@@ -365,6 +365,25 @@
     (local.set $t (i32.load8_u offset=$M.type (local.get $m)))
     (local.set $b (i32.load offset=$M.beg (local.get $m)))
     (local.set $e (i32.load offset=$M.end (local.get $m)))
+    ;; Only parser-produced markers reach the host. Source text is HTML-escaped.
+    (if (i32.eq (local.get $t) (enum.get $Mk.directive))
+      (then
+        (local.set $q (i32.load offset=$M.data (local.get $m)))
+        (if (i32.or (global.get $plain) (i32.eqz (local.get $q)))
+          (then (call $rText (local.get $b) (local.get $e)) (return)))
+        (i32.store8 (i32.const 34) (i32.const 1))
+        (if (i32.lt_s (local.get $q) (i32.const 0))
+          (then
+            ;; A pending placeholder needs only the name and opening bracket.
+            (out.str "<w-i p=\22")
+            (local.set $q (i32.sub (i32.const 0) (local.get $q)))
+            (local.set $e (local.get $q)))
+          (else (out.str "<w-i l=\22")))
+        (call $rText (local.get $b) (local.get $q))
+        (out.str "\22>")
+        (call $rText (local.get $q) (local.get $e))
+        (out.str "</w-i>")
+        (return)))
     (block $emph
      (block $text
       (block $footnote

@@ -23,6 +23,8 @@
       [30]            document contains global definitions
       [31]            extension flags (u8): bit 0 = CJK-friendly emphasis,
                       bit 1 = math
+      [32:34)         byte length of the inline island names below $mem.idPrefixEnd
+      [34]            output contains an inline island marker
       [36:40)         UTF-16 length of the input before the boundary (option bit 3)
       [40:44)         UTF-16 length of the output before the boundary (option bit 3)
       [48:64)         decimal conversion scratch
@@ -117,6 +119,7 @@
   (const $mem.mathInfixBitsEnd $mem.mathInfixBits+3072)
   ;; Already escaped; written by the host.
   (const $mem.idPrefix 61440)
+  (const $mem.idPrefixEnd 65536)
   ;; Math box nodes (pages 3-4) are 48 bytes each.
   (const $mem.mathGlyphs 65536)
   (const $mem.mathGlyphsEnd $mem.mathGlyphs+10240)

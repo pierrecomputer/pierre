@@ -187,3 +187,22 @@ void test('an id prefix that does not fit Wasm memory throws', () => {
   assert.throws(() => renderer.render('x[^1]\n\n[^1]: y', false), RangeError);
   assert.match(good.render('x[^1]\n\n[^1]: z', false).html, / id="good-fn-1"/);
 });
+
+void test('inline registry changes and rejected prefixes leave shared parser memory usable', () => {
+  const islands = { ref: { inline: true, accepts: () => true } };
+  const source = ':ref[one]';
+  const fits = createHtmlRenderer({ islands, idPrefix: 'p'.repeat(4092) });
+  const tooLong = createHtmlRenderer({ islands, idPrefix: 'p'.repeat(4093) });
+  assert.match(fits.render(source, false).html, /data-words-island="ref"/);
+  assert.throws(() => tooLong.render(source, false), RangeError);
+  assert.match(
+    fits.render(source + '.', false).html,
+    /data-words-island="ref"/
+  );
+  const ordinary = createHtmlRenderer();
+  assert.doesNotMatch(ordinary.render(source, false).html, /data-words-island/);
+  assert.throws(
+    () => createHtmlRenderer({ islands: { 'ref!': islands.ref } }),
+    TypeError
+  );
+});

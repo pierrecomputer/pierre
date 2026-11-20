@@ -13,7 +13,7 @@ import { createHighlightsPlugin } from '@pierre/words/highlights';
 import { createMermaidPlugin } from '@pierre/words/mermaid';
 import { Markdown } from '@pierre/words/react';
 import '@pierre/words/styles.css';
-import type { Components } from '@pierre/words/react';
+import type { Components, ReactiveIslands } from '@pierre/words/react';
 import { register, render } from 'pele/core';
 import flowchart from 'pele/diagrams/flowchart';
 import {
@@ -33,7 +33,11 @@ import { getBenchmarkGradientStyle } from '../highlights/BenchmarkBar';
 import rainbowStyles from '../highlights/HighlightsRainbow.module.css';
 import styles from './WordsDemo.module.css';
 import { WordsDisclosure } from './WordsDisclosure';
-import { getWordsUsage, type WordsExampleKind } from './wordsUsage';
+import {
+  detailsPending,
+  getWordsUsage,
+  type WordsExampleKind,
+} from './wordsUsage';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -82,6 +86,86 @@ flowchart LR
   C -->|math| D[SVG formula]
   C -->|mermaid| E[Pele diagram]
 ~~~`;
+const islandsSample = `Click the counter below, then edit this paragraph in the source pane. The counter keeps its state while its **id** stays the same.
+
+~~~island-counter
+{"id":"demo-counter","label":"Votes"}
+~~~
+
+The counter appears when its fence closes. The “Show details” label shimmers until its button is ready.
+
+~~~island-details
+{"id":"demo-details","text":"Votes are local to this preview. Editing the prose keeps your vote in place as long as the counter keeps the same id. Replay starts a fresh stream."}
+~~~
+
+The parser lives in :file[inline.wat]{path="packages/words/src/inline.wat"}. Click the filename to see its path.`;
+
+function Counter({ label }: { label: string }) {
+  const [count, setCount] = useState(0);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => setCount((value) => value + 1)}
+    >
+      {label} ({count})
+    </Button>
+  );
+}
+
+function Details({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-40"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {expanded ? 'Hide details' : 'Show details'}
+      </Button>
+      {expanded && <p>{text}</p>}
+    </>
+  );
+}
+
+function FileReference({ label, path }: { label: string; path: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <button
+      type="button"
+      className="font-mono underline decoration-dotted underline-offset-4"
+      aria-expanded={expanded}
+      onClick={() => setExpanded(!expanded)}
+    >
+      {expanded ? path : label}
+    </button>
+  );
+}
+
+const demoIslands: ReactiveIslands = {
+  file: {
+    inline: true,
+    render: ({ label, path }) =>
+      typeof label === 'string' && typeof path === 'string' ? (
+        <FileReference label={label} path={path} />
+      ) : null,
+  },
+  counter: {
+    fallback: '',
+    render: ({ label }) =>
+      typeof label === 'string' ? <Counter label={label} /> : null,
+  },
+  details: {
+    pending: detailsPending,
+    fallback: 'Details are available when the page is interactive.',
+    render: ({ text }) =>
+      typeof text === 'string' ? <Details text={text} /> : null,
+  },
+};
+
 const overrides: Components = {
   // Keep streamed title spans inside one flex item beside the icon.
   h2: (html) =>
@@ -178,8 +262,14 @@ function WordsExample({
 }) {
   const playground = kind === 'playground';
   const diagrams = kind === 'diagrams';
+  const islands = kind === 'reactive-islands';
+  const editable = playground || islands;
   const fixedSpeed =
-    kind === 'streaming' || kind === 'code' || kind === 'hooks' || diagrams;
+    kind === 'streaming' ||
+    kind === 'code' ||
+    kind === 'hooks' ||
+    diagrams ||
+    islands;
   const initialSource =
     kind === 'code'
       ? samples.code
@@ -187,9 +277,11 @@ function WordsExample({
         ? hooksSample
         : diagrams
           ? diagramsSample
-          : playground
-            ? samples.conversation
-            : streamingSample;
+          : islands
+            ? islandsSample
+            : playground
+              ? samples.conversation
+              : streamingSample;
   const previewRef = useRef<HTMLDivElement>(null);
   const [sample, setSample] = useState(
     kind === 'streaming' ? 'streaming' : 'conversation'
@@ -294,6 +386,7 @@ function WordsExample({
     highlight,
     lineNumbers,
     diagrams,
+    islands,
     repair,
   });
   const selectedSample =
@@ -460,8 +553,8 @@ function WordsExample({
         )}
       </div>
       <div className={`${styles.demo} dark`} data-scrollable={playground}>
-        <div className={styles.panes} data-source-visible={playground}>
-          {playground && (
+        <div className={styles.panes} data-source-visible={editable}>
+          {editable && (
             <div className={styles.editorPane}>
               <div className={styles.paneTitle}>
                 <label htmlFor={sourceId}>Markdown source</label>
@@ -505,6 +598,7 @@ function WordsExample({
                 parseIncompleteMarkdown={repair}
                 components={custom ? overrides : undefined}
                 math={diagrams}
+                islands={islands ? demoIslands : undefined}
                 plugins={
                   diagrams ? diagramPlugins : highlight ? plugins : undefined
                 }
@@ -628,6 +722,18 @@ export function WordsDemo({
             </a>{' '}
             to <code>createMermaidPlugin</code> to draw <code>mermaid</code>{' '}
             blocks as diagrams.
+          </>
+        }
+      />
+      <WordsExample
+        kind="reactive-islands"
+        preloadedUsage={usageExamples['reactive-islands']}
+        title="Reactive islands"
+        description={
+          <>
+            Replay to see “Show details” shimmer while its fence streams. Cast a
+            vote, then edit the prose above the counter to see its state
+            persist. Click the inline file reference to expand its path.
           </>
         }
       />

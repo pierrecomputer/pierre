@@ -1,5 +1,13 @@
 import { delta, type InternalHtmlUpdate } from '../lib/internal';
 import { decodeHtml } from '../lib/utils';
+import {
+  appendIslandHosts,
+  collectIslands,
+  isIsland,
+  islandHostStart,
+  type MountedIsland,
+  noIslands,
+} from './islands';
 import type { InternalCodeUpdate } from './render';
 import { controlFlags, createHtmlRenderer, rewritesElements } from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
@@ -9,7 +17,7 @@ const isFade = (node: Node): node is HTMLElement =>
   (node as Element).getAttribute('data-markdown') === 'token';
 const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
-  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], svg';
+  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], [data-words-island], svg';
 
 // The source HTML of each math SVG that patchHtml placed, to reuse equal ones.
 const svgSources = new WeakMap<Node, string>();
@@ -86,6 +94,7 @@ function createFades(root: HTMLElement) {
   const animate = (text: Text): void => {
     if (!enabled() || text.data.trim() === '' || text.parentElement === null)
       return;
+    if (text.parentElement.closest(passiveText) !== null) return;
     // An open fence line ends with LF. Keep the LF outside the span, so the
     // next chunk can extend the same line.
     if (
@@ -94,7 +103,6 @@ function createFades(root: HTMLElement) {
       text.parentElement.closest('pre code') !== null
     )
       text.splitText(text.data.length - 1);
-    if (text.parentElement.closest(passiveText) !== null) return;
     const span = document.createElement('span');
     span.dataset.markdown = 'token';
     span.dataset.animated = 'true';
@@ -149,6 +157,7 @@ function createFades(root: HTMLElement) {
           const element = node as HTMLElement;
           const kind = element.getAttribute('data-markdown');
           if (
+            element.hasAttribute('data-words-island') ||
             kind === 'code-header' ||
             kind === 'line-numbers' ||
             kind === 'caret' ||
@@ -511,6 +520,29 @@ function patchChildren(
         }
       }
       current = end;
+    } else if (isIsland(current) || isIsland(target)) {
+      // Replacing a shell must leave its portal children intact until React
+      // unmounts them. A matching shell keeps its target and fallback nodes.
+      if (
+        isIsland(current) &&
+        isIsland(target) &&
+        current.tagName === target.tagName &&
+        current.dataset.wordsIsland === target.dataset.wordsIsland &&
+        current.dataset.wordsIslandId === target.dataset.wordsIslandId
+      ) {
+        current.dataset.wordsIslandData = target.dataset.wordsIslandData!;
+        const fallback = current.lastElementChild!;
+        const text = target.lastElementChild!.textContent;
+        if (fallback.textContent !== text) fallback.textContent = text;
+        actual = current;
+        current = current.nextSibling;
+      } else {
+        actual = target;
+        const next = current?.nextSibling ?? null;
+        parent.insertBefore(target, current);
+        if (current !== null) parent.removeChild(current);
+        current = next;
+      }
     } else if (
       current?.nodeType === 1 &&
       target.nodeType === 1 &&
@@ -643,6 +675,10 @@ export function createDomRenderer(
   const caret = document.createElement('span');
   const fades = createFades(root);
   let revision = 0;
+  let islands: readonly MountedIsland[] = noIslands;
+  // Committed blocks keep their hosts. Only the previous pending tail can be replaced.
+  const committedHosts: HTMLElement[] = [];
+  let pendingHasIslands = false;
   let initialized = false;
   let previousCaret: 'block' | 'circle' | undefined;
   let codeState:
@@ -706,6 +742,7 @@ export function createDomRenderer(
   };
 
   return {
+    getIslands: () => islands,
     connect(): void {
       fades.connect();
       root.addEventListener('click', click);
@@ -796,6 +833,7 @@ export function createDomRenderer(
       const direct =
         animated === false &&
         options.plugins === undefined &&
+        !pendingHasIslands &&
         !rewritesElements(options);
       if (
         changed &&
@@ -933,7 +971,7 @@ export function createDomRenderer(
           append(text);
           codeState.numberCount = count;
         }
-      } else if (changed && direct) {
+      } else if (changed) {
         codeState?.marker?.remove();
         codeState = undefined;
         if (checkpoint.parentNode !== null) {
@@ -942,39 +980,123 @@ export function createDomRenderer(
         }
         if (reset) pending = root.firstChild;
         const addition = reset ? update.stable : update.addition;
-        const firstPending = patchHtml(
-          root,
-          addition + update.pending,
-          pending,
-          addition.length,
-          template
-        );
-        pending = firstPending;
-        if (codeUpdate !== undefined) {
-          let code: Element | null = null;
-          for (
-            let node = firstPending;
-            node !== null;
-            node = node.nextSibling
-          ) {
-            if (node.nodeType === 1)
-              code = (node as Element).querySelector(
-                '[data-incomplete] > pre > code'
+        const pendingHtml = update.pending;
+        const additionHasIslands =
+          options.islands !== undefined && addition.includes(islandHostStart);
+        const tailHasIslands =
+          options.islands !== undefined &&
+          pendingHtml.includes(islandHostStart);
+        // A patch touching a portal must preserve its React-owned children.
+        const patchIslands =
+          additionHasIslands ||
+          tailHasIslands ||
+          pendingHasIslands ||
+          (reset && committedHosts.length !== 0);
+        pendingHasIslands = tailHasIslands;
+        if (direct && !patchIslands) {
+          const firstPending = patchHtml(
+            root,
+            addition + pendingHtml,
+            pending,
+            addition.length,
+            template
+          );
+          pending = firstPending;
+          if (codeUpdate !== undefined) {
+            let code: Element | null = null;
+            for (
+              let node = firstPending;
+              node !== null;
+              node = node.nextSibling
+            ) {
+              if (node.nodeType === 1)
+                code = (node as Element).querySelector(
+                  '[data-incomplete] > pre > code'
+                );
+              if (code !== null) break;
+            }
+            if (code !== null) {
+              const group = code.lastElementChild ?? code;
+              const first = lastCodeLine(
+                group,
+                codeUpdate.lastLine < codeUpdate.lineCount - 1
               );
-            if (code !== null) break;
+              const numbers = code.previousElementSibling;
+              codeState = {
+                code,
+                marker: undefined,
+                group,
+                first,
+                line: codeUpdate.lastLine,
+                lineCount: codeUpdate.lineCount,
+                key: codeUpdate.key,
+                numbers:
+                  numbers?.getAttribute('data-markdown') === 'line-numbers'
+                    ? numbers
+                    : null,
+                numberCount: codeUpdate.numbers ?? 0,
+              };
+            }
           }
-          if (code !== null) {
-            const group = code.lastElementChild ?? code;
-            const first = lastCodeLine(
-              group,
-              codeUpdate.lastLine < codeUpdate.lineCount - 1
-            );
+        } else {
+          template.innerHTML = addition;
+          const fragment = template.content;
+          const count = fragment.childNodes.length;
+          tail.innerHTML = pendingHtml;
+          // Only the open fence block is incomplete; footnotes after it may hold other fences.
+          const incomingCode =
+            codeUpdate === undefined
+              ? null
+              : tail.content.querySelector('[data-incomplete] > pre > code');
+          // Add the marker before insertion, because fades wrap multi-line text.
+          const codeMarker =
+            incomingCode === null || codeUpdate === undefined
+              ? undefined
+              : markLastCodeLine(
+                  incomingCode.lastElementChild ?? incomingCode,
+                  codeUpdate.lastLine < codeUpdate.lineCount - 1
+                );
+          fragment.append(tail.content);
+          const previousSibling =
+            pending === null ? root.lastChild : pending.previousSibling;
+          const firstPending = patchChildren(
+            root,
+            fragment,
+            pending,
+            fades,
+            count,
+            codeMarker,
+            initialized && reset
+          );
+          pending = firstPending;
+          if (patchIslands) {
+            if (reset) committedHosts.length = 0;
+            if (additionHasIslands) {
+              const first =
+                previousSibling === null
+                  ? root.firstChild
+                  : previousSibling.nextSibling;
+              appendIslandHosts(committedHosts, first, firstPending);
+            }
+            let hosts = committedHosts;
+            if (pendingHasIslands) {
+              hosts = [...committedHosts];
+              appendIslandHosts(hosts, firstPending, null);
+            }
+            islands = collectIslands(root, hosts, islands);
+          }
+          // Root-level text can merge when fade wrappers finish. Keep a physical
+          // boundary only there; ordinary block nodes are stable references.
+          if (firstPending !== null && isText(firstPending))
+            root.insertBefore(checkpoint, firstPending);
+          if (codeUpdate !== undefined && codeMarker?.parentNode != null) {
+            const code = codeMarker.parentNode.parentNode as Element;
             const numbers = code.previousElementSibling;
             codeState = {
               code,
-              marker: undefined,
-              group,
-              first,
+              marker: codeMarker,
+              group: codeMarker.parentNode as Element,
+              first: codeMarker.nextSibling,
               line: codeUpdate.lastLine,
               lineCount: codeUpdate.lineCount,
               key: codeUpdate.key,
@@ -985,72 +1107,9 @@ export function createDomRenderer(
               numberCount: codeUpdate.numbers ?? 0,
             };
           }
+          if (!initialized) fades.tree(root);
         }
         initialized = true;
-      } else if (changed) {
-        // The first render and skipped revisions need the full prefix. Other
-        // updates use only the addition.
-        codeState?.marker?.remove();
-        codeState = undefined;
-        if (checkpoint.parentNode !== null) {
-          pending = checkpoint.nextSibling;
-          checkpoint.remove();
-        }
-        if (reset) pending = root.firstChild;
-        template.innerHTML = reset ? update.stable : update.addition;
-        const fragment = template.content;
-        const count = fragment.childNodes.length;
-        tail.innerHTML = update.pending;
-        // Only the open fence block is incomplete; footnotes after it may hold other fences.
-        const incomingCode =
-          codeUpdate === undefined
-            ? null
-            : tail.content.querySelector('[data-incomplete] > pre > code');
-        // Add the marker before insertion, because fades wrap multi-line text.
-        const codeMarker =
-          incomingCode === null || codeUpdate === undefined
-            ? undefined
-            : markLastCodeLine(
-                incomingCode.lastElementChild ?? incomingCode,
-                codeUpdate.lastLine < codeUpdate.lineCount - 1
-              );
-        fragment.append(tail.content);
-        const firstPending = patchChildren(
-          root,
-          fragment,
-          pending,
-          fades,
-          count,
-          codeMarker,
-          initialized && reset
-        );
-        pending = firstPending;
-        // Root-level text can merge when fade wrappers finish. Keep a physical
-        // boundary only there; ordinary block nodes are stable references.
-        if (firstPending !== null && isText(firstPending))
-          root.insertBefore(checkpoint, firstPending);
-        if (codeUpdate !== undefined && codeMarker?.parentNode != null) {
-          const code = codeMarker.parentNode.parentNode as Element;
-          const numbers = code.previousElementSibling;
-          codeState = {
-            code,
-            marker: codeMarker,
-            group: codeMarker.parentNode as Element,
-            first: codeMarker.nextSibling,
-            line: codeUpdate.lastLine,
-            lineCount: codeUpdate.lineCount,
-            key: codeUpdate.key,
-            numbers:
-              numbers?.getAttribute('data-markdown') === 'line-numbers'
-                ? numbers
-                : null,
-            numberCount: codeUpdate.numbers ?? 0,
-          };
-        }
-        if (!initialized) {
-          initialized = true;
-          fades.tree(root);
-        }
       }
       revision = update.revision;
       previousCaret = nextCaret;
@@ -1072,7 +1131,7 @@ export function createDomRenderer(
             continue;
           }
           let block = false;
-          if (node.nodeType === 1)
+          if (node.nodeType === 1 && !isIsland(node))
             switch (node.nodeName) {
               case 'BLOCKQUOTE':
               case 'DIV':
