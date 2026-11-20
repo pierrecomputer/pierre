@@ -1568,6 +1568,26 @@ for (const diffStyle of ['split', 'unified']) {
   });
 }
 
+test('the open search panel follows the default light and dark themes', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/test/e2e/fixtures/code-view-search.html');
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+
+  const input = root.getByRole('textbox', { name: 'Search' });
+  const inputBox = root.locator('[data-input-box][data-find]');
+  await expect(inputBox).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+  await expect(inputBox).toHaveCSS('outline-color', 'rgb(0, 159, 255)');
+  await expect(input).toHaveCSS('color', 'rgb(250, 250, 250)');
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(inputBox).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+});
+
 test('unsafeCSS reaches the CodeView search panel and wins over its own styles', async ({
   page,
 }) => {
