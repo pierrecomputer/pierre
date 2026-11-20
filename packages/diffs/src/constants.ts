@@ -73,6 +73,7 @@ export const DEFAULT_MESSAGES = {
   unknownUnmodifiedLines: 'More unchanged context may be available',
   /** Button that expands an entire collapsed region at once. */
   expandAll: 'Expand all',
+  expandLine: 'Show full line',
   /** Marker shown after a final line that has no trailing newline. */
   noNewlineAtEndOfFile: 'No newline at end of file',
   /** Merge conflict button that keeps the current (ours) side. */
@@ -87,13 +88,15 @@ export const DEFAULT_MESSAGES = {
   replacePlaceholder: 'Replace',
   /** Search panel status when the query is empty or matches nothing. */
   noSearchResults: 'No results',
+  /** Search panel status while scanning without any completed matches yet. */
+  searching: 'Searching…',
   /** Search panel status when no match is selected. Receives `count`. */
   searchResultCount: '{count, plural, one {# result} other {# results}}',
   /**
    * Search panel status for the selected match. Receives the 1-based `index`
    * and the `count` of matches.
    */
-  searchResultPosition: '{index} of {count}',
+  searchResultPosition: '{index}/{count}',
   /** Search option toggle for case-sensitive matching. */
   matchCase: 'Match Case',
   /** Search option toggle for whole-word matching. */

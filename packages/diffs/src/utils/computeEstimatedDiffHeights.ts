@@ -10,7 +10,7 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from './computeVirtualFileMetrics';
-import { endsWithNewline } from './iterateOverDiff';
+import { endsWithNewline } from './endsWithNewline';
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
@@ -28,7 +28,7 @@ export interface ComputeEstimatedDiffHeightsOptions {
   collapsedContextThreshold: number;
   canHydratePartialDiff: boolean;
   // Count the row for the empty line after the final newline; see
-  // IterateOverDiffProps.includeTrailingNewline.
+  // DiffRowCursorOptions.includeTrailingNewline.
   includeTrailingNewline?: boolean;
   // Count the "No newline at end of file" marker rows.
   showNoNewlineMarkers?: boolean;

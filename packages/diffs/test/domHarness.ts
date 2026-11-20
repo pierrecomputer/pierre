@@ -68,6 +68,9 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     'navigator'
   );
   const originalValues = {
+    addEventListener: Reflect.get(globalThis, 'addEventListener'),
+    removeEventListener: Reflect.get(globalThis, 'removeEventListener'),
+    postMessage: Reflect.get(globalThis, 'postMessage'),
     cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
     document: Reflect.get(globalThis, 'document'),
     Document: Reflect.get(globalThis, 'Document'),
@@ -247,6 +250,9 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   });
 
   Object.assign(globalThis, {
+    addEventListener: dom.window.addEventListener.bind(dom.window),
+    removeEventListener: dom.window.removeEventListener.bind(dom.window),
+    postMessage: (message: unknown) => dom.window.postMessage(message, '*'),
     cancelAnimationFrame: (id: number) => {
       const timeout = frames.get(id);
       if (timeout != null) {

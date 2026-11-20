@@ -367,15 +367,22 @@ describe('CodeView search API', () => {
         },
       ]);
 
+      // A panel opened with a query has not searched yet, so its zero count
+      // is not final.
       viewer.openSearch({ query: 'target' });
       expect(last()).toMatchObject({
         text: 'target',
         matchCount: 0,
+        searching: true,
         canReplace: false,
         mode: 'find',
       });
       await wait(0);
-      expect(last()).toMatchObject({ matchCount: 3, currentMatchIndex: 0 });
+      expect(last()).toMatchObject({
+        matchCount: 3,
+        searching: false,
+        currentMatchIndex: 0,
+      });
 
       viewer.navigateSearch('next');
       expect(last()).toMatchObject({ currentMatchIndex: 1 });
@@ -408,6 +415,111 @@ describe('CodeView search API', () => {
       viewer.closeSearch();
       expect(last()).toBeUndefined();
       expect(states.filter((state) => state == null)).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('reports a panel opened without a query as not searching', async () => {
+    const dom = installDom();
+    const states: (SearchPanelState | undefined)[] = [];
+    const viewer = new CodeView({
+      onSearchStateChange: (state) => states.push(state),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        { id: 'a', type: 'file', file: { name: 'a.txt', contents: 'target' } },
+      ]);
+
+      viewer.openSearch({ query: '' });
+      expect(states.at(-1)).toMatchObject({
+        text: '',
+        matchCount: 0,
+        searching: false,
+      });
+      await wait(0);
+      expect(states.at(-1)).toMatchObject({
+        text: '',
+        matchCount: 0,
+        searching: false,
+      });
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('searches for the opening query while the view is out of the document', async () => {
+    const dom = installDom();
+    const states: (SearchPanelState | undefined)[] = [];
+    const viewer = new CodeView({
+      onSearchStateChange: (state) => states.push(state),
+    });
+    try {
+      const root = createRoot();
+      const { parentNode } = root;
+      viewer.setup(root);
+      await renderItems(viewer, [
+        { id: 'a', type: 'file', file: { name: 'a.txt', contents: 'target' } },
+      ]);
+
+      root.remove();
+      viewer.openSearch({ query: 'target' });
+      expect(states.at(-1)).toMatchObject({ matchCount: 0, searching: true });
+      await wait(0);
+      expect(states.at(-1)).toMatchObject({ matchCount: 1, searching: false });
+
+      parentNode?.append(root);
+      viewer.render(true);
+      await wait(0);
+      expect(viewer.isSearchOpen()).toBe(true);
+      expect(states.at(-1)).toMatchObject({ matchCount: 1, searching: false });
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('does not step to a match once the state callback closed the panel', async () => {
+    const dom = installDom();
+    let collapsedChanges = 0;
+    const viewer = new CodeView({
+      onSearchStateChange: (state) => {
+        if (state?.matchCount === 2) {
+          viewer.closeSearch();
+        }
+      },
+      onItemCollapsedChange: () => {
+        collapsedChanges++;
+      },
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          file: { name: 'a.txt', contents: 'target a' },
+        },
+        {
+          id: 'b',
+          type: 'file',
+          collapsed: true,
+          file: { name: 'b.txt', contents: 'target b' },
+        },
+      ]);
+
+      // The step runs the panel's first search, whose results close the
+      // panel. Stepping on would open the collapsed file for its match.
+      viewer.openSearch({ query: 'target' });
+      viewer.navigateSearch('next');
+      await wait(0);
+      expect(viewer.isSearchOpen()).toBe(false);
+      expect(collapsedChanges).toBe(0);
     } finally {
       viewer.cleanUp();
       dom.cleanup();

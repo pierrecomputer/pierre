@@ -1,4 +1,5 @@
 import type { FileModel } from '../model/FileModel';
+import type { LineCuts } from '../rows/LineCuts';
 import type { RowSource } from '../rows/RowSource';
 import type { AnnotationSpan, LineAnnotation, RenderRange } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -72,6 +73,8 @@ export class FileLayout<LAnnotation = undefined> {
   // Lines whose text or tokens changed since the last walk.
   #marked: Set<number> | undefined;
 
+  constructor(private readonly lineCuts: LineCuts) {}
+
   /** Lines whose text or tokens changed; the next layout rebuilds their rows. */
   markLines(lines: Iterable<number>): void {
     const marked = (this.#marked ??= new Set());
@@ -91,6 +94,7 @@ export class FileLayout<LAnnotation = undefined> {
     const column = createColumn();
     const positions = new Map<LineKey, number>();
     let rowCount = 0;
+    this.lineCuts.startLayout();
     const names = (list: LineAnnotation<LAnnotation>[]) =>
       list.map((annotation) => input.annotationSlotName(annotation));
     const pushAnnotationRow = (
@@ -192,7 +196,7 @@ export class FileLayout<LAnnotation = undefined> {
     const lineIndexText = `${line}`;
     const base = rows.additionRow(model, line);
     const content = this.#cells.line(
-      base,
+      this.lineCuts.additionRow(base, model, line, lineNumber),
       { 'data-line-type': 'context' },
       lineNumber,
       undefined,

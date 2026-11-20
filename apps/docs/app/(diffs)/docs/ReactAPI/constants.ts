@@ -253,7 +253,8 @@ interface DiffOptions {
   // (default: false)
   disableErrorHandling: false,
 
-  // Skip syntax highlighting for lines exceeding this length
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 
   // Fires after hydration, after DOM-committing render updates, and before
@@ -1004,7 +1005,8 @@ interface FileOptions {
   // (default: false)
   disableErrorHandling: false,
 
-  // Skip syntax highlighting for lines exceeding this length
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 
   // Fires after hydration, after DOM-committing render updates, and before

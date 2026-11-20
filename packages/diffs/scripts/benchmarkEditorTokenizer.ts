@@ -54,6 +54,13 @@ const messageListeners = new Set<EventListenerOrEventListenerObject>();
 const postedMessages: unknown[] = [];
 let mutationCallback: ((records: MutationRecord[]) => void) | undefined;
 
+// The callback the stubbed MutationObserver was last constructed with.
+function getMutationCallback():
+  | ((records: MutationRecord[]) => void)
+  | undefined {
+  return mutationCallback;
+}
+
 Reflect.set(globalThis, 'window', globalThis);
 Reflect.set(globalThis, 'matchMedia', () => ({
   addEventListener() {},
@@ -191,7 +198,7 @@ function percentile(sortedValues: number[], rank: number): number {
 }
 
 function createTokenizer(
-  textDocument: TextDocument<unknown>,
+  textDocument: TextDocument,
   counters: MockCounters,
   options: {
     matchBrackets?: boolean;
@@ -256,7 +263,7 @@ function createTokenizer(
 // background messages.
 function primeTokenizer(
   tokenizer: EditorTokenizer,
-  textDocument: TextDocument<unknown>,
+  textDocument: TextDocument,
   counters: MockCounters,
   renderRange?: RenderRange
 ): void {
@@ -606,7 +613,7 @@ function createBenchmarkCases(
             themeChangeCallbacks++;
           },
         });
-        const callback = mutationCallback;
+        const callback = getMutationCallback();
         if (callback === undefined) {
           throw new Error('Expected a system-theme MutationObserver');
         }
@@ -752,15 +759,15 @@ function printTable(summaries: BenchmarkSummary[]): void {
       header.length
     )
   );
-  const formatRow = (row: Record<(typeof headers)[number], string>) =>
-    headers
-      .map((header, index) => row[header].padEnd(widths[index]))
+  const formatRow = (cells: readonly string[]) =>
+    cells
+      .map((cell, index) => cell.padEnd(widths[index]))
       .join('  ')
       .trimEnd();
-  console.log(formatRow(Object.fromEntries(headers.map((key) => [key, key]))));
+  console.log(formatRow(headers));
   console.log(widths.map((width) => '-'.repeat(width)).join('  '));
   for (const row of rows) {
-    console.log(formatRow(row));
+    console.log(formatRow(headers.map((header) => row[header])));
   }
 }
 

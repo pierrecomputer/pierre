@@ -5,8 +5,13 @@ import type { LineTypes } from '../types';
 import { createGutterItem } from '../utils/hast_utils';
 import type { LineKey, RowKey, RowSpec } from './RowSpec';
 
+// A content cell, and the line attributes it was built with.
 interface StampedRow {
-  properties: Properties;
+  contentProperties: Properties | undefined;
+  lineNumber: number;
+  altLineNumber: number | undefined;
+  lineIndexText: string;
+  readOnly: boolean;
   row: HASTElement;
 }
 
@@ -51,15 +56,28 @@ export class RowCells {
 
   /**
    * The content cell of a line: `row` with its line attributes. Reuses the
-   * last cell while the attributes match.
+   * last cell while the attributes match. `readOnly` marks a line the caret
+   * must not enter.
    */
   line(
     row: HASTElement,
     contentProperties: Properties | undefined,
     lineNumber: number,
     altLineNumber: number | undefined,
-    lineIndexText: string
+    lineIndexText: string,
+    readOnly = false
   ): HASTElement {
+    const cached = this.#stamped.get(row);
+    if (
+      cached != null &&
+      cached.lineNumber === lineNumber &&
+      cached.altLineNumber === altLineNumber &&
+      cached.lineIndexText === lineIndexText &&
+      cached.readOnly === readOnly &&
+      arePropertiesEqual(cached.contentProperties, contentProperties)
+    ) {
+      return cached.row;
+    }
     // Line attributes in one order for every row, whichever source built it.
     const properties: Properties = {
       ...row.properties,
@@ -71,12 +89,18 @@ export class RowCells {
       'data-line-index': lineIndexText,
       ...contentProperties,
     };
-    const cached = this.#stamped.get(row);
-    if (cached != null && arePropertiesEqual(cached.properties, properties)) {
-      return cached.row;
+    if (readOnly) {
+      properties.contenteditable = 'false';
     }
     const stamped: HASTElement = { ...row, properties };
-    this.#stamped.set(row, { properties, row: stamped });
+    this.#stamped.set(row, {
+      contentProperties,
+      lineNumber,
+      altLineNumber,
+      lineIndexText,
+      readOnly,
+      row: stamped,
+    });
     return stamped;
   }
 
@@ -175,11 +199,26 @@ export function readOnly(cell: HASTElement): HASTElement {
   };
 }
 
-function arePropertiesEqual(a: Properties, b: Properties): boolean {
-  const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
-  for (const key of keys) {
-    if (a[key] !== b[key]) return false;
+// Whether two sets of properties hold the same names and values.
+function arePropertiesEqual(
+  a: Properties | undefined,
+  b: Properties | undefined
+): boolean {
+  if (a === b) {
+    return true;
   }
-  return true;
+  if (a == null || b == null) {
+    return false;
+  }
+  let count = 0;
+  for (const key in a) {
+    if (a[key] !== b[key]) {
+      return false;
+    }
+    count++;
+  }
+  for (const _key in b) {
+    count--;
+  }
+  return count === 0;
 }

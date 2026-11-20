@@ -5,6 +5,7 @@ import {
   type TextDocumentChange,
 } from '../editor/textDocument';
 import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
+import type { SearchLineCuts } from '../search/codeViewSearch';
 import type {
   FileContents,
   LineAnnotation,
@@ -130,6 +131,16 @@ export class VirtualizedFile<
     requestOwnerRender?: () => void
   ) {
     super(options, workerManager, requestOwnerRender);
+  }
+
+  // What find needs to know about this item's cut-off lines: the length they
+  // are cut at, and the lines that were expanded.
+  public getLineCutsForSearch(): SearchLineCuts {
+    const { fileRenderer, options } = this;
+    return {
+      cutLength: fileRenderer.getLineCutLength(options),
+      expandedLines: fileRenderer.lineCuts.expandedLines,
+    };
   }
 
   public setMetrics(

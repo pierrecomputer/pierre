@@ -7,6 +7,7 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import { CodeViewSearchScan } from '../src/search/codeViewSearch';
 import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -55,7 +56,7 @@ describe('CodeView search', () => {
       createEditor: (type, options, editStateKey) =>
         new Editor(type, options, editStateKey),
     });
-    const search = spyOn(TextDocument.prototype, 'search');
+    const search = spyOn(CodeViewSearchScan.prototype, 'advance');
     const render = spyOn(viewer, 'render');
     try {
       const root = createRoot();
@@ -114,7 +115,7 @@ describe('CodeView search', () => {
       expect(getSearchState(viewer).matches).toEqual([]);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('No results');
+      ).toBe('0/0');
     } finally {
       search.mockRestore();
       render.mockRestore();
@@ -1482,7 +1483,7 @@ describe('CodeView search', () => {
       ]);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('1 of 3');
+      ).toBe('1/3');
     } finally {
       viewer.cleanUp();
       dom.cleanup();
@@ -1683,20 +1684,20 @@ describe('CodeView search', () => {
       expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('1 of 2');
+      ).toBe('1/2');
 
       const firstEnter = pressSearchEnter(root);
       expect(firstEnter.defaultPrevented).toBe(true);
       expect(getSearchState(viewer).current?.lineNumber).toBe(3);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('2 of 2');
+      ).toBe('2/2');
 
       pressSearchEnter(root);
       expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('1 of 2');
+      ).toBe('1/2');
 
       fillSearch(root, '');
       expect(getSearchState(viewer).matches).toEqual([]);

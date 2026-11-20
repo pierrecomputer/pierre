@@ -33,6 +33,14 @@ tasks:
       cache: false
       runInCI: 'always'
 
+  benchmark-code-view-search:
+    command: 'bun scripts/benchmarkCodeViewSearch.ts'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      runInCI: 'always'
+
   # Rendering pipeline timings in jsdom: first paint, scroll windows, hunk
   # expansion, annotation changes, editor edits and CodeView scrolling.
   benchmark-render:

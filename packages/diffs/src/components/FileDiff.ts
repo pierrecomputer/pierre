@@ -58,6 +58,7 @@ import {
   type DiffHunksRendererOptions,
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
+import type { LineExpansion } from '../rows/LineCuts';
 export type { FileDiffEditCompleteEvent } from '../editor/types';
 import type {
   AppliedThemeStyleCache,
@@ -121,8 +122,8 @@ import { finishEditSessionForDiff } from '../utils/editSessionHunks';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
-import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getLineIndexForDiff } from '../utils/getLineIndexForDiff';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
@@ -462,6 +463,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       'diff',
       pluckInteractionOptions(
         options,
+        this.expandLine,
         typeof options.hunkSeparators === 'function' ||
           (options.hunkSeparators ?? 'line-info') === 'line-info' ||
           options.hunkSeparators === 'line-info-basic'
@@ -532,81 +534,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     lineNumber: number,
     side: SelectionSide
   ): [number, number] | undefined {
-    if (fileDiff == null) {
-      return undefined;
-    }
-    const lastHunk = fileDiff.hunks.at(-1);
-    let targetUnifiedIndex: number | undefined;
-    let targetSplitIndex: number | undefined;
-    hunkIterator: for (const hunk of fileDiff.hunks) {
-      const hunkStart =
-        side === 'deletions' ? hunk.deletionStart : hunk.additionStart;
-      const hunkCount =
-        side === 'deletions' ? hunk.deletionCount : hunk.additionCount;
-      let currentLineNumber =
-        getHunkSideStartBoundary(hunkStart, hunkCount) + 1;
-      let splitIndex = hunk.splitLineStart;
-      let unifiedIndex = hunk.unifiedLineStart;
-
-      // If we've selected a line between or before a hunk,
-      // we should grab its index here
-      if (lineNumber < currentLineNumber) {
-        const difference = currentLineNumber - lineNumber;
-        targetUnifiedIndex = Math.max(unifiedIndex - difference, 0);
-        targetSplitIndex = Math.max(splitIndex - difference, 0);
-        break hunkIterator;
-      }
-
-      if (lineNumber >= currentLineNumber + hunkCount) {
-        if (hunk === lastHunk) {
-          const difference = lineNumber - (currentLineNumber + hunkCount);
-          targetUnifiedIndex =
-            unifiedIndex + hunk.unifiedLineCount + difference;
-          targetSplitIndex = splitIndex + hunk.splitLineCount + difference;
-          break hunkIterator;
-        }
-        continue;
-      }
-
-      for (const content of hunk.hunkContent) {
-        if (content.type === 'context') {
-          if (lineNumber < currentLineNumber + content.lines) {
-            const difference = lineNumber - currentLineNumber;
-            targetSplitIndex = splitIndex + difference;
-            targetUnifiedIndex = unifiedIndex + difference;
-            break hunkIterator;
-          } else {
-            currentLineNumber += content.lines;
-            splitIndex += content.lines;
-            unifiedIndex += content.lines;
-          }
-        } else {
-          const sideCount =
-            side === 'deletions' ? content.deletions : content.additions;
-          if (lineNumber < currentLineNumber + sideCount) {
-            const indexDifference = lineNumber - currentLineNumber;
-            targetUnifiedIndex =
-              unifiedIndex +
-              (side === 'additions' ? content.deletions : 0) +
-              indexDifference;
-            targetSplitIndex = splitIndex + indexDifference;
-
-            break hunkIterator;
-          } else {
-            currentLineNumber += sideCount;
-            splitIndex += Math.max(content.deletions, content.additions);
-            unifiedIndex += content.deletions + content.additions;
-          }
-        }
-      }
-
-      break hunkIterator;
-    }
-
-    if (targetUnifiedIndex == null || targetSplitIndex == null) {
-      return undefined;
-    }
-    return [targetUnifiedIndex, targetSplitIndex];
+    return getLineIndexForDiff(fileDiff, lineNumber, side);
   }
 
   // FIXME(amadeus): This is a bit of a looming issue that I'll need to resolve:
@@ -631,6 +559,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.interactionManager.setOptions(
       pluckInteractionOptions(
         this.options,
+        this.expandLine,
         typeof this.options.hunkSeparators === 'function' ||
           (this.options.hunkSeparators ?? 'line-info') === 'line-info' ||
           this.options.hunkSeparators === 'line-info-basic'
@@ -1153,6 +1082,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.flushManagers();
   }
 
+  public expandLine = (target: LineExpansion): void => {
+    this.hunksRenderer.expandLine(target);
+    this.rerender();
+  };
+
   public rerender(): void {
     if (
       !this.enabled ||
@@ -1431,6 +1365,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return false;
     }
     this.editor?.__assertOutsideChangeCallback('FileDiff.render');
+    this.hunksRenderer.lineCuts.clear();
     const previousAnnotations = this.getLatestAnnotations();
     this.fileDiff = incomingDiff;
     const { editSession } = this;
@@ -2201,6 +2136,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     if (installResult && acceptedDiff != null) {
+      this.hunksRenderer.lineCuts.clear();
       // Callers using the oldFile/newFile API get the stored pair
       // refreshed so their next render with the event's files does not
       // reparse over the accepted diff. Every editable pair has a new

@@ -144,6 +144,9 @@ you can then manually pass to all your File/FileDiff instances.
   diffs.
 </Notice>
 
+Lines longer than `tokenizeMaxLineLength` characters skip syntax highlighting
+and show only their start, with a button to show the rest.
+
 To change render options after `WorkerPoolManager` instantiates, call
 `setRenderOptions()`. Changing render options will force mounted components to
 re-render and clear the render cache.

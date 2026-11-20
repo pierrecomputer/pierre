@@ -28,6 +28,7 @@ import type {
   EditorColumns,
   FileEditCompleteEvent,
 } from '../editor/types';
+import { i18n } from '../i18n/I18n';
 import { isLineKey } from '../layout/RowSpec';
 import type { RowKey } from '../layout/RowSpec';
 import {
@@ -38,7 +39,12 @@ import {
   type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
+import {
+  dequeueRender,
+  queueRender,
+} from '../managers/UniversalRenderingManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
+import type { LineExpansion } from '../rows/LineCuts';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
   getHighlighterIfLoaded,
@@ -330,7 +336,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.resizeManager = new ResizeManager();
     this.interactionManager = new InteractionManager(
       'file',
-      pluckInteractionOptions(options)
+      pluckInteractionOptions(options, this.expandLine)
     );
   }
 
@@ -339,6 +345,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   // screen to update.
   private subscribeToChanges(): void {
     this.workerManager?.subscribeToThemeChanges(this);
+    i18n.subscribe(this);
   }
 
   public getAnnotationSlotName = (
@@ -352,6 +359,12 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   };
 
   private handleHighlightRender = (): void => {
+    this.rerender();
+  };
+
+  // Shows the full text of a long line that was cut off.
+  public expandLine = (target: LineExpansion): void => {
+    this.fileRenderer.expandLine(target);
     this.rerender();
   };
 
@@ -518,6 +531,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return false;
     }
     this.editor?.__assertOutsideChangeCallback('File.render');
+    // A new file starts with its long lines cut off again.
+    this.fileRenderer.lineCuts.clear();
     const previousAnnotations = this.getLatestAnnotations();
     this.file = incomingFile;
     const { editSession } = this;
@@ -586,6 +601,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.pendingData = { file, lineAnnotations: annotations.current };
   }
 
+  // Refreshes translated buttons when the host changes its messages.
+  public onMessagesChange(): void {
+    this.rerender();
+  }
+
   public onThemeChange(): void {
     this.fileRenderer.clearRenderCache();
     this.rerender();
@@ -603,7 +623,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   protected syncInteractionOptions(): void {
-    this.interactionManager.setOptions(pluckInteractionOptions(this.options));
+    this.interactionManager.setOptions(
+      pluckInteractionOptions(this.options, this.expandLine)
+    );
   }
 
   private mergeOptions(
@@ -898,6 +920,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
   public cleanUp(recycle = false): void {
     const editor = this.editor;
+    dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
     // Tear the editor down while the code scroller still exists. A recycle
     // keeps its document and undo history; a full teardown drops them as the
@@ -910,6 +933,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.interactionManager.cleanUp();
     this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
+    i18n.unsubscribe(this);
     this.renderRange = undefined;
 
     // Clean up the elements
@@ -1300,8 +1324,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         this.adoptRenderData(editSessionFile);
       }
       // Rows this instance wrote take the editor as they are. Hydrated markup
-      // is rendered once first, so its rows are written by key.
-      if (this.columnsWritten()) {
+      // is rendered once first, so its rows are written by key, and so are
+      // rows with a cut line, so the editor gets whole lines.
+      if (this.canAdoptEditorRows()) {
         this.syncRenderViewToEditor();
       } else {
         this.rerender();
@@ -1401,6 +1426,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       installResult && acceptedFile != null
         ? (sessionAnnotationsCurrent ?? inputAnnotations)
         : inputAnnotations;
+    if (installResult && acceptedFile != null) {
+      this.fileRenderer.lineCuts.clear();
+    }
     this.editSession = undefined;
     this.file = settledFile;
     this.pendingData = {
@@ -1410,13 +1438,23 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (areFileTargetsEqual(this.getRenderedFile(), settledFile)) {
       this.adoptRenderData(settledFile);
     }
-    if (installResult && this.fileContainer != null) {
-      this.rerender();
+    if (this.fileContainer != null) {
+      if (installResult) {
+        this.rerender();
+      } else {
+        queueRender(this.handleEditSessionRender);
+      }
     }
     if (failed) {
       throw failure;
     }
   }
+
+  // Queued render after a session ends with nothing to install. The rows on
+  // screen still show whole lines, and long ones are cut again.
+  private handleEditSessionRender = (): void => {
+    this.rerender();
+  };
 
   public render({
     file,
@@ -2007,11 +2045,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  // Whether the code element on screen was written by this instance, so its
-  // rows can be patched by key.
-  private columnsWritten(): boolean {
-    const { code } = this;
-    return code == null || this.columnReconcilers.has(code);
+  // Whether the editor can take the rows on screen as they are: this instance
+  // wrote them, so they can be patched by key, and none shows a cut line.
+  private canAdoptEditorRows(): boolean {
+    const { code, columnReconcilers, fileRenderer } = this;
+    return (
+      code == null ||
+      (columnReconcilers.has(code) && !fileRenderer.lineCuts.hasCutRows)
+    );
   }
 
   private createColumns(code: HTMLElement, rowCount: number): ColumnElements {
