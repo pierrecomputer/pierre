@@ -279,3 +279,15 @@ void test('element hooks do not see kept tags that start with their name', () =>
   );
   renderer.dispose();
 });
+
+void test('element hooks run on kept custom elements', () => {
+  const renderer = createHtmlRenderer({
+    allowedHtml: { 'x-widget': ['data-id'] },
+    components: { 'x-widget': (element) => `<b>${element}</b>` },
+  });
+  assert.equal(
+    renderer.render('<x-widget data-id="1">w</x-widget>', false).html,
+    '<p data-markdown="p"><b><x-widget data-id="1">w</x-widget></b></p>\n'
+  );
+  renderer.dispose();
+});
