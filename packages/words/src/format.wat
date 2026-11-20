@@ -61,11 +61,15 @@
   ;; https, ftp, mailto, tel, or xmpp, and it is not a network path. The URL
   ;; is percent-encoded, so it holds no space, control byte, or backslash.
   (func $urlAllowed (param $p i32) (param $e i32) (result i32)
+    (i32.or (i32.ne (i32.and (global.get $fmt) (i32.const $Fmt.rawUrls)) (i32.const 0))
+      (call $urlRules (local.get $p) (local.get $e))))
+
+  ;; $urlAllowed without the host's URL hook
+  (func $urlRules (param $p i32) (param $e i32) (result i32)
     (local $q i32)
     (local $c i32)
     (local $colon i32)
     (local $name i64)
-    (if (i32.and (global.get $fmt) (i32.const $Fmt.rawUrls)) (then (return (i32.const 1))))
     (if (i32.ge_u (i32.sub (local.get $e) (local.get $p)) (i32.const 2))
       (then
         (if (i32.eq (i32.load16_u (local.get $p)) (i32.const "//")) (then (return (i32.const 0))))))

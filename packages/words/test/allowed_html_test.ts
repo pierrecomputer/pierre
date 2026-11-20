@@ -216,3 +216,66 @@ void test('lists share memory with the id prefix of formatted output', () => {
   }
   renderer.dispose();
 });
+
+void test('formatted output checks kept URL attributes like Markdown URLs', () => {
+  const list = { a: ['href', 'title'], img: ['src'], form: ['action'] };
+  for (const urlTransform of [undefined, (url: string) => url]) {
+    const renderer = createHtmlRenderer({ allowedHtml: list, urlTransform });
+    const render = (url: string): string =>
+      renderer.render(
+        `<a href="${url}" title="t: x">a</a><img src="${url}"><form action="${url}"></form>`,
+        false
+      ).html;
+    for (const url of [
+      'https://x.y/a?b',
+      '/rel',
+      'mailto:a@b',
+      '&#x68;ttp://x',
+    ])
+      assert.doesNotMatch(render(url), /<a title|<img \/>|<form>/, url);
+    for (const url of [
+      'data:text/html,x',
+      ' DATA:x',
+      '//evil.com',
+      '/\\evil.com',
+      '/\t/evil.com',
+      'foo:bar',
+    ])
+      assert.equal(
+        render(url),
+        '<p data-markdown="p"><a title="t: x">a</a><img /><form></form></p>\n',
+        url
+      );
+    renderer.dispose();
+  }
+  // Plain output checks neither Markdown nor kept URLs beyond script schemes.
+  assert.equal(
+    html('<a href="data:x">a</a>', { allowedHtml: list }),
+    '<p><a href="data:x">a</a></p>\n'
+  );
+});
+
+void test('kept tags keep renderer attributes out and decode block text', () => {
+  assert.equal(
+    html('<a data-words-island="x" href="/">a</a>', {
+      allowedHtml: { a: ['data-words-island', 'href'] },
+    }),
+    '<p><a href="/">a</a></p>\n'
+  );
+  assert.equal(
+    html('<details>\n&copy; &lt;b&gt; &#0; &amp; "q"\n</details>'),
+    '<details>\n© &lt;b&gt; � &amp; &quot;q&quot;\n</details>\n'
+  );
+});
+
+void test('element hooks do not see kept tags that start with their name', () => {
+  const renderer = createHtmlRenderer({
+    allowedHtml: { 'a-card': [], a: ['href'] },
+    components: { a: (element) => `<b>${element}</b>` },
+  });
+  assert.equal(
+    renderer.render('<a-card>c</a-card> <a href="/r">r</a>', false).html,
+    '<p data-markdown="p"><a-card>c</a-card> <b><a href="/r">r</a></b></p>\n'
+  );
+  renderer.dispose();
+});

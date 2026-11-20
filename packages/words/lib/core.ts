@@ -61,12 +61,25 @@ const voidElements = new Set([
   'track',
   'wbr',
 ]);
+// Attributes whose values the HTML renderers check as URLs.
+const urlAttributes = new Set([
+  'action',
+  'background',
+  'cite',
+  'data',
+  'formaction',
+  'href',
+  'poster',
+  'src',
+  'xlink:href',
+]);
 const packedLists = new WeakMap<object, string>();
 
 /**
  * Pack `allowedHtml` for Wasm (see `$allowAt` in src/html.wat): per tag, the
  * name length, a void flag, the lowercase name, the attribute list length
- * (u16), then each attribute name after its length. Unsafe names are left out.
+ * (u16), then each attribute as its name length, a URL flag, and its name.
+ * Unsafe names are left out.
  */
 function packAllowedHtml(
   list: Readonly<Record<string, readonly string[]>>
@@ -84,8 +97,9 @@ function packAllowedHtml(
       const key = attribute.toLowerCase();
       if (!/^[a-z_:][a-z\d:._-]{0,254}$/.test(key))
         throw new TypeError(`allowedHtml: invalid attribute "${key}"`);
-      if (!/^(?:on|srcdoc$|data-markdown)/.test(key))
-        names += String.fromCharCode(key.length) + key;
+      if (!/^(?:on|srcdoc$|data-markdown|data-words)/.test(key))
+        names +=
+          String.fromCharCode(key.length, urlAttributes.has(key) ? 1 : 0) + key;
     }
     packed +=
       String.fromCharCode(name.length, voidElements.has(name) ? 1 : 0) +

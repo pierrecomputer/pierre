@@ -280,8 +280,10 @@ const allowedHtml = { details: ['open'], summary: [], ref: ['id'] };
 - Other tags, comments, and attributes are dropped. Text of an HTML block shows
   only inside a kept element, without the content of `script`, `style`, and the
   other raw text elements.
-- `on*`, `srcdoc`, and `data-markdown*` attributes, `javascript:` and
-  `vbscript:` values, and `script` tags never pass, even when listed.
+- `on*`, `srcdoc`, `data-markdown*`, and `data-words*` attributes, `javascript:`
+  and `vbscript:` values, and `script` tags never pass, even when listed.
+- The HTML and DOM renderers and React check URL attributes such as `href` and
+  `src` with the built-in URL check, and drop values that fail it.
 - `/>` closes any element, so `<x-widget />` is empty. Void elements such as
   `br` and `img` need no closing tag.
 - A paragraph, heading, or table cell closes the inline elements it opened. An
@@ -294,8 +296,8 @@ pending HTML closes the element until its closing tag arrives.
 
 Element filters and hooks apply to kept tags as to generated ones.
 
-**Warning:** Listed attributes keep their values, and `urlTransform` does not
-see them. List only tags and attributes you trust.
+**Warning:** Other listed attributes keep their values, and `urlTransform` does
+not see kept tags. List only tags and attributes you trust.
 
 ## Mermaid
 

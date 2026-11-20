@@ -165,7 +165,8 @@ function mapElements(
   tag: string,
   transform: (html: string) => string
 ): string {
-  const expression = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'g');
+  // Kept raw tags such as `<a-card>` may start with the name.
+  const expression = new RegExp(`<(/?)${tag}(?=[ />])[^>]*>`, 'g');
   const voidTag = voidTags.has(tag);
   const open: string[] = [];
   let result = '';

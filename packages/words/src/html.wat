@@ -248,7 +248,7 @@
   ;; The host's allowed HTML list (control bytes 44 to 47), or 0. Each entry
   ;; is the name length, flags (bit 0: void element), the lowercase name, the
   ;; byte length of its attribute list (u16), then each lowercase attribute
-  ;; name after its length.
+  ;; as its name length, flags (bit 0: URL attribute), and name.
   (global $allowAt (mut i32) (i32.const 0))
   (global $allowEnd (mut i32) (i32.const 0))
   ;; Open allowed elements at $mem.allowStack, four bytes each: the entry
@@ -260,7 +260,7 @@
   (global $allowSafe (mut i32) (i32.const 0))
 
   ;; Find the $n-byte name at $p in the list [$at, $end): tag entries when
-  ;; $tags is 1, attribute names when 0. Letters match in either case.
+  ;; $tags is 1, attributes when 0. Letters match in either case.
   ;; Returns the entry, or 0.
   (func $allowFind (param $at i32) (param $end i32) (param $p i32) (param $n i32) (param $tags i32)
     (result i32)
@@ -270,7 +270,7 @@
     (block $none
       (loop $entry
         (br_if $none (i32.ge_u (local.get $at) (local.get $end)))
-        (local.set $name (i32.add (i32.add (local.get $at) (i32.const 1)) (local.get $tags)))
+        (local.set $name (i32.add (local.get $at) (i32.const 2)))
         (block $next
           (br_if $next (i32.ne (i32.load8_u (local.get $at)) (local.get $n)))
           (local.set $i (i32.const 0))
@@ -319,61 +319,35 @@
           (i32.lt_u (local.get $entry) (i32.const 0x1000000))))
         (br $l))))
 
-  ;; Whether the attribute value written at [$p, $e) is a javascript: or
-  ;; vbscript: URL as a browser reads it: leading spaces and control bytes,
-  ;; tabs, and line breaks do not count.
-  (func $allowUnsafe (param $p i32) (param $e i32) (result i32)
+;; Whether the attribute value written at [$p, $e) may stay. Browsers skip
+  ;; spaces and control bytes in URLs and read `\` as `/`, so the checks read
+  ;; the first 16 other bytes, with `\` as `/`. A javascript: or vbscript: URL
+  ;; never stays, and with $url the value must pass $urlRules.
+  (func $allowValue (param $p i32) (param $e i32) (param $url i32) (result i32)
     (local $c i32)
     (local $n i32)
     (local $w i64)
-    (block $lead
-      (loop $l
-        (br_if $lead (i32.ge_u (local.get $p) (local.get $e)))
-        (br_if $lead (i32.gt_u (i32.load8_u (local.get $p)) (i32.const 32)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $l)))
-    (i64.store (i32.const $mem.numbuf) (i64.const 0))
-    (i64.store (i32.const $mem.numbuf+8) (i64.const 0))
+    (v128.store (i32.const $mem.numbuf) (v128.const i64x2 0 0))
     (block $done
       (loop $l
-        (br_if $done (i32.or (i32.ge_u (local.get $p) (local.get $e)) (i32.ge_u (local.get $n) (i32.const 11))))
+        (br_if $done (i32.or (i32.ge_u (local.get $p) (local.get $e)) (i32.ge_u (local.get $n) (i32.const 16))))
         (local.set $c (i32.load8_u (local.get $p)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br_if $l (i32.or (i32.eq (local.get $c) (i32.const 13))
-          (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 1))))
-        (i32.store8 offset=$mem.numbuf (local.get $n) (i32.or (local.get $c) (i32.const 32)))
+        (br_if $l (i32.le_u (local.get $c) (i32.const 32)))
+        (i32.store8 offset=$mem.numbuf (local.get $n)
+          (select (i32.const "/") (local.get $c) (i32.eq (local.get $c) (i32.const "\5c"))))
         (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (br $l)))
-    (local.set $w (i64.load (i32.const $mem.numbuf)))
-    (i32.or
-      (i32.and (i64.eq (local.get $w) (i64.const "javascri"))
-        (i32.eq (i32.load (i32.const $mem.numbuf+8)) (i32.const "pt:")))
-      (i32.and (i64.eq (local.get $w) (i64.const "vbscript"))
-        (i32.eq (i32.load8_u (i32.const $mem.numbuf+8)) (i32.const ":")))))
-
-  ;; Copy raw HTML text into reserved output at $dst: entities stay, `>` is
-  ;; escaped, and NUL is U+FFFD. The text holds no `<`. Returns the end.
-  (func $allowTextAt (param $p i32) (param $e i32) (param $dst i32) (result i32)
-    (local $c i32)
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
-        (local.set $c (i32.load8_u (local.get $p)))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (if (i32.eq (local.get $c) (i32.const ">"))
-          (then
-            (i32.store (local.get $dst) (i32.const "&gt;"))
-            (local.set $dst (i32.add (local.get $dst) (i32.const 4)))
-            (br $l)))
-        (if (i32.eqz (local.get $c))
-          (then
-            (i32.store (local.get $dst) (i32.const "\ef\bf\bd"))
-            (local.set $dst (i32.add (local.get $dst) (i32.const 3)))
-            (br $l)))
-        (i32.store8 (local.get $dst) (local.get $c))
-        (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
-        (br $l)))
-    (local.get $dst))
+    (local.set $w (i64.or (i64.load (i32.const $mem.numbuf)) (i64.const 0x2020202020202020)))
+    (if (i32.or
+          (i32.and (i64.eq (local.get $w) (i64.const "javascri"))
+            (i32.eq (i32.or (i32.and (i32.load (i32.const $mem.numbuf+8)) (i32.const 0xffffff))
+              (i32.const 0x2020)) (i32.const "pt:")))
+          (i32.and (i64.eq (local.get $w) (i64.const "vbscript"))
+            (i32.eq (i32.load8_u (i32.const $mem.numbuf+8)) (i32.const ":"))))
+      (then (return (i32.const 0))))
+    (i32.or (i32.eqz (local.get $url))
+      (call $urlRules (i32.const $mem.numbuf) (i32.add (i32.const $mem.numbuf) (local.get $n)))))
 
   ;; The `<` of the closing tag of raw text element $name ($n bytes) in
   ;; [$p, $end), or $end.
@@ -519,20 +493,22 @@
             (local.set $at (local.get $dst))
             (i32.store8 (local.get $dst) (i32.const " "))
             (local.set $dst (call $copyAt (i32.add (local.get $dst) (i32.const 1))
-              (i32.add (local.get $hit) (i32.const 1)) (i32.load8_u (local.get $hit))))
+              (i32.add (local.get $hit) (i32.const 2)) (i32.load8_u (local.get $hit))))
             (if (local.get $v)
               (then
                 (i32.store16 (local.get $dst) (i32.const "=\22"))
                 (global.set $out (i32.add (local.get $dst) (i32.const 2)))
                 (call $outCleanText (local.get $v) (local.get $ve) (i32.const 1))
                 (local.set $dst (global.get $out))
-                (if (call $allowUnsafe
+                ;; formatted output checks URLs as the host's defaultUrlTransform does
+                (if (call $allowValue
                       (i32.add (local.get $at) (i32.add (i32.load8_u (local.get $hit)) (i32.const 3)))
-                      (local.get $dst))
-                  (then (local.set $dst (local.get $at)))
-                  (else
+                      (local.get $dst)
+                      (i32.and (i32.ne (global.get $fmt) (i32.const 0)) (i32.load8_u offset=1 (local.get $hit))))
+                  (then
                     (i32.store8 (local.get $dst) (i32.const "\22"))
-                    (local.set $dst (i32.add (local.get $dst) (i32.const 1)))))))))
+                    (local.set $dst (i32.add (local.get $dst) (i32.const 1))))
+                  (else (local.set $dst (local.get $at))))))))
         (br $attr)))
     (if (i32.and (i32.load8_u offset=1 (local.get $entry)) (i32.const 1))
       (then
@@ -581,10 +557,9 @@
             (if (i32.gt_u (local.get $n) (i32.const 65536)) (then (local.set $n (i32.const 65536))))
             (if (global.get $allowTop)
               (then
-                (call $ensureOut (i32.shl (local.get $n) (i32.const 2)))
+                (call $ensureOut (i32.add (i32.mul (local.get $n) (i32.const 6)) (i32.const 16)))
                 (local.set $p (call $contentAt (local.get $b)))
-                (global.set $out (call $allowTextAt (local.get $p)
-                  (i32.add (local.get $p) (local.get $n)) (global.get $out)))))
+                (call $outCleanText (local.get $p) (i32.add (local.get $p) (local.get $n)) (i32.const 1))))
             (local.set $b (i32.add (local.get $b) (local.get $n)))
             (br $l)))
         (local.set $n (call $scanHtmlAny (local.get $p) (i32.add (local.get $base) (local.get $e))))

@@ -451,6 +451,24 @@ describe('HTML rendering and the React wrapper', () => {
     expect(container.querySelector('details')).toBe(first);
     expect(container.querySelector('details > p')?.textContent).toBe('Body');
   });
+  test('the DOM renderer patches kept void tags, svg-named tags, and entities', () => {
+    const allowedHtml = { wbr: [], br: [], 'svg-icon': ['name'], details: [] };
+    const source =
+      'a<wbr>b<br>c <svg-icon name=x></svg-icon> $x$\n\n<details>\n&copy; x\n</details>\n';
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, { allowedHtml, math: true });
+    for (let end = 1; end <= source.length; end++)
+      renderer.update(source.slice(0, end), true);
+    renderer.update(source, false);
+    const expected = document.createElement('div');
+    expected.innerHTML = createHtmlRenderer({ allowedHtml, math: true }).render(
+      source,
+      false
+    ).html;
+    expect(container.innerHTML).toBe(expected.innerHTML);
+    expect(container.querySelector('details')?.textContent).toBe('\n© x\n');
+    renderer.disconnect();
+  });
   test('hydration effects reuse the client formatting pass', async () => {
     let calls = 0;
     const components: Components = {
