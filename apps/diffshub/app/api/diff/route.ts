@@ -6,6 +6,7 @@ import {
   type GitHubRepo,
   parseGitHubDiffSource,
 } from '@/lib/githubDiffSource';
+import { DIFF_TITLE_HEADER } from '@/lib/readDiffTitleHeader';
 
 const CACHE_CONTROL = 'no-store';
 const GITHUB_API_ROOT = 'https://api.github.com';
@@ -17,6 +18,10 @@ const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
 const NON_DIFF_RESPONSE_MESSAGE = 'GitHub did not return a diff for this URL.';
 const RAW_GITHUB_DIFF_PATH_PATTERN =
   /^\/raw\/[^/]+\/[^/]+\/pull\/[^/]+\.(?:diff|patch)$/;
+const GITHUB_PULL_REF_PATH_PATTERN =
+  /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[/.]|$)/;
+// The title is a nicety for the browser tab, so never let it hold the diff back.
+const PULL_TITLE_TIMEOUT_MS = 1500;
 const GITHUB_PULL_TAB_PATH_PATTERN =
   /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:changes|files)$/;
 
@@ -104,7 +109,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return await createPatchStreamResponse(patchRequest, request.signal);
+    // Looked up alongside the diff fetch so it adds no latency in the common
+    // case; it resolves to undefined whenever the title is unavailable.
+    const pullTitle = fetchGitHubPullTitle(
+      resolveGitHubPullRef(path, domain, url),
+      token,
+      request.signal
+    );
+    return await createPatchStreamResponse(
+      patchRequest,
+      request.signal,
+      pullTitle
+    );
   } catch (error) {
     return createTextResponse(
       error instanceof Error ? error.message : 'Unknown error',
@@ -450,6 +466,96 @@ function getAuthorizationToken(
 interface TextResponseOptions {
   status?: number;
   sourceURL?: string;
+  /** Human title of the change (the PR title), sent as `X-Diffshub-Title`. */
+  title?: string;
+}
+
+interface GitHubPullRef {
+  owner: string;
+  repo: string;
+  number: string;
+}
+
+// Extracts the owner, repo and number when the request targets a GitHub pull
+// request, whether it arrived as a GitHub-relative path, a github.com URL, or
+// GitHub's raw PR diff host. Returns undefined for commits, compares, Tangled
+// and every other source, which have no PR title to show.
+function resolveGitHubPullRef(
+  path: string | null,
+  domain: string | null,
+  url: string | null
+): GitHubPullRef | undefined {
+  const input = url ?? path;
+  if (input == null || domain != null) {
+    return undefined;
+  }
+
+  let pathname = input;
+  if (!input.startsWith('/')) {
+    let parsedURL: URL;
+    try {
+      parsedURL = new URL(input);
+    } catch {
+      return undefined;
+    }
+    if (parsedURL.hostname === GITHUB_HOST) {
+      pathname = parsedURL.pathname;
+    } else if (
+      parsedURL.hostname === GITHUB_RAW_DIFF_HOST &&
+      parsedURL.pathname.startsWith('/raw/')
+    ) {
+      pathname = parsedURL.pathname.slice('/raw'.length);
+    } else {
+      return undefined;
+    }
+  }
+
+  const match = GITHUB_PULL_REF_PATH_PATTERN.exec(pathname);
+  return match == null
+    ? undefined
+    : { owner: match[1], repo: match[2], number: match[3] };
+}
+
+// Fetches the pull request title from the GitHub API so the browser tab can be
+// named after it. The token, when the caller supplied one, covers private repos
+// and raises the rate limit. Any failure (rate limit, 404, timeout, abort)
+// resolves to undefined: the tab then keeps its generic title.
+async function fetchGitHubPullTitle(
+  ref: GitHubPullRef | undefined,
+  token: string | undefined,
+  requestSignal: AbortSignal
+): Promise<string | undefined> {
+  if (ref == null) {
+    return undefined;
+  }
+
+  try {
+    const response = await fetch(
+      createGitHubAPIURL(
+        `/repos/${encodeURLSegment(ref.owner)}/${encodeURLSegment(ref.repo)}/pulls/${ref.number}`
+      ),
+      {
+        cache: 'no-store',
+        headers: {
+          Accept: GITHUB_JSON_MEDIA_TYPE,
+          'User-Agent': 'pierre-diffshub',
+          'X-GitHub-Api-Version': GITHUB_API_VERSION,
+          ...(token == null ? {} : createGitHubAuthHeaders(token)),
+        },
+        signal: AbortSignal.any([
+          requestSignal,
+          AbortSignal.timeout(PULL_TITLE_TIMEOUT_MS),
+        ]),
+      }
+    );
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      return undefined;
+    }
+    return readStringPath(await response.json(), ['title']);
+  } catch {
+    return undefined;
+  }
 }
 
 // Validates the upstream response before opening the client-facing stream so
@@ -457,7 +563,8 @@ interface TextResponseOptions {
 // error documents.
 async function createPatchStreamResponse(
   patchRequest: ResolvedPatchRequest,
-  requestSignal: AbortSignal
+  requestSignal: AbortSignal,
+  pullTitle: Promise<string | undefined>
 ): Promise<Response> {
   const upstreamController = new AbortController();
   const abortUpstream = () => upstreamController.abort();
@@ -512,6 +619,7 @@ async function createPatchStreamResponse(
 
   const options = {
     sourceURL: responseTarget.sourceURL ?? responseTarget.patchURL,
+    title: await pullTitle,
   } satisfies Omit<TextResponseOptions, 'status'>;
 
   const responseBody = response.body;
@@ -810,7 +918,7 @@ async function pumpPatchBody(
 // responses can replay poorly and delay the first useful diff bytes.
 function createTextResponse(
   body: string | ReadableStream<Uint8Array>,
-  { status = 200, sourceURL }: TextResponseOptions = {}
+  { status = 200, sourceURL, title }: TextResponseOptions = {}
 ): Response {
   const headers = new Headers({
     'Content-Type': 'text/plain; charset=utf-8',
@@ -819,6 +927,10 @@ function createTextResponse(
   });
   if (sourceURL != null) {
     headers.set('X-Patch-Source', sourceURL);
+  }
+  if (title != null && title.trim() !== '') {
+    // Header values must be ASCII, so the title travels percent-encoded.
+    headers.set(DIFF_TITLE_HEADER, encodeURIComponent(title.trim()));
   }
   return new Response(body, {
     status,

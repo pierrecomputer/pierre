@@ -97,4 +97,71 @@ describe('diff route', () => {
       expect(await response.text()).not.toContain('<html>');
     }
   );
+
+  describe('pull request title header', () => {
+    function createPullRequest(path: string): NextRequest {
+      return new NextRequest(
+        `https://diffshub.com/api/diff?${new URLSearchParams({ path })}`
+      );
+    }
+
+    // Answers the PR metadata call and the diff call separately, the way
+    // GitHub does, and records every URL that was requested.
+    function mockGitHub(pullResponse: Response): string[] {
+      const requested: string[] = [];
+      spyOn(globalThis, 'fetch').mockImplementation((async (
+        input: Parameters<typeof fetch>[0]
+      ) => {
+        const url = String(input);
+        requested.push(url);
+        return url.startsWith('https://api.github.com/repos/')
+          ? pullResponse
+          : new Response(patchText, {
+              headers: { 'Content-Type': 'text/plain' },
+            });
+      }) as typeof fetch);
+      return requested;
+    }
+
+    test('sends the encoded PR title for a public pull request', async () => {
+      const requested = mockGitHub(
+        Response.json({ title: 'Fix café rendering' })
+      );
+
+      const response = await GET(createPullRequest('/acme/widgets/pull/42'));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Diffshub-Title')).toBe(
+        encodeURIComponent('Fix café rendering')
+      );
+      expect(await response.text()).toBe(patchText);
+      expect(requested).toContain(
+        'https://api.github.com/repos/acme/widgets/pulls/42'
+      );
+    });
+
+    test('still serves the diff when the title lookup fails', async () => {
+      mockGitHub(new Response('rate limited', { status: 403 }));
+
+      const response = await GET(createPullRequest('/acme/widgets/pull/42'));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Diffshub-Title')).toBeNull();
+      expect(await response.text()).toBe(patchText);
+    });
+
+    test('skips the title lookup for non-pull diffs', async () => {
+      const requested = mockGitHub(Response.json({ title: 'unused' }));
+
+      const response = await GET(
+        createPullRequest('/acme/widgets/compare/main...dev')
+      );
+
+      expect(response.headers.get('X-Diffshub-Title')).toBeNull();
+      expect(
+        requested.some((url) => url.startsWith('https://api.github.com/'))
+      ).toBe(false);
+      await response.text();
+    });
+  });
 });
