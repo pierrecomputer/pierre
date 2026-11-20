@@ -902,7 +902,7 @@ export interface RenderedDiffASTCache {
 /**
  * A window of rendered content. Two unit interpretations exist:
  *
- * - Renderer consumers (`iterateOverDiff` window predicates, windowed AST
+ * - Renderer consumers (`DiffRowCursor` window predicates, windowed AST
  *   requests, buffers, sticky specs) read `startingLine`/`totalLines` as
  *   dense rendered-row indexes for the active diff style.
  * - The editor reads them as zero-based document-line indexes of the new

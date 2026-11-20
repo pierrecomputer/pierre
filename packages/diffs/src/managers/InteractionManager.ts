@@ -1,3 +1,4 @@
+import type { LineExpansion } from '../rows/LineCuts';
 import type {
   AnnotationSide,
   DiffLineEventBaseProps,
@@ -137,8 +138,8 @@ interface LineRenderColumn {
   renderSelectedLines: boolean;
 }
 
-interface ResolvedLineTarget<TMode extends InteractionManagerMode> {
-  kind: 'line';
+// What every target on a line knows about that line.
+interface ResolvedLineFields<TMode extends InteractionManagerMode> {
   lineType: LineTypes;
   lineElement: HTMLElement;
   lineNumber: number;
@@ -148,15 +149,16 @@ interface ResolvedLineTarget<TMode extends InteractionManagerMode> {
   splitLineIndex: number | undefined;
 }
 
-interface ResolvedTokenTarget<TMode extends InteractionManagerMode> {
+interface ResolvedLineTarget<
+  TMode extends InteractionManagerMode,
+> extends ResolvedLineFields<TMode> {
+  kind: 'line';
+}
+
+interface ResolvedTokenTarget<
+  TMode extends InteractionManagerMode,
+> extends ResolvedLineFields<TMode> {
   kind: 'token';
-  lineType: LineTypes;
-  lineElement: HTMLElement;
-  lineNumber: number;
-  numberColumn: boolean;
-  numberElement: HTMLElement;
-  side: TMode extends 'diff' ? AnnotationSide : undefined;
-  splitLineIndex: number | undefined;
   tokenElement: HTMLElement;
   tokenText: string;
   lineCharStart: number;
@@ -169,9 +171,19 @@ export interface MergeConflictActionTarget {
   conflictIndex: number;
 }
 
+// The button that shows a cut-off line whole. It counts as part of its line
+// for hovering.
+interface ResolvedLineExpandTarget<
+  TMode extends InteractionManagerMode,
+> extends ResolvedLineFields<TMode> {
+  kind: 'expand-line';
+  expansion: LineExpansion;
+}
+
 type ResolvedPointerTarget<TMode extends InteractionManagerMode> =
   | ResolvedLineTarget<TMode>
   | ResolvedTokenTarget<TMode>
+  | ResolvedLineExpandTarget<TMode>
   | ExpandoEventProps
   | MergeConflictActionTarget;
 
@@ -183,7 +195,8 @@ type TokenPointerTarget<TMode extends InteractionManagerMode> =
 
 type HoverableLinePointerTarget<TMode extends InteractionManagerMode> =
   | LinePointerTarget<TMode>
-  | TokenPointerTarget<TMode>;
+  | TokenPointerTarget<TMode>
+  | ResolvedLineExpandTarget<TMode>;
 
 interface SessionIdle {
   mode: 'idle';
@@ -242,6 +255,7 @@ export interface InteractionManagerOptions<
   TMode extends InteractionManagerMode,
 > extends InteractionManagerBaseOptions<TMode> {
   usesCustomGutterUtility?: boolean;
+  onLineExpand?(target: LineExpansion): void;
   onHunkExpand?(
     hunkIndex: number,
     direction: ExpansionDirections,
@@ -445,6 +459,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   handlePointerClick = (event: MouseEvent): void => {
     const {
+      onLineExpand,
       onHunkExpand,
       onLineClick,
       onLineNumberClick,
@@ -452,6 +467,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onMergeConflictActionClick,
     } = this.options;
     if (
+      onLineExpand == null &&
       onHunkExpand == null &&
       onLineClick == null &&
       onLineNumberClick == null &&
@@ -616,6 +632,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenClick,
       onTokenEnter,
       onTokenLeave,
+      onLineExpand,
       onHunkExpand,
       onMergeConflictActionClick,
     } = this.options;
@@ -677,6 +694,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           onMergeConflictActionClick(target);
           break;
         }
+        if (isLineExpandPointerTarget(target)) {
+          onLineExpand?.(target.expansion);
+          break;
+        }
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
           onHunkExpand(
             target.hunkIndex,
@@ -722,6 +743,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenClick,
       onTokenEnter,
       onTokenLeave,
+      onLineExpand,
       onHunkExpand,
       onMergeConflictActionClick,
       enableGutterUtility = false,
@@ -738,6 +760,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenClick != null ||
       onTokenEnter != null ||
       onTokenLeave != null ||
+      onLineExpand != null ||
       onHunkExpand != null ||
       onMergeConflictActionClick != null ||
       enableGutterUtility ||
@@ -2056,6 +2079,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     let tokenElement: HTMLElement | undefined;
     let tokenInfo: TokenCache | undefined;
     let expandInfo: ExpandCache | undefined;
+    let lineExpansion: LineExpansion | undefined;
     let lineNumber: number | undefined;
     let mergeConflictActionTarget: MergeConflictActionTarget | undefined;
 
@@ -2139,6 +2163,17 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         continue;
       }
 
+      if (element.hasAttribute('data-expand-line')) {
+        const { additionLineNumber, deletionLineNumber } = element.dataset;
+        lineExpansion = {
+          additionLineNumber:
+            additionLineNumber != null ? Number(additionLineNumber) : undefined,
+          deletionLineNumber:
+            deletionLineNumber != null ? Number(deletionLineNumber) : undefined,
+        };
+        continue;
+      }
+
       if (
         expandInfo == null &&
         (element.hasAttribute('data-expand-button') ||
@@ -2218,6 +2253,23 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     }
 
     const splitLineIndex = this.parseLineIndex(lineElement, this.isSplitDiff());
+
+    if (lineExpansion != null) {
+      return {
+        kind: 'expand-line',
+        lineType,
+        lineElement,
+        lineNumber,
+        numberColumn,
+        numberElement,
+        side:
+          this.mode === 'file'
+            ? undefined
+            : getAnnotationSide(lineType, codeElement),
+        splitLineIndex,
+        expansion: lineExpansion,
+      } as ResolvedPointerTarget<TMode>;
+    }
 
     if (tokenInfo != null) {
       if (this.mode === 'file') {
@@ -2325,6 +2377,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onLineSelectionChange,
     onLineSelectionEnd,
   }: InteractionPluckOptions<TMode>,
+  onLineExpand?: (target: LineExpansion) => void,
   onHunkExpand?: (
     hunkIndex: number,
     direction: ExpansionDirections,
@@ -2344,6 +2397,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     lineHoverHighlight,
 
     onGutterUtilityClick,
+    onLineExpand,
     onHunkExpand,
     onMergeConflictActionClick,
     onLineClick,
@@ -2399,7 +2453,17 @@ function isTokenPointerTarget<TMode extends InteractionManagerMode>(
 function isHoverableLinePointerTarget<TMode extends InteractionManagerMode>(
   target: ResolvedPointerTarget<TMode> | undefined
 ): target is HoverableLinePointerTarget<TMode> {
-  return isLinePointerTarget(target) || isTokenPointerTarget(target);
+  return (
+    isLinePointerTarget(target) ||
+    isTokenPointerTarget(target) ||
+    isLineExpandPointerTarget(target)
+  );
+}
+
+function isLineExpandPointerTarget<TMode extends InteractionManagerMode>(
+  target: ResolvedPointerTarget<TMode> | undefined
+): target is ResolvedLineExpandTarget<TMode> {
+  return target != null && 'kind' in target && target.kind === 'expand-line';
 }
 
 function isExpandoPointerTarget<TMode extends InteractionManagerMode>(

@@ -203,6 +203,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     this.interactionManager.setOptions(
       pluckInteractionOptions(
         this.options,
+        this.expandLine,
         typeof this.options.hunkSeparators === 'function' ||
           (this.options.hunkSeparators ?? 'line-info') === 'line-info' ||
           this.options.hunkSeparators === 'line-info-basic'

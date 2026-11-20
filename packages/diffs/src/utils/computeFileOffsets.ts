@@ -90,10 +90,11 @@ export function countLineBreaks(contents: string): number {
  */
 export function linesFromFileContents(contents: string): string[] {
   const offsets = computeLineOffsets(contents);
-  const lines = Array.from({ length: offsets.length }, (_, i) => {
-    const start = offsets[i];
-    const end = offsets[i + 1] ?? contents.length;
-    return contents.slice(start, end);
-  });
+  const lineCount = offsets.length;
+  const lines = new Array<string>(lineCount);
+  for (let i = 0; i < lineCount; i++) {
+    const end = i + 1 < lineCount ? offsets[i + 1] : contents.length;
+    lines[i] = contents.slice(offsets[i], end);
+  }
   return lines;
 }

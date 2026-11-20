@@ -308,6 +308,38 @@ describe('CodeView scroll anchoring', () => {
     }
   });
 
+  test('reset drops a scroll that is still running', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({});
+    const root = createRoot();
+    const items = Array.from({ length: 6 }, (_, index) =>
+      makeFileItem(`file:${index}`, 200)
+    );
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      viewer.scrollTo({
+        type: 'item',
+        id: 'file:4',
+        align: 'start',
+        behavior: 'smooth',
+      });
+      viewer.reset();
+
+      // The same items again: a scroll left over from before the reset would
+      // carry on to file:4.
+      await renderItems(viewer, items);
+      await wait(100);
+      viewer.render(true);
+      expect(viewer.getScrollTop()).toBe(0);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('keeps a rendered item anchored when reconcileItems removes earlier items', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();

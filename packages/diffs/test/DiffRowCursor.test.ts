@@ -2,18 +2,21 @@ import { describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
+import type { DiffLineMetadata } from '../src/layout/RowSpec';
 import type { ChangeContent, FileDiffMetadata, Hunk } from '../src/types';
-import {
-  type DiffLineCallbackProps,
-  type DiffLineMetadata,
-  iterateOverDiff,
-} from '../src/utils/iterateOverDiff';
+import { DiffRowCursor } from '../src/utils/DiffRowCursor';
 import { fileNew, fileOld } from './mocks';
-import { assertDefined, countDeclaredRows } from './testUtils';
+import {
+  assertDefined,
+  collectDiffRows,
+  type CollectedDiffRow,
+  countDeclaredRows,
+  createDiffFixtures,
+} from './testUtils';
 
 // NOTE(amadeus): These tests were written by an AI and they are probably
 // pretty sloppy, but keeping them for now until we can have better tests
-describe('iterateOverDiff', () => {
+describe('DiffRowCursor', () => {
   // Fixture geometry the big-fixture tests rely on: this diff parses to 14
   // hunks; hunk 0 has collapsedBefore 3, and three other hunks have
   // single-line collapsed gaps that fall at DEFAULT_COLLAPSED_CONTEXT_THRESHOLD
@@ -31,21 +34,20 @@ describe('iterateOverDiff', () => {
       collapsedBefore: number;
     }> = [];
 
-    iterateOverDiff({
+    for (const props of collectDiffRows({
       diff,
       diffStyle: 'unified',
-      callback: (props) => {
-        results.push({
-          type: props.type,
-          hunkIndex: props.hunkIndex,
-          unifiedLineIndex:
-            props.additionLine?.unifiedLineIndex ??
-            props.deletionLine?.unifiedLineIndex ??
-            0,
-          collapsedBefore: props.collapsedBefore,
-        });
-      },
-    });
+    })) {
+      results.push({
+        type: props.type,
+        hunkIndex: props.hunkIndex,
+        unifiedLineIndex:
+          props.additionLine?.unifiedLineIndex ??
+          props.deletionLine?.unifiedLineIndex ??
+          0,
+        collapsedBefore: props.collapsedBefore,
+      });
+    }
 
     // The iterator must emit exactly the rows the hunk metadata declares plus
     // every collapsed gap at or under DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
@@ -76,17 +78,16 @@ describe('iterateOverDiff', () => {
       additionSplitLineIndex: number | undefined;
     }> = [];
 
-    iterateOverDiff({
+    for (const props of collectDiffRows({
       diff,
       diffStyle: 'split',
-      callback: (props) => {
-        results.push({
-          type: props.type,
-          deletionSplitLineIndex: props.deletionLine?.splitLineIndex,
-          additionSplitLineIndex: props.additionLine?.splitLineIndex,
-        });
-      },
-    });
+    })) {
+      results.push({
+        type: props.type,
+        deletionSplitLineIndex: props.deletionLine?.splitLineIndex,
+        additionSplitLineIndex: props.additionLine?.splitLineIndex,
+      });
+    }
 
     // Same row contract as unified mode, in split coordinates: 487 declared
     // split rows across the 14 hunks + 3 auto-expanded single-line gaps = 490.
@@ -147,23 +148,22 @@ describe('iterateOverDiff', () => {
   test('windowing skips lines correctly', () => {
     const results: number[] = [];
 
-    iterateOverDiff({
+    for (const props of collectDiffRows({
       diff,
       diffStyle: 'unified',
       startingLine: 10,
       totalLines: 5,
-      callback: (props) => {
-        results.push(
-          (() => {
-            return (
-              props.additionLine?.unifiedLineIndex ??
-              props.deletionLine?.unifiedLineIndex ??
-              0
-            );
-          })()
-        );
-      },
-    });
+    })) {
+      results.push(
+        (() => {
+          return (
+            props.additionLine?.unifiedLineIndex ??
+            props.deletionLine?.unifiedLineIndex ??
+            0
+          );
+        })()
+      );
+    }
 
     // Should get exactly 5 consecutive lines
     expect(results.length).toBe(5);
@@ -570,17 +570,37 @@ describe('iterateOverDiff', () => {
     ]);
   });
 
-  test('callback can stop iteration early', () => {
+  test('a walk can stop early', () => {
     const rows: RowSnapshot[] = [];
 
-    iterateOverDiff({
-      diff,
-      diffStyle: 'unified',
-      callback: (props) => {
-        rows.push(serializeRow(props));
-        return rows.length === 3;
-      },
-    });
+    const cursor = new DiffRowCursor({ diff, diffStyle: 'unified' });
+    while (cursor.next()) {
+      rows.push({
+        type: cursor.type,
+        hunkIndex: cursor.hunkIndex,
+        collapsedBefore: cursor.collapsedBefore,
+        collapsedAfter: cursor.collapsedAfter,
+        deletionLine: cursor.hasDeletion
+          ? {
+              lineIndex: cursor.deletionLineIndex,
+              lineNumber: cursor.deletionLineNumber,
+              unifiedLineIndex: cursor.deletionUnifiedLineIndex,
+              splitLineIndex: cursor.splitLineIndex,
+              noEOFCR: cursor.deletionNoEOFCR,
+            }
+          : undefined,
+        additionLine: cursor.hasAddition
+          ? {
+              lineIndex: cursor.additionLineIndex,
+              lineNumber: cursor.additionLineNumber,
+              unifiedLineIndex: cursor.additionUnifiedLineIndex,
+              splitLineIndex: cursor.splitLineIndex,
+              noEOFCR: cursor.additionNoEOFCR,
+            }
+          : undefined,
+      });
+      if (rows.length === 3) break;
+    }
 
     expect(rows).toEqual(
       collectRows({ diff, diffStyle: 'unified' }).slice(0, rows.length)
@@ -659,19 +679,18 @@ describe('iterateOverDiff', () => {
       for (const diffStyle of ['unified', 'split'] as const) {
         const rows: Array<{ type: string; collapsedBefore: number }> = [];
 
-        iterateOverDiff({
+        for (const props of collectDiffRows({
           diff: testCase.diff,
           diffStyle,
           expandedHunks: testCase.expandedHunks,
           startingLine: testCase.startingLine,
           totalLines: 1,
-          callback: (props) => {
-            rows.push({
-              type: props.type,
-              collapsedBefore: props.collapsedBefore,
-            });
-          },
-        });
+        })) {
+          rows.push({
+            type: props.type,
+            collapsedBefore: props.collapsedBefore,
+          });
+        }
 
         expect({ name: testCase.name, diffStyle, rows }).toEqual({
           name: testCase.name,
@@ -685,7 +704,7 @@ describe('iterateOverDiff', () => {
 
 const COLLAPSED_BEFORE = 10;
 
-type IterateOptions = Omit<Parameters<typeof iterateOverDiff>[0], 'callback'>;
+type IterateOptions = Parameters<typeof collectDiffRows>[0];
 
 interface LineSnapshot {
   unifiedLineIndex: number;
@@ -696,7 +715,7 @@ interface LineSnapshot {
 }
 
 interface RowSnapshot {
-  type: DiffLineCallbackProps['type'];
+  type: CollectedDiffRow['type'];
   hunkIndex: number;
   collapsedBefore: number;
   collapsedAfter: number;
@@ -704,20 +723,12 @@ interface RowSnapshot {
   additionLine: LineSnapshot | undefined;
 }
 
+// Collects the row fields these window assertions compare.
 function collectRows(options: IterateOptions): RowSnapshot[] {
-  const rows: RowSnapshot[] = [];
-
-  iterateOverDiff({
-    ...options,
-    callback: (props) => {
-      rows.push(serializeRow(props));
-    },
-  });
-
-  return rows;
+  return collectDiffRows(options).map(serializeRow);
 }
 
-function serializeRow(props: DiffLineCallbackProps): RowSnapshot {
+function serializeRow(props: CollectedDiffRow): RowSnapshot {
   return {
     type: props.type,
     hunkIndex: props.hunkIndex,
@@ -744,7 +755,7 @@ function serializeLine(
 }
 
 function getRowIdentities(rows: RowSnapshot[]): Array<{
-  type: DiffLineCallbackProps['type'];
+  type: CollectedDiffRow['type'];
   hunkIndex: number;
   deletionLine: LineSnapshot | undefined;
   additionLine: LineSnapshot | undefined;
@@ -904,3 +915,299 @@ function getHunkContentCounts(hunkContent: Hunk['hunkContent']): {
 function createLines(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `line ${index}\n`);
 }
+
+describe('DiffRowCursor row windows', () => {
+  const before = Array.from({ length: 3000 }, (_, index) => `line ${index}\n`);
+  const after = before.map((line, index) =>
+    index % 10 === 5 ? `changed ${index}\n` : line
+  );
+  const manyHunks = parseDiffFromFile(
+    { name: 'many-hunks.txt', contents: before.join('') },
+    { name: 'many-hunks.txt', contents: after.join('') },
+    { context: 1, disableLineMatching: true }
+  );
+  const manyBlocks = parseDiffFromFile(
+    { name: 'many-blocks.txt', contents: before.join('') },
+    {
+      name: 'many-blocks.txt',
+      contents: before
+        .map((line, index) =>
+          index >= 20 && index < 2980 && index % 4 === 0
+            ? `changed ${index}\n`
+            : line
+        )
+        .join(''),
+    },
+    { context: 3, disableLineMatching: true }
+  );
+  const fixtures = [
+    ...createDiffFixtures().map((diff) => ({ diff, exhaustive: true })),
+    {
+      diff: parseDiffFromFile(
+        { name: 'test.txt', contents: fileOld },
+        { name: 'test.txt', contents: fileNew }
+      ),
+      exhaustive: false,
+    },
+    { diff: manyHunks, exhaustive: false },
+    { diff: manyBlocks, exhaustive: false },
+  ];
+
+  test('many-block fixture has one hunk with hidden lines above it', () => {
+    expect(manyBlocks.hunks).toHaveLength(1);
+    expect(manyBlocks.hunks[0].hunkContent.length).toBeGreaterThan(1000);
+    expect(manyBlocks.hunks[0].collapsedBefore).toBeGreaterThan(4);
+  });
+
+  for (const { diff, exhaustive } of fixtures) {
+    const name = `${diff.name} (${diff.isPartial ? 'partial' : 'full'})`;
+
+    test(`${name}: split and unified windows equal unwindowed slices`, () => {
+      for (const options of createWindowOptions(diff)) {
+        for (const diffStyle of ['split', 'unified'] satisfies (
+          | 'split'
+          | 'unified'
+        )[]) {
+          const full = collectDiffRows({ ...options, diffStyle });
+          for (const window of createRowWindows([full], exhaustive)) {
+            const { startingLine, totalLines } = window;
+            expect(
+              collectDiffRows({ ...options, diffStyle, ...window })
+            ).toEqual(full.slice(startingLine, startingLine + totalLines));
+          }
+        }
+      }
+    });
+
+    test(`${name}: both windows equal the union of the two views`, () => {
+      for (const options of createWindowOptions(diff)) {
+        const split = collectDiffRows({ ...options, diffStyle: 'split' });
+        const unified = collectDiffRows({ ...options, diffStyle: 'unified' });
+        const both = collectDiffRows({ ...options, diffStyle: 'both' });
+        const splitPositions = indexRowSides(split);
+        const unifiedPositions = indexRowSides(unified);
+        const positions = both.map(({ deletionLine, additionLine }) => {
+          const splitPosition =
+            deletionLine != null
+              ? splitPositions.deletions.get(deletionLine.lineIndex)
+              : additionLine != null
+                ? splitPositions.additions.get(additionLine.lineIndex)
+                : undefined;
+          assertDefined(splitPosition, 'every both row has a split position');
+          return {
+            split: splitPosition,
+            deletion:
+              deletionLine != null
+                ? unifiedPositions.deletions.get(deletionLine.lineIndex)
+                : undefined,
+            addition:
+              additionLine != null
+                ? unifiedPositions.additions.get(additionLine.lineIndex)
+                : undefined,
+          };
+        });
+        for (const window of createRowWindows([split, unified], exhaustive)) {
+          const { startingLine, totalLines } = window;
+          const windowEnd = startingLine + totalLines;
+          const expected = both.filter((_, index) => {
+            const { split, deletion, addition } = positions[index];
+            return (
+              (split >= startingLine && split < windowEnd) ||
+              (deletion != null &&
+                deletion >= startingLine &&
+                deletion < windowEnd) ||
+              (addition != null &&
+                addition >= startingLine &&
+                addition < windowEnd)
+            );
+          });
+          expect(
+            collectDiffRows({ ...options, diffStyle: 'both', ...window })
+          ).toEqual(expected);
+        }
+      }
+    });
+  }
+
+  test('every starting row reproduces the entire remaining row metadata', () => {
+    for (const diff of createDiffFixtures()) {
+      for (const diffStyle of ['split', 'unified'] satisfies (
+        | 'split'
+        | 'unified'
+      )[]) {
+        const full = collectDiffRows({ diff, diffStyle, expandedHunks: true });
+        expect(full.length).toBeGreaterThan(0);
+        for (
+          let startingLine = 0;
+          startingLine <= full.length;
+          startingLine++
+        ) {
+          const resumed = collectDiffRows({
+            diff,
+            diffStyle,
+            expandedHunks: true,
+            startingLine,
+          });
+          expect(resumed).toEqual(full.slice(startingLine));
+        }
+      }
+    }
+  });
+});
+
+// Covers hidden, fully expanded, and partly expanded gaps in each window test.
+function createWindowOptions(diff: FileDiffMetadata) {
+  const options: Omit<IterateOptions, 'diffStyle'>[] = [];
+  const partialExpansion = new Map(
+    Array.from(
+      { length: diff.hunks.length + 1 },
+      (_, index) =>
+        [index, { fromStart: 1, fromEnd: 1 }] satisfies [
+          number,
+          { fromStart: number; fromEnd: number },
+        ]
+    )
+  );
+  for (const expandedHunks of [
+    undefined,
+    true,
+    partialExpansion,
+  ] satisfies IterateOptions['expandedHunks'][]) {
+    for (const collapsedContextThreshold of [0, 1, 4]) {
+      for (const includeTrailingNewline of [false, true]) {
+        options.push({
+          diff,
+          expandedHunks,
+          collapsedContextThreshold,
+          includeTrailingNewline,
+        });
+      }
+    }
+  }
+  return options;
+}
+
+// Locates each side's lines by their position in an unwindowed walk.
+function indexRowSides(rows: CollectedDiffRow[]) {
+  const deletions = new Map<number, number>();
+  const additions = new Map<number, number>();
+  for (const [position, { deletionLine, additionLine }] of rows.entries()) {
+    if (deletionLine != null) deletions.set(deletionLine.lineIndex, position);
+    if (additionLine != null) additions.set(additionLine.lineIndex, position);
+  }
+  return { deletions, additions };
+}
+
+// Uses every pair of boundaries for small walks, and samples run boundaries
+// and the middle and end of larger walks.
+function createRowWindows(walks: CollectedDiffRow[][], exhaustive: boolean) {
+  const windows: { startingLine: number; totalLines: number }[] = [];
+  const length = Math.max(...walks.map((rows) => rows.length));
+  if (exhaustive) {
+    for (let startingLine = 0; startingLine <= length + 1; startingLine++) {
+      for (let end = startingLine; end <= length + 1; end++) {
+        windows.push({ startingLine, totalLines: end - startingLine });
+      }
+      windows.push({ startingLine, totalLines: Infinity });
+    }
+    return windows;
+  }
+
+  const starts = new Set([0, 1, length - 1, length, length + 1]);
+  for (const fraction of [0.1, 0.25, 0.5, 0.75, 0.9]) {
+    starts.add(Math.floor(length * fraction));
+  }
+  for (const rows of walks) {
+    const seen = new Set<string>();
+    const blocks: { start: number; end: number }[] = [];
+    let start = 0;
+    for (let end = 1; end <= rows.length; end++) {
+      const first = rows[start];
+      const row = rows[end];
+      if (
+        row != null &&
+        row.type === first.type &&
+        row.hunkIndex === first.hunkIndex &&
+        row.deletionLine?.lineIndex ===
+          (first.deletionLine != null
+            ? first.deletionLine.lineIndex + end - start
+            : undefined) &&
+        row.additionLine?.lineIndex ===
+          (first.additionLine != null
+            ? first.additionLine.lineIndex + end - start
+            : undefined)
+      ) {
+        continue;
+      }
+      const kind = `${first.type},${first.deletionLine != null},${first.additionLine != null},${first.collapsedBefore > 0},${first.hunk == null}`;
+      if (first.hunk != null && first.type !== 'context-expanded') {
+        blocks.push({ start, end });
+      }
+      if (!seen.has(kind)) {
+        seen.add(kind);
+        starts.add(start);
+        starts.add(Math.floor((start + end) / 2));
+        starts.add(end - 1);
+        starts.add(end);
+      }
+      start = end;
+    }
+    for (const index of [0, Math.floor(blocks.length / 2), blocks.length - 1]) {
+      const block = blocks[index];
+      if (block == null) continue;
+      starts.add(Math.max(0, block.start - 1));
+      starts.add(block.start);
+      starts.add(block.end - 1);
+      starts.add(block.end);
+    }
+  }
+  for (const startingLine of starts) {
+    for (const totalLines of [0, 1, 2, 7, 300, Infinity]) {
+      windows.push({ startingLine, totalLines });
+    }
+  }
+  return windows;
+}
+
+describe('DiffRowCursor side reads', () => {
+  test('reading a side the row does not have throws', () => {
+    const diff = parseDiffFromFile(
+      { name: 'side.txt', contents: 'old line\n' },
+      { name: 'side.txt', contents: 'new line\n' },
+      { disableLineMatching: true }
+    );
+    const rows = new DiffRowCursor({ diff, diffStyle: 'unified' });
+    let missingAdditions = 0;
+    let missingDeletions = 0;
+    while (rows.next()) {
+      if (!rows.hasAddition) {
+        missingAdditions++;
+        expect(() => rows.additionLineIndex).toThrow(
+          'row has no addition line'
+        );
+        expect(() => rows.additionLineNumber).toThrow(
+          'row has no addition line'
+        );
+        expect(() => rows.additionUnifiedLineIndex).toThrow(
+          'row has no addition line'
+        );
+        expect(() => rows.additionNoEOFCR).toThrow('row has no addition line');
+      }
+      if (!rows.hasDeletion) {
+        missingDeletions++;
+        expect(() => rows.deletionLineIndex).toThrow(
+          'row has no deletion line'
+        );
+        expect(() => rows.deletionLineNumber).toThrow(
+          'row has no deletion line'
+        );
+        expect(() => rows.deletionUnifiedLineIndex).toThrow(
+          'row has no deletion line'
+        );
+        expect(() => rows.deletionNoEOFCR).toThrow('row has no deletion line');
+      }
+    }
+    expect(missingAdditions).toBe(1);
+    expect(missingDeletions).toBe(1);
+  });
+});

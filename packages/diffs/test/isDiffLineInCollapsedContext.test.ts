@@ -5,12 +5,12 @@ import type {
   HunkExpansionRegion,
   SelectionSide,
 } from '../src/types';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   getNearestRenderableAdditionLine,
   isDiffLineInCollapsedContext,
 } from '../src/utils/virtualDiffLayout';
+import { collectDiffRows } from './testUtils';
 
 const COLLAPSED_CONTEXT_THRESHOLD = 1;
 
@@ -40,7 +40,7 @@ function makeShiftedDiff(): FileDiffMetadata {
   );
 }
 
-// Collects the one-based line numbers of one side that iterateOverDiff emits
+// Collects the one-based line numbers of one side that DiffRowCursor emits
 // rows for under the given expansion state — the ground truth the oracle must
 // match.
 function collectRenderedLines(
@@ -49,18 +49,17 @@ function collectRenderedLines(
   expandedHunks: Map<number, HunkExpansionRegion> | true | undefined
 ): Set<number> {
   const rendered = new Set<number>();
-  iterateOverDiff({
+  for (const { additionLine, deletionLine } of collectDiffRows({
     diff,
     diffStyle: 'split',
     expandedHunks,
     collapsedContextThreshold: COLLAPSED_CONTEXT_THRESHOLD,
-    callback: ({ additionLine, deletionLine }) => {
-      const line = side === 'additions' ? additionLine : deletionLine;
-      if (line != null) {
-        rendered.add(line.lineNumber);
-      }
-    },
-  });
+  })) {
+    const line = side === 'additions' ? additionLine : deletionLine;
+    if (line != null) {
+      rendered.add(line.lineNumber);
+    }
+  }
   return rendered;
 }
 
@@ -90,7 +89,7 @@ function assertOracleMatches(
 
 describe('isDiffLineInCollapsedContext', () => {
   test.each(['additions', 'deletions'] as const)(
-    'matches iterateOverDiff on the %s side when the sides number rows differently',
+    'matches DiffRowCursor on the %s side when the sides number rows differently',
     (side) => {
       const diff = makeShiftedDiff();
       assertOracleMatches(diff, new Map(), side);
@@ -107,11 +106,11 @@ describe('isDiffLineInCollapsedContext', () => {
     }
   );
 
-  test('matches iterateOverDiff with everything collapsed', () => {
+  test('matches DiffRowCursor with everything collapsed', () => {
     assertOracleMatches(makeDiff(), new Map());
   });
 
-  test('matches iterateOverDiff with partially expanded regions', () => {
+  test('matches DiffRowCursor with partially expanded regions', () => {
     assertOracleMatches(
       makeDiff(),
       new Map<number, HunkExpansionRegion>([
@@ -125,7 +124,7 @@ describe('isDiffLineInCollapsedContext', () => {
     );
   });
 
-  test('matches iterateOverDiff with a fully expanded gap', () => {
+  test('matches DiffRowCursor with a fully expanded gap', () => {
     assertOracleMatches(
       makeDiff(),
       new Map<number, HunkExpansionRegion>([[1, { fromStart: 99, fromEnd: 0 }]])

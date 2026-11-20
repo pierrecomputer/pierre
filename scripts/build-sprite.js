@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, readdir, stat, writeFile } from 'fs/promises';
-import { basename, dirname, extname, join } from 'path';
+import { dirname, extname, join } from 'path';
 import { optimize } from 'svgo';
 import { fileURLToPath } from 'url';
 
@@ -110,9 +110,19 @@ async function buildSprite() {
   const missingFiles = [];
 
   for (const iconName of spriteConfig.icons) {
-    const fileName = `${iconName}.svg`;
-    if (allSvgFiles.includes(fileName)) {
-      foundFiles.push(fileName);
+    const configuredFile = spriteConfig.source.files?.[iconName];
+    const fileName = configuredFile ?? `${iconName}.svg`;
+    const filePath =
+      configuredFile == null
+        ? join(sourceDir, fileName)
+        : join(dirname(sourceDir), configuredFile);
+    if (configuredFile != null || allSvgFiles.includes(fileName)) {
+      try {
+        await stat(filePath);
+        foundFiles.push({ fileName, filePath, iconName });
+      } catch {
+        missingFiles.push(iconName);
+      }
     } else {
       missingFiles.push(iconName);
     }
@@ -132,8 +142,8 @@ async function buildSprite() {
     `${colors.blue}➜ Processing ${colors.bright}${foundFiles.length}${colors.reset}${colors.blue} of ${colors.bright}${spriteConfig.icons.length}${colors.reset}${colors.blue} requested SVG files:${colors.reset}`
   );
 
-  foundFiles.forEach((file) =>
-    console.log(`${colors.dim}  ✔ ${file}${colors.reset}`)
+  foundFiles.forEach(({ fileName }) =>
+    console.log(`${colors.dim}  ✔ ${fileName}${colors.reset}`)
   );
 
   if (missingFiles.length > 0) {
@@ -145,10 +155,7 @@ async function buildSprite() {
   const symbols = [];
   const errors = [];
 
-  for (const file of foundFiles) {
-    const filePath = join(sourceDir, file);
-    const iconName = basename(file, spriteConfig.source.extension);
-
+  for (const { fileName, filePath, iconName } of foundFiles) {
     try {
       const { viewBox, content } = await processSvg(filePath);
 
@@ -158,7 +165,7 @@ async function buildSprite() {
         content,
       });
     } catch (error) {
-      errors.push({ file, error: error.message });
+      errors.push({ file: fileName, error: error.message });
     }
   }
 

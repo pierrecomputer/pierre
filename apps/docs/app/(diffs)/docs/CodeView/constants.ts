@@ -203,7 +203,8 @@ export function SearchableCodeView({
   items: CodeViewItem<undefined>[];
 }) {
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
-  // Reported when the panel opens and after every change; undefined on close.
+  // Reported on open and each change; counts are final when searching is false.
+  // Undefined on close.
   const [search, setSearch] = useState<SearchPanelState>();
 
   // Open find from anywhere on the page, not only while the viewer has focus.
@@ -232,7 +233,7 @@ export function SearchableCodeView({
 
   return (
     <>
-      <p>{search == null ? '' : \`\${search.matchCount} matches for \${search.text}\`}</p>
+      <p>{search == null ? '' : \`\${search.matchCount} matches for \${search.text}\${search.searching ? ' (searching)' : ''}\`}</p>
       <button
         onClick={() =>
           // Search one editable item with a preset query.
@@ -280,10 +281,11 @@ const viewer = new CodeView({
     // Matching options a fresh panel opens with.
     defaults: { caseSensitive: true },
   },
-  // Reported when the panel opens and after every change; undefined on close.
+  // Reported on open and each change; counts are final when searching is
+  // false. Undefined on close.
   onSearchStateChange(state: SearchPanelState | undefined) {
     badge.textContent =
-      state == null ? '' : \`\${state.matchCount} matches for \${state.text}\`;
+      state == null ? '' : \`\${state.matchCount} matches for \${state.text}\${state.searching ? ' (searching)' : ''}\`;
   },
 });
 viewer.setup(document.querySelector<HTMLElement>('#code-view')!);
