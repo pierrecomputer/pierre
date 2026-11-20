@@ -77,7 +77,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
   #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
-  #themeStyle?: HTMLStyleElement;
+  #themeStyle: HTMLStyleElement;
   #initializeMatches: () => void;
   #mount?: () => void;
   #closed = false;
@@ -582,10 +582,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       shadowRoot.appendChild(spriteElement);
     }
     h('style', { textContent: searchPanelCSS }, shadowRoot);
-    if (themeCSS != null) {
-      this.#themeStyle = h('style', { textContent: themeCSS }, shadowRoot);
-      this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
-    }
+    this.#themeStyle = h('style', { textContent: themeCSS ?? '' }, shadowRoot);
+    this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
     if (unsafeCSS != null) {
       h(
         'style',
@@ -642,25 +640,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   }
 
   setThemeCSS(themeCSS: string | undefined): void {
-    if (themeCSS == null) {
-      this.#themeStyle?.remove();
-      this.#themeStyle = undefined;
-      return;
-    }
-    if (this.#themeStyle == null) {
-      const shadowRoot = this.#host.shadowRoot;
-      if (shadowRoot == null) {
-        return;
-      }
-      this.#themeStyle = h('style', { textContent: themeCSS });
-      this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
-      const unsafeStyle = shadowRoot.querySelector(
-        `style[${UNSAFE_CSS_ATTRIBUTE}]`
-      );
-      shadowRoot.insertBefore(this.#themeStyle, unsafeStyle);
-    } else {
-      this.#themeStyle.textContent = themeCSS;
-    }
+    this.#themeStyle.textContent = themeCSS ?? '';
   }
 
   hasQuery(): boolean {
