@@ -14,15 +14,7 @@ import type {
   RenderOptions,
 } from './types';
 
-export type {
-  AnsiOptions,
-  Frontmatter,
-  HtmlSessionOptions,
-  HtmlUpdate,
-  RenderOptions,
-} from './types';
-
-type Input = string | Uint8Array | ArrayBuffer;
+export type Input = string | Uint8Array | ArrayBuffer;
 type Options = AnsiOptions &
   RenderOptions & { boundary?: boolean; format?: HtmlFormat };
 
@@ -92,7 +84,7 @@ function fenceMayClose(
   }
 }
 
-class Renderer {
+export class Renderer {
   memory: WebAssembly.Memory;
   wasmRender: () => void;
   buffer!: Uint8Array<ArrayBuffer>;
@@ -252,52 +244,55 @@ class Renderer {
   }
 }
 
-let shared: Renderer;
+/**
+ * The renderer of one entry. Each entry (`@pierre/words`, `/no-math`, ...)
+ * owns one, so entries loaded together keep their own Wasm build.
+ */
+export type State = { renderer: Renderer };
 
 const tooLarge = () =>
   new RangeError(`input exceeds ${maxInput} bytes of UTF-8`);
 
-export function init(wasmModule: WebAssembly.Module): Renderer {
-  return (shared = new Renderer(wasmModule));
-}
+export type RenderToHtml = {
+  (input: Input): Uint8Array;
+  <T = Frontmatter>(
+    input: Input,
+    options: RenderOptions & { frontmatter: true }
+  ): [T | null, Uint8Array];
+  (input: Input, options?: RenderOptions & { frontmatter?: false }): Uint8Array;
+  <T = Frontmatter>(
+    input: Input,
+    options: RenderOptions
+  ): Uint8Array | [T | null, Uint8Array];
+};
 
-export function renderToHtml(input: Input): Uint8Array;
-export function renderToHtml<T = Frontmatter>(
-  input: Input,
-  options: RenderOptions & { frontmatter: true }
-): [T | null, Uint8Array];
 export function renderToHtml(
-  input: Input,
-  options?: RenderOptions & { frontmatter?: false }
-): Uint8Array;
-export function renderToHtml<T = Frontmatter>(
-  input: Input,
-  options: RenderOptions
-): Uint8Array | [T | null, Uint8Array];
-export function renderToHtml(
+  state: State,
   input: Input,
   options?: RenderOptions
 ): Uint8Array | [unknown, Uint8Array] {
-  const { output, meta } = shared.render(input, 0, options);
+  const { output, meta } = state.renderer.render(input, 0, options);
   if (options?.frontmatter !== true) return output;
   return [meta != null ? JSON.parse(dec.decode(meta)) : null, output];
 }
 
-export function renderToAnsi(input: Input, options?: AnsiOptions): Uint8Array {
-  return shared.render(input, 1, {
+export function renderToAnsi(
+  state: State,
+  input: Input,
+  options?: AnsiOptions
+): Uint8Array {
+  return state.renderer.render(input, 1, {
     width: options?.width,
     cjk: options?.cjk,
     math: options?.math,
   }).output;
 }
 
-/**
- * Render a growing string to HTML. A session keeps completed HTML and reparses
- * only the unfinished end.
- */
-export function createHtmlSession(): {
+export type HtmlSession = {
   render(input: string, options?: HtmlSessionOptions): HtmlUpdate;
-} {
+};
+
+export function createHtmlSession(state: State): HtmlSession {
   let previous = '';
   let stable = '';
   let offset = 0;
@@ -328,6 +323,7 @@ export function createHtmlSession(): {
     render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
+      const renderer = state.renderer;
       const wanted = options?.incomplete === true;
       const ext =
         (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);
@@ -497,23 +493,23 @@ export function createHtmlSession(): {
         format: form,
       };
       let tail = input.slice(nextOffset);
-      let rendered = shared.render(tail, 0, renderOptions);
-      if (nextOffset !== 0 && shared.dv.getUint8(30) !== 0) {
+      let rendered = renderer.render(tail, 0, renderOptions);
+      if (nextOffset !== 0 && renderer.dv.getUint8(30) !== 0) {
         nextStable = '';
         nextOffset = 0;
         reset = true;
         tail = input;
-        rendered = shared.render(tail, 0, renderOptions);
+        rendered = renderer.render(tail, 0, renderOptions);
       }
       const html = dec.decode(rendered.output);
-      definitions = shared.dv.getUint8(30) !== 0;
-      const slots = shared.dv.getUint8(27) !== 0;
+      definitions = renderer.dv.getUint8(30) !== 0;
+      const slots = renderer.dv.getUint8(27) !== 0;
       // Wasm measures the source and HTML before the boundary in UTF-16 units.
-      const completed = definitions ? 0 : shared.dv.getUint32(36, true);
+      const completed = definitions ? 0 : renderer.dv.getUint32(36, true);
       let pending = html;
       let addition = '';
       if (completed > 0 && completed <= tail.length) {
-        addition = html.slice(0, shared.dv.getUint32(40, true));
+        addition = html.slice(0, renderer.dv.getUint32(40, true));
         nextStable += addition;
         nextOffset += completed;
         pending = html.slice(addition.length);
@@ -533,7 +529,7 @@ export function createHtmlSession(): {
       // longer tells what the paragraph shows.
       if (
         !definitions &&
-        (shared.dv.getUint8(1) & 128) === 0 &&
+        (renderer.dv.getUint8(1) & 128) === 0 &&
         pending.startsWith(open) &&
         pending.endsWith('</p>\n')
       ) {
@@ -643,7 +639,7 @@ export function createHtmlSession(): {
       };
       // A computed key would slow every literal: add this one only when set.
       if (slots) result[format] = true;
-      if (shared.dv.getUint8(34) !== 0) result.hasInlineIslands = true;
+      if (renderer.dv.getUint8(34) !== 0) result.hasInlineIslands = true;
       return result;
     },
   };

@@ -3,7 +3,8 @@
 Use `@pierre/words` for synchronous, dependency-free HTML or terminal output.
 The package selects its WebAssembly loader for Node.js, browsers, or Cloudflare
 Workers. `init(module)` is for embedders that supply a compiled
-`WebAssembly.Module` to replace the shared instance.
+`WebAssembly.Module` to replace the instance of the entry it is imported from.
+Each entry (`@pierre/words`, `@pierre/words/no-math`) keeps its own instance.
 
 ```ts
 import { renderToAnsi, renderToHtml } from '@pierre/words';
