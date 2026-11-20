@@ -53,7 +53,6 @@ function createFades(root: HTMLElement) {
     timer = undefined;
     timerDeadline = Infinity;
     const now = performance.now();
-    const parents = new Set<Node>();
     let next = Infinity;
     let kept = 0;
     for (let at = 0; at < nodes.length; at++) {
@@ -74,14 +73,32 @@ function createFades(root: HTMLElement) {
           if (span.getAttribute('style') === '') span.removeAttribute('style');
           continue;
         }
+        const first = span.firstChild;
+        let last = span.lastChild;
         while (span.firstChild !== null)
           parent.insertBefore(span.firstChild, span);
         parent.removeChild(span);
-        parents.add(parent);
+        // Warning: never use normalize() here. It also merges and removes text
+        // nodes in hook output, which frameworks keep references to. Merge only
+        // the moved edge text into non-empty neighbours, and keep empty ones.
+        if (first?.nodeType === 3) {
+          const previous = first.previousSibling;
+          if (previous?.nodeType === 3 && (previous as Text).length > 0) {
+            (previous as Text).appendData((first as Text).data);
+            if (last === first) last = previous;
+            first.remove();
+          }
+        }
+        if (last?.nodeType === 3) {
+          const after = last.nextSibling;
+          if (after?.nodeType === 3 && (after as Text).length > 0) {
+            (last as Text).appendData((after as Text).data);
+            after.remove();
+          }
+        }
       }
     }
     nodes.length = deadlines.length = kept;
-    for (const parent of parents) parent.normalize();
     arm(next);
   };
   const stop = (): void => {

@@ -977,7 +977,7 @@ describe('native DOM token fades', () => {
     ).toBe('New paragraph');
     formatter.dispose();
   });
-  test('batches fade timers and compacts each affected parent once', () => {
+  test('batches fade timers and merges unwrapped text without normalize()', () => {
     const container = mountDOM();
     const renderer = createDomRenderer(container);
     const timeout = globalThis.setTimeout;
@@ -1013,7 +1013,9 @@ describe('native DOM token fades', () => {
         },
       });
       renderer.update('First **bold**\n\nSecond grows again', true, false);
-      expect(normalized.filter((node) => node === second)).toHaveLength(1);
+      expect(normalized).toHaveLength(0);
+      expect(second.childNodes).toHaveLength(1);
+      expect(second.textContent).toBe('Second grows again');
       expect(container.querySelector('[data-markdown="token"]')).toBeNull();
     } finally {
       renderer.disconnect();
@@ -1276,6 +1278,68 @@ describe('native DOM token fades', () => {
         document.getSelection = getSelection;
         document.addEventListener = addEventListener;
       }
+    }
+  });
+  test('fade cleanup keeps text nodes owned by component hooks', async () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, {
+      components: { a: (html) => html.replace('<a ', '<a data-slot ') },
+    });
+    try {
+      renderer.connect();
+      renderer.update('Hello [x](https://example.com)', true, true, {
+        duration: 20,
+      });
+      const slot = container.querySelector('[data-slot]')!;
+      const owned = document.createTextNode('');
+      slot.append(owned);
+      renderer.update('Hello [x](https://example.com) more text', true, true, {
+        duration: 20,
+      });
+      await pause();
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+      expect(slot.isConnected).toBe(true);
+      expect(owned.isConnected).toBe(true);
+      expect(owned.data).toBe('');
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('fade cleanup merges adjacent unwrapped text runs', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    try {
+      renderer.connect();
+      let source = 'Hello';
+      renderer.update(source, true, true, { duration: 10_000 });
+      for (const chunk of [' one', ' two', ' three']) {
+        source += chunk;
+        renderer.update(source, true, true, { duration: 10_000 });
+      }
+      const paragraph = container.querySelector('p')!;
+      expect(
+        paragraph.querySelectorAll('[data-markdown="token"]').length
+      ).toBeGreaterThan(1);
+      renderer.update(source, true, true, false);
+      expect(paragraph.childNodes.length).toBe(1);
+      expect(paragraph.firstChild?.nodeType).toBe(3);
+      expect(paragraph.textContent).toBe('Hello one two three');
+
+      renderer.update('```text\nab', true, true, { duration: 10_000 });
+      renderer.update('```text\nabc\nd', true, true, { duration: 10_000 });
+      renderer.update('```text\nabc\ndef\n', true, true, { duration: 10_000 });
+      renderer.update('```text\nabc\ndef\n', true, true, false);
+      const code = container.querySelector('code')!;
+      expect(code.querySelector('[data-markdown="token"]')).toBeNull();
+      const walker = document.createTreeWalker(code, 4);
+      for (
+        let text = walker.nextNode();
+        text !== null;
+        text = walker.nextNode()
+      )
+        expect(text.nextSibling?.nodeType).not.toBe(3);
+    } finally {
+      renderer.disconnect();
     }
   });
   test('code text fades without remounting previous code nodes', async () => {
