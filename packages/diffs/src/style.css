@@ -673,7 +673,8 @@
     [data-no-newline] {
       --diffs-diff-line-mix-target: var(--diffs-bg);
 
-      &[data-line-type^='change-'] {
+      /* The line type is written before the & so that it is tested first. */
+      [data-line-type^='change-']& {
         --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
@@ -689,40 +690,40 @@
         );
       }
 
-      &[data-line-type='change-deletion'] {
+      [data-line-type='change-deletion']& {
         --diffs-diff-line-mix-target: var(
           --diffs-bg-deletion-override,
           var(--diffs-deletion-base)
         );
       }
 
-      &[data-line-type='change-addition'] {
+      [data-line-type='change-addition']& {
         --diffs-diff-line-mix-target: var(
           --diffs-bg-addition-override,
           var(--diffs-addition-base)
         );
       }
 
-      &[data-line-type='change-moved'],
-      &[data-line-type='change-reordered'],
-      &[data-line-type='change-extracted-function'],
-      &[data-line-type='change-inlined-function'] {
+      [data-line-type='change-moved']&,
+      [data-line-type='change-reordered']&,
+      [data-line-type='change-extracted-function']&,
+      [data-line-type='change-inlined-function']& {
         --diffs-diff-line-mix-target: var(
           --diffs-bg-moved-override,
           var(--diffs-moved-base)
         );
       }
 
-      &[data-line-type='change-edited'],
-      &[data-line-type='change-moved-with-edit'],
-      &[data-line-type='change-renamed'] {
+      [data-line-type='change-edited']&,
+      [data-line-type='change-moved-with-edit']&,
+      [data-line-type='change-renamed']& {
         --diffs-diff-line-mix-target: var(
           --diffs-bg-edited-override,
           var(--diffs-edited-base)
         );
       }
 
-      &[data-line-type='change-reformatted'] {
+      [data-line-type='change-reformatted']& {
         --diffs-diff-line-mix-target: var(
           --diffs-bg-reformatted-override,
           var(--diffs-reformatted-base)
