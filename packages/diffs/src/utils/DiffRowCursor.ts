@@ -51,11 +51,10 @@ const LEADING_START = 1;
 const LEADING_END = 2;
 const CONTENT = 3;
 const CHANGE_REST = 4;
-const CHANGE_END = 5;
-const FOLD_PIECES = 6;
-const TRAILING = 7;
-const TRAILING_NEWLINE = 8;
-const DONE = 9;
+const FOLD_PIECES = 5;
+const TRAILING = 6;
+const TRAILING_NEWLINE = 7;
+const DONE = 8;
 
 // Walks the rows of a diff in the order they render. The caller pulls rows:
 //
@@ -480,8 +479,13 @@ export class DiffRowCursor {
       this.secondStretchEnd = 0;
       return true;
     }
-    for (;;) {
-      if (this.part === DONE || this.isPastWindow()) {
+    while (true) {
+      // A run being yielded in pieces checks each piece against the window
+      // itself.
+      if (
+        this.part === DONE ||
+        (this.part !== FOLD_PIECES && this.isPastWindow())
+      ) {
         this.part = DONE;
         return false;
       }
@@ -560,22 +564,21 @@ export class DiffRowCursor {
             throw new Error('DiffRowCursor: missing change content');
           }
           const isLast = this.contentIndex === hunk.hunkContent.length - 1;
-          this.part = CHANGE_END;
+          this.part = CONTENT;
+          this.contentIndex++;
           const started = this.startChangeRun(hunk, content, isLast, true);
-          // A run that folds cut up has more pieces to come before the block
-          // ends.
-          if (this.part === CHANGE_END) {
-            this.endChange(content);
-          }
+          // The block's rows are counted without the ones closed folds hide.
+          const { deletions, additions } = content;
+          const { changeHiddenRows } = this;
+          this.unifiedCount += deletions + additions - changeHiddenRows;
+          this.splitCount += Math.max(deletions, additions) - changeHiddenRows;
+          this.unifiedAt += deletions + additions;
+          this.splitAt += Math.max(deletions, additions);
+          this.deletionIndexAt += deletions;
+          this.additionIndexAt += additions;
+          this.deletionNumberAt += deletions;
+          this.additionNumberAt += additions;
           if (started) return true;
-          break;
-        }
-        case CHANGE_END: {
-          const content = this.walkHunk?.hunkContent[this.contentIndex];
-          if (content == null || content.type !== 'change') {
-            throw new Error('DiffRowCursor: missing change content');
-          }
-          this.endChange(content);
           break;
         }
         case FOLD_PIECES: {
@@ -880,22 +883,6 @@ export class DiffRowCursor {
       splitCount + skipped,
       hasDeletion && hasAddition ? unifiedAdditionStart : undefined
     );
-  }
-
-  // Moves the walk past a change block. Its rows are counted without the
-  // ones closed folds hide.
-  private endChange({ deletions, additions }: ChangeContent): void {
-    const { changeHiddenRows } = this;
-    this.part = CONTENT;
-    this.contentIndex++;
-    this.unifiedCount += deletions + additions - changeHiddenRows;
-    this.splitCount += Math.max(deletions, additions) - changeHiddenRows;
-    this.unifiedAt += deletions + additions;
-    this.splitAt += Math.max(deletions, additions);
-    this.deletionIndexAt += deletions;
-    this.additionIndexAt += additions;
-    this.deletionNumberAt += deletions;
-    this.additionNumberAt += additions;
   }
 
   // Finds what semantic folds do to the change block the walk is at: whether
