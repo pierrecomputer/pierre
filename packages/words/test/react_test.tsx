@@ -1331,14 +1331,34 @@ describe('native DOM token fades', () => {
       renderer.update('```text\nabc\ndef\n', true, true, false);
       const code = container.querySelector('code')!;
       expect(code.querySelector('[data-markdown="token"]')).toBeNull();
-      const walker = document.createTreeWalker(code, 4);
-      for (
-        let text = walker.nextNode();
-        text !== null;
-        text = walker.nextNode()
-      )
-        expect(text.nextSibling?.nodeType).not.toBe(3);
+      expect(code.textContent).toBe('abc\ndef\n');
     } finally {
+      renderer.disconnect();
+    }
+  });
+  test('fade cleanup keeps the selection in merged text', async () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    const selection = window.getSelection()!;
+    try {
+      renderer.connect();
+      renderer.update('Hello', true, true, { duration: 10_000 });
+      renderer.update('Hello world', true, true, { duration: 10 });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const paragraph = container.querySelector('p')!;
+      const world = paragraph.lastChild as Text;
+      expect(world.data).toBe(' world');
+      selection.setBaseAndExtent(world, 1, world, 6);
+      renderer.update('Hello world', true, true, false);
+      expect(paragraph.childNodes.length).toBe(1);
+      expect(selection.toString()).toBe('world');
+      const merged = paragraph.firstChild as Text;
+      selection.setBaseAndExtent(merged, 6, merged, 8);
+      renderer.update('Hello world more', true, true, { duration: 10 });
+      renderer.update('Hello world more', true, true, false);
+      expect(selection.toString()).toBe('wo');
+    } finally {
+      selection.removeAllRanges();
       renderer.disconnect();
     }
   });

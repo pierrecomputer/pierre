@@ -81,19 +81,21 @@ function createFades(root: HTMLElement) {
         // Warning: never use normalize() here. It also merges and removes text
         // nodes in hook output, which frameworks keep references to. Merge only
         // the moved edge text into non-empty neighbours, and keep empty ones.
+        // Remove only moved text: removing a neighbour would move a selection
+        // in it to the parent. A selection in moved text already moved out.
         if (first?.nodeType === 3) {
           const previous = first.previousSibling;
           if (previous?.nodeType === 3 && (previous as Text).length > 0) {
             (previous as Text).appendData((first as Text).data);
-            if (last === first) last = previous;
+            if (last === first) last = null;
             first.remove();
           }
         }
         if (last?.nodeType === 3) {
           const after = last.nextSibling;
           if (after?.nodeType === 3 && (after as Text).length > 0) {
-            (last as Text).appendData((after as Text).data);
-            after.remove();
+            (after as Text).insertData(0, (last as Text).data);
+            last.remove();
           }
         }
       }
