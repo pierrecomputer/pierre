@@ -24,6 +24,37 @@ export function Message({ text, active }: { text: string; active: boolean }) {
 }`
 );
 
+export const WORDS_ISLANDS = docsCodeSnippet(
+  'islands.tsx',
+  `import { Markdown, type ReactiveIslands } from '@pierre/words/react';
+import { useState } from 'react';
+
+function Counter({ label }: { label: string }) {
+  const [count, setCount] = useState(0);
+  return (
+    <button type="button" onClick={() => setCount((value) => value + 1)}>
+      {label} ({count})
+    </button>
+  );
+}
+
+const islands: ReactiveIslands = {
+  counter: {
+    fallback: 'Loading counter…',
+    render: ({ label }) =>
+      typeof label === 'string' ? <Counter label={label} /> : null,
+  },
+};
+
+export function Message({ text, active }: { text: string; active: boolean }) {
+  return (
+    <Markdown islands={islands} isAnimating={active}>
+      {text}
+    </Markdown>
+  );
+}`
+);
+
 export const WORDS_HIGHLIGHTS = docsCodeSnippet(
   'highlighted-message.tsx',
   `import { createHighlightsPlugin } from '@pierre/words/highlights';
@@ -154,6 +185,7 @@ export const WORDS_DOC_FILES = {
   wordsInstall: WORDS_INSTALL,
   wordsSkill: WORDS_SKILL,
   wordsReact: WORDS_REACT,
+  wordsIslands: WORDS_ISLANDS,
   wordsHighlights: WORDS_HIGHLIGHTS,
   wordsMermaid: WORDS_MERMAID,
   wordsHtml: WORDS_HTML,

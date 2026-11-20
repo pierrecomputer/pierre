@@ -60,6 +60,34 @@ attributes, such as `className`. React supplies a unique `idPrefix` by default.
 The component supports server output and hydration. Keep the initial source and
 options consistent between server and client.
 
+#### Reactive islands
+
+Pass an `islands` registry to mount React components from fenced blocks. The
+fence language is `island-NAME`, and the body is a JSON object with a nonempty
+string `id`. Keep the id stable and unique in the document so the component
+keeps its state across updates. A repeated id shows its fallback.
+
+````md
+```island-counter
+{"id":"article-votes","label":"Votes"}
+```
+````
+
+<DocsCodeExample {...wordsIslands} />
+
+`render(data)` validates the data and returns an element, or `null` to show the
+source as code. Put hooks in the component it returns. A closed fence shows
+`fallback` on the server and mounts on the client while the stream continues. An
+open fence is hidden while it streams. Set `pending` to text or to
+`{ className, label? }` to show a placeholder. An invalid payload or an
+unregistered name renders as code.
+
+Set `inline: true` on an entry to also accept a directive in prose, such as
+`:file[inline.wat]{path="src/inline.wat"}`. The component gets the label as
+`data.label` and each attribute as a string. Without an explicit `id`, Words
+derives one from the directive content. Inline names share the 4,096-byte
+`idPrefix` limit.
+
 ### DOM rendering
 
 Use `createDomRenderer(root, options)` from `@pierre/words/html` to patch an
