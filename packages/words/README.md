@@ -283,9 +283,9 @@ that does not parse shows as code.
 
 A renderer in `plugins.renderers` can return `null` the same way to show the
 code block. The renderer keeps the output of a closed block and reuses it while
-the language and code stay the same. Set `frame: true` on a renderer to show its
-output in the code block frame, with the header and Copy/Download buttons, as
-Mermaid diagrams do.
+the language, meta, and code stay the same. Set `frame: true` on a renderer to
+show its output in the code block frame, with the header and Copy/Download
+buttons, as Mermaid diagrams do.
 
 ### Code options
 

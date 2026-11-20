@@ -260,7 +260,12 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let stableRaw = '';
   let nextCode = 0;
   let live:
-    | { session: CodeHighlighterSession; index: number; language: string }
+    | {
+        session: CodeHighlighterSession;
+        index: number;
+        language: string;
+        meta: string;
+      }
     | undefined;
   let liveUses = 0;
   let previousUpdate: HtmlUpdate | undefined;
@@ -501,17 +506,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         }
       }
       const plugin = options.plugins?.code;
-      // Only a different open fence replaces the live highlighter.
+      // A new open fence, language, or meta replaces the live highlighter.
       if (isIncomplete) {
         if (
           live !== undefined &&
-          (live.index !== number || live.language !== language)
+          (live.index !== number ||
+            live.language !== language ||
+            live.meta !== meta)
         )
           dispose();
         if (live === undefined) {
           const session = plugin?.createSession?.();
           if (session !== undefined)
-            live = { session, index: number, language };
+            live = { session, index: number, language, meta };
         }
       }
       let highlighted: string | null | undefined;
@@ -699,13 +706,15 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (
       live !== undefined &&
-      (live.index !== fence.index || live.language !== language)
+      (live.index !== fence.index ||
+        live.language !== language ||
+        live.meta !== meta)
     )
       dispose();
     if (live === undefined && plugin !== undefined) {
       const session = plugin.createSession?.();
       if (session !== undefined)
-        live = { session, index: fence.index, language };
+        live = { session, index: fence.index, language, meta };
     }
     // Plugins without line updates re-highlight the whole fence through format().
     if (plugin !== undefined && live?.session.highlightLines === undefined)

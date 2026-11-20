@@ -846,6 +846,34 @@ void test('code blocks expose the info string after the language as meta', () =>
   ]);
   renderer.dispose();
 
+  // a new meta on the open fence starts a new highlighter session
+  // through format() and through formatFence()
+  for (const lineUpdates of [false, true]) {
+    const metas: string[] = [];
+    const rewrite = createHtmlRenderer({
+      plugins: {
+        code: {
+          highlight: () => null,
+          createSession: () => {
+            let first: string | undefined;
+            const lines = (options: { meta: string }) => {
+              metas.push((first ??= options.meta));
+              return null;
+            };
+            return {
+              highlight: lines,
+              highlightLines: lineUpdates ? lines : undefined,
+              dispose() {},
+            };
+          },
+        },
+      },
+    });
+    rewrite.render('```ts a=1\nx\n', true, true);
+    rewrite.render('```ts b=2\nx\ny\n', true, true);
+    assert.deepEqual([...new Set(metas)], ['a=1', 'b=2']);
+  }
+
   // an island name sits in the language, so meta leaves islands working
   const islands = { card: { accepts: () => true, fallback: 'Card' } };
   assert.match(
