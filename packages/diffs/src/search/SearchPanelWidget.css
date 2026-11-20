@@ -208,14 +208,6 @@
     outline: none;
   }
 
-  [data-input-box] input::selection {
-    background-color: color-mix(
-      in lab,
-      var(--diffs-search-panel-fg) 8%,
-      var(--diffs-search-panel-bg)
-    );
-  }
-
   [data-input-box] input:focus-visible {
     outline: 1px solid var(--diffs-search-panel-modified);
     outline-offset: -1px;
