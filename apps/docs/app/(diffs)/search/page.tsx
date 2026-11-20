@@ -309,7 +309,7 @@ function ThemeReviewControls({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="max-h-[550px] overflow-auto"
+              className="z-[110] max-h-[550px] overflow-auto"
               scrollSelectedIntoView
             >
               {THEME_NAMES[scheme].map((name) => (
