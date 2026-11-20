@@ -1089,7 +1089,6 @@
     cursor: pointer;
     -webkit-user-select: none;
     user-select: none;
-    transition: opacity 0.15s ease-in-out;
 
     &:hover {
       opacity: 1;
