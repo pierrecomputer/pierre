@@ -66,11 +66,13 @@
     "variable.parameter"
     "variable.special"
     ;; rarely named by lexers
+    "emphasis.strong.italic"
     "enum"
     "hint"
     "keyword.jsdoc"
     "link_text"
     "link_uri"
+    "markup.strikethrough"
     "selector.pseudo"
     "tag.component.jsx"
     "type.jsdoc"
@@ -81,10 +83,10 @@
     "foreground")
 
   ;; [ptr:u16, length:u8] records over the kebab-case CSS-variable suffixes
-  (css-variable-table $Token $mem.tokenCssTable $mem.tokenCssTable+912)
+  (css-variable-table $Token $mem.tokenCssTable $mem.byteSets)
 
   ;; theme record for a $Token member: [r][g][b][a][style], where style
-  ;; packs italic in bit 4 and font-weight/100 in the low nibble;
+  ;; packs strikethrough in bit 5, italic in bit 4 and weight/100 in bits 0-3;
   ;; all-zero = unthemed
   (func $themeRec (param $hl i32) (result i32)
     (i32.add

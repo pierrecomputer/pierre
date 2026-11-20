@@ -506,12 +506,7 @@ export class LiveTokenizer {
           const style = single
             ? {
                 color: themeStyle?.color ?? this.#themes[0].fg ?? 'inherit',
-                ...(themeStyle?.italic === true
-                  ? { 'font-style': 'italic' }
-                  : {}),
-                ...((themeStyle?.weight ?? 0) !== 0
-                  ? { 'font-weight': String(themeStyle?.weight) }
-                  : {}),
+                ...themeStyle?.fontCss,
               }
             : themeHtmlStyle(this.#themes, token, this.#cssVariablePrefix);
           let css = '';

@@ -2,10 +2,13 @@ import type { Theme, ThemedToken } from '../lib/index';
 import {
   ansiNames,
   defaultCssVariablePrefix,
+  type FontProperty,
+  fontVariable,
   isThemeColor,
   resolveThemeSyntax,
   themeAnsiColors,
   themeBackground,
+  themeFontWeight,
   themeForeground,
 } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
@@ -130,8 +133,12 @@ export function toCSS(
     const color = settings?.color ?? foreground;
     const variable = cssVariablePrefix + name.replace(/[._]/g, '-');
     css += `${variable}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
-    if (fontStyle)
+    if (fontStyle) {
+      const weight = themeFontWeight(settings?.font_weight);
       css += `${variable}-font-style: ${settings?.font_style === 'italic' ? 'italic' : 'normal'};`;
+      css += `${variable}-font-weight: ${weight === 0 ? 'normal' : weight};`;
+      css += `${variable}-text-decoration: ${name === 'markup.strikethrough' ? 'line-through' : 'none'};`;
+    }
   }
   const ansi = themeAnsiColors(style);
   for (let i = 0; i < ansi.length; i++) {
@@ -140,10 +147,13 @@ export function toCSS(
   return css;
 }
 
-/** Return the font-style variable for a token from the `cssVariables` theme. */
-export function getFontStyle(token: ThemedToken): string | undefined {
+/** Return a font or decoration variable for a token from the `cssVariables` theme. */
+export function getFontStyle(
+  token: ThemedToken,
+  property: FontProperty = 'font-style'
+): string | undefined {
   if (token.color?.startsWith('var(') === true) {
-    return token.color.slice(0, -1) + '-font-style)';
+    return fontVariable(token.color, property);
   }
   return undefined;
 }

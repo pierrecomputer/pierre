@@ -15,7 +15,15 @@
     "\22><code>"                            ;; 8
     "</code></pre>"                         ;; 13
     "light-dark("                           ;; 11
+    ";text-decoration:line-through"         ;; 29
+    "700"                                   ;; 3
   )
+
+  (enum-map $MarkdownFont $Token $mem.markdownFont 0
+    (value 1 "emphasis")
+    (value 2 "emphasis.strong")
+    (value 3 "emphasis.strong.italic")
+    (value 8 "markup.strikethrough"))
 
   (global $out (mut i32) (i32.const 0))     ;; write cursor
   (global $cap (mut i32) (i32.const 0))     ;; highest safe write position (16 bytes of slack below memory end)
@@ -102,6 +110,21 @@
     (i32.store8 (global.get $out) (i32.const ")"))
     (global.set $out (i32.add (global.get $out) (i32.const 1))))
 
+  ;; Append ;property:var(PREFIX-scope-property,fallback) to a Markdown span.
+  (func $emitCssFont (param $hl i32) (param $prop i32) (param $len i32) (param $fallback i32) (param $n i32)
+    (memory.copy (global.get $out) (i32.sub (local.get $prop) (i32.const 1))
+      (i32.add (local.get $len) (i32.const 2)))
+    (global.set $out (i32.add (global.get $out) (i32.add (local.get $len) (i32.const 2))))
+    (call $emitCssVariable (local.get $hl) (i32.load (i32.const 18)))
+    (i32.store8 (i32.sub (global.get $out) (i32.const 1)) (i32.const "-"))
+    (memory.copy (global.get $out) (local.get $prop) (local.get $len))
+    (global.set $out (i32.add (global.get $out) (local.get $len)))
+    (i32.store8 (global.get $out) (i32.const ","))
+    (memory.copy (i32.add (global.get $out) (i32.const 1)) (local.get $fallback) (local.get $n))
+    (global.set $out (i32.add (global.get $out) (i32.add (local.get $n) (i32.const 1))))
+    (i32.store8 (global.get $out) (i32.const ")"))
+    (global.set $out (i32.add (global.get $out) (i32.const 1))))
+
   ;; write the record's font attributes: `;font-style:italic` and/or
   ;; `;font-weight:N00` - 34 bytes max
   (func $emitFont (param $style i32)
@@ -151,7 +174,7 @@
     (global.set $spanHl (i32.const -1)))
 
   ;; Write a cached `<span style="...">` opener from $mem.emitterSpanCache.
-  ;; The cache has 73 [len:u8, fragment:u8*65] slots, filled on first use.
+  ;; The cache has 75 [len:u8, fragment:u8*65] slots, filled on first use.
   ;; $hlBegin clears it when theme bytes or the output mode change,
   ;; including after use as a theme set's opener arena.
   (func $emitSpanOpen (param $hl i32)
@@ -159,6 +182,7 @@
     (local $len i32)
     (local $save i32)
     (local $rec i32)
+    (local $font i32)
     (local $prefixLength i32)
     (local.set $slot
       (i32.add (i32.const $mem.emitterSpanCache) (i32.mul (local.get $hl) (i32.const 66))))
@@ -197,6 +221,21 @@
         (global.set $out (i32.add (global.get $out) (local.get $prefixLength)))
         (memory.copy (global.get $out) (i32.add (local.get $slot) (i32.const 24)) (i32.sub (local.get $len) (i32.const 23)))
         (global.set $out (i32.add (global.get $out) (i32.sub (local.get $len) (i32.const 23))))
+        (local.set $font (enum-map.get $MarkdownFont (local.get $hl)))
+        (if (local.get $font)
+          (then
+            (global.set $out (i32.sub (global.get $out) (i32.const 2)))
+            (if (i32.and (local.get $font) (i32.const 1))
+              (then (call $emitCssFont (local.get $hl) (i32.const $mem.emitterHtml+84) (i32.const 10)
+                (i32.const $mem.emitterHtml+95) (i32.const 6))))
+            (if (i32.and (local.get $font) (i32.const 2))
+              (then (call $emitCssFont (local.get $hl) (i32.const $mem.emitterHtml+102) (i32.const 11)
+                (i32.const $mem.emitterHtml+179) (i32.const 3))))
+            (if (i32.and (local.get $font) (i32.const 8))
+              (then (call $emitCssFont (local.get $hl) (i32.const $mem.emitterHtml+151) (i32.const 15)
+                (i32.const $mem.emitterHtml+167) (i32.const 12))))
+            (i32.store16 (global.get $out) (i32.const 0x3e22))
+            (global.set $out (i32.add (global.get $out) (i32.const 2)))))
         (return)))
     ;; Copy with four 16-byte stores. Openers use at most 64 bytes and slots
     ;; hold 65. Reserved output space covers extra writes, which later output
@@ -246,6 +285,15 @@
     (global.set $spanVal (local.get $val))
     (if (i64.eqz (local.get $val))
       (then (return)))
+    (if (i32.and (i32.eq (local.get $hl) (enum.get $Token.markup.strikethrough))
+          (i32.eqz (global.get $cssVariables)))
+      (then
+        ;; The decoration can take this opener past the 65-byte cache slot.
+        (call $emitSpanOpen (local.get $hl))
+        (memory.copy (i32.sub (global.get $out) (i32.const 2)) (i32.const $mem.emitterHtml+150) (i32.const 29))
+        (global.set $out (i32.add (global.get $out) (i32.const 29)))
+        (i32.store16 (i32.sub (global.get $out) (i32.const 2)) (i32.const 0x3e22))
+        (return)))
     ;; a cached single-theme opener: copy it here and skip the call
     (local.set $slot
       (i32.add (i32.const $mem.emitterSpanCache) (i32.mul (local.get $hl) (i32.const 66))))
@@ -685,7 +733,17 @@
         (i32.store8 offset=12 (global.get $out) (i32.add (i32.const "0") (local.get $w)))
         (i32.store16 offset=13 (global.get $out) (i32.const 0x3030)) ;; `00`
         (i32.store8 offset=15 (global.get $out) (i32.const ";"))
-        (global.set $out (i32.add (global.get $out) (i32.const 16))))))
+        (global.set $out (i32.add (global.get $out) (i32.const 16)))))
+    (if (i32.and (local.get $style) (i32.const 0x20))
+      (then
+        (if (local.get $named)
+          (then
+            (call $multiName (local.get $i))
+            (i32.store8 (global.get $out) (i32.const "-"))
+            (global.set $out (i32.add (global.get $out) (i32.const 1)))))
+        (memory.copy (global.get $out) (i32.const $mem.emitterHtml+151) (i32.const 28))
+        (i32.store8 offset=28 (global.get $out) (i32.const ";"))
+        (global.set $out (i32.add (global.get $out) (i32.const 29))))))
 
   ;; one side of `light-dark(A, B)`: a color, or for a missing side the
   ;; keyword $kw (0 `currentcolor`, 1 `transparent`) - 12 bytes max
@@ -748,7 +806,7 @@
         (global.set $out (i32.add (global.get $out) (i32.const 1)))))
     (local.set $sa (i32.load8_u offset=4 (local.get $recA)))
     (local.set $sb (i32.load8_u offset=4 (local.get $recB)))
-    (local.set $common (i32.and (i32.and (local.get $sa) (local.get $sb)) (i32.const 0x10)))
+    (local.set $common (i32.and (i32.and (local.get $sa) (local.get $sb)) (i32.const 0x30)))
     (if (i32.eq (i32.and (local.get $sa) (i32.const 15)) (i32.and (local.get $sb) (i32.const 15)))
       (then (local.set $common (i32.or (local.get $common) (i32.and (local.get $sa) (i32.const 15))))))
     (call $multiFontDecls (i32.const 0) (local.get $common) (i32.const 0))
@@ -757,7 +815,7 @@
 
   ;; Write `<span style="...">` for $hl. Theme set property names have
   ;; variable lengths, so use the span cache as an arena:
-  ;; [id:u32, used:u32, length:u16*73, offset:u16*73, fragments:4520 bytes].
+  ;; [id:u32, used:u32, length:u16*75, offset:u16*75, fragments:4656 bytes].
   ;; $hlBegin clears it when the set ID or output mode changes.
   ;; Render each opener on first use, then copy it in 16-byte steps.
   ;; Reserved space covers extra writes. If an opener does not fit the
@@ -772,16 +830,16 @@
       (then
         (call $copyWide
           (i32.add
-            (i32.const $mem.emitterSpanCache+304)
-            (i32.load16_u (i32.add (i32.const $mem.emitterSpanCache+154) (i32.shl (local.get $hl) (i32.const 1)))))
+            (i32.const $mem.emitterSpanCache+320)
+            (i32.load16_u (i32.add (i32.const $mem.emitterSpanCache+158) (i32.shl (local.get $hl) (i32.const 1)))))
           (local.get $len))
         (return)))
     (local.set $at
-      (i32.add (i32.const $mem.emitterSpanCache+304) (i32.load (i32.const $mem.emitterSpanCache+4))))
+      (i32.add (i32.const $mem.emitterSpanCache+320) (i32.load (i32.const $mem.emitterSpanCache+4))))
     (if
       (i32.le_u
         (i32.add (i32.load (i32.const $mem.emitterSpanCache+4)) (global.get $spanReserve))
-        (i32.const 4520))
+        (i32.const 4656))
       (then
         (local.set $save (global.get $out))
         (global.set $out (local.get $at))))
@@ -793,8 +851,8 @@
           (i32.add (i32.const $mem.emitterSpanCache+8) (i32.shl (local.get $hl) (i32.const 1)))
           (local.get $len))
         (i32.store16
-          (i32.add (i32.const $mem.emitterSpanCache+154) (i32.shl (local.get $hl) (i32.const 1)))
-          (i32.sub (local.get $at) (i32.const $mem.emitterSpanCache+304)))
+          (i32.add (i32.const $mem.emitterSpanCache+158) (i32.shl (local.get $hl) (i32.const 1)))
+          (i32.sub (local.get $at) (i32.const $mem.emitterSpanCache+320)))
         (i32.store
           (i32.const $mem.emitterSpanCache+4)
           (i32.add (i32.load (i32.const $mem.emitterSpanCache+4)) (local.get $len)))
@@ -1018,11 +1076,12 @@
     (global.set $spanVal (i64.const 0))
     ;; per-token output reserve beyond the escaped bytes: close (7) + open
     ;; (19 + 9 + 34 + 2) and the 64-byte wide copy $emitSpanOpen performs,
-    ;; plus the CSS-variable prefix when that mode inserts one
+    ;; plus decoration or up to three prefixed variables for Markdown emphasis
     (global.set $spanReserve
-      (i32.add
-        (i32.const 96)
-        (select (i32.load (i32.const 18)) (i32.const 0) (global.get $cssVariables))))
+      (select
+        (i32.add (i32.const 256) (i32.mul (i32.load (i32.const 18)) (i32.const 3)))
+        (i32.const 112)
+        (global.get $cssVariables)))
     (if (global.get $htmlOpeners)
       (then
         (global.set $spanReserve (i32.load (global.get $htmlOpeners)))
@@ -1047,7 +1106,7 @@
             (i32.load (i32.const $mem.emitterSpanCache))
             (i32.load offset=16 (global.get $multiBlob)))
           (then
-            (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 304))
+            (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 320))
             (i32.store
               (i32.const $mem.emitterSpanCache)
               (i32.load offset=16 (global.get $multiBlob)))))
@@ -1055,7 +1114,7 @@
         (return)))
     (if (i32.eqz (global.get $tokens))
       (then
-        ;; Compare all 73 five-byte records, padded to 384 bytes, in twelve
+        ;; Compare all 75 five-byte records, padded to 384 bytes, in twelve
         ;; pairs of vectors. Reading bytes also catches direct host writes.
         (loop $theme
           (local.set $changed
@@ -1076,7 +1135,7 @@
             (v128.any_true (local.get $changed))
             (i32.ne (global.get $spanCacheMode) (global.get $cssVariables)))
           (then
-            (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 4818))
+            (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 4950))
             (memory.copy
               (i32.const $mem.emitterThemeCache)
               (i32.const $mem.themeTable)

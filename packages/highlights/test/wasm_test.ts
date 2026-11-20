@@ -23,7 +23,7 @@ const common = transformWat(
   commonUrl,
   `(module
     (import "../src/common.wat")
-    (keyword-table $Test $mem.laterWordsFree $mem.languageNames
+    (keyword-table $Test $mem.laterWordsFree $mem.lexLowerScratch
       ${words.map((word) => `(group ${word.length} "${word}")`).join('\n')})
     (func (export "lookup") (param $n i32) (result i32)
       (keyword-table.value $Test (i32.const $mem.input)
@@ -479,8 +479,8 @@ void test('preprocessor: data segments count UTF-8 bytes', () => {
 void test('preprocessor: the $Token enum cannot outgrow the emitter regions', () => {
   const names = (n: number) =>
     Array.from({ length: n }, (_, i) => `"t${i}"`).join(' ');
-  const { enumMap } = synthetic(`(enum $Token ${names(74)})`);
-  assert.throws(() => listTokenTypes(enumMap), /span cache holds 73/);
-  const { enumMap: ok } = synthetic(`(enum $Token ${names(73)})`);
-  assert.equal(listTokenTypes(ok).length, 73);
+  const { enumMap } = synthetic(`(enum $Token ${names(76)})`);
+  assert.throws(() => listTokenTypes(enumMap), /span cache holds 75/);
+  const { enumMap: ok } = synthetic(`(enum $Token ${names(75)})`);
+  assert.equal(listTokenTypes(ok).length, 75);
 });
