@@ -1290,17 +1290,12 @@ export class VirtualizedFile<
         };
       }
 
-      // Find which line is at viewport center
-      const centerLine = Math.floor(
-        measuredFileAnnotationVisible &&
-          viewportCenter < fileTop + codeRegionTop
+      const centerInHunks =
+        measuredFileAnnotationVisible && viewportCenter < sourceRowsTop
           ? 0
-          : (viewportCenter - (fileTop + codeRegionTop)) / lineHeight
-      );
-      const centerHunk = Math.floor(centerLine / hunkLineCount);
-
-      // Calculate ideal start centered around viewport
-      const idealStartHunk = centerHunk - Math.floor(totalHunks / 2);
+          : (viewportCenter - sourceRowsTop) / (lineHeight * hunkLineCount);
+      // Round only the start so the spare hunk covers both window edges.
+      const idealStartHunk = Math.round(centerInHunks - totalHunks / 2);
       const totalHunksInFile = Math.ceil(lineCount / hunkLineCount);
       const startingLine =
         Math.max(0, Math.min(idealStartHunk, totalHunksInFile)) * hunkLineCount;

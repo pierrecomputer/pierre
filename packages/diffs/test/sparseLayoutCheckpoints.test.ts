@@ -236,6 +236,40 @@ describe('sparse layout checkpoints', () => {
     );
   });
 
+  test.each([
+    { name: 'even chunk count', top: 1501, bottom: 3001, budget: 200 },
+    { name: 'odd chunk count', top: 1501, bottom: 2501, budget: 150 },
+    { name: 'first row partly visible', top: -1499, bottom: 1, budget: 200 },
+  ])(
+    'VirtualizedFile covers both window edges with $name',
+    ({ top, bottom, budget }) => {
+      const file = createLargeFile();
+      const instance = new VirtualizedFile({}, virtualizer, {
+        ...metrics,
+        hunkLineCount: 50,
+      });
+      const fileTop = 2000;
+      const rowsTop = fileTop + metrics.diffHeaderHeight;
+      instance.updateCodeViewLayout(file, fileTop);
+
+      const range = inspectFile(instance).computeRenderRangeFromWindow(
+        file,
+        fileTop,
+        {
+          top: rowsTop + top,
+          bottom: rowsTop + bottom,
+        }
+      );
+      expect(range.startingLine).toBeLessThanOrEqual(
+        Math.max(0, Math.floor(top / metrics.lineHeight))
+      );
+      expect(range.startingLine + range.totalLines).toBeGreaterThanOrEqual(
+        Math.ceil(bottom / metrics.lineHeight)
+      );
+      expect(range.totalLines).toBeLessThanOrEqual(budget);
+    }
+  );
+
   test('VirtualizedFile uses a top render range when measured file-level annotations are visible', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
