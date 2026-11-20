@@ -499,17 +499,35 @@ describe('file-tree keyboard and selection', () => {
         '[data-item-flattened-subitems]'
       );
 
-      expect(flattenedContainer?.innerHTML).toContain(' / ');
-      expect(
+      // The rendered path reads as one run. The separator opening the terminal
+      // segment uses a non-breaking space so it survives at the start of its
+      // line box.
+      const visibleText = Array.from(
         flattenedContainer?.querySelectorAll(
-          ':scope > [data-item-flattened-subitem]'
-        ).length
-      ).toBe(2);
+          '[data-truncate-content="visible"]'
+        ) ?? []
+      )
+        .map((node) => node.textContent)
+        .join('');
+      expect(visibleText).toBe('src\u00a0/ lib');
+
+      // Each segment is in the DOM once. The copies that measure overflow carry
+      // plain text, so they never duplicate a segment's identity.
       expect(
-        flattenedContainer?.querySelector(
-          ':scope > span:not([data-item-flattened-subitem])'
+        Array.from(
+          flattenedContainer?.querySelectorAll(
+            '[data-item-flattened-subitem]'
+          ) ?? []
+        ).map((node) => node.getAttribute('data-item-flattened-subitem'))
+      ).toEqual(['src/', 'src/lib/']);
+
+      // No span exists solely to hold a separator, which would make it a hover
+      // and drop target of its own.
+      expect(
+        Array.from(flattenedContainer?.querySelectorAll('span') ?? []).some(
+          (node) => node.textContent?.trim() === '/'
         )
-      ).toBeNull();
+      ).toBe(false);
 
       fileTree.cleanUp();
     } finally {
