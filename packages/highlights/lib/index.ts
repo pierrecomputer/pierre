@@ -121,7 +121,7 @@ export interface ThemedToken {
   bgColor?: string;
   /**
    * Shiki flags: italic 1, bold 2, underline 4, strikethrough 8.
-   * Highlights emits italic and bold, and all four for `ansi`.
+   * Markdown can combine italic and bold or use strikethrough.
    */
   fontStyle?: number;
   /**
