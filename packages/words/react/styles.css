@@ -3,7 +3,7 @@
   overflow-wrap: anywhere;
 }
 [data-markdown='root']
-  :is(p, ul, ol, blockquote, table, [data-markdown='code-block']) {
+  :where(p, ul, ol, blockquote, table, [data-markdown='code-block']) {
   margin-block: 1.25em;
 }
 [data-markdown='root'] :is(h1, h2, h3, h4, h5, h6) {
