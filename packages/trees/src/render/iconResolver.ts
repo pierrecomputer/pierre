@@ -56,6 +56,9 @@ export function createFileTreeIconResolver(icons?: FileTreeIcons): {
 } {
   const normalizedIcons = normalizeFileTreeIcons(icons);
   const iconRemap = normalizedIcons.remap;
+  const iconByPath = new Map<string, RemappedIcon>(
+    Object.entries(normalizedIcons.byPath ?? {})
+  );
   const iconByFileName = new Map<string, RemappedIcon>();
   for (const [fileName, icon] of Object.entries(
     normalizedIcons.byFileName ?? {}
@@ -82,6 +85,11 @@ export function createFileTreeIconResolver(icons?: FileTreeIcons): {
     filePath?: string
   ): FileTreeResolvedIcon => {
     if (name === 'file-tree-icon-file' && filePath != null) {
+      const pathEntry = iconByPath.get(filePath);
+      if (pathEntry != null) {
+        return remapEntryToIcon(pathEntry, name);
+      }
+
       const fileName = getBaseFileName(filePath);
       const lowerFileName = fileName.toLowerCase();
       const fileNameEntry = iconByFileName.get(lowerFileName);
