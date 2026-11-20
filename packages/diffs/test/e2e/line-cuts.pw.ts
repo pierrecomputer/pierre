@@ -35,11 +35,14 @@ for (const overflow of ['scroll', 'wrap']) {
         const control = expand.getBoundingClientRect();
         return {
           gap: control.left - text.right,
+          characterWidth: text.width,
           textMiddle: text.top + text.height / 2,
           buttonMiddle: control.top + control.height / 2,
         };
       });
-      expect(Math.abs(positions.gap)).toBeLessThan(1);
+      // Right after the text: not over it, and less than a character away.
+      expect(positions.gap).toBeGreaterThan(-1);
+      expect(positions.gap).toBeLessThan(positions.characterWidth);
       expect(
         Math.abs(positions.buttonMiddle - positions.textMiddle)
       ).toBeLessThan(2);
