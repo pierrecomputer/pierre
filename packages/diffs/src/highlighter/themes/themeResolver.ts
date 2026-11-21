@@ -40,7 +40,8 @@ const ZED_COLOR_ALIASES: readonly (readonly [
 ])[] = [
   ['editor.lineHighlightBackground', 'editor.active_line.background'],
   ['editor.selectionBackground', 'element.selected'],
-  ['editor.findMatchBackground', 'search.match_background'],
+  // Zed exposes one general search-match color. Use it for ordinary matches;
+  // the current match needs a distinct fallback when no active color exists.
   ['editor.findMatchHighlightBackground', 'search.match_background'],
   [
     'editorBracketMatch.background',

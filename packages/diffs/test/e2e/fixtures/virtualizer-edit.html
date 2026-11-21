@@ -48,6 +48,10 @@
           { disableFileHeader: true },
           virtualizer
         );
+        if (id === 'first') {
+          window.__setEditorUnsafeCSS = (unsafeCSS) =>
+            file.setOptions({ ...file.options, unsafeCSS });
+        }
         file.render({
           file: {
             name: `${id}.ts`,

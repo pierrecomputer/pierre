@@ -339,7 +339,7 @@ function makeZedTheme(
       'renamed.background': alpha(c.states.info, 0.1),
       'renamed.border': alpha(c.states.info, 0.3),
 
-      // Search
+      // Zed keeps the syntax foreground when highlighting search matches.
       'search.match_background': alpha(c.states.warn, 0.3),
 
       // Tabs

@@ -548,6 +548,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     options: FileDiffOptions<LAnnotation, Caret> | undefined
   ): void {
     if (options == null) return;
+    if (options.unsafeCSS !== this.options.unsafeCSS) {
+      this.editor?.__setSearchPanelUnsafeCSS(options.unsafeCSS);
+    }
     this.options = options;
     this.clearReusableHeader();
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));

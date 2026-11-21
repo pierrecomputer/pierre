@@ -48,6 +48,11 @@ export const light: Roles = {
     subtle: blue['100'],
     contrastOnAccent: '#ffffff',
   },
+  search: {
+    matchBackground: yellow['300'],
+    currentBackground: blue['300'],
+    foreground: neutral['1040'],
+  },
   states: {
     merge: indigo['600'],
     success: jade['600'],

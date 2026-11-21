@@ -15,7 +15,13 @@
     <button data-outside>Outside CodeView</button>
     <div data-code-view-root tabindex="0"></div>
     <script type="module">
-      import { CodeView, parseDiffFromFile } from '/dist/index.js';
+      import {
+        CodeView,
+        File,
+        parseDiffFromFile,
+        preloadHighlighter,
+        registerCustomTheme,
+      } from '/dist/index.js';
       import { Editor } from '/dist/edit/index.js';
 
       const params = new URLSearchParams(location.search);
@@ -52,7 +58,49 @@
       });
       window.__codeView = view;
       window.__searchStates = searchStates;
-      view.setup(document.querySelector('[data-code-view-root]'));
+      const root = document.querySelector('[data-code-view-root]');
+      if (params.has('nestedTheme')) {
+        const outer = document.createElement('div');
+        root.replaceWith(outer);
+        new File({
+          theme: 'pierre-light',
+          renderAnnotation: () => root,
+        }).render({
+          file: { name: 'outer.txt', contents: 'Outer file' },
+          containerWrapper: outer,
+          lineAnnotations: [{ lineNumber: 1 }],
+        });
+      }
+      view.setup(root);
+      window.__switchToPreloadingTheme = async (failFirst, waitForTheme) => {
+        const name = 'search-test-dark';
+        const unavailable = new Error('Search fixture theme unavailable');
+        let available = !failFirst;
+        registerCustomTheme(name, async () => {
+          if (!available) throw unavailable;
+          await waitForTheme;
+          return {
+            name,
+            type: 'dark',
+            colors: {
+              'editor.background': '#142537',
+              'editor.foreground': '#abcdef',
+            },
+            tokenColors: [],
+          };
+        });
+        const load = () => preloadHighlighter({ themes: [name], langs: [] });
+        view.setOptions({ ...view.options, theme: name });
+        if (failFirst) {
+          view.render(true);
+          await load().catch((error) => {
+            if (error !== unavailable) throw error;
+          });
+          available = true;
+        }
+        await load();
+        view.render(true);
+      };
       const scopedFixture = params.has('scope');
       if (params.has('sliced')) {
         const contents = Array.from({ length: 1000 }, (_, index) =>

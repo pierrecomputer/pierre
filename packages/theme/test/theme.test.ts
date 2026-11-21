@@ -5,7 +5,7 @@
 import { afterAll, describe, test } from 'bun:test';
 import assert from 'node:assert/strict';
 
-import { convertRolesToP3 } from '../src/color';
+import { contrastRatio, convertRolesToP3 } from '../src/color';
 import { createTheme } from '../src/createTheme';
 import {
   type Roles,
@@ -101,6 +101,10 @@ describe('palette roles', () => {
 const CRITICAL_COLORS = [
   'editor.background',
   'editor.foreground',
+  'editor.findMatchBackground',
+  'editor.findMatchForeground',
+  'editor.findMatchHighlightBackground',
+  'editor.findMatchHighlightForeground',
   'foreground',
   'focusBorder',
   'sideBar.background',
@@ -222,6 +226,24 @@ describe('theme generation', () => {
             `missing critical color: ${key}`
           );
         }
+      });
+
+      test('search text has strong contrast on both match backgrounds', () => {
+        const foreground = theme.colors['editor.findMatchForeground'];
+        const currentBackground = theme.colors['editor.findMatchBackground'];
+        const matchBackground =
+          theme.colors['editor.findMatchHighlightBackground'];
+        // contrastRatio accepts authored sRGB hex. Vibrant themes are the same
+        // role colors converted to Display P3 and are covered by that source.
+        if (foreground.startsWith('color(')) return;
+        assert.ok(
+          contrastRatio(foreground, currentBackground) >= 7,
+          'current search match contrast is below 7:1'
+        );
+        assert.ok(
+          contrastRatio(foreground, matchBackground) >= 7,
+          'search match contrast is below 7:1'
+        );
       });
 
       test('has only valid color values', () => {

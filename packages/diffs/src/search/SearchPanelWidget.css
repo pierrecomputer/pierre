@@ -2,16 +2,30 @@
 
 @layer base {
   :host {
-    --diffs-search-panel-fg: var(--diffs-fg, light-dark(#000, #fff));
-    --diffs-search-panel-bg: var(--diffs-bg, light-dark(#fff, #000));
+    --diffs-search-panel-fg: var(
+      --diffs-fg,
+      light-dark(var(--diffs-light, #000), var(--diffs-dark, #fff))
+    );
+    --diffs-search-panel-bg: var(
+      --diffs-bg,
+      light-dark(var(--diffs-light-bg, #fff), var(--diffs-dark-bg, #000))
+    );
     --diffs-search-panel-modified: var(
       --diffs-modified-base,
-      light-dark(
-        var(--diffs-modified-light, #009fff),
-        var(--diffs-modified-dark, #69b1ff)
+      var(
+        --diffs-modified-color-override,
+        light-dark(
+          var(
+            --diffs-light-modified-color,
+            var(--diffs-modified-color, var(--diffs-modified-light, #009fff))
+          ),
+          var(
+            --diffs-dark-modified-color,
+            var(--diffs-modified-color, var(--diffs-modified-dark, #69b1ff))
+          )
+        )
       )
     );
-    color-scheme: light dark;
     position: sticky;
     top: var(--diffs-search-panel-inset-top, 16px);
     right: var(--diffs-search-panel-inset-right, 16px);
@@ -25,6 +39,14 @@
   }
 
   :host([data-search-panel-overlay]) {
+    /* A CodeView can sit inside another file. Resolve its own theme here. */
+    --diffs-fg: initial;
+    --diffs-bg: initial;
+    --diffs-modified-base: initial;
+    --diffs-modified-color: initial;
+    --diffs-light-modified-color: initial;
+    --diffs-dark-modified-color: initial;
+    color-scheme: light dark;
     pointer-events: none;
   }
 

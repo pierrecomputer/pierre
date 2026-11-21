@@ -437,6 +437,24 @@ test.describe('edit mode', () => {
     await expect.poll(() => editorHasFocus(page)).toBe(false);
   });
 
+  test('the open search panel follows the editor theme when it differs from the system', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await openFixture(page);
+    await clickIntoAdditions(page);
+    await page.keyboard.press('ControlOrMeta+f');
+    const inputBox = page.locator('[data-input-box][data-find]');
+    const input = inputBox.getByRole('textbox');
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+    await expect(input).toHaveCSS('color', 'rgb(250, 250, 250)');
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await runFullRender(page);
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+  });
+
   test('a queued focus yields to the search panel when the host render lands later', async ({
     page,
   }) => {

@@ -694,6 +694,30 @@ describe('CodeView search API', () => {
     }
   });
 
+  test('updates the open panel when an empty CodeView renders a new theme', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({ theme: 'pierre-dark' });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      viewer.openSearch();
+      const panelRoot = getSearchPanelRoot(root);
+      const themeStyle = panelRoot.querySelector<HTMLStyleElement>(
+        'style[data-theme-css]'
+      );
+      expect(themeStyle?.textContent).toContain('--diffs-bg:#0a0a0a;');
+
+      viewer.setOptions({ theme: 'pierre-light' });
+      expect(themeStyle?.textContent).toContain('--diffs-bg:#0a0a0a;');
+      await waitFor(
+        () => themeStyle?.textContent?.includes('--diffs-bg:#ffffff;') === true
+      );
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('applies the host unsafeCSS inside the panel after its own styles', () => {
     const dom = installDom();
     const unsafeCSS = 'input[data-search] { color: rgb(1, 2, 3); }';
@@ -705,11 +729,12 @@ describe('CodeView search API', () => {
       const styles = Array.from(
         getSearchPanelRoot(root).querySelectorAll('style')
       );
-      expect(styles).toHaveLength(2);
+      expect(styles).toHaveLength(3);
       expect(styles[0].hasAttribute('data-unsafe-css')).toBe(false);
-      expect(styles[1].hasAttribute('data-unsafe-css')).toBe(true);
-      expect(styles[1].textContent).toContain('@layer unsafe {');
-      expect(styles[1].textContent).toContain(unsafeCSS);
+      expect(styles[1].hasAttribute('data-theme-css')).toBe(true);
+      expect(styles[2].hasAttribute('data-unsafe-css')).toBe(true);
+      expect(styles[2].textContent).toContain('@layer unsafe {');
+      expect(styles[2].textContent).toContain(unsafeCSS);
     } finally {
       viewer.cleanUp();
       dom.cleanup();

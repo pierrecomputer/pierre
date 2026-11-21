@@ -53,6 +53,10 @@ interface E2EEditor {
 
 interface Window {
   __codeView?: import('../../src/components/CodeView').CodeView;
+  __switchToPreloadingTheme?: (
+    failFirst: boolean,
+    waitForTheme?: Promise<void>
+  ) => Promise<void>;
   __searchStates?: import('../../src/search').SearchPanelState[];
 
   // Fixture ready flags.
@@ -133,6 +137,8 @@ interface Window {
   __syncCount?: number;
   // editable.html: force a full render, optionally moving its bounded window.
   __renderEditorWindow?: (startingLine: number) => void;
+  // Updates the standalone file or the first file in the virtualizer fixture.
+  __setEditorUnsafeCSS?: (unsafeCSS: string | undefined) => void;
 
   // edit-collapsed.html helpers: rendered new-file line numbers in the
   // editable column, and the primary caret's zero-based line.
