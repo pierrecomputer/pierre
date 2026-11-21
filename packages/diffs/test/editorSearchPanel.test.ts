@@ -572,6 +572,32 @@ describe('SearchPanelWidget', () => {
     }
   });
 
+  test('search option toggles swap outline icons for fill icons when active', () => {
+    const harness = createWidget('foo');
+    try {
+      const icons = [
+        ['case', 'case-fill'],
+        ['whole-word', 'whole-word-fill'],
+        ['regex', 'regex-fill'],
+      ];
+
+      for (const [index, [outline, fill]] of icons.entries()) {
+        const toggle = harness.button('search-toggles', index);
+        const icon = () => toggle.querySelector('use')?.getAttribute('href');
+
+        expect(icon()).toBe(`#diffs-editor-icon-${outline}`);
+        toggle.click();
+        expect(toggle.ariaPressed).toBe('true');
+        expect(icon()).toBe(`#diffs-editor-icon-${fill}`);
+        toggle.click();
+        expect(toggle.ariaPressed).toBe('false');
+        expect(icon()).toBe(`#diffs-editor-icon-${outline}`);
+      }
+    } finally {
+      harness.cleanup();
+    }
+  });
+
   test('Escape closes the panel and notifies the host', async () => {
     const harness = createWidget('foo foo foo');
     try {

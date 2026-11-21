@@ -334,16 +334,18 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // announce it.
     const makeToggle = (
       icon: SVGSpriteNames,
+      activeIcon: SVGSpriteNames,
       title: string,
       key: 'caseSensitive' | 'wholeWord' | 'regex'
     ) => {
       const button = iconButton({
-        icon,
+        icon: searchParams[key] ? activeIcon : icon,
         label: title,
         size: 14,
         onClick: () => {
           const next = !searchParams[key];
           button.ariaPressed = String(next);
+          button.innerHTML = getEditorIconSvg(next ? activeIcon : icon, 14);
           updateSearchParam(key, next);
         },
       });
@@ -353,16 +355,19 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     const caseSensitiveToggle = makeToggle(
       'case',
+      'case-fill',
       i18n.t('matchCase'),
       'caseSensitive'
     );
     const wholeWordToggle = makeToggle(
       'whole-word',
+      'whole-word-fill',
       i18n.t('wholeWord'),
       'wholeWord'
     );
     const regexToggle = makeToggle(
       'regex',
+      'regex-fill',
       i18n.t('regularExpression'),
       'regex'
     );
