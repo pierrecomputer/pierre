@@ -1568,24 +1568,127 @@ for (const diffStyle of ['split', 'unified']) {
   });
 }
 
-test('the open search panel follows the default light and dark themes', async ({
+for (const retry of [false, true]) {
+  test(`the open search panel picks up a ${retry ? 'retried' : 'preloaded'} theme when the view is ready`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/test/e2e/fixtures/code-view-search.html');
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    const inputBox = root.locator('[data-input-box][data-find]');
+    await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+    await page.evaluate(
+      (retry) => window.__switchToPreloadingTheme!(retry),
+      retry
+    );
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(20, 37, 55)');
+    await expect(input).toHaveCSS('color', 'rgb(171, 205, 239)');
+  });
+}
+
+test('opening Find during a theme switch uses the palette on the visible rows', async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('/test/e2e/fixtures/code-view-search.html');
+  await page.goto('/test/e2e/fixtures/code-view-search.html?nestedTheme');
   const root = page.locator('[data-code-view-root]');
+  const file = root.locator('diffs-container').first();
+  await expect(file).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+  const finishLoad = await page.evaluateHandle(() => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const loaded = window.__switchToPreloadingTheme!(false, promise);
+    return () => {
+      resolve();
+      return loaded;
+    };
+  });
   await root.focus();
   await page.keyboard.press('ControlOrMeta+f');
-
-  const input = root.getByRole('textbox', { name: 'Search' });
   const inputBox = root.locator('[data-input-box][data-find]');
   await expect(inputBox).toHaveCSS('background-color', 'rgb(10, 10, 10)');
-  await expect(inputBox).toHaveCSS('outline-color', 'rgb(0, 159, 255)');
-  await expect(input).toHaveCSS('color', 'rgb(250, 250, 250)');
+  await expect(file).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+  await finishLoad.evaluate((finish) => finish());
+  await expect(file).toHaveCSS('background-color', 'rgb(20, 37, 55)');
+  await expect(inputBox).toHaveCSS('background-color', 'rgb(20, 37, 55)');
+});
 
-  await page.emulateMedia({ colorScheme: 'light' });
-  await expect(inputBox).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+for (const nested of [false, true]) {
+  test(`the open search panel follows the default light and dark themes ${nested ? 'inside a light file' : 'in a standalone CodeView'}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html${nested ? '?nestedTheme' : ''}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+
+    const input = root.getByRole('textbox', { name: 'Search' });
+    const inputBox = root.locator('[data-input-box][data-find]');
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+    await expect(inputBox).toHaveCSS('outline-color', 'rgb(0, 159, 255)');
+    await expect(input).toHaveCSS('color', 'rgb(250, 250, 250)');
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+  });
+}
+
+test('scrolling across files leaves the open panel styles untouched', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?sliced&unsafe');
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.locator('[data-line]').first()).toBeVisible();
+  await page.evaluate(() => window.__codeView!.openSearch());
+  const panel = root.locator('[data-search-panel-overlay]');
+  const result = await panel.evaluate(async (host) => {
+    const view = window.__codeView!;
+    const styles = Array.from(
+      host.shadowRoot!.querySelectorAll(
+        'style[data-theme-css], style[data-unsafe-css]'
+      )
+    );
+    let writes = 0;
+    const observer = new MutationObserver((records) => {
+      writes += records.length;
+    });
+    for (const style of styles) {
+      observer.observe(style, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    }
+    try {
+      for (const id of ['file-1', 'file-2', 'file-0']) {
+        view.scrollTo({
+          type: 'line',
+          id,
+          lineNumber: 300,
+          align: 'center',
+          behavior: 'instant',
+        });
+        view.render(true);
+        await new Promise(requestAnimationFrame);
+        if (!view.getRenderedItems().some((item) => item.id === id)) {
+          throw new Error(`Expected ${id} to be rendered`);
+        }
+      }
+      return {
+        retained: styles.filter((style) => style.isConnected).length,
+        writes: writes + observer.takeRecords().length,
+      };
+    } finally {
+      observer.disconnect();
+    }
+  });
+  expect(result).toEqual({ retained: 2, writes: 0 });
 });
 
 test('unsafeCSS reaches the CodeView search panel and wins over its own styles', async ({
@@ -1600,6 +1703,26 @@ test('unsafeCSS reaches the CodeView search panel and wins over its own styles',
     .getByRole('textbox', { name: 'Search' });
   await expect(input).toBeFocused();
   await expect(input).toHaveCSS('color', 'rgb(1, 2, 3)');
+  await input.fill('github');
+  await page.evaluate(() => {
+    const view = window.__codeView!;
+    view.setOptions({
+      ...view.options,
+      unsafeCSS: 'input[data-search] { color: rgb(4, 5, 6); }',
+    });
+  });
+  await expect(input).toHaveCSS('color', 'rgb(4, 5, 6)');
+  await page.evaluate(() => {
+    const view = window.__codeView!;
+    view.setOptions({
+      ...view.options,
+      unsafeCSS: undefined,
+      themeType: 'light',
+    });
+  });
+  await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+  await expect(input).toHaveValue('github');
+  await expect(input).toBeFocused();
 });
 
 for (const kind of ['file', 'split'] as const) {

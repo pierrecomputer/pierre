@@ -13,6 +13,7 @@ import type {
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import { resolveSearchShortcut } from '../editor/command';
 import { getSearchQueryFromSelection } from '../editor/selection';
+import { getHighlighterIfLoaded } from '../highlighter/shared_highlighter';
 import {
   BACKGROUND_TASK_BUDGET_MS,
   dequeueBackgroundTask,
@@ -23,7 +24,9 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type { FileDiffMetadata } from '../types';
+import { wrapThemeCSS } from '../utils/cssWrappers';
 import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
+import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getLineIndexForDiff } from '../utils/getLineIndexForDiff';
 import {
   areCodeViewSearchMatchesEqual,
@@ -95,6 +98,8 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     currentPosition: undefined,
   };
   private panel: SearchPanelWidget<CodeViewSearchMatch> | undefined;
+  private renderedThemeCSS: string | undefined;
+  private themeDirty = true;
   private matchesDirty = false;
   private highlighter: SearchHighlighter | undefined;
 
@@ -125,7 +130,7 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
       // Ahead of a CodeView header, so the panel stays pinned to the top of the
       // scroll view instead of starting below the header.
       containerElement: view.getHeaderElement() ?? container,
-      themeCSS: view.getSearchPanelThemeCSS(),
+      themeCSS: this.renderedThemeCSS,
       unsafeCSS: view.options.unsafeCSS,
       defaultQuery: query ?? this.getQueryFromScope(),
       defaults: view.options.searchOptions?.defaults,
@@ -311,15 +316,43 @@ export class CodeViewSearchManager<LAnnotation, Caret> {
     previousOptions: CodeViewOptions<LAnnotation, Caret>,
     nextOptions: CodeViewOptions<LAnnotation, Caret>
   ): void {
-    this.syncTheme();
+    if (previousOptions.unsafeCSS !== nextOptions.unsafeCSS) {
+      this.panel?.setUnsafeCSS(nextOptions.unsafeCSS);
+    }
     if (hasSearchIndexOptionChanged(previousOptions, nextOptions)) {
       this.invalidateScan();
       this.markMatchesDirty();
     }
   }
 
-  public syncTheme(): void {
-    this.panel?.setThemeCSS(this.view.getSearchPanelThemeCSS());
+  public invalidateTheme(): void {
+    this.themeDirty = true;
+  }
+
+  public clearTheme(): void {
+    this.renderedThemeCSS = undefined;
+    this.themeDirty = true;
+  }
+
+  // Keep the palette from the last ready render even while Find is closed.
+  // Opening it while the next theme loads then matches the code on screen.
+  public flushPendingTheme(): void {
+    if (!this.themeDirty) {
+      return;
+    }
+    const theme = this.view.getTheme();
+    const highlighter = getHighlighterIfLoaded({ theme });
+    if (highlighter == null) {
+      return;
+    }
+    const baseThemeType =
+      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
+    this.renderedThemeCSS = wrapThemeCSS(
+      getHighlighterThemeStyles({ theme, highlighter }),
+      baseThemeType ?? this.view.options.themeType ?? 'system'
+    );
+    this.themeDirty = false;
+    this.panel?.setThemeCSS(this.renderedThemeCSS);
   }
 
   // An item's editor drew its rows again.

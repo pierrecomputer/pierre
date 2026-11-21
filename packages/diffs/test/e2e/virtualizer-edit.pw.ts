@@ -96,6 +96,25 @@ async function openWithCaretOnLine2(page: Page): Promise<void> {
 // one out of view swaps its rows for a placeholder, which removes the
 // focused content element.
 test.describe('Virtualizer edit session across a placeholder swap', () => {
+  test('removing custom CSS while offscreen clears it from the open Find panel', async ({
+    page,
+  }) => {
+    await openWithCaretOnLine2(page);
+    await page.evaluate(() =>
+      window.__setEditorUnsafeCSS!(
+        'input[data-search] { color: rgb(1, 2, 3); }'
+      )
+    );
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = page.locator('[data-host="first"] input[data-search]');
+    await expect(input).toHaveCSS('color', 'rgb(1, 2, 3)');
+    await wheelUntil(page, 600, async () => (await state(page)).placeholder);
+    await page.evaluate(() => window.__setEditorUnsafeCSS!(undefined));
+    await wheelUntil(page, -600, () => showsLine(page, 2));
+    await expect(input).toBeVisible();
+    await expect(input).not.toHaveCSS('color', 'rgb(1, 2, 3)');
+  });
+
   test('focus and the caret come back when the rows render again', async ({
     page,
   }) => {

@@ -61,9 +61,7 @@ import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
-import { wrapThemeCSS } from '../utils/cssWrappers';
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
-import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isUserScrollInput } from '../utils/isUserScrollInput';
@@ -1494,6 +1492,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.footer.height = 0;
     this.root = undefined;
     this.container = undefined;
+    this.search.clearTheme();
     if (resetFailed) {
       throw resetFailure;
     }
@@ -2110,7 +2109,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   public onThemeChange(): void {
     this.invalidateElementPool();
-    this.search.syncTheme();
+    this.search.invalidateTheme();
+    this.render();
   }
 
   public setOptions(
@@ -2125,7 +2125,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const previousLayout = this.getLayout();
     const { itemMetricsCache: previousItemMetrics } = this;
 
-    if (shouldClearPool(prevOptions, options)) {
+    const themeChanged = hasThemeOptionChanged(prevOptions, options);
+    if (themeChanged) {
+      this.search.invalidateTheme();
+    }
+    if (themeChanged || prevOptions.unsafeCSS !== options.unsafeCSS) {
       this.invalidateElementPool();
     }
 
@@ -2166,14 +2170,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     this.syncItemEditors();
 
-    // Render when there are items, OR when the header/footer presence changed —
-    // an otherwise-empty CodeView still needs a render to mount/unmount its hosts.
+    // An empty view can still have a search panel or header/footer to update.
     const headerFooterChanged =
       prevOptions.renderCodeViewHeader !== options.renderCodeViewHeader ||
       prevOptions.renderCodeViewFooter !== options.renderCodeViewFooter;
     if (
       !this.isComponentManaged &&
-      (this.items.length > 0 || headerFooterChanged)
+      (this.items.length > 0 || headerFooterChanged || themeChanged)
     ) {
       this.render();
     }
@@ -2233,7 +2236,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         }
 
         this.clearReadySubscription();
-        this.search.syncTheme();
         this.render(true);
       }
     );
@@ -2255,11 +2257,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.pendingHighlighterTheme = undefined;
   }
 
-  private isSharedHighlighterReady(): boolean {
-    const theme =
+  /** @internal The worker pool's theme takes precedence over the view option. */
+  public getTheme(): DiffsThemeNames | ThemesType {
+    return (
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
-      DEFAULT_THEMES;
+      DEFAULT_THEMES
+    );
+  }
+
+  private isSharedHighlighterReady(): boolean {
+    const theme = this.getTheme();
     if (getHighlighterIfLoaded({ theme }) != null) {
       this.clearReadySubscription();
       return true;
@@ -2284,7 +2292,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             return;
           }
           this.clearReadySubscription();
-          this.search.syncTheme();
           this.render(true);
         },
         (error: unknown) => {
@@ -2335,25 +2342,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   public getContainerElement(): HTMLElement | undefined {
     return this.root;
-  }
-
-  // The search panel lives outside item shadow roots, so it needs its own copy
-  // of the active theme variables rather than inheriting them from an item.
-  public getSearchPanelThemeCSS(): string | undefined {
-    const theme =
-      this.workerManager?.getFileRenderOptions().theme ??
-      this.options.theme ??
-      DEFAULT_THEMES;
-    const highlighter = getHighlighterIfLoaded({ theme });
-    if (highlighter == null) {
-      return undefined;
-    }
-    const baseThemeType =
-      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
-    return wrapThemeCSS(
-      getHighlighterThemeStyles({ theme, highlighter }),
-      baseThemeType ?? this.options.themeType ?? 'system'
-    );
   }
 
   // The always-rendered header/footer host elements, or undefined when the
@@ -4039,6 +4027,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       startingIndex <= lastRenderedIndex ? startingIndex : -1;
     this.renderState.lastIndex = lastRenderedIndex;
 
+    this.search.flushPendingTheme();
     this.flushSlotCoordinator();
     this.flushManagers(updatedItems);
     // Read phase: measure a freshly mounted or re-populated host now so its
@@ -4977,7 +4966,7 @@ function prepareItemInstance<LAnnotation, Caret>(
   }
 }
 
-function shouldClearPool<LAnnotation, Caret>(
+function hasThemeOptionChanged<LAnnotation, Caret>(
   previousOptions: CodeViewOptions<LAnnotation, Caret>,
   nextOptions: CodeViewOptions<LAnnotation, Caret>
 ): boolean {
@@ -4987,8 +4976,7 @@ function shouldClearPool<LAnnotation, Caret>(
       nextOptions.theme ?? DEFAULT_THEMES
     ) ||
     (previousOptions.themeType ?? 'system') !==
-      (nextOptions.themeType ?? 'system') ||
-    previousOptions.unsafeCSS !== nextOptions.unsafeCSS
+      (nextOptions.themeType ?? 'system')
   );
 }
 

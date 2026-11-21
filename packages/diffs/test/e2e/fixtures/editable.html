@@ -122,6 +122,10 @@ const baz = foo;
           forceRender: true,
           renderRange: windowed ? renderRange(startingLine) : undefined,
         });
+      window.__setEditorUnsafeCSS = (unsafeCSS) => {
+        instance.setOptions({ ...instance.options, unsafeCSS });
+        instance.rerender();
+      };
       editor.edit(instance);
 
       const waitForEditable = async () => {

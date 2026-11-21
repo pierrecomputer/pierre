@@ -694,7 +694,7 @@ describe('CodeView search API', () => {
     }
   });
 
-  test('themes an open panel with the CodeView theme', () => {
+  test('updates the open panel when an empty CodeView renders a new theme', async () => {
     const dom = installDom();
     const viewer = new CodeView({ theme: 'pierre-dark' });
     try {
@@ -708,7 +708,10 @@ describe('CodeView search API', () => {
       expect(themeStyle?.textContent).toContain('--diffs-bg:#0a0a0a;');
 
       viewer.setOptions({ theme: 'pierre-light' });
-      expect(themeStyle?.textContent).toContain('--diffs-bg:#ffffff;');
+      expect(themeStyle?.textContent).toContain('--diffs-bg:#0a0a0a;');
+      await waitFor(
+        () => themeStyle?.textContent?.includes('--diffs-bg:#ffffff;') === true
+      );
     } finally {
       viewer.cleanUp();
       dom.cleanup();

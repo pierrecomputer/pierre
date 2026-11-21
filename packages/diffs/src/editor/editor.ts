@@ -6647,6 +6647,11 @@ export class Editor<
     }
   }
 
+  /** @internal Mirrors a change to the file's custom CSS into an open Find panel. */
+  __setSearchPanelUnsafeCSS(css: string | undefined): void {
+    this.#searchPanel?.setUnsafeCSS(css);
+  }
+
   // Opens the search panel in the requested mode. If a panel is already open,
   // it switches that panel's mode in place (preserving the current query)
   // rather than recreating it.

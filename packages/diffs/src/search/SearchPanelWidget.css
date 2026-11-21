@@ -26,7 +26,6 @@
         )
       )
     );
-    color-scheme: light dark;
     position: sticky;
     top: var(--diffs-search-panel-inset-top, 16px);
     right: var(--diffs-search-panel-inset-right, 16px);
@@ -40,6 +39,14 @@
   }
 
   :host([data-search-panel-overlay]) {
+    /* A CodeView can sit inside another file. Resolve its own theme here. */
+    --diffs-fg: initial;
+    --diffs-bg: initial;
+    --diffs-modified-base: initial;
+    --diffs-modified-color: initial;
+    --diffs-light-modified-color: initial;
+    --diffs-dark-modified-color: initial;
+    color-scheme: light dark;
     pointer-events: none;
   }
 

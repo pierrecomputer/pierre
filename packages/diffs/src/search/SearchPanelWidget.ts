@@ -1,4 +1,4 @@
-import { THEME_CSS_ATTRIBUTE, UNSAFE_CSS_ATTRIBUTE } from '../constants';
+import { THEME_CSS_ATTRIBUTE } from '../constants';
 import {
   resolveFindAgainShortcut,
   resolveSearchShortcut,
@@ -14,6 +14,7 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import {
   type MatchRange,
@@ -78,6 +79,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #themeStyle: HTMLStyleElement;
+  #unsafeStyle?: HTMLStyleElement;
   #initializeMatches: () => void;
   #mount?: () => void;
   #closed = false;
@@ -584,13 +586,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     h('style', { textContent: searchPanelCSS }, shadowRoot);
     this.#themeStyle = h('style', { textContent: themeCSS ?? '' }, shadowRoot);
     this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
-    if (unsafeCSS != null) {
-      h(
-        'style',
-        { textContent: wrapUnsafeCSS(unsafeCSS) },
-        shadowRoot
-      ).setAttribute(UNSAFE_CSS_ATTRIBUTE, '');
-    }
+    this.setUnsafeCSS(unsafeCSS);
 
     this.#widgetElement = h('div', {
       dataset: 'editorWidget',
@@ -640,7 +636,23 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   }
 
   setThemeCSS(themeCSS: string | undefined): void {
-    this.#themeStyle.textContent = themeCSS ?? '';
+    const css = themeCSS ?? '';
+    if (this.#themeStyle.textContent !== css) {
+      this.#themeStyle.textContent = css;
+    }
+  }
+
+  setUnsafeCSS(css: string | undefined): void {
+    if (!css) {
+      this.#unsafeStyle?.remove();
+      this.#unsafeStyle = undefined;
+      return;
+    }
+    if (this.#unsafeStyle == null) {
+      this.#unsafeStyle = createUnsafeCSSStyleNode();
+      this.#themeStyle.after(this.#unsafeStyle);
+    }
+    this.#unsafeStyle.textContent = wrapUnsafeCSS(css);
   }
 
   hasQuery(): boolean {
