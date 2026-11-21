@@ -153,9 +153,9 @@ const patches = parsePatchFiles(patch, {
 ```
 
 For file pairs, `parseDiffFromFile(oldFile, newFile, options?, throwOnError?)`
-accepts `ParseDiffOptions`, including jsdiff settings such as `context` and
+accepts `ParseDiffOptions`, including diff settings such as `context` and
 `ignoreWhitespace`, plus `disableLineMatching`. The fourth `throwOnError`
-argument is unchanged. jsdiff settings do not apply to existing patch text.
+argument is unchanged. Diff settings do not apply to existing patch text.
 
 `disableLineMatching` is a parse-time escape hatch, defaulting to `false`. When
 true, it preserves the patch's change blocks and line order without similarity

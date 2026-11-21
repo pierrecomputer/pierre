@@ -1409,10 +1409,10 @@ export function listTokenTypes(
 }
 
 // Maximum token count supported by the fixed memory regions.
-// The span cache holds 73 slots of 66 bytes. Theme tables and SIMD
+// The span cache holds 75 slots of 66 bytes. Theme tables and SIMD
 // comparisons cover 384 bytes (76 five-byte records). Packed live records
 // use one byte for the ID. Resize these regions before increasing the limit.
-const tokenSlotLimit = 73;
+const tokenSlotLimit = 75;
 
 /** Generate the checked-in language lookup and derive Lang from its keys. */
 export function generateLanguages(languages: Record<string, number>): string {

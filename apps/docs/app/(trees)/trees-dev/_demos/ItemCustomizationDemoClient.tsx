@@ -218,23 +218,11 @@ function areSamePathLists(
   return true;
 }
 
-// The selection the tree should show on this render, read from the ref the demo
-// keeps current while restoring selection across option changes. Kept in its own
-// hook because the render-time ref read is deliberate; the boundary lets the demo
-// component stay compilable.
-function useDesiredSelectedPaths(
-  desiredSelectedPathsRef: RefObject<readonly string[]>
-) {
-  /* oxlint-disable-next-line react/refs -- this hook preserves the existing
-   * render-time selection snapshot */
-  return desiredSelectedPathsRef.current;
-}
-
 function HydratedItemCustomizationTree({
   containerHtml,
   contextMenuRootRef,
   contextMenuSlotRef,
-  desiredSelectedPaths,
+  desiredSelectedPathsRef,
   gitStatus,
   hasHydratedTreeRef,
   isRestoringSelectionRef,
@@ -243,7 +231,7 @@ function HydratedItemCustomizationTree({
   containerHtml: string;
   contextMenuRootRef: { current: ReactDomRoot | null };
   contextMenuSlotRef: { current: HTMLDivElement | null };
-  desiredSelectedPaths: readonly string[];
+  desiredSelectedPathsRef: RefObject<readonly string[]>;
   gitStatus: FileTreePathOptions['gitStatus'];
   hasHydratedTreeRef: { current: boolean };
   isRestoringSelectionRef: { current: boolean };
@@ -257,6 +245,9 @@ function HydratedItemCustomizationTree({
       return;
     }
 
+    // Restore the selection when options recreate the tree. Selecting a row
+    // in the current tree should leave its expanded folders alone.
+    const desiredSelectedPaths = desiredSelectedPathsRef.current;
     const contextMenuSlotElement =
       contextMenuSlotRef.current ?? document.createElement('div');
     contextMenuSlotRef.current = contextMenuSlotElement;
@@ -276,9 +267,6 @@ function HydratedItemCustomizationTree({
     }
     hasHydratedTreeRef.current = true;
 
-    // Selection changes should update rows in place. We only snapshot the
-    // current selection when mounting a replacement tree for a structural
-    // control change such as a different decoration preset.
     isRestoringSelectionRef.current = desiredSelectedPaths.length > 0;
     const restoreSelectionFrame = requestAnimationFrame(() => {
       restoreSelectedPaths(fileTree, desiredSelectedPaths);
@@ -300,7 +288,7 @@ function HydratedItemCustomizationTree({
     containerHtml,
     contextMenuRootRef,
     contextMenuSlotRef,
-    desiredSelectedPaths,
+    desiredSelectedPathsRef,
     gitStatus,
     hasHydratedTreeRef,
     isRestoringSelectionRef,
@@ -463,7 +451,6 @@ export function ItemCustomizationDemoClient({
     gitStatusEnabled ? gitStatusPresetId : 'git-status-off',
     decorationPresetId,
   ].join(':');
-  const desiredSelectedPaths = useDesiredSelectedPaths(desiredSelectedPathsRef);
 
   return (
     <div className="space-y-6">
@@ -663,7 +650,7 @@ export function ItemCustomizationDemoClient({
             containerHtml={containerHtml}
             contextMenuRootRef={contextMenuRootRef}
             contextMenuSlotRef={contextMenuSlotRef}
-            desiredSelectedPaths={desiredSelectedPaths}
+            desiredSelectedPathsRef={desiredSelectedPathsRef}
             gitStatus={gitStatus}
             hasHydratedTreeRef={hasHydratedTreeRef}
             isRestoringSelectionRef={isRestoringSelectionRef}

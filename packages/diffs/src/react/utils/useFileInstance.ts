@@ -32,6 +32,7 @@ import { noopRender } from '../constants';
 import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
+import { useEditorAttach } from './useEditorAttach';
 import { useForceUpdate } from './useForceUpdate';
 import { useNextRenderData } from './useNextRenderData';
 import { useStableCallback } from './useStableCallback';
@@ -134,7 +135,7 @@ export function useFileInstance<LAnnotation, Caret>({
     file,
     lineAnnotations: lineAnnotations ?? EMPTY_LINE_ANNOTATIONS,
   };
-  const disposeEditorRef = useRef<() => void>(null);
+  const editorAttach = useEditorAttach<LAnnotation, Caret>();
   const getEditor = useStableCallback(() => {
     if (createEditor == null) {
       throw new Error('File: EditContext is not attached');
@@ -177,9 +178,6 @@ export function useFileInstance<LAnnotation, Caret>({
           forceUpdate
         );
       }
-      if (edit && disposeEditorRef.current == null) {
-        disposeEditorRef.current = applyEdit(instanceRef.current, getEditor);
-      }
       void instanceRef.current.hydrate({
         file,
         fileContainer: node,
@@ -192,7 +190,7 @@ export function useFileInstance<LAnnotation, Caret>({
       }
       instanceRef.current.cleanUp();
       instanceRef.current = null;
-      disposeEditorRef.current = null;
+      editorAttach.forget();
     }
   });
 
@@ -210,10 +208,8 @@ export function useFileInstance<LAnnotation, Caret>({
     const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     // Detach the editor before rendering when editing turns off
-    if (!edit && disposeEditorRef.current != null) {
-      const { current: disposeEditor } = disposeEditorRef;
-      disposeEditorRef.current = null;
-      disposeEditor();
+    if (!edit) {
+      editorAttach.detach();
     }
     const resolved = resolveAcceptedValues(
       file,
@@ -228,12 +224,16 @@ export function useFileInstance<LAnnotation, Caret>({
     if (selectedLines !== undefined) {
       instance.setSelectedLines(selectedLines);
     }
-    // Attach the editor after rendering when editing turns on. The editor can
-    // show content that is still highlighting, so render the children again
-    // from the edit session.
-    if (edit && disposeEditorRef.current == null) {
-      disposeEditorRef.current = applyEdit(instance, getEditor);
-      forceUpdate();
+    // Attach the editor after rendering when editing turns on, once a pool
+    // highlight still in flight has rendered. The editor can show content
+    // that is still highlighting, so render the children again from the edit
+    // session.
+    if (edit) {
+      editorAttach.attachWhenReady(
+        instance,
+        () => applyEdit(instance, getEditor),
+        forceUpdate
+      );
     }
   });
 

@@ -37,6 +37,7 @@
       changed[changed.length - 2] = 'const later = true;';
       const options = {
         disableFileHeader: true,
+        tokenizeMaxLineLength: params.has('cut') ? 113 : undefined,
         disableLineNumbers: params.has('hideNumbers'),
         diffStyle: type === 'unified' ? 'unified' : 'split',
         expandUnchanged: true,

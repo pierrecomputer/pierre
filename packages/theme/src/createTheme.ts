@@ -49,6 +49,10 @@ export function createTheme({
         kind === 'dark' ? 0.3 : 0.18
       ),
       'editor.lineHighlightBackground': alpha(c.accent.subtle, 0.55),
+      'editor.findMatchBackground': c.search.currentBackground,
+      'editor.findMatchForeground': c.search.foreground,
+      'editor.findMatchHighlightBackground': c.search.matchBackground,
+      'editor.findMatchHighlightForeground': c.search.foreground,
       'editorCursor.foreground': c.accent.primary,
       'editorLineNumber.foreground': c.fg.fg3,
       'editorLineNumber.activeForeground': c.fg.fg2,

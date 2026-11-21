@@ -477,9 +477,9 @@ void t.test(
   }
 );
 
-void t.test('markdown: lines of many `<` or `[` stay linear', () => {
+void t.test('markdown: repeated unmatched inline markers stay linear', () => {
   // each `<` used to rescan to the line end: 80k of them took ~760ms
-  for (const line of ['<a', '[', '[a](', '[a] ', '<a "x>" ']) {
+  for (const line of ['<a', '[', '[a](', '[a] ', '<a "x>" ', '~~a ']) {
     const code = line.repeat(80000) + '\n';
     const start = performance.now();
     const out = checkInvariants(markdown.hl, code);
@@ -544,6 +544,59 @@ void t.test(
         ['escaped', null],
         ['\\*', 'string.escape'],
       ]
+    );
+  }
+);
+
+void t.test(
+  'markdown: paired tildes and triple emphasis respect inline boundaries',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'markdown',
+        'before ___both___ ~~see `~~` here~~ after\n' +
+          '***first *** last***\n' +
+          '~one~ and ~~ open ~~ and ~~unclosed\n' +
+          '`***literal*** ~~literal~~` \\~\\~escaped\\~\\~'
+      ),
+      [
+        ['before', null],
+        ['___both___', 'emphasis.strong.italic'],
+        ['~~see `~~` here~~', 'markup.strikethrough'],
+        ['after', null],
+        ['***first *** last***', 'emphasis.strong.italic'],
+        ['~one~', 'markup.strikethrough'],
+        ['and ~~ open ~~ and ~~unclosed', null],
+        ['`***literal*** ~~literal~~`', 'text.literal'],
+        ['\\~\\~', 'string.escape'],
+        ['escaped', null],
+        ['\\~\\~', 'string.escape'],
+      ]
+    );
+  }
+);
+
+void t.test('markdown: mixed-width emphasis runs still pair', () => {
+  assert.deepEqual(
+    tokenKinds('markdown', '***foo** bar*\n**a*\n****b****\nx ~~~c~~~'),
+    [
+      ['***foo**', 'emphasis.strong'],
+      ['bar*', null],
+      ['**a*', 'emphasis'],
+      ['****b***', 'emphasis.strong.italic'],
+      ['*', null],
+      ['x ~~~c~~~', null],
+    ]
+  );
+});
+
+void t.test(
+  'markdown: a cached emphasis miss does not hide later closers',
+  () => {
+    const kinds = tokenKinds('markdown', '*a <x y="`"> *b* `c`');
+    assert.deepEqual(
+      kinds.find(([text]) => text === '*b*'),
+      ['*b*', 'emphasis']
     );
   }
 );

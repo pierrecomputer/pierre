@@ -7,7 +7,7 @@
   "dependencies": {
     "@pierre/diffs": "workspace:*",
     "@pierre/icons": "catalog:",
-    "diff": "catalog:",
+    "@pierre/patches": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "catalog:"

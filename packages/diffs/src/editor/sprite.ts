@@ -4,6 +4,7 @@ export type SVGSpriteNames =
   | 'case'
   | 'chevron'
   | 'close'
+  | 'loader'
   | 'regex'
   | 'whole-word'
   | 'replace'
@@ -11,14 +12,17 @@ export type SVGSpriteNames =
 
 // Icon artwork is sourced from `@pierre/icons` (IconSearch, IconX,
 // IconArrowRight, IconType, IconTypeWord, IconRegex, IconReplace, IconChevron,
-// IconReplaceAll) so the editor matches the rest of the product. The arrow glyph
-// is the full-size right arrow rotated to point up/down for the search
-// "previous"/"next" controls. `getEditorIconSvg` omits an outer viewBox so each
-// symbol scales to fill the requested size regardless of its intrinsic
-// coordinate system.
+// IconReplaceAll, IconLoader) so the editor matches the rest of the product.
+// The arrow glyph is the full-size right arrow rotated to point up/down for
+// the search "previous"/"next" controls. `getEditorIconSvg` omits an outer
+// viewBox so each symbol scales to fill the requested size regardless of its
+// intrinsic coordinate system.
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="diffs-editor-icon-close" viewBox="0 0 16 16">
     <path fill="currentColor" d="M3.21967 3.21967C3.51256 2.92678 3.98744 2.92678 4.28033 3.21967L8 6.93934L11.7197 3.21967C12.0126 2.92678 12.4874 2.92678 12.7803 3.21967C13.0732 3.51256 13.0732 3.98744 12.7803 4.28033L9.06066 8L12.7803 11.7197C13.0732 12.0126 13.0732 12.4874 12.7803 12.7803C12.4874 13.0732 12.0126 13.0732 11.7197 12.7803L8 9.06066L4.28033 12.7803C3.98744 13.0732 3.51256 13.0732 3.21967 12.7803C2.92678 12.4874 2.92678 12.0126 3.21967 11.7197L6.93934 8L3.21967 4.28033C2.92678 3.98744 2.92678 3.51256 3.21967 3.21967Z"></path>
+  </symbol>
+  <symbol id="diffs-editor-icon-loader" viewBox="0 0 16 16">
+    <path d="M7.25 4V1a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-1.5 0"/><path d="M4.641 5.702 2.521 3.58A.75.75 0 1 1 3.58 2.52l2.121 2.121a.75.75 0 0 1-1.06 1.06" opacity=".8"/><path d="M1 7.25h3a.75.75 0 0 1 0 1.5H1a.75.75 0 0 1 0-1.5" opacity=".6"/><path d="m2.52 12.42 2.121-2.122a.75.75 0 1 1 1.061 1.06L3.581 13.48a.75.75 0 0 1-1.061-1.06" opacity=".5"/><path d="M7.25 15v-3a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-1.5 0" opacity=".4"/><path d="m12.42 13.48-2.122-2.121a.75.75 0 0 1 1.06-1.061l2.122 2.121a.75.75 0 1 1-1.06 1.061" opacity=".3"/><path d="M12 7.25h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5" opacity=".2"/><path d="M10.298 4.641 12.42 2.52a.75.75 0 1 1 1.061 1.06l-2.121 2.122a.75.75 0 1 1-1.06-1.06" opacity=".1"/>
   </symbol>
   <symbol id="diffs-editor-icon-arrow-up" viewBox="0 0 16 16">
     <path fill="currentColor" transform="rotate(-90 8 8)" d="M8.46967 2.21967C8.17678 2.51256 8.17678 2.98744 8.46967 3.28033L12.4393 7.25H1.75C1.33579 7.25 1 7.58579 1 8C1 8.41421 1.33579 8.75 1.75 8.75H12.4393L8.46967 12.7197C8.17678 13.0126 8.17678 13.4874 8.46967 13.7803C8.76256 14.0732 9.23744 14.0732 9.53033 13.7803L14.7803 8.53033C15.0732 8.23744 15.0732 7.76256 14.7803 7.46967L9.53033 2.21967C9.23744 1.92678 8.76256 1.92678 8.46967 2.21967Z"></path>

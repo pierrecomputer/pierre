@@ -51,7 +51,7 @@ export function recomputeDiffHunks(
     splitLineCount: recomputed.splitLineCount,
     unifiedLineCount: recomputed.unifiedLineCount,
     additionLines: recomputed.additionLines,
-    deletionLines: recomputed.deletionLines,
+    deletionLines: diff.deletionLines,
     additionCharacterCount: recomputed.additionCharacterCount,
     deletionCharacterCount: recomputed.deletionCharacterCount,
     type: recomputed.type,
@@ -133,7 +133,7 @@ export function recomputeTopAlignedAdditionDiff(
     splitLineCount: recomputed.splitLineCount,
     unifiedLineCount: recomputed.unifiedLineCount,
     additionLines,
-    deletionLines: recomputed.deletionLines,
+    deletionLines: diff.deletionLines,
     additionCharacterCount,
     deletionCharacterCount: recomputed.deletionCharacterCount,
     type: recomputed.type,
@@ -169,62 +169,7 @@ export function recomputeDiffHunksForEdit(
       parseDiffOptions
     );
   }
-  const additionLines = diff.additionLines;
-  const recomputed = recomputeDiffHunks(diff, parseDiffOptions);
-  preserveTrailingEditorBlankLine(recomputed, additionLines);
-  return recomputed;
-}
-
-function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
-  return additionLines.length > 1 && additionLines.at(-1) === '';
-}
-
-// Re-adds the editor's phantom trailing empty line (a document ending in a
-// newline exposes one extra empty line) as an addition row when the last
-// hunk's final change block can absorb it, so the caret keeps a rendered row.
-export function preserveTrailingEditorBlankLine(
-  recomputed: Pick<
-    FullDiffHunkUpdate,
-    'hunks' | 'additionLines' | 'splitLineCount' | 'unifiedLineCount'
-  >,
-  additionLines: string[]
-): void {
-  if (!hasTrailingEditorBlankLine(additionLines)) {
-    return;
-  }
-  const extraLineCount = additionLines.length - recomputed.additionLines.length;
-  if (extraLineCount <= 0) {
-    return;
-  }
-  const extraAdditionLineIndex = recomputed.additionLines.length;
-
-  const lastHunk = recomputed.hunks.at(-1);
-  if (lastHunk == null) {
-    return;
-  }
-
-  const lastHunkAdditionEnd = getHunkSideEndBoundary(
-    lastHunk.additionStart,
-    lastHunk.additionCount
-  );
-  if (lastHunkAdditionEnd !== extraAdditionLineIndex) {
-    return;
-  }
-
-  for (const content of lastHunk.hunkContent) {
-    if (
-      content.type === 'change' &&
-      content.additions < content.deletions &&
-      content.additionLineIndex + content.additions === extraAdditionLineIndex
-    ) {
-      recomputed.additionLines = additionLines;
-      content.additions += extraLineCount;
-      lastHunk.additionCount += extraLineCount;
-      lastHunk.additionLines += extraLineCount;
-      recomputeDiffRenderLineCounts(recomputed);
-      return;
-    }
-  }
+  return recomputeDiffHunks(diff, parseDiffOptions);
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */
@@ -387,6 +332,8 @@ function reparseHunkRegion(
   return true;
 }
 
+// Only a hunk whose lines run to the end of the file carries the "no newline
+// at end of file" marker; collapsed context after the last hunk keeps it off.
 export function syncHunkNoEOFCRFromFullFile(
   diff: FileDiffMetadata,
   hunkIndex: number
@@ -395,24 +342,33 @@ export function syncHunkNoEOFCRFromFullFile(
   if (hunk == null) {
     return;
   }
+  hunk.noEOFCRAdditions = endsFileWithoutNewline(
+    diff.additionLines,
+    hunk.additionLineIndex,
+    hunk.additionCount
+  );
+  hunk.noEOFCRDeletions = endsFileWithoutNewline(
+    diff.deletionLines,
+    hunk.deletionLineIndex,
+    hunk.deletionCount
+  );
+}
 
-  const isLastHunk = hunkIndex === diff.hunks.length - 1;
-  if (!isLastHunk) {
-    hunk.noEOFCRAdditions = false;
-    hunk.noEOFCRDeletions = false;
-    return;
-  }
-
-  const lastAdditionLine = diff.additionLines.at(-1);
-  const lastDeletionLine = diff.deletionLines.at(-1);
-  hunk.noEOFCRAdditions =
-    lastAdditionLine != null &&
-    lastAdditionLine !== '' &&
-    !lastAdditionLine.endsWith('\n');
-  hunk.noEOFCRDeletions =
-    lastDeletionLine != null &&
-    lastDeletionLine !== '' &&
-    !lastDeletionLine.endsWith('\n');
+// Whether `count` lines from `start` reach the end of `lines`, and the last
+// line has no line break.
+function endsFileWithoutNewline(
+  lines: readonly string[],
+  start: number,
+  count: number
+): boolean {
+  const last = lines.at(-1);
+  return (
+    start >= 0 &&
+    start + count === lines.length &&
+    last != null &&
+    last !== '' &&
+    !last.endsWith('\n')
+  );
 }
 
 function applyReparsedHunk(target: Hunk, parsed: Hunk): void {

@@ -5,6 +5,7 @@ import {
   type Theme,
 } from '@pierre/highlights';
 
+import { DiffsEditorTokenizer } from '../DiffsEditorTokenizer';
 import { DiffsHighlighter } from '../DiffsHighlighter';
 import { HighlightsEditorTokenizer } from '../highlights-editor';
 import { HighlightsStreamTokenizer } from '../highlights-stream';
@@ -47,10 +48,13 @@ export class HighlightsHighlighter extends DiffsHighlighter {
 
   createEditorTokenizer(
     options: DiffsEditorTokenizerOptions
-  ): HighlightsEditorTokenizer {
+  ): DiffsEditorTokenizer {
     this.assertNotDisposed();
-    return new HighlightsEditorTokenizer(options, (tokenizerOptions) =>
-      this.resolveOptions(tokenizerOptions)
+    return new DiffsEditorTokenizer(
+      new HighlightsEditorTokenizer(options, (tokenizerOptions) =>
+        this.resolveOptions(tokenizerOptions)
+      ),
+      options
     );
   }
 

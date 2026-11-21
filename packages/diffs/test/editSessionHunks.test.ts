@@ -10,17 +10,16 @@ import {
   captureExpansionAnchors,
   findDivergenceCore,
   finishEditSessionForDiff,
-  normalizeEditorLines,
   rebuildExpansionFromAnchors,
   rebuildSessionHunks,
   remapExpandedHunksForRegionChange,
 } from '../src/utils/editSessionHunks';
 import { hydratePartialDiff } from '../src/utils/hydratePartialDiff';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { processFile } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { getTrailingContextRangeSize } from '../src/utils/virtualDiffLayout';
+import { collectDiffRows } from './testUtils';
 import { verifyFileDiffHunkValues } from './testUtils';
 
 function makeLines(
@@ -56,16 +55,11 @@ function oldBounds(diff: FileDiffMetadata) {
 }
 
 function countRenderedRows(diff: FileDiffMetadata): number {
-  let rows = 0;
-  iterateOverDiff({
+  return collectDiffRows({
     diff,
     diffStyle: 'split',
     expandedHunks: true,
-    callback: () => {
-      rows++;
-    },
-  });
-  return rows;
+  }).length;
 }
 
 function pairingProjection(diff: FileDiffMetadata) {
@@ -118,14 +112,6 @@ function expectPairingParity(
   expect(pairingProjection(diff)).toEqual(pairingProjection(expected));
   expect(verifyFileDiffHunkValues(diff)).toEqual({ valid: true, errors: [] });
 }
-
-describe('normalizeEditorLines', () => {
-  test('drops only the phantom trailing empty line', () => {
-    expect(normalizeEditorLines(['a\n', 'b\n', ''])).toEqual(['a\n', 'b\n']);
-    expect(normalizeEditorLines(['a\n', 'b'])).toEqual(['a\n', 'b']);
-    expect(normalizeEditorLines([''])).toEqual(['']);
-  });
-});
 
 describe('findDivergenceCore', () => {
   test('finds replacement, insertion, and the identical case', () => {

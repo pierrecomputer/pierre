@@ -129,16 +129,18 @@ tasks:
       persistent: true
       runInCI: 'skip'
 
-  # Deliberately out of CI (parity with the pre-moon pipeline) and a graph
-  # dependent of `build`, so it must stay runInCI skip. In CI-marked shells:
-  # `CI= moonx docs:test-e2e`.
+  # These tests visit /trees-dev routes, so build and serve the Trees site.
+  # The suite runs outside CI. In CI-marked shells, use
+  # `moonx docs:test-e2e --ignore-ci-checks`.
   test-e2e:
     script:
       '(bun ./test/e2e/check-playwright-binary.ts || pnpm exec playwright
       install chromium) && pnpm exec playwright test -c
       test/e2e/playwright.config.ts'
     deps:
-      - 'build'
+      - 'build-trees-site'
+    env:
+      NEXT_PUBLIC_SITE: 'trees'
     options:
       cache: false
       runInCI: 'skip'
