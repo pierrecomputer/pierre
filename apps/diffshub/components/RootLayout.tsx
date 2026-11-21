@@ -34,10 +34,6 @@ const geistSans = Geist({
 const berkeleyMono = localFont({
   src: '../public/fonts/BerkeleyMonoVariable.woff2',
   variable: '--font-berkeley-mono',
-  declarations: [
-    { prop: 'ascent-override', value: '110%' },
-    { prop: 'descent-override', value: '44%' },
-  ],
   fallback: [
     'JetBrains Mono Box Drawing',
     'Menlo',
