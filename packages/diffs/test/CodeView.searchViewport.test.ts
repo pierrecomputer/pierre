@@ -78,7 +78,7 @@ function makeItem(
       };
 }
 
-// Uses real CodeView layout and editor documents; only the scan clock is controlled.
+// Uses real CodeView layout and editor documents with a controllable clock.
 async function withViewer(
   items: CodeViewItem<undefined>[],
   run: (context: {
@@ -86,6 +86,8 @@ async function withViewer(
     root: HTMLElement;
     states: SearchPanelState[];
     slice(): void;
+    renderFrame(): void;
+    finishScroll(): void;
     finish(): Promise<void>;
   }) => void | Promise<void>,
   options: CodeViewOptions<undefined, undefined> = {}
@@ -102,6 +104,12 @@ async function withViewer(
   });
   const clock = spyOn(performance, 'now').mockReturnValue(0);
   let ticks = 0;
+  // Step the scroll animation by one frame, independent of the host timer.
+  function renderFrame(): void {
+    ticks += 16;
+    clock.mockReturnValue(ticks);
+    viewer.render(true);
+  }
   try {
     const root = createRoot();
     viewer.setup(root);
@@ -112,6 +120,17 @@ async function withViewer(
       viewer,
       root,
       states,
+      renderFrame,
+      finishScroll: () => {
+        for (
+          let frame = 0;
+          viewer.pendingScrollTarget != null && frame < 120;
+          frame++
+        ) {
+          renderFrame();
+        }
+        expect(viewer.pendingScrollTarget).toBeUndefined();
+      },
       slice: () => {
         clock.mockImplementation(() => (ticks += 2));
       },
@@ -459,18 +478,17 @@ describe('CodeView viewport search', () => {
       test('Escape returns during a smooth scroll to the first match', async () => {
         await withViewer(
           [file],
-          async ({ viewer, root, slice }) => {
+          ({ viewer, root, renderFrame, finishScroll }) => {
             scrollToPosition(viewer, root, 517);
             fillSearch(root, 'target');
-            slice();
-            await waitFor(() => viewer.getScrollTop() > 517);
+            renderFrame();
             expect(viewer.getScrollTop()).toBeGreaterThan(517);
             expect(viewer.pendingScrollTarget).toMatchObject({
               type: 'line',
               searchMatch: true,
             });
             dispatchEscape(root);
-            await waitFor(() => viewer.pendingScrollTarget == null);
+            finishScroll();
             expect(viewer.getScrollTop()).toBe(517);
           },
           { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
@@ -480,11 +498,10 @@ describe('CodeView viewport search', () => {
       test('Escape returns after a pointer press interrupts a smooth find scroll', async () => {
         await withViewer(
           [file],
-          async ({ viewer, root, slice }) => {
+          ({ viewer, root, renderFrame, finishScroll }) => {
             scrollToPosition(viewer, root, 517);
             fillSearch(root, 'target');
-            slice();
-            await waitFor(() => viewer.getScrollTop() > 517);
+            renderFrame();
             const stopped = viewer.getScrollTop();
             expect(stopped).toBeGreaterThan(517);
             expect(viewer.pendingScrollTarget).toMatchObject({
@@ -496,7 +513,7 @@ describe('CodeView viewport search', () => {
             expect(viewer.pendingScrollTarget).toBeUndefined();
             expect(viewer.getScrollTop()).toBe(stopped);
             dispatchEscape(root);
-            await waitFor(() => viewer.pendingScrollTarget == null);
+            finishScroll();
             expect(viewer.getScrollTop()).toBe(517);
           },
           { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
@@ -506,11 +523,10 @@ describe('CodeView viewport search', () => {
       test('Escape keeps the wheel position after a panel wheel interrupts a smooth find scroll', async () => {
         await withViewer(
           [file],
-          async ({ viewer, root, slice }) => {
+          ({ viewer, root, renderFrame, finishScroll }) => {
             scrollToPosition(viewer, root, 517);
             fillSearch(root, 'target');
-            slice();
-            await waitFor(() => viewer.getScrollTop() > 517);
+            renderFrame();
             expect(viewer.pendingScrollTarget).toMatchObject({
               searchMatch: true,
             });
@@ -520,7 +536,7 @@ describe('CodeView viewport search', () => {
             expect(viewer.pendingScrollTarget).toBeUndefined();
             scrollToPosition(viewer, root, 1203);
             dispatchEscape(root);
-            await waitFor(() => viewer.pendingScrollTarget == null);
+            finishScroll();
             expect(viewer.getScrollTop()).toBe(1203);
           },
           { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }
@@ -530,22 +546,21 @@ describe('CodeView viewport search', () => {
       test('Escape returns to the start after typing during a smooth find scroll', async () => {
         await withViewer(
           [file],
-          async ({ viewer, root, slice }) => {
+          ({ viewer, root, renderFrame, finishScroll }) => {
             scrollToPosition(viewer, root, 517);
             fillSearch(root, 'target');
-            slice();
-            await waitFor(() => viewer.getScrollTop() > 517);
+            renderFrame();
             expect(viewer.getScrollTop()).toBeGreaterThan(517);
             expect(viewer.pendingScrollTarget).toMatchObject({
               searchMatch: true,
               lineNumber: 151,
             });
             fillSearch(root, 'target again later');
-            await waitFor(() => viewer.pendingScrollTarget == null);
+            finishScroll();
             expect(getSearchState(viewer).current?.lineNumber).toBe(383);
             expect(viewer.getScrollTop()).toBeGreaterThan(517);
             dispatchEscape(root);
-            await waitFor(() => viewer.pendingScrollTarget == null);
+            finishScroll();
             expect(viewer.getScrollTop()).toBe(517);
           },
           { stickyHeaders, searchOptions: { scrollBehavior: 'smooth' } }

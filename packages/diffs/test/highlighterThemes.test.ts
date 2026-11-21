@@ -256,9 +256,7 @@ describe('highlights themes', () => {
     );
     const andromeeda = highlighter.getTheme('andromeeda').colors ?? {};
     expect(andromeeda['search.match_background']).toBeDefined();
-    expect(andromeeda['editor.findMatchBackground']).toBe(
-      andromeeda['search.match_background']
-    );
+    expect(andromeeda['editor.findMatchBackground']).toBeUndefined();
     expect(andromeeda['editor.findMatchHighlightBackground']).toBe(
       andromeeda['search.match_background']
     );

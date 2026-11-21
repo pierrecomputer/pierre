@@ -69,6 +69,7 @@
 
     // Search Match Color Overrides (find/replace)
     --diffs-fg-search-match-override
+    --diffs-fg-search-match-current-override
     --diffs-bg-search-match-override
     --diffs-bg-search-match-current-override
 
@@ -220,13 +221,59 @@
       color-mix(in lab, var(--diffs-selection-base) 65%, var(--diffs-mixer)),
       color-mix(in lab, var(--diffs-selection-base) 75%, var(--diffs-mixer))
     );
-    /* Match backgrounds are a saturated yellow and blue in both schemes, so
-       the text stays black regardless of the theme foreground. */
-    --diffs-search-text-color: var(--diffs-fg-search-match-override, #000);
-    --diffs-search-match-color: var(--diffs-bg-search-match-override, #ffff54);
+    /* Prefer the active theme's VS Code find colors. The opaque fallbacks use
+       black text and remain distinct from both light and dark surfaces. */
+    --diffs-search-text-color: var(
+      --diffs-fg-search-match-override,
+      light-dark(
+        var(
+          --diffs-light-fg-search-match-theme,
+          var(--diffs-fg-search-match-theme, #000)
+        ),
+        var(
+          --diffs-dark-fg-search-match-theme,
+          var(--diffs-fg-search-match-theme, #000)
+        )
+      )
+    );
+    --diffs-search-current-text-color: var(
+      --diffs-fg-search-match-current-override,
+      light-dark(
+        var(
+          --diffs-light-fg-search-match-current-theme,
+          var(--diffs-fg-search-match-current-theme, #fff)
+        ),
+        var(
+          --diffs-dark-fg-search-match-current-theme,
+          var(--diffs-fg-search-match-current-theme, #000)
+        )
+      )
+    );
+    --diffs-search-match-color: var(
+      --diffs-bg-search-match-override,
+      light-dark(
+        var(
+          --diffs-light-bg-search-match-theme,
+          var(--diffs-bg-search-match-theme, #ffff54)
+        ),
+        var(
+          --diffs-dark-bg-search-match-theme,
+          var(--diffs-bg-search-match-theme, #ffff54)
+        )
+      )
+    );
     --diffs-search-current-color: var(
       --diffs-bg-search-match-current-override,
-      var(--diffs-modified-base)
+      light-dark(
+        var(
+          --diffs-light-bg-search-match-current-theme,
+          var(--diffs-bg-search-match-current-theme, #0067b1)
+        ),
+        var(
+          --diffs-dark-bg-search-match-current-theme,
+          var(--diffs-bg-search-match-current-theme, #009fff)
+        )
+      )
     );
 
     background-color: var(--diffs-bg);
@@ -1100,6 +1147,7 @@
     }
 
     &[data-search-match='current'] {
+      color: var(--diffs-search-current-text-color);
       background-color: var(--diffs-search-current-color);
     }
 
@@ -1546,7 +1594,7 @@
   }
 
   ::highlight(diffs-search-current) {
-    color: var(--diffs-search-text-color);
+    color: var(--diffs-search-current-text-color);
     background-color: var(--diffs-search-current-color);
   }
 

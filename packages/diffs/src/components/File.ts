@@ -615,6 +615,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     options: FileOptions<LAnnotation, Caret> | undefined
   ): void {
     if (options == null) return;
+    if (options.unsafeCSS !== this.options.unsafeCSS) {
+      this.editor?.__setSearchPanelUnsafeCSS(options.unsafeCSS);
+    }
     this.options = options;
     this.fileRenderer.setOptions(getFileRendererOptions(options));
     this.cachedHeaderHTML = undefined;

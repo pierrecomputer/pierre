@@ -20,6 +20,11 @@ export type Roles = {
     subtle: string;
     contrastOnAccent: string;
   };
+  search: {
+    matchBackground: string;
+    currentBackground: string;
+    foreground: string;
+  };
   states: {
     merge: string;
     success: string;

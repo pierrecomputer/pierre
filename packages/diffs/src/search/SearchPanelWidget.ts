@@ -1,4 +1,4 @@
-import { UNSAFE_CSS_ATTRIBUTE } from '../constants';
+import { THEME_CSS_ATTRIBUTE } from '../constants';
 import {
   resolveFindAgainShortcut,
   resolveSearchShortcut,
@@ -14,6 +14,7 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import {
   type MatchRange,
@@ -40,6 +41,7 @@ export interface SearchPanelReplaceHandlers<TMatch> {
 
 export interface SearchPanelOptions<TMatch = MatchRange> {
   containerElement: HTMLElement;
+  themeCSS?: string;
   unsafeCSS?: string;
   defaultQuery: string;
   defaults?: SearchOptionDefaults;
@@ -76,6 +78,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
   #widgetElement: HTMLDivElement;
   #inputElement: HTMLInputElement;
+  #themeStyle: HTMLStyleElement;
+  #unsafeStyle?: HTMLStyleElement;
   #initializeMatches: () => void;
   #mount?: () => void;
   #closed = false;
@@ -92,6 +96,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   constructor(options: SearchPanelOptions<TMatch>) {
     const {
       containerElement,
+      themeCSS,
       unsafeCSS,
       defaultQuery,
       defaults,
@@ -579,13 +584,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       shadowRoot.appendChild(spriteElement);
     }
     h('style', { textContent: searchPanelCSS }, shadowRoot);
-    if (unsafeCSS != null) {
-      h(
-        'style',
-        { textContent: wrapUnsafeCSS(unsafeCSS) },
-        shadowRoot
-      ).setAttribute(UNSAFE_CSS_ATTRIBUTE, '');
-    }
+    this.#themeStyle = h('style', { textContent: themeCSS ?? '' }, shadowRoot);
+    this.#themeStyle.setAttribute(THEME_CSS_ATTRIBUTE, '');
+    this.setUnsafeCSS(unsafeCSS);
 
     this.#widgetElement = h('div', {
       dataset: 'editorWidget',
@@ -632,6 +633,26 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
   getBounds(): DOMRect {
     return this.#widgetElement.getBoundingClientRect();
+  }
+
+  setThemeCSS(themeCSS: string | undefined): void {
+    const css = themeCSS ?? '';
+    if (this.#themeStyle.textContent !== css) {
+      this.#themeStyle.textContent = css;
+    }
+  }
+
+  setUnsafeCSS(css: string | undefined): void {
+    if (!css) {
+      this.#unsafeStyle?.remove();
+      this.#unsafeStyle = undefined;
+      return;
+    }
+    if (this.#unsafeStyle == null) {
+      this.#unsafeStyle = createUnsafeCSSStyleNode();
+      this.#themeStyle.after(this.#unsafeStyle);
+    }
+    this.#unsafeStyle.textContent = wrapUnsafeCSS(css);
   }
 
   hasQuery(): boolean {

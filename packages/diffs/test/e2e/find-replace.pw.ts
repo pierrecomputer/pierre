@@ -710,11 +710,19 @@ test('initial search indexes results after the mounted editor window before wrap
   await expect(page.locator(MATCHES)).toHaveText('1/3');
 });
 
-test('unsafeCSS reaches the search panel and wins over its own styles', async ({
-  page,
-}) => {
+test('custom CSS updates an open standalone search panel', async ({ page }) => {
   await page.goto('/test/e2e/fixtures/editable.html?unsafe');
   await page.waitForFunction(() => window.__editableReady === true);
   await openSearchPanel(page);
-  await expect(page.locator(SEARCH_INPUT)).toHaveCSS('color', 'rgb(1, 2, 3)');
+  const input = page.locator(SEARCH_INPUT);
+  await expect(input).toHaveCSS('color', 'rgb(1, 2, 3)');
+  await input.fill('target');
+  await page.evaluate(() =>
+    window.__setEditorUnsafeCSS!('input[data-search] { color: rgb(4, 5, 6); }')
+  );
+  await expect(input).toHaveCSS('color', 'rgb(4, 5, 6)');
+  await page.evaluate(() => window.__setEditorUnsafeCSS!(undefined));
+  await expect(input).toHaveCSS('color', 'rgb(250, 250, 250)');
+  await expect(input).toHaveValue('target');
+  await expect(input).toBeFocused();
 });

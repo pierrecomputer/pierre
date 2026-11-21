@@ -49,11 +49,14 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined, undefined> = {
   /* Edit cursor background color */
   --diffs-bg-caret-override: rgba(128, 128, 128, 0.55);
 
-  /* Find/replace match colors: the text color painted over every match, the
-   * background of a match, and the background of the current match. These
-   * are fixed defaults rather than theme colors, so this is how to change
-   * them. */
+  /* For ordinary matches and the current match, Diffs uses the theme's
+   * VS Code find colors if it defines both foreground and background for
+   * that state. Otherwise, Diffs uses the built-in pair for that state.
+   * These variables override either pair. */
+  /* --diffs-fg-search-match-override used to set the text color for every
+   * match. To keep that behavior, reuse it for the current match below. */
   --diffs-fg-search-match-override: #000;
+  --diffs-fg-search-match-current-override: var(--diffs-fg-search-match-override);
   --diffs-bg-search-match-override: #eab308;
   --diffs-bg-search-match-current-override: #3b82f6;
 
