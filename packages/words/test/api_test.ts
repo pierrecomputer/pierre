@@ -1,5 +1,7 @@
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { renderToAnsi, renderToHtml } from '../dist/index.js';
 
@@ -124,4 +126,14 @@ void test('carriage returns are accepted as line endings', () => {
     html('```\r\na\r\nb\r\n```'),
     '<pre><code>a\nb\n</code></pre>\n'
   );
+});
+
+void test('the core entry renders with a module the caller loads', async () => {
+  const { init, renderToHtml: render } = await import('@pierre/words/core');
+  const wasm = readFileSync(
+    fileURLToPath(import.meta.resolve('@pierre/words/words.wasm'))
+  );
+  assert.throws(() => render('# a'), /call init\(\)/);
+  init(new WebAssembly.Module(wasm));
+  assert.equal(dec.decode(render('# a')), '<h1>a</h1>\n');
 });

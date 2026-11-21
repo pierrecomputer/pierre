@@ -4,6 +4,7 @@ export default defineConfig([
   {
     entry: [
       'lib/core.ts',
+      'lib/core-entry.ts',
       'lib/index.ts',
       'lib/workerd.ts',
       'lib/no-math.ts',
