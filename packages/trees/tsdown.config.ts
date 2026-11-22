@@ -4,7 +4,9 @@ import { defineConfig, type UserConfig } from 'tsdown';
 
 const config: UserConfig[] = defineConfig([
   {
-    entry: ['src/**/*.ts', 'src/**/*.tsx'],
+    // model/engine.ts types the store seam with @pierre/path-store shapes;
+    // it is inlined into its importers so no emitted declaration names them.
+    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/model/engine.ts'],
     loader: {
       '.css': 'text',
     },
@@ -16,7 +18,13 @@ const config: UserConfig[] = defineConfig([
     },
     unbundle: true,
     platform: 'neutral',
-    deps: { alwaysBundle: ['@pierre/path-store', '@pierre/theming'] },
+    deps: {
+      alwaysBundle: [
+        '@pierre/path-store',
+        '@pierre/path-store-wat',
+        '@pierre/theming',
+      ],
+    },
     plugins: [
       {
         name: 'postcss-autoprefixer',

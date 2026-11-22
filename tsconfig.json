@@ -12,10 +12,13 @@
       "path": "apps/docs/tsconfig.json"
     },
     {
+      "path": "packages/diffs/tsconfig.json"
+    },
+    {
       "path": "packages/highlights/tsconfig.json"
     },
     {
-      "path": "packages/diffs/tsconfig.json"
+      "path": "packages/path-store-wat/tsconfig.json"
     },
     {
       "path": "packages/patches/tsconfig.json"

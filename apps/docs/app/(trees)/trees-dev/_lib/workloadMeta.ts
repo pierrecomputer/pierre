@@ -1,9 +1,13 @@
 export interface TreesPageSearchParams {
+  engine?: string | readonly string[];
   expansion?: string | readonly string[];
   workload?: string | readonly string[];
 }
 
 export type TreesExpansionMode = 'all' | 'collapsed' | 'workload';
+
+/** Which path store builds the tree: the JavaScript engine or `@pierre/trees/wasm`. */
+export type TreesEngineMode = 'js' | 'wasm';
 
 export type TreesWorkloadName =
   | 'demo-small'
@@ -122,6 +126,14 @@ export function getRequestedExpansionMode(
   return expansionMode === 'all' || expansionMode === 'collapsed'
     ? expansionMode
     : 'workload';
+}
+
+export function getRequestedEngineMode(
+  searchParams: TreesPageSearchParams | undefined
+): TreesEngineMode {
+  return getRequestedSearchParamValue(searchParams?.engine) === 'wasm'
+    ? 'wasm'
+    : 'js';
 }
 
 export function getWorkloadOption(

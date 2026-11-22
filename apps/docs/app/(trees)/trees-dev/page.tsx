@@ -12,6 +12,7 @@ import { loadWorkloadDataPayload } from './_lib/workloadLoader';
 import {
   DEFAULT_TREES_WORKLOAD_NAME,
   FILE_TREE_PROOF_VIEWPORT_HEIGHT,
+  getRequestedEngineMode,
   getRequestedExpansionMode,
   getRequestedWorkloadName,
   TREES_WORKLOAD_OPTIONS,
@@ -41,6 +42,7 @@ export default async function TreesDevIndexPage({
   const resolvedSearchParams = (await searchParams) ?? {};
   const selectedWorkloadName = getRequestedWorkloadName(resolvedSearchParams);
   const expansionMode = getRequestedExpansionMode(resolvedSearchParams);
+  const engineMode = getRequestedEngineMode(resolvedSearchParams);
   const workloadData = await loadWorkloadDataPayload(
     selectedWorkloadName,
     expansionMode
@@ -72,12 +74,13 @@ export default async function TreesDevIndexPage({
       ? createPresortedPreparedInput(workloadData.paths)
       : undefined,
   });
-  const treeMountId = `trees-dev-main-proof-${selectedWorkloadName}-${expansionMode}`;
+  const treeMountId = `trees-dev-main-proof-${selectedWorkloadName}-${expansionMode}-${engineMode}`;
 
   return (
     <MainDemoClient
-      key={`${selectedWorkloadName}-${expansionMode}`}
+      key={`${selectedWorkloadName}-${expansionMode}-${engineMode}`}
       defaultWorkloadName={DEFAULT_TREES_WORKLOAD_NAME}
+      engineMode={engineMode}
       expansionMode={expansionMode}
       treeMountId={treeMountId}
       workloadData={workloadData}

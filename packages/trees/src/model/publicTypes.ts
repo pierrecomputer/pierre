@@ -1,3 +1,4 @@
+import type { FileTreeEngine } from '../engine';
 import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
 import type { FileTreePreparedInput } from '../preparedInput';
 import type {
@@ -69,8 +70,14 @@ export interface FileTreeGitStatusPatch {
 }
 
 // Mirrors the subset of PathStoreConstructorOptions that trees forwards to its
-// underlying store. See the duplication note above the FileTree* type cluster.
+// underlying store, plus the engine that builds it. See the duplication note
+// above the FileTree* type cluster.
 interface FileTreeStoreOptions {
+  /**
+   * Store engine; defaults to the JavaScript path store. Pass `wasmEngine`
+   * from `@pierre/trees/wasm` to build large trees in WebAssembly.
+   */
+  engine?: FileTreeEngine;
   flattenEmptyDirectories?: boolean;
   initialExpansion?: FileTreeInitialExpansion;
   initialExpandedPaths?: readonly FileTreePublicId[];

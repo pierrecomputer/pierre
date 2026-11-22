@@ -1,0 +1,27 @@
+{
+  "name": "@pierre/path-store-wat",
+  "version": "1.0.0-beta.1",
+  "private": true,
+  "license": "apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/workerd.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@pierre/path-store": "workspace:*"
+  },
+  "devDependencies": {
+    "@pierre/tree-test-data": "workspace:*",
+    "@pierre/wat-tools": "workspace:*",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

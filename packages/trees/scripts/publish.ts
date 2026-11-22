@@ -301,6 +301,7 @@ function mutatePackageJson(packageDir: string): {
   const pkg = JSON.parse(before);
   if (pkg.dependencies != null) {
     delete pkg.dependencies['@pierre/path-store'];
+    delete pkg.dependencies['@pierre/path-store-wat'];
   }
   stripPublishOnlyScripts(pkg);
   const serialized = `${JSON.stringify(pkg, null, 2)}\n`;

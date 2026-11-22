@@ -18,6 +18,7 @@ export type {
 } from './utils/themeToTreeStyles';
 export { themeToTreeStyles } from './utils/themeToTreeStyles';
 export { DEFAULT_FILE_TREE_LABELS } from './utils/fileTreeLabels';
+export type { FileTreeEngine } from './engine';
 export type { FileTreePreparedInput } from './preparedInput';
 export {
   prepareFileTreeInput,
