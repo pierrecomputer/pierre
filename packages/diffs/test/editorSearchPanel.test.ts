@@ -1593,6 +1593,14 @@ describe('SearchPanelWidget messages', () => {
         expect(harness.matchesText()).toBe('2 résultats');
         pressKey(harness.input, 'Enter');
         expect(harness.matchesText()).toBe('1 sur 2');
+
+        i18n.set();
+        expect(harness.matchesText()).toBe('1/2');
+        expect(harness.input.placeholder).toBe('Search');
+        expect(harness.replaceInput.placeholder).toBe('Replace');
+        expect(panel.querySelector('[data-search-close]')?.ariaLabel).toBe(
+          'Close'
+        );
       } finally {
         harness.cleanup();
       }
