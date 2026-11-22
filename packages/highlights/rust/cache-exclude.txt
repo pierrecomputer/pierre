@@ -1,0 +1,14 @@
+# Languages whose lexer functions keep wasm globals in the struct instead of
+# caching them in locals (see `choose_cached_globals` in xtask). For these,
+# holding `$ptr` in a register across the lexer's main loop made the
+# compiler spill other values and measured slower. One language per line;
+# each name maps to src/langs/<name>.wat.
+#
+# Measured 2026-10-21 against caching, median of three interleaved runs
+# (token records, no PGO).
+gdscript    # 0.67× with caching
+gdresource  # 0.86×
+css         # 0.93×
+python      # 0.93×
+lisp        # 0.93×
+fortran     # 0.94×
