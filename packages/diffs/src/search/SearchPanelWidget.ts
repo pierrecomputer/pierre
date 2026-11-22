@@ -155,9 +155,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       delete matchResultElement.dataset.searching;
       matchResultElement.removeAttribute('aria-label');
     };
-    // Use a stable zero position when there are no matches. Searching remains
-    // visible because it communicates an in-progress result rather than a
-    // settled empty result.
     const showNoMatches = () => {
       // Keep a spinner that is already showing. A new one starts turning
       // from the beginning, so replacing it on every update freezes it.
@@ -167,7 +164,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         matchResultElement.innerHTML = getEditorIconSvg('loader', 16);
       } else if (!searching) {
         clearSearchingIndicator();
-        matchResultElement.textContent = '0/0';
+        matchResultElement.textContent = i18n.t('noSearchResults');
       }
       matchResultElement.toggleAttribute('data-no-matches', !searching);
     };

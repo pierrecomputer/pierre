@@ -1579,7 +1579,7 @@ describe('SearchPanelWidget messages', () => {
         const panel = harness.widget.getHostElement().shadowRoot!;
         expect(harness.input.placeholder).toBe('Rechercher');
         expect(harness.replaceInput.placeholder).toBe('Remplacer');
-        expect(harness.matchesText()).toBe('0/0');
+        expect(harness.matchesText()).toBe('Aucun résultat');
         expect(
           panel.querySelector<HTMLButtonElement>('[data-replace-toggle]')
             ?.ariaLabel

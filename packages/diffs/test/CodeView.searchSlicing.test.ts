@@ -987,7 +987,7 @@ describe('CodeView sliced find', () => {
         getSearchPanelRoot(root).querySelector('[data-no-matches]')
       ).toBeNull();
       await finish();
-      expect(label(root)).toBe('0/0');
+      expect(label(root)).toBe('Aucun résultat');
     });
   });
 
