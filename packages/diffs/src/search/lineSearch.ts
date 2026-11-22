@@ -62,7 +62,8 @@ function isNewlineSpanningSearch(text: string, isRegex: boolean): boolean {
   return (
     text.includes('\n') ||
     text.includes('\r') ||
-    (isRegex && (text.includes('\\n') || text.includes('\\r')))
+    // Each pair represents a literal backslash. Only an unpaired one escapes n or r.
+    (isRegex && /\\[nr]/.test(text.replaceAll('\\\\', '')))
   );
 }
 

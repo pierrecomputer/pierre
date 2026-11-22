@@ -974,20 +974,20 @@ describe('CodeView sliced find', () => {
 
   test('localized searching label waits for a finished empty result', async () => {
     await withViewer([fileItem('a')], async ({ root, finish }) => {
+      fillSearch(root, 'missing');
       i18n.set({
         messages: {
           searching: 'Recherche…',
           noSearchResults: 'Aucun résultat',
         },
       });
-      fillSearch(root, 'missing');
       expect(matches(root)?.ariaLabel).toBe('Recherche…');
       expect(matches(root)?.hasAttribute('data-searching')).toBe(true);
       expect(
         getSearchPanelRoot(root).querySelector('[data-no-matches]')
       ).toBeNull();
       await finish();
-      expect(label(root)).toBe('0/0');
+      expect(label(root)).toBe('Aucun résultat');
     });
   });
 
@@ -996,10 +996,15 @@ describe('CodeView sliced find', () => {
       fillSearch(root, 'missing');
       const spinner = matches(root)?.querySelector('svg');
       expect(spinner).not.toBeNull();
+      const observer = new MutationObserver(() => {});
+      observer.observe(matches(root)!, { attributeFilter: ['aria-label'] });
       // New items make the panel read its matches again while the search is
       // still running. The spinner must stay the same element.
       viewer.addItems([fileItem('b')]);
       viewer.render(true);
+      i18n.set({ messages: { closeSearch: 'Dismiss' } });
+      expect(observer.takeRecords()).toHaveLength(0);
+      observer.disconnect();
       expect(matches(root)?.hasAttribute('data-searching')).toBe(true);
       expect(matches(root)?.querySelector('svg') === spinner).toBe(true);
       await finish();

@@ -14,6 +14,7 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import type { DiffsMessageKey } from '../types';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import { wrapUnsafeCSS } from '../utils/cssWrappers';
 import {
@@ -82,6 +83,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #unsafeStyle?: HTMLStyleElement;
   #initializeMatches: () => void;
   #mount?: () => void;
+  #unsubscribeMessages?: () => void;
   #closed = false;
   #updateMatches?: (options?: { skipNavigation?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
@@ -151,23 +153,29 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     let searching = defaultQuery !== '';
 
     const matchResultElement = h('div', { dataset: { matches: '' } });
+    let spinnerMessageVersion: number | undefined;
     const clearSearchingIndicator = () => {
+      spinnerMessageVersion = undefined;
       delete matchResultElement.dataset.searching;
       matchResultElement.removeAttribute('aria-label');
     };
-    // Use a stable zero position when there are no matches. Searching remains
-    // visible because it communicates an in-progress result rather than a
-    // settled empty result.
     const showNoMatches = () => {
       // Keep a spinner that is already showing. A new one starts turning
       // from the beginning, so replacing it on every update freezes it.
-      if (searching && matchResultElement.dataset.searching == null) {
-        matchResultElement.dataset.searching = '';
-        matchResultElement.ariaLabel = i18n.t('searching');
-        matchResultElement.innerHTML = getEditorIconSvg('loader', 16);
-      } else if (!searching) {
+      if (searching) {
+        if (spinnerMessageVersion === i18n.version) return;
+        if (spinnerMessageVersion == null) {
+          matchResultElement.dataset.searching = '';
+          matchResultElement.innerHTML = getEditorIconSvg('loader', 16);
+        }
+        const label = i18n.t('searching');
+        if (matchResultElement.ariaLabel !== label) {
+          matchResultElement.ariaLabel = label;
+        }
+        spinnerMessageVersion = i18n.version;
+      } else {
         clearSearchingIndicator();
-        matchResultElement.textContent = '0/0';
+        matchResultElement.textContent = i18n.t('noSearchResults');
       }
       matchResultElement.toggleAttribute('data-no-matches', !searching);
     };
@@ -313,25 +321,28 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     };
     this.#close = close;
 
+    const buttonLabels = new Map<HTMLButtonElement, DiffsMessageKey>();
+
     // Shared builder for the panel's icon controls. Every clickable control is a
     // real <button> so it gets focus, keyboard activation, and native disabled
     // handling for free; `getEditorIconSvg` marks the glyph aria-hidden, so the
     // accessible name comes from `label` (also used as the hover title).
     const iconButton = (opts: {
       icon: SVGSpriteNames;
-      label: string;
+      label: DiffsMessageKey;
       size?: number;
       dataset?: Record<string, string>;
       onClick: () => void;
-    }) =>
-      h('button', {
+    }) => {
+      const button = h('button', {
         type: 'button',
-        title: opts.label,
-        ariaLabel: opts.label,
         dataset: { searchIcon: '', ...opts.dataset },
         innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
         onclick: opts.onClick,
       });
+      buttonLabels.set(button, opts.label);
+      return button;
+    };
 
     // Builds an always-visible icon button that toggles one boolean search
     // option (case/whole-word/regex). The button reflects its on/off state via
@@ -339,12 +350,12 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // announce it.
     const makeToggle = (
       icon: SVGSpriteNames,
-      title: string,
+      label: DiffsMessageKey,
       key: 'caseSensitive' | 'wholeWord' | 'regex'
     ) => {
       const button = iconButton({
         icon,
-        label: title,
+        label,
         size: 14,
         onClick: () => {
           const next = !searchParams[key];
@@ -358,23 +369,14 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     const caseSensitiveToggle = makeToggle(
       'case',
-      i18n.t('matchCase'),
+      'matchCase',
       'caseSensitive'
     );
-    const wholeWordToggle = makeToggle(
-      'whole-word',
-      i18n.t('wholeWord'),
-      'wholeWord'
-    );
-    const regexToggle = makeToggle(
-      'regex',
-      i18n.t('regularExpression'),
-      'regex'
-    );
+    const wholeWordToggle = makeToggle('whole-word', 'wholeWord', 'wholeWord');
+    const regexToggle = makeToggle('regex', 'regularExpression', 'regex');
 
     this.#inputElement = h('input', {
       type: 'text',
-      placeholder: i18n.t('searchPlaceholder'),
       dataset: 'search',
       value: defaultQuery,
       oninput: (e: Event) => {
@@ -434,14 +436,14 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // Held so the no-results state can toggle their native disabled flag.
     const prevButton = iconButton({
       icon: 'arrow-up',
-      label: i18n.t('previousMatch'),
+      label: 'previousMatch',
       onClick: () => {
         findNextMatch(true);
       },
     });
     const nextButton = iconButton({
       icon: 'arrow-down',
-      label: i18n.t('nextMatch'),
+      label: 'nextMatch',
       onClick: () => {
         findNextMatch();
       },
@@ -456,14 +458,13 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     const closeElement = iconButton({
       icon: 'close',
-      label: i18n.t('closeSearch'),
+      label: 'closeSearch',
       onClick: close,
       dataset: { searchClose: '' },
     });
 
     const replaceInputElement = h('input', {
       type: 'text',
-      placeholder: i18n.t('replacePlaceholder'),
       dataset: 'replace',
       value: '',
       oninput: (e: Event) => {
@@ -497,12 +498,12 @@ export class SearchPanelWidget<TMatch = MatchRange> {
 
     const replaceButton = iconButton({
       icon: 'replace',
-      label: i18n.t('replaceMatch'),
+      label: 'replaceMatch',
       onClick: replaceCurrentMatch,
     });
     const replaceAllButton = iconButton({
       icon: 'replace-all',
-      label: i18n.t('replaceAllMatches'),
+      label: 'replaceAllMatches',
       onClick: replaceAllMatches,
     });
     const replaceActionsElement = h('div', {
@@ -513,7 +514,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     // Keep the replace row reachable without its keyboard shortcut.
     const replaceToggleElement = iconButton({
       icon: 'chevron',
-      label: i18n.t('toggleReplace'),
+      label: 'toggleReplace',
       dataset: { replaceToggle: '' },
       onClick: () => {
         if (gridElement.dataset.mode === 'replace') {
@@ -613,7 +614,28 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       updateMatches();
     };
 
+    const refreshMessages = () => {
+      this.#inputElement.placeholder = i18n.t('searchPlaceholder');
+      replaceInputElement.placeholder = i18n.t('replacePlaceholder');
+      for (const [button, key] of buttonLabels) {
+        button.title = i18n.t(key);
+        button.ariaLabel = button.title;
+      }
+      if (matches.all.length > 0) {
+        updateCurrentMatch(matches.currentIndex);
+      } else {
+        showNoMatches();
+      }
+    };
+
     this.#mount = () => {
+      if (this.#closed) {
+        return;
+      }
+      refreshMessages();
+      this.#unsubscribeMessages ??= i18n.subscribe({
+        onMessagesChange: refreshMessages,
+      });
       containerElement.before(this.#host);
       this.#inputElement.select();
       emitState();
@@ -705,6 +727,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   // (e.g. a full editor reset). User-initiated dismissals should call close().
   cleanup(): void {
     this.#closed = true;
+    this.#unsubscribeMessages?.();
     dequeueRender(this.#initializeMatches);
     this.#host.remove();
   }
