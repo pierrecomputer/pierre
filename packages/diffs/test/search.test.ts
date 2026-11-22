@@ -234,6 +234,24 @@ describe('searchDocument', () => {
     ).toEqual([]);
   });
 
+  test('distinguishes escaped backslashes from newline escapes in regex queries', () => {
+    const document = createSearchDocument('\\n \\r');
+    const find = (pattern: RegExp) =>
+      searchDocument(
+        document,
+        searchParams({ text: pattern.source, regex: true })
+      );
+
+    expect(find(/\\n/)).toEqual([[0, 2]]);
+    expect(find(/\\r/)).toEqual([[3, 5]]);
+    expect(find(/[\\n]/)).toEqual([
+      [0, 1],
+      [1, 2],
+      [3, 4],
+    ]);
+    expect(find(/n|\\\n/)).toEqual([]);
+  });
+
   test('expands regex capture replacements', () => {
     const text = 'const answer = 42';
     const document = createSearchDocument(text);
