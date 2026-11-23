@@ -2139,6 +2139,7 @@ describe('incremental streaming', () => {
       const options = {
         code: code.slice(0, end),
         language: 'words-example',
+        meta: '',
         isIncomplete: true,
       };
       const html = plugin.highlight(options)!;
