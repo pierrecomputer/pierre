@@ -233,9 +233,8 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
     <WorkerPoolContextProvider
       poolOptions={{
         workerFactory,
-        // poolSize defaults to 8. More workers = more parallelism but
-        // also more memory. Too many can actually slow things down.
-        // poolSize: 8,
+        // By default, use one fewer worker than logical processors (1 to 3 workers).
+        // poolSize: 3,
       }}
       highlighterOptions={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -312,9 +311,8 @@ import { workerFactory } from './utils/workerFactory';
 const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: {
     workerFactory,
-    // poolSize defaults to 8. More workers = more parallelism but
-    // also more memory. Too many can actually slow things down.
-    // poolSize: 8,
+    // By default, use one fewer worker than logical processors (1 to 3 workers).
+    // poolSize: 3,
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -416,7 +414,8 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // Parameters:
 // - poolOptions: WorkerPoolOptions
 //   - workerFactory: () => Worker - Function that creates a Worker instance
-//   - poolSize?: number (default: 8) - Number of workers
+//   - poolSize?: number - Defaults to hardwareConcurrency minus one,
+//     limited to 1–3 workers. Uses 1 if hardwareConcurrency is unavailable.
 //   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)

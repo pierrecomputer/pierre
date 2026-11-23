@@ -50,25 +50,12 @@ function isMobileBrowser(): boolean {
   );
 }
 
-function getWorkerResourceLimits(): Pick<
-  Required<WorkerPoolOptions>,
-  'poolSize' | 'totalASTLRUCacheSize'
-> {
-  return isMobileBrowser()
-    ? { poolSize: 1, totalASTLRUCacheSize: 10 }
-    : { poolSize: 3, totalASTLRUCacheSize: 100 };
-}
-
 // Built lazily so the browser globals are only read when a pool is created.
 function getPoolOptions(): WorkerPoolOptions {
-  const limits = getWorkerResourceLimits();
+  const isMobile = isMobileBrowser();
   return {
-    // We really shouldn't let the pool get too big...
-    poolSize: Math.min(
-      Math.max(1, (global.navigator?.hardwareConcurrency ?? 1) - 1),
-      limits.poolSize
-    ),
-    totalASTLRUCacheSize: limits.totalASTLRUCacheSize,
+    poolSize: isMobile ? 1 : undefined,
+    totalASTLRUCacheSize: isMobile ? 10 : 100,
     // The shiki-js fallback leaves this unset so every highlight goes through
     // a worker.
     mainThreadMaxCharacters:

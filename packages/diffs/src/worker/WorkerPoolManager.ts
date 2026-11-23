@@ -38,6 +38,7 @@ import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { getDefaultWorkerPoolSize } from '../utils/getDefaultWorkerPoolSize';
 import {
   getCustomExtensionsMap,
   getCustomExtensionsVersion,
@@ -607,7 +608,8 @@ export class WorkerPoolManager {
     if (this.workers.length > 0) {
       this.terminateWorkers();
     }
-    for (let i = 0; i < (this.options.poolSize ?? 8); i++) {
+    const poolSize = this.options.poolSize ?? getDefaultWorkerPoolSize();
+    for (let i = 0; i < poolSize; i++) {
       const worker = this.options.workerFactory();
       const managedWorker: ManagedWorker = {
         worker,

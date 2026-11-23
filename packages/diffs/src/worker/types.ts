@@ -160,7 +160,8 @@ export interface WorkerPoolOptions {
 
   /**
    * Number of workers to create in the pool.
-   * @default 8
+   * Defaults to one fewer than the reported logical processor count,
+   * with a minimum of 1 and a maximum of 3. Uses 1 if the count is unavailable.
    */
   poolSize?: number;
 

@@ -244,8 +244,8 @@ also surfacing as an uncaught error on the page.
 <DocsCodeExample {...workerErrors} />
 
 <Notice icon={<IconInfoFill />}>
-  The hook runs once per `error` event, not once per failure: a pool of 8
-  workers whose script fails to load calls it up to 8 times, so deduplicate on
+  The hook runs once per `error` event, not once per failure: a pool of 3
+  workers whose script fails to load calls it up to 3 times, so deduplicate on
   your side if you report once per page. A worker script that failed to load
   fires a plain `Event` with no `message` or `error`; a worker that threw fires
   an `ErrorEvent`. The parameter is typed `ErrorEvent | Event` for that reason.
