@@ -14,6 +14,8 @@ import c from '@pierre/highlights/langs/c';
 import go from '@pierre/highlights/langs/go';
 import html from '@pierre/highlights/langs/html';
 import markdown from '@pierre/highlights/langs/markdown';
+import org from '@pierre/highlights/langs/org';
+import wikitext from '@pierre/highlights/langs/wikitext';
 import { cssVariables } from '@pierre/highlights/themes';
 import {
   buildHighlightsLexer,
@@ -102,6 +104,30 @@ test('Markdown fences resolve registered custom names and aliases', async () => 
     theme: 'css-variables',
   });
   expect(result.tokens[1][0].color).toBe('var(--hls-text-literal)');
+});
+
+test('Org and Wikitext source blocks run registered custom lexers', async () => {
+  const highlighter = await createHighlighter({
+    langs: [org, wikitext, custom],
+    themes: [cssVariables],
+  });
+  for (const [lang, code] of [
+    ['org', '#+begin_src example\nhello\n#+end_src\n'],
+    [
+      'wikitext',
+      '<syntaxhighlight lang="example">\nhello\n</syntaxhighlight>\n',
+    ],
+    ['wikitext', '<source lang="example">hello</source>\n'],
+  ]) {
+    const result = highlighter.codeToTokens(code, {
+      lang,
+      theme: 'css-variables',
+    });
+    expect(
+      result.tokens.flat().find((token) => token.content.includes('hello'))
+        ?.color
+    ).toBe('var(--hls-keyword)');
+  }
 });
 
 test.each([

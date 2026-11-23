@@ -384,10 +384,11 @@
         (br $next))))
 
   ;; Org mode, line by line. $block: an open block body. Bits 0-3: the block
-  ;; name that closes it (see $orgBlockName). Bits 8-15: the language of a
-  ;; source block, highlighted by $markdownCodeRange. Bit 16: its lexer
-  ;; already ran in an earlier chunk. Bits 24-31: the stream region the body
-  ;; left open while region 92 marks our open body for $streamResumeLang.
+  ;; name that closes it (see $orgBlockName). Bit 4: the source lexer
+  ;; already ran in an earlier chunk. Bits 8-23: the language of a source
+  ;; block (custom lexers use IDs from 256), highlighted by
+  ;; $markdownCodeRange. Bits 24-31: the stream region the body left open
+  ;; while region 92 marks our open body for $streamResumeLang.
   (func $hlOrg
     (local $c i32)
     (local $c2 i32)
@@ -410,7 +411,7 @@
           (if (local.get $block)
             (then
               (local.set $c (i32.and (local.get $block) (i32.const 15)))
-              (local.set $q (i32.and (i32.shr_u (local.get $block) (i32.const 8)) (i32.const 255)))
+              (local.set $q (i32.and (i32.shr_u (local.get $block) (i32.const 8)) (i32.const 0xffff)))
               (if (local.get $q)
                 (then
                   (local.set $p (local.get $lhs))
@@ -425,11 +426,11 @@
                     (local.get $q)
                     (local.get $lhs)
                     (local.get $p)
-                    (i32.and (i32.shr_u (local.get $block) (i32.const 16)) (i32.const 1)))
+                    (i32.and (i32.shr_u (local.get $block) (i32.const 4)) (i32.const 1)))
                   (if (i32.ge_u (local.get $p) (global.get $end))
                     (then
                       (local.set $block
-                        (i32.or (local.get $block) (i32.shl (global.get $markdownBodyRan) (i32.const 16))))
+                        (i32.or (local.get $block) (i32.shl (global.get $markdownBodyRan) (i32.const 4))))
                       (if (i32.and (global.get $streaming) (i32.eq (global.get $end) (global.get $eof)))
                         (then
                           (local.set $block
