@@ -568,6 +568,10 @@ async function measureCodeViewCase(
           await waitFor(() =>
             hasExpectedSearchState(searchState, query, expectedCount)
           );
+          // Matches are numbered from where a scan starts, and the same text
+          // keeps the scan from the middle. Clear it so typing at the top
+          // starts a new scan.
+          fillSearch(root, '');
         }
         viewer.scrollTo({ type: 'position', position: 0, behavior: 'instant' });
         viewer.render(true);
