@@ -571,8 +571,12 @@ async function measureCodeViewCase(
         }
         viewer.scrollTo({ type: 'position', position: 0, behavior: 'instant' });
         viewer.render(true);
-        if (layout === 'small-items') fillSearch(root, query.text);
-        else
+        if (layout === 'small-items') {
+          // Typing the same text keeps the scan that started in the middle.
+          // Clear it first so the new scan numbers matches from the top.
+          fillSearch(root, '');
+          fillSearch(root, query.text);
+        } else
           viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
         await waitFor(() =>
           hasExpectedSearchState(searchState, query, expectedCount)
