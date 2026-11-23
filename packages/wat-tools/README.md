@@ -61,10 +61,10 @@ A name starts with a lowercase letter and can contain `a-z`, `0-9`, `_`, `.`,
 With the main `@pierre/highlights` entry, `registerLanguages([example])` adds
 the lexer to the shared `codeToHtml()` and `codeToTokens()` functions. Its names
 override built-in names there. `StreamTokenizer` and `LiveTokenizer` use it too.
-A Markdown fence uses a custom lexer only when the
-`@pierre/highlights/langs/markdown` module is in the same `langs` list or is
-registered too. The two tokenizers follow the same rule. In `LiveTokenizer`,
-such a fence stays plain if its lexer cannot save its state.
+Markdown, MDX, and Org code blocks use it too. With `createHighlighter`, a
+Markdown fence uses a custom lexer only when the
+`@pierre/highlights/langs/markdown` module is in the same `langs` list.
+`registerLanguages` rejects a lexer that cannot save its state.
 
 In `@pierre/diffs`, use
 `registerCustomLanguage(name, loader, files, 'highlights')`. The loader returns

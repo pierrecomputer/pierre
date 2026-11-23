@@ -98,16 +98,18 @@ them, and they copy every mutable global and memory region that a run does not
 set again. The document stores this state for each line, as it does for a
 built-in lexer, and loads it to start from a line. A registered built-in
 language module has no such exports, because its child lexers hold a part of the
-state. For its names, both classes use the built-in lexer with the same ID. That
-lexer asks the host for the language of each Markdown, MDX, Org, or Wikitext
-code block (`fence_language`), so a registered name wins there, as it does in
-`codeToTokens`. The host runs the body in the registered lexer (`fence_lex`) and
-copies back the records. In a live document the host also gives each state of
-that lexer an ID. The line state keeps the ID, and the host loads the state
-again from it. A lexer that cannot save its state leaves a live block plain.
-Such an instance stays out of the stream pool. A completed stream can return its
-instance to a pool with one slot, if its memory is at most 1 MiB. A new stream
-can reuse that instance. Live documents do not share a pool.
+state. For its names, both classes use the built-in lexer with the same ID. Once
+any lexer is registered, every built-in lexer asks the host for the language of
+each Markdown, MDX, Org, or Wikitext code block (`fence_language`), so a
+registered name wins there, as it does in `codeToTokens`. The host runs the body
+in the registered lexer (`fence_lex`) and copies back the records. In a live
+document the host also gives each state of that lexer an ID. The line state
+keeps the ID, and the host loads the state again from it. `registerLanguages`
+rejects a lexer without `saveState`. The shared `codeToHtml` has no host in
+direct HTML output, so for Markdown, MDX, and Org it emits from the records of
+the shared instance. Such an instance stays out of the stream pool. A completed
+stream can return its instance to a pool with one slot, if its memory is at most
+1 MiB. A new stream can reuse that instance. Live documents do not share a pool.
 
 Each module reserves its own static memory with
 `(memory-region $mem.name bytes)`. The compiler aligns these regions after the

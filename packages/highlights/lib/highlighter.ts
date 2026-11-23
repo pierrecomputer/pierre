@@ -61,7 +61,8 @@ export function isSupportedLanguage(lang: string): lang is Lang {
 /**
  * Check whether `registerLanguages` added a name or alias. The shared
  * `codeToHtml` and `codeToTokens` use its lexer. `StreamTokenizer` and
- * `LiveTokenizer` use it too, unless it is a built-in language module.
+ * `LiveTokenizer` use it too, unless it is a built-in language module. Code
+ * blocks in Markdown, MDX, and Org use it in all of them.
  */
 export function isRegisteredLanguage(lang: string): boolean {
   return registeredLexers.has(String(lang).toLowerCase());
@@ -323,14 +324,16 @@ export class HighlightsHighlighter implements Highlighter<
     langId: number,
     mode: number,
     length: number,
-    reset?: boolean
+    reset?: boolean,
+    lexerMode?: number
   ): void {
     const at = lexer.lexRecords(
       langId,
       lexer.writeInput(
         this.buffer.subarray(this.inputPtr, this.inputPtr + length)
       ),
-      reset
+      reset,
+      lexerMode
     );
     const bytes = lexer.dv.getUint32(10, true);
     if (bytes > 0 && lexer.dv.getUint16(at + 4, true) === 0xffff)
@@ -515,10 +518,55 @@ function assertShared(
   input: string | Uint8Array | ArrayBuffer
 ): HighlightsHighlighter {
   if (shared == null) throw new Error('highlights is not initialized');
-  if (oversized(shared, input)) {
-    shared = new HighlightsHighlighter(shared.wasmModule);
-  }
+  if (oversized(shared, input)) shared = createShared(shared.wasmModule);
   return shared;
+}
+
+/**
+ * A combined-module instance for the shared `codeToHtml` and `codeToTokens`.
+ * Once `registerLanguages` has added lexers, its Markdown fences run them.
+ */
+function createShared(wasm: WebAssembly.Module): HighlightsHighlighter {
+  const hl: HighlightsHighlighter = new HighlightsHighlighter(
+    wasm,
+    undefined,
+    registeredLexers.size > 0 ? fenceImports(() => hl, false) : undefined
+  );
+  return hl;
+}
+
+// Languages whose code blocks can run a registered lexer. Direct HTML output
+// has no host for their fences, so `codeToHtml` emits them from records.
+const fenceHosts = new Set(
+  ['markdown', 'mdx', 'org'].map((name) => LANGS[name])
+);
+let fenceEmitter: HighlightsHighlighter | undefined;
+
+/** An emitter that converts the records of the shared instance to HTML. */
+function assertFenceEmitter(
+  input: string | Uint8Array | ArrayBuffer
+): HighlightsHighlighter {
+  const lexer = assertShared(input);
+  if (
+    fenceEmitter?.wasmModule !== lexer.wasmModule ||
+    oversized(fenceEmitter, input)
+  ) {
+    const emitter: HighlightsHighlighter = new HighlightsHighlighter(
+      lexer.wasmModule,
+      // Mode 5: the combined module writes byte records, as a lexer does.
+      (id, mode, length) =>
+        emitter.lexWith(shared!, id, mode, length, undefined, 5),
+      undefined,
+      true
+    );
+    fenceEmitter = emitter;
+  }
+  return fenceEmitter;
+}
+
+/** Whether `registerLanguages` has added any name. */
+export function hasRegisteredLanguages(): boolean {
+  return registeredLexers.size > 0;
 }
 
 /** The compiled Wasm module required by isolated tokenizers. */
@@ -540,7 +588,7 @@ export function init(wasm: WebAssembly.Module): Highlighter {
     registeredLangs = [];
     registerLanguages(langs);
   }
-  return (shared = new HighlightsHighlighter(wasm));
+  return (shared = createShared(wasm));
 }
 
 const lexerModules = new WeakMap<
@@ -654,6 +702,8 @@ function buildHighlighter(
     ['ansi', -1],
   ]);
   let nextLanguageId = 256;
+  // External IDs by module and lexer ID, so adding a lexer again reuses them.
+  const externalIds = new Map<WebAssembly.Module, Map<number, number>>();
   const add = (
     languages: readonly Language[],
     compiled: readonly WebAssembly.Module[],
@@ -674,10 +724,22 @@ function buildHighlighter(
           throw new RangeError('reserved language name: ansi');
       }
       // Only a built-in language module exports `reserve`.
-      return exports.some(({ name }) => name === 'reserve');
+      const builtin = exports.some(({ name }) => name === 'reserve');
+      // LiveTokenizer and live fences need the lexer state.
+      if (
+        lexers !== undefined &&
+        !builtin &&
+        !exports.some(({ name }) => name === 'saveState')
+      )
+        throw new TypeError(
+          `${languages[i].name}: the lexer cannot save its state; build it with buildHighlightsLexer`
+        );
+      return builtin;
     });
     for (let i = 0; i < languages.length; i++) {
-      const localIds = new Map<number, number>();
+      let localIds = externalIds.get(compiled[i]);
+      if (localIds === undefined)
+        externalIds.set(compiled[i], (localIds = new Map()));
       for (const [alias, id] of Object.entries(languages[i].aliases)) {
         const name = alias.toLowerCase();
         // A built-in ID also routes embedded languages. Only a built-in module
@@ -1012,17 +1074,7 @@ export function fenceImports(
       let index = lexers.findIndex(
         (entry) => entry.module === module && entry.id === id
       );
-      if (index < 0) {
-        // A lexer that cannot save its state leaves a live fence plain.
-        if (
-          live &&
-          !WebAssembly.Module.exports(module).some(
-            ({ name }) => name === 'saveState'
-          )
-        )
-          return 0;
-        index = lexers.push({ module, id, state: 0 }) - 1;
-      }
+      if (index < 0) index = lexers.push({ module, id, state: 0 }) - 1;
       return 256 + index;
     },
     fence_lex: (lang, from, to, reset, state, out) => {
@@ -1128,6 +1180,10 @@ export function registerLanguages(langs: readonly Language[]): void {
     ...registeredLangs.filter((lang) => !added.includes(lang)),
     ...added,
   ];
+  // Instances made before the first registration have no fence imports.
+  if (shared !== undefined && wasmModule !== undefined)
+    shared = createShared(wasmModule);
+  pooledStreamHighlighter = undefined;
 }
 
 /**
@@ -1145,6 +1201,11 @@ export function codeToHtml(
   ) {
     return registered[0].codeToHtml(input, options);
   }
+  if (
+    registeredLexers.size > 0 &&
+    fenceHosts.has(LANGS[String(options.lang).toLowerCase()])
+  )
+    return assertFenceEmitter(input).codeToHtml(input, options);
   return assertShared(input).codeToHtml(input, options);
 }
 
@@ -1221,15 +1282,15 @@ export class StreamTokenizer extends TransformStream<
       registered?.id ?? (this.#ansi === undefined ? langIdOf(options.lang) : 0);
     this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
-    if (registered === undefined) {
+    if (registered === undefined && registeredLexers.size === 0) {
       this.#hl =
         pooledStreamHighlighter?.wasmModule === compiledWasm
           ? pooledStreamHighlighter
           : new HighlightsHighlighter(compiledWasm);
       pooledStreamHighlighter = undefined;
-    } else if (registered.module === undefined) {
-      // A registered language module runs the registered lexers in its
-      // fences. Its instance keeps their state, so it stays out of the pool.
+    } else if (registered?.module === undefined) {
+      // A built-in language runs the registered lexers in its fences. Its
+      // instance keeps their state, so it stays out of the pool.
       this.#fences = true;
       this.#hl = new HighlightsHighlighter(
         compiledWasm,

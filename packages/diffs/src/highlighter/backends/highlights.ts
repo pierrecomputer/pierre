@@ -99,7 +99,7 @@ export class HighlightsHighlighter extends DiffsHighlighter {
       );
       if (!aliases.includes(name.toLowerCase())) {
         throw new Error(
-          `attachResolvedLanguages: The Highlights lexer "${highlights.name}" does not declare "${name}" as an alias.`
+          `HighlightsHighlighter.attachLanguages: The Highlights lexer "${highlights.name}" does not declare "${name}" as an alias.`
         );
       }
       // WARNING: unsupported languages render as 'text', so a lexer with a
@@ -109,7 +109,7 @@ export class HighlightsHighlighter extends DiffsHighlighter {
       );
       if (plain !== undefined) {
         throw new Error(
-          `attachResolvedLanguages: The Highlights lexer "${highlights.name}" declares the reserved alias "${plain}".`
+          `HighlightsHighlighter.attachLanguages: The Highlights lexer "${highlights.name}" declares the reserved alias "${plain}".`
         );
       }
       names.push(name);

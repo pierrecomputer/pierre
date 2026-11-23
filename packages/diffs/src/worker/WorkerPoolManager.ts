@@ -1220,8 +1220,8 @@ export class WorkerPoolManager {
     this.queueDrain();
   }
 
-  // Cached Shiki grammars return without a promise, so a task can start in
-  // the same tick.
+  // Cached grammars and lexers return without a promise, so a task can start
+  // in the same tick.
   private resolveWorkerLanguages(
     langs: SupportedLanguages[]
   ): ResolvedLanguage[] | Promise<ResolvedLanguage[]> {
@@ -1528,7 +1528,12 @@ export class WorkerPoolManager {
       }
       let hasEveryLang = true;
       for (const lang of langs) {
-        if (!managedWorker.langs.has(lang)) {
+        // Highlights workers bundle every lexer that has no registered loader.
+        if (
+          !managedWorker.langs.has(lang) &&
+          (this.preferredHighlighter !== 'highlights' ||
+            RegisteredHighlightsLanguages.has(lang))
+        ) {
           hasEveryLang = false;
           break;
         }

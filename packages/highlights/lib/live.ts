@@ -9,6 +9,7 @@ import type {
 import {
   assertWasmModule,
   fenceImports,
+  hasRegisteredLanguages,
   HighlightsHighlighter,
   langIdOf,
   registeredLexer,
@@ -349,10 +350,6 @@ export class LiveTokenizer {
         saveState(): number;
         loadState(): void;
       };
-      if (saveState === undefined)
-        throw new TypeError(
-          'the lexer cannot save its state; build it with buildHighlightsLexer'
-        );
       // WARNING: This runs for each line, inside `liveRun`. The lexer writes
       // its state after its records, so one copy moves both to the document
       // instance, at the address that the Wasm driver reads.
@@ -385,8 +382,8 @@ export class LiveTokenizer {
           return bytes;
         },
       };
-    } else if (custom !== undefined) {
-      // A registered language module runs the registered lexers in its fences.
+    } else if (custom !== undefined || hasRegisteredLanguages()) {
+      // A built-in language runs the registered lexers in its fences.
       imports = fenceImports(() => hl, true);
     }
     const hl = new HighlightsHighlighter(

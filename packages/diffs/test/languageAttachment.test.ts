@@ -92,7 +92,7 @@ test('Highlights attaches lexers registered with the highlights type', async () 
     .catch((error: unknown) => error);
   expect(error).toEqual(
     new Error(
-      'attachResolvedLanguages: The Highlights lexer "json" does not declare "bad-json" as an alias.'
+      'HighlightsHighlighter.attachLanguages: The Highlights lexer "json" does not declare "bad-json" as an alias.'
     )
   );
   expect(highlighter.hasLoadedLanguages(['bad-json'])).toBe(false);
@@ -106,7 +106,7 @@ test('Highlights attaches lexers registered with the highlights type', async () 
       },
     ])
   ).toThrow(
-    'attachResolvedLanguages: The Highlights lexer "json" declares the reserved alias "text".'
+    'HighlightsHighlighter.attachLanguages: The Highlights lexer "json" declares the reserved alias "text".'
   );
   expect(tokens('text')).not.toEqual(tokens('json'));
 });

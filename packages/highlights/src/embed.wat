@@ -25,8 +25,8 @@
     (i32.const 0))
 
   ;; The registered lexer of the host for a fence name, from ID 256, or 0.
-  ;; StreamTokenizer and LiveTokenizer supply it for a registered language
-  ;; module; other hosts return 0.
+  ;; Once registerLanguages has added a lexer, the shared instance,
+  ;; StreamTokenizer, and LiveTokenizer supply it; other hosts return 0.
   (import "env" "fence_language" (func $hostFenceLanguage (param $ptr i32) (param $len i32) (result i32)))
   ;; Lex the fence body [$from, $to) with the registered lexer $lang. $state is
   ;; the ID of the lexer state before the body, and $reset starts the lexer

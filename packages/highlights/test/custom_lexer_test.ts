@@ -589,15 +589,36 @@ test('StreamTokenizer and LiveTokenizer run registered lexers in the fences of a
     expect(lines()).toEqual(whole(live.getText()));
   }
   live.dispose();
-  // Without the registered module, the tokenizers use the built-in lexers.
-  const mdx = new LiveTokenizer({ ...options, lang: 'mdx', code });
-  expect(mdx.getLineTokens(2).tokens.map(({ content }) => content)).toEqual([
-    'a # b /* open',
-  ]);
+  // A built-in language that is not registered runs them in its fences too.
+  const mdxOptions = { ...options, lang: 'mdx' } as const;
+  const mdxExpected = colors(codeToTokens(code, mdxOptions).tokens);
+  expect(mdxExpected[2]).toContainEqual(['# b ', 'var(--hls-keyword)']);
+  expect(new TextDecoder().decode(codeToHtml(code, mdxOptions))).toContain(
+    'var(--hls-keyword)'
+  );
+  // Without registered fences, the record path matches direct HTML output.
+  const plain =
+    '# T\n*a* `b`\n```go\nfunc main() {}\n```\n```js\nlet a = 1\n```\n';
+  expect(codeToHtml(plain, mdxOptions)).toEqual(
+    combined.codeToHtml(plain, mdxOptions)
+  );
+  const mdxStream = new StreamTokenizer(mdxOptions);
+  expect(colors([...mdxStream.pushCode(code), ...mdxStream.end()])).toEqual(
+    mdxExpected
+  );
+  const mdx = new LiveTokenizer({ ...mdxOptions, code });
+  mdx.flush();
+  expect(
+    Array.from({ length: mdx.lineCount }, (_, line) =>
+      mdx
+        .getLineTokens(line)
+        .tokens.map(({ content, color }) => [content, color])
+    )
+  ).toEqual(mdxExpected);
   mdx.dispose();
 });
 
-test('a lexer that cannot save its state works in streams and throws in LiveTokenizer', () => {
+test('registerLanguages rejects a lexer that cannot save its state', async () => {
   const { code: wat } = transformWat(
     new URL('./example-stateless.wat', import.meta.url),
     `(module
@@ -611,21 +632,20 @@ test('a lexer that cannot save its state works in streams and throws in LiveToke
   const wasm = Buffer.from(wat2wasm('example-stateless.wat', wat)).toString(
     'base64'
   );
-  // Entry 20 is another language in the combined module.
-  for (const id of [0, 20]) {
-    const lang = `example-stateless-${id}`;
-    registerLanguages([{ name: lang, aliases: { [lang]: id }, wasm }]);
-    const options = { lang, theme: cssVariables } as const;
-    const code = 'if (x) return "s"; // c\n';
-    const stream = new StreamTokenizer(options);
-    const lines = [...stream.pushCode(code), ...stream.end()];
-    expect(lines).toEqual(codeToTokens(code, options).tokens);
-    expect(lines[0]).toHaveLength(1);
-    expect(lines[0][0].color).toBe('var(--hls-keyword)');
-    expect(() => new LiveTokenizer({ ...options, code })).toThrow(
-      /cannot save its state/
-    );
-  }
+  const lang = 'example-stateless';
+  const stateless = { name: lang, aliases: { [lang]: 0 }, wasm };
+  expect(() => registerLanguages([stateless])).toThrow(/cannot save its state/);
+  expect(isRegisteredLanguage(lang)).toBe(false);
+  // Without LiveTokenizer, createHighlighter does not need the state.
+  const highlighter = await createHighlighter({
+    langs: [stateless],
+    themes: [cssVariables],
+  });
+  const { tokens } = highlighter.codeToTokens('if (x)', {
+    lang,
+    theme: 'css-variables',
+  });
+  expect(tokens[0][0].color).toBe('var(--hls-keyword)');
 });
 
 test('lexers without the 6-byte token record format are rejected', async () => {

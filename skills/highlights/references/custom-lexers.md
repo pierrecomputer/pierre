@@ -192,8 +192,8 @@ mutable globals or memory regions, and reset it when `$streamReset` is `1`:
   entry when you pop it.
 - When an open string or comment from a shared helper covers a whole chunk,
   `$highlight` does not run for that chunk.
-- In `LiveTokenizer`, a Markdown fence stays plain if its lexer cannot save its
-  state.
+- `registerLanguages` rejects a lexer that cannot save its state, such as one
+  compiled with `transformWat` and `wat2wasm`. Use `buildHighlightsLexer`.
 
 ## Rules and pitfalls
 
