@@ -218,16 +218,15 @@ export class Renderer {
       inputLength = input.length;
     }
     this.dv.setUint8(0, mode);
+    const htmlAsText = options?.escapeHtml === true;
     const allowed =
-      options?.allowedHtml === undefined
+      options?.allowedHtml === undefined || htmlAsText
         ? undefined
         : packAllowedHtml(options.allowedHtml);
     this.dv.setUint8(
       1,
       (options?.frontmatter === true ? 1 : 0) |
-        (options?.skipHtml === true ||
-        allowed !== undefined ||
-        options?.escapeHtml === true
+        (options?.skipHtml === true || allowed !== undefined || htmlAsText
           ? 2
           : 0) |
         (options?.boundary === true ? 8 : 0) |
@@ -238,7 +237,7 @@ export class Renderer {
       31,
       (options?.cjk === true ? 1 : 0) |
         (options?.math === true ? 2 : 0) |
-        (options?.escapeHtml === true ? 4 : 0)
+        (htmlAsText ? 4 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
     const format = options?.format;

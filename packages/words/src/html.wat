@@ -85,6 +85,8 @@
             (then (call $htmlCodeBlockFmt (local.get $r)))
             (else (call $htmlCodeBlock (local.get $r))))
           (return))
+        ;; escapeHtml: an HTML block is a paragraph of its source text
+        (br_if $p (i32.and (global.get $ext) (i32.const 4)))
         (call $htmlRawBlock (local.get $r))
         (return))
       ;; a tight list item's paragraph has no tags
@@ -95,7 +97,9 @@
           (out.str "<p>")
           (if (global.get $fmt) (then (call $mark (i32.const 1) (i32.const 0))))))
       (call $htmlTaskBox)
-      (call $renderInline (local.get $r))
+      (if (i32.eq (local.get $t) (enum.get $Blk.html))
+        (then (call $rText (i32.const 0) (call $blockContent (local.get $r))))
+        (else (call $renderInline (local.get $r))))
       (if (i32.eqz (local.get $n))
         (then (out.str "</p>\n")))
       (return))
@@ -178,13 +182,8 @@
     (local $i i32)
     (local $line i32)
     (if (global.get $allowAt) (then (call $allowBlock (local.get $r)) (return)))
-    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2))
-      (then
-        ;; skipped raw HTML leaves no line breaks behind, unless escapeHtml
-        ;; shows it as text
-        (if (i32.and (global.get $ext) (i32.const 4))
-          (then (call $htmlRawBlockText (local.get $r))))
-        (return)))
+    ;; skipped raw HTML leaves no line breaks behind
+    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (then (return)))
     (call $cr)
     (local.set $n (i32.load offset=$R.nLines (local.get $r)))
     (block $done
@@ -198,46 +197,14 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l))))
 
-  ;; With the escapeHtml option, an HTML block is a paragraph of its lines as
-  ;; escaped text, without inline parsing, so the reader sees the markup the
-  ;; source holds. As in a paragraph, the lines lose their indentation.
-  (func $htmlRawBlockText (param $r i32)
-    (local $n i32)
-    (local $i i32)
-    (local $line i32)
-    (local $tight i32)
-    (local.set $tight (call $tightParagraph))
-    (if (i32.eqz (local.get $tight))
-      (then
-        (call $cr)
-        (out.str "<p>")
-        (if (global.get $fmt) (then (call $mark (i32.const 1) (i32.const 0))))))
-    (local.set $n (i32.load offset=$R.nLines (local.get $r)))
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (if (local.get $i) (then (call $outByte (i32.const 10))))
-        (local.set $line (call $lineAt (local.get $r) (local.get $i)))
-        (call $outText
-          (call $skipSpace (call $lineBeg (local.get $line)) (call $lineEndOf (local.get $line)))
-          (call $lineEndOf (local.get $line)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l)))
-    (if (i32.eqz (local.get $tight)) (then (out.str "</p>\n"))))
-
   ;; raw HTML passes through, except that GFM escapes a handful of tag names
   (func $htmlFiltered2 (param $p i32) (param $e i32) (param $eol i32)
     (local $q i32)
     (local $n i32)
     (local $tag i32)
     (local $tagEnd i32)
-    ;; Structured React output drops raw HTML, and the escapeHtml option writes
-    ;; it as text.
-    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2))
-      (then
-        (if (i32.and (global.get $ext) (i32.const 4))
-          (then (call $outText (local.get $p) (local.get $e))))
-        (return)))
+    ;; structured React output drops raw HTML
+    (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2)) (then (return)))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (local.get $e)))

@@ -1626,8 +1626,10 @@ void test('a nested footnote definition renders only under its own number', () =
 });
 
 void test('escapeHtml shows raw HTML as escaped text', () => {
-  const escaped = (md: string, options?: { skipHtml?: boolean }) =>
-    dec.decode(renderToHtml(md, { ...options, escapeHtml: true }));
+  const escaped = (
+    md: string,
+    options?: { skipHtml?: boolean; allowedHtml?: Record<string, string[]> }
+  ) => dec.decode(renderToHtml(md, { ...options, escapeHtml: true }));
   assert.equal(
     escaped('x <b>bold</b> & <!-- y -->'),
     '<p>x &lt;b&gt;bold&lt;/b&gt; &amp; &lt;!-- y --&gt;</p>\n'
@@ -1635,7 +1637,7 @@ void test('escapeHtml shows raw HTML as escaped text', () => {
   // An HTML block is a paragraph of its lines, with no Markdown inside it.
   assert.equal(
     escaped('<div class="a">\n  *b*\n</div>\n\nc'),
-    '<p>&lt;div class=&quot;a&quot;&gt;\n*b*\n&lt;/div&gt;</p>\n<p>c</p>\n'
+    '<p>&lt;div class=&quot;a&quot;&gt;\n  *b*\n&lt;/div&gt;</p>\n<p>c</p>\n'
   );
   assert.equal(
     escaped('<div>\r\nx\r\n</div>'),
@@ -1650,7 +1652,7 @@ void test('escapeHtml shows raw HTML as escaped text', () => {
   // Indented code was never raw HTML.
   assert.equal(escaped('    <b>'), '<pre><code>&lt;b&gt;\n</code></pre>\n');
   assert.equal(
-    escaped('<b>a</b>\n\n<div>', { skipHtml: true }),
+    escaped('<b>a</b>\n\n<div>', { skipHtml: true, allowedHtml: { b: [] } }),
     escaped('<b>a</b>\n\n<div>')
   );
 });

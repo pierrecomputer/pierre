@@ -492,8 +492,8 @@
              (call $rRaw (i32.const $mem.numbuf)
                (call $entityEncode (i32.const $mem.numbuf) (i32.load offset=$M.data (local.get $m))))
              (return))
-            ;; raw HTML: dropped in ANSI, literal text in alt text
-            (br_if $text (global.get $plain))
+            ;; raw HTML: dropped in ANSI, literal text in alt text and with escapeHtml
+            (br_if $text (i32.or (global.get $plain) (i32.and (global.get $ext) (i32.const 4))))
             (if (global.get $mode) (then (return)))
             (if (global.get $allowAt)
               (then
