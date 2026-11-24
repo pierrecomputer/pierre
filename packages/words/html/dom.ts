@@ -1,5 +1,13 @@
 import { delta, type InternalHtmlUpdate } from '../lib/internal';
 import { decodeHtml } from '../lib/utils';
+import {
+  appendIslandHosts,
+  collectIslands,
+  isIsland,
+  islandHostStart,
+  type MountedIsland,
+  noIslands,
+} from './islands';
 import type { InternalCodeUpdate } from './render';
 import { controlFlags, createHtmlRenderer, rewritesElements } from './render';
 import type { AnimateOptions, HtmlOptions, PluginConfig } from './types';
@@ -9,7 +17,7 @@ const isFade = (node: Node): node is HTMLElement =>
   (node as Element).getAttribute('data-markdown') === 'token';
 const isText = (node: Node): boolean => node.nodeType === 3 || isFade(node);
 const passiveText =
-  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], svg';
+  '[data-animated="true"], [data-markdown="token"], [data-markdown="code-header"], [data-markdown="line-numbers"], [data-markdown="caret"], [data-words-island], svg';
 
 // The source HTML of each math SVG that patchHtml placed, to reuse equal ones.
 const svgSources = new WeakMap<Node, string>();
@@ -45,7 +53,6 @@ function createFades(root: HTMLElement) {
     timer = undefined;
     timerDeadline = Infinity;
     const now = performance.now();
-    const parents = new Set<Node>();
     let next = Infinity;
     let kept = 0;
     for (let at = 0; at < nodes.length; at++) {
@@ -66,14 +73,34 @@ function createFades(root: HTMLElement) {
           if (span.getAttribute('style') === '') span.removeAttribute('style');
           continue;
         }
+        const first = span.firstChild;
+        let last = span.lastChild;
         while (span.firstChild !== null)
           parent.insertBefore(span.firstChild, span);
         parent.removeChild(span);
-        parents.add(parent);
+        // Warning: never use normalize() here. It also merges and removes text
+        // nodes in hook output, which frameworks keep references to. Merge only
+        // the moved edge text into non-empty neighbours, and keep empty ones.
+        // Remove only moved text: removing a neighbour would move a selection
+        // in it to the parent. A selection in moved text already moved out.
+        if (first?.nodeType === 3) {
+          const previous = first.previousSibling;
+          if (previous?.nodeType === 3 && (previous as Text).length > 0) {
+            (previous as Text).appendData((first as Text).data);
+            if (last === first) last = null;
+            first.remove();
+          }
+        }
+        if (last?.nodeType === 3) {
+          const after = last.nextSibling;
+          if (after?.nodeType === 3 && (after as Text).length > 0) {
+            (after as Text).insertData(0, (last as Text).data);
+            last.remove();
+          }
+        }
       }
     }
     nodes.length = deadlines.length = kept;
-    for (const parent of parents) parent.normalize();
     arm(next);
   };
   const stop = (): void => {
@@ -86,6 +113,7 @@ function createFades(root: HTMLElement) {
   const animate = (text: Text): void => {
     if (!enabled() || text.data.trim() === '' || text.parentElement === null)
       return;
+    if (text.parentElement.closest(passiveText) !== null) return;
     // An open fence line ends with LF. Keep the LF outside the span, so the
     // next chunk can extend the same line.
     if (
@@ -94,7 +122,6 @@ function createFades(root: HTMLElement) {
       text.parentElement.closest('pre code') !== null
     )
       text.splitText(text.data.length - 1);
-    if (text.parentElement.closest(passiveText) !== null) return;
     const span = document.createElement('span');
     span.dataset.markdown = 'token';
     span.dataset.animated = 'true';
@@ -149,6 +176,7 @@ function createFades(root: HTMLElement) {
           const element = node as HTMLElement;
           const kind = element.getAttribute('data-markdown');
           if (
+            element.hasAttribute('data-words-island') ||
             kind === 'code-header' ||
             kind === 'line-numbers' ||
             kind === 'caret' ||
@@ -252,12 +280,13 @@ function patchHtml(
         } else if (at >= committed && firstPending === null)
           firstPending = fragment.firstChild;
         // Record math SVG sources as the walk below does, so patches keep them.
-        if (html.includes('<svg', at)) {
+        // Kept raw tags such as `<svg-icon>` also start with `<svg`.
+        if (html.includes('<svg ', at)) {
           const svgs = fragment.querySelectorAll('svg');
-          for (let open = html.indexOf('<svg', at), index = 0; open >= 0; ) {
+          for (let open = html.indexOf('<svg ', at), index = 0; open >= 0; ) {
             const end = html.indexOf('</svg>', open) + 6;
             svgSources.set(svgs[index++], html.slice(open, end));
-            open = html.indexOf('<svg', end);
+            open = html.indexOf('<svg ', end);
           }
         }
         parent.appendChild(fragment);
@@ -325,7 +354,7 @@ function patchHtml(
           }
         } else actual = document.createTextNode(value);
         at = end;
-      } else if (html.startsWith('<svg', at)) {
+      } else if (html.startsWith('<svg ', at)) {
         // Math SVG is one unit: keep an equal one, else let the parser build it.
         const end = html.indexOf('</svg>', at) + 6;
         const source = html.slice(at, end);
@@ -339,6 +368,8 @@ function patchHtml(
         at = end;
       } else {
         const end = html.indexOf('>', at);
+        // Kept raw void tags end with ` />`.
+        const selfClosing = html.charCodeAt(end - 1) === 47;
         let nameEnd = html.indexOf(' ', at);
         if (nameEnd < 0 || nameEnd > end) nameEnd = end;
         const name = html.slice(at + 1, nameEnd);
@@ -347,7 +378,7 @@ function patchHtml(
             ? (current as Element)
             : document.createElement(name);
         const names: string[] = [];
-        for (let pos = nameEnd; pos < end; ) {
+        for (let pos = nameEnd; pos < end - (selfClosing ? 1 : 0); ) {
           if (html.charCodeAt(pos) === 32) {
             pos++;
             continue;
@@ -376,6 +407,7 @@ function patchHtml(
         }
         at = end + 1;
         if (
+          !selfClosing &&
           name !== 'br' &&
           name !== 'hr' &&
           name !== 'img' &&
@@ -511,6 +543,29 @@ function patchChildren(
         }
       }
       current = end;
+    } else if (isIsland(current) || isIsland(target)) {
+      // Replacing a shell must leave its portal children intact until React
+      // unmounts them. A matching shell keeps its target and fallback nodes.
+      if (
+        isIsland(current) &&
+        isIsland(target) &&
+        current.tagName === target.tagName &&
+        current.dataset.wordsIsland === target.dataset.wordsIsland &&
+        current.dataset.wordsIslandId === target.dataset.wordsIslandId
+      ) {
+        current.dataset.wordsIslandData = target.dataset.wordsIslandData!;
+        const fallback = current.lastElementChild!;
+        const text = target.lastElementChild!.textContent;
+        if (fallback.textContent !== text) fallback.textContent = text;
+        actual = current;
+        current = current.nextSibling;
+      } else {
+        actual = target;
+        const next = current?.nextSibling ?? null;
+        parent.insertBefore(target, current);
+        if (current !== null) parent.removeChild(current);
+        current = next;
+      }
     } else if (
       current?.nodeType === 1 &&
       target.nodeType === 1 &&
@@ -643,6 +698,10 @@ export function createDomRenderer(
   const caret = document.createElement('span');
   const fades = createFades(root);
   let revision = 0;
+  let islands: readonly MountedIsland[] = noIslands;
+  // Committed blocks keep their hosts. Only the previous pending tail can be replaced.
+  const committedHosts: HTMLElement[] = [];
+  let pendingHasIslands = false;
   let initialized = false;
   let previousCaret: 'block' | 'circle' | undefined;
   let codeState:
@@ -706,6 +765,7 @@ export function createDomRenderer(
   };
 
   return {
+    getIslands: () => islands,
     connect(): void {
       fades.connect();
       root.addEventListener('click', click);
@@ -757,15 +817,17 @@ export function createDomRenderer(
                 hooks(value as HtmlOptions['components'])
               : key === 'urlTransform'
                 ? (previous === undefined) === (value === undefined)
-                : key === 'plugins'
-                  ? samePlugins(
-                      previous as PluginConfig | undefined,
-                      value as PluginConfig | undefined
-                    )
-                  : Array.isArray(previous) &&
-                    Array.isArray(value) &&
-                    previous.length === value.length &&
-                    previous.every((tag, at) => tag === value[at]))
+                : key === 'allowedHtml'
+                  ? JSON.stringify(previous) === JSON.stringify(value)
+                  : key === 'plugins'
+                    ? samePlugins(
+                        previous as PluginConfig | undefined,
+                        value as PluginConfig | undefined
+                      )
+                    : Array.isArray(previous) &&
+                      Array.isArray(value) &&
+                      previous.length === value.length &&
+                      previous.every((tag, at) => tag === value[at]))
         );
       }
       formatter.configure(next, reset);
@@ -796,6 +858,7 @@ export function createDomRenderer(
       const direct =
         animated === false &&
         options.plugins === undefined &&
+        !pendingHasIslands &&
         !rewritesElements(options);
       if (
         changed &&
@@ -933,7 +996,7 @@ export function createDomRenderer(
           append(text);
           codeState.numberCount = count;
         }
-      } else if (changed && direct) {
+      } else if (changed) {
         codeState?.marker?.remove();
         codeState = undefined;
         if (checkpoint.parentNode !== null) {
@@ -942,39 +1005,123 @@ export function createDomRenderer(
         }
         if (reset) pending = root.firstChild;
         const addition = reset ? update.stable : update.addition;
-        const firstPending = patchHtml(
-          root,
-          addition + update.pending,
-          pending,
-          addition.length,
-          template
-        );
-        pending = firstPending;
-        if (codeUpdate !== undefined) {
-          let code: Element | null = null;
-          for (
-            let node = firstPending;
-            node !== null;
-            node = node.nextSibling
-          ) {
-            if (node.nodeType === 1)
-              code = (node as Element).querySelector(
-                '[data-incomplete] > pre > code'
+        const pendingHtml = update.pending;
+        const additionHasIslands =
+          options.islands !== undefined && addition.includes(islandHostStart);
+        const tailHasIslands =
+          options.islands !== undefined &&
+          pendingHtml.includes(islandHostStart);
+        // A patch touching a portal must preserve its React-owned children.
+        const patchIslands =
+          additionHasIslands ||
+          tailHasIslands ||
+          pendingHasIslands ||
+          (reset && committedHosts.length !== 0);
+        pendingHasIslands = tailHasIslands;
+        if (direct && !patchIslands) {
+          const firstPending = patchHtml(
+            root,
+            addition + pendingHtml,
+            pending,
+            addition.length,
+            template
+          );
+          pending = firstPending;
+          if (codeUpdate !== undefined) {
+            let code: Element | null = null;
+            for (
+              let node = firstPending;
+              node !== null;
+              node = node.nextSibling
+            ) {
+              if (node.nodeType === 1)
+                code = (node as Element).querySelector(
+                  '[data-incomplete] > pre > code'
+                );
+              if (code !== null) break;
+            }
+            if (code !== null) {
+              const group = code.lastElementChild ?? code;
+              const first = lastCodeLine(
+                group,
+                codeUpdate.lastLine < codeUpdate.lineCount - 1
               );
-            if (code !== null) break;
+              const numbers = code.previousElementSibling;
+              codeState = {
+                code,
+                marker: undefined,
+                group,
+                first,
+                line: codeUpdate.lastLine,
+                lineCount: codeUpdate.lineCount,
+                key: codeUpdate.key,
+                numbers:
+                  numbers?.getAttribute('data-markdown') === 'line-numbers'
+                    ? numbers
+                    : null,
+                numberCount: codeUpdate.numbers ?? 0,
+              };
+            }
           }
-          if (code !== null) {
-            const group = code.lastElementChild ?? code;
-            const first = lastCodeLine(
-              group,
-              codeUpdate.lastLine < codeUpdate.lineCount - 1
-            );
+        } else {
+          template.innerHTML = addition;
+          const fragment = template.content;
+          const count = fragment.childNodes.length;
+          tail.innerHTML = pendingHtml;
+          // Only the open fence block is incomplete; footnotes after it may hold other fences.
+          const incomingCode =
+            codeUpdate === undefined
+              ? null
+              : tail.content.querySelector('[data-incomplete] > pre > code');
+          // Add the marker before insertion, because fades wrap multi-line text.
+          const codeMarker =
+            incomingCode === null || codeUpdate === undefined
+              ? undefined
+              : markLastCodeLine(
+                  incomingCode.lastElementChild ?? incomingCode,
+                  codeUpdate.lastLine < codeUpdate.lineCount - 1
+                );
+          fragment.append(tail.content);
+          const previousSibling =
+            pending === null ? root.lastChild : pending.previousSibling;
+          const firstPending = patchChildren(
+            root,
+            fragment,
+            pending,
+            fades,
+            count,
+            codeMarker,
+            initialized && reset
+          );
+          pending = firstPending;
+          if (patchIslands) {
+            if (reset) committedHosts.length = 0;
+            if (additionHasIslands) {
+              const first =
+                previousSibling === null
+                  ? root.firstChild
+                  : previousSibling.nextSibling;
+              appendIslandHosts(committedHosts, first, firstPending);
+            }
+            let hosts = committedHosts;
+            if (pendingHasIslands) {
+              hosts = [...committedHosts];
+              appendIslandHosts(hosts, firstPending, null);
+            }
+            islands = collectIslands(root, hosts, islands);
+          }
+          // Root-level text can merge when fade wrappers finish. Keep a physical
+          // boundary only there; ordinary block nodes are stable references.
+          if (firstPending !== null && isText(firstPending))
+            root.insertBefore(checkpoint, firstPending);
+          if (codeUpdate !== undefined && codeMarker?.parentNode != null) {
+            const code = codeMarker.parentNode.parentNode as Element;
             const numbers = code.previousElementSibling;
             codeState = {
               code,
-              marker: undefined,
-              group,
-              first,
+              marker: codeMarker,
+              group: codeMarker.parentNode as Element,
+              first: codeMarker.nextSibling,
               line: codeUpdate.lastLine,
               lineCount: codeUpdate.lineCount,
               key: codeUpdate.key,
@@ -985,72 +1132,9 @@ export function createDomRenderer(
               numberCount: codeUpdate.numbers ?? 0,
             };
           }
+          if (!initialized) fades.tree(root);
         }
         initialized = true;
-      } else if (changed) {
-        // The first render and skipped revisions need the full prefix. Other
-        // updates use only the addition.
-        codeState?.marker?.remove();
-        codeState = undefined;
-        if (checkpoint.parentNode !== null) {
-          pending = checkpoint.nextSibling;
-          checkpoint.remove();
-        }
-        if (reset) pending = root.firstChild;
-        template.innerHTML = reset ? update.stable : update.addition;
-        const fragment = template.content;
-        const count = fragment.childNodes.length;
-        tail.innerHTML = update.pending;
-        // Only the open fence block is incomplete; footnotes after it may hold other fences.
-        const incomingCode =
-          codeUpdate === undefined
-            ? null
-            : tail.content.querySelector('[data-incomplete] > pre > code');
-        // Add the marker before insertion, because fades wrap multi-line text.
-        const codeMarker =
-          incomingCode === null || codeUpdate === undefined
-            ? undefined
-            : markLastCodeLine(
-                incomingCode.lastElementChild ?? incomingCode,
-                codeUpdate.lastLine < codeUpdate.lineCount - 1
-              );
-        fragment.append(tail.content);
-        const firstPending = patchChildren(
-          root,
-          fragment,
-          pending,
-          fades,
-          count,
-          codeMarker,
-          initialized && reset
-        );
-        pending = firstPending;
-        // Root-level text can merge when fade wrappers finish. Keep a physical
-        // boundary only there; ordinary block nodes are stable references.
-        if (firstPending !== null && isText(firstPending))
-          root.insertBefore(checkpoint, firstPending);
-        if (codeUpdate !== undefined && codeMarker?.parentNode != null) {
-          const code = codeMarker.parentNode.parentNode as Element;
-          const numbers = code.previousElementSibling;
-          codeState = {
-            code,
-            marker: codeMarker,
-            group: codeMarker.parentNode as Element,
-            first: codeMarker.nextSibling,
-            line: codeUpdate.lastLine,
-            lineCount: codeUpdate.lineCount,
-            key: codeUpdate.key,
-            numbers:
-              numbers?.getAttribute('data-markdown') === 'line-numbers'
-                ? numbers
-                : null,
-            numberCount: codeUpdate.numbers ?? 0,
-          };
-        }
-        if (!initialized) {
-          initialized = true;
-          fades.tree(root);
-        }
       }
       revision = update.revision;
       previousCaret = nextCaret;
@@ -1072,7 +1156,7 @@ export function createDomRenderer(
             continue;
           }
           let block = false;
-          if (node.nodeType === 1)
+          if (node.nodeType === 1 && !isIsland(node))
             switch (node.nodeName) {
               case 'BLOCKQUOTE':
               case 'DIV':

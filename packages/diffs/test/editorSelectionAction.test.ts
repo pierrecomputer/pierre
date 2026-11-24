@@ -64,6 +64,7 @@ async function createSelectionActionFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const editor = new Editor('file', editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
@@ -705,8 +706,8 @@ describe('Editor selection action', () => {
       expect(editor.getViewState().selections?.[0]?.direction).toBe(
         DirectionBackward
       );
-      // setSelections ends by re-focusing the caret, which sets
-      // #shouldIgnoreSelectionChange for two nested rAFs before clearing it.
+      // setSelections ends by re-focusing the caret, which holds a focus
+      // request that ignores native selection reads for two nested rAFs.
       // Flush those first, or the dispatch below would be ignored regardless
       // of the fix under test.
       await wait(0);
@@ -745,9 +746,9 @@ describe('Editor selection action', () => {
 
   // IME candidate windows can fire selectionchange events mid-composition with
   // the same direction-less range shape a refocus produces (see the test
-  // above). Composition sets #shouldIgnoreSelectionChange for its whole
-  // duration, so these must be ignored outright rather than reaching the
-  // bounds-comparison branch — confirms the two fixes don't interact badly.
+  // above). Native selection reads are ignored for the whole composition, so
+  // these must be ignored outright rather than reaching the bounds-comparison
+  // branch — confirms the two fixes don't interact badly.
   test('composition-time selectionchange does not affect a backward selection', async () => {
     const { cleanup, editor, content, window } =
       await createSelectionActionFixture('hello\nworld', {

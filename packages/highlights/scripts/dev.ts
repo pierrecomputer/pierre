@@ -19,6 +19,16 @@ async function rebuild(): Promise<void> {
       const compile = generate;
       generate = false;
       if (compile) {
+        child = Bun.spawn(['moon', 'run', 'wat-tools:build'], {
+          cwd,
+          stdout: 'inherit',
+          stderr: 'inherit',
+        });
+        if ((await child.exited) !== 0) {
+          generate = true;
+          continue;
+        }
+        if (stopped) break;
         child = Bun.spawn([process.execPath, './scripts/build.ts'], {
           cwd,
           stdout: 'inherit',
@@ -47,8 +57,11 @@ async function rebuild(): Promise<void> {
 
 /** Poll source metadata so edits also rebuild on filesystems without watch events. */
 function poll(): void {
-  const paths = ['tsdown.config.ts', 'tsconfig.json', '../wat-tools/index.ts'];
-  for (const dir of ['src', 'lib', 'themes', 'scripts']) {
+  const paths = ['tsdown.config.ts', 'tsconfig.json'];
+  for (const name of readdirSync(`${cwd}/../wat-tools`)) {
+    if (name.endsWith('.ts')) paths.push(`../wat-tools/${name}`);
+  }
+  for (const dir of ['src', 'lib', 'themes', 'scripts', '../wat-tools/wat']) {
     for (const name of readdirSync(`${cwd}/${dir}`, {
       recursive: true,
       encoding: 'utf8',
@@ -72,7 +85,7 @@ function poll(): void {
       if (files.get(path) === next.get(path)) continue;
       pending = true;
       generate ||=
-        path === '../wat-tools/index.ts' ||
+        path.startsWith('../wat-tools/') ||
         /^(src|themes|scripts)\//.test(path);
     }
   }

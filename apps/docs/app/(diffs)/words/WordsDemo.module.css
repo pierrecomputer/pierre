@@ -206,3 +206,45 @@
   --pele-border: var(--border);
   --pele-font: inherit;
 }
+
+[data-words-example='reactive-islands']
+  .preview
+  [data-markdown='island-pending'] {
+  display: grid;
+  place-content: center;
+  width: 10rem;
+  height: 2.25rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 36%, transparent);
+  border-radius: var(--radius-lg);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  [data-words-example='reactive-islands']
+    .preview
+    [data-markdown='island-pending'] {
+    color: transparent;
+    background-image: linear-gradient(
+      100deg,
+      var(--muted-foreground) 35%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 65%
+    );
+    background-clip: text;
+    background-size: 300% 100%;
+    animation: island-label-shimmer 2.4s linear -0.65s infinite;
+  }
+}
+
+@keyframes island-label-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}

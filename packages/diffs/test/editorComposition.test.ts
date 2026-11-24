@@ -6,6 +6,7 @@ import type { EditorKeymap } from '../src/editor/command';
 import { Editor } from '../src/editor/editor';
 import { DirectionForward, DirectionNone } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { clearRenderQueue } from '../src/managers/UniversalRenderingManager';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
@@ -35,6 +36,8 @@ interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<'file', undefined>;
+  file: File<undefined>;
+  fileContainer: HTMLElement;
   window: EditorTestWindow;
 }
 
@@ -77,6 +80,7 @@ async function createEditorFixture(
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const initialFile: FileContents = {
     name: 'editor.ts',
@@ -110,6 +114,8 @@ async function createEditorFixture(
     },
     content,
     editor,
+    file,
+    fileContainer,
     window: dom.window as unknown as EditorTestWindow,
   };
 }
@@ -166,7 +172,9 @@ async function openSearchReplacePanel({
 }
 
 function findReplaceInput(panel: HTMLElement): HTMLInputElement {
-  const input = panel.querySelector<HTMLInputElement>('input[data-replace]');
+  const input = panel.shadowRoot?.querySelector<HTMLInputElement>(
+    'input[data-replace]'
+  );
   if (input == null) {
     throw new Error('replace input was not rendered');
   }
@@ -174,7 +182,8 @@ function findReplaceInput(panel: HTMLElement): HTMLInputElement {
 }
 
 function findSearchInput(panel: HTMLElement): HTMLInputElement {
-  const input = panel.querySelector<HTMLInputElement>('input[data-search]');
+  const input =
+    panel.shadowRoot?.querySelector<HTMLInputElement>('input[data-search]');
   if (input == null) {
     throw new Error('search input was not rendered');
   }
@@ -186,7 +195,162 @@ function updateInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
 }
 
+interface ControlledFrames {
+  // Runs every animation frame queued so far, in order, as one render pass.
+  frame(): void;
+  restore(): void;
+}
+
+// Replaces requestAnimationFrame with a manual queue so tests decide when the
+// editor's deferred focus and settle frames run. Drops anything the fixture
+// already queued so the test starts from an empty render queue.
+function installControlledFrames(): ControlledFrames {
+  clearRenderQueue();
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  const raf = spyOn(globalThis, 'requestAnimationFrame').mockImplementation(
+    (callback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    }
+  );
+  const cancel = spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(
+    (id) => {
+      frames.delete(id);
+    }
+  );
+  return {
+    frame() {
+      const pending = [...frames.values()];
+      frames.clear();
+      for (const callback of pending) callback(0);
+    },
+    restore() {
+      clearRenderQueue();
+      raf.mockRestore();
+      cancel.mockRestore();
+    },
+  };
+}
+
+// Makes the next selectionchange report a collapsed native caret inside the
+// first rendered line's text, `character` code units in. The line is
+// flattened to a single text node so the offset maps directly to a column.
+function reportNativeCaret(content: HTMLElement, character: number): void {
+  const row = content.querySelector<HTMLElement>('[data-line="1"]')!;
+  row.replaceChildren(row.textContent ?? '');
+  const node = row.firstChild!;
+  const selection = document.getSelection()!;
+  Object.defineProperty(selection, 'getComposedRanges', {
+    configurable: true,
+    value: () => [
+      {
+        collapsed: true,
+        startContainer: node,
+        startOffset: character,
+        endContainer: node,
+        endOffset: character,
+      },
+    ],
+  });
+  document.dispatchEvent(new Event('selectionchange'));
+}
+
+function caretAt(character: number): EditableSelection {
+  return {
+    start: { line: 0, character },
+    end: { line: 0, character },
+    direction: 'none',
+  };
+}
+
 describe('Editor composition input', () => {
+  test('keeps the insertion position when deferred focus settles during the next composition', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: '앞뒤',
+      selections: [caretAt(1)],
+    });
+    const { frame, restore } = installControlledFrames();
+    const composition = (type: string, data = '') =>
+      content.dispatchEvent(
+        new window.CompositionEvent(type, {
+          bubbles: true,
+          composed: true,
+          data,
+        })
+      );
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+      composition('compositionstart');
+      composition('compositionend', '가');
+      composition('compositionstart');
+      frame();
+      frame();
+
+      // The browser shows the unfinished syllable in the row before it exists
+      // in the model, and reports the native caret after it.
+      const row = content.querySelector<HTMLElement>('[data-line="1"]')!;
+      row.textContent = '앞가ㄴ뒤';
+      reportNativeCaret(content, 3);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 2,
+      });
+      composition('compositionend', '나');
+
+      expect(editor.getText()).toBe('앞가나뒤');
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('ending a composition does not release a pending focus request', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'abcdef',
+      selections: [caretAt(3)],
+    });
+    const { frame, restore } = installControlledFrames();
+    const composition = (type: string, data = '') =>
+      content.dispatchEvent(
+        new window.CompositionEvent(type, {
+          bubbles: true,
+          composed: true,
+          data,
+        })
+      );
+
+    try {
+      // Queue a caret placement, then cancel a composition before its focus
+      // frame has run. The browser's stale caret must stay ignored until the
+      // placement settles.
+      editor.setSelections([caretAt(3)]);
+      composition('compositionstart');
+      composition('compositionend', '');
+      expect(content.hasAttribute('data-composing')).toBe(false);
+      reportNativeCaret(content, 0);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 3,
+      });
+
+      frame();
+      frame();
+      reportNativeCaret(content, 0);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 0,
+      });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
   test('lets the browser own IME preview before committing composition text', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture();
     const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {});
@@ -313,6 +477,294 @@ describe('Editor composition input', () => {
       expect(editor.getText()).toBe('line 1');
     } finally {
       consoleError.mockRestore();
+      cleanup();
+    }
+  });
+});
+
+describe('Editor focus ownership', () => {
+  test('a superseded caret placement cannot focus or release the newer one', async () => {
+    const { cleanup, content, editor } = await createEditorFixture({
+      contents: 'hello world',
+    });
+    const { frame, restore } = installControlledFrames();
+    const focus = spyOn(content, 'focus');
+
+    try {
+      // First placement focuses; its settle frame is now queued.
+      editor.setSelections([caretAt(1)]);
+      frame();
+      expect(focus).toHaveBeenCalledTimes(1);
+
+      // Second placement queues its focus frame into the same render pass as
+      // the first placement's settle frame.
+      editor.setSelections([caretAt(5)]);
+      focus.mockClear();
+      frame();
+      expect(focus).toHaveBeenCalledTimes(1);
+
+      // The browser reports the first placement's caret while the second is
+      // still settling. It must not move the editor's caret.
+      reportNativeCaret(content, 1);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 5,
+      });
+
+      // Once the second placement settles, native selection reads resume.
+      frame();
+      reportNativeCaret(content, 1);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 1,
+      });
+    } finally {
+      focus.mockRestore();
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a host re-render still restores focus when a placement supersedes the restore', async () => {
+    const { cleanup, content, editor, file, fileContainer } =
+      await createEditorFixture({ contents: 'hello world' });
+    const { frame, restore } = installControlledFrames();
+    const shadowRoot = fileContainer.shadowRoot!;
+    let focus = spyOn(content, 'focus');
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+      focus.mockRestore();
+
+      // A full host render replaces the rows and queues a focus restore. A
+      // caret placement before that restore's frame supersedes it.
+      file.render({
+        file: { name: 'editor.ts', contents: 'hello world' },
+        fileContainer,
+        forceRender: true,
+      });
+      const current = shadowRoot.querySelector<HTMLElement>('[data-content]')!;
+      focus = spyOn(current, 'focus');
+      editor.setSelections([caretAt(5)]);
+      frame();
+      frame();
+      frame();
+
+      expect(focus).toHaveBeenCalled();
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 5,
+      });
+    } finally {
+      focus.mockRestore();
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a direct focus call after a host re-render leaves no restore behind', async () => {
+    const { cleanup, content, editor, file, fileContainer } =
+      await createEditorFixture({ contents: 'hello world' });
+    const { frame, restore } = installControlledFrames();
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+
+      // A full host render queues a focus restore. A plain focus() in the
+      // same tick does not go through the restore path.
+      file.render({
+        file: { name: 'editor.ts', contents: 'hello world' },
+        fileContainer,
+        forceRender: true,
+      });
+      editor.focus();
+      frame();
+      frame();
+      frame();
+
+      // Once everything has settled, the browser's selection is the user's
+      // again and must be read back.
+      const current =
+        fileContainer.shadowRoot!.querySelector<HTMLElement>('[data-content]')!;
+      reportNativeCaret(current, 2);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 2,
+      });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a landed restore does not release a keyboard placement that follows it', async () => {
+    const { cleanup, content, editor, file, fileContainer, window } =
+      await createEditorFixture({
+        contents: 'hello world',
+        selections: [caretAt(1)],
+      });
+    const { frame, restore } = installControlledFrames();
+
+    try {
+      content.focus();
+      editor.focus();
+      frame();
+      frame();
+
+      // A host render queues a restore; its focus frame runs, leaving only
+      // its settle frame pending.
+      file.render({
+        file: { name: 'editor.ts', contents: 'hello world' },
+        fileContainer,
+        forceRender: true,
+      });
+      frame();
+
+      // A keyboard selection extends the caret and places it again before
+      // that settle frame runs. The restore's settle must not release this
+      // newer placement, or the browser's collapsed caret would be read back
+      // over the selection.
+      const current =
+        fileContainer.shadowRoot!.querySelector<HTMLElement>('[data-content]')!;
+      dispatchKeydown(window, current, {
+        key: 'ArrowRight',
+        code: 'ArrowRight',
+        shiftKey: true,
+      });
+      const selection = () => editor.getViewState().selections?.[0];
+      expect(selection()?.end).toEqual({ line: 0, character: 2 });
+      frame();
+      reportNativeCaret(current, 2);
+      expect(selection()?.start).toEqual({ line: 0, character: 1 });
+      expect(selection()?.end).toEqual({ line: 0, character: 2 });
+
+      frame();
+      reportNativeCaret(current, 2);
+      expect(selection()?.start).toEqual({ line: 0, character: 2 });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a press on the content takes over from a pending caret placement', async () => {
+    const { cleanup, content, editor } = await createEditorFixture({
+      contents: 'hello world',
+      selections: [caretAt(1)],
+    });
+    const { restore } = installControlledFrames();
+
+    try {
+      content.focus();
+      editor.focus();
+      // The placement's frames have not run. The user presses in the content
+      // before they do; the browser's selection for that press must win.
+      content.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      reportNativeCaret(content, 5);
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 5,
+      });
+    } finally {
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a focus requested by the press itself is not dropped by that press', async () => {
+    const { cleanup, content, editor } = await createEditorFixture({
+      contents: 'hello world',
+    });
+    const { frame, restore } = installControlledFrames();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    const focused: HTMLElement[] = [];
+    const focus = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focused.push(this);
+      }
+    );
+
+    try {
+      // A control inside the content (an annotation's button) handles the
+      // press itself, keeps the browser from focusing anything, and asks the
+      // editor for focus. That request is newer than the press, so it stands.
+      const line = content.querySelector<HTMLElement>('[data-line="1"]')!;
+      line.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        editor.focus({ lineNumber: 1, preventScroll: true });
+      });
+      line.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+          composed: true,
+          pointerType: 'mouse',
+        })
+      );
+      frame();
+      frame();
+      expect(focused.at(-1) === content).toBe(true);
+    } finally {
+      focus.mockRestore();
+      input.remove();
+      restore();
+      cleanup();
+    }
+  });
+
+  test('a queued focus survives a host render that replaces the document', async () => {
+    const { cleanup, editor, file, fileContainer } = await createEditorFixture({
+      contents: 'hello world',
+    });
+    const { frame, restore } = installControlledFrames();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    const focused: HTMLElement[] = [];
+    const focus = spyOn(HTMLElement.prototype, 'focus').mockImplementation(
+      function (this: HTMLElement) {
+        focused.push(this);
+      }
+    );
+
+    try {
+      // The editor asks for focus; the real focus() call is a frame away.
+      editor.focus({ lineNumber: 1, preventScroll: true });
+      // Before that frame, the host renders a different file, replacing the
+      // editor's document and DOM. The editor's request must still win over
+      // the input that held focus until then.
+      file.render({
+        file: { name: 'other.ts', contents: 'alpha' },
+        fileContainer,
+        forceRender: true,
+      });
+      frame();
+      frame();
+
+      const current =
+        fileContainer.shadowRoot!.querySelector<HTMLElement>('[data-content]')!;
+      expect(focused.at(-1) === current).toBe(true);
+    } finally {
+      focus.mockRestore();
+      input.remove();
+      restore();
       cleanup();
     }
   });

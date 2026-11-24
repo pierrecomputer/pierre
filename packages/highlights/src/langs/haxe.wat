@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.haxeWords 224)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; High byte: capture the next name as 1 a type, 2 a function, 3 a module path
   ;; up to `;`, 4 a variable (no call before `(`).
-  (keyword-table $haxeWords $mem.haxeWords $mem.qmlWords
+  (keyword-table $haxeWords $mem.haxeWords $mem.haxeWords+224
     (group $Token.keyword.control
       "if" "else" "for" "while" "do" "switch" "case" "default" "break" "continue" "return" "try"
       "catch" "throw")
@@ -348,6 +352,10 @@
               (loop $op
                 (local.set $c (call $templateByte (global.get $ptr)))
                 (br_if $opDone (i32.eqz (byteset.get "!%&*+-/<=>?^|~" (local.get $c))))
+                (if (i32.eq (local.get $c) (i32.const "/"))
+                  (then
+                    (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                    (br_if $opDone (i32.or (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c) (i32.const "*"))))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (local.set $hl (enum.get $Token.operator))

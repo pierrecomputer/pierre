@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.fsharpWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./ocaml.wat")
 
   (func $fsByte (param $p i32) (result i32)
@@ -9,7 +13,7 @@
   ;; declaration value names the pending capture: 1 a value binding whose
   ;; name is a function when arguments follow, 2 a type, 3 a module or
   ;; namespace line, 5 a member whose self identifier and name follow.
-  (keyword-table $fsharpWords $mem.fsharpWords $mem.gdTypes
+  (keyword-table $fsharpWords $mem.fsharpWords $mem.fsharpWords+384
     (group $Token.keyword.control ;; 1: control flow
       "if" "then" "elif" "else" "match" "with" "when" "for" "to" "downto" "while" "do" "done" "try"
       "finally" "raise" "failwith" "yield" "return" "begin" "end" "function" "fun" "lazy" "assert"
@@ -133,7 +137,7 @@
             (return (i32.const 1))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (local.set $e (call $lexEscapeEnd (local.get $p)))
+            (local.set $e (call $mlEscapeEnd (local.get $p)))
             (br $escape)))
         ;; `{`: an escaped brace or a splice
         (br_if $escape (i32.eq (local.get $c2) (i32.const "{")))
@@ -196,7 +200,8 @@
     (i32.const 1))
 
   ;; $strKind is one more than the body kind of $fsStringBody while a string
-  ;; is open, with $seg the start of the bytes not yet emitted; $interp
+  ;; is open, with $seg the start of the bytes not yet emitted, and the
+  ;; $mlComment state times 16 while a comment is open; $interp
   ;; counts braces inside a `{` splice and $interpKind remembers which body
   ;; to return to. $expect is the pending capture: 1 after `let`, `and`,
   ;; `rec`, or `use` - the name is a function when arguments follow - 2
@@ -231,6 +236,8 @@
     (local $lastModule i32)
     (local $attr i32)
     (call $lexEmitLeadingContinuation)
+    (if (i32.ge_u (local.get $strKind) (i32.const 64))
+      (then (local.set $strKind (call $mlComment (i32.const 0) (local.get $strKind) (i32.const 4)))))
     (block $done
       (loop $next
         ;; an open string body; $seg is zero across a chunk boundary, where
@@ -311,10 +318,7 @@
               (i32.eq (local.get $c2) (i32.const "*")))
             (i32.ne (local.get $c3) (i32.const ")")))
           (then
-            (call $lexNestedBlockComment
-              (i32.const "(*")
-              (i32.const "*)")
-              (enum.get $Token.comment))
+            (local.set $strKind (call $mlComment (i32.const 2) (i32.const 64) (i32.const 4)))
             (br $next)))
         ;; `#if`, `#else`, `#endif`, `#r`, `#load`, `#nowarn` directives
         (if
@@ -349,7 +353,8 @@
                 (i32.eq (call $fsByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
                 (i32.eq (call $fsByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34)))
               (then
-                (local.set $n (i32.or (local.get $n) (i32.const 1)))
+                ;; a triple-quoted body has no escapes, as a verbatim one
+                (local.set $n (i32.or (local.get $n) (i32.const 3)))
                 (local.set $p (i32.add (local.get $p) (i32.const 2)))))
             (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
@@ -362,7 +367,7 @@
             (then (call $mlIsCharLiteral (global.get $ptr)))
             (else (i32.const 0)))
           (then
-            (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
+            (drop (call $mlString (i32.const 39) (i32.const 1)))
             (local.set $member (i32.const 0))
             (local.set $afterValue (i32.const 1))
             (br $next)))

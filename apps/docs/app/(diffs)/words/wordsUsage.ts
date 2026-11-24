@@ -4,6 +4,7 @@ export const WORDS_EXAMPLE_KINDS = [
   'code',
   'hooks',
   'diagrams',
+  'reactive-islands',
   'playground',
 ] as const;
 
@@ -15,6 +16,7 @@ interface WordsUsageOptions {
   highlight: boolean;
   lineNumbers: boolean;
   diagrams?: boolean;
+  islands?: boolean;
   repair: boolean;
 }
 
@@ -25,6 +27,7 @@ export function getWordsUsage({
   highlight,
   lineNumbers,
   diagrams = false,
+  islands = false,
   repair,
 }: WordsUsageOptions): string {
   const props = [
@@ -32,6 +35,7 @@ export function getWordsUsage({
     repair ? '' : 'parseIncompleteMarkdown={false}',
     "animated={{ animation: 'fadeIn', duration: " + fadeDuration + ' }}',
     diagrams ? 'math' : '',
+    islands ? 'islands={islands}' : '',
     highlight || diagrams ? 'plugins={plugins}' : '',
     lineNumbers ? '' : 'lineNumbers={false}',
     custom
@@ -42,12 +46,16 @@ export function getWordsUsage({
     .map((prop) => '      ' + prop.replaceAll('\n', '\n      '));
   return [
     "import { Markdown } from '@pierre/words/react';\nimport '@pierre/words/styles.css';" +
+      (islands
+        ? "\nimport type { ReactiveIslands } from '@pierre/words/react';\nimport { useState } from 'react';"
+        : '') +
       (highlight
         ? "\nimport { createHighlightsPlugin } from '@pierre/words/highlights';\nimport light from '@pierre/highlights/themes/pierre-light';\nimport dark from '@pierre/highlights/themes/pierre-dark';"
         : '') +
       (diagrams
         ? "\nimport { createMermaidPlugin } from '@pierre/words/mermaid';\nimport { render } from 'pele';"
         : ''),
+    islands ? islandsUsage : '',
     diagrams
       ? 'const plugins = {\n  mermaid: createMermaidPlugin({ render }),\n};'
       : highlight
@@ -76,6 +84,62 @@ export function getInitialWordsUsage(kind: WordsExampleKind): string {
     highlight: kind === 'code' || kind === 'playground',
     lineNumbers: kind === 'code' || kind === 'playground',
     diagrams: kind === 'diagrams',
+    islands: kind === 'reactive-islands',
     repair: true,
   });
 }
+
+export const detailsPending = 'Show details';
+
+const islandsUsage = [
+  'function Counter({ label }: { label: string }) {',
+  '  const [count, setCount] = useState(0);',
+  '  return (',
+  '    <button type="button" onClick={() => setCount((value) => value + 1)}>',
+  '      {label} ({count})',
+  '    </button>',
+  '  );',
+  '}',
+  '',
+  'function Details({ text }: { text: string }) {',
+  '  const [expanded, setExpanded] = useState(false);',
+  '  return (',
+  '    <>',
+  '      <button type="button" className="h-9 w-40" aria-expanded={expanded}',
+  '        onClick={() => setExpanded((value) => !value)}>',
+  "        {expanded ? 'Hide details' : 'Show details'}",
+  '      </button>',
+  '      {expanded && <p>{text}</p>}',
+  '    </>',
+  '  );',
+  '}',
+  '',
+  'function FileReference({ label, path }: { label: string; path: string }) {',
+  '  const [expanded, setExpanded] = useState(false);',
+  '  return (',
+  '    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>',
+  '      {expanded ? path : label}',
+  '    </button>',
+  '  );',
+  '}',
+  '',
+  'const islands: ReactiveIslands = {',
+  '  file: {',
+  '    inline: true,',
+  '    render: ({ label, path }) =>',
+  "      typeof label === 'string' && typeof path === 'string'",
+  '        ? <FileReference label={label} path={path} /> : null,',
+  '  },',
+  '  counter: {',
+  "    fallback: '',",
+  '    render: ({ label }) =>',
+  "      typeof label === 'string' ? <Counter label={label} /> : null,",
+  '  },',
+  '  details: {',
+  "    pending: '" + detailsPending + "',",
+  "    fallback: 'Details are available when the page is interactive.',",
+  '    render: ({ text }) =>',
+  "      typeof text === 'string' ? <Details text={text} /> : null,",
+  '  },',
+  '};',
+].join('\n');

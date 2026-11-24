@@ -24,6 +24,7 @@ export const protanDeutanDark: Roles = {
     subtle: blue['950'],
     contrastOnAccent: neutral['1040'],
   },
+  search: dark.search,
   states: {
     success: blue['300'], // added → light blue (luminance-split from accent blue 500)
     danger: orange['500'], // deleted/error → orange (deeper stop widens the luminance gap from warn yellow)

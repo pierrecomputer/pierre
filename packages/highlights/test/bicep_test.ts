@@ -122,3 +122,14 @@ test('bicep: multi-line strings, comments, and directives span lines', () => {
   assertLineFedParity('bicep', code);
   assertLineFedParity('bicep', "var s = '${concat(\n  'a')}'\nvar t = 1\n");
 });
+
+test('bicep: `\\u{...}` is one escape', () => {
+  expect(tokenKinds('bicep', "var esc = 'a \\u{1F600} b'\n")).toEqual([
+    ['var', 'keyword.declaration'],
+    ['esc', 'variable'],
+    ['=', 'operator'],
+    ["'a", 'string'],
+    ['\\u{1F600}', 'string.escape'],
+    ["b'", 'string'],
+  ]);
+});

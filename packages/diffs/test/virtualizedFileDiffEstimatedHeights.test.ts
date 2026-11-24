@@ -13,10 +13,10 @@ import type {
   RenderWindow,
   VirtualFileMetrics,
 } from '../src/types';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { recomputeDiffHunks } from '../src/utils/updateDiffHunks';
 import { installDom } from './domHarness';
+import { collectDiffRows } from './testUtils';
 
 const metrics: VirtualFileMetrics = {
   ...DEFAULT_CODE_VIEW_FILE_METRICS,
@@ -211,6 +211,12 @@ class FakeHTMLElement {
   public getBoundingClientRect(): DOMRect {
     return { height: this.getHeight() } as DOMRect;
   }
+
+  // The code columns listen for scroll to keep their scroll offset; a fake
+  // column never scrolls.
+  public addEventListener(): void {}
+
+  public removeEventListener(): void {}
 }
 
 function installFakeHTMLElement() {
@@ -291,16 +297,11 @@ function countIteratedRows(
   diffStyle: 'split' | 'unified',
   expandedHunks: Map<number, HunkExpansionRegion>
 ): number {
-  let count = 0;
-  iterateOverDiff({
+  return collectDiffRows({
     diff: fileDiff,
     diffStyle,
     expandedHunks,
-    callback: () => {
-      count++;
-    },
-  });
-  return count;
+  }).length;
 }
 
 describe('VirtualizedFileDiff estimated height cache', () => {

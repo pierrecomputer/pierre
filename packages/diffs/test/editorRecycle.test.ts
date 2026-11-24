@@ -69,6 +69,7 @@ function createTestFile(
     {
       disableFileHeader: true,
       theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
     },
     undefined,
     () => undefined
@@ -100,13 +101,13 @@ function createTestFile(
     return rendered;
   };
 
-  const applyDocumentChange = component.applyDocumentChange.bind(component);
-  component.applyDocumentChange = (textDocument, lineAnnotations) => {
-    currentFile = { ...currentFile, contents: textDocument.getText() };
-    if (lineAnnotations !== undefined) {
-      currentLineAnnotations = lineAnnotations;
+  const applyChange = component.applyChange.bind(component);
+  component.applyChange = (document, change, options) => {
+    currentFile = { ...currentFile, contents: document.getText() };
+    if (options?.lineAnnotations !== undefined) {
+      currentLineAnnotations = options.lineAnnotations;
     }
-    applyDocumentChange(textDocument, lineAnnotations);
+    return applyChange(document, change, options);
   };
 
   Object.defineProperties(component, {
@@ -178,6 +179,7 @@ function createTestDiff(file: FileContents): FileDiff<undefined> {
   const component = new FileDiff<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    useTokenTransformer: true,
   });
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
@@ -334,9 +336,11 @@ describe('Editor onAttach lifecycle', () => {
       editor.__syncRenderView({
         highlighter: getHighlighterIfLoaded()!,
         fileContainer: component.testFileContainer,
+        columns: undefined,
         file,
         lineAnnotations: undefined,
         renderRange: undefined,
+        domCurrent: false,
       });
       await wait(0);
 
@@ -437,6 +441,53 @@ describe('Editor onAttach lifecycle', () => {
       editor.cleanUp();
       first.cleanUp();
       second?.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a focus frame from before a recycle cannot focus the reattached content', async () => {
+    const dom = installDom();
+    const focusedContents: HTMLElement[] = [];
+    const editor = new Editor('file', {});
+    const component = createTestFile(createFile(), {
+      onContentFocus: (content) => focusedContents.push(content),
+    });
+    const caret = {
+      start: { line: 0, character: 1 },
+      end: { line: 0, character: 1 },
+      direction: 'none',
+    } as const;
+    let reattachedContent: HTMLElement | undefined;
+    try {
+      editor.edit(component);
+      await wait(0);
+
+      // Recycle and reattach inside the render pass that already holds the
+      // old placement's focus frame, then claim focus for the new content.
+      queueRender(() => {
+        editor.cleanUp('recycle');
+        component.cleanUp(true);
+        component.virtualizedSetup();
+        editor.edit(component);
+        component.rerender();
+        reattachedContent = component.contentElement;
+        editor.setSelections([caret]);
+      });
+      editor.setSelections([caret]);
+      focusedContents.length = 0;
+
+      // The stale frame runs after the reattachment and must not focus.
+      await wait(0);
+      expect(reattachedContent).toBeDefined();
+      expect(focusedContents.length).toBe(0);
+
+      // The new placement's own frame focuses the reattached content.
+      await wait(0);
+      expect(focusedContents.length).toBe(1);
+      expect(focusedContents[0] === reattachedContent).toBe(true);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
       dom.cleanup();
     }
   });
@@ -1504,7 +1555,7 @@ describe('Editor edit-state manager', () => {
 });
 
 describe('Editor recycle cleanUp', () => {
-  test('recycle keeps document and undo history across re-attach', () => {
+  test('recycle keeps document and undo history across re-attach', async () => {
     const dom = installDom();
     const editor = new Editor('file');
     const first = createTestFile(createFile());
@@ -1513,9 +1564,17 @@ describe('Editor recycle cleanUp', () => {
       insertAtStart(editor, 'X');
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
+      const composingContent = first.contentElement;
+      composingContent.dispatchEvent(
+        new dom.window.CompositionEvent('compositionstart', {
+          bubbles: true,
+          composed: true,
+        })
+      );
       // Simulate a virtualized unmount: the host recycles, the editor is
       // unrendered non-destructively.
       editor.cleanUp('recycle');
+      expect(composingContent.hasAttribute('data-composing')).toBe(false);
       first.cleanUp(true);
       first.virtualizedSetup();
 
@@ -1523,10 +1582,47 @@ describe('Editor recycle cleanUp', () => {
       // document (holding the unsaved edit) must win over host contents.
       editor.edit(first);
       expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
+      expect(first.contentElement.hasAttribute('data-composing')).toBe(false);
 
       // Undo history lives in the retained document and survives with it.
       editor.undo();
       expect(editor.getText()).toBe(FILE_CONTENTS);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      editor.focus();
+      await new Promise<void>((resolve) =>
+        queueRender(() => queueRender(() => resolve()))
+      );
+      const row = first.contentElement.querySelector('[data-line="1"]');
+      const node =
+        row == null
+          ? null
+          : document
+              .createTreeWalker(row, dom.window.NodeFilter.SHOW_TEXT)
+              .nextNode();
+      if (node == null) throw new Error('missing rendered text after recycle');
+      Object.defineProperty(document.getSelection()!, 'getComposedRanges', {
+        configurable: true,
+        value: () => [
+          {
+            collapsed: true,
+            startContainer: node,
+            startOffset: 2,
+            endContainer: node,
+            endOffset: 2,
+          },
+        ],
+      });
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections?.[0]?.start).toEqual({
+        line: 0,
+        character: 2,
+      });
     } finally {
       editor.cleanUp();
       first.cleanUp();
@@ -1582,6 +1678,103 @@ describe('Editor recycle cleanUp', () => {
       expect(onAttach).toHaveBeenCalledTimes(1);
       expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
     } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test("a focused editor's restore waits for its caret row and lands when it renders", async () => {
+    const dom = installDom();
+    const focused: HTMLElement[] = [];
+    const onAttach = mock((attachedEditor: Editor<'file', undefined>) => {
+      attachedEditor.focus({ lineNumber: 2, preventScroll: true });
+    });
+    const editor = new Editor('file', { onAttach });
+    const component = createTestFile(createFile(), {
+      onContentFocus: (content) => focused.push(content),
+    });
+    try {
+      editor.edit(component);
+      await wait(20);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
+      focused.length = 0;
+
+      // The host re-renders a window that no longer contains the caret's
+      // row. The editor keeps its claim but cannot place the caret yet.
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 1,
+          bufferBefore: 0,
+          bufferAfter: 60,
+        },
+      });
+      await wait(20);
+      expect(focused.length).toBe(0);
+
+      // When the row comes back, the caret lands on it.
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 3,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      await wait(20);
+      expect(focused.length).toBe(1);
+      expect(focused[0] === component.contentElement).toBe(true);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
+    } finally {
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('a queued focus survives two host renders before its caret row exists', async () => {
+    const dom = installDom();
+    const focused: HTMLElement[] = [];
+    const editor = new Editor('file', {});
+    const component = createTestFile(createFile(), {
+      onContentFocus: (content) => focused.push(content),
+    });
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    try {
+      editor.edit(component);
+      await wait(20);
+      input.focus();
+      expect(document.activeElement).toBe(input);
+
+      // The editor asks for line 2 while the input holds focus. Before the
+      // focus frame runs, the host renders twice: once without row 2, then
+      // with it. The editor's request must still win over the input.
+      editor.focus({ lineNumber: 2, preventScroll: true });
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 1,
+          bufferBefore: 0,
+          bufferAfter: 60,
+        },
+      });
+      component.render({
+        renderRange: {
+          startingLine: 0,
+          totalLines: 3,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      await wait(20);
+
+      expect(focused.length).toBe(1);
+      expect(focused[0] === component.contentElement).toBe(true);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(1);
+    } finally {
+      input.remove();
       editor.cleanUp();
       component.cleanUp();
       dom.cleanup();

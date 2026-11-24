@@ -132,3 +132,21 @@ test('prolog: comments, strings, and clause state cross lines', () => {
     assertLineFedParity('prolog', code);
   }
 });
+
+test("prolog: a radix integer `16'FF` is one number", () => {
+  const code = "x :- X = 16'FF.\nfoo(a).\n";
+  assertLineFedParity('prolog', code);
+  expect(tokenKinds('prolog', code)).toEqual([
+    ['x', 'function.definition'],
+    [':-', 'operator'],
+    ['X', 'variable'],
+    ['=', 'operator'],
+    ["16'FF", 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['foo', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['a', 'string.special.symbol'],
+    [')', 'punctuation.bracket'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+});

@@ -82,6 +82,7 @@ export class ScrollSyncManager {
     }, 300);
     this.codeAdditions?.scrollTo({
       left: this.codeDeletions?.scrollLeft,
+      behavior: 'instant',
     });
   };
 
@@ -96,6 +97,7 @@ export class ScrollSyncManager {
     }, 300);
     this.codeDeletions?.scrollTo({
       left: this.codeAdditions?.scrollLeft,
+      behavior: 'instant',
     });
   };
 }

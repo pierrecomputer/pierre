@@ -13,6 +13,7 @@ export const tritanopiaLight: Roles = {
     subtle: blue['100'],
     contrastOnAccent: '#ffffff',
   },
+  search: light.search,
   states: {
     success: teal['700'], // added/positive → teal (cyan pole)
     danger: vermillion['600'], // deleted/error → red (red pole preserved under tritanopia)

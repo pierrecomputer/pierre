@@ -189,6 +189,7 @@ type TestPoolOptions = Pick<
   | 'mainThreadMaxCharacters'
   | 'onWorkerError'
   | 'poolSize'
+  | 'totalASTLRUCacheSize'
   | 'workerInitializationTimeout'
 >;
 

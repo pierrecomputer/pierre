@@ -13,6 +13,7 @@ export const tritanopiaDark: Roles = {
     subtle: blue['950'],
     contrastOnAccent: neutral['1040'],
   },
+  search: dark.search,
   states: {
     success: teal['300'], // added → teal
     danger: vermillion['400'], // deleted/error → red

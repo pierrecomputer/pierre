@@ -7,7 +7,12 @@ import { EditStateManager } from '../src/editor/EditStateManager';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileDiffMetadata, ParseDiffOptions } from '../src/types';
-import { installDom, wait, waitFor } from './domHarness';
+import {
+  getSearchHighlightRanges,
+  installDom,
+  wait,
+  waitFor,
+} from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -84,6 +89,7 @@ async function createCollapsedEditFixture(
 
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
     parseDiffOptions,
@@ -180,6 +186,7 @@ describe('diff editor: parsing options', () => {
 describe('diff editor: attach-time markup normalization', () => {
   test('renders editor token markup without mutating component options', async () => {
     const dom = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const container = document.createElement('div');
     document.body.appendChild(container);
     // useTokenTransformer: false means the attach-time session render must
@@ -233,11 +240,14 @@ describe('diff editor: attach-time markup normalization', () => {
       expect(fileDiff.options.enableGutterUtility).toBe(true);
       expect(fileDiff.options.enableLineSelection).toBe(true);
       expect(fileDiff.options.lineHoverHighlight).toBe('both');
+      // Rendering without the transformer and then editing is reported.
+      expect(consoleError).toHaveBeenCalledTimes(1);
     } finally {
       await wait(10);
       editor.cleanUp();
       fileDiff.cleanUp();
       dom.cleanup();
+      consoleError.mockRestore();
     }
   });
 });
@@ -252,8 +262,8 @@ describe('diff editor: collapsed regions during edit', () => {
       // a mid-gap line has no row.
       expect(lineNumbers.length).toBeLessThan(60);
       expect(lineNumbers).not.toContain(30);
-      expect(fileDiff.isLineRenderable(30)).toBe(false);
-      expect(fileDiff.isLineRenderable(10)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(10)).toBe(false);
 
       // Separator rows inside the contenteditable column are read-only.
       const content = findAdditionContent(container);
@@ -297,16 +307,18 @@ describe('diff editor: collapsed regions during edit', () => {
         })
       );
       await wait(0);
-      const input = container.shadowRoot?.querySelector<HTMLInputElement>(
-        '[data-search-panel] input[data-search]'
+      const panel = container.shadowRoot?.querySelector<HTMLElement>(
+        '[data-search-panel]'
       );
+      const input =
+        panel?.shadowRoot?.querySelector<HTMLInputElement>(
+          'input[data-search]'
+        );
       expect(input).not.toBeNull();
       input!.value = 'line';
       input!.dispatchEvent(new window.Event('input', { bubbles: true }));
 
-      const visibleMatchCount =
-        container.shadowRoot?.querySelectorAll('[data-match-range]').length ??
-        0;
+      const visibleMatchCount = getSearchHighlightRanges(container).length;
       expect(visibleMatchCount).toBeGreaterThan(0);
       expect(visibleMatchCount).toBeLessThan(60);
 
@@ -421,6 +433,35 @@ describe('diff editor: collapsed regions during edit', () => {
     }
   });
 
+  test('an edit that adds a hunk above an expanded gap keeps the gap expanded', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor, fileDiff } = fixture;
+    try {
+      fileDiff.handleExpandHunk(1, 'both');
+      await wait(10);
+      expect(
+        findAdditionContent(container)!.querySelector('[data-line="30"]')
+      ).not.toBeNull();
+
+      // A new first line is a hunk of its own, so every hunk below moves to
+      // the next index and the expansion keyed by index must move with it.
+      typeAt(editor, 0, 0, 'inserted\n');
+      await wait(30);
+
+      const content = findAdditionContent(container)!;
+      expect(content.querySelector('[data-line="1"]')?.textContent).toBe(
+        'inserted'
+      );
+      expect(content.querySelector('[data-line="31"]')?.textContent).toBe(
+        'line 30'
+      );
+      const lineNumbers = renderedLineNumbers(container);
+      expect(new Set(lineNumbers).size).toBe(lineNumbers.length);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('typing into context revealed mid-edit lands correctly and undoes', async () => {
     const fixture = await createCollapsedEditFixture();
     const { container, editor, fileDiff } = fixture;
@@ -469,7 +510,7 @@ describe('diff editor: collapsed regions during edit', () => {
       await wait(30);
       first.editor.undo();
       await wait(30);
-      expect(first.fileDiff.isLineRenderable(30)).toBe(true);
+      expect(first.fileDiff.isLineInCollapsedContext(30)).toBe(false);
 
       await first.cleanup();
       firstCleaned = true;
@@ -477,7 +518,7 @@ describe('diff editor: collapsed regions during edit', () => {
       const second = await createCollapsedEditFixture(documentKey);
       try {
         expect(second.editor.getText()).not.toContain('typed line 30');
-        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(second.fileDiff.isLineInCollapsedContext(30)).toBe(false);
         expect(
           findAdditionContent(second.container)?.querySelector(
             '[data-line="30"]'
@@ -487,7 +528,7 @@ describe('diff editor: collapsed regions during edit', () => {
         second.editor.redo();
         await wait(30);
         expect(second.editor.getText()).toContain('typed line 30');
-        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(second.fileDiff.isLineInCollapsedContext(30)).toBe(false);
       } finally {
         await second.cleanup();
       }
@@ -511,7 +552,7 @@ describe('diff editor: collapsed regions during edit', () => {
       await wait(30);
       first.editor.undo();
       await wait(30);
-      expect(first.fileDiff.isLineRenderable(30)).toBe(true);
+      expect(first.fileDiff.isLineInCollapsedContext(30)).toBe(false);
 
       await first.cleanup();
       firstCleaned = true;
@@ -521,7 +562,7 @@ describe('diff editor: collapsed regions during edit', () => {
       });
       try {
         expect(second.editor.getText()).not.toContain('typed line 30');
-        expect(second.fileDiff.isLineRenderable(30)).toBe(true);
+        expect(second.fileDiff.isLineInCollapsedContext(30)).toBe(false);
       } finally {
         await second.cleanup();
       }
@@ -541,7 +582,7 @@ describe('diff editor: collapsed regions during edit', () => {
       // an edit so a genuine exit recompute runs.
       fileDiff.handleExpandHunk(1, 'up', 5);
       await wait(10);
-      expect(fileDiff.isLineRenderable(15)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(15)).toBe(false);
       typeAt(editor, 49, 0, 'X');
       await wait(10);
 
@@ -551,10 +592,10 @@ describe('diff editor: collapsed regions during edit', () => {
       await wait(20);
 
       expect(fileDiff.fileDiff?.editSessionDirty).toBeUndefined();
-      expect(fileDiff.isLineRenderable(15)).toBe(true);
-      expect(fileDiff.isLineRenderable(19)).toBe(true);
+      expect(fileDiff.isLineInCollapsedContext(15)).toBe(false);
+      expect(fileDiff.isLineInCollapsedContext(19)).toBe(false);
       // The gap interior stays collapsed.
-      expect(fileDiff.isLineRenderable(30)).toBe(false);
+      expect(fileDiff.isLineInCollapsedContext(30)).toBe(true);
       const content = findAdditionContent(container);
       expect(content?.querySelector('[data-line="15"]')).not.toBeNull();
       expect(content?.querySelector('[data-line="30"]')).toBeNull();

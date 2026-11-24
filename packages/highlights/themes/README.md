@@ -6,11 +6,20 @@ Zed-compatible object with the same ID and display name. The
 [third-party notices](../NOTICE.md) list source versions and attribution.
 
 ```js
-import { codeToHtml } from '@pierre/highlights';
+import { createHighlighter } from '@pierre/highlights/core';
+import ts from '@pierre/highlights/langs/typescript';
 import { vitesseDark } from '@pierre/highlights/themes';
 
-codeToHtml('const a = 1', { lang: 'js', theme: vitesseDark });
+const highlighter = await createHighlighter({
+  langs: [ts],
+  themes: [vitesseDark],
+});
+highlighter.codeToHtml('const a = 1', { lang: 'js', theme: 'vitesse-dark' });
 ```
+
+Pass theme objects to `createHighlighter({ themes })`. Output methods accept
+these objects or their IDs. Import `themes` from `@pierre/highlights/themes` to
+select the complete theme array.
 
 The Shiki catalog and Pierre themes have camel-case named exports:
 `vitesse-dark.json` becomes `vitesseDark`.
@@ -35,10 +44,18 @@ The default prefix for CSS variables is `--hls-`.
 To change it, pass `{ cssVariablePrefix: '--code-' }` as the second argument to
 `toCSS`. Set the same `cssVariablePrefix` in the highlighter options.
 
-Pass `{ fontStyle: true }` to `toCSS` to emit a `-font-style` variable for each
-syntax scope, with `italic` or `normal` as its value. These variables are absent
-by default. Import `getFontStyle` from `@pierre/highlights/themes` to derive the
-CSS `font-style` value from a token, such as `var(--hls-comment-font-style)`.
+Pass `{ fontStyle: true }` to `toCSS` to emit font style, font weight, and text
+decoration variables for each syntax scope. When rendering tokens yourself, use
+`getFontStyle` from `@pierre/highlights/themes` to read each CSS value.
+
+```js
+const style = {
+  color: token.color,
+  fontStyle: getFontStyle(token),
+  fontWeight: getFontStyle(token, 'font-weight'),
+  textDecoration: getFontStyle(token, 'text-decoration'),
+};
+```
 
 Community themes use licensed Zed versions when available. The other themes use
 conversions from fixed TextMate source versions and Zed's scope map. The files

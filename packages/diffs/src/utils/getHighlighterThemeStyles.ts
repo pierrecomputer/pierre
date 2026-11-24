@@ -29,18 +29,21 @@ export function getHighlighterThemeStyles({
     styles += `${formatCSSVariablePrefix('global')}fg:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}bg:${normalized.bg};`;
     styles += getGitVariables(themeData, prefix);
+    styles += getSearchVariables(themeData);
   } else {
     let themeData = highlighter.getTheme(theme.dark);
     let normalized = getThemeColors(themeData, highlighter);
     styles += `${formatCSSVariablePrefix('global')}dark:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}dark-bg:${normalized.bg};`;
     styles += getGitVariables(themeData, 'dark');
+    styles += getSearchVariables(themeData, 'dark');
 
     themeData = highlighter.getTheme(theme.light);
     normalized = getThemeColors(themeData, highlighter);
     styles += `${formatCSSVariablePrefix('global')}light:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}light-bg:${normalized.bg};`;
     styles += getGitVariables(themeData, 'light');
+    styles += getSearchVariables(themeData, 'light');
   }
   return styles;
 }
@@ -78,5 +81,31 @@ function getGitVariables(themeData: DiffsTheme, modePrefix?: string) {
   if (modifiedBlue != null) {
     styles += `${formatCSSVariablePrefix('global')}${modePrefix}modified-color:${modifiedBlue};`;
   }
+  return styles;
+}
+
+// Treat each VS Code find background and foreground as a pair. Most themes
+// omit find foregrounds, and combining their backgrounds with arbitrary syntax
+// colors can produce unreadable text. Incomplete pairs use the CSS fallback pair.
+function getSearchVariables(themeData: DiffsTheme, modePrefix?: string) {
+  modePrefix = modePrefix != null ? `${modePrefix}-` : '';
+  const prefix = formatCSSVariablePrefix('global');
+  const colors = themeData.colors;
+  let styles = '';
+
+  const matchBackground = colors?.['editor.findMatchHighlightBackground'];
+  const matchForeground = colors?.['editor.findMatchHighlightForeground'];
+  if (matchBackground != null && matchForeground != null) {
+    styles += `${prefix}${modePrefix}bg-search-match-theme:${matchBackground};`;
+    styles += `${prefix}${modePrefix}fg-search-match-theme:${matchForeground};`;
+  }
+
+  const currentBackground = colors?.['editor.findMatchBackground'];
+  const currentForeground = colors?.['editor.findMatchForeground'];
+  if (currentBackground != null && currentForeground != null) {
+    styles += `${prefix}${modePrefix}bg-search-match-current-theme:${currentBackground};`;
+    styles += `${prefix}${modePrefix}fg-search-match-current-theme:${currentForeground};`;
+  }
+
   return styles;
 }

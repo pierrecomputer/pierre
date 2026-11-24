@@ -1,14 +1,14 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { LANGS } from '../lib/highlighter';
-import type { Highlighter, Lang } from '../lib/index';
+import type { Highlighter, Lang } from '../lib/core';
 import {
   codeToTokens,
   init,
   isSupportedLanguage,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
+import { LANGS } from '../lib/highlighter';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { samples } from './_samples';
@@ -121,18 +121,22 @@ void t.test(
     const { code } = transformWat(
       url,
       `(module
-      (import "../src/emit.wat")
+      (import "../src/emitter.wat")
       (func (export "escape") (param $len i32) (result i32)
-        (global.set $out (i32.const 131072))
+        (global.set $out (i32.const $mem.input+128))
+        (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
         (call $escCopy
-          (i32.const 65536)
-          (i32.add (i32.const 65536) (local.get $len)))
-        (i32.sub (global.get $out) (i32.const 131072))))`
+          (i32.const $mem.input)
+          (i32.add (i32.const $mem.input) (local.get $len)))
+        (i32.sub (global.get $out) (i32.const $mem.input+128))))`
     );
     const instance = new WebAssembly.Instance(
       new WebAssembly.Module(wat2wasm(url.pathname, code))
     );
     const memory = instance.exports.memory as WebAssembly.Memory;
+    const inputPtr = Number(
+      (instance.exports.inputPtr as WebAssembly.Global).value
+    );
     const escape = instance.exports.escape as (length: number) => number;
     const bytes = new Uint8Array(memory.buffer);
     for (let length = 0; length <= 33; length++) {
@@ -151,11 +155,13 @@ void t.test(
           length + 14,
         ]) {
           if (at < 0) continue;
-          bytes.fill(0x78, 65536, 65600);
-          bytes[65536 + at] = special.charCodeAt(0);
+          bytes.fill(0x78, inputPtr, inputPtr + 64);
+          bytes[inputPtr + at] = special.charCodeAt(0);
           const end = escape(length);
           assert.equal(
-            decoder.decode(bytes.subarray(131072, 131072 + end)),
+            decoder.decode(
+              bytes.subarray(inputPtr + 128, inputPtr + 128 + end)
+            ),
             at < length
               ? 'x'.repeat(at) + escaped + 'x'.repeat(length - at - 1)
               : 'x'.repeat(length),

@@ -48,6 +48,11 @@ export const lightSoft: Roles = {
     subtle: blue['100'],
     contrastOnAccent: '#ffffff',
   },
+  search: {
+    matchBackground: yellow['300'],
+    currentBackground: blue['300'],
+    foreground: neutral['1040'],
+  },
   states: {
     merge: indigo['500'],
     success: jade['500'],

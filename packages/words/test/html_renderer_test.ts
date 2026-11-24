@@ -125,6 +125,7 @@ void test('every format path writes the same code blocks', () => {
     Array.from({ length: count }, (_, at) => `line ${at} <&"'>`).join('\n');
   const source = [
     '```ts\n' + lines(64) + '\n```',
+    '```ts title="<&\'>" {1}\n' + lines(2) + '\n```',
     "``` it's&amp;\n" + lines(65) + '\n```',
     '~~~\n' + lines(129) + '\n~~~',
     '```\n```',
@@ -156,7 +157,7 @@ void test('every format path writes the same code blocks', () => {
 
 void test('a streamed open fence matches a full render in every format path', () => {
   const source =
-    'Intro [a](/b)\n\n```js\nlet a = "1";\n\nlet b = 2;\n```\n\n- x\n  ```\n  nested\n  open';
+    'Intro [a](/b)\n\n```js title="a&b"\nlet a = "1";\n\nlet b = 2;\n```\n\n- x\n  ``` py {2}\n  nested\n  open';
   for (const path of [{}, ...formatPaths]) {
     const renderer = createHtmlRenderer(path);
     for (let end = 1; end <= source.length; end++) {
@@ -196,4 +197,23 @@ void test('escapeHtml shows raw HTML as text in formatted output', () => {
       '<p data-markdown="p">&lt;div&gt;\nd\n&lt;/div&gt;</p>\n'
   );
   renderer.dispose();
+});
+
+void test('inline registry changes and rejected prefixes leave shared parser memory usable', () => {
+  const islands = { ref: { inline: true, accepts: () => true } };
+  const source = ':ref[one]';
+  const fits = createHtmlRenderer({ islands, idPrefix: 'p'.repeat(4092) });
+  const tooLong = createHtmlRenderer({ islands, idPrefix: 'p'.repeat(4093) });
+  assert.match(fits.render(source, false).html, /data-words-island="ref"/);
+  assert.throws(() => tooLong.render(source, false), RangeError);
+  assert.match(
+    fits.render(source + '.', false).html,
+    /data-words-island="ref"/
+  );
+  const ordinary = createHtmlRenderer();
+  assert.doesNotMatch(ordinary.render(source, false).html, /data-words-island/);
+  assert.throws(
+    () => createHtmlRenderer({ islands: { 'ref!': islands.ref } }),
+    TypeError
+  );
 });

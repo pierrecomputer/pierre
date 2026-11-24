@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -441,4 +441,125 @@ void t.test('yaml: numeric and doubled-quote keys are properties', () => {
     ['1', 'number'],
   ]);
   assertLineFedParity('yaml', src);
+});
+
+void t.test(
+  'yaml: a block scalar under `- key:` ends at the next key of the item',
+  () => {
+    const src =
+      'steps:\n  - run: |\n      npm ci\n    name: Install\n- - a: |2\n      x\n    b: 1\n- ? k: >\n     body\n    m: 2\n- |-\n top\n';
+    assert.deepEqual(tokenKinds('yaml', src), [
+      ['steps', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['-', 'punctuation.delimiter'],
+      ['run', 'property'],
+      [': |', 'punctuation.delimiter'],
+      ['npm ci', 'string'],
+      ['name', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['Install', 'string'],
+      ['- -', 'punctuation.delimiter'],
+      ['a', 'property'],
+      [': |2', 'punctuation.delimiter'],
+      ['x', 'string'],
+      ['b', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      ['- ?', 'punctuation.delimiter'],
+      ['k', 'property'],
+      [': >', 'punctuation.delimiter'],
+      ['body', 'string'],
+      ['m', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['2', 'number'],
+      ['- |-', 'punctuation.delimiter'],
+      ['top', 'string'],
+    ]);
+    assertLineFedParity('yaml', src);
+  }
+);
+
+void t.test('yaml: a quoted key does not span lines', () => {
+  const src = "k: \"a\nb\": 1\nx: 'it''s\n more': 2\n";
+  assert.deepEqual(tokenKinds('yaml', src).slice(0, 4), [
+    ['k', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['"a', 'string'],
+    ['b"', 'string'],
+  ]);
+  assertLineFedParity('yaml', src);
+});
+
+void t.test('yaml: anchor, alias, and tag names keep dashes and dots', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'yaml',
+      'base: &base-config\n<<: *base-config\nt: [!a.b x, *c]\n'
+    ),
+    [
+      ['base', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['&base-config', 'type'],
+      ['<<', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['*base-config', 'type'],
+      ['t', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['[', 'punctuation.bracket'],
+      ['!a.b', 'type'],
+      ['x', 'string'],
+      [',', 'punctuation.delimiter'],
+      ['*c', 'type'],
+      [']', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test(
+  'yaml: `-`, `---`, and `...` are indicators only before a blank',
+  () => {
+    const src =
+      'command: --config /etc/x.conf\nflag: -foo\na: ---\nb: ...loading\n--- # doc\n...\n';
+    assert.deepEqual(tokenKinds('yaml', src), [
+      ['command', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['--config /etc/x.conf', 'string'],
+      ['flag', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['-foo', 'string'],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['---', 'string'],
+      ['b', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['...loading', 'string'],
+      ['---', 'punctuation.special'],
+      ['# doc', 'comment'],
+      ['...', 'punctuation.special'],
+    ]);
+    assertLineFedParity('yaml', src);
+  }
+);
+
+void t.test('yaml: core-schema infinity and NaN are numbers', () => {
+  assert.deepEqual(
+    tokenKinds('yaml', 'a: .inf\nb: -.Inf\nc: .NaN\nd: +.INF\ne: .info\n'),
+    [
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['.inf', 'number'],
+      ['b', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['-.Inf', 'number'],
+      ['c', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['.NaN', 'number'],
+      ['d', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['+.INF', 'number'],
+      ['e', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['.info', 'string'],
+    ]
+  );
 });

@@ -17,7 +17,17 @@ import {
   wat2wasm,
 } from '@pierre/wat-tools';
 import * as fs from 'node:fs';
+import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
+
+// --no-math builds the module of `@pierre/words/no-math` (lib/no-math.ts), for
+// apps that render no TeX: src/math-none.wat in place of src/math.wat, about a
+// third smaller, and the math option shows formulas as code. It adds
+// words-no-math.wasm to dist/, so it runs after the default build, which starts
+// dist/ anew (`build` in moon.yml).
+const { values: args } = parseArgs({
+  options: { 'no-math': { type: 'boolean' } },
+});
 
 // East Asian Wide and Fullwidth code points (EastAsianWidth.txt, EAW in {W, F}).
 const WIDE_RANGES =
@@ -42,10 +52,14 @@ const source = new URL('../src/words.wat', import.meta.url);
 const path = source.pathname;
 const enumMap: EnumMap = new Map();
 const bitsetMap: BitsetMap = new Map();
-let code = expandEnums(
-  flattenWat(source, fs.readFileSync(source, 'utf-8')).code,
-  enumMap
-);
+let words = fs.readFileSync(source, 'utf-8');
+if (args['no-math'] === true) {
+  const mathImport = '(import "./math.wat")';
+  if (!words.includes(mathImport))
+    throw new Error(`--no-math: ${path} has no ${mathImport}`);
+  words = words.replace(mathImport, '(import "./math-none.wat")');
+}
+let code = expandEnums(flattenWat(source, words).code, enumMap);
 code = resolveConsts(code, path).code;
 code = expandBitsets(code, enumMap, bitsetMap, path);
 code = expandBitsetGets(code, bitsetMap, path);
@@ -643,13 +657,16 @@ const wasmBytes = optimizeWasm(wat2wasm(path, code), {
   shrinkLevel: 1,
 });
 
-// tsdown runs next with `clean: false`, so remove old chunks here.
 const dist = new URL('../dist/', import.meta.url);
-fs.rmSync(dist, { recursive: true, force: true });
-fs.mkdirSync(dist, { recursive: true });
-fs.writeFileSync(new URL('words.wasm', dist), wasmBytes);
+const name = args['no-math'] === true ? 'words-no-math' : 'words';
+if (name === 'words') {
+  // tsdown runs next with `clean: false`, so remove old chunks here.
+  fs.rmSync(dist, { recursive: true, force: true });
+  fs.mkdirSync(dist, { recursive: true });
+}
+fs.writeFileSync(new URL(`${name}.wasm`, dist), wasmBytes);
 fs.writeFileSync(
-  new URL('words.wasm.mjs', dist),
+  new URL(`${name}.wasm.mjs`, dist),
   `const s = atob("${Buffer.from(wasmBytes).toString('base64')}");\n` +
     `const b = new Uint8Array(s.length);\n` +
     `for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);\n` +

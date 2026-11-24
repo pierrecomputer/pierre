@@ -11,6 +11,8 @@ export const format = Symbol.for('@pierre/words/html-format/v1');
 export interface HtmlFormat {
   flags: number;
   idPrefix: string;
+  /** Length-prefixed ASCII names of enabled inline islands. */
+  inlineNames?: string;
 }
 
 export const formatFlags = {
@@ -21,6 +23,7 @@ export const formatFlags = {
   active: 16,
   slots: 32,
   rawUrls: 64,
+  islands: 128,
 };
 
 export interface FenceDelta {
@@ -35,6 +38,8 @@ export interface FenceDelta {
 
 export type InternalHtmlUpdate = HtmlUpdate & {
   [delta]?: string | FenceDelta;
+  /** This parse produced inline markers for the host formatter. */
+  hasInlineIslands?: true;
   /** A code block of this formatted HTML is in slots, each after a NUL. */
   [format]?: boolean;
 };

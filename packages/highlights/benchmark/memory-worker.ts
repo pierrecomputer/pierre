@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import type { Theme } from '../lib/core';
 import type { HighlightsHighlighter } from '../lib/highlighter';
-import type { Theme } from '../lib/index';
 
 export interface MemoryCase {
   name: string;
@@ -74,7 +74,7 @@ const baseline = readMemory();
 if (engine === 'highlights') {
   const { init } = (await import(
     request.highlights
-  )) as typeof import('../lib/index');
+  )) as typeof import('../lib/core');
   const highlighter = init(new WebAssembly.Module(readFileSync(request.wasm)));
   const theme = JSON.parse(readFileSync(request.theme, 'utf8')) as Theme;
   const options = { lang: 'ts' as const, theme };

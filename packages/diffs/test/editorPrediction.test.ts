@@ -109,6 +109,7 @@ async function createPredictionFixture({
     let activeRenderRange = renderRange;
     const file = new File<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       overflow,
       theme: DEFAULT_THEMES,
     });
@@ -145,6 +146,7 @@ async function createPredictionFixture({
       oldContents ?? contents.replaceAll('value', 'previous');
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       diffStyle,
       overflow,
       theme: DEFAULT_THEMES,
@@ -410,12 +412,14 @@ describe('Editor edit prediction', () => {
       jest.advanceTimersByTime(1);
       expect(calls).toHaveLength(1);
 
+      // The excerpt and its offsets use the document's one-character line
+      // breaks; `eol` names the file's own.
       expect(calls[0].request).toMatchObject({
         cursorOffsetInExcerpt: 4,
-        editableRange: { start: 0, end: 9 },
+        editableRange: { start: 0, end: 8 },
         eol: '\r\n',
         excerptStartLine: 0,
-        excerptText: 'abcX\r\ndef',
+        excerptText: 'abcX\ndef',
         path: FILE_NAME,
         version: 1,
       });

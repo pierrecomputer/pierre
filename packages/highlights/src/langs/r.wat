@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.rWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $rByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $hlR. `NA_complex_` is missing on
   ;; purpose: it shares its hash features with `NA_integer_`.
-  (keyword-table $rWords $mem.rWords $mem.rubyWords
+  (keyword-table $rWords $mem.rWords $mem.rWords+96
     (group ;; 1: control
       "if" "else" "repeat" "while" "for" "next" "break" "return")
     (group "function")     ;; 2: declaration

@@ -3,7 +3,8 @@
 Use `@pierre/words` for synchronous, dependency-free HTML or terminal output.
 The package selects its WebAssembly loader for Node.js, browsers, or Cloudflare
 Workers. `init(module)` is for embedders that supply a compiled
-`WebAssembly.Module` to replace the shared instance.
+`WebAssembly.Module` to replace the instance of the entry it is imported from.
+Each entry (`@pierre/words`, `@pierre/words/no-math`) keeps its own instance.
 
 ```ts
 import { renderToAnsi, renderToHtml } from '@pierre/words';
@@ -20,17 +21,19 @@ overwrite or detach it.
 
 ## HTML
 
-`renderToHtml(input, options?)` accepts `skipHtml`, `escapeHtml`, `incomplete`,
-`frontmatter`, `math`, and `cjk`. All default to `false`. Set `incomplete: true`
-for a preview of unfinished inline syntax. See [Extensions](extensions.md) for
-`math` and `cjk`.
+`renderToHtml(input, options?)` accepts `skipHtml`, `allowedHtml`, `escapeHtml`,
+`incomplete`, `frontmatter`, `math`, and `cjk`. All default to `false`. Set
+`incomplete: true` for a preview of unfinished inline syntax. See
+[Extensions](extensions.md) for `math` and `cjk`.
 
 Core output preserves raw HTML by default. `skipHtml: true` drops raw HTML.
-`escapeHtml: true` shows it as escaped text: an HTML block becomes a paragraph
-of its source lines, without Markdown inside it. It takes precedence over
-`skipHtml`. Sanitize output from untrusted Markdown before placing it in a page,
-including link and image URLs. The [HTML renderer](html.md) checks Markdown URLs
-and omits raw HTML by default.
+`allowedHtml` keeps only the listed tags and attributes, drops unsafe ones such
+as `on*` and `javascript:` URLs, and closes open tags itself. `escapeHtml: true`
+shows raw HTML as escaped text: an HTML block becomes a paragraph of its source
+text, without Markdown inside it. It overrides `skipHtml` and `allowedHtml`.
+Sanitize output from untrusted Markdown before placing it in a page, including
+link and image URLs. The [HTML renderer](html.md) checks Markdown URLs and omits
+raw HTML by default.
 
 ## Frontmatter
 

@@ -13,9 +13,17 @@ import {
   type SelectedLineRange,
   type ThemeTypes,
 } from '@pierre/diffs';
+import { resolveSearchShortcut } from '@pierre/diffs/edit';
 import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
-import { memo, type RefObject, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
@@ -25,7 +33,11 @@ import type { AvatarName } from '@/lib/annotation';
 import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
 import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
 import { cn } from '@/lib/cn';
-import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
+import {
+  CODE_VIEW_CUSTOM_CSS,
+  CODE_VIEW_LAYOUT,
+  CODE_VIEW_SEARCH_OPTIONS,
+} from '@/lib/constants';
 import { isDiffItem } from '@/lib/isDiffItem';
 import { isDraftAnnotation } from '@/lib/isDraftAnnotation';
 import { isDraftMetadata } from '@/lib/isDraftMetadata';
@@ -148,6 +160,33 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
       }
     }
   );
+
+  // Find is page-wide: cmd/ctrl+f opens the viewer's search from anywhere,
+  // including the sidebar, so the viewer leaves the shortcut to this handler.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) {
+        return;
+      }
+      const shortcut = resolveSearchShortcut(event);
+      const viewer = viewerRef.current;
+      if (shortcut == null || viewer == null) {
+        return;
+      }
+      if (shortcut === 'next' || shortcut === 'previous') {
+        if (!viewer.isSearchOpen()) {
+          return;
+        }
+        event.preventDefault();
+        viewer.navigateSearch(shortcut);
+      } else {
+        event.preventDefault();
+        viewer.openSearch();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [viewerRef]);
 
   const handleCreateDraftComment = useStableCallback(
     (range: SelectedLineRange, itemId: string) => {
@@ -445,6 +484,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         enableLineSelection: true,
         enableGutterUtility: true,
         stickyHeaders: true,
+        searchOptions: CODE_VIEW_SEARCH_OPTIONS,
         unsafeCSS: CODE_VIEW_CUSTOM_CSS,
         // FIXME(amadeus): Move all `onX` methods onto the react component maybe?
         onGutterUtilityClick(range, context) {

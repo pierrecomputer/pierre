@@ -1,10 +1,26 @@
+import { registerLanguages } from '@pierre/highlights';
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
 import pierreLight from '@pierre/highlights/themes/pierre-light';
+import { buildHighlightsLexer } from '@pierre/wat-tools';
 import { createHtmlSession, renderToHtml } from '@pierre/words';
-import { afterEach, describe, expect, expectTypeOf, test } from 'bun:test';
+import {
+  afterEach,
+  describe,
+  expect,
+  expectTypeOf,
+  spyOn,
+  test,
+} from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
-import { act, StrictMode } from 'react';
+import {
+  act,
+  createContext,
+  StrictMode,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
@@ -14,7 +30,7 @@ import { createHtmlRenderer } from '../html/render';
 import { createHighlightsPlugin } from '../react/highlights';
 import { Markdown } from '../react/react';
 import { defaultUrlTransform } from '../react/react';
-import type { Components, HtmlOptions } from '../react/react';
+import type { Components, HtmlOptions, ReactiveIslands } from '../react/react';
 
 const decoder = new TextDecoder();
 const html = (
@@ -410,6 +426,50 @@ describe('HTML rendering and the React wrapper', () => {
     expect(container.querySelectorAll('p')[20].className).toBe(`v${calls}`);
     await render(source + 'Tail grows more', ['p', 'a']);
     expect(container.querySelectorAll('a[class]')).toHaveLength(20);
+  });
+  test('allowed raw HTML streams inside its element and keeps completed output', async () => {
+    const source =
+      '<details>\n<summary>Title</summary>\n\nBody\n\n</details>\n\nAfter';
+    const markup = html(source, { allowedHtml: { details: [], summary: [] } });
+    expect(markup).toContain(
+      '<details>\n<summary>Title</summary>\n<p data-markdown="p">Body</p>\n</details>'
+    );
+    expect(markup).not.toContain('allowedhtml');
+    const container = mountDOM();
+    root = createRoot(container);
+    const render = (value: string): Promise<void> =>
+      flush(() => {
+        root?.render(
+          <Markdown allowedHtml={{ details: [], summary: [] }} isAnimating>
+            {value}
+          </Markdown>
+        );
+      });
+    await render(source.slice(0, 50));
+    expect(container.querySelector('details > p')?.textContent).toBe('Body');
+    await render(source);
+    const first = container.querySelector('details');
+    await render(source + ' more');
+    expect(container.querySelector('details')).toBe(first);
+    expect(container.querySelector('details > p')?.textContent).toBe('Body');
+  });
+  test('the DOM renderer patches kept void tags, svg-named tags, and entities', () => {
+    const allowedHtml = { wbr: [], br: [], 'svg-icon': ['name'], details: [] };
+    const source =
+      'a<wbr>b<br>c <svg-icon name=x></svg-icon> $x$\n\n<details>\n&copy; x\n</details>\n';
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, { allowedHtml, math: true });
+    for (let end = 1; end <= source.length; end++)
+      renderer.update(source.slice(0, end), true);
+    renderer.update(source, false);
+    const expected = document.createElement('div');
+    expected.innerHTML = createHtmlRenderer({ allowedHtml, math: true }).render(
+      source,
+      false
+    ).html;
+    expect(container.innerHTML).toBe(expected.innerHTML);
+    expect(container.querySelector('details')?.textContent).toBe('\n© x\n');
+    renderer.disconnect();
   });
   test('hydration effects reuse the client formatting pass', async () => {
     let calls = 0;
@@ -963,7 +1023,7 @@ describe('native DOM token fades', () => {
     ).toBe('New paragraph');
     formatter.dispose();
   });
-  test('batches fade timers and compacts each affected parent once', () => {
+  test('batches fade timers and merges unwrapped text without normalize()', () => {
     const container = mountDOM();
     const renderer = createDomRenderer(container);
     const timeout = globalThis.setTimeout;
@@ -999,7 +1059,9 @@ describe('native DOM token fades', () => {
         },
       });
       renderer.update('First **bold**\n\nSecond grows again', true, false);
-      expect(normalized.filter((node) => node === second)).toHaveLength(1);
+      expect(normalized).toHaveLength(0);
+      expect(second.childNodes).toHaveLength(1);
+      expect(second.textContent).toBe('Second grows again');
       expect(container.querySelector('[data-markdown="token"]')).toBeNull();
     } finally {
       renderer.disconnect();
@@ -1262,6 +1324,88 @@ describe('native DOM token fades', () => {
         document.getSelection = getSelection;
         document.addEventListener = addEventListener;
       }
+    }
+  });
+  test('fade cleanup keeps text nodes owned by component hooks', async () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, {
+      components: { a: (html) => html.replace('<a ', '<a data-slot ') },
+    });
+    try {
+      renderer.connect();
+      renderer.update('Hello [x](https://example.com)', true, true, {
+        duration: 20,
+      });
+      const slot = container.querySelector('[data-slot]')!;
+      const owned = document.createTextNode('');
+      slot.append(owned);
+      renderer.update('Hello [x](https://example.com) more text', true, true, {
+        duration: 20,
+      });
+      await pause();
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+      expect(slot.isConnected).toBe(true);
+      expect(owned.isConnected).toBe(true);
+      expect(owned.data).toBe('');
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('fade cleanup merges adjacent unwrapped text runs', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    try {
+      renderer.connect();
+      let source = 'Hello';
+      renderer.update(source, true, true, { duration: 10_000 });
+      for (const chunk of [' one', ' two', ' three']) {
+        source += chunk;
+        renderer.update(source, true, true, { duration: 10_000 });
+      }
+      const paragraph = container.querySelector('p')!;
+      expect(
+        paragraph.querySelectorAll('[data-markdown="token"]').length
+      ).toBeGreaterThan(1);
+      renderer.update(source, true, true, false);
+      expect(paragraph.childNodes.length).toBe(1);
+      expect(paragraph.firstChild?.nodeType).toBe(3);
+      expect(paragraph.textContent).toBe('Hello one two three');
+
+      renderer.update('```text\nab', true, true, { duration: 10_000 });
+      renderer.update('```text\nabc\nd', true, true, { duration: 10_000 });
+      renderer.update('```text\nabc\ndef\n', true, true, { duration: 10_000 });
+      renderer.update('```text\nabc\ndef\n', true, true, false);
+      const code = container.querySelector('code')!;
+      expect(code.querySelector('[data-markdown="token"]')).toBeNull();
+      expect(code.textContent).toBe('abc\ndef\n');
+    } finally {
+      renderer.disconnect();
+    }
+  });
+  test('fade cleanup keeps the selection in merged text', async () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    const selection = window.getSelection()!;
+    try {
+      renderer.connect();
+      renderer.update('Hello', true, true, { duration: 10_000 });
+      renderer.update('Hello world', true, true, { duration: 10 });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const paragraph = container.querySelector('p')!;
+      const world = paragraph.lastChild as Text;
+      expect(world.data).toBe(' world');
+      selection.setBaseAndExtent(world, 1, world, 6);
+      renderer.update('Hello world', true, true, false);
+      expect(paragraph.childNodes.length).toBe(1);
+      expect(selection.toString()).toBe('world');
+      const merged = paragraph.firstChild as Text;
+      selection.setBaseAndExtent(merged, 6, merged, 8);
+      renderer.update('Hello world more', true, true, { duration: 10 });
+      renderer.update('Hello world more', true, true, false);
+      expect(selection.toString()).toBe('wo');
+    } finally {
+      selection.removeAllRanges();
+      renderer.disconnect();
     }
   });
   test('code text fades without remounting previous code nodes', async () => {
@@ -1930,6 +2074,7 @@ describe('incremental streaming', () => {
       const options = {
         code: code.slice(0, end),
         language: 'ansi',
+        meta: '',
         isIncomplete: true,
       };
       const update = session.highlightLines!(options)!;
@@ -1942,7 +2087,12 @@ describe('incremental streaming', () => {
         update.lineCount - (options.code.endsWith('\n') ? 2 : 1)
       );
     }
-    const rewrite = { code: 'other\n', language: 'ansi', isIncomplete: false };
+    const rewrite = {
+      code: 'other\n',
+      language: 'ansi',
+      meta: '',
+      isIncomplete: false,
+    };
     expect(session.highlightLines!(rewrite)!.firstLine).toBe(0);
     expect(session.highlight(rewrite)).toBe(plugin.highlight(rewrite));
     session.dispose();
@@ -1963,10 +2113,48 @@ describe('incremental streaming', () => {
     expect(element.textContent).toBe('red\ngreen\nstill <green>\nend\n');
     expect(element.innerHTML).toContain(
       plugin
-        .highlight({ code, language: 'ansi', isIncomplete: false })!
+        .highlight({ code, language: 'ansi', meta: '', isIncomplete: false })!
         .split('\n')[0]
     );
     renderer.disconnect();
+  });
+  test('fences of a registered language use its lexer, open or closed', () => {
+    registerLanguages([
+      buildHighlightsLexer({
+        name: 'words-example',
+        wat: `(module
+          (func $highlight
+            (call $emitTok
+              (enum.get $Token.keyword)
+              (global.get $ptr)
+              (global.get $end))))`,
+      }),
+    ]);
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    const session = plugin.createSession!();
+    const code = 'a <b>\nc\n';
+    const text = (html: string): string => html.replace(/<[^>]+>/g, '');
+    let lines = 0;
+    for (let end = 0; end <= code.length; end++) {
+      const options = {
+        code: code.slice(0, end),
+        language: 'words-example',
+        meta: '',
+        isIncomplete: true,
+      };
+      const html = plugin.highlight(options)!;
+      if (end > 0) expect(html).toContain('<span');
+      const update = session.highlightLines!(options)!;
+      expect(text(update.fullHtml)).toBe(text(html));
+      // The token covers both lines. Each line of the update must still be
+      // balanced HTML, and an append must not render the lines before it.
+      for (const line of update.html.split('\n'))
+        expect(line.split('<span').length).toBe(line.split('</span>').length);
+      if (update.lineCount > lines && lines > 1)
+        expect(update.firstLine).toBeGreaterThan(0);
+      lines = update.lineCount;
+    }
+    session.dispose();
   });
   test('compares plugins by their parts, not by the wrapper object', () => {
     let calls = 0;
@@ -2238,6 +2426,8 @@ describe('incremental streaming', () => {
     expectFreshDom(container, '```text\nhello', options);
     renderer.disconnect();
   });
+  // Warning: these exhaustive prefix tests repeatedly instantiate Wasm and can
+  // exceed Bun's 5 s default on a loaded CI runner.
   test('changed-line HTML reconstructs fresh highlighting and keeps older lazy strings', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
@@ -2251,7 +2441,7 @@ describe('incremental streaming', () => {
         'const greeting = `é 🥳\n${name}`;\r\n\r\n/* comment\r\nends */\r\n';
       for (let end = 0; end <= source.length; end++) {
         const code = source.slice(0, end);
-        const options = { code, language: 'ts', isIncomplete: true };
+        const options = { code, language: 'ts', meta: '', isIncomplete: true };
         const update = session.highlightLines!(options)!;
         const prefix = previous.split('\n').slice(0, update.firstLine);
         const reconstructed =
@@ -2271,7 +2461,7 @@ describe('incremental streaming', () => {
         previous = reconstructed;
       }
       for (const code of ['const replaced = 1;\n', 'const replaced = 12;\n']) {
-        const options = { code, language: 'ts', isIncomplete: true };
+        const options = { code, language: 'ts', meta: '', isIncomplete: true };
         const update = session.highlightLines!(options)!;
         const fresh = plugin.createSession!();
         try {
@@ -2285,6 +2475,7 @@ describe('incremental streaming', () => {
         session.highlightLines!({
           code: 'literal',
           language: 'unknown-language',
+          meta: '',
           isIncomplete: true,
         })
       ).toBeNull();
@@ -2292,6 +2483,7 @@ describe('incremental streaming', () => {
         session.highlightLines!({
           code: '.x { color: red; }\n',
           language: 'css',
+          meta: '',
           isIncomplete: true,
         })?.fullHtml
       ).toContain('color:');
@@ -2300,7 +2492,7 @@ describe('incremental streaming', () => {
     } finally {
       session.dispose();
     }
-  });
+  }, 30_000);
   test('highlighted fence DOM matches fresh HTML at partial lines, closure, and replacements', () => {
     const options = {
       controls: false,
@@ -2326,12 +2518,17 @@ describe('incremental streaming', () => {
     } finally {
       renderer.disconnect();
     }
-  });
+  }, 30_000);
   test('a live fence that loses its final empty line patches from the right line', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
     const lines = (code: string) =>
-      session.highlightLines!({ code, language: 'ts', isIncomplete: true })!;
+      session.highlightLines!({
+        code,
+        language: 'ts',
+        meta: '',
+        isIncomplete: true,
+      })!;
     lines('a\nb\n\n');
     // Line 1 is now the last line with content, so the update starts there.
     expect(lines('a\nb\n').firstLine).toBe(1);
@@ -2702,7 +2899,12 @@ describe('incremental streaming', () => {
     for (let end = 0; end <= source.length; end++) {
       const code = source.slice(0, end);
       container.innerHTML =
-        session.highlight({ code, language: 'ts', isIncomplete: true }) ?? '';
+        session.highlight({
+          code,
+          language: 'ts',
+          meta: '',
+          isIncomplete: true,
+        }) ?? '';
       expect(container.textContent).toBe(code);
     }
     session.dispose();
@@ -2710,6 +2912,7 @@ describe('incremental streaming', () => {
       session.highlight({
         code: 'let x = 1;',
         language: 'ts',
+        meta: '',
         isIncomplete: false,
       })
     ).toContain('color:');
@@ -2717,6 +2920,7 @@ describe('incremental streaming', () => {
       session.highlight({
         code: 'unknown',
         language: 'unknown-language',
+        meta: '',
         isIncomplete: false,
       })
     ).toBeNull();
@@ -2755,4 +2959,377 @@ test('the DOM renderer keeps math SVG placed by a large first render', () => {
   // not a plain append, so the update walks the SVG
   renderer.update(source + 'b*', true, true, false);
   expect(root.querySelector('svg')).toBe(svg);
+});
+
+describe('reactive islands', () => {
+  const open = '~~~island-counter\n{"id":"votes","label":"Votes"}\n';
+  const closed = open + '~~~\n';
+  const registry: ReactiveIslands = {
+    counter: {
+      fallback: 'Loading <counter>',
+      render: ({ label }) =>
+        typeof label === 'string' ? <button>{label}</button> : null,
+    },
+  };
+
+  test('renders an escaped server fallback only for accepted closed fences', () => {
+    expect(html(closed, { islands: registry })).toContain(
+      'Loading &lt;counter&gt;'
+    );
+    const ordinary = '~~~js\nconst n = 1;\n~~~\n\n';
+    expect(html(ordinary, { islands: registry })).toBe(html(ordinary));
+    const encoded = closed.replace('island-', 'island&#45;');
+    expect(html(ordinary + encoded + ordinary, { islands: registry })).toBe(
+      html(ordinary + closed + ordinary, { islands: registry })
+    );
+    for (const source of [
+      open,
+      closed.replace('counter', 'unknown'),
+      closed.replace('"Votes"', '4'),
+      closed.replace('"id":"votes",', ''),
+      closed.replace('"Votes"', 'oops'),
+    ]) {
+      const output = html(source, { islands: registry });
+      expect(output).toContain('<pre');
+      expect(output).not.toContain('data-words-island=');
+    }
+    expect(html(closed)).toContain('<pre');
+  });
+
+  test('parses opted-in inline islands only in Markdown text', () => {
+    const islands: HtmlOptions['islands'] = {
+      file: { inline: true, accepts: ({ label }) => label !== 'reject' },
+      block: { accepts: () => true },
+    };
+    const renderer = createHtmlRenderer({ islands });
+    const container = mountDOM();
+    const source = String.raw`A **:file[lib[2]\] <x>]{id=ref path='src/a } b' flag}**.`;
+    container.innerHTML = renderer.render(source, false).html;
+    const host = container.querySelector<HTMLElement>('p > strong > span')!;
+    expect(JSON.parse(host.dataset.wordsIslandData!)).toEqual({
+      id: 'ref',
+      label: 'lib[2]] <x>',
+      path: 'src/a } b',
+      flag: '',
+    });
+    expect(container.querySelector('x')).toBeNull();
+    expect(container.textContent?.trim()).toBe('A lib[2]] <x>.');
+    for (const literal of [
+      ':file[reject]',
+      ':file[x]{id=""}',
+      ':file[x]{x=1 x=2}',
+      ':file[x]{path="unfinished}',
+      ':file[x]{label=override}',
+      ':file[unfinished',
+    ]) {
+      container.innerHTML = renderer.render(literal, false).html;
+      expect(container.querySelector('[data-words-island]')).toBeNull();
+      expect(container.textContent?.trim()).toBe(literal);
+    }
+    for (const ordinary of [
+      ':unknown[hi]',
+      ':block[hi]',
+      '::file[hi]',
+      String.raw`\:file[hi]`,
+      '`:file[hi]`',
+      '~~~md\n:file[hi]\n~~~',
+      '[read](https://example.com/:file[x])',
+    ])
+      expect(renderer.render(ordinary, false).html).toBe(
+        createHtmlRenderer().render(ordinary, false).html
+      );
+    renderer.configure({});
+    expect(renderer.render(source, false).html).toBe(
+      createHtmlRenderer().render(source, false).html
+    );
+    renderer.configure({ islands });
+    expect(renderer.render(source, false).html).toContain(
+      'data-words-island="file"'
+    );
+  });
+
+  test('keeps a streaming directive pending until its attributes or label are settled', () => {
+    const islands = {
+      file: { inline: true, pending: 'Reading', accepts: () => true },
+    };
+    const directive = ':file[parse [v2]]{path="a } b" id=one}';
+    const start = directive.indexOf('[') + 1;
+    for (const repair of [false, true]) {
+      const renderer = createHtmlRenderer({ islands });
+      for (let at = start; at < directive.length; at++) {
+        const source = 'Read **' + directive.slice(0, at);
+        const update = renderer.render(source, repair, true);
+        expect(update.html).toBe(
+          createHtmlRenderer({ islands }).render(source, repair, true).html
+        );
+        expect(update.html).toContain('>Reading</span>');
+        expect(update.html).not.toContain(':file');
+        expect(update.html).not.toContain('data-words-island=');
+      }
+      expect(
+        renderer.render('Read **' + directive, repair, true).html
+      ).toContain('data-words-island="file"');
+      expect(renderer.render(':file[done]', repair, true).html).toContain(
+        '>Reading</span>'
+      );
+      for (const next of [' ', '.', '\n', ' after']) {
+        expect(
+          renderer.render(':file[done]' + next, repair, true).html
+        ).toContain('>done</span>');
+      }
+      expect(renderer.render(':file[done]', repair, false).html).toContain(
+        '>done</span>'
+      );
+      expect(renderer.render(':file[unfinished', repair, false).html).toContain(
+        ':file[unfinished'
+      );
+    }
+    expect(
+      createHtmlRenderer({
+        islands: { file: { inline: true, accepts: () => true } },
+      }).render('Read :file[in', true, true).html
+    ).toBe('<p data-markdown="p">Read </p>\n');
+  });
+
+  test('hydrates inline portals, mounts anonymous repeats, and preserves an explicit id on edits', async () => {
+    function Chip({ label }: { label: string }) {
+      const [count, setCount] = useState(0);
+      return (
+        <button onClick={() => setCount(count + 1)}>
+          {label} {count}
+        </button>
+      );
+    }
+    const islands: ReactiveIslands = {
+      file: {
+        inline: true,
+        render: ({ label }) => <Chip label={String(label)} />,
+      },
+    };
+    const element = (source: string) => (
+      <Markdown islands={islands}>{source}</Markdown>
+    );
+    const first = 'Read :file[one]{id=ref}, :file[two], and :file[two].';
+    const container = mountDOM(renderToString(element(first)));
+    expect(
+      container.querySelectorAll('p > span[data-words-island]')
+    ).toHaveLength(3);
+    const errors: unknown[] = [];
+    await flush(() => {
+      root = hydrateRoot(container, element(first), {
+        onRecoverableError: (e) => errors.push(e),
+      });
+    });
+    const [chip, repeat1, repeat2] = container.querySelectorAll('button');
+    await flush(() => chip.click());
+    await flush(() => repeat2.click());
+    await flush(() =>
+      root!.render(element('Intro.\n\n' + first.replace('one', 'edited')))
+    );
+    expect([...container.querySelectorAll('button')]).toEqual([
+      chip,
+      repeat1,
+      repeat2,
+    ]);
+    expect(chip.textContent).toBe('edited 1');
+    expect(repeat1.textContent).toBe('two 0');
+    expect(repeat2.textContent).toBe('two 1');
+    expect(errors).toEqual([]);
+  });
+
+  test('discovers new hosts without searching the root or revisiting committed blocks', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, {
+      islands: { counter: { accepts: () => true } },
+    });
+    const searches = spyOn(container, 'querySelectorAll');
+    const render = (source: string) =>
+      renderer.update(source, true, true, false);
+    const prose = 'Intro.\n\n~~~js\n1\n~~~\n\n';
+    const quote = closed
+      .trimEnd()
+      .split('\n')
+      .map((line) => '> ' + line)
+      .join('\n');
+    try {
+      render(prose);
+      expect(renderer.getIslands()).toHaveLength(0);
+      render(prose + quote + '\n\nTail\n\n');
+      const [first] = renderer.getIslands();
+      expect(first.data.id).toBe('votes');
+
+      const committed = container.querySelector('blockquote')!;
+      const previousSearches = spyOn(committed, 'querySelectorAll');
+      const next =
+        prose + quote + '\n\nTail\n\n' + closed.replace('votes', 'second');
+      render(next);
+      expect(renderer.getIslands().map((island) => island.data.id)).toEqual([
+        'votes',
+        'second',
+      ]);
+      expect(renderer.getIslands()[0]).toBe(first);
+      render(next + '\nMore prose\n\n');
+      expect(previousSearches).not.toHaveBeenCalled();
+
+      renderer.configure({});
+      render(next);
+      expect(renderer.getIslands()).toHaveLength(0);
+      expect(container.querySelector('[data-words-island]')).toBeNull();
+      expect(searches).not.toHaveBeenCalledWith('[data-words-island]');
+    } finally {
+      renderer.disconnect();
+    }
+  });
+
+  test('hydrates a counter and preserves its state and context through streamed text and edits', async () => {
+    const Context = createContext('Default');
+    let unmounts = 0;
+    function Counter({ label }: { label: string }) {
+      const context = useContext(Context);
+      const [count, setCount] = useState(0);
+      useEffect(
+        () => () => {
+          unmounts++;
+        },
+        []
+      );
+      return (
+        <button type="button" onClick={() => setCount((n) => n + 1)}>
+          {context} {label} {count}
+        </button>
+      );
+    }
+
+    const islands: ReactiveIslands = {
+      counter: {
+        fallback: 'Loading counter',
+        render: ({ label }) =>
+          typeof label === 'string' ? <Counter label={label} /> : null,
+      },
+    };
+    const element = (source: string) => (
+      <Context.Provider value="Live">
+        <Markdown animated caret="block" islands={islands} isAnimating>
+          {source}
+        </Markdown>
+      </Context.Provider>
+    );
+    const container = mountDOM(renderToString(element(closed)));
+    const fallback = container.querySelector<HTMLElement>(
+      '[data-words-island-fallback]'
+    )!;
+    expect(fallback.hidden).toBe(false);
+    const errors: unknown[] = [];
+    await flush(() => {
+      root = hydrateRoot(container, element(closed), {
+        onRecoverableError: (error) => errors.push(error),
+      });
+    });
+    expect(errors).toEqual([]);
+    const button = container.querySelector('button')!;
+    expect(fallback.hidden).toBe(true);
+    expect(button.textContent).toBe('Live Votes 0');
+    await flush(() => button.click());
+    await flush(() => root!.render(element(closed + '\nMore Markdown')));
+    await flush(() =>
+      root!.render(element('A new heading.\n\n' + closed + '\nMore Markdown'))
+    );
+    expect(container.querySelector('button')).toBe(button);
+    expect(button.textContent).toBe('Live Votes 1');
+    await flush(() =>
+      root!.render(element(closed.replace('"Votes"', '"Choices"') + closed))
+    );
+    expect([...container.querySelectorAll('button')]).toEqual([button]);
+    expect(button.textContent).toBe('Live Choices 1');
+    expect(
+      container.querySelectorAll('[data-words-island-fallback]:not([hidden])')
+    ).toHaveLength(1);
+
+    await flush(() => root!.render(element('The fence was removed.')));
+    expect(container.querySelector('button')).toBeNull();
+    expect(unmounts).toBe(1);
+  });
+
+  test('shows an opted-in pending state separately from the server fallback', async () => {
+    const islands: ReactiveIslands = {
+      counter: {
+        ...registry.counter,
+        pending: { className: 'counter-skeleton', label: 'Loading votes' },
+      },
+    };
+    expect(html(closed, { islands })).toContain('Loading &lt;counter&gt;');
+    expect(html(closed, { islands })).not.toContain('counter-skeleton');
+    expect(
+      html(open, {
+        isAnimating: true,
+        islands: {
+          counter: { ...registry.counter, pending: 'Loading <votes>' },
+        },
+      })
+    ).toContain('Loading &lt;votes&gt;');
+
+    const container = mountDOM();
+    const render = (source: string) =>
+      flush(() => {
+        root ??= createRoot(container);
+        root.render(
+          <Markdown islands={islands} isAnimating>
+            {source}
+          </Markdown>
+        );
+      });
+
+    await render('~~~island-counter\n');
+    const skeleton = container.querySelector('.counter-skeleton');
+    expect(skeleton?.getAttribute('aria-label')).toBe('Loading votes');
+    expect(container.querySelector('pre, [data-words-island]')).toBeNull();
+    await render(open);
+    expect(container.querySelector('.counter-skeleton')).toBe(skeleton);
+    await render(closed);
+    expect(container.querySelector('.counter-skeleton')).toBeNull();
+    expect(
+      container.querySelector('[data-words-island] button')?.textContent
+    ).toBe('Votes');
+    await render(closed.replace('"Votes"', '4'));
+    expect(container.querySelector('.counter-skeleton')).toBeNull();
+    expect(container.querySelector('pre')).not.toBeNull();
+  });
+
+  test('omits a streaming island and mounts it when the fence closes', async () => {
+    const container = mountDOM();
+    const render = (source: string, active: boolean) =>
+      flush(() => {
+        root ??= createRoot(container);
+        root.render(
+          <Markdown islands={registry} isAnimating={active}>
+            {source}
+          </Markdown>
+        );
+      });
+    await render('~~~i', true);
+    expect(container.querySelector('pre')).toBeNull();
+    const partial = open.slice(0, open.indexOf('"Votes"'));
+    await render(partial, true);
+    expect(
+      container.querySelector('[data-markdown="root"]')?.childElementCount
+    ).toBe(0);
+    await render(open, true);
+    expect(
+      container.querySelector('[data-markdown="root"]')?.childElementCount
+    ).toBe(0);
+    await render(open, false);
+    expect(container.querySelector('pre')?.textContent).toContain(
+      '"id":"votes"'
+    );
+    await render(closed, true);
+    expect(
+      container.querySelector('[data-words-island] button')?.textContent
+    ).toBe('Votes');
+    await render(closed + '\n~~~text\nMore code', true);
+    expect(
+      container.querySelector('[data-words-island] button')?.textContent
+    ).toBe('Votes');
+    await render(open, false);
+    expect(container.querySelector('[data-words-island]')).toBeNull();
+  });
 });

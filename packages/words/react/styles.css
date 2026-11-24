@@ -2,20 +2,20 @@
   line-height: 1.75;
   overflow-wrap: anywhere;
 }
-[data-markdown='root'] > :first-child {
-  margin-top: 0;
-}
-[data-markdown='root'] > :last-child {
-  margin-bottom: 0;
-}
 [data-markdown='root']
-  :is(p, ul, ol, blockquote, table, [data-markdown='code-block']) {
+  :where(p, ul, ol, blockquote, table, [data-markdown='code-block']) {
   margin-block: 1.25em;
 }
 [data-markdown='root'] :is(h1, h2, h3, h4, h5, h6) {
   font-weight: 600;
   line-height: 1.3;
   margin-block: 1.5em 0.6em;
+}
+[data-markdown='root'] > :first-child {
+  margin-top: 0;
+}
+[data-markdown='root'] > :last-child {
+  margin-bottom: 0;
 }
 [data-markdown='h1'] {
   font-size: 2em;

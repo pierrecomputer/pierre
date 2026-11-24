@@ -177,6 +177,7 @@
     (local $n i32)
     (local $i i32)
     (local $line i32)
+    (if (global.get $allowAt) (then (call $allowBlock (local.get $r)) (return)))
     (if (i32.and (i32.load8_u (i32.const 1)) (i32.const 2))
       (then
         ;; skipped raw HTML leaves no line breaks behind, unless escapeHtml
@@ -280,6 +281,346 @@
         (call $outByte (i32.const "<"))
         (local.set $p (i32.add (local.get $q) (i32.const 1)))
         (br $l))))
+
+  ;; The host's allowed HTML list (control bytes 44 to 47), or 0. Each entry
+  ;; is the name length, flags (bit 0: void element), the lowercase name, the
+  ;; byte length of its attribute list (u16), then each lowercase attribute
+  ;; as its name length, flags (bit 0: URL attribute), and name.
+  (global $allowAt (mut i32) (i32.const 0))
+  (global $allowEnd (mut i32) (i32.const 0))
+  ;; Open allowed elements at $mem.allowStack, four bytes each: the entry
+  ;; offset (u16), the render depth, and 1 for an element of inline content.
+  ;; Inline elements close at the end of their leaf and block elements with
+  ;; their container, so the output stays balanced.
+  (global $allowTop (mut i32) (i32.const 0))
+  ;; The input length before the last boundary with no open element.
+  (global $allowSafe (mut i32) (i32.const 0))
+
+  ;; Find the $n-byte name at $p in the list [$at, $end): tag entries when
+  ;; $tags is 1, attributes when 0. Letters match in either case.
+  ;; Returns the entry, or 0.
+  (func $allowFind (param $at i32) (param $end i32) (param $p i32) (param $n i32) (param $tags i32)
+    (result i32)
+    (local $name i32)
+    (local $i i32)
+    (local $c i32)
+    (block $none
+      (loop $entry
+        (br_if $none (i32.ge_u (local.get $at) (local.get $end)))
+        (local.set $name (i32.add (local.get $at) (i32.const 2)))
+        (block $next
+          (br_if $next (i32.ne (i32.load8_u (local.get $at)) (local.get $n)))
+          (local.set $i (i32.const 0))
+          (loop $byte
+            (if (i32.eq (local.get $i) (local.get $n)) (then (return (local.get $at))))
+            (local.set $c (i32.load8_u (i32.add (local.get $p) (local.get $i))))
+            (br_if $next (i32.ne (i32.load8_u (i32.add (local.get $name) (local.get $i)))
+              (i32.or (local.get $c) (i32.shl
+                (i32.lt_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 26)) (i32.const 5)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $byte)))
+        (local.set $at (i32.add (local.get $name) (i32.load8_u (local.get $at))))
+        (if (local.get $tags)
+          (then (local.set $at (i32.add (i32.add (local.get $at) (i32.const 2))
+            (i32.load16_u (local.get $at))))))
+        (br $entry)))
+    (i32.const 0))
+
+  ;; Write `</name>` for the list entry at offset $off into reserved output at
+  ;; $dst, and return the end.
+  (func $allowCloserAt (param $dst i32) (param $off i32) (result i32)
+    (local.set $off (i32.add (global.get $allowAt) (local.get $off)))
+    (i32.store16 (local.get $dst) (i32.const "</"))
+    (local.set $dst (call $copyAt (i32.add (local.get $dst) (i32.const 2))
+      (i32.add (local.get $off) (i32.const 2)) (i32.load8_u (local.get $off))))
+    (i32.store8 (local.get $dst) (i32.const ">"))
+    (i32.add (local.get $dst) (i32.const 1)))
+
+  ;; Close the open elements whose key (render depth, plus 256 when inline) is
+  ;; above $keep, innermost first. A block element's closer ends a line.
+  (func $allowClose (param $keep i32)
+    (local $entry i32)
+    ;; 32 closers of at most 255 name bytes and a line feed
+    (call $ensureOut (i32.const 8448))
+    (block $done
+      (loop $l
+        (br_if $done (i32.eqz (global.get $allowTop)))
+        (local.set $entry (i32.load offset=$mem.allowStack
+          (i32.shl (i32.sub (global.get $allowTop) (i32.const 1)) (i32.const 2))))
+        (br_if $done (i32.le_s (i32.shr_u (local.get $entry) (i32.const 16)) (local.get $keep)))
+        (global.set $allowTop (i32.sub (global.get $allowTop) (i32.const 1)))
+        (global.set $out (call $allowCloserAt (global.get $out)
+          (i32.and (local.get $entry) (i32.const 0xffff))))
+        (i32.store8 (global.get $out) (i32.const 10))
+        (global.set $out (i32.add (global.get $out)
+          (i32.lt_u (local.get $entry) (i32.const 0x1000000))))
+        (br $l))))
+
+;; Whether the attribute value written at [$p, $e) may stay. Browsers skip
+  ;; spaces and control bytes in URLs and read `\` as `/`, so the checks read
+  ;; the first 16 other bytes, with `\` as `/`. A javascript: or vbscript: URL
+  ;; never stays, and with $url the value must pass $urlRules.
+  (func $allowValue (param $p i32) (param $e i32) (param $url i32) (result i32)
+    (local $c i32)
+    (local $n i32)
+    (local $w i64)
+    (v128.store (i32.const $mem.numbuf) (v128.const i64x2 0 0))
+    (block $done
+      (loop $l
+        (br_if $done (i32.or (i32.ge_u (local.get $p) (local.get $e)) (i32.ge_u (local.get $n) (i32.const 16))))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $l (i32.le_u (local.get $c) (i32.const 32)))
+        (i32.store8 offset=$mem.numbuf (local.get $n)
+          (select (i32.const "/") (local.get $c) (i32.eq (local.get $c) (i32.const "\5c"))))
+        (local.set $n (i32.add (local.get $n) (i32.const 1)))
+        (br $l)))
+    (local.set $w (i64.or (i64.load (i32.const $mem.numbuf)) (i64.const 0x2020202020202020)))
+    (if (i32.or
+          (i32.and (i64.eq (local.get $w) (i64.const "javascri"))
+            (i32.eq (i32.or (i32.and (i32.load (i32.const $mem.numbuf+8)) (i32.const 0xffffff))
+              (i32.const 0x2020)) (i32.const "pt:")))
+          (i32.and (i64.eq (local.get $w) (i64.const "vbscript"))
+            (i32.eq (i32.load8_u (i32.const $mem.numbuf+8)) (i32.const ":"))))
+      (then (return (i32.const 0))))
+    (i32.or (i32.eqz (local.get $url))
+      (call $urlRules (i32.const $mem.numbuf) (i32.add (i32.const $mem.numbuf) (local.get $n)))))
+
+  ;; The `<` of the closing tag of raw text element $name ($n bytes) in
+  ;; [$p, $end), or $end.
+  (func $allowSkipRaw (param $p i32) (param $end i32) (param $name i32) (param $n i32) (result i32)
+    (local $i i32)
+    (loop $l
+      (local.set $p (call $findByte (local.get $p) (local.get $end) (i32.const "<")))
+      (if (i32.gt_u (i32.add (i32.add (local.get $p) (i32.const 2)) (local.get $n)) (local.get $end))
+        (then (return (local.get $end))))
+      (block $miss
+        (br_if $miss (i32.ne (i32.load8_u offset=1 (local.get $p)) (i32.const "/")))
+        (local.set $i (i32.const 0))
+        (loop $byte
+          (if (i32.lt_u (local.get $i) (local.get $n))
+            (then
+              (br_if $miss (i32.ne
+                (i32.or (i32.load8_u offset=2 (i32.add (local.get $p) (local.get $i))) (i32.const 32))
+                (i32.or (i32.load8_u (i32.add (local.get $name) (local.get $i))) (i32.const 32))))
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (br $byte))))
+        ;; a longer name is another element; the byte at $end is slack
+        (local.set $i (i32.load8_u offset=2 (i32.add (local.get $p) (local.get $n))))
+        (br_if $miss (i32.or (call $isAlnum (local.get $i)) (i32.eq (local.get $i) (i32.const "-"))))
+        (return (local.get $p)))
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+      (br $l))
+    (local.get $end))
+
+  ;; Write the complete raw HTML construct [$p, $q) if it is a tag on the
+  ;; allowed list, with only its allowed attributes; drop anything else.
+  ;; $inline is 1 in inline content. The caller reserved 6 bytes per input
+  ;; byte plus 8448. Returns where the caller goes on: $q, or in an HTML block
+  ;; the closing tag of a dropped raw text element such as script or style.
+  (func $allowTag (param $p i32) (param $q i32) (param $end i32) (param $inline i32) (result i32)
+    (local $close i32)
+    (local $name i32)
+    (local $n i32)
+    (local $entry i32)
+    (local $off i32)
+    (local $attrs i32)
+    (local $attrsEnd i32)
+    (local $a i32)
+    (local $an i32)
+    (local $hit i32)
+    (local $v i32)
+    (local $ve i32)
+    (local $c i32)
+    (local $i i32)
+    (local $dst i32)
+    (local $at i32)
+    (local.set $close (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/")))
+    (local.set $name (i32.add (i32.add (local.get $p) (i32.const 1)) (local.get $close)))
+    ;; comments, processing instructions, declarations, and CDATA have no name
+    (local.set $n (call $scanTagName (local.get $name) (local.get $q)))
+    (if (i32.eqz (local.get $n)) (then (return (local.get $q))))
+    (local.set $entry (call $allowFind (global.get $allowAt) (global.get $allowEnd)
+      (local.get $name) (local.get $n) (i32.const 1)))
+    (if (i32.eqz (local.get $entry))
+      (then
+        (if (i32.eqz (i32.or (local.get $inline) (local.get $close)))
+          (then
+            (if (call $wordLookup (i32.const $mem.filterTags) (local.get $name) (local.get $n) (i32.const 9))
+              (then (return (call $allowSkipRaw (local.get $q) (local.get $end)
+                (local.get $name) (local.get $n)))))))
+        (return (local.get $q))))
+    (local.set $off (i32.sub (local.get $entry) (global.get $allowAt)))
+    (if (local.get $close)
+      (then
+        ;; A void element has no closing tag. Otherwise close the nearest
+        ;; open element of this name in the same leaf or container, and the
+        ;; elements opened after it.
+        (if (i32.and (i32.load8_u offset=1 (local.get $entry)) (i32.const 1))
+          (then (return (local.get $q))))
+        (local.set $i (global.get $allowTop))
+        (loop $search
+          (if (i32.eqz (local.get $i)) (then (return (local.get $q))))
+          (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+          (local.set $c (i32.load offset=$mem.allowStack (i32.shl (local.get $i) (i32.const 2))))
+          (if (i32.ne (i32.shr_u (local.get $c) (i32.const 16))
+                (i32.or (i32.shl (local.get $inline) (i32.const 8)) (global.get $rsp)))
+            (then (return (local.get $q))))
+          (br_if $search (i32.ne (i32.and (local.get $c) (i32.const 0xffff)) (local.get $off))))
+        (local.set $dst (global.get $out))
+        (loop $pop
+          (global.set $allowTop (i32.sub (global.get $allowTop) (i32.const 1)))
+          (local.set $dst (call $allowCloserAt (local.get $dst)
+            (i32.load16_u offset=$mem.allowStack (i32.shl (global.get $allowTop) (i32.const 2)))))
+          (br_if $pop (i32.gt_u (global.get $allowTop) (local.get $i))))
+        (global.set $out (local.get $dst))
+        (return (local.get $q))))
+    (if (i32.and (i32.ge_u (global.get $allowTop) (i32.const 32))
+          (i32.eqz (i32.and (i32.load8_u offset=1 (local.get $entry)) (i32.const 1))))
+      (then (return (local.get $q))))
+    (local.set $attrs (i32.add (i32.add (local.get $entry) (i32.const 2)) (local.get $n)))
+    (local.set $attrsEnd (i32.add (i32.add (local.get $attrs) (i32.const 2))
+      (i32.load16_u (local.get $attrs))))
+    (local.set $attrs (i32.add (local.get $attrs) (i32.const 2)))
+    (local.set $dst (global.get $out))
+    (i32.store8 (local.get $dst) (i32.const "<"))
+    (local.set $dst (call $copyAt (i32.add (local.get $dst) (i32.const 1))
+      (i32.add (local.get $entry) (i32.const 2)) (local.get $n)))
+    ;; The scanner accepted this tag, so its attributes parse as they did there.
+    (local.set $a (i32.add (local.get $name) (local.get $n)))
+    (block $attrsDone
+      (loop $attr
+        (local.set $an (call $skipWs (local.get $a) (local.get $q)))
+        (br_if $attrsDone (i32.eq (local.get $an) (local.get $a)))
+        (local.set $a (local.get $an))
+        (block $nameDone
+          (loop $nameByte
+            (br_if $nameDone (i32.eqz (call $byteIn (i32.load8_u (local.get $an))
+              (select (i64.const 0x7ff600000000000) (i64.const 0x400000000000000)
+                (i32.gt_u (local.get $an) (local.get $a)))
+              (i64.const 0x7fffffe87fffffe))))
+            (local.set $an (i32.add (local.get $an) (i32.const 1)))
+            (br $nameByte)))
+        (br_if $attrsDone (i32.eq (local.get $an) (local.get $a)))
+        (local.set $hit (call $allowFind (local.get $attrs) (local.get $attrsEnd)
+          (local.get $a) (i32.sub (local.get $an) (local.get $a)) (i32.const 0)))
+        (local.set $v (i32.const 0))
+        (local.set $a (call $skipWs (local.get $an) (local.get $q)))
+        (if (i32.eq (i32.load8_u (local.get $a)) (i32.const "="))
+          (then
+            (local.set $v (call $skipWs (i32.add (local.get $a) (i32.const 1)) (local.get $q)))
+            (local.set $c (i32.load8_u (local.get $v)))
+            (if (i32.or (i32.eq (local.get $c) (i32.const "'")) (i32.eq (local.get $c) (i32.const "\22")))
+              (then
+                (local.set $v (i32.add (local.get $v) (i32.const 1)))
+                (local.set $ve (call $findByte (local.get $v) (local.get $q) (local.get $c)))
+                (local.set $a (i32.add (local.get $ve) (i32.const 1))))
+              (else
+                (local.set $ve (local.get $v))
+                (block $valueDone
+                  (loop $value
+                    (br_if $valueDone (call $byteIn (i32.load8_u (local.get $ve))
+                      (i64.const 0x7000008500003e00) (i64.const 0x100000000)))
+                    (local.set $ve (i32.add (local.get $ve) (i32.const 1)))
+                    (br $value)))
+                (local.set $a (local.get $ve)))))
+          (else (local.set $a (local.get $an))))
+        (if (local.get $hit)
+          (then
+            (local.set $at (local.get $dst))
+            (i32.store8 (local.get $dst) (i32.const " "))
+            (local.set $dst (call $copyAt (i32.add (local.get $dst) (i32.const 1))
+              (i32.add (local.get $hit) (i32.const 2)) (i32.load8_u (local.get $hit))))
+            (if (local.get $v)
+              (then
+                (i32.store16 (local.get $dst) (i32.const "=\22"))
+                (global.set $out (i32.add (local.get $dst) (i32.const 2)))
+                (call $outCleanText (local.get $v) (local.get $ve) (i32.const 1))
+                (local.set $dst (global.get $out))
+                ;; formatted output checks URLs as the host's defaultUrlTransform does
+                (if (call $allowValue
+                      (i32.add (local.get $at) (i32.add (i32.load8_u (local.get $hit)) (i32.const 3)))
+                      (local.get $dst)
+                      (i32.and (i32.ne (global.get $fmt) (i32.const 0)) (i32.load8_u offset=1 (local.get $hit))))
+                  (then
+                    (i32.store8 (local.get $dst) (i32.const "\22"))
+                    (local.set $dst (i32.add (local.get $dst) (i32.const 1))))
+                  (else (local.set $dst (local.get $at))))))))
+        (br $attr)))
+    (if (i32.and (i32.load8_u offset=1 (local.get $entry)) (i32.const 1))
+      (then
+        (i32.store (local.get $dst) (i32.const " />"))
+        (global.set $out (i32.add (local.get $dst) (i32.const 3)))
+        (return (local.get $q))))
+    (i32.store8 (local.get $dst) (i32.const ">"))
+    (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+    ;; HTML ignores `/>` on elements that are not void; here it closes them.
+    (if (i32.eq (i32.load8_u (call $skipWs (local.get $a) (local.get $q))) (i32.const "/"))
+      (then
+        (global.set $out (call $allowCloserAt (local.get $dst) (local.get $off)))
+        (return (local.get $q))))
+    (global.set $out (local.get $dst))
+    (i32.store offset=$mem.allowStack (i32.shl (global.get $allowTop) (i32.const 2))
+      (i32.or (local.get $off) (i32.shl
+        (i32.or (i32.shl (local.get $inline) (i32.const 8)) (global.get $rsp)) (i32.const 16))))
+    (global.set $allowTop (i32.add (global.get $allowTop) (i32.const 1)))
+    (local.get $q))
+
+  ;; An HTML block through the allowed list: allowed tags pass, text shows only
+  ;; inside an allowed element, and anything else is dropped. A block that
+  ;; writes nothing leaves no line break.
+  (func $allowBlock (param $r i32)
+    (local $start i32)
+    (local $mark i32)
+    (local $b i32)
+    (local $e i32)
+    (local $base i32)
+    (local $p i32)
+    (local $n i32)
+    (local.set $start (global.get $out))
+    (call $cr)
+    (local.set $mark (global.get $out))
+    (local.set $e (call $blockContent (local.get $r)))
+    (global.set $htmlNoClose (i32.const 0))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $b) (local.get $e)))
+        (local.set $base (global.get $contentBase))
+        (local.set $p (i32.add (local.get $base) (local.get $b)))
+        (if (i32.ne (i32.load8_u (local.get $p)) (i32.const "<"))
+          (then
+            (local.set $n (i32.sub (call $findByte (local.get $p)
+              (i32.add (local.get $base) (local.get $e)) (i32.const "<")) (local.get $p)))
+            (if (i32.gt_u (local.get $n) (i32.const 65536)) (then (local.set $n (i32.const 65536))))
+            (if (global.get $allowTop)
+              (then
+                (call $ensureOut (i32.add (i32.mul (local.get $n) (i32.const 6)) (i32.const 16)))
+                (local.set $p (call $contentAt (local.get $b)))
+                (call $outCleanText (local.get $p) (i32.add (local.get $p) (local.get $n)) (i32.const 1))))
+            (local.set $b (i32.add (local.get $b) (local.get $n)))
+            (br $l)))
+        (local.set $n (call $scanHtmlAny (local.get $p) (i32.add (local.get $base) (local.get $e))))
+        (if (i32.eqz (local.get $n))
+          (then
+            ;; a `<` that starts no construct is text
+            (if (global.get $allowTop) (then (out.str "&lt;")))
+            (local.set $b (i32.add (local.get $b) (i32.const 1)))
+            (br $l)))
+        (local.set $n (i32.sub (local.get $n) (local.get $p)))
+        ;; Only tags write output, so a long comment needs no reservation.
+        (if (call $isAlpha (i32.load8_u offset=1 (i32.add (local.get $p)
+              (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/")))))
+          (then
+            (call $ensureOut (i32.add (i32.mul (local.get $n) (i32.const 6)) (i32.const 8448)))
+            (local.set $base (global.get $contentBase))
+            (local.set $p (i32.add (local.get $base) (local.get $b)))
+            (local.set $n (i32.sub (call $allowTag (local.get $p) (i32.add (local.get $p) (local.get $n))
+              (i32.add (local.get $base) (local.get $e)) (i32.const 0)) (local.get $p)))))
+        (local.set $b (i32.add (local.get $b) (local.get $n)))
+        (br $l)))
+    (if (i32.eq (global.get $out) (local.get $mark))
+      (then (global.set $out (local.get $start)))
+      (else (call $outByte (i32.const 10)))))
 
   (func $htmlTable (param $r i32)
     (local $cols i32)

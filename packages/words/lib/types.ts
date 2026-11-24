@@ -45,10 +45,19 @@ export interface HtmlSessionOptions {
   /** Render `$…$`, `$$…$$`, `$$` blocks, and `math` code blocks as SVG. */
   math?: boolean;
   /**
-   * Show raw HTML as escaped text, instead of omitting it (sessions,
-   * `skipHtml`) or keeping it as markup (`renderToHtml()`). An HTML block
-   * becomes a paragraph of its source lines, without Markdown inside it.
-   * Takes precedence over `skipHtml`.
+   * Raw HTML tags to keep, each with the attributes it keeps, for example
+   * `{ details: ['open'], summary: [] }`. Names match in any case. Other
+   * tags, comments, and attributes are dropped, and so are `on*`, `srcdoc`,
+   * `data-markdown*`, and `data-words*` attributes, `javascript:` and
+   * `vbscript:` values, and `script` tags. Formatted output also checks URL
+   * attributes such as `href` and `src` with `defaultUrlTransform` rules.
+   * Overrides `skipHtml`.
+   */
+  allowedHtml?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Show raw HTML as escaped text instead of dropping or keeping it. An HTML
+   * block becomes a paragraph of its source text, without Markdown inside
+   * it. Overrides `skipHtml` and `allowedHtml`.
    */
   escapeHtml?: boolean;
 }

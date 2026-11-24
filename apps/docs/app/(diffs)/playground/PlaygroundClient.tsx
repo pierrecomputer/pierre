@@ -112,6 +112,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 const HIGHLIGHTER_LABELS: Record<HighlighterTypes, string> = {
   'shiki-js': 'Shiki JS',
@@ -199,6 +200,7 @@ export type SharedRenderOptions = Pick<
   | 'themeType'
   | 'theme'
   | 'preferredHighlighter'
+  | 'parseDiffOptions'
 > & {
   // The full `hunkSeparators` type includes an LAnnotation-typed render
   // callback; the playground only uses the string presets, so narrow it here to
@@ -1377,6 +1379,7 @@ function PlaygroundContent({
   const renderOptions = useMemo<SharedRenderOptions>(
     () => ({
       preferredHighlighter: highlighter,
+      parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
       diffStyle,
       diffIndicators,
       lineDiffType,

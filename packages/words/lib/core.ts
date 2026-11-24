@@ -14,15 +14,7 @@ import type {
   RenderOptions,
 } from './types';
 
-export type {
-  AnsiOptions,
-  Frontmatter,
-  HtmlSessionOptions,
-  HtmlUpdate,
-  RenderOptions,
-} from './types';
-
-type Input = string | Uint8Array | ArrayBuffer;
+export type Input = string | Uint8Array | ArrayBuffer;
 type Options = AnsiOptions &
   RenderOptions & { boundary?: boolean; format?: HtmlFormat };
 
@@ -44,6 +36,72 @@ const delta = Symbol.for(
 const format: typeof protocolFormat = Symbol.for(
   '@pierre/words/html-format/v1'
 ) as typeof protocolFormat;
+
+const voidElements = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
+// Attributes whose values the HTML renderers check as URLs.
+const urlAttributes = new Set([
+  'action',
+  'background',
+  'cite',
+  'data',
+  'formaction',
+  'href',
+  'poster',
+  'src',
+  'xlink:href',
+]);
+const packedLists = new WeakMap<object, string>();
+
+/**
+ * Pack `allowedHtml` for Wasm (see `$allowAt` in src/html.wat): per tag, the
+ * name length, a void flag, the lowercase name, the attribute list length
+ * (u16), then each attribute as its name length, a URL flag, and its name.
+ * Unsafe names are left out.
+ */
+function packAllowedHtml(
+  list: Readonly<Record<string, readonly string[]>>
+): string {
+  let packed = packedLists.get(list);
+  if (packed !== undefined) return packed;
+  packed = '';
+  for (const [tag, attributes] of Object.entries(list)) {
+    const name = tag.toLowerCase();
+    if (!/^[a-z][a-z\d-]{0,254}$/.test(name) || !Array.isArray(attributes))
+      throw new TypeError(`allowedHtml: invalid entry "${tag}"`);
+    if (name === 'script') continue;
+    let names = '';
+    for (const attribute of attributes) {
+      const key = attribute.toLowerCase();
+      if (!/^[a-z_:][a-z\d:._-]{0,254}$/.test(key))
+        throw new TypeError(`allowedHtml: invalid attribute "${key}"`);
+      if (!/^(?:on|srcdoc$|data-markdown|data-words)/.test(key))
+        names +=
+          String.fromCharCode(key.length, urlAttributes.has(key) ? 1 : 0) + key;
+    }
+    packed +=
+      String.fromCharCode(name.length, voidElements.has(name) ? 1 : 0) +
+      name +
+      String.fromCharCode(names.length & 255, names.length >> 8) +
+      names;
+  }
+  packedLists.set(list, packed);
+  return packed;
+}
 
 // oxlint-disable-next-line no-control-regex -- Control bytes require parser normalization.
 const paragraphSyntax = /[\u0000-\u001f"&<>@\\[\]`*_~:\uD800-\uDFFF]/u;
@@ -92,7 +150,7 @@ function fenceMayClose(
   }
 }
 
-class Renderer {
+export class Renderer {
   memory: WebAssembly.Memory;
   wasmRender: () => void;
   buffer!: Uint8Array<ArrayBuffer>;
@@ -100,6 +158,7 @@ class Renderer {
   pages!: number;
   idPrefix = '';
   idPrefixLength = 0;
+  inlineNames = '';
 
   constructor(wasmModule: WebAssembly.Module) {
     const instance = new WebAssembly.Instance(wasmModule, {});
@@ -159,10 +218,18 @@ class Renderer {
       inputLength = input.length;
     }
     this.dv.setUint8(0, mode);
+    const allowed =
+      options?.allowedHtml === undefined
+        ? undefined
+        : packAllowedHtml(options.allowedHtml);
     this.dv.setUint8(
       1,
       (options?.frontmatter === true ? 1 : 0) |
-        (options?.skipHtml === true || options?.escapeHtml === true ? 2 : 0) |
+        (options?.skipHtml === true ||
+        allowed !== undefined ||
+        options?.escapeHtml === true
+          ? 2
+          : 0) |
         (options?.boundary === true ? 8 : 0) |
         (mode === 1 && typeof input !== 'string' ? 32 : 0) |
         (options?.incomplete === true ? 64 : 0)
@@ -177,8 +244,12 @@ class Renderer {
     const format = options?.format;
     // The byte after the flags tells whether a code block is in slots.
     this.dv.setUint16(26, format?.flags ?? 0, true);
+    const names = format?.inlineNames ?? '';
+    // Also clear the inline-output flag at byte 34 for this render.
+    this.dv.setUint32(32, names.length, true);
     if (format !== undefined) {
       if (format.idPrefix !== this.idPrefix) {
+        this.inlineNames = ''; // A longer prefix may overwrite the previous names.
         const { read, written } = enc.encodeInto(
           format.idPrefix,
           this.buffer.subarray(idPrefixAt, idPrefixAt + idPrefixRoom)
@@ -194,8 +265,38 @@ class Renderer {
         this.idPrefix = format.idPrefix;
         this.idPrefixLength = written;
       }
+      if (
+        names.length + this.idPrefixLength + (allowed?.length ?? 0) >
+        idPrefixRoom
+      )
+        throw new RangeError(
+          'Inline island names, allowedHtml, and idPrefix exceed 4096 bytes'
+        );
+      if (names !== this.inlineNames) {
+        const start = idPrefixAt + idPrefixRoom - names.length;
+        for (let i = 0; i < names.length; i++)
+          this.buffer[start + i] = names.charCodeAt(i);
+        this.inlineNames = names;
+      }
       this.dv.setUint16(28, this.idPrefixLength, true);
     }
+    // The list follows the id prefix. Without a format, the cached prefix
+    // and names give way to it.
+    let allowedAt = this.idPrefixLength;
+    if (allowed) {
+      if (allowedAt + allowed.length > idPrefixRoom) {
+        if (allowed.length > idPrefixRoom)
+          throw new RangeError('allowedHtml exceeds 4096 bytes');
+        this.idPrefix = '';
+        this.idPrefixLength = allowedAt = 0;
+      }
+      if (allowedAt + allowed.length > idPrefixRoom - this.inlineNames.length)
+        this.inlineNames = '';
+      for (let i = 0; i < allowed.length; i++)
+        this.buffer[idPrefixAt + allowedAt + i] = allowed.charCodeAt(i);
+    }
+    this.dv.setUint16(44, allowedAt, true);
+    this.dv.setUint16(46, allowed?.length ?? 0, true);
     this.dv.setUint32(
       22,
       options?.width != null && options.width > 0
@@ -239,52 +340,55 @@ class Renderer {
   }
 }
 
-let shared: Renderer;
+/**
+ * The renderer of one entry. Each entry (`@pierre/words`, `/no-math`, ...)
+ * owns one, so entries loaded together keep their own Wasm build.
+ */
+export type State = { renderer: Renderer };
 
 const tooLarge = () =>
   new RangeError(`input exceeds ${maxInput} bytes of UTF-8`);
 
-export function init(wasmModule: WebAssembly.Module): Renderer {
-  return (shared = new Renderer(wasmModule));
-}
+export type RenderToHtml = {
+  (input: Input): Uint8Array;
+  <T = Frontmatter>(
+    input: Input,
+    options: RenderOptions & { frontmatter: true }
+  ): [T | null, Uint8Array];
+  (input: Input, options?: RenderOptions & { frontmatter?: false }): Uint8Array;
+  <T = Frontmatter>(
+    input: Input,
+    options: RenderOptions
+  ): Uint8Array | [T | null, Uint8Array];
+};
 
-export function renderToHtml(input: Input): Uint8Array;
-export function renderToHtml<T = Frontmatter>(
-  input: Input,
-  options: RenderOptions & { frontmatter: true }
-): [T | null, Uint8Array];
 export function renderToHtml(
-  input: Input,
-  options?: RenderOptions & { frontmatter?: false }
-): Uint8Array;
-export function renderToHtml<T = Frontmatter>(
-  input: Input,
-  options: RenderOptions
-): Uint8Array | [T | null, Uint8Array];
-export function renderToHtml(
+  state: State,
   input: Input,
   options?: RenderOptions
 ): Uint8Array | [unknown, Uint8Array] {
-  const { output, meta } = shared.render(input, 0, options);
+  const { output, meta } = state.renderer.render(input, 0, options);
   if (options?.frontmatter !== true) return output;
   return [meta != null ? JSON.parse(dec.decode(meta)) : null, output];
 }
 
-export function renderToAnsi(input: Input, options?: AnsiOptions): Uint8Array {
-  return shared.render(input, 1, {
+export function renderToAnsi(
+  state: State,
+  input: Input,
+  options?: AnsiOptions
+): Uint8Array {
+  return state.renderer.render(input, 1, {
     width: options?.width,
     cjk: options?.cjk,
     math: options?.math,
   }).output;
 }
 
-/**
- * Render a growing string to HTML. A session keeps completed HTML and reparses
- * only the unfinished end.
- */
-export function createHtmlSession(): {
+export type HtmlSession = {
   render(input: string, options?: HtmlSessionOptions): HtmlUpdate;
-} {
+};
+
+export function createHtmlSession(state: State): HtmlSession {
   let previous = '';
   let stable = '';
   let offset = 0;
@@ -293,6 +397,8 @@ export function createHtmlSession(): {
   let extensions: number | undefined;
   let flags: number | undefined;
   let idPrefix: string | undefined;
+  let inlineNames: string | undefined;
+  let allowed: string | undefined;
   let result: InternalHtmlUpdate | undefined;
   let revision = 0;
   let paragraph:
@@ -314,17 +420,24 @@ export function createHtmlSession(): {
     render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
+      const renderer = state.renderer;
       const wanted = options?.incomplete === true;
       const ext =
         (options?.cjk === true ? 1 : 0) |
         (options?.math === true ? 2 : 0) |
         (options?.escapeHtml === true ? 4 : 0);
       const form = options?.[format];
+      const list =
+        options?.allowedHtml === undefined
+          ? undefined
+          : packAllowedHtml(options.allowedHtml);
       const sameMode =
+        allowed === list &&
         incomplete === wanted &&
         extensions === ext &&
         flags === form?.flags &&
-        idPrefix === form?.idPrefix;
+        idPrefix === form?.idPrefix &&
+        inlineNames === form?.inlineNames;
       if (input === previous && sameMode && result != null) return result;
       // V8 compares slices with memcmp, but its startsWith reads each character.
       let reset =
@@ -483,25 +596,26 @@ export function createHtmlSession(): {
         escapeHtml: (ext & 4) !== 0,
         boundary: true,
         format: form,
+        allowedHtml: options?.allowedHtml,
       };
       let tail = input.slice(nextOffset);
-      let rendered = shared.render(tail, 0, renderOptions);
-      if (nextOffset !== 0 && shared.dv.getUint8(30) !== 0) {
+      let rendered = renderer.render(tail, 0, renderOptions);
+      if (nextOffset !== 0 && renderer.dv.getUint8(30) !== 0) {
         nextStable = '';
         nextOffset = 0;
         reset = true;
         tail = input;
-        rendered = shared.render(tail, 0, renderOptions);
+        rendered = renderer.render(tail, 0, renderOptions);
       }
       const html = dec.decode(rendered.output);
-      definitions = shared.dv.getUint8(30) !== 0;
-      const slots = shared.dv.getUint8(27) !== 0;
+      definitions = renderer.dv.getUint8(30) !== 0;
+      const slots = renderer.dv.getUint8(27) !== 0;
       // Wasm measures the source and HTML before the boundary in UTF-16 units.
-      const completed = definitions ? 0 : shared.dv.getUint32(36, true);
+      const completed = definitions ? 0 : renderer.dv.getUint32(36, true);
       let pending = html;
       let addition = '';
       if (completed > 0 && completed <= tail.length) {
-        addition = html.slice(0, shared.dv.getUint32(40, true));
+        addition = html.slice(0, renderer.dv.getUint32(40, true));
         nextStable += addition;
         nextOffset += completed;
         pending = html.slice(addition.length);
@@ -513,6 +627,8 @@ export function createHtmlSession(): {
       extensions = ext;
       flags = form?.flags;
       idPrefix = form?.idPrefix;
+      inlineNames = form?.inlineNames;
+      allowed = list;
       const completedHtml = stable;
       paragraph = undefined;
       const open = form === undefined ? '<p>' : '<p data-markdown="p">';
@@ -520,7 +636,7 @@ export function createHtmlSession(): {
       // longer tells what the paragraph shows.
       if (
         !definitions &&
-        (shared.dv.getUint8(1) & 128) === 0 &&
+        (renderer.dv.getUint8(1) & 128) === 0 &&
         pending.startsWith(open) &&
         pending.endsWith('</p>\n')
       ) {
@@ -630,6 +746,7 @@ export function createHtmlSession(): {
       };
       // A computed key would slow every literal: add this one only when set.
       if (slots) result[format] = true;
+      if (renderer.dv.getUint8(34) !== 0) result.hasInlineIslands = true;
       return result;
     },
   };

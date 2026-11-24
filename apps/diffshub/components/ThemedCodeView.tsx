@@ -10,6 +10,7 @@ import { type Ref, useMemo } from 'react';
 import { useDiffThemeProps } from './useDiffThemeProps';
 import { useHighlightTheme } from './useHighlightTheme';
 import { useWorkerDiffTheme } from './useWorkerDiffTheme';
+import { getPreferredDiffLib } from '@/lib/preferredDiffLib';
 import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
@@ -39,6 +40,10 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
   const themedOptions = useMemo(
     () => ({
       ...options,
+      parseDiffOptions: {
+        ...options?.parseDiffOptions,
+        preferredDiffLib: getPreferredDiffLib(),
+      },
       preferredHighlighter: getPreferredHighlighter(),
       theme: highlightTheme.theme,
       themeType: options?.themeType ?? diffTheme.themeType,

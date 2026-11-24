@@ -24,6 +24,9 @@ const html = new TextDecoder().decode(
 - Math produces SVG in HTML and TeX source in ANSI. During a stream, inline math
   stays text until its closing delimiter arrives. An open display block can show
   a partial formula.
+- An app that renders no TeX can import `renderToHtml()`, `renderToAnsi()`, and
+  `createHtmlSession()` from `@pierre/words/no-math`: a WebAssembly module about
+  a third smaller, where the `math` option shows formulas as code.
 - CJK mode lets `*`, `**`, and `~~` mark emphasis or strikethrough where
   punctuation meets Chinese, Japanese, or Korean text. `**重要。**请阅读。`
   renders as `<strong>重要。</strong>请阅读。` inside a paragraph. Prefer
@@ -72,6 +75,33 @@ Pass the same `plugins` option as for Mermaid. Use a Highlights theme object.
 The fence supplies the language. Unknown languages fall back to plain code.
 During an active stream, an open fence reuses a live tokenizer.
 
+The plugin uses the main `@pierre/highlights` entry, which loads all built-in
+lexers. Only an open `ansi` fence renders again in full on each update.
+
+### Custom languages
+
+Build a lexer with `@pierre/wat-tools` at build time, and save the descriptor in
+a module. See the
+[Highlights custom lexers reference](../../highlights/references/custom-lexers.md)
+for the lexer contract.
+
+```ts
+import { registerLanguages } from '@pierre/highlights';
+import { createHighlightsPlugin } from '@pierre/words/highlights';
+import pierreLight from '@pierre/highlights/themes/pierre-light';
+import conf from './conf.js'; // from buildHighlightsLexer({ name: 'conf', alias: ['cfg'], wat })
+
+registerLanguages([conf]);
+const plugins = { code: createHighlightsPlugin({ theme: pierreLight }) };
+```
+
+- Register once at module level, before the first render. The registry is
+  global, and repeated calls with the same lexer do nothing.
+- Fences that use the name or an alias (`conf`, `cfg`) use the lexer, open or
+  closed. A registered name overrides a built-in name.
+- Use a custom fence renderer instead when the fence needs other HTML, not only
+  token colors.
+
 ## Custom code blocks
 
 Use `plugins.renderers` to replace an entire fenced block. Use `plugins.code` to
@@ -94,11 +124,12 @@ const plugins: PluginConfig = {
 };
 ```
 
-Each hook receives `{ code, language, isIncomplete }`. A custom renderer can
-return `null` to use the code block or set `frame: true` to keep its header and
-controls. Words caches the result of a closed block for the same language and
-source. `configure(next)` on the HTML renderer clears this cache. The DOM
-renderer clears it only when a renderer, plugin, or option value changes.
+Each hook receives `{ code, language, meta, isIncomplete }`. `meta` is the rest
+of the fence info string after the language, trimmed, or `''`. A custom renderer
+can return `null` to use the code block or set `frame: true` to keep its header
+and controls. Words caches the result of a closed block for the same language,
+meta, and source. `configure(next)` on the HTML renderer clears this cache. The
+DOM renderer clears it only when a renderer, plugin, or option value changes.
 
 A custom `CodeHighlighterPlugin` returns escaped HTML for the contents of
 `<code>` from `highlight(options)`, or `null` for plain code. Implement

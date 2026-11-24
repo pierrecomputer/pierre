@@ -198,6 +198,12 @@
           (then
             (global.set $nSlots (i32.const 0))
             (global.set $bracketSp (i32.add (local.get $links) (local.get $extra)))
+            (if (i32.load16_u (i32.const 32))
+              (then
+                (local.set $q (call $scanDirective (local.get $p) (local.get $e) (i32.const 0)))
+                (if (i32.lt_s (local.get $q) (i32.const 0)) (then (return (i32.const 0))))
+                (if (i32.gt_u (local.get $q) (i32.add (local.get $p) (i32.const 1)))
+                  (then (local.set $p (local.get $q)) (br $scan)))))
             (local.set $p (call $tryUrlAutolink (local.get $p) (local.get $e)))
             (br $scan)))
         (if (i32.eq (local.get $c) (i32.const "."))

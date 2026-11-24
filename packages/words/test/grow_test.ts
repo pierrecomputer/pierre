@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { init } from '../dist/core.js';
+import { Renderer } from '../dist/core.js';
 
 const wasm = new WebAssembly.Module(
   readFileSync(new URL('../dist/words.wasm', import.meta.url))
@@ -10,7 +10,7 @@ const wasm = new WebAssembly.Module(
 const dec = new TextDecoder();
 
 // enough to hold anything below without growing again
-const warm = init(wasm);
+const warm = new Renderer(wasm);
 warm.render('x'.repeat(8 << 20), 0, {});
 
 const q = '"';
@@ -94,7 +94,7 @@ const docs = {
 };
 
 void test('a render that traps after growing memory leaves usable views', () => {
-  const renderer = init(wasm);
+  const renderer = new Renderer(wasm);
   const render = renderer.wasmRender;
   renderer.wasmRender = () => {
     renderer.memory.grow(1);
@@ -113,7 +113,7 @@ void test('string encoding survives growth between multibyte characters', () => 
   for (const length of [16000, 26023, 65536, 262144]) {
     for (const tail of ['é中', '😀', '\ud800x\udc00', '\0']) {
       const source = 'é'.repeat(length) + tail.repeat(10000) + ' finished';
-      const cold = init(wasm);
+      const cold = new Renderer(wasm);
       assert.equal(
         dec.decode(cold.render(source, 0, {}).output),
         dec.decode(warm.render(new TextEncoder().encode(source), 0, {}).output)
@@ -140,7 +140,7 @@ void test(
       input.copyWithin(4 + n, 4, 4 + Math.min(n, input.length - 4 - n));
     input.set(new TextEncoder().encode('```\n'));
     input[input.length - 1] = 10;
-    const renderer = init(wasm);
+    const renderer = new Renderer(wasm);
     renderer.memory.grow(40000 - renderer.pages);
     renderer.bindMemory();
     const output = renderer.render(input, 0, {}).output;
@@ -153,7 +153,7 @@ void test('a large code block reserves output as it goes, not six times its size
   const input = new TextEncoder().encode(
     '```\n' + 'code line\n'.repeat(800_000)
   );
-  const renderer = init(wasm);
+  const renderer = new Renderer(wasm);
   const output = renderer.render(input, 0, {}).output;
   assert.equal(output.length, input.length + 21);
   assert.ok(
@@ -174,7 +174,7 @@ void test(
     const input = new Uint8Array(715_828_000).fill(97);
     for (let i = 99; i < input.length; i += 100) input[i] = 10;
     input.set(new TextEncoder().encode('```\n'));
-    const output = init(wasm).render(input, 0, {}).output;
+    const output = new Renderer(wasm).render(input, 0, {}).output;
     assert.equal(output.length, input.length + 21);
   }
 );
@@ -186,7 +186,7 @@ for (const [name, doc] of Object.entries(docs)) {
   ] as const) {
     void test(`${name} renders identically whether or not memory grows (${label})`, () => {
       // a brand new instance starts at two pages, so this render has to grow
-      const cold = init(wasm);
+      const cold = new Renderer(wasm);
       const grown = dec.decode(cold.render(doc, mode, { width: 80 }).output);
       const flat = dec.decode(warm.render(doc, mode, { width: 80 }).output);
       if (grown !== flat) {

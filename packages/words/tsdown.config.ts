@@ -2,12 +2,18 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig([
   {
-    entry: ['lib/core.ts', 'lib/index.ts', 'lib/workerd.ts'],
+    entry: [
+      'lib/core.ts',
+      'lib/index.ts',
+      'lib/workerd.ts',
+      'lib/no-math.ts',
+      'lib/no-math-workerd.ts',
+    ],
     clean: false,
     unbundle: true,
     platform: 'neutral',
     dts: { tsgo: true },
-    deps: { neverBundle: [/^\.\/words\.wasm/] },
+    deps: { neverBundle: [/^\.\/words(-no-math)?\.wasm/] },
   },
   {
     entry: {
@@ -24,8 +30,9 @@ export default defineConfig([
     deps: {
       neverBundle: [
         '@pierre/words',
-        '@pierre/highlights',
+        /^@pierre\/highlights(?:\/|$)/,
         'react',
+        'react-dom',
         'react/jsx-runtime',
       ],
     },

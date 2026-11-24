@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Emit the run of non-blank bytes at $ptr as $hl. In a path ($hl
   ;; string.special), `\` escapes the next byte, as in `\#` or `\ `, but

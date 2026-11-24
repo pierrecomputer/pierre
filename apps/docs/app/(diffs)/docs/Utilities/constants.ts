@@ -48,6 +48,12 @@ const deletedFileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, null);
 // Omitting one side is not the same as passing null, and passing
 // null for both sides throws because at least one side must exist.
 
+// Use the WebAssembly diff library instead of jsdiff (the default).
+// The options also accept context, ignoreWhitespace, and stripTrailingCr.
+const wasmFileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile, {
+  preferredDiffLib: '@pierre/patches',
+});
+
 // With strict error handling (throws instead of logging)
 // const fileDiff = parseDiffFromFile(oldFile, newFile, undefined, true);
 
@@ -217,7 +223,7 @@ export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<
     name: 'registerCustomLanguage.ts',
     contents: `import { registerCustomLanguage } from '@pierre/diffs';
 
-// Register a custom Shiki language loader before rendering.
+// Register a custom language loader before rendering.
 // my-lang.tmLanguage.json must declare "my-lang" as its name or an alias.
 
 // Option 1: Dynamic import (recommended for code splitting)
@@ -231,7 +237,16 @@ registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [
 ]);
 
 // Option 2: No extension mapping (use setLanguageOverride instead)
-registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));`,
+registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));
+
+// Option 3: A Highlights lexer built with @pierre/wat-tools.
+// my-lang.highlights.js default-exports the lexer, with "my-lang" in its aliases.
+registerCustomLanguage(
+  'my-lang',
+  () => import('./my-lang.highlights.js'),
+  ['mylang'],
+  'highlights'
+);`,
   },
   options,
 };

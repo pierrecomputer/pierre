@@ -1,5 +1,11 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cppWords 352)
+  (memory-region $mem.cudaWords 192)
+
+  (import "@pierre/wat-tools/common.wat")
+  (import "./c.wat")
 
   ;; A bounded byte read for prefix and operator lookahead.
   (func $cppByte (param $p i32) (result i32)
@@ -190,14 +196,27 @@
   ;; Advance $ptr over the rest of a directive's logical line: physical lines
   ;; joined by a backslash before the line break. $lhs bounds the byte-before
   ;; read. Returns 1 when the scan stopped at $end right after such a join,
-  ;; so the next streaming chunk still belongs to the directive.
-  (func $cppDirectiveScan (param $lhs i32) (result i32)
+  ;; so the next streaming chunk still belongs to the directive (3 inside a
+  ;; `//` comment), and 2 with $ptr at a `/*` that a physical line leaves open.
+  ;; $cmt is 2 inside a spliced `//` comment, where `/*` opens nothing.
+  (func $cppDirectiveScan (param $lhs i32) (param $cmt i32) (result i32)
     (local $joined i32)
+    (local $line i32)
     (block $done
       (loop $l
+        (local.set $line (global.get $ptr))
         (call $scanToLineEnd)
+        (if (i32.eqz (local.get $cmt))
+          (then
+            (local.set $cmt (call $cDirectiveComment (local.get $line)))
+            (if (i32.eq (local.get $cmt) (i32.const 1))
+              (then (return (i32.const 2))))))
         (if (i32.ge_u (global.get $ptr) (global.get $end))
-          (then (return (i32.eq (global.get $ptr) (local.get $joined)))))
+          (then
+            (return
+              (i32.mul
+                (i32.eq (global.get $ptr) (local.get $joined))
+                (i32.add (local.get $cmt) (i32.const 1))))))
         (br_if $done
           (i32.or
             (i32.eq (global.get $ptr) (local.get $lhs))
@@ -214,8 +233,43 @@
         (br $l)))
     (i32.const 0))
 
+  ;; $state: 0 after the `#` at $lhs, else the $contDirective a chunk resumes. Returns the new one.
+  (func $cppDirective (param $lhs i32) (param $state i32) (result i32)
+    (local $cont i32)
+    (local $p i32)
+    (if (i32.ge_u (local.get $state) (i32.const 256))
+      (then
+        (return
+          (call $cLineComment
+            (local.get $lhs)
+            (i32.and (local.get $state) (i32.const 255))
+            (i32.const 0)))))
+    (local.set $cont (call $cppDirectiveScan (local.get $lhs) (i32.and (local.get $state) (i32.const 2))))
+    (if (i32.eqz (local.get $state))
+      (then
+        (local.set $p
+          (call $scanFindSpecial
+            (local.get $lhs)
+            (global.get $ptr)
+            (i32.const 10)
+            (i32.const 0)
+            (i32.const 0)))
+        (local.set $p
+          (select
+            (i32.add (local.get $p) (i32.const 1))
+            (global.get $ptr)
+            (i32.lt_u (local.get $p) (global.get $ptr))))
+        (if (call $lexEmitIncludeDirective (local.get $lhs) (local.get $p))
+          (then (local.set $lhs (local.get $p))))))
+    (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
+    (if (i32.eq (local.get $cont) (i32.const 2))
+      (then
+        (local.set $cont (i32.const 0))
+        (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))))
+    (local.get $cont))
+
   ;; group order is the dispatch order in $cppWordHl below
-  (keyword-table $cppWords $mem.cppWords $mem.csharpWords
+  (keyword-table $cppWords $mem.cppWords $mem.cppWords+352
     (group $Token.keyword.control ;; 1: control - `continue` lives in $cppWordHl instead
       "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch" "throw" "switch" "return"
       "default" "co_await" "co_yield" "co_return")
@@ -254,7 +308,7 @@
           (then (return (enum.get $Token.type.builtin))))))
     (keyword-table.value $cppWords (local.get $lhs) (local.get $rhs)))
 
-  (keyword-table $cudaWords $mem.cudaWords $mem.dartWords
+  (keyword-table $cudaWords $mem.cudaWords $mem.cudaWords+192
     (group $Token.keyword
       "__global__" "__host__" "__constant__" "__managed__"
       "__forceinline__" "__launch_bounds__" "__align__")
@@ -288,7 +342,8 @@
     ;; the quote byte of an ordinary literal the previous chunk left open at
     ;; an escaped line break, or 0
     (local $strCont i32)
-    ;; 1 when the previous chunk ended inside a backslash-continued directive
+    ;; 1 when the previous chunk ended inside a backslash-continued directive,
+    ;; 256 + the token of a `//` comment that splices in the next line
     (local $contDirective i32)
     (call $lexEmitLeadingContinuation)
     ;; Resume a construct left open at an escaped line break: the literal
@@ -311,9 +366,8 @@
               (i32.const 2))))))
     (if (local.get $contDirective)
       (then
-        (local.set $lhs (global.get $ptr))
-        (local.set $contDirective (call $cppDirectiveScan (local.get $lhs)))
-        (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))))
+        (local.set $contDirective
+          (call $cppDirective (global.get $ptr) (local.get $contDirective)))))
     (block $done
       (loop $next
         ;; Whitespace remains a gap; a physical newline inside it puts the
@@ -346,14 +400,14 @@
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
           (then
-            (call $lexLineComment
-              (i32.const 2)
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.or
-                  (i32.eq (local.get $c3) (i32.const "/"))
-                  (i32.eq (local.get $c3) (i32.const "!")))))
+            (local.set $contDirective
+              (call $cLineCommentFrom
+                (select
+                  (enum.get $Token.comment.doc)
+                  (enum.get $Token.comment)
+                  (i32.or
+                    (i32.eq (local.get $c3) (i32.const "/"))
+                    (i32.eq (local.get $c3) (i32.const "!"))))))
             (br $next)))
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
@@ -376,9 +430,7 @@
         (if (i32.and (i32.eqz (local.get $midLine)) (i32.eq (local.get $c) (i32.const "#")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (local.set $contDirective (call $cppDirectiveScan (local.get $lhs)))
-            (if (i32.eqz (call $lexEmitIncludeDirective (local.get $lhs) (global.get $ptr)))
-              (then (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))))
+            (local.set $contDirective (call $cppDirective (local.get $lhs) (i32.const 0)))
             (br $tailType)))
 
         ;; ordinary/prefixed/raw strings and character literals
@@ -495,7 +547,17 @@
                                     (enum.get $Token.type)
                                     (local.get $c3))))
                               (else
-                                (if (i32.eq (local.get $c2) (i32.const ":"))
+                                (if
+                                  (if (result i32) (i32.eq (local.get $c2) (i32.const ":"))
+                                    (then
+                                      (local.set $c (call $lexLineByteBefore (local.get $lhs)))
+                                      ;; 0 at the line start; `;` | 0x40 is `{`
+                                      (i32.or
+                                        (i32.or
+                                          (i32.eqz (local.get $c))
+                                          (i32.eq (local.get $c) (i32.const "}")))
+                                        (i32.eq (i32.or (local.get $c) (i32.const 0x40)) (i32.const "{"))))
+                                    (else (i32.const 0)))
                                   (then (local.set $hl (enum.get $Token.label)))
                                   (else
                                     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))

@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.logWords 288)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Month names (+256) count only before a day number.
-  (keyword-table $logWords $mem.logWords $mem.verilogWords
+  (keyword-table $logWords $mem.logWords $mem.logWords+288
     (group $Token.diff.minus
       "error" "err" "fatal" "ftl" "critical" "crit" "severe" "alert" "emerg" "emergency" "panic"
       "fail" "failed" "failure" "traceback")
@@ -200,6 +204,8 @@
                   (br_if $numberDone
                     (i32.eqz (i32.or (byteset.get "+-./:" (local.get $p)) (i32.eq (local.get $p) (i32.const ",")))))
                   (local.set $c (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                  (br_if $numberDone
+                    (i32.and (i32.eq (local.get $p) (i32.const ",")) (i32.eqz (call $lexIsDigit (local.get $c)))))
                   (br_if $numberDone
                     (i32.eqz
                       (i32.or

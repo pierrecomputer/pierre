@@ -137,6 +137,9 @@ test.describe('file-tree drag-and-drop proof', () => {
     );
     await expect(source).toBeVisible();
     await expect(stickyTarget).toBeVisible();
+    // Scrolling temporarily disables pointer events on both the list and
+    // its sticky rows. Start the drag once the target can accept it.
+    await expect(stickyTarget).toHaveCSS('pointer-events', 'auto');
 
     // `locator.dragTo()` dispatches Chromium's native HTML5 drag handshake
     // with the same sequencing Playwright uses in its battle-tested drag

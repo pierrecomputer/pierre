@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -334,6 +334,34 @@ void t.test(
     assertLineFedParity(
       'scss',
       '/* a\n b */\n.x {\n  .y {\n    c: #{$d};\n  }\n  &:hover {\n    e: 1;\n  }\n}\n'
+    );
+  }
+);
+
+void t.test(
+  'scss: `@at-root` takes a selector, or a query in parentheses',
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'scss',
+        '@at-root .child { a: b; }\n@at-root (without: media) {}\n'
+      ),
+      [
+        ['@at-root', 'keyword'],
+        ['.child', 'selector.class'],
+        ['{', 'punctuation.bracket'],
+        ['a', 'property'],
+        [':', 'punctuation.delimiter'],
+        ['b', 'constant.builtin'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+        ['@at-root', 'keyword'],
+        ['(', 'punctuation.bracket'],
+        ['without', 'property'],
+        [':', 'punctuation.delimiter'],
+        ['media', 'constant.builtin'],
+        [') {}', 'punctuation.bracket'],
+      ]
     );
   }
 );

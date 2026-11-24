@@ -1,6 +1,6 @@
 {
   "name": "@pierre/words",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "A fast markdown renderer written in WebAssembly Text.",
   "license": "apache-2.0",
   "files": [
@@ -18,6 +18,12 @@
       "workerd": "./dist/workerd.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./no-math": {
+      "types": "./dist/no-math.d.ts",
+      "workerd": "./dist/no-math-workerd.js",
+      "import": "./dist/no-math.js",
+      "default": "./dist/no-math.js"
     },
     "./react": {
       "types": "./dist/react.d.ts",
@@ -65,10 +71,14 @@
   },
   "peerDependencies": {
     "@pierre/highlights": ">=0.5.1",
-    "react": "^18.3.1 || ^19.0.0"
+    "react": "^18.3.1 || ^19.0.0",
+    "react-dom": "^18.3.1 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "react-dom": {
       "optional": true
     },
     "@pierre/highlights": {

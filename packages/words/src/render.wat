@@ -38,6 +38,8 @@
     (global.set $plain (i32.const 0))
     (global.set $pendingTask (i32.const 0))
     (global.set $fnSkip (i32.const 0))
+    (global.set $allowTop (i32.const 0))
+    (global.set $allowSafe (i32.const 0))
     (if (global.get $mode)
       (then
         (global.set $prefixLen (i32.const 0))
@@ -66,6 +68,7 @@
         (call $renderBlock (local.get $r))
         (local.set $r (i32.add (local.get $r) (i32.load offset=4 (local.get $r))))
         (br $l)))
+    (if (global.get $allowTop) (then (call $allowClose (i32.const -1))))
     (call $renderFootnotes)
     (if (global.get $mode)
       (then
@@ -109,6 +112,7 @@
                 (then (call $renderBlock (local.get $r))))))
             (local.set $r (i32.add (local.get $r) (i32.load offset=4 (local.get $r))))
             (br $body)))
+        (if (global.get $allowTop) (then (call $allowClose (i32.const -1))))
         (if (global.get $mode)
           (then (call $ansiFootnoteClose))
           (else (call $htmlFootnoteClose (i32.add (local.get $i) (i32.const 1)) (local.get $def))))
@@ -123,7 +127,15 @@
     (local.set $flags (i32.load8_u offset=1 (local.get $r)))
     (if (i32.or (i32.eq (local.get $t) (enum.get $Blk.none))
           (i32.eq (local.get $t) (enum.get $Blk.linkdef)))
-      (then (return)))
+      (then
+        ;; With an allowed HTML list, block analysis marks each safe append
+        ;; boundary with an empty record (see $analyze). It counts only
+        ;; where no allowed element is open.
+        (if (i32.and (i32.eq (local.get $flags) (i32.const 3)) (i32.eqz (global.get $allowTop)))
+          (then
+            (global.set $boundaryOut (global.get $out))
+            (global.set $allowSafe (i32.load offset=8 (local.get $r)))))
+        (return)))
     ;; definitions are rendered later, in reference order
     (if (i32.eq (local.get $t) (enum.get $Blk.footnote))
       (then
@@ -139,6 +151,7 @@
         ;; a task box never outlives its item
         (if (i32.eq (local.get $t) (enum.get $Blk.li))
           (then (global.set $pendingTask (i32.const 0))))
+        (if (global.get $allowTop) (then (call $allowClose (global.get $rsp))))
         (if (global.get $mode)
           (then (call $ansiBlockClose (local.get $t)))
           (else (call $htmlBlockClose (local.get $t))))
@@ -338,7 +351,9 @@
         (local.set $p (local.get $markEnd))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br_if $done (i32.ge_u (local.get $p) (global.get $contentLen)))
-        (br $l))))
+        (br $l)))
+    ;; allowed HTML elements of inline content close with their leaf
+    (if (global.get $allowTop) (then (call $allowClose (i32.const 255)))))
 
   (func $renderMark (param $i i32)
     (local $m i32)
@@ -365,6 +380,25 @@
     (local.set $t (i32.load8_u offset=$M.type (local.get $m)))
     (local.set $b (i32.load offset=$M.beg (local.get $m)))
     (local.set $e (i32.load offset=$M.end (local.get $m)))
+    ;; Only parser-produced markers reach the host. Source text is HTML-escaped.
+    (if (i32.eq (local.get $t) (enum.get $Mk.directive))
+      (then
+        (local.set $q (i32.load offset=$M.data (local.get $m)))
+        (if (i32.or (global.get $plain) (i32.eqz (local.get $q)))
+          (then (call $rText (local.get $b) (local.get $e)) (return)))
+        (i32.store8 (i32.const 34) (i32.const 1))
+        (if (i32.lt_s (local.get $q) (i32.const 0))
+          (then
+            ;; A pending placeholder needs only the name and opening bracket.
+            (out.str "<w-i p=\22")
+            (local.set $q (i32.sub (i32.const 0) (local.get $q)))
+            (local.set $e (local.get $q)))
+          (else (out.str "<w-i l=\22")))
+        (call $rText (local.get $b) (local.get $q))
+        (out.str "\22>")
+        (call $rText (local.get $q) (local.get $e))
+        (out.str "</w-i>")
+        (return)))
     (block $emph
      (block $text
       (block $footnote
@@ -461,6 +495,13 @@
             ;; raw HTML: dropped in ANSI, literal text in alt text
             (br_if $text (global.get $plain))
             (if (global.get $mode) (then (return)))
+            (if (global.get $allowAt)
+              (then
+                (call $ensureOut (i32.add
+                  (i32.mul (i32.sub (local.get $e) (local.get $b)) (i32.const 6)) (i32.const 8448)))
+                (drop (call $allowTag (call $contentAt (local.get $b)) (call $contentAt (local.get $e))
+                  (call $contentAt (local.get $e)) (i32.const 1)))
+                (return)))
             (call $ensureOut (i32.add
               (i32.mul (i32.sub (local.get $e) (local.get $b)) (i32.const 4)) (i32.const 64)))
             (call $htmlFiltered2

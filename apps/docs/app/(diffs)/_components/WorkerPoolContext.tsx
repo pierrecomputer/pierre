@@ -8,6 +8,7 @@ import {
 } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
+import { getPreferredDiffLib } from '@/lib/preferredDiffLib';
 import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 function isMobileBrowser(): boolean {
@@ -36,7 +37,7 @@ const WorkerResourceLimits = getWorkerResourceLimits();
 
 // Files and diffs up to this many characters highlight on the main thread,
 // where highlights finishes faster than a worker round trip.
-const MAIN_THREAD_MAX_CHARACTERS = 100_000;
+export const MAIN_THREAD_MAX_CHARACTERS = 100_000;
 
 const PoolOptions: WorkerPoolOptions = {
   // We really shouldn't let the pool get too big...
@@ -61,6 +62,7 @@ const PoolOptions: WorkerPoolOptions = {
 const SITE = process.env.NEXT_PUBLIC_SITE;
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
+  preferredDiffLib: getPreferredDiffLib(),
   preferredHighlighter: getPreferredHighlighter(),
   // diffshub intentionally previews on the soft Pierre pair (a deliberate
   // product choice) even though the canonical default is the non-soft pair.

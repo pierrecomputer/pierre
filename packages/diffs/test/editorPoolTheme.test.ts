@@ -52,23 +52,28 @@ test('File edit mode works when the pool theme differs from component options', 
   // Fresh shared highlighter so only the pool-configured theme gets loaded —
   // the state a WorkerPoolContextProvider host starts from.
   await disposeHighlighter();
-  const { manager } = await createInitializedManager({ theme: 'github-dark' });
+  const { manager } = await createInitializedManager({
+    theme: 'github-dark',
+    useTokenTransformer: true,
+  });
   const editor = new Editor('file');
   let instance: File<undefined> | undefined;
   try {
     // Component options stay untouched: the default pierre-* themes.
-    instance = new File<undefined>({ disableFileHeader: true }, manager);
+    instance = new File<undefined>(
+      { disableFileHeader: true, useTokenTransformer: true },
+      manager
+    );
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
     instance.render({
-      file: {
-        name: 'demo.ts',
-        contents: 'const a = 1;\n',
-        cacheKey: 'pool-theme:file',
-      },
+      // No cache key, so the session does not wait for the pool and the
+      // editor's local highlight resolves the theme itself.
+      file: { name: 'demo.ts', contents: 'const a = 1;\n' },
       fileContainer,
       forceRender: true,
     });
+    await instance.prepareForEditing();
     editor.edit(instance);
     const content = await waitForEditable(fileContainer);
     expect(content.getAttribute('role')).toBe('textbox');
@@ -83,29 +88,31 @@ test('File edit mode works when the pool theme differs from component options', 
 test('FileDiff edit mode works when the pool theme differs from component options', async () => {
   const dom = installDom();
   await disposeHighlighter();
-  const { manager } = await createInitializedManager({ theme: 'github-dark' });
+  const { manager } = await createInitializedManager({
+    theme: 'github-dark',
+    useTokenTransformer: true,
+  });
   const editor = new Editor('file-diff');
   let instance: FileDiff<undefined> | undefined;
   try {
     instance = new FileDiff<undefined>(
-      { disableFileHeader: true, diffStyle: 'split' },
+      {
+        disableFileHeader: true,
+        diffStyle: 'split',
+        useTokenTransformer: true,
+      },
       manager
     );
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
+    // No cache keys, so the session does not wait for the pool and the
+    // editor's local highlight resolves the theme itself.
     const fileDiff = parseDiffFromFile(
-      {
-        name: 'demo.ts',
-        contents: 'const value = "old";\n',
-        cacheKey: 'pool-theme:old',
-      },
-      {
-        name: 'demo.ts',
-        contents: 'const value = "new";\n',
-        cacheKey: 'pool-theme:new',
-      }
+      { name: 'demo.ts', contents: 'const value = "old";\n' },
+      { name: 'demo.ts', contents: 'const value = "new";\n' }
     );
     instance.render({ fileDiff, fileContainer, forceRender: true });
+    await instance.prepareForEditing();
     editor.edit(instance);
     const content = await waitForEditable(fileContainer);
     expect(content.getAttribute('role')).toBe('textbox');

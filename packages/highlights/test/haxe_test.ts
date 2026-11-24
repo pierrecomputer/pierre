@@ -107,3 +107,26 @@ test('haxe: strings, interpolations, and comments span lines', () => {
     'variable',
   ]);
 });
+
+test('haxe: a comment opener ends an operator run', () => {
+  const code = "var a = b +// don't\n  c;\nvar d = e =/* x' */ 1;\n";
+  expect(tokenKinds('haxe', code)).toEqual([
+    ['var', 'keyword.declaration'],
+    ['a', 'variable'],
+    ['=', 'operator'],
+    ['b', 'variable'],
+    ['+', 'operator'],
+    ["// don't", 'comment'],
+    ['c', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['d', 'variable'],
+    ['=', 'operator'],
+    ['e', 'variable'],
+    ['=', 'operator'],
+    ["/* x' */", 'comment'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('haxe', code);
+});

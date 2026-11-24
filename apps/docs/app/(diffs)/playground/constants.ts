@@ -8,6 +8,7 @@ import type { PreloadFileDiffOptions } from '@pierre/diffs/ssr';
 
 import type { PlaygroundUrlState } from './searchParams';
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import { DEFAULT_PARSE_DIFF_OPTIONS } from '@/lib/preferredDiffLib';
 
 export interface PlaygroundAnnotationMetadata {
   key: string;
@@ -161,7 +162,8 @@ const PLAYGROUND_FILE_DIFF = parseDiffFromFile(
     name: 'api/users.ts',
     contents: OLD_USERS_CONTENT,
   },
-  PLAYGROUND_FILE
+  PLAYGROUND_FILE,
+  DEFAULT_PARSE_DIFF_OPTIONS
 );
 
 PLAYGROUND_FILE_DIFF.cacheKey = 'playground:users-diff';
@@ -189,6 +191,7 @@ export function getPlaygroundPreloadOptions(
   return {
     fileDiff: PLAYGROUND_FILE_DIFF,
     options: {
+      parseDiffOptions: DEFAULT_PARSE_DIFF_OPTIONS,
       theme: { dark: state.darkTheme, light: state.lightTheme },
       themeType: state.colorMode,
       diffStyle: state.diffStyle,
@@ -416,7 +419,8 @@ function variantDiff(base: BaseDiff, index: number): FileDiffMetadata {
   const name = variantName(base.name, index);
   return parseDiffFromFile(
     { name, contents: base.oldContents },
-    { name, contents: base.newContents }
+    { name, contents: base.newContents },
+    DEFAULT_PARSE_DIFF_OPTIONS
   );
 }
 
@@ -567,7 +571,7 @@ function longFixtureDiff(): FileDiffMetadata {
   return parseDiffFromFile(
     { name: LONG_FIXTURE_NAME, contents: LONG_FIXTURE_CONTENTS.oldContents },
     { name: LONG_FIXTURE_NAME, contents: LONG_FIXTURE_CONTENTS.newContents },
-    { context: 8 }
+    { ...DEFAULT_PARSE_DIFF_OPTIONS, context: 8 }
   );
 }
 

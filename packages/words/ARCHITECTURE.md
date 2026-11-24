@@ -28,6 +28,7 @@ UTF-8 input
 | `src/format.wat`                             | Final markup for the HTML renderer             |
 | `src/frontmatter.wat`, `complete.wat`        | YAML frontmatter and unfinished syntax         |
 | `src/math.wat`                               | TeX math to SVG                                |
+| `src/math-none.wat`                          | Replaces `math.wat` in `@pierre/words/no-math` |
 | `tables/`                                    | Entity names, TeX commands, and glyph metrics  |
 | `scripts/build.ts`                           | WAT preprocessor and compiler                  |
 | `lib/`                                       | Wasm loaders, byte APIs, and HTML sessions     |
@@ -204,9 +205,17 @@ and renderer bundles; public result types and enumerable string keys stay
 unchanged. Each result still provides independent full HTML through lazy
 getters.
 
-An edit, a changed `incomplete` option, a BOM at the boundary, or a link or
-footnote definition resets the session. Definitions can change earlier output,
-so those documents always render in full.
+With an `allowedHtml` list, an allowed element can stay open across a blank
+line, so block analysis cannot place the boundary alone. It writes an empty
+record at each candidate, and the renderer takes the last one where no allowed
+element is open. Open elements close with their leaf, container, or the
+document, so pending HTML is always balanced and the boundary output matches a
+full render. The host packs the list after the id prefix (control bytes 44 to
+47); without it, none of this runs.
+
+An edit, a changed `incomplete` or `allowedHtml` option, a BOM at the boundary,
+or a link or footnote definition resets the session. Definitions can change
+earlier output, so those documents always render in full.
 
 [`complete.wat`](./src/complete.wat) repairs a display copy of unfinished
 syntax. It never changes the source. It runs after block analysis and looks only
@@ -231,8 +240,8 @@ bits (control byte 26) and the escaped id prefix. Public sessions and
 - A URL hook (`urlTransform`). Wasm then leaves URLs unchecked, and the host
   checks the result of the hook.
 - Element filters, code plugins, and custom code renderers. Wasm then writes
-  each code block in slots: the language, the markup before `<code>`, the
-  `<code>` tag, and the escaped code, each after a NUL. The output holds no
+  each code block in slots: the language and meta, the markup before `<code>`,
+  the `<code>` tag, and the escaped code, each after a NUL. The output holds no
   other NUL, so a single-character search finds every block.
 - Element hooks, which run last on the finished HTML.
 
@@ -260,10 +269,27 @@ can update single lines and add line numbers as they arrive.
 
 The Highlights plugin uses `codeToHtml` for completed fences. An open fence
 keeps one live tokenizer until its fence leaves the pending output. Completed
-output moves forward without a lookup cache for previously rendered code.
+output moves forward without a lookup cache for previously rendered code. A
+language from `registerLanguages` uses it too. The live tokenizer keeps escape
+sequences as text, so an open `ansi` fence renders again with `codeToHtml` on
+each update.
 
 React owns one container for server output, hydration, and later updates. It
 does not reconcile individual Markdown nodes.
+
+For inline islands the host sends a length-prefixed list of opted-in names. The
+inline scanner and the completion pass use the same directive boundaries, so
+incomplete-Markdown repair cannot turn part of a label into a link. The
+formatter receives escaped label and attribute spans, checks the island’s
+payload, and emits inline portal targets inside the surrounding paragraph.
+
+With an island registry, Wasm passes fences whose language starts with `island-`
+to the host formatter. Ordinary closed fences stay in Wasm unless a plugin or
+filter needs their contents. For an accepted island, the formatter emits a
+portal target and text fallback. The DOM patcher keeps the hosts in committed
+blocks and looks for new hosts only in patched blocks whose HTML contains an
+island. When an edit moves an island, the patcher preserves its portal target by
+id so the React component retains its state and context.
 
 ## Constraints
 
@@ -282,8 +308,9 @@ does not reconcile individual Markdown nodes.
 - Limits: 250 container levels, 999 characters per link or footnote label, nine
   digits per ordered-list start, 512 table columns, 255 backticks per code span,
   256 open brackets per leaf, 64 open delimiter runs in the block that
-  completion repairs, 4,096 bytes of escaped id prefix, and 1,073,414,144 bytes
-  (2^30 − 320 KiB) of input.
+  completion repairs, 4,096 bytes shared by the escaped id prefix, the packed
+  `allowedHtml` list, and inline island registry, 32 open allowed elements, and
+  1,073,414,144 bytes (2^30 − 320 KiB) of input.
 - A table closes after a row takes it past 524,288 auto-filled cells, matching
   cmark-gfm. Later lines parse as normal Markdown. Supplied cells do not count
   toward this limit.

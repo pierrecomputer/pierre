@@ -1,12 +1,16 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.dWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Each group's value is its token; the high byte marks what follows:
   ;; 1 the next name is a type, 2 names are module path parts until `;` or
   ;; `:`, 3 the word acts as a type, so `name(` after it defines a function.
   ;; `__FILE__` and the other special tokens share hash features, so
   ;; $dWordKind matches them by shape instead.
-  (keyword-table $dWords $mem.dWords $mem.llvmWords
+  (keyword-table $dWords $mem.dWords $mem.dWords+384
     (group $Token.keyword.control
       "if" "do" "for" "try" "case" "else" "goto" "with" "break" "catch" "throw" "while"
       "return" "switch" "default" "finally" "foreach" "continue" "foreach_reverse")
@@ -64,20 +68,127 @@
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (i32.const 1))
 
-  ;; Scan a `q{...}` token string from $ptr at brace depth $depth and emit it
-  ;; as one string. Returns the depth still open at $end, or 0 when closed.
+  ;; Bits 16+ of $depth: 1 an open `"` string, 2 a backtick string, 3 a `/*`
+  ;; comment, 4+n a `/+` comment nested n deep. Returns the depth still open at $end, or 0.
   (func $dTokenString (param $depth i32) (result i32)
     (local $lhs i32)
+    (local $c i32)
+    (local $k i32)
+    (local $stop i32)
     (local.set $lhs (global.get $ptr))
     (block $done
       (loop $scan
-        (global.set $ptr (call $lexFindEither (global.get $ptr) (i32.const "{") (i32.const "}")))
+        (local.set $k (i32.shr_u (local.get $depth) (i32.const 16)))
+        (if (local.get $k)
+          (then
+            (block $closed
+              (if (i32.eq (local.get $k) (i32.const 1))
+                (then
+                  (loop $str
+                    (global.set $ptr
+                      (call $scanFindSpecial
+                        (global.get $ptr)
+                        (global.get $end)
+                        (i32.const 34)
+                        (i32.const 1)
+                        (i32.const 0)))
+                    (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (br_if $closed
+                      (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 34)))
+                    (global.set $ptr
+                      (i32.add (global.get $ptr) (i32.lt_u (global.get $ptr) (global.get $end))))
+                    (br $str))))
+              (if (i32.eq (local.get $k) (i32.const 2))
+                (then
+                  (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "`")))
+                  (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+                  (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                  (br $closed)))
+              (if (i32.eq (local.get $k) (i32.const 3))
+                (then
+                  (local.set $c (global.get $ptr))
+                  (call $scanBlockCommentEnd)
+                  (br_if $closed
+                    (i32.and
+                      (i32.ge_u (global.get $ptr) (i32.add (local.get $c) (i32.const 2)))
+                      (i32.eq (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a))))
+                  (br $done)))
+              (loop $nest
+                (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+                (local.set $c (i32.load8_u (global.get $ptr)))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $k (call $templateByte (global.get $ptr)))
+                (if (i32.and (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $k) (i32.const "/")))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (local.set $depth (i32.sub (local.get $depth) (i32.const 0x10000)))
+                    (br_if $closed (i32.lt_u (local.get $depth) (i32.const 0x50000)))))
+                (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $k) (i32.const "+")))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (local.set $depth (i32.add (local.get $depth) (i32.const 0x10000)))))
+                (br $nest)))
+            (local.set $depth (i32.and (local.get $depth) (i32.const 0xffff)))))
+        ;; the next brace or `"` is searched once per pass over it, so `/` and
+        ;; `'` stops in a long token string stay linear
+        (if (i32.gt_u (global.get $ptr) (local.get $stop))
+          (then
+            (local.set $stop
+              (call $scanFind3 (global.get $ptr) (i32.const "{") (i32.const "}") (i32.const 34)))))
+        (local.set $k (global.get $end))
+        (global.set $end (local.get $stop))
+        (global.set $ptr (call $scanFind3 (global.get $ptr) (i32.const 39) (i32.const "`") (i32.const "/")))
+        (global.set $end (local.get $k))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (if (i32.eq (local.get $c) (i32.const "/"))
+          (then
+            (local.set $k (call $templateByte (global.get $ptr)))
+            (if (i32.eq (local.get $k) (i32.const "/"))
+              (then (call $scanToLineEnd)))
+            (if (i32.or (i32.eq (local.get $k) (i32.const "*")) (i32.eq (local.get $k) (i32.const "+")))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $depth
+                  (i32.add
+                    (local.get $depth)
+                    (select (i32.const 0x30000) (i32.const 0x50000) (i32.eq (local.get $k) (i32.const "*")))))))
+            (br $scan)))
+        (if (i32.eq (local.get $c) (i32.const 39))
+          (then
+            (loop $char
+              (global.set $ptr
+                (call $scanFindSpecial
+                  (global.get $ptr)
+                  (global.get $end)
+                  (i32.const 39)
+                  (i32.const 1)
+                  (i32.const 1)))
+              (br_if $scan (i32.ge_u (global.get $ptr) (global.get $end)))
+              (local.set $c (i32.load8_u (global.get $ptr)))
+              (br_if $scan (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+              (br_if $scan (i32.eq (local.get $c) (i32.const 39)))
+              (local.set $c (call $templateByte (global.get $ptr)))
+              (global.set $ptr
+                (i32.add
+                  (global.get $ptr)
+                  (i32.and
+                    (i32.lt_u (global.get $ptr) (global.get $end))
+                    (i32.and (i32.ne (local.get $c) (i32.const 10)) (i32.ne (local.get $c) (i32.const 13))))))
+              (br $char))))
         (local.set $depth
           (i32.add
             (local.get $depth)
-            (select (i32.const 1) (i32.const -1) (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "{")))))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (select
+              (i32.const 0x10000)
+              (select
+                (i32.const 0x20000)
+                (select (i32.const 1) (i32.const -1) (i32.eq (local.get $c) (i32.const "{")))
+                (i32.eq (local.get $c) (i32.const "`")))
+              (i32.eq (local.get $c) (i32.const 34)))))
         (br_if $scan (local.get $depth))))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
     (local.get $depth))
@@ -218,6 +329,8 @@
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (local.set $dq (call $dStringBody (local.get $lhs)))
+            (local.set $afterType (i32.const 0))
+            (local.set $member (i32.const 0))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then

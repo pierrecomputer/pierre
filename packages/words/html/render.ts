@@ -16,6 +16,13 @@ import {
   isNameCode,
   unchangedEnd,
 } from '../lib/utils';
+import {
+  formatInlineIslands,
+  formatIsland,
+  formatIslandPending,
+  inlineIslandNames,
+  islandFor,
+} from './islands';
 import type {
   CodeHighlighterSession,
   CodeHighlightUpdate,
@@ -158,7 +165,8 @@ function mapElements(
   tag: string,
   transform: (html: string) => string
 ): string {
-  const expression = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'g');
+  // Kept raw tags such as `<a-card>` may start with the name.
+  const expression = new RegExp(`<(/?)${tag}(?=[ />])[^>]*>`, 'g');
   const voidTag = voidTags.has(tag);
   const open: string[] = [];
   let result = '';
@@ -246,12 +254,19 @@ function transformUrls(html: string, options: HtmlOptions): string {
 /** Format session output with HTML options. Keeps at most one live highlighter. */
 export function createHtmlRenderer(options: HtmlOptions = {}) {
   let parser = createHtmlSession();
+  let inlineNames = inlineIslandNames(options.islands);
+  let sawInlineIsland = false;
   // Formatted completed HTML and the Wasm HTML it was formatted from.
   let stable = '';
   let stableRaw = '';
   let nextCode = 0;
   let live:
-    | { session: CodeHighlighterSession; index: number; language: string }
+    | {
+        session: CodeHighlighterSession;
+        index: number;
+        language: string;
+        meta: string;
+      }
     | undefined;
   let liveUses = 0;
   let previousUpdate: HtmlUpdate | undefined;
@@ -271,12 +286,12 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   let pendingHtml = '';
   let pendingParagraph: { body: string } | undefined;
   let pendingFence: InternalCodeUpdate | undefined;
-  // Whether Wasm writes every code block in slots, not only the open fence.
-  let allSlots = false;
+  // Whether completed output can contain slots as well as the open fence.
+  let closedSlots = false;
   // Raw end, formatted end, and next code index at fences in the current pending output.
   let pendingFences: number[] = [];
-  // Completed fence output by language and code: highlighted HTML, or what a
-  // renderer returned. Resets keep only the fences they reuse.
+  // Completed fence output by language, meta, and code: highlighted HTML, or
+  // what a renderer returned. Resets keep only the fences they reuse.
   let codeCache = new Map<string, string | null>();
   let oldCodeCache = new Map<string, string | null>();
   // The open fence, the formatted HTML around it, and its previous escaped and decoded code.
@@ -311,6 +326,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
   const resetState = (): void => {
     dispose();
     parser = createHtmlSession();
+    sawInlineIsland = false;
     stable = '';
     stableRaw = '';
     nextCode = 0;
@@ -360,6 +376,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     let dropped = 0;
     /** Apply the element filters, then the URL hook, to HTML between code blocks. */
     const pass = (html: string): string => {
+      if (sawInlineIsland && options.islands !== undefined)
+        html = formatInlineIslands(html, options.islands);
       if (filtered) {
         let result = '';
         let from = 0;
@@ -425,23 +443,47 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         continue;
       }
       const isIncomplete = input.charCodeAt(at + 1) === 50;
+      // The language, then a space and the meta when the block has one.
+      const space = input.indexOf(' ', at + 2);
+      const split = space === -1 || space > open ? open : space;
       const language =
-        open === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, open));
+        split === at + 2 ? 'text' : decodeHtml(input.slice(at + 2, split));
+      const meta =
+        split === open ? '' : decodeHtml(input.slice(split + 1, open));
       const number = index++;
+      const island =
+        filtered && excluded('div')
+          ? undefined
+          : islandFor(options.islands, language);
+      if (island !== undefined) {
+        if (isIncomplete) {
+          html += formatIslandPending(island.pending);
+          continue;
+        }
+        // A paused but still open fence stays code.
+        if (input.charCodeAt(at + 1) === 48) {
+          const block = formatIsland(island, language, decodeHtml(content));
+          if (block !== undefined) {
+            html += block;
+            fences?.push(cursor, html.length, index);
+            continue;
+          }
+        }
+      }
       const custom = rendererFor(options.plugins, language);
       if (custom !== undefined) {
         let code = decodeHtml(content);
         // Open code ends with an added LF. Drop it from a partial line.
         if (isIncomplete && partial) code = code.slice(0, -1);
         // The leading NUL keeps these keys apart from the highlighter's.
-        const key = '\0' + language + '\0' + code;
+        const key = '\0' + language + '\0' + meta + '\0' + code;
         let block = isIncomplete
           ? undefined
           : codeCache.has(key)
             ? codeCache.get(key)
             : oldCodeCache.get(key);
         if (block === undefined)
-          block = custom.render({ code, language, isIncomplete });
+          block = custom.render({ code, language, meta, isIncomplete });
         if (!isIncomplete) codeCache.set(key, block);
         // A renderer that returns null shows the code block.
         if (block !== null) {
@@ -465,17 +507,19 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         }
       }
       const plugin = options.plugins?.code;
-      // Only a different open fence replaces the live highlighter.
+      // A new open fence, language, or meta replaces the live highlighter.
       if (isIncomplete) {
         if (
           live !== undefined &&
-          (live.index !== number || live.language !== language)
+          (live.index !== number ||
+            live.language !== language ||
+            live.meta !== meta)
         )
           dispose();
         if (live === undefined) {
           const session = plugin?.createSession?.();
           if (session !== undefined)
-            live = { session, index: number, language };
+            live = { session, index: number, language, meta };
         }
       }
       let highlighted: string | null | undefined;
@@ -484,16 +528,22 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         highlighted = live.session.highlight({
           code: decodeHtml(content),
           language,
+          meta,
           isIncomplete,
         });
       } else if (plugin !== undefined) {
         const code = decodeHtml(content);
-        const key = language + '\0' + code;
+        const key = language + '\0' + meta + '\0' + code;
         highlighted = isIncomplete
           ? undefined
           : (codeCache.get(key) ?? oldCodeCache.get(key));
         if (highlighted === undefined) {
-          highlighted = plugin.highlight({ code, language, isIncomplete });
+          highlighted = plugin.highlight({
+            code,
+            language,
+            meta,
+            isIncomplete,
+          });
           if (!isIncomplete && typeof highlighted === 'string')
             codeCache.set(key, highlighted);
         } else codeCache.set(key, highlighted);
@@ -520,12 +570,14 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     html += pass(input.slice(cursor));
     for (const [tag, render] of Object.entries(options.components ?? {})) {
-      // An element hook has a tag name: lowercase letters, then digits too.
+      // An element hook has a tag name: a lowercase letter, then lowercase
+      // letters, digits, or `-`, as in `allowedHtml`.
       let named = tag !== '';
       for (let at = 0; named && at < tag.length; at++) {
         const code = tag.charCodeAt(at);
         named =
-          (code >= 97 && code <= 122) || (at > 0 && code >= 48 && code <= 57);
+          (code >= 97 && code <= 122) ||
+          (at > 0 && ((code >= 48 && code <= 57) || code === 45));
       }
       if (render === undefined || (!named && tag !== 'inlineCode')) continue;
       const inline = tag === 'inlineCode';
@@ -588,13 +640,13 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           input.slice(pendingFences[at]),
           pendingFences[at + 2],
           undefined,
-          allSlots
+          closedSlots
         );
         return [pendingHtml.slice(0, pendingFences[at + 1]) + tail, next];
       }
     }
     // Completed output never holds the open fence.
-    return format(input, firstCode, undefined, allSlots);
+    return format(input, firstCode, undefined, closedSlots);
   };
 
   /**
@@ -613,9 +665,16 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     const tag = input.indexOf('\0', open + 1);
     const body = input.indexOf('\0', tag + 1) + 1;
     const end = input.indexOf('\0', body);
+    const space = input.indexOf(' ', start + 2);
+    const split = space === -1 || space > open ? open : space;
     const language =
-      open === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, open));
-    if (rendererFor(options.plugins, language) !== undefined) return;
+      split === start + 2 ? 'text' : decodeHtml(input.slice(start + 2, split));
+    const meta = split === open ? '' : decodeHtml(input.slice(split + 1, open));
+    if (
+      islandFor(options.islands, language) !== undefined ||
+      rendererFor(options.plugins, language) !== undefined
+    )
+      return;
     const plugin = options.plugins?.code;
     const prefix = input.slice(0, start);
     const suffix = input.slice(end + 1 + codeEnd.length);
@@ -629,7 +688,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
       codeTag !== fence.code ||
       firstCode !== fence.firstCode
     ) {
-      const [before, index] = format(prefix, firstCode, undefined, allSlots);
+      const [before, index] = format(prefix, firstCode, undefined, closedSlots);
       fence = {
         key: ++fenceKey,
         prefix,
@@ -639,7 +698,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         firstCode,
         index,
         before,
-        after: format(suffix, index + 1, undefined, allSlots)[0],
+        after: format(suffix, index + 1, undefined, closedSlots)[0],
         highlighted: false,
         escaped: undefined,
         start: 0,
@@ -650,13 +709,15 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (
       live !== undefined &&
-      (live.index !== fence.index || live.language !== language)
+      (live.index !== fence.index ||
+        live.language !== language ||
+        live.meta !== meta)
     )
       dispose();
     if (live === undefined && plugin !== undefined) {
       const session = plugin.createSession?.();
       if (session !== undefined)
-        live = { session, index: fence.index, language };
+        live = { session, index: fence.index, language, meta };
     }
     // Plugins without line updates re-highlight the whole fence through format().
     if (plugin !== undefined && live?.session.highlightLines === undefined)
@@ -694,8 +755,12 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     }
     if (live !== undefined) liveUses++;
     let lines =
-      live?.session.highlightLines?.({ code, language, isIncomplete: true }) ??
-      null;
+      live?.session.highlightLines?.({
+        code,
+        language,
+        meta,
+        isIncomplete: true,
+      }) ?? null;
     // Highlighted and plain lines are different markup for the same code.
     if (fence.highlighted !== (lines !== null)) {
       fence.highlighted = lines !== null;
@@ -796,6 +861,8 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
     /** Change options. A reset discards completed output and reformats it. */
     configure(next: HtmlOptions, reset = true): void {
       if (reset) resetState();
+      if (next.islands !== options.islands)
+        inlineNames = inlineIslandNames(next.islands);
       options = next;
     },
     render(
@@ -810,16 +877,18 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
         const controls = controlFlags(options.controls);
         const plugins = options.plugins;
         // Plugins and filters need code blocks in slots.
-        allSlots =
+        const allSlots =
           plugins?.code !== undefined ||
           plugins?.mermaid !== undefined ||
           (plugins?.renderers?.length ?? 0) > 0 ||
           options.allowedElements !== undefined ||
           options.disallowedElements !== undefined;
+        closedSlots = allSlots || options.islands !== undefined;
         const sessionOptions: InternalSessionOptions = {
           incomplete,
           cjk: options.cjk,
           math: options.math,
+          allowedHtml: options.allowedHtml,
           escapeHtml: options.escapeHtml,
           [formatKey]: {
             flags:
@@ -828,15 +897,24 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
               ((controls & 1) === 0 ? 0 : formatFlags.copy) |
               ((controls & 2) === 0 ? 0 : formatFlags.download) |
               (active ? formatFlags.active : 0) |
-              (allSlots ? formatFlags.slots : 0) |
+              (allSlots
+                ? formatFlags.slots
+                : options.islands !== undefined
+                  ? formatFlags.islands
+                  : 0) |
               (options.urlTransform === undefined ? 0 : formatFlags.rawUrls),
             idPrefix: escapeHtml(options.idPrefix ?? ''),
+            inlineNames,
           },
         };
-        const update = parser.render(source, sessionOptions);
-        const change = (update as InternalHtmlUpdate)[delta];
-        const slots =
-          allSlots || (update as InternalHtmlUpdate)[formatKey] === true;
+        const update = parser.render(
+          source,
+          sessionOptions
+        ) as InternalHtmlUpdate;
+        // Cached prefixes can still contain earlier markers after the tail turns literal.
+        if (update.hasInlineIslands === true) sawInlineIsland = true;
+        const change = update[delta];
+        const slots = closedSlots || update[formatKey] === true;
         const fenceDelta = typeof change === 'object' ? change : undefined;
         const paragraphDelta = typeof change === 'string' ? change : undefined;
         if (
@@ -974,7 +1052,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
             if (pendingSource !== undefined) {
               pendingRaw = pendingSource.pending;
               pendingSlots =
-                allSlots ||
+                closedSlots ||
                 (pendingSource as InternalHtmlUpdate)[formatKey] === true;
               pendingSource = undefined;
             }

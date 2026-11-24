@@ -60,6 +60,34 @@ attributes, such as `className`. React supplies a unique `idPrefix` by default.
 The component supports server output and hydration. Keep the initial source and
 options consistent between server and client.
 
+#### Reactive islands
+
+Pass an `islands` registry to mount React components from fenced blocks. The
+fence language is `island-NAME`, and the body is a JSON object with a nonempty
+string `id`. Keep the id stable and unique in the document so the component
+keeps its state across updates. A repeated id shows its fallback.
+
+````md
+```island-counter
+{"id":"article-votes","label":"Votes"}
+```
+````
+
+<DocsCodeExample {...wordsIslands} />
+
+`render(data)` validates the data and returns an element, or `null` to show the
+source as code. Put hooks in the component it returns. A closed fence shows
+`fallback` on the server and mounts on the client while the stream continues. An
+open fence is hidden while it streams. Set `pending` to text or to
+`{ className, label? }` to show a placeholder. An invalid payload or an
+unregistered name renders as code.
+
+Set `inline: true` on an entry to also accept a directive in prose, such as
+`:file[inline.wat]{path="src/inline.wat"}`. The component gets the label as
+`data.label` and each attribute as a string. Without an explicit `id`, Words
+derives one from the directive content. Inline names share the 4,096-byte
+`idPrefix` limit.
+
 ### DOM rendering
 
 Use `createDomRenderer(root, options)` from `@pierre/words/html` to patch an
@@ -82,7 +110,8 @@ container to release event listeners and the live highlighter.
 <span id="words-html-and-dom" />
 
 Use `createHtmlRenderer()` from `@pierre/words/html` to produce HTML strings on
-the server or in the browser. It omits raw HTML, checks URLs, and supports
+the server or in the browser. It omits raw HTML, except tags listed in
+`allowedHtml`, checks URLs, and supports
 [hooks and plugins](#words-api-reference-customize-the-output). For a complete
 document, call `renderer.render(source, false).html`.
 
@@ -108,14 +137,15 @@ into UTF-8 HTML. The input can be a string, a UTF-8 `Uint8Array`, or an
 The returned `Uint8Array` shares WebAssembly memory. Decode it or copy it before
 another render can overwrite the bytes or detach the view.
 
-| HTML option   | Default | Behavior                                             |
-| ------------- | ------- | ---------------------------------------------------- |
-| `skipHtml`    | `false` | Omit raw HTML.                                       |
-| `escapeHtml`  | `false` | Show raw HTML as escaped text. Wins over `skipHtml`. |
-| `incomplete`  | `false` | Repair common unfinished inline syntax for display.  |
-| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`.  |
-| `math`        | `false` | Render [TeX as SVG](#words-math-rendering).          |
-| `cjk`         | `false` | Enable [CJK-friendly emphasis](#words-cjk-support).  |
+| HTML option   | Default | Behavior                                                        |
+| ------------- | ------- | --------------------------------------------------------------- |
+| `skipHtml`    | `false` | Omit raw HTML.                                                  |
+| `allowedHtml` |         | Keep only these raw HTML tags and attributes.                   |
+| `escapeHtml`  | `false` | Show raw HTML as escaped text. Overrides the two options above. |
+| `incomplete`  | `false` | Repair common unfinished inline syntax for display.             |
+| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`.             |
+| `math`        | `false` | Render [TeX as SVG](#words-math-rendering).                     |
+| `cjk`         | `false` | Enable [CJK-friendly emphasis](#words-cjk-support).             |
 
 `renderToHtml()` preserves raw HTML by default. Sanitize output from untrusted
 Markdown before inserting it into a page. Links and images still need URL
@@ -181,9 +211,10 @@ replace the pending part with `pending`. The DOM renderer handles this for you.
 
 Sessions reuse completed blocks. Edits, changes to parser options, and link or
 footnote definitions can require a full render. Session results are strings that
-stay valid after later calls. Sessions omit raw HTML, or show it as text with
-`escapeHtml: true`, and preserve Markdown URLs. Sanitize the output before
-inserting untrusted content into a page.
+stay valid after later calls. Sessions omit raw HTML, except tags listed in
+`allowedHtml`, or show it as text with `escapeHtml: true`. They preserve
+Markdown URLs. Sanitize the output before inserting untrusted content into a
+page.
 
 ### Syntax highlighting
 
@@ -196,9 +227,10 @@ Pass a theme object from `@pierre/highlights/themes`, not a theme name. The
 plugin accepts `theme` or `themes` and the Highlights HTML theme options. See
 [Highlights themes](#highlights-themes).
 
-Unsupported languages render as plain code. An open fence uses an incremental
-tokenizer. The renderer releases it when the fence closes or disappears. The
-same `plugins` object works with the HTML and DOM renderers.
+Unsupported languages render as plain code. To add a language, register a custom
+lexer with `registerLanguages()` from `@pierre/highlights`. An open fence uses
+an incremental tokenizer. The renderer releases it when the fence closes or
+disappears. The same `plugins` object works with the HTML and DOM renderers.
 
 ### Mermaid diagrams
 
@@ -246,6 +278,11 @@ block without blank lines, or a `math` code fence.
 
 During a stream, inline math stays as text until the closing delimiter. Open
 display blocks can show partial formulas.
+
+An app that renders no TeX can import `renderToHtml()`, `renderToAnsi()`, and
+`createHtmlSession()` from `@pierre/words/no-math` instead of `@pierre/words`.
+Its WebAssembly module is about a third smaller, and the `math` option shows
+formulas as code.
 
 ### CJK support
 
@@ -306,23 +343,24 @@ target inline code. This example adds CSS classes and removes image URLs.
 
 **Fenced code.** To replace a whole block, add an entry to `plugins.renderers`
 with a `language` string or array and a
-`render({ code, language, isIncomplete })` method. Return HTML, or return `null`
-to use the code block. Set `frame: true` to keep its header and buttons. Custom
-renderers run before the code highlighter. Use these hooks for extensions. Words
-has no remark or rehype plugin pipeline.
+`render({ code, language, meta, isIncomplete })` method. Return HTML, or return
+`null` to use the code block. Set `frame: true` to keep its header and buttons.
+Custom renderers run before the code highlighter. Use these hooks for
+extensions. Words has no remark or rehype plugin pipeline.
 
-For syntax colors, `plugins.code.highlight({ code, language, isIncomplete })`
-returns escaped HTML for the contents of `<code>`, or `null` for plain text. A
-highlighter can supply `createSession()` with `highlight()` and `dispose()` to
-reuse work across updates.
+For syntax colors,
+`plugins.code.highlight({ code, language, meta, isIncomplete })` returns escaped
+HTML for the contents of `<code>`, or `null` for plain text. A highlighter can
+supply `createSession()` with `highlight()` and `dispose()` to reuse work across
+updates.
 
 <span id="words-html-safety" />
 
-**Untrusted Markdown.** The React, HTML string, and DOM renderers omit raw HTML
-and check link and image URLs. The check allows relative URLs and the `http`,
-`https`, `ftp`, `mailto`, `tel`, and `xmpp` schemes. It blocks network paths
-such as `//host`. Invalid links lose their destination. Invalid images
-disappear.
+**Untrusted Markdown.** The React, HTML string, and DOM renderers omit raw HTML,
+except tags listed in `allowedHtml`, and check link and image URLs. The check
+allows relative URLs and the `http`, `https`, `ftp`, `mailto`, `tel`, and `xmpp`
+schemes. It blocks network paths such as `//host`. Invalid links lose their
+destination. Invalid images disappear.
 
 `urlTransform(url, key)` receives the decoded URL and `'href'` or `'src'`. The
 built-in check still runs on its result. Return `null` or `undefined` to remove

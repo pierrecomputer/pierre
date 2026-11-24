@@ -123,3 +123,52 @@ test('gnuplot: datablocks and continued lines span lines', () => {
   assertLineFedParity('gnuplot', code);
   assertLineFedParity('gnuplot', '$d << EOD\n1 2\nplot x\n');
 });
+
+test('gnuplot: command abbreviations and stats start a command', () => {
+  expect(
+    tokenKinds('gnuplot', "p sin(x) w l\nrep\nstats 'a.dat'\np(x) = x\np = 1")
+  ).toEqual([
+    ['p', 'keyword'],
+    ['sin', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['w l', 'attribute'],
+    ['rep', 'keyword'],
+    ['stats', 'keyword'],
+    ["'a.dat'", 'string'],
+    ['p', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable.parameter'],
+    [')', 'punctuation.bracket'],
+    ['=', 'operator'],
+    ['x', 'variable'],
+    ['p', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+});
+
+test('gnuplot: a comment ending in a backslash joins the next line', () => {
+  const code = '# off: \\\nplot sin(x)\nprint 1\n# a \\\r\n  b\n';
+  expect(tokenKinds('gnuplot', code)).toEqual([
+    ['# off: \\', 'comment'],
+    ['plot sin(x)', 'comment'],
+    ['print', 'keyword'],
+    ['1', 'number'],
+    ['# a \\', 'comment'],
+    ['b', 'comment'],
+  ]);
+  assertLineFedParity('gnuplot', code);
+});
+
+test('gnuplot: a one-letter function call in a plot is not a modifier', () => {
+  expect(tokenKinds('gnuplot', 'plot p(x) w p\n')).toEqual([
+    ['plot', 'keyword'],
+    ['p', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['w p', 'attribute'],
+  ]);
+});

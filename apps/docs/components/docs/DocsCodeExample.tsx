@@ -33,7 +33,9 @@ export function DocsCodeExample<LAnnotation = undefined, Caret = undefined>(
       {...rest}
       prerenderedHTML={
         typeof prerenderedHTML === 'object'
-          ? prerenderedHTML.shared.html + prerenderedHTML.content
+          ? prerenderedHTML.sprite +
+            prerenderedHTML.shared.html +
+            prerenderedHTML.content
           : prerenderedHTML
       }
       className={cn(

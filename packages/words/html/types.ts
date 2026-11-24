@@ -12,7 +12,13 @@ export interface CodeOptions {
    * last line of an open fence has no LF while it is still being written.
    */
   code: string;
+  /** The first word of the info string, or `text` when it has none. */
   language: string;
+  /**
+   * The rest of the info string after the language, trimmed, or `''`. For
+   * ```` ```ts title="a.ts" {3-5} ```` it is `title="a.ts" {3-5}`.
+   */
+  meta: string;
   isIncomplete: boolean;
 }
 
@@ -56,7 +62,7 @@ export interface PluginConfig {
   mermaid?: MermaidPlugin;
   /**
    * Renderers return HTML for a code block, or null to show the code. A closed
-   * block's output is reused while its language and code stay the same.
+   * block's output is reused while its language, meta, and code stay the same.
    */
   renderers?: {
     language: string | string[];
@@ -70,11 +76,31 @@ export interface ControlsConfig {
   code?: boolean | { copy?: boolean; download?: boolean };
 }
 
+export type IslandData = Readonly<{ id: string; [key: string]: unknown }>;
+
+/** Plain loading text or a CSS-styled skeleton with an optional accessible label. */
+export type IslandPending = string | { className: string; label?: string };
+
+export interface HtmlIsland {
+  /** Also accept :name[label]{key="value"} in prose. Render phrasing content. */
+  inline?: boolean;
+  /** Displayed while an island is streaming. Defaults to no content. */
+  pending?: IslandPending;
+  /** Text shown before the island mounts. */
+  fallback?: string;
+  /** Return false to show the original source. */
+  accepts(data: IslandData): boolean;
+}
+
 export interface HtmlOptions {
+  /** Registered island-NAME fences, keyed by NAME. */
+  islands?: Readonly<Record<string, HtmlIsland>>;
   /** CJK-friendly emphasis. See `HtmlSessionOptions.cjk`. */
   cjk?: boolean;
   /** Math as SVG. See `HtmlSessionOptions.math`. */
   math?: boolean;
+  /** Raw HTML tags to keep. See `HtmlSessionOptions.allowedHtml`. */
+  allowedHtml?: Readonly<Record<string, readonly string[]>>;
   /** Raw HTML as escaped text. See `HtmlSessionOptions.escapeHtml`. */
   escapeHtml?: boolean;
   components?: Components;

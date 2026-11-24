@@ -87,6 +87,7 @@ async function createDiffEditorFixture(
   document.body.appendChild(container);
 
   const fileDiff = new TestFileDiff({
+    useTokenTransformer: true,
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle,
@@ -337,8 +338,15 @@ describe('diff editor: empty document', () => {
           (child) => (child as HTMLElement).dataset.line === '2'
         );
         if (diffStyle === 'split') {
-          expect(line1Index).toBeGreaterThanOrEqual(0);
-          expect(line2Index).toBe(line1Index + 1);
+          // Line 1 stays top-aligned. Line 2 is the editor's empty final line,
+          // which renders after the block, past the deletions' buffer.
+          expect(line1Index).toBe(0);
+          expect(
+            content.children[line1Index + 1]?.hasAttribute(
+              'data-content-buffer'
+            )
+          ).toBe(true);
+          expect(line2Index).toBe(line1Index + 2);
         }
         expect(
           container.shadowRoot?.querySelector('[data-caret]') != null
