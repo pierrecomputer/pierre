@@ -61,7 +61,7 @@
   "meta": {
     "emitter.wasm": 6530,
     "emitter.wasm.gz": 3520,
-    "langs.wasm": 355548,
-    "langs.wasm.gz": 168519
+    "langs.wasm": 355587,
+    "langs.wasm.gz": 168546
   }
 }

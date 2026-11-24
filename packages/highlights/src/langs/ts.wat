@@ -8,7 +8,7 @@
     (value 253
       "eof" "invalid" "comment" "multiline_comment" "hash_bang" "string_literal" "backtick"
       "dollar_brace")
-    (value 254 "colon" "question_mark")
+    (value 254 "colon" "question_mark" "hash_identifier")
     (value 255
       "identifier" "ctxword_as" "ctxword_async" "ctxword_await" "ctxword_from" "ctxword_get"
       "ctxword_of" "ctxword_set" "ctxword_abstract" "ctxword_declare" "ctxword_infer" "ctxword_is"
@@ -21,7 +21,6 @@
     (value $Token.number "number_literal" "bigint_literal")
     (value $Token.string.regex "regexp_literal")
     (value $Token.attribute "at_identifier")
-    (value $Token.property "hash_identifier")
     (value $Token.keyword.control
       "keyword_if" "keyword_else" "keyword_switch" "keyword_case" "keyword_default" "keyword_for"
       "keyword_while" "keyword_do" "keyword_return" "keyword_try" "keyword_catch" "keyword_finally"
@@ -530,7 +529,7 @@
     ;; the other ctxwords - as/async/keyof/type/satisfies/is/declare/abstract/
     ;; namespace/readonly/override/infer/get/set - read as keywords before a
     ;; name; `type` introduces a declaration, so it lands in Zed's declaration
-    ;; bucket. Accessors also name private members (`get #x()`), and
+    ;; bucket. Modifiers also precede private members (`async #x()`), and
     ;; `readonly` also marks index signatures and mapped types
     ;; (`readonly [K in T]`)
     (if
@@ -538,11 +537,7 @@
         (i32.or
           (call $isIdentish (local.get $next))
           (i32.or
-            (i32.and
-              (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
-              (i32.or
-                (i32.eq (local.get $t) (enum.get $Lex.ctxword_get))
-                (i32.eq (local.get $t) (enum.get $Lex.ctxword_set))))
+            (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
             (i32.and
               (i32.eq (local.get $next) (enum.get $Lex.l_bracket))
               (i32.and
@@ -950,6 +945,24 @@
             (local.get $next)
             (local.get $lhs)
             (local.get $rhs)))))
+    ;; `#name(` and `#name<T>(` are private methods, like `name(`; other
+    ;; private names are properties
+    (if (i32.eq (local.get $t) (enum.get $Lex.hash_identifier))
+      (then
+        (if (i32.eq (local.get $next) (enum.get $Lex.l_angle))
+          (then
+            (if (call $tsGenericCallAhead)
+              (then (local.set $next (enum.get $Lex.l_paren))))))
+        (if (i32.eq (local.get $next) (enum.get $Lex.l_paren))
+          (then
+            (return
+              (select
+                (enum.get $Token.function.method)
+                (enum.get $Token.function)
+                (i32.or
+                  (i32.eq (local.get $prev) (enum.get $Lex.dot))
+                  (i32.eq (local.get $prev) (enum.get $Lex.question_mark_dot)))))))
+        (return (enum.get $Token.property))))
     ;; `:` before a type name and `?` directly before `:` are TypeScript
     ;; punctuation.special; the word compare only runs for a colon before an
     ;; identifier - wasm i32.and is eager, and this runs for every such token.
