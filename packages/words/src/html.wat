@@ -85,6 +85,8 @@
             (then (call $htmlCodeBlockFmt (local.get $r)))
             (else (call $htmlCodeBlock (local.get $r))))
           (return))
+        ;; escapeHtml: an HTML block is a paragraph of its source text
+        (br_if $p (i32.and (global.get $ext) (i32.const 4)))
         (call $htmlRawBlock (local.get $r))
         (return))
       ;; a tight list item's paragraph has no tags
@@ -95,7 +97,9 @@
           (out.str "<p>")
           (if (global.get $fmt) (then (call $mark (i32.const 1) (i32.const 0))))))
       (call $htmlTaskBox)
-      (call $renderInline (local.get $r))
+      (if (i32.eq (local.get $t) (enum.get $Blk.html))
+        (then (call $rText (i32.const 0) (call $blockContent (local.get $r))))
+        (else (call $renderInline (local.get $r))))
       (if (i32.eqz (local.get $n))
         (then (out.str "</p>\n")))
       (return))

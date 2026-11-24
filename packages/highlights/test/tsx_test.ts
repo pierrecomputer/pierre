@@ -1111,6 +1111,47 @@ void t.test(
   }
 );
 
+void t.test('ts/js: private methods read like plain methods (#1335)', () => {
+  const src =
+    'class A {\n  #f = 1;\n  #watch() {}\n  async #w() {}\n  static #s() {}\n' +
+    '  get #g() {}\n  async *#ag() {}\n' +
+    '  m() { this.#f; this.#watch(); this?.#w(); #f in this }\n}\n';
+  const pick = (kinds: [string, string | null][]) =>
+    kinds.filter(([text]) => /^(#|async$|static$|get$)/.test(text));
+  const expected = [
+    ['#f', 'property'],
+    ['#watch', 'function'],
+    ['async', 'keyword'],
+    ['#w', 'function'],
+    ['static', 'keyword'],
+    ['#s', 'function'],
+    ['get', 'keyword'],
+    ['#g', 'function'],
+    ['async', 'keyword'],
+    ['#ag', 'function'],
+    ['#f', 'property'],
+    ['#watch', 'function.method'],
+    ['#w', 'function.method'],
+    ['#f', 'property'],
+  ];
+  for (const lang of ['ts', 'js'] as const) {
+    assert.deepEqual(pick(tokenKinds(lang, src)), expected, lang);
+    assertLineFedParity(lang, src);
+  }
+  const generic = tokenKinds(
+    'ts',
+    'class B { #t<T>(x: T) {} readonly #r = 1 }'
+  );
+  assert.deepEqual(pick(generic), [
+    ['#t', 'function'],
+    ['#r', 'property'],
+  ]);
+  assert.deepEqual(
+    generic.find(([text]) => text === 'readonly'),
+    ['readonly', 'keyword']
+  );
+});
+
 void t.test(
   'tsx: function declarations name after the function keyword',
   () => {
@@ -1916,10 +1957,10 @@ void t.test('ts: contextual keywords outside the keyword table', () => {
       ['1', 'number'],
       [';', 'punctuation.delimiter'],
       ['get', 'keyword'],
-      ['#x', 'property'],
+      ['#x', 'function'],
       ['() {}', 'punctuation.bracket'],
       ['set', 'keyword'],
-      ['#y', 'property'],
+      ['#y', 'function'],
       ['(', 'punctuation.bracket'],
       ['v', 'variable.parameter'],
       [') {} }', 'punctuation.bracket'],

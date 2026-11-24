@@ -54,6 +54,12 @@ export interface HtmlSessionOptions {
    * Overrides `skipHtml`.
    */
   allowedHtml?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Show raw HTML as escaped text instead of dropping or keeping it. An HTML
+   * block becomes a paragraph of its source text, without Markdown inside
+   * it. Overrides `skipHtml` and `allowedHtml`.
+   */
+  escapeHtml?: boolean;
 }
 
 /** The result of one session render. */

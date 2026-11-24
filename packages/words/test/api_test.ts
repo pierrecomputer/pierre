@@ -1,6 +1,8 @@
 import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { renderToAnsi, renderToHtml } from '../dist/index.js';
 
@@ -155,4 +157,20 @@ void test('import compiles no Wasm; the first render reports a compile error', (
     true,
     '<h1>a</h1>\n',
   ]);
+});
+
+void test('the core entry renders with a module the caller loads', async () => {
+  const {
+    init,
+    renderToHtml: render,
+    canUseWASM,
+  } = await import('@pierre/words/core');
+  const wasm = readFileSync(
+    fileURLToPath(import.meta.resolve('@pierre/words/words.wasm'))
+  );
+  assert.throws(() => render('# a'), /call init\(\)/);
+  assert.equal(canUseWASM(), false);
+  init(new WebAssembly.Module(wasm));
+  assert.equal(canUseWASM(), true);
+  assert.equal(dec.decode(render('# a')), '<h1>a</h1>\n');
 });

@@ -218,21 +218,26 @@ export class Renderer {
       inputLength = input.length;
     }
     this.dv.setUint8(0, mode);
+    const htmlAsText = options?.escapeHtml === true;
     const allowed =
-      options?.allowedHtml === undefined
+      options?.allowedHtml === undefined || htmlAsText
         ? undefined
         : packAllowedHtml(options.allowedHtml);
     this.dv.setUint8(
       1,
       (options?.frontmatter === true ? 1 : 0) |
-        (options?.skipHtml === true || allowed !== undefined ? 2 : 0) |
+        (options?.skipHtml === true || allowed !== undefined || htmlAsText
+          ? 2
+          : 0) |
         (options?.boundary === true ? 8 : 0) |
         (mode === 1 && typeof input !== 'string' ? 32 : 0) |
         (options?.incomplete === true ? 64 : 0)
     );
     this.dv.setUint8(
       31,
-      (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0)
+      (options?.cjk === true ? 1 : 0) |
+        (options?.math === true ? 2 : 0) |
+        (htmlAsText ? 4 : 0)
     );
     this.dv.setUint32(2, inputLength, true);
     const format = options?.format;
@@ -334,26 +339,7 @@ export class Renderer {
   }
 }
 
-/**
- * The renderer of one entry. Each entry (`@pierre/words`, `/no-math`, ...)
- * owns one, so entries loaded together keep their own Wasm build. `load` runs
- * on first use, so an engine without Wasm SIMD fails at the first render, not
- * at import.
- */
-export type State = { renderer?: Renderer; load: () => WebAssembly.Module };
-
-export const getRenderer = (state: State): Renderer =>
-  (state.renderer ??= new Renderer(state.load()));
-
-/** Whether this engine can run the Wasm of an entry. A success keeps it. */
-export function canUseWASM(state: State): boolean {
-  try {
-    getRenderer(state);
-    return true;
-  } catch {
-    return false;
-  }
-}
+type State = { renderer: Renderer };
 
 const tooLarge = () =>
   new RangeError(`input exceeds ${maxInput} bytes of UTF-8`);
@@ -371,22 +357,18 @@ export type RenderToHtml = {
   ): Uint8Array | [T | null, Uint8Array];
 };
 
-export function renderToHtml(
+function html(
   state: State,
   input: Input,
   options?: RenderOptions
 ): Uint8Array | [unknown, Uint8Array] {
-  const { output, meta } = getRenderer(state).render(input, 0, options);
+  const { output, meta } = state.renderer.render(input, 0, options);
   if (options?.frontmatter !== true) return output;
   return [meta != null ? JSON.parse(dec.decode(meta)) : null, output];
 }
 
-export function renderToAnsi(
-  state: State,
-  input: Input,
-  options?: AnsiOptions
-): Uint8Array {
-  return getRenderer(state).render(input, 1, {
+function ansi(state: State, input: Input, options?: AnsiOptions): Uint8Array {
+  return state.renderer.render(input, 1, {
     width: options?.width,
     cjk: options?.cjk,
     math: options?.math,
@@ -397,7 +379,7 @@ export type HtmlSession = {
   render(input: string, options?: HtmlSessionOptions): HtmlUpdate;
 };
 
-export function createHtmlSession(state: State): HtmlSession {
+function session(state: State): HtmlSession {
   let previous = '';
   let stable = '';
   let offset = 0;
@@ -429,10 +411,12 @@ export function createHtmlSession(state: State): HtmlSession {
     render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
-      const renderer = getRenderer(state);
+      const renderer = state.renderer;
       const wanted = options?.incomplete === true;
       const ext =
-        (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);
+        (options?.cjk === true ? 1 : 0) |
+        (options?.math === true ? 2 : 0) |
+        (options?.escapeHtml === true ? 4 : 0);
       const form = options?.[format];
       const list =
         options?.allowedHtml === undefined
@@ -600,6 +584,7 @@ export function createHtmlSession(state: State): HtmlSession {
         incomplete: wanted,
         cjk: (ext & 1) !== 0,
         math: (ext & 2) !== 0,
+        escapeHtml: (ext & 4) !== 0,
         boundary: true,
         format: form,
         allowedHtml: options?.allowedHtml,
@@ -757,3 +742,63 @@ export function createHtmlSession(state: State): HtmlSession {
     },
   };
 }
+
+export type Words = {
+  /** Replace the Wasm module of this entry. */
+  init(module: WebAssembly.Module): Renderer;
+  renderToHtml: RenderToHtml;
+  renderToAnsi(input: Input, options?: AnsiOptions): Uint8Array;
+  /**
+   * Render a growing string to HTML. A session keeps completed HTML and
+   * reparses only the unfinished end.
+   */
+  createHtmlSession(): HtmlSession;
+  /**
+   * Whether this engine can run Words' Wasm, which needs SIMD. Use it to pick a
+   * fallback renderer. It compiles the Wasm once and keeps it for rendering.
+   */
+  canUseWASM(): boolean;
+};
+
+/**
+ * Build the public API around one renderer. Each entry (`@pierre/words`,
+ * `/no-math`, ...) owns one, so entries loaded together keep their own Wasm
+ * build. `load` runs on the first render, so an engine without Wasm SIMD
+ * fails there, not at import. Without `load`, rendering throws until `init()`
+ * is called.
+ */
+export function createWords(load?: () => WebAssembly.Module): Words {
+  let renderer: Renderer | undefined;
+  const state: State = {
+    get renderer() {
+      if (renderer !== undefined) return renderer;
+      if (load === undefined)
+        throw new Error('@pierre/words/core: call init() before rendering');
+      return (renderer = new Renderer(load()));
+    },
+  };
+  return {
+    init: (module) => (renderer = new Renderer(module)),
+    canUseWASM() {
+      try {
+        return state.renderer !== undefined;
+      } catch {
+        return false;
+      }
+    },
+    renderToHtml: ((input: Input, options?: RenderOptions) =>
+      html(state, input, options)) as RenderToHtml,
+    renderToAnsi: (input, options) => ansi(state, input, options),
+    createHtmlSession: () => session(state),
+  };
+}
+
+// `@pierre/words/core`: the root API without the embedded module.
+export type * from './types';
+export const {
+  init,
+  renderToHtml,
+  renderToAnsi,
+  createHtmlSession,
+  canUseWASM,
+} = createWords();

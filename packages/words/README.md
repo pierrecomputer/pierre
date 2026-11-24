@@ -36,6 +36,7 @@ render.
 | `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. `meta` is `null` if there is none. |
 | `skipHtml`    | `false` | Omit raw HTML.                                                                         |
 | `allowedHtml` |         | Keep only these raw HTML tags. See [Raw HTML](#raw-html).                              |
+| `escapeHtml`  | `false` | Show raw HTML as escaped text. See [Raw HTML](#raw-html).                              |
 | `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
 | `math`        | `false` | Render math as SVG. See [Math](#math).                                                 |
 | `cjk`         | `false` | Enable [CJK-friendly emphasis](#cjk-support).                                          |
@@ -80,6 +81,7 @@ normal Markdown.
 | `components`                            | HTML hooks for generated elements, including `inlineCode`.                                    |
 | `math`, `cjk`                           | Render math as SVG, and CJK-friendly emphasis. Default: `false`.                              |
 | `allowedHtml`                           | Raw HTML tags to keep. See [Raw HTML](#raw-html).                                             |
+| `escapeHtml`                            | Show raw HTML as escaped text. See [Raw HTML](#raw-html).                                     |
 | `plugins.code`                          | Code highlighter.                                                                             |
 | `plugins.mermaid`                       | Mermaid diagram renderer. See [Mermaid](#mermaid).                                            |
 | `islands`                               | Registered React components for reactive islands.                                             |
@@ -304,6 +306,11 @@ Element filters and hooks apply to kept tags as to generated ones.
 **Warning:** Other listed attributes keep their values, and `urlTransform` does
 not see kept tags. List only tags and attributes you trust.
 
+`escapeHtml: true` shows raw HTML as escaped text instead, so
+`Use <Stack> for rows` reads as written. An HTML block becomes a paragraph of
+its source text, without Markdown inside it. It overrides `skipHtml` and
+`allowedHtml`.
+
 ## Mermaid
 
 `@pierre/words/mermaid` renders `mermaid` code blocks with
@@ -377,6 +384,27 @@ open blocks return to the parser.
 `@pierre/words/html` exports `createHtmlRenderer()` for formatted HTML and
 `createDomRenderer()` for DOM updates without React. See
 [`html/types.ts`](./html/types.ts) for their options.
+
+## Loading the Wasm yourself
+
+`@pierre/words/core` has the same API as `@pierre/words`, but it does not embed
+the WebAssembly module as base64. Call `init()` with a compiled module before
+the first render. The package exports the modules as `@pierre/words/words.wasm`
+and `@pierre/words/words-no-math.wasm`. A `.wasm` file is about 20% smaller
+after gzip, compiles off the main thread, and stays cached when your JavaScript
+changes. This example needs a bundler such as Vite to resolve the URL:
+
+```ts
+import { init, renderToHtml } from '@pierre/words/core';
+
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/words/words.wasm', import.meta.url))
+  )
+);
+```
+
+The React and HTML renderers use `@pierre/words`, not this entry.
 
 ## Development
 

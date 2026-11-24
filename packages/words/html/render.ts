@@ -889,6 +889,7 @@ export function createHtmlRenderer(options: HtmlOptions = {}) {
           cjk: options.cjk,
           math: options.math,
           allowedHtml: options.allowedHtml,
+          escapeHtml: options.escapeHtml,
           [formatKey]: {
             flags:
               formatFlags.on |

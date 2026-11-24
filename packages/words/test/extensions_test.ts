@@ -620,6 +620,12 @@ void test('sessions and the HTML renderer stream math', () => {
     );
 });
 
+void test('ASCII control bytes in math do not trap out of bounds', () => {
+  for (const byte of ['\u0001', '\u0007', '\u001b', '\u001f']) {
+    assert.match(html(`$a${byte}b + c$`, { math: true }), /<svg /);
+  }
+});
+
 void test('element filters skip self-closing SVG children', () => {
   const doc = '$$\\frac{a}{b}$$\n\nafter\n';
   for (const options of [
