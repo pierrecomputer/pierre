@@ -565,8 +565,9 @@ async function measureCodeViewCase(
       if (navigation != null) {
         if (layout === 'small-items') {
           viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
-          await waitFor(() =>
-            hasExpectedSearchState(searchState, query, expectedCount)
+          await waitFor(
+            () => hasExpectedSearchState(searchState, query, expectedCount),
+            { timeout: 15000 }
           );
           // Matches are numbered from where a scan starts, and the same text
           // keeps the scan from the middle. Clear it so typing at the top
@@ -578,9 +579,13 @@ async function measureCodeViewCase(
         if (layout === 'small-items') fillSearch(root, query.text);
         else
           viewer.openSearch({ query: query.text, scope: 'all', mode: 'find' });
-        await waitFor(() =>
-          hasExpectedSearchState(searchState, query, expectedCount)
+        await waitFor(
+          () => hasExpectedSearchState(searchState, query, expectedCount),
+          { timeout: 15000 }
         );
+        if (!hasExpectedSearchState(searchState, query, expectedCount)) {
+          throw new Error(`${name}: search did not finish before navigation`);
+        }
         if (searchState?.currentMatchIndex !== 0) {
           throw new Error(
             `${name}: expected the first match before navigation`

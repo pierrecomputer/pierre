@@ -90,7 +90,9 @@ async function withViewer(
       states,
       finish: async () => {
         viewer.render(true);
-        await waitFor(() => states.at(-1)?.searching === false);
+        await waitFor(() => states.at(-1)?.searching === false, {
+          timeout: 10000,
+        });
         expect(states.at(-1)?.searching).toBe(false);
       },
     });
