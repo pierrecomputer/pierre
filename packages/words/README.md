@@ -381,6 +381,27 @@ open blocks return to the parser.
 `createDomRenderer()` for DOM updates without React. See
 [`html/types.ts`](./html/types.ts) for their options.
 
+## Loading the Wasm yourself
+
+`@pierre/words/core` has the same API as `@pierre/words`, but it does not embed
+the WebAssembly module as base64. Call `init()` with a compiled module before
+the first render. The package exports the modules as `@pierre/words/words.wasm`
+and `@pierre/words/words-no-math.wasm`. A `.wasm` file is about 20% smaller
+after gzip, compiles off the main thread, and stays cached when your JavaScript
+changes. This example needs a bundler such as Vite to resolve the URL:
+
+```ts
+import { init, renderToHtml } from '@pierre/words/core';
+
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/words/words.wasm', import.meta.url))
+  )
+);
+```
+
+The React and HTML renderers use `@pierre/words`, not this entry.
+
 ## Development
 
 ```bash

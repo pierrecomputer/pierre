@@ -5,6 +5,9 @@ The package selects its WebAssembly loader for Node.js, browsers, or Cloudflare
 Workers. `init(module)` is for embedders that supply a compiled
 `WebAssembly.Module` to replace the instance of the entry it is imported from.
 Each entry (`@pierre/words`, `@pierre/words/no-math`) keeps its own instance.
+`@pierre/words/core` has no embedded module: call `init()` with compiled
+`@pierre/words/words.wasm` or `@pierre/words/words-no-math.wasm` before the
+first render.
 
 ```ts
 import { renderToAnsi, renderToHtml } from '@pierre/words';

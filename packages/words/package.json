@@ -25,6 +25,13 @@
       "import": "./dist/no-math.js",
       "default": "./dist/no-math.js"
     },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "default": "./dist/core.js"
+    },
+    "./words.wasm": "./dist/words.wasm",
+    "./words-no-math.wasm": "./dist/words-no-math.wasm",
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js",
