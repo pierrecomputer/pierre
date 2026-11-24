@@ -1,6 +1,4 @@
-// `@pierre/words/core`: the root entry's API without an embedded module. The
-// caller loads one (`@pierre/words/words.wasm`, `words-no-math.wasm` or its own
-// build) and passes it to `init()` before the first render.
+// `@pierre/words/core`: the root API without the embedded module.
 import * as core from './core.ts';
 import type { AnsiOptions, RenderOptions } from './types.ts';
 
@@ -26,6 +24,9 @@ export const renderToAnsi = (
   options?: AnsiOptions
 ): Uint8Array => core.renderToAnsi(state, input, options);
 
-/** @see `createHtmlSession` of `@pierre/words` */
+/**
+ * Render a growing string to HTML. A session keeps completed HTML and reparses
+ * only the unfinished end.
+ */
 export const createHtmlSession = (): core.HtmlSession =>
   core.createHtmlSession(state);

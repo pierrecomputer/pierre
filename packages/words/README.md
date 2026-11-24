@@ -376,23 +376,24 @@ open blocks return to the parser.
 
 ## Loading the Wasm yourself
 
-`@pierre/words/core` has the same API as `@pierre/words`, without the
-WebAssembly module it embeds as base64 and compiles on import. Compared to
-`@pierre/words`, it has less overhead: a third smaller download, no compile
-blocking the main thread, and a file that stays cached when your JavaScript
-changes. Call `init()` with a compiled `WebAssembly.Module` before the first
-render, for example one from `@pierre/words/words.wasm`,
-`@pierre/words/words-no-math.wasm` or your own build.
+`@pierre/words/core` has the same API as `@pierre/words`, but it does not embed
+the WebAssembly module as base64. Call `init()` with a compiled module before
+the first render. The package exports the modules as `@pierre/words/words.wasm`
+and `@pierre/words/words-no-math.wasm`. A `.wasm` file is about 20% smaller
+after gzip, compiles off the main thread, and stays cached when your JavaScript
+changes. This example needs a bundler such as Vite to resolve the URL:
 
 ```ts
 import { init, renderToHtml } from '@pierre/words/core';
 
-const url = new URL('./words.wasm', import.meta.url); // where you serve the file
-init(await WebAssembly.compileStreaming(fetch(url)));
+init(
+  await WebAssembly.compileStreaming(
+    fetch(new URL('@pierre/words/words.wasm', import.meta.url))
+  )
+);
 ```
 
-Like every entry, `@pierre/words/core` keeps its own instance: the React and
-HTML renderers use `@pierre/words`, not this module.
+The React and HTML renderers use `@pierre/words`, not this entry.
 
 ## Development
 
