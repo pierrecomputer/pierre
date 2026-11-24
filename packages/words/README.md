@@ -36,6 +36,7 @@ render.
 | `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. `meta` is `null` if there is none. |
 | `skipHtml`    | `false` | Omit raw HTML.                                                                         |
 | `allowedHtml` |         | Keep only these raw HTML tags. See [Raw HTML](#raw-html).                              |
+| `escapeHtml`  | `false` | Show raw HTML as escaped text. See [Raw HTML](#raw-html).                              |
 | `incomplete`  | `false` | Complete common unfinished inline syntax.                                              |
 | `math`        | `false` | Render math as SVG. See [Math](#math).                                                 |
 | `cjk`         | `false` | Enable [CJK-friendly emphasis](#cjk-support).                                          |
@@ -76,6 +77,7 @@ normal Markdown.
 | `components`                            | HTML hooks for generated elements, including `inlineCode`.                                    |
 | `math`, `cjk`                           | Render math as SVG, and CJK-friendly emphasis. Default: `false`.                              |
 | `allowedHtml`                           | Raw HTML tags to keep. See [Raw HTML](#raw-html).                                             |
+| `escapeHtml`                            | Show raw HTML as escaped text. See [Raw HTML](#raw-html).                                     |
 | `plugins.code`                          | Code highlighter.                                                                             |
 | `plugins.mermaid`                       | Mermaid diagram renderer. See [Mermaid](#mermaid).                                            |
 | `islands`                               | Registered React components for reactive islands.                                             |
@@ -299,6 +301,11 @@ Element filters and hooks apply to kept tags as to generated ones.
 
 **Warning:** Other listed attributes keep their values, and `urlTransform` does
 not see kept tags. List only tags and attributes you trust.
+
+`escapeHtml: true` shows raw HTML as escaped text instead, so
+`Use <Stack> for rows` reads as written. An HTML block becomes a paragraph of
+its source text, without Markdown inside it. It overrides `skipHtml` and
+`allowedHtml`.
 
 ## Mermaid
 

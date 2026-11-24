@@ -101,6 +101,8 @@ export interface HtmlOptions {
   math?: boolean;
   /** Raw HTML tags to keep. See `HtmlSessionOptions.allowedHtml`. */
   allowedHtml?: Readonly<Record<string, readonly string[]>>;
+  /** Raw HTML as escaped text. See `HtmlSessionOptions.escapeHtml`. */
+  escapeHtml?: boolean;
   components?: Components;
   plugins?: PluginConfig;
   controls?: boolean | ControlsConfig;
