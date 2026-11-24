@@ -4,10 +4,16 @@ import wasmModule from './words-no-math.wasm';
 
 export type * from './types.ts';
 
-const state: core.State = { renderer: new core.Renderer(wasmModule) };
+const state: core.State = { load: () => wasmModule };
 
 export const init = (module: WebAssembly.Module): core.Renderer =>
   (state.renderer = new core.Renderer(module));
+
+/**
+ * Whether this engine can run Words' Wasm, which needs SIMD. Use it to pick a
+ * fallback renderer. It compiles the Wasm once and keeps it for rendering.
+ */
+export const canUseWASM = (): boolean => core.canUseWASM(state);
 
 export const renderToHtml = ((input: core.Input, options?: RenderOptions) =>
   core.renderToHtml(state, input, options)) as core.RenderToHtml;

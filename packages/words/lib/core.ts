@@ -336,9 +336,24 @@ export class Renderer {
 
 /**
  * The renderer of one entry. Each entry (`@pierre/words`, `/no-math`, ...)
- * owns one, so entries loaded together keep their own Wasm build.
+ * owns one, so entries loaded together keep their own Wasm build. `load` runs
+ * on first use, so an engine without Wasm SIMD fails at the first render, not
+ * at import.
  */
-export type State = { renderer: Renderer };
+export type State = { renderer?: Renderer; load: () => WebAssembly.Module };
+
+export const getRenderer = (state: State): Renderer =>
+  (state.renderer ??= new Renderer(state.load()));
+
+/** Whether this engine can run the Wasm of an entry. A success keeps it. */
+export function canUseWASM(state: State): boolean {
+  try {
+    getRenderer(state);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const tooLarge = () =>
   new RangeError(`input exceeds ${maxInput} bytes of UTF-8`);
@@ -361,7 +376,7 @@ export function renderToHtml(
   input: Input,
   options?: RenderOptions
 ): Uint8Array | [unknown, Uint8Array] {
-  const { output, meta } = state.renderer.render(input, 0, options);
+  const { output, meta } = getRenderer(state).render(input, 0, options);
   if (options?.frontmatter !== true) return output;
   return [meta != null ? JSON.parse(dec.decode(meta)) : null, output];
 }
@@ -371,7 +386,7 @@ export function renderToAnsi(
   input: Input,
   options?: AnsiOptions
 ): Uint8Array {
-  return state.renderer.render(input, 1, {
+  return getRenderer(state).render(input, 1, {
     width: options?.width,
     cjk: options?.cjk,
     math: options?.math,
@@ -414,7 +429,7 @@ export function createHtmlSession(state: State): HtmlSession {
     render(input: string, options?: InternalSessionOptions) {
       if (typeof input !== 'string')
         throw new TypeError('session input must be a string');
-      const renderer = state.renderer;
+      const renderer = getRenderer(state);
       const wanted = options?.incomplete === true;
       const ext =
         (options?.cjk === true ? 1 : 0) | (options?.math === true ? 2 : 0);

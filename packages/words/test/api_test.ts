@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
 import { renderToAnsi, renderToHtml } from '../dist/index.js';
@@ -124,4 +125,34 @@ void test('carriage returns are accepted as line endings', () => {
     html('```\r\na\r\nb\r\n```'),
     '<pre><code>a\nb\n</code></pre>\n'
   );
+});
+
+void test('import compiles no Wasm; the first render reports a compile error', () => {
+  // A child process, so the stub cannot leak into the Wasm this file shares.
+  const out = execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      `
+      const Module = WebAssembly.Module;
+      WebAssembly.Module = function () {
+        throw new WebAssembly.CompileError('Wasm SIMD unsupported');
+      };
+      const words = await import(${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)});
+      const results = [words.canUseWASM()];
+      try { words.renderToHtml('# a'); } catch (e) { results.push(e.message); }
+      WebAssembly.Module = Module;
+      results.push(words.canUseWASM(), new TextDecoder().decode(words.renderToHtml('# a')));
+      console.log(JSON.stringify(results));
+      `,
+    ],
+    { encoding: 'utf8' }
+  );
+  assert.deepEqual(JSON.parse(out), [
+    false,
+    'Wasm SIMD unsupported',
+    true,
+    '<h1>a</h1>\n',
+  ]);
 });

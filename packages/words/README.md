@@ -49,6 +49,10 @@ source.
 untrusted Markdown before you add it to a page. `skipHtml` alone is not a
 sanitizer.
 
+Words needs WebAssembly with SIMD. The Wasm compiles on the first render, so an
+engine without it throws there, not at import. `canUseWASM()` returns `false` on
+such engines, so you can pick a fallback renderer.
+
 ## React
 
 ```tsx
