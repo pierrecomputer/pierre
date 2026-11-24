@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.ocamlWords 256)
+
+  (import "@pierre/wat-tools/common.wat")
 
   (func $mlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $mlWordHl below
-  (keyword-table $mlWords $mem.ocamlWords $mem.pascalWords
+  (keyword-table $mlWords $mem.ocamlWords $mem.ocamlWords+256
     (group $Token.keyword.control ;; 1: control
       "do" "if" "of" "to" "for" "try" "done" "else" "then" "when" "with" "begin" "match" "while"
       "downto" "assert" "function" "lazy")
@@ -30,16 +34,227 @@
   ;; A character literal starts at the tick $p when a single character - an
   ;; escape, or one code point - sits between it and a closing tick. Any
   ;; other tick begins a type variable such as 'a or ends a name like x'.
+  ;; A line break never sits inside one: a stream chunk ends there.
   (func $mlIsCharLiteral (param $p i32) (result i32)
+    (local $c i32)
     (local $e i32)
     (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
       (then (return (i32.const 0))))
-    (if (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 92))
+    (local.set $c (i32.load8_u offset=1 (local.get $p)))
+    (if (i32.eq (local.get $c) (i32.const 92))
       (then (return (i32.const 1))))
     (local.set $e (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
-    (i32.and
-      (i32.lt_u (local.get $e) (global.get $end))
-      (i32.eq (i32.load8_u (local.get $e)) (i32.const 39))))
+    (if (result i32)
+      (i32.and
+        (i32.lt_u (local.get $e) (global.get $end))
+        (i32.eq (i32.load8_u (local.get $e)) (i32.const 39)))
+      (then (i32.and (i32.ne (local.get $c) (i32.const 10)) (i32.ne (local.get $c) (i32.const 13))))
+      (else (i32.const 0))))
+
+  (func $mlEscapeEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local $q i32)
+    (local $n i32)
+    (local.set $c (call $mlByte (i32.add (local.get $p) (i32.const 1))))
+    (local.set $q (i32.add (local.get $p) (i32.const 2)))
+    (if (i32.eq (local.get $c) (i32.const "x"))
+      (then (return (call $scanHexRun (local.get $q) (i32.const 2)))))
+    (if (i32.eq (local.get $c) (i32.const "U"))
+      (then (return (call $scanHexRun (local.get $q) (i32.const 8)))))
+    (if (i32.eq (local.get $c) (i32.const "u"))
+      (then
+        (if (i32.ne (call $mlByte (local.get $q)) (i32.const "{"))
+          (then (return (call $scanHexRun (local.get $q) (i32.const 4)))))
+        (local.set $q (call $scanHexRun (i32.add (local.get $q) (i32.const 1)) (i32.const 6)))
+        (return
+          (i32.add
+            (local.get $q)
+            (i32.eq (call $mlByte (local.get $q)) (i32.const "}"))))))
+    (local.set $n (i32.add (i32.const 2) (i32.eq (local.get $c) (i32.const "o"))))
+    (if (i32.or (i32.eq (local.get $n) (i32.const 3)) (call $lexIsDigit (local.get $c)))
+      (then
+        (loop $digits
+          (if
+            (i32.and
+              (i32.ne (local.get $n) (i32.const 0))
+              (call $lexIsDigit (call $mlByte (local.get $q))))
+            (then
+              (local.set $q (i32.add (local.get $q) (i32.const 1)))
+              (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+              (br $digits))))
+        (return (local.get $q))))
+    (call $lexEscapeEnd (local.get $p)))
+
+  ;; Returns 1 when a `"` string, the only kind that spans lines, is open at $end.
+  (func $mlString (param $quote i32) (param $skip i32) (result i32)
+    (local $c i32)
+    (local $seg i32)
+    (local.set $seg (global.get $ptr))
+    (global.set $ptr (i32.add (global.get $ptr) (local.get $skip)))
+    (block $done
+      (loop $l
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (local.get $quote)
+            (i32.const 1)
+            (i32.ne (local.get $quote) (i32.const 34))))
+        (if (i32.ge_u (global.get $ptr) (global.get $end))
+          (then
+            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+            (return (i32.eq (local.get $quote) (i32.const 34)))))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (local.get $quote))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (br $done)))
+        (br_if $done (i32.ne (local.get $c) (i32.const 92)))
+        (if (i32.ne (local.get $quote) (i32.const 34))
+          (then
+            (local.set $c (call $mlByte (i32.add (global.get $ptr) (i32.const 1))))
+            (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+        (local.set $seg (call $mlEscapeEnd (global.get $ptr)))
+        (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $seg))
+        (global.set $ptr (local.get $seg))
+        (br $l)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (i32.const 0))
+
+  ;; $s is the depth times 4, plus 2 for a doc comment and 1 inside a string,
+  ;; shifted left by $shift; returns it at $end, or 0 once the comment closes.
+  ;; F# ($shift 4) adds 0x1000000 in a verbatim string, 0x2000000 in `"""`.
+  (func $mlComment (param $skip i32) (param $s i32) (param $shift i32) (result i32)
+    (local $c i32)
+    (local $hl i32)
+    (local $lhs i32)
+    (local $mask i32)
+    (local $w v128)
+    (local $w1 v128)
+    (local.set $s (i32.shr_u (local.get $s) (local.get $shift)))
+    (local.set $lhs (global.get $ptr))
+    (local.set $hl
+      (select (enum.get $Token.comment.doc) (enum.get $Token.comment) (i32.and (local.get $s) (i32.const 2))))
+    (global.set $ptr (i32.add (global.get $ptr) (local.get $skip)))
+    (block $done
+      (loop $scan
+        (if (i32.and (local.get $s) (i32.const 1))
+          (then
+            (if (i32.and (local.get $s) (i32.const 0x3000000))
+              (then
+                (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const 34)))
+                (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+                (local.set $c (call $mlByte (i32.add (global.get $ptr) (i32.const 1))))
+                (if (i32.and (local.get $s) (i32.const 0x2000000))
+                  (then
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $c) (i32.const 34))
+                        (i32.eq (call $mlByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34)))
+                      (then
+                        (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
+                        (local.set $s (i32.and (local.get $s) (i32.const -0x2000002)))
+                        (br $scan))))
+                  (else
+                    (if (i32.eq (local.get $c) (i32.const 34))
+                      (then
+                        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                        (br $scan)))
+                    (local.set $s (i32.and (local.get $s) (i32.const -0x1000002)))))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (br $scan)))
+            (global.set $ptr
+              (call $scanFindSpecial
+                (global.get $ptr)
+                (global.get $end)
+                (i32.const 34)
+                (i32.const 1)
+                (i32.const 0)))
+            (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $c (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 34)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.sub (i32.const 2) (local.get $c))))
+            (if (i32.gt_u (global.get $ptr) (global.get $end))
+              (then (global.set $ptr (global.get $end))))
+            (local.set $s (i32.xor (local.get $s) (local.get $c)))
+            (br $scan)))
+        ;; wide loads may read the input slack past $end
+        (block $found
+          (loop $wide
+            (br_if $found (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $w (v128.load (global.get $ptr)))
+            (local.set $w1 (v128.load offset=1 (global.get $ptr)))
+            (local.set $mask
+              (i8x16.bitmask
+                (v128.or
+                  (v128.or
+                    (v128.and
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "(")))
+                      (i8x16.eq (local.get $w1) (i8x16.splat (i32.const "*"))))
+                    (v128.and
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "*")))
+                      (i8x16.eq (local.get $w1) (i8x16.splat (i32.const ")")))))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34))))))
+            (if (local.get $mask)
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
+                (br $found)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
+            (br $wide)))
+        (if (i32.ge_u (global.get $ptr) (global.get $end))
+          (then
+            (global.set $ptr (global.get $end))
+            (br $done)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (i32.const 34))
+          (then
+            (if
+              (i32.and
+                (i32.eq (call $mlByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 39))
+                (i32.gt_u (global.get $ptr) (global.get $srcBase)))
+              (then
+                (local.set $c (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))))
+                (if
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const 39))
+                    (i32.and
+                      (i32.eq (local.get $c) (i32.const 92))
+                      (i32.and
+                        (i32.gt_u (i32.sub (global.get $ptr) (i32.const 1)) (global.get $srcBase))
+                        (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 39)))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                    (br $scan)))))
+            (if (local.get $shift)
+              (then
+                (if
+                  (i32.and
+                    (i32.eq (call $mlByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+                    (i32.eq (call $mlByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34)))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
+                    (local.set $s (i32.or (local.get $s) (i32.const 0x2000001)))
+                    (br $scan)))
+                (if
+                  (i32.and
+                    (i32.gt_u (global.get $ptr) (global.get $srcBase))
+                    (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const "@")))
+                  (then (local.set $s (i32.or (local.get $s) (i32.const 0x1000000)))))))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $s (i32.or (local.get $s) (i32.const 1)))
+            (br $scan)))
+        ;; a pair whose second byte is at or past $end lies in the slack
+        (if (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+          (then
+            (global.set $ptr (global.get $end))
+            (br $done)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+        (local.set $s
+          (i32.add (local.get $s) (select (i32.const 4) (i32.const -4) (i32.eq (local.get $c) (i32.const "(")))))
+        (br_if $scan (i32.ge_u (local.get $s) (i32.const 4)))
+        (local.set $s (i32.const 0))))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (i32.shl (local.get $s) (local.get $shift)))
 
   (func $mlIsSymbol (param $c i32) (result i32)
     (byteset.get "!$%&*+-/:<=>?@^|~" (local.get $c)))
@@ -51,7 +266,8 @@
   ;; where lowercase names are types; $member is 1 after `.` and 2 after a
   ;; module's `.`; $afterValue is 1 after a value - a name, a literal, or
   ;; a closer - so the head of an application can be told from its
-  ;; arguments. All are checkpointed.
+  ;; arguments; $open is 1 inside a string and the $mlComment state inside
+  ;; a comment. All are checkpointed.
   (func $hlOcaml
     (local $c i32)
     (local $c2 i32)
@@ -69,7 +285,14 @@
     (local $n i32)
     (local $afterValue i32)
     (local $lastModule i32)
+    (local $open i32)
     (call $lexEmitLeadingContinuation)
+    (if (local.get $open)
+      (then
+        (local.set $open
+          (if (result i32) (i32.eq (local.get $open) (i32.const 1))
+            (then (call $mlString (i32.const 34) (i32.const 0)))
+            (else (call $mlComment (i32.const 0) (local.get $open) (i32.const 0)))))))
     (block $done
       (loop $next
         ;; token tails: $valueTok and $opTok set $afterValue, and $tok emits
@@ -90,23 +313,23 @@
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (call $lexNestedBlockComment
-              (i32.const "(*")
-              (i32.const "*)")
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.and
-                  (i32.eq (local.get $c3) (i32.const "*"))
-                  (i32.ne
-                    (call $mlByte (i32.add (global.get $ptr) (i32.const 3)))
-                    (i32.const ")")))))
+            (local.set $n
+              (i32.and
+                (i32.eq (local.get $c3) (i32.const "*"))
+                (i32.ne
+                  (call $mlByte (i32.add (global.get $ptr) (i32.const 3)))
+                  (i32.const ")"))))
+            (local.set $open
+              (call $mlComment
+                (i32.const 2)
+                (i32.or (i32.const 4) (i32.shl (local.get $n) (i32.const 1)))
+                (i32.const 0)))
             (br $next)))
 
         ;; strings span lines; `{id|...|id}` is a quoted string with no escapes
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (call $lexString (i32.const 34) (i32.const 1) (enum.get $Token.string))
+            (local.set $open (call $mlString (i32.const 34) (i32.const 1)))
             (local.set $member (i32.const 0))
             (local.set $afterValue (i32.const 1))
             (br $next)))
@@ -159,7 +382,7 @@
             (then (call $mlIsCharLiteral (global.get $ptr)))
             (else (i32.const 0)))
           (then
-            (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
+            (drop (call $mlString (i32.const 39) (i32.const 1)))
             (local.set $member (i32.const 0))
             (local.set $afterValue (i32.const 1))
             (br $next)))
@@ -470,17 +693,21 @@
   ;; Lex a quoted string from $lhs whose key id is [$idStart, $idEnd), with
   ;; the opener's `|` at $idEnd: build the closer `|` + id + `}` in the
   ;; delimiter region, where a chunk boundary can resume it, scan to it, and
-  ;; emit everything from $lhs as one string.
+  ;; emit everything from $lhs as one string. An id too long for the region
+  ;; is compared in place and cannot resume.
   (func $mlQuoted (param $lhs i32) (param $idStart i32) (param $idEnd i32)
     (local $n i32)
+    (local $src i32)
     (local.set $n (i32.sub (local.get $idEnd) (local.get $idStart)))
-    (if (i32.gt_u (local.get $n) (i32.const 30))
-      (then (local.set $n (i32.const 30))))
-    (i32.store8 (i32.const $mem.streamDelimiter) (i32.const "|"))
-    (memory.copy (i32.const $mem.streamDelimiter+1) (local.get $idStart) (local.get $n))
-    (i32.store8 (i32.add (i32.const $mem.streamDelimiter+1) (local.get $n)) (i32.const "}"))
+    (local.set $src (i32.sub (local.get $idStart) (i32.const 1)))
+    (if (i32.le_u (local.get $n) (i32.const 30))
+      (then
+        (local.set $src (i32.const $mem.streamDelimiter))
+        (i32.store8 (i32.const $mem.streamDelimiter) (i32.const "|"))
+        (memory.copy (i32.const $mem.streamDelimiter+1) (local.get $idStart) (local.get $n))
+        (i32.store8 (i32.add (i32.const $mem.streamDelimiter+1) (local.get $n)) (i32.const "}"))))
     (global.set $ptr (i32.add (local.get $idEnd) (i32.const 1)))
-    (call $mlQuotedBody (i32.add (local.get $n) (i32.const 2)))
+    (call $mlQuotedBody (local.get $src) (i32.add (local.get $n) (i32.const 2)))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
     (call $streamSetFixed
       (i32.const $mem.streamDelimiter)
@@ -510,9 +737,8 @@
       (i32.eq (i32.and (local.get $kind) (i32.const 255)) (enum.get $Token.boolean))))
 
   ;; Advance $ptr through a quoted string body to just past the $n-byte
-  ;; closer held in the delimiter region, or to $end: hop between `|` bytes
-  ;; with SIMD and verify the rest only at each candidate.
-  (func $mlQuotedBody (param $n i32)
+  ;; closer at $src, or to $end.
+  (func $mlQuotedBody (param $src i32) (param $n i32)
     (local $i i32)
     (block $done
       (loop $scan
@@ -523,14 +749,19 @@
             (local.set $i (i32.const 1))
             (block $cmpDone
               (loop $cmp
-                (br_if $cmpDone (i32.ge_u (local.get $i) (local.get $n)))
+                (br_if $cmpDone (i32.ge_u (local.get $i) (i32.sub (local.get $n) (i32.const 1))))
                 (br_if $cmpDone
                   (i32.ne
                     (i32.load8_u (i32.add (global.get $ptr) (local.get $i)))
-                    (i32.load8_u (i32.add (i32.const $mem.streamDelimiter) (local.get $i)))))
+                    (i32.load8_u (i32.add (local.get $src) (local.get $i)))))
                 (local.set $i (i32.add (local.get $i) (i32.const 1)))
                 (br $cmp)))
-            (if (i32.eq (local.get $i) (local.get $n))
+            (if
+              (i32.and
+                (i32.eq (local.get $i) (i32.sub (local.get $n) (i32.const 1)))
+                (i32.eq
+                  (i32.load8_u (i32.add (global.get $ptr) (local.get $i)))
+                  (i32.const "}")))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (local.get $n)))
                 (return)))))

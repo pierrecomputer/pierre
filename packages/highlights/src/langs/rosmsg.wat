@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.rosmsgWords 384)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group value 256 marks the string types, whose constants run to the line end.
-  (keyword-table $rosmsgWords $mem.rosmsgWords $mem.fishWords
+  (keyword-table $rosmsgWords $mem.rosmsgWords $mem.rosmsgWords+384
     (group $Token.type.builtin
       "bool" "byte" "char" "float32" "float64" "int8" "uint8" "int16" "uint16"
       "int32" "uint32" "int64" "uint64" "time" "duration" "Header")

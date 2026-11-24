@@ -123,3 +123,72 @@ test('pug: multi-line attributes and bodies stream like the whole buffer', () =>
     assertLineFedParity('pug', code);
   }
 });
+
+test('pug: an attribute value goes on across lines', () => {
+  const code =
+    'div(style={\n  color: "red",\n  "font-size": size + "px"\n} class="x") Text\np ok\n';
+  assertLineFedParity('pug', code);
+  expect(tokenKinds('pug', code)).toEqual([
+    ['div', 'tag'],
+    ['(', 'punctuation.bracket'],
+    ['style', 'attribute'],
+    ['=', 'operator'],
+    ['{', 'punctuation.bracket'],
+    ['color', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['"red"', 'string'],
+    [',', 'punctuation.delimiter'],
+    ['"font-size"', 'string'],
+    [':', 'punctuation.delimiter'],
+    ['size', 'variable'],
+    ['+', 'operator'],
+    ['"px"', 'string'],
+    ['}', 'punctuation.bracket'],
+    ['class', 'attribute'],
+    ['=', 'operator'],
+    ['"x"', 'string'],
+    [')', 'punctuation.bracket'],
+    ['Text', null],
+    ['p', 'tag'],
+    ['ok', null],
+  ]);
+});
+
+test('pug: a dotted block after multi-line attributes uses the tag line indent', () => {
+  const code = 'script(a=1,\n  b=1).\n  var x = 1;\np after\n';
+  assertLineFedParity('pug', code);
+  expect(tokenKinds('pug', code).slice(11, 13)).toEqual([
+    ['var', 'keyword.declaration'],
+    ['x', 'variable'],
+  ]);
+});
+
+test('pug: block expansion after `when` and `default`, `:coffee-script`', () => {
+  expect(
+    tokenKinds(
+      'pug',
+      'case role\n  when "admin": p Admin\n  default: p Other\n'
+    )
+  ).toEqual([
+    ['case', 'keyword.control'],
+    ['role', 'variable'],
+    ['when', 'keyword.control'],
+    ['"admin"', 'string'],
+    [':', 'punctuation.special'],
+    ['p', 'tag'],
+    ['Admin', null],
+    ['default', 'keyword.control'],
+    [':', 'punctuation.special'],
+    ['p', 'tag'],
+    ['Other', null],
+  ]);
+  expect(
+    tokenKinds('pug', 'script\n  :coffee-script\n    sq = (x) -> x\n').slice(
+      2,
+      4
+    )
+  ).toEqual([
+    ['sq', 'function.definition'],
+    ['=', 'operator'],
+  ]);
+});

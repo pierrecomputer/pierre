@@ -274,3 +274,89 @@ void t.test('groovy: an LF or CRLF gap ends an import line', () => {
     ['()', 'punctuation.bracket'],
   ]);
 });
+
+void t.test('groovy: slashy and dollar-slashy strings', () => {
+  const code =
+    'def m = line =~ /"([^"]*)"/\ndef r = s.replaceAll(/\'\\/x/, \'\')\ndef q = a / b\n';
+  assert.deepEqual(tokenKinds('groovy', code), [
+    ['def', 'keyword.declaration'],
+    ['m', 'variable'],
+    ['=', 'operator'],
+    ['line', 'variable'],
+    ['=~', 'operator'],
+    ['/"([^"]*)"/', 'string'],
+    ['def', 'keyword.declaration'],
+    ['r', 'variable'],
+    ['=', 'operator'],
+    ['s', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['replaceAll', 'function.method'],
+    ['(', 'punctuation.bracket'],
+    ["/'", 'string'],
+    ['\\/', 'string.escape'],
+    ['x/', 'string'],
+    [',', 'punctuation.delimiter'],
+    ["''", 'string'],
+    [')', 'punctuation.bracket'],
+    ['def', 'keyword.declaration'],
+    ['q', 'variable'],
+    ['=', 'operator'],
+    ['a', 'variable'],
+    ['/', 'operator'],
+    ['b', 'variable'],
+  ]);
+  assertLineFedParity('groovy', code);
+  const dollar = "def s = $/\n  don't $/ ${x} /$\ndef y = 1\n";
+  assert.deepEqual(tokenKinds('groovy', dollar), [
+    ['def', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['$/', 'string'],
+    ["don't", 'string'],
+    ['$/', 'string.escape'],
+    ['${', 'punctuation.special'],
+    ['x', 'variable'],
+    ['}', 'punctuation.special'],
+    ['/$', 'string'],
+    ['def', 'keyword.declaration'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('groovy', dollar);
+});
+
+void t.test('groovy: slashy string after an arithmetic operator', () => {
+  assert.deepEqual(tokenKinds('groovy', 'x = -/a/ + /b/\ni++ / 2\n'), [
+    ['x', 'variable'],
+    ['= -', 'operator'],
+    ['/a/', 'string'],
+    ['+', 'operator'],
+    ['/b/', 'string'],
+    ['i', 'variable'],
+    ['++ /', 'operator'],
+    ['2', 'number'],
+  ]);
+});
+
+void t.test('groovy: import static, `?.`, and `*.`', () => {
+  assert.deepEqual(
+    tokenKinds('groovy', 'import static a.B\ndef x = a?.b*.c()'),
+    [
+      ['import', 'keyword.import'],
+      ['static', 'keyword.declaration'],
+      ['a', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['B', 'namespace'],
+      ['def', 'keyword.declaration'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['a', 'variable'],
+      ['?.', 'operator'],
+      ['b', 'property'],
+      ['*.', 'operator'],
+      ['c', 'function.method'],
+      ['()', 'punctuation.bracket'],
+    ]
+  );
+});

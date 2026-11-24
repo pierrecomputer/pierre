@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -455,4 +455,33 @@ void t.test('hlsl: a capitalized declarator after a type is a variable', () => {
     assert.equal(kinds.get(name), 'type', name);
   }
   assertLineFedParity('hlsl', code);
+});
+
+void t.test('hlsl: a float with an empty fraction is one number', () => {
+  assert.deepEqual(tokenKinds('hlsl', 'x = 1.f + 2. + 1.e5 + 0.xxxx;'), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1.f', 'number'],
+    ['+', 'operator'],
+    ['2.', 'number'],
+    ['+', 'operator'],
+    ['1.e5', 'number'],
+    ['+', 'operator'],
+    ['0', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['xxxx', 'property'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('hlsl: a PascalCase call is a function, not a type', () => {
+  assert.deepEqual(
+    tokenKinds('hlsl', 'void CSMain() { InterlockedAdd(c[0], 1); }').filter(
+      ([text]) => text === 'CSMain' || text === 'InterlockedAdd'
+    ),
+    [
+      ['CSMain', 'function.definition'],
+      ['InterlockedAdd', 'function'],
+    ]
+  );
 });

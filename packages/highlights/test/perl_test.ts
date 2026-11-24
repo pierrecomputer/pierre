@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -507,3 +507,137 @@ void t.test('perl: heredocs after a print filehandle', () => {
   ]);
   assertLineFedParity('perl', code);
 });
+
+void t.test("perl: `\\'` does not close a raw string", () => {
+  const code = "my $s = 'it\\'s' . 'x\\\\' . 'a\\n';\nmy $q = q{a \\} b};\n";
+  assert.deepEqual(tokenKinds('perl', code), [
+    ['my', 'keyword.declaration'],
+    ['$s', 'variable'],
+    ['=', 'operator'],
+    ["'it\\'s'", 'string'],
+    ['.', 'operator'],
+    ["'x\\\\'", 'string'],
+    ['.', 'operator'],
+    ["'a\\n'", 'string'],
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['$q', 'variable'],
+    ['=', 'operator'],
+    ['q{a \\} b}', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('perl', code);
+});
+
+void t.test('perl: one-letter hash keys and `x =>` are keys', () => {
+  const code =
+    'my $v = $h{s} + $h{q} + $h{y} + $h{x};\nmy %p = (x => 1);\nmy $r = $a x 3;\n';
+  const key = (k: string) => [
+    ['$h', 'variable'],
+    ['{', 'punctuation.bracket'],
+    [k, 'string.special.symbol'],
+    ['}', 'punctuation.bracket'],
+  ];
+  assert.deepEqual(tokenKinds('perl', code), [
+    ['my', 'keyword.declaration'],
+    ['$v', 'variable'],
+    ['=', 'operator'],
+    ...key('s'),
+    ['+', 'operator'],
+    ...key('q'),
+    ['+', 'operator'],
+    ...key('y'),
+    ['+', 'operator'],
+    ...key('x'),
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['%p', 'variable'],
+    ['=', 'operator'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'string.special.symbol'],
+    ['=>', 'operator'],
+    ['1', 'number'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['$r', 'variable'],
+    ['=', 'operator'],
+    ['$a', 'variable'],
+    ['x', 'keyword.operator'],
+    ['3', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test('perl: `${` takes a name only up to a `}` on its line', () => {
+  const code =
+    'my $s = ${\n  $ref\n};\nmy $t = ${ $self->{name} };\nmy $u = "a ${\nb";\n';
+  assert.deepEqual(tokenKinds('perl', code), [
+    ['my', 'keyword.declaration'],
+    ['$s', 'variable'],
+    ['=', 'operator'],
+    ['$', 'variable.special'],
+    ['{', 'punctuation.bracket'],
+    ['$ref', 'variable'],
+    ['}', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['$t', 'variable'],
+    ['=', 'operator'],
+    ['$', 'variable.special'],
+    ['{', 'punctuation.bracket'],
+    ['$self', 'variable'],
+    ['->', 'punctuation.delimiter'],
+    ['{', 'punctuation.bracket'],
+    ['name', 'string.special.symbol'],
+    ['} }', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['$u', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['$', 'variable'],
+    ['{', 'string'],
+    ['b"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('perl', code);
+});
+
+void t.test('perl: a quoted heredoc delimiter ends at its line', () => {
+  assertLineFedParity('perl', 'print <<"\n;\nmy $a = 1;\n"\n');
+});
+
+void t.test('perl: `/` after `time` or `wantarray` divides', () => {
+  const code = 'my $t = time / 60;\nmy $w = wantarray / 2; # /\n';
+  assert.deepEqual(tokenKinds('perl', code), [
+    ['my', 'keyword.declaration'],
+    ['$t', 'variable'],
+    ['=', 'operator'],
+    ['time', 'function'],
+    ['/', 'operator'],
+    ['60', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['my', 'keyword.declaration'],
+    ['$w', 'variable'],
+    ['=', 'operator'],
+    ['wantarray', 'function'],
+    ['/', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['# /', 'comment'],
+  ]);
+});
+
+void t.test('perl: a heredoc waits for a body open at its line break', () => {
+  const code = '<<"END";/\nEND\nr';
+  checkInvariants(lexer.hl, code);
+  assertLineFedParity('perl', code);
+});
+
+void t.test(
+  'perl: a heredoc delimiter longer than 32 bytes opens no body',
+  () => {
+    assertLineFedParity('perl', '<<"otal: @{[ total(undef, @names) ]}\nN\n');
+  }
+);

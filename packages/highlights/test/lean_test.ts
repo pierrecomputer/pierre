@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { codeToTokens } from '../lib/index';
+import { codeToTokens } from '../lib/core';
 import { samples } from './_samples';
 import {
   assertLineFedParity,
@@ -163,4 +163,48 @@ test('lean4 alias highlights the same proof as lean', () => {
   ).toEqual(
     codeToTokens(samples.lean.code, { lang: 'lean', theme: distinctTheme })
   );
+});
+
+test('lean: a string inside an `s!` term keeps the outer string open', () => {
+  const code = 'def s := s!"a {f "b"} c\n{x}"\ndef t := 1\n';
+  assertLineFedParity('lean', code);
+  expect(tokenKinds('lean', code)).toEqual([
+    ['def', 'keyword.declaration'],
+    ['s', 'function.definition'],
+    [':=', 'operator'],
+    ['s!', 'variable'],
+    ['"a', 'string'],
+    ['{', 'punctuation.special'],
+    ['f', 'variable'],
+    ['"b"', 'string'],
+    ['}', 'punctuation.special'],
+    ['c', 'string'],
+    ['{', 'punctuation.special'],
+    ['x', 'variable'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    ['def', 'keyword.declaration'],
+    ['t', 'function.definition'],
+    [':=', 'operator'],
+    ['1', 'number'],
+  ]);
+});
+
+test('lean: an `s!` string nests inside an `s!` term', () => {
+  const code = 'def s := s!"a {s!"b {x}"} c"\ndef t := 1\n';
+  assertLineFedParity('lean', code);
+  expect(tokenKinds('lean', code).slice(3, 15)).toEqual([
+    ['s!', 'variable'],
+    ['"a', 'string'],
+    ['{', 'punctuation.special'],
+    ['s!', 'variable'],
+    ['"b', 'string'],
+    ['{', 'punctuation.special'],
+    ['x', 'variable'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    ['}', 'punctuation.special'],
+    ['c"', 'string'],
+    ['def', 'keyword.declaration'],
+  ]);
 });

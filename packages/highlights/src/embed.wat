@@ -1,11 +1,12 @@
 (module
   ;; Resume script/style bodies, front matter, and framework expressions
-  ;; at chunk boundaries. These use $streamRegionKind 1-8, 14-16, and 42
-  ;; (CSS preprocessor bodies, see html.wat).
+  ;; at chunk boundaries. These use $streamRegionKind 1-8, 14-18, and 42
+  ;; (CSS preprocessor bodies, TypeScript and plain-text scripts, see
+  ;; html.wat).
   ;; highlights.wat resumes them in HTML-like documents. markdown.wat
   ;; resumes them inside streamed fences. Their import cycle is safe
   ;; because the build inlines each module once.
-  (import "./common.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./langs/tsx.wat")
   (import "./langs/html.wat")
   (import "./langs/css.wat")
@@ -13,6 +14,122 @@
   (import "./langs/svelte.wat")
   (import "./langs/astro.wat")
   (import "./langs/markdown.wat")
+
+  ;; Modular builds enable this flag and replace these host callbacks.
+  (global $externalEmbedding i32 (i32.const 0))
+
+  (func $embedLanguage
+    (param $lang i32) (param $from i32) (param $to i32)
+    (param $reset i32) (param $context i32) (result i32)
+    (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
+    (i32.const 0))
+
+  ;; The registered lexer of the host for a fence name, from ID 256, or 0.
+  ;; Once registerLanguages has added a lexer, the shared instance,
+  ;; StreamTokenizer, and LiveTokenizer supply it; other hosts return 0.
+  (import "env" "fence_language" (func $hostFenceLanguage (param $ptr i32) (param $len i32) (result i32)))
+  ;; Lex the fence body [$from, $to) with the registered lexer $lang. $state is
+  ;; the ID of the lexer state before the body, and $reset starts the lexer
+  ;; again. The host copies the records to $out, growing the memory when
+  ;; they do not fit, and returns their byte length. It writes the ID of the
+  ;; state after the body to control word 10.
+  (import "env" "fence_lex" (func $hostFenceLex (param $lang i32) (param $from i32) (param $to i32) (param $reset i32) (param $state i32) (param $out i32) (result i32)))
+
+  ;; The state ID of the registered lexer in the open fence, or 0. A live
+  ;; line state holds it, so an edit starts that lexer at any line.
+  (global $fenceState (mut i32) (i32.const 0))
+
+  ;; WARNING: the host goes first, so a registered name overrides a built-in
+  ;; name in a fence, as it does in `codeToTokens`.
+  (func $embedLanguageByName (param $from i32) (param $to i32) (result i32)
+    (local $lang i32)
+    (local.set $lang
+      (call $hostFenceLanguage (local.get $from) (i32.sub (local.get $to) (local.get $from))))
+    (if (result i32) (local.get $lang)
+      (then (local.get $lang))
+      (else (call $languageByName (local.get $from) (local.get $to)))))
+
+  ;; Append the $bytes of child records at $out for the body [$from, $to).
+  ;; Their ends are relative to $from. Type 0xffff is a leading gap: it
+  ;; extends the previous record.
+  ;; The records are read in place. A write lands at or before the
+  ;; record just read, because appending never adds records.
+  ;; A custom lexer can stop early or pass the body end. Clamp each
+  ;; end and cover the rest, or the next token takes those bytes.
+  (func $embedAppend (param $bytes i32) (param $from i32) (param $to i32)
+    (local $record i32)
+    (local $stop i32)
+    (local $end i32)
+    (local $type i32)
+    (local.set $record (global.get $out))
+    (local.set $stop (i32.add (local.get $record) (local.get $bytes)))
+    (local.set $end (local.get $from))
+    (block $done
+      (loop $records
+        (br_if $done (i32.ge_u (local.get $record) (local.get $stop)))
+        (local.set $end (i32.add (local.get $from) (i32.load (local.get $record))))
+        (local.set $type (i32.load16_u offset=4 (local.get $record)))
+        (local.set $record (i32.add (local.get $record) (i32.const 6)))
+        (if (i32.gt_u (local.get $end) (local.get $to))
+          (then (local.set $end (local.get $to))))
+        (if (i32.eq (local.get $type) (i32.const 0xffff))
+          (then (call $emitGap (global.get $srcBase) (local.get $end)))
+          (else (call $recTok (local.get $type) (local.get $end))))
+        (br $records)))
+    (if (i32.lt_u (local.get $end) (local.get $to))
+      (then (call $recTok (enum.get $Token.none) (local.get $to)))))
+
+  ;; Lex the fence body [$from, $to) with the registered lexer $lang of the
+  ;; host and append its records. Only record output has a host for it.
+  (func $embedFence (param $lang i32) (param $from i32) (param $to i32) (param $resume i32)
+    (local $bytes i32)
+    (if (i32.eqz (global.get $tokens))
+      (then
+        (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
+        (return)))
+    (local.set $bytes
+      (call $hostFenceLex
+        (local.get $lang) (local.get $from) (local.get $to)
+        (i32.eqz (local.get $resume)) (global.get $fenceState) (global.get $out)))
+    (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
+    (global.set $fenceState (i32.load (i32.const 10)))
+    (call $embedAppend (local.get $bytes) (local.get $from) (local.get $to)))
+
+  ;; The host keeps one child lexer for each open stream context.
+  ;; End the context when its body closes, or the host cannot reuse the lexer.
+  (func $embedEnd (param $context i32)
+    (if (local.get $context)
+      (then
+        (drop
+          (call $embedLanguage
+            (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 2) (local.get $context))))))
+
+  (func $embedRegionLanguage (param $kind i32) (result i32)
+    (if (i32.eq (local.get $kind) (i32.const 1))
+      (then (return (enum.get $Language.javascript))))
+    (if (i32.eq (local.get $kind) (i32.const 2))
+      (then (return (enum.get $Language.css))))
+    (if (i32.eq (local.get $kind) (i32.const 4))
+      (then (return (enum.get $Language.yaml))))
+    (if (i32.eq (local.get $kind) (i32.const 14))
+      (then (return (enum.get $Language.less))))
+    (if (i32.eq (local.get $kind) (i32.const 15))
+      (then (return (enum.get $Language.scss))))
+    (if (i32.eq (local.get $kind) (i32.const 16))
+      (then (return (enum.get $Language.sass))))
+    (if (i32.eq (local.get $kind) (i32.const 42))
+      (then (return (enum.get $Language.stylus))))
+    (if (i32.eq (local.get $kind) (i32.const 17))
+      (then (return (enum.get $Language.typescript))))
+    (if (i32.eq (local.get $kind) (i32.const 18))
+      (then (return (enum.get $Language.plain))))
+    (enum.get $Language.tsx))
+
+  (func $embedRegion (param $kind i32) (param $from i32) (param $to i32) (param $reset i32)
+    (drop
+      (call $embedLanguage
+        (call $embedRegionLanguage (local.get $kind))
+        (local.get $from) (local.get $to) (local.get $reset) (i32.const -1))))
 
   ;; Clear what an embedded body leaves behind once it ends: the ECMAScript
   ;; machine, the stream registers, the saved delimiter, and saved locals.
@@ -24,6 +141,8 @@
   ;; bodies keep none, except Markdown's $listStart: an address in the
   ;; current line that every LF resets.
   (func $streamClearEmbedded
+    (if (global.get $externalEmbedding)
+      (then (return)))
     (call $ecmaReset)
     (global.set $tsxStreamExpressionClose (i32.const 0))
     (global.set $tsxStreamExpressionClosed (i32.const 0))
@@ -42,6 +161,12 @@
     (local $saveEnd i32)
     (local $saveReset i32)
     (local.set $reset (i32.eqz (global.get $streamRegionStarted)))
+    (if (global.get $externalEmbedding)
+      (then
+        (call $embedRegion (local.get $kind) (local.get $from) (local.get $to) (local.get $reset))
+        (global.set $ptr (local.get $to))
+        (global.set $streamRegionStarted (i32.const 1))
+        (return)))
     (local.set $saveDepth (global.get $streamDepth))
     (local.set $saveEnd (global.get $end))
     (local.set $saveReset (global.get $streamReset))
@@ -52,17 +177,27 @@
     (block $bodyDone
       ;; CSS and YAML use the common comment/string modes. Resume them only
       ;; after the region end is installed; ECMAScript owns its own machine.
-      ;; Style bodies are kind 2 or, in a preprocessor dialect, 14-16.
+      ;; Style bodies are kind 2 or, in a preprocessor dialect, 14-16 and 42.
       (if
         (i32.and
           (i32.eqz (local.get $reset))
-          (i32.or
-            (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
-            (i32.eq (local.get $kind) (i32.const 4))))
+          (i32.and
+            (i32.or
+              (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
+              (i32.eq (local.get $kind) (i32.const 4)))
+            (i32.gt_u (i32.sub (local.get $kind) (i32.const 17)) (i32.const 1))))
         (then (br_if $bodyDone (call $streamResumeCommon))))
       (if (i32.eq (local.get $kind) (i32.const 1))
         (then (call $hlJsStream (local.get $reset)))
         (else
+          (if (i32.eq (local.get $kind) (i32.const 17))
+            (then
+              (call $hlTsStream (local.get $reset))
+              (br $bodyDone)))
+          (if (i32.eq (local.get $kind) (i32.const 18))
+            (then
+              (call $emitTok (enum.get $Token.none) (local.get $from) (local.get $to))
+              (br $bodyDone)))
           (if
             (i32.or (i32.eq (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
             (then (call $htmlStyleBody (local.get $kind)))
@@ -150,7 +285,10 @@
         (global.set $jsxRootEnd (i32.const 1))
         (if (call $jsxRootDone (call $jsxTopMode))
           (then (global.set $jsxRootEnd (local.get $p)))
-          (else (call $streamEmbedRange (local.get $kind) (local.get $p) (local.get $close))))
+          (else
+            (if (global.get $externalEmbedding)
+              (then (call $hlTsxStream (i32.const 0)))
+              (else (call $streamEmbedRange (local.get $kind) (local.get $p) (local.get $close))))))
         (local.set $close (global.get $jsxRootEnd))
         (global.set $jsxRootEnd (i32.const 0))
         (if (i32.eq (local.get $close) (i32.const 1))
@@ -165,7 +303,10 @@
           (loop $raw
             (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
             (br_if $rawDone (i32.ge_u (local.get $p) (global.get $end)))
-            (if (call $isRawTextClose (local.get $p) (local.get $kind))
+            (if
+              (call $isRawTextClose
+                (local.get $p)
+                (select (i32.const 1) (local.get $kind) (i32.le_u (i32.sub (local.get $kind) (i32.const 17)) (i32.const 1))))
               (then
                 (local.set $close (local.get $p))
                 (local.set $found (i32.const 1))

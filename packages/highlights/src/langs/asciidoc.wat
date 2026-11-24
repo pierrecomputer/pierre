@@ -1,5 +1,7 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./rst.wat")
 
   (func $adocIsAdmonition (param $p i32) (param $stop i32) (result i32)
@@ -38,9 +40,11 @@
     (local $para i32)
     (local $mid i32)
     (local $lineEnd i32)
+    (local $br i32)
     (call $lexEmitLeadingContinuation)
     (local.set $mid (i32.const 0))
     (local.set $lineEnd (i32.const 0))
+    (local.set $br (i32.const 0))
     (block $done
       (loop $next
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -69,6 +73,7 @@
             ;; a blank line keeps $mid 0 for its line break
             (br_if $next (i32.ge_u (local.get $p) (local.get $lineEnd)))
             (local.set $mid (i32.const 1))
+            (global.set $rstNoClose (i32.const 0))
             (local.set $c (i32.load8_u (local.get $p)))
             (local.set $c2 (call $templateByte (i32.add (local.get $p) (i32.const 1))))
             (local.set $rhs (call $rstTrimEnd (local.get $p) (local.get $lineEnd)))
@@ -97,95 +102,113 @@
                       (local.get $p)
                       (global.get $ptr))))
                 (br $next)))
-            (if (i32.eqz (local.get $para))
-              (then (local.set $para (i32.add (i32.const 1) (i32.gt_u (local.get $p) (local.get $lhs))))))
-            (if (i32.eq (local.get $para) (i32.const 2))
-              (then
-                (global.set $ptr (local.get $lineEnd))
-                (call $emitTok (enum.get $Token.text.literal) (local.get $p) (global.get $ptr))
-                (br $next)))
+            (block $marker
+              (if (i32.eqz (local.get $para))
+                (then
+                  (local.set $para (i32.add (i32.const 1) (i32.gt_u (local.get $p) (local.get $lhs))))
+                  (br_if $marker (i32.eq (local.get $para) (i32.const 2)))))
+              (if (i32.eq (local.get $para) (i32.const 2))
+                (then
+                  (global.set $ptr (local.get $lineEnd))
+                  (call $emitTok (enum.get $Token.text.literal) (local.get $p) (global.get $ptr))
+                  (br $next)))
 
-            (if
-              (i32.or
-                (i32.eq (local.get $q) (i32.const 1))
+              (if
+                (i32.and
+                  (i32.and (i32.eq (local.get $c) (i32.const "`")) (i32.ge_u (local.get $n) (i32.const 4)))
+                  (i32.and
+                    (i32.eq (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)) (i32.const "```"))
+                    (i32.ne (i32.load8_u offset=3 (local.get $p)) (i32.const "`"))))
+                (then
+                  (local.set $delim (i32.const 0x360))
+                  (global.set $ptr (i32.add (local.get $p) (i32.const 3)))
+                  (call $emitTok (enum.get $Token.punctuation.markup) (local.get $p) (global.get $ptr))
+                  (local.set $q (call $lexSkipSpaceAt (global.get $ptr)))
+                  (call $emitGap (global.get $ptr) (local.get $q))
+                  (global.set $ptr (local.get $rhs))
+                  (call $emitTok (enum.get $Token.label) (local.get $q) (global.get $ptr))
+                  (br $next)))
+              (if
                 (i32.or
-                  (i32.and (i32.eq (local.get $n) (i32.const 2)) (i32.eq (i32.load16_u (local.get $p)) (i32.const 0x2d2d)))
+                  (i32.eq (local.get $q) (i32.const 1))
                   (i32.or
-                    (i32.and (i32.eq (local.get $n) (i32.const 1)) (i32.eq (local.get $c) (i32.const "+")))
-                    (i32.and (i32.ge_u (local.get $n) (i32.const 4)) (i32.eq (i32.load (local.get $p)) (i32.const "|==="))))))
-              (then
-                (if
-                  (i32.and
-                    (i32.eq (local.get $q) (i32.const 1))
+                    (i32.and (i32.eq (local.get $n) (i32.const 2)) (i32.eq (i32.load16_u (local.get $p)) (i32.const 0x2d2d)))
                     (i32.or
-                      (i32.and
-                        (i32.ge_u (local.get $n) (i32.const 4))
-                        (i32.or
-                          (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const ".")))
-                          (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "/")))))
-                      (i32.eq (local.get $c) (i32.const "`"))))
-                  (then (local.set $delim (i32.or (local.get $c) (i32.shl (local.get $n) (i32.const 8))))))
-                (global.set $ptr (local.get $rhs))
-                (call $emitTok (enum.get $Token.punctuation.markup) (local.get $p) (global.get $ptr))
-                (br $next)))
-            (if (i32.eq (local.get $c) (i32.const "="))
-              (then
-                (local.set $q (local.get $p))
-                (block $levels
-                  (loop $level
-                    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                    (br_if $levels (i32.ge_u (local.get $q) (local.get $lineEnd)))
-                    (br_if $level (i32.eq (i32.load8_u (local.get $q)) (i32.const "=")))))
-                (if
-                  (i32.and
-                    (i32.le_u (i32.sub (local.get $q) (local.get $p)) (i32.const 6))
-                    (i32.and (i32.lt_u (local.get $q) (local.get $lineEnd)) (call $lexIsSpace (i32.load8_u (local.get $q)))))
-                  (then
-                    (global.set $ptr (local.get $rhs))
-                    (call $emitTok (enum.get $Token.title) (local.get $p) (global.get $ptr))
-                    (br $next)))))
-            (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
-              (then
-                (global.set $ptr (local.get $lineEnd))
-                (call $emitTok (enum.get $Token.comment) (local.get $p) (global.get $ptr))
-                (br $next)))
-            (if (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eqz (call $lexIsSpace (local.get $c2))))
-              (then
-                (local.set $q
-                  (call $scanFindSpecial (i32.add (local.get $p) (i32.const 2)) (local.get $lineEnd) (i32.const ":") (i32.const 0) (i32.const 0)))
-                (if
-                  (i32.and
-                    (i32.lt_u (local.get $q) (local.get $lineEnd))
+                      (i32.and (i32.eq (local.get $n) (i32.const 1)) (i32.eq (local.get $c) (i32.const "+")))
+                      (i32.and (i32.ge_u (local.get $n) (i32.const 4)) (i32.eq (i32.load (local.get $p)) (i32.const "|==="))))))
+                (then
+                  (if
                     (i32.and
-                      (i32.eq
-                        (call $scanFindSpecial (local.get $p) (local.get $q) (i32.const 32) (i32.const 0) (i32.const 0))
-                        (local.get $q))
+                      (i32.eq (local.get $q) (i32.const 1))
                       (i32.or
-                        (i32.ge_u (i32.add (local.get $q) (i32.const 1)) (local.get $lineEnd))
-                        (call $lexIsSpace (i32.load8_u offset=1 (local.get $q))))))
-                  (then
-                    (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
-                    (call $emitTok (enum.get $Token.property) (local.get $p) (global.get $ptr))
-                    (br $next)))))
-            (if
-              (i32.and
-                (i32.eq (local.get $c) (i32.const "["))
-                (i32.eq (i32.load8_u (i32.sub (local.get $rhs) (i32.const 1))) (i32.const "]")))
-              (then
-                (local.set $q (i32.sub (local.get $rhs) (i32.const 1)))
-                (global.set $ptr (local.get $rhs))
-                (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (i32.add (local.get $p) (i32.const 1)))
-                (call $emitTok (enum.get $Token.attribute) (i32.add (local.get $p) (i32.const 1)) (local.get $q))
-                (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $q) (local.get $rhs))
-                (br $next)))
-            (if
-              (i32.and
-                (i32.eq (local.get $c) (i32.const "."))
-                (i32.eqz (i32.or (call $lexIsSpace (local.get $c2)) (i32.eq (local.get $c2) (i32.const ".")))))
-              (then
-                (global.set $ptr (local.get $rhs))
-                (call $emitTok (enum.get $Token.label) (local.get $p) (global.get $ptr))
-                (br $next)))
+                        (i32.and
+                          (i32.ge_u (local.get $n) (i32.const 4))
+                          (i32.or
+                            (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const ".")))
+                            (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "/")))))
+                        (i32.eq (local.get $c) (i32.const "`"))))
+                    (then (local.set $delim (i32.or (local.get $c) (i32.shl (local.get $n) (i32.const 8))))))
+                  (global.set $ptr (local.get $rhs))
+                  (call $emitTok (enum.get $Token.punctuation.markup) (local.get $p) (global.get $ptr))
+                  (br $next)))
+              (if (i32.eq (local.get $c) (i32.const "="))
+                (then
+                  (local.set $q (local.get $p))
+                  (block $levels
+                    (loop $level
+                      (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                      (br_if $levels (i32.ge_u (local.get $q) (local.get $lineEnd)))
+                      (br_if $level (i32.eq (i32.load8_u (local.get $q)) (i32.const "=")))))
+                  (if
+                    (i32.and
+                      (i32.le_u (i32.sub (local.get $q) (local.get $p)) (i32.const 6))
+                      (i32.and (i32.lt_u (local.get $q) (local.get $lineEnd)) (call $lexIsSpace (i32.load8_u (local.get $q)))))
+                    (then
+                      (global.set $ptr (local.get $rhs))
+                      (call $emitTok (enum.get $Token.title) (local.get $p) (global.get $ptr))
+                      (br $next)))))
+              (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
+                (then
+                  (global.set $ptr (local.get $lineEnd))
+                  (call $emitTok (enum.get $Token.comment) (local.get $p) (global.get $ptr))
+                  (br $next)))
+              (if (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eqz (call $lexIsSpace (local.get $c2))))
+                (then
+                  (local.set $q
+                    (call $scanFindSpecial (i32.add (local.get $p) (i32.const 2)) (local.get $lineEnd) (i32.const ":") (i32.const 0) (i32.const 0)))
+                  (if
+                    (i32.and
+                      (i32.lt_u (local.get $q) (local.get $lineEnd))
+                      (i32.and
+                        (i32.eq
+                          (call $scanFindSpecial (local.get $p) (local.get $q) (i32.const 32) (i32.const 0) (i32.const 0))
+                          (local.get $q))
+                        (i32.or
+                          (i32.ge_u (i32.add (local.get $q) (i32.const 1)) (local.get $lineEnd))
+                          (call $lexIsSpace (i32.load8_u offset=1 (local.get $q))))))
+                    (then
+                      (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
+                      (call $emitTok (enum.get $Token.property) (local.get $p) (global.get $ptr))
+                      (br $next)))))
+              (if
+                (i32.and
+                  (i32.eq (local.get $c) (i32.const "["))
+                  (i32.eq (i32.load8_u (i32.sub (local.get $rhs) (i32.const 1))) (i32.const "]")))
+                (then
+                  (local.set $q (i32.sub (local.get $rhs) (i32.const 1)))
+                  (global.set $ptr (local.get $rhs))
+                  (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (i32.add (local.get $p) (i32.const 1)))
+                  (call $emitTok (enum.get $Token.attribute) (i32.add (local.get $p) (i32.const 1)) (local.get $q))
+                  (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $q) (local.get $rhs))
+                  (br $next)))
+              (if
+                (i32.and
+                  (i32.eq (local.get $c) (i32.const "."))
+                  (i32.eqz (i32.or (call $lexIsSpace (local.get $c2)) (i32.eq (local.get $c2) (i32.const ".")))))
+                (then
+                  (global.set $ptr (local.get $rhs))
+                  (call $emitTok (enum.get $Token.label) (local.get $p) (global.get $ptr))
+                  (br $next))))
             (local.set $q (local.get $p))
             (if (byteset.get "*-." (local.get $c))
               (then
@@ -220,8 +243,14 @@
                 (i32.gt_u (local.get $q) (local.get $p))
                 (i32.and (i32.lt_u (local.get $q) (local.get $lineEnd)) (call $lexIsSpace (i32.load8_u (local.get $q)))))
               (then
+                (local.set $para (i32.const 1))
                 (global.set $ptr (local.get $q))
                 (call $emitTok (enum.get $Token.punctuation.list_marker) (local.get $p) (global.get $ptr))
+                (br $next)))
+            (if (i32.eq (local.get $para) (i32.const 2))
+              (then
+                (global.set $ptr (local.get $lineEnd))
+                (call $emitTok (enum.get $Token.text.literal) (local.get $p) (global.get $ptr))
                 (br $next)))
             (global.set $ptr (local.get $p))
             (call $scanIdentRun (i32.const "-"))
@@ -367,14 +396,17 @@
                   (else
                     (local.set $p
                       (i32.add (local.get $p) (i32.eq (call $templateByte (local.get $p)) (i32.const ":"))))
-                    (local.set $q
-                      (call $scanFindSpecial (local.get $p) (local.get $lineEnd) (i32.const "[") (i32.const 0) (i32.const 0)))
+                    ;; $br: first `[` or blank after an earlier `name:` on this line
+                    (if (i32.gt_u (local.get $p) (local.get $br))
+                      (then
+                        (local.set $br (call $scanFind3 (local.get $p) (i32.const "[") (i32.const 32) (i32.const 10)))
+                        (if (i32.gt_u (local.get $br) (local.get $lineEnd))
+                          (then (local.set $br (local.get $lineEnd))))))
+                    (local.set $q (local.get $br))
                     (if
                       (i32.and
                         (i32.lt_u (local.get $q) (local.get $lineEnd))
-                        (i32.eq
-                          (call $scanFindSpecial (local.get $p) (local.get $q) (i32.const 32) (i32.const 0) (i32.const 0))
-                          (local.get $q)))
+                        (i32.eq (i32.load8_u (local.get $q)) (i32.const "[")))
                       (then
                         (call $emitTok (enum.get $Token.none) (local.get $lhs) (local.get $c))
                         (call $emitTok (enum.get $Token.function) (local.get $c) (local.get $p))

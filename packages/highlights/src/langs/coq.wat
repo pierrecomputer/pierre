@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.coqWords 480)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; The high byte primes the next name: 1 a function definition, 2 a type
   ;; and then its constructors, 3 a namespace, 4 namespaces until the
   ;; sentence ends. Other vernacular commands are found by shape: a
   ;; capitalized word that starts a sentence.
-  (keyword-table $coqWords $mem.coqWords $mem.wolframWords
+  (keyword-table $coqWords $mem.coqWords $mem.coqWords+480
     (group $Token.keyword.declaration+256
       "Theorem" "Lemma" "Definition" "Fixpoint" "CoFixpoint" "Function" "Example" "Corollary"
       "Fact" "Remark" "Proposition" "Instance" "Let" "Ltac")
@@ -47,18 +51,90 @@
       (then (return (enum.get $Token.keyword.control))))
     (keyword-table.value $coqWords (local.get $lhs) (local.get $rhs)))
 
+  ;; $s is the depth times 4, plus 2 for a doc comment and 1 inside a string;
+  ;; returns it at $end, or 0 once the comment closes.
+  (func $coqComment (param $s i32) (result i32)
+    (local $c i32)
+    (local $mask i32)
+    (local $w v128)
+    (local $w1 v128)
+    (block $done
+      (loop $scan
+        (if (i32.and (local.get $s) (i32.const 1))
+          (then
+            (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const 34)))
+            (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $s (i32.xor (local.get $s) (i32.const 1)))
+            (br $scan)))
+        ;; wide loads may read the input slack past $end
+        (block $found
+          (loop $wide
+            (br_if $found (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $w (v128.load (global.get $ptr)))
+            (local.set $w1 (v128.load offset=1 (global.get $ptr)))
+            (local.set $mask
+              (i8x16.bitmask
+                (v128.or
+                  (v128.or
+                    (v128.and
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "(")))
+                      (i8x16.eq (local.get $w1) (i8x16.splat (i32.const "*"))))
+                    (v128.and
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "*")))
+                      (i8x16.eq (local.get $w1) (i8x16.splat (i32.const ")")))))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34))))))
+            (if (local.get $mask)
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
+                (br $found)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
+            (br $wide)))
+        (if (i32.ge_u (global.get $ptr) (global.get $end))
+          (then
+            (global.set $ptr (global.get $end))
+            (br $done)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (i32.const 34))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $s (i32.or (local.get $s) (i32.const 1)))
+            (br $scan)))
+        ;; a pair whose second byte is at or past $end lies in the slack
+        (if (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+          (then
+            (global.set $ptr (global.get $end))
+            (br $done)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+        (local.set $s
+          (i32.add (local.get $s) (select (i32.const 4) (i32.const -4) (i32.eq (local.get $c) (i32.const "(")))))
+        (br_if $scan (i32.ge_u (local.get $s) (i32.const 4)))
+        (local.set $s (i32.const 0))))
+    (local.get $s))
+
   ;; $expect is the pending name: 1 a function definition, 2 a type, 3 a
   ;; namespace, 4 namespaces until the sentence ends (`Require Import`), 6
   ;; inside an inductive or record body, 7 a constructor after `:=` or `|`
   ;; there. $mid is 0 at a sentence start, where a capitalized word is a
   ;; vernacular command, 2 inside the command's leading words (`Hint
   ;; Resolve`, `Local Open Scope`), and 1 elsewhere. $attr is 1 inside
-  ;; `#[...]`. All are checkpointed.
+  ;; `#[...]`; $open is the $coqComment state of a comment open across a
+  ;; chunk boundary. All are checkpointed.
   (func $hlCoq
     (local $c i32) (local $c2 i32) (local $lhs i32) (local $rhs i32) (local $gap i32)
     (local $kind i32) (local $hl i32) (local $cap i32)
-    (local $expect i32) (local $mid i32) (local $attr i32)
+    (local $expect i32) (local $mid i32) (local $attr i32) (local $open i32)
     (call $lexEmitLeadingContinuation)
+    (if (local.get $open)
+      (then
+        (local.set $lhs (global.get $ptr))
+        (local.set $hl
+          (select
+            (enum.get $Token.comment.doc)
+            (enum.get $Token.comment)
+            (i32.and (local.get $open) (i32.const 2))))
+        (local.set $open (call $coqComment (local.get $open)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -71,15 +147,16 @@
         ;; `(* ... *)` nests; `(** ... *)` documents
         (if (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (call $lexNestedBlockComment
-              (i32.const "(*")
-              (i32.const "*)")
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.and
-                  (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "*"))
-                  (i32.ne (call $templateByte (i32.add (local.get $lhs) (i32.const 3))) (i32.const ")")))))
+            (local.set $kind
+              (i32.and
+                (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "*"))
+                (i32.ne (call $templateByte (i32.add (local.get $lhs) (i32.const 3))) (i32.const ")"))))
+            (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
+            (local.set $open (call $coqComment (i32.or (i32.const 4) (i32.shl (local.get $kind) (i32.const 1)))))
+            (call $emitTok
+              (select (enum.get $Token.comment.doc) (enum.get $Token.comment) (local.get $kind))
+              (local.get $lhs)
+              (global.get $ptr))
             (br $next)))
         ;; a doubled `""` escapes a quote: two adjacent strings
         (if (i32.eq (local.get $c) (i32.const 34))

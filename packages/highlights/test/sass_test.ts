@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -292,3 +292,42 @@ void t.test('sass: nested blocks and block comments stream line-fed', () => {
     '/* a\n b */\n.x\n  color: red\n  &:hover\n    color: blue\n  .y\n    z: 1\n'
   );
 });
+
+void t.test('sass: a nested `tag:pseudo` line is a selector', () => {
+  const src =
+    '.a\n  li:first-child\n    margin: 0\n  a:hover\n    gap:0\n  color:red\n';
+  assert.deepEqual(tokenKinds('sass', src), [
+    ['.a', 'selector.class'],
+    ['li', 'tag'],
+    [':first-child', 'selector.pseudo'],
+    ['margin', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['0', 'number'],
+    ['a', 'tag'],
+    [':hover', 'selector.pseudo'],
+    ['gap', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['0', 'number'],
+    ['color', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['red', 'constant.builtin'],
+  ]);
+  assertLineFedParity('sass', src);
+});
+
+void t.test(
+  'sass: `tag:read-only` and `:host:invalid` lines are selectors',
+  () => {
+    const src =
+      '.a\n  input:read-only\n    margin: 0\n  :host:invalid\n    gap: 0\n';
+    assert.deepEqual(tokenKinds('sass', src).slice(1, 3), [
+      ['input', 'tag'],
+      [':read-only', 'selector.pseudo'],
+    ]);
+    assert.deepEqual(tokenKinds('sass', src)[6], [
+      ':host:invalid',
+      'selector.pseudo',
+    ]);
+    assertLineFedParity('sass', src);
+  }
+);

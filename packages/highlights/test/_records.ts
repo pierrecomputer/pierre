@@ -1,9 +1,12 @@
-import { type HighlightsHighlighter, inputPtr } from '../lib/highlighter';
+import type { HighlightsHighlighter } from '../lib/highlighter';
 
 /** A raw byte-offset run retained as an independent line-splitting oracle. */
 export type StyleRun = [number, number, number];
 
-/** Read raw byte records from the test-only Wasm entry before line conversion. */
+/**
+ * Read raw `[end: u32, tokenId: u16]` byte records from the test-only Wasm
+ * entry before line conversion, as `(end, tokenId)` pairs.
+ */
 export function tokenizeRecords(
   highlighter: HighlightsHighlighter,
   langId: number,
@@ -12,17 +15,19 @@ export function tokenizeRecords(
   highlighter.dv.setUint8(0, langId);
   highlighter.dv.setUint8(1, 3);
   highlighter.dv.setUint32(2, inputLength, true);
-  highlighter.buffer[inputPtr + inputLength] = 0;
+  highlighter.buffer[highlighter.inputPtr + inputLength] = 0;
   try {
     (highlighter.instance.exports.highlightByteRecords as () => void)();
   } finally {
     highlighter.bindMemory();
   }
-  return new Uint32Array(
-    highlighter.memory.buffer,
-    highlighter.dv.getUint32(6, true),
-    highlighter.dv.getUint32(10, true) >> 2
-  );
+  const at = highlighter.dv.getUint32(6, true);
+  const recs = new Uint32Array((highlighter.dv.getUint32(10, true) / 6) * 2);
+  for (let i = 0; i < recs.length; i += 2) {
+    recs[i] = highlighter.dv.getUint32(at + i * 3, true);
+    recs[i + 1] = highlighter.dv.getUint16(at + i * 3 + 4, true);
+  }
+  return recs;
 }
 
 /**

@@ -1,11 +1,15 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.adaWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Bits 8-10 capture the next name: 1 a routine, 2 a package,
   ;; 3 a type, 4 `with`/`use` units. Bit 11 keeps a capture armed (`in out`).
   ;; Bit 12: a tick after the word starts an attribute. `range` collides with
   ;; `raise` and is matched directly.
-  (keyword-table $adaWords $mem.adaWords $mem.apexWords
+  (keyword-table $adaWords $mem.adaWords $mem.adaWords+416
     (group $Token.keyword.control
       "if" "then" "elsif" "else" "case" "when" "loop" "while" "for" "exit" "return" "goto" "raise"
       "select" "accept" "abort" "delay" "terminate" "reverse" "do" "until")
@@ -140,7 +144,9 @@
                     (local.set $expect (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 7)))))
                 ;; `with` and `use` open a clause only at its start, not in `new T with record`
                 (if (i32.and (i32.eq (local.get $expect) (i32.const 4)) (i32.ne (local.get $last) (i32.const 0)))
-                  (then (local.set $expect (i32.const 0))))
+                  (then
+                    (local.set $expect (i32.const 0))
+                    (local.set $hl (enum.get $Token.keyword))))
                 (local.set $prev
                   (select (i32.const 1) (i32.const 2) (i32.and (local.get $kind) (i32.const 4096)))))
               (else

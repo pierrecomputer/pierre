@@ -258,3 +258,67 @@ void t.test('pascal: multi-line constructs stream line-fed', () => {
     assertLineFedParity('pascal', code);
   }
 });
+
+void t.test('pascal: the statement after a case label is not a type', () => {
+  const code = "case Key of\n  0: Total := 1;\n  'a': WriteLn(Total);\nend;\n";
+  assert.deepEqual(tokenKinds('pascal', code), [
+    ['case', 'keyword.control'],
+    ['Key', 'variable'],
+    ['of', 'keyword.control'],
+    ['0', 'number'],
+    [':', 'punctuation.delimiter'],
+    ['Total', 'variable'],
+    [':=', 'operator'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+    ["'a'", 'string'],
+    [':', 'punctuation.delimiter'],
+    ['WriteLn', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['Total', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['end', 'keyword'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('pascal', code);
+});
+
+void t.test('pascal: name and spaced case labels end a label', () => {
+  const code =
+    'case Color of\n  clRed: x := 1;\n  0 : begin y := 2; end;\n  clBlue: z := 3;\nend;\nvar v: TFoo;\n';
+  assert.deepEqual(tokenKinds('pascal', code), [
+    ['case', 'keyword.control'],
+    ['Color', 'variable'],
+    ['of', 'keyword.control'],
+    ['clRed', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['x', 'variable'],
+    [':=', 'operator'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['0', 'number'],
+    [':', 'punctuation.delimiter'],
+    ['begin', 'keyword'],
+    ['y', 'variable'],
+    [':=', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['end', 'keyword'],
+    [';', 'punctuation.delimiter'],
+    ['clBlue', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['z', 'variable'],
+    [':=', 'operator'],
+    ['3', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['end', 'keyword'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['v', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['TFoo', 'type'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('pascal', code);
+});

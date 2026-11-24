@@ -4,8 +4,10 @@ import type { LRUMap } from 'lru_map';
 import { DEFAULT_THEMES } from '../constants';
 import { resolveHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
+import { RegisteredHighlightsLanguages } from '../highlighter/languages/constants';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
+import { resolveHighlightsLanguages } from '../highlighter/languages/resolveHighlightsLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
 import {
   getHighlighterIfLoaded,
@@ -517,12 +519,10 @@ export class WorkerPoolManager {
               return;
             }
 
-            let resolvedLanguages: ResolvedLanguage[] = [];
-            if (this.preferredHighlighter !== 'highlights') {
-              resolvedLanguages = hasResolvedLanguages(languages)
-                ? getResolvedLanguages(languages)
-                : await resolveLanguages(languages);
-            }
+            const resolving = this.resolveWorkerLanguages(languages);
+            const resolvedLanguages = Array.isArray(resolving)
+              ? resolving
+              : await resolving;
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               resolve();
               return;
@@ -1220,6 +1220,19 @@ export class WorkerPoolManager {
     this.queueDrain();
   }
 
+  // Cached grammars and lexers return without a promise, so a task can start
+  // in the same tick.
+  private resolveWorkerLanguages(
+    langs: SupportedLanguages[]
+  ): ResolvedLanguage[] | Promise<ResolvedLanguage[]> {
+    if (this.preferredHighlighter === 'highlights') {
+      return resolveHighlightsLanguages(langs);
+    }
+    return hasResolvedLanguages(langs)
+      ? getResolvedLanguages(langs)
+      : resolveLanguages(langs);
+  }
+
   private async resolveLanguagesAndExecuteTask(
     availableWorker: ManagedWorker,
     task: RenderFileTask | RenderDiffTask,
@@ -1241,19 +1254,19 @@ export class WorkerPoolManager {
         });
       }
       // Add resolved languages if required
-      const workerMissingLangs =
-        this.preferredHighlighter === 'highlights'
-          ? []
-          : langs.filter((lang) => !availableWorker.langs.has(lang));
+      // Highlights workers need only the lexers registered for Highlights.
+      const workerMissingLangs = langs.filter(
+        (lang) =>
+          !availableWorker.langs.has(lang) &&
+          (this.preferredHighlighter !== 'highlights' ||
+            RegisteredHighlightsLanguages.has(lang))
+      );
 
       if (workerMissingLangs.length > 0) {
-        if (hasResolvedLanguages(workerMissingLangs)) {
-          task.request.resolvedLanguages =
-            getResolvedLanguages(workerMissingLangs);
-        } else {
-          task.request.resolvedLanguages =
-            await resolveLanguages(workerMissingLangs);
-        }
+        const resolving = this.resolveWorkerLanguages(workerMissingLangs);
+        task.request.resolvedLanguages = Array.isArray(resolving)
+          ? resolving
+          : await resolving;
       }
       // If the task has been cleaned up after awaiting language resolving,
       // lets fully clean it up
@@ -1515,7 +1528,12 @@ export class WorkerPoolManager {
       }
       let hasEveryLang = true;
       for (const lang of langs) {
-        if (!managedWorker.langs.has(lang)) {
+        // Highlights workers bundle every lexer that has no registered loader.
+        if (
+          !managedWorker.langs.has(lang) &&
+          (this.preferredHighlighter !== 'highlights' ||
+            RegisteredHighlightsLanguages.has(lang))
+        ) {
           hasEveryLang = false;
           break;
         }

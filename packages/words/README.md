@@ -202,8 +202,9 @@ const plugins = { code: createHighlightsPlugin({ theme: pierreLight }) };
 ```
 
 Create the plugin once, outside the render. Unknown languages render as plain
-text. React and `@pierre/highlights` are optional peer dependencies, and the
-core entry point loads neither.
+text. To add a language, call `registerLanguages()` from `@pierre/highlights`
+with a custom lexer. React and `@pierre/highlights` are optional peer
+dependencies, and the core entry point loads neither.
 
 ## Math
 

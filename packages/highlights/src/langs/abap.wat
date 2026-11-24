@@ -1,5 +1,9 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.abapWords 1216)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Lowercase words. Bits 8-10 capture the next name: 1 a method or form
   ;; definition, 2 a type, 3 nothing (`CALL METHOD x` calls rather than
@@ -7,7 +11,7 @@
   ;; x`), and bit 12 makes the word a builtin type where a type is expected
   ;; (`TYPE REF TO data`). `like`, `where`, and `ascending` collide and are
   ;; matched directly.
-  (keyword-table $abapWords $mem.abapWords $mem.moonbitWords
+  (keyword-table $abapWords $mem.abapWords $mem.abapWords+1216
     (group $Token.keyword.declaration
       "constants" "field-symbols" "field-symbol" "class-data" "statics" "parameters"
       "select-options" "tables" "endclass" "endmethod" "endform" "endfunction" "endinterface"
@@ -25,7 +29,7 @@
     (group $Token.keyword.control
       "if" "elseif" "else" "endif" "case" "when" "endcase" "do" "enddo" "while" "endwhile" "loop"
       "endloop" "try" "cleanup" "endtry" "check" "exit" "continue" "return" "raise" "endat"
-      "endselect" "leave" "stop" "retry" "then" "switch" "cond")
+      "endselect" "leave" "stop" "retry" "then" "switch" "cond" "others")
     (group $Token.keyword
       "read" "append" "insert" "modify" "delete" "clear" "free" "refresh" "sort" "collect" "move"
       "move-corresponding" "assign" "unassign" "write" "message" "concatenate" "split" "replace"
@@ -243,7 +247,7 @@
                             (i64.eq (local.get $w) (i64.const "ascendin"))
                             (i32.eq (i32.load8_u (i32.const $mem.lexLowerScratch+8)) (i32.const "g")))))
                       (then (local.set $v (enum.get $Token.keyword))))))))
-            (if (i32.ge_s (local.get $v) (i32.const 0))
+            (if (i32.and (i32.ge_s (local.get $v) (i32.const 0)) (i32.ne (local.get $want) (i32.const 1)))
               (then
                 (local.set $hl (i32.and (local.get $v) (i32.const 255)))
                 (if

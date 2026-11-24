@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -595,5 +595,61 @@ void t.test(
     ]) {
       checkInvariants(lexer.hl, src);
     }
+  }
+);
+
+void t.test('lisp: `#;` comments out one datum across lines', () => {
+  const code = '(list 1 #;2 3)\n(f #;\n (a "b)"\n #\\) [c]) 4)\n(g #;) 5)\n';
+  assertLineFedParity('lisp', code);
+  assert.deepEqual(tokenKinds('lisp', code), [
+    ['(', 'punctuation.bracket'],
+    ['list', 'function'],
+    ['1', 'number'],
+    ['#;2', 'comment'],
+    ['3', 'number'],
+    [')', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['f', 'function'],
+    ['#;', 'comment'],
+    ['(a "b)"', 'comment'],
+    ['#\\) [c])', 'comment'],
+    ['4', 'number'],
+    [')', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['g', 'function'],
+    ['#;', 'comment'],
+    [')', 'punctuation.bracket'],
+    ['5', 'number'],
+    [')', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test(
+  'lisp: a bare `define` name is a variable; `|a b|` is one symbol',
+  () => {
+    const code = "(define pi-ish 3.14)\n(define (sq x) x)\n(list '|a;b| 'c)";
+    assertLineFedParity('lisp', code);
+    assert.deepEqual(tokenKinds('lisp', code), [
+      ['(', 'punctuation.bracket'],
+      ['define', 'keyword.declaration'],
+      ['pi-ish', 'variable'],
+      ['3.14', 'number'],
+      [')', 'punctuation.bracket'],
+      ['(', 'punctuation.bracket'],
+      ['define', 'keyword.declaration'],
+      ['(', 'punctuation.bracket'],
+      ['sq', 'function.definition'],
+      ['x', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['x', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['(', 'punctuation.bracket'],
+      ['list', 'function'],
+      ["'", 'punctuation.special'],
+      ['|a;b|', 'variable'],
+      ["'", 'punctuation.special'],
+      ['c', 'variable'],
+      [')', 'punctuation.bracket'],
+    ]);
   }
 );

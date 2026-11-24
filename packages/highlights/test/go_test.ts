@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -424,4 +424,35 @@ void t.test('go: each line of a grouped type declaration names a type', () => {
     ['x', 'variable']
   );
   assertLineFedParity('go', code);
+});
+
+void t.test('go: := is one operator and ...T is a type', () => {
+  assert.deepEqual(tokenKinds('go', 'x := 1'), [
+    ['x', 'variable'],
+    [':=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assert.deepEqual(tokenKinds('go', 'func f(xs ...Option) { g(xs...) }'), [
+    ['func', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['xs', 'variable'],
+    ['...', 'punctuation.delimiter'],
+    ['Option', 'type'],
+    [') {', 'punctuation.bracket'],
+    ['g', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['xs', 'variable'],
+    ['...', 'punctuation.delimiter'],
+    [') }', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('go: banner comments are not doc comments', () => {
+  assert.deepEqual(tokenKinds('go', '/**/\n////////\n/***/\n/// d'), [
+    ['/**/', 'comment'],
+    ['////////', 'comment'],
+    ['/***/', 'comment'],
+    ['/// d', 'comment.doc'],
+  ]);
 });

@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.cypherWords 416)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Matched without case. Words that also make common names, such as
   ;; `node`, `key`, and `type`, stay out.
-  (keyword-table $cypherWords $mem.cypherWords $mem.codeqlWords
+  (keyword-table $cypherWords $mem.cypherWords $mem.cypherWords+416
     (group $Token.keyword
       "match" "optional" "where" "return" "with" "create" "merge" "set" "delete" "detach"
       "remove" "unwind" "call" "yield" "order" "by" "skip" "limit" "asc" "desc" "ascending"

@@ -1,7 +1,11 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.solidityWords 416)
 
-  (keyword-table $solidityWords $mem.solidityWords $mem.swiftWords
+  (import "@pierre/wat-tools/common.wat")
+
+  (keyword-table $solidityWords $mem.solidityWords $mem.solidityWords+416
     (group $Token.keyword.declaration+256 "function" "modifier" "event" "error")
     (group $Token.keyword.declaration+512 "contract" "interface" "library" "struct" "enum" "type")
     (group $Token.keyword.declaration "constructor" "fallback" "receive" "let")
@@ -133,6 +137,16 @@
                 (if (i32.ge_s (local.get $kind) (i32.const 0))
                   (then
                     (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $kind) (enum.get $Token.keyword.import))
+                        (i32.and
+                          (i32.eq (local.get $n) (i32.const 4))
+                          (i32.eq (i32.load (local.get $lhs)) (i32.const "from"))))
+                      (then
+                        (local.set $c2 (call $templateByte (local.get $p)))
+                        (if (i32.eqz (i32.or (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c2) (i32.const 39))))
+                          (then (local.set $hl (enum.get $Token.variable))))))
                     (if (i32.shr_u (local.get $kind) (i32.const 8))
                       (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8))))))
                   (else
@@ -146,7 +160,12 @@
                           (then (local.set $hl (enum.get $Token.function)))
                           (else
                             (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
-                              (then (local.set $hl (enum.get $Token.type))))))))))))
+                              (then
+                                (local.set $hl
+                                  (select
+                                    (enum.get $Token.constant)
+                                    (enum.get $Token.type)
+                                    (call $lexIsConstCase (local.get $lhs) (local.get $rhs))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (br $next)))
