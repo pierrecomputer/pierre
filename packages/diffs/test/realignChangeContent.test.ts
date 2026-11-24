@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata } from '../src/types';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   parsePatchFiles,
   processFile,
   processPatch,
 } from '../src/utils/parsePatchFiles';
+import { collectDiffRows } from './testUtils';
 import { assertDefined, verifyFileDiffHunkValues } from './testUtils';
 
 // parseDiffFromFile pairs change-block lines by similarity: the diff library
@@ -137,15 +137,12 @@ describe('parsed change-block realignment', () => {
         );
 
         const rows: string[] = [];
-        iterateOverDiff({
+        for (const { type, deletionLine } of collectDiffRows({
           diff: file,
           diffStyle: 'unified',
-          callback({ type, deletionLine }) {
-            rows.push(
-              type !== 'change' ? ' ' : deletionLine != null ? '-' : '+'
-            );
-          },
-        });
+        })) {
+          rows.push(type !== 'change' ? ' ' : deletionLine != null ? '-' : '+');
+        }
         expect(rows.join('')).toBe(
           disableLineMatching === true
             ? ' ----++++++++++++ '
@@ -160,13 +157,12 @@ describe('parsed change-block realignment', () => {
 
         for (const diffStyle of ['split', 'unified'] as const) {
           const allRows: [number | undefined, number | undefined][] = [];
-          iterateOverDiff({
+          for (const { deletionLine, additionLine } of collectDiffRows({
             diff: file,
             diffStyle,
-            callback({ deletionLine, additionLine }) {
-              allRows.push([deletionLine?.lineIndex, additionLine?.lineIndex]);
-            },
-          });
+          })) {
+            allRows.push([deletionLine?.lineIndex, additionLine?.lineIndex]);
+          }
           expect(allRows).toHaveLength(diffStyle === 'split' ? 14 : 18);
           expect(
             allRows.flatMap(([old]) => (old == null ? [] : [old]))
@@ -178,18 +174,17 @@ describe('parsed change-block realignment', () => {
           // Windows begin and end inside the replacement and cross its edges.
           for (const startingLine of [0, 1, 3, 4, 5, 8, 13, 17]) {
             const windowRows: typeof allRows = [];
-            iterateOverDiff({
+            for (const { deletionLine, additionLine } of collectDiffRows({
               diff: file,
               diffStyle,
               startingLine,
               totalLines: 4,
-              callback({ deletionLine, additionLine }) {
-                windowRows.push([
-                  deletionLine?.lineIndex,
-                  additionLine?.lineIndex,
-                ]);
-              },
-            });
+            })) {
+              windowRows.push([
+                deletionLine?.lineIndex,
+                additionLine?.lineIndex,
+              ]);
+            }
             expect(windowRows).toEqual(
               allRows.slice(startingLine, startingLine + 4)
             );
@@ -321,13 +316,12 @@ describe('parsed change-block realignment', () => {
     expect(file.hunks[0].noEOFCRDeletions).toBe(true);
     expect(file.hunks[0].noEOFCRAdditions).toBe(true);
     const eofRows: [boolean | undefined, boolean | undefined][] = [];
-    iterateOverDiff({
+    for (const { deletionLine, additionLine } of collectDiffRows({
       diff: file,
       diffStyle: 'unified',
-      callback({ deletionLine, additionLine }) {
-        eofRows.push([deletionLine?.noEOFCR, additionLine?.noEOFCR]);
-      },
-    });
+    })) {
+      eofRows.push([deletionLine?.noEOFCR, additionLine?.noEOFCR]);
+    }
     expect(eofRows).toEqual([
       [true, undefined],
       [undefined, false],

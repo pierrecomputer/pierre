@@ -410,6 +410,20 @@ void t.test('html: comment forms, bogus comments, and stray brackets', () => {
       ['<1>', null],
     ]
   );
+  const code =
+    '<?php $a->b ?>\n<?xml version="1.0">\n<p>x</p>\n<?xml a\n<b>y</b>\n';
+  assert.deepEqual(tokenKinds('html', code).slice(0, 5), [
+    ['<?php $a->b ?>', 'comment'],
+    ['<?xml version="1.0">', 'comment'],
+    ['<', 'punctuation.bracket.html'],
+    ['p', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+  ]);
+  assert.deepEqual(tokenKinds('html', code).slice(9, 11), [
+    ['<?xml a', 'comment'],
+    ['<', 'punctuation.bracket.html'],
+  ]);
+  assertLineFedParity('html', code);
 });
 
 void t.test(
@@ -459,4 +473,37 @@ void t.test('html: a style lang names the css dialect of its body', () => {
   ]) {
     assertLineFedParity('html', code);
   }
+});
+
+void t.test('html: numeric references need digits of their base', () => {
+  assert.deepEqual(tokenKinds('html', '&#xZZ; &#x; &#; &#x1F; &#09;'), [
+    ['&#xZZ; &#x; &#;', null],
+    ['&#x1F;', 'string.special'],
+    ['&#09;', 'string.special'],
+  ]);
+});
+
+void t.test('html: a CDATA section ends at ]]>, not at the first >', () => {
+  assert.deepEqual(
+    tokenKinds('html', '<svg><![CDATA[ x > y ]] > z ]]></svg>').slice(3, 5),
+    [
+      ['<![CDATA[ x > y ]] > z ]]>', 'text.literal'],
+      ['</', 'punctuation.bracket.html'],
+    ]
+  );
+  assertLineFedParity('html', '<svg><![CDATA[ x > y\n]] > z ]]></svg>\n');
+});
+
+void t.test('html: script type and lang pick the body language', () => {
+  const code =
+    '<script type="text/x-template">\n<div>{{ a }}</div>\n</script>\n<script type="text/javascript">a</script>\n<script lang="ts">\nlet n: number;\n</script>\n';
+  const kinds = tokenKinds('html', code);
+  assert.ok(
+    kinds.some(([text, kind]) => text === '<div>{{ a }}</div>' && kind === null)
+  );
+  assert.ok(kinds.some(([text, kind]) => text === 'a' && kind === 'variable'));
+  assert.ok(
+    kinds.some(([text, kind]) => text === 'number' && kind === 'type.builtin')
+  );
+  assertLineFedParity('html', code);
 });

@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gherkinWords 64)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./dockerfile.wat")
   (import "./bicep.wat")
 
   ;; group 1 opens a section with `:` right after it; group 2 starts a step
-  (keyword-table $gherkinWords $mem.gherkinWords $mem.gnuplotWords
+  (keyword-table $gherkinWords $mem.gherkinWords $mem.gherkinWords+64
     (group "Feature" "Background" "Rule" "Scenario" "Example" "Examples" "Scenarios" "Ability")
     (group "Given" "When" "Then" "And" "But"))
 
@@ -20,9 +24,11 @@
     (local $g i32)
     (local $head i32)
     (local $row i32)
+    (local $noGt i32)
     (call $lexEmitLeadingContinuation)
     (local.set $head (i32.const 1))
     (local.set $row (i32.const 0))
+    (local.set $noGt (i32.const 0))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -127,7 +133,8 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then
-            (if (call $lexIsIdentStart (local.get $c2))
+            ;; $noGt: where a `>` search failed, so later `<` before it do not search again
+            (if (i32.and (i32.ge_u (local.get $lhs) (local.get $noGt)) (call $lexIsIdentStart (local.get $c2)))
               (then
                 (local.set $p
                   (call $scanFindSpecial
@@ -140,7 +147,8 @@
                   (then
                     (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
                     (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-                    (br $next)))))))
+                    (br $next)))
+                (local.set $noGt (local.get $p))))))
         (if (local.get $row)
           (then
             (if (i32.eq (local.get $c) (i32.const "|"))

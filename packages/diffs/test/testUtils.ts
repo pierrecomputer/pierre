@@ -1,8 +1,92 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
+import type {
+  DiffLineMetadata,
+  LayoutColumns,
+  RowSpec,
+} from '../src/layout/RowSpec';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
-import type { FileDiffMetadata, ParsedPatch } from '../src/types';
+import type { FileRenderResult } from '../src/renderers/FileRenderer';
+import type { FileDiffMetadata, Hunk, ParsedPatch } from '../src/types';
+import {
+  DiffRowCursor,
+  type DiffRowCursorOptions,
+} from '../src/utils/DiffRowCursor';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { processPatch } from '../src/utils/parsePatchFiles';
+
+export interface CollectedDiffRow {
+  type: DiffRowCursor['type'];
+  hunkIndex: number;
+  hunk: Hunk | undefined;
+  collapsedBefore: number;
+  collapsedAfter: number;
+  deletionLine: DiffLineMetadata | undefined;
+  additionLine: DiffLineMetadata | undefined;
+}
+
+// Collects the cursor's rows as plain objects for row-order assertions.
+export function collectDiffRows(
+  options: DiffRowCursorOptions
+): CollectedDiffRow[] {
+  const rows = new DiffRowCursor(options);
+  const result: CollectedDiffRow[] = [];
+  while (rows.next()) {
+    const {
+      type,
+      hunkIndex,
+      hunk,
+      collapsedBefore,
+      collapsedAfter,
+      splitLineIndex,
+    } = rows;
+    result.push({
+      type,
+      hunkIndex,
+      hunk,
+      collapsedBefore,
+      collapsedAfter,
+      deletionLine: rows.hasDeletion
+        ? {
+            lineIndex: rows.deletionLineIndex,
+            lineNumber: rows.deletionLineNumber,
+            unifiedLineIndex: rows.deletionUnifiedLineIndex,
+            splitLineIndex,
+            noEOFCR: rows.deletionNoEOFCR,
+          }
+        : undefined,
+      additionLine: rows.hasAddition
+        ? {
+            lineIndex: rows.additionLineIndex,
+            lineNumber: rows.additionLineNumber,
+            unifiedLineIndex: rows.additionUnifiedLineIndex,
+            splitLineIndex,
+            noEOFCR: rows.additionNoEOFCR,
+          }
+        : undefined,
+    });
+  }
+  return result;
+}
+
+// Includes separated hunks, unequal change sides, and unchanged trailing rows.
+export function createDiffFixtures(): FileDiffMetadata[] {
+  const before = Array.from({ length: 35 }, (_, index) => `line ${index}\n`);
+  const after = [...before];
+  after.splice(4, 2, 'replacement one\n', 'replacement two\n', 'added\n');
+  after.splice(23, 1, 'replacement later\n');
+  const full = parseDiffFromFile(
+    { name: 'search.txt', contents: before.join('') },
+    { name: 'search.txt', contents: after.join('') },
+    { context: 1, disableLineMatching: true }
+  );
+  const partial = processPatch(
+    '--- a/search.txt\n+++ b/search.txt\n@@ -4,4 +4,5 @@\n context\n-old one\n-old two\n+new one\n+new two\n+added\n context end\n@@ -20,3 +21,3 @@\n later context\n-old later\n+new later\n final context\n'
+  ).files[0];
+  if (partial == null) throw new Error('Expected parsed patch fixture');
+  return [full, partial];
+}
 
 // Async test helpers
 
@@ -308,11 +392,55 @@ export function countRenderedLines(ast: ElementContent[]): number {
   ).length;
 }
 
+// The content cells of a column's rows, in order; none for a column the
+// result does not have.
+export function columnContent(
+  specs: readonly RowSpec[] | undefined
+): ElementContent[] {
+  return specs?.map((spec) => spec.content) ?? [];
+}
+
+// A column the diff render result has; the test is wrong otherwise.
+function requireColumn(
+  result: HunksRenderResult | undefined,
+  column: keyof LayoutColumns
+): RowSpec[] {
+  const specs = result?.columns[column];
+  if (specs == null) {
+    throw new Error(`the render result has no ${column} column`);
+  }
+  return specs;
+}
+
+/** The content cells of one column of a diff render result, in row order. */
+export function contentAST(
+  result: HunksRenderResult | undefined,
+  column: keyof LayoutColumns
+): ElementContent[] {
+  return requireColumn(result, column).map((spec) => spec.content);
+}
+
+/** The gutter cells of one column of a diff render result, in row order. */
+export function gutterAST(
+  result: HunksRenderResult | undefined,
+  column: keyof LayoutColumns
+): ElementContent[] {
+  return requireColumn(result, column).map((spec) => spec.gutter);
+}
+
+/** The content cells of a file render result's rows, in row order. */
+export function fileContentAST(
+  result: FileRenderResult | undefined
+): ElementContent[] {
+  return columnContent(result?.column);
+}
+
 // Count rows in split mode by looking at line-index values
 // Each unique line-index represents one visual row in split view
 export function countSplitRows(result: HunksRenderResult): number {
   const lineIndices = new Set<number>();
-  const { additionsContentAST = [], deletionsContentAST = [] } = result;
+  const additionsContentAST = columnContent(result.columns.additions);
+  const deletionsContentAST = columnContent(result.columns.deletions);
 
   for (const nodes of [additionsContentAST, deletionsContentAST]) {
     const allElements = collectAllElements(nodes);
@@ -438,19 +566,14 @@ export interface RenderResultProjection {
 export function projectRenderResult(
   result: HunksRenderResult
 ): RenderResultProjection {
+  const project = (column: keyof LayoutColumns) => {
+    const cells = contentAST(result, column);
+    return cells == null ? undefined : projectColumn(cells);
+  };
   return {
-    unified:
-      result.unifiedContentAST != null
-        ? projectColumn(result.unifiedContentAST)
-        : undefined,
-    deletions:
-      result.deletionsContentAST != null
-        ? projectColumn(result.deletionsContentAST)
-        : undefined,
-    additions:
-      result.additionsContentAST != null
-        ? projectColumn(result.additionsContentAST)
-        : undefined,
+    unified: project('unified'),
+    deletions: project('deletions'),
+    additions: project('additions'),
     bufferBefore: result.bufferBefore,
     bufferAfter: result.bufferAfter,
   };

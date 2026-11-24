@@ -291,6 +291,29 @@ export function resolveEditorCommandFromKeyboardEvent(
   );
 }
 
+export type SearchShortcut = 'find' | 'replace' | 'next' | 'previous';
+
+// Resolves the find/replace shortcuts a host handles outside the editor's
+// keymap: cmd/ctrl+f opens find, cmd/ctrl+alt+f opens find/replace, and
+// cmd/ctrl+g steps to the next match (shift for previous). Hosts that bind
+// these keys themselves, e.g. on window, call this so platform handling stays
+// in one place. macOS can emit a dead key for the physical F or G, so fall
+// back to event.code.
+export function resolveSearchShortcut(
+  event: KeyboardEvent,
+  isMac: boolean = isMacLike()
+): SearchShortcut | undefined {
+  if (!isPrimaryModifier(event, isMac)) {
+    return undefined;
+  }
+  const normalizedKey =
+    event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  if (!event.shiftKey && (normalizedKey === 'f' || event.code === 'KeyF')) {
+    return event.altKey ? 'replace' : 'find';
+  }
+  return resolveFindAgainShortcut(event, isMac);
+}
+
 // Detects the native "find again" shortcut (cmd/ctrl+g for next, adding shift
 // for previous) so the find/replace panel can override the browser default and
 // step through matches. macOS can emit a dead key for the physical G, so fall

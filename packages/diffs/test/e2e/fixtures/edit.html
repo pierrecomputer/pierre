@@ -40,7 +40,7 @@
       real cross-browser gap. The editor reads its selection through the shadow
       root, and the pinned CI Chromium (and older browsers/WebViews) lack
       Selection.getComposedRanges. That path now falls back to the older
-      ShadowRoot.getSelection() (see getShadowRootRange in src/editor/editor.ts),
+      ShadowRoot.getSelection() (see getShadowRootRange in src/utils/getComposedSelectionRange.ts),
       so a plain click seeds the caret and typing works without a workaround.
       edit.pw.ts intentionally clicks-then-types to guard this behavior.
     -->
@@ -57,9 +57,12 @@
         throw new Error('Missing edit fixture nodes.');
       }
 
-      const withAnnotations = new URLSearchParams(location.search).has(
-        'annotations'
-      );
+      const params = new URLSearchParams(location.search);
+      const withAnnotations = params.has('annotations');
+      // `mixedBlocks` renders a diff with every kind of hunk block: context, a
+      // change with additions, a pure deletion mid-file, and a pure deletion at
+      // the end of the file.
+      const withMixedBlocks = params.has('mixedBlocks');
       const oldFile = withAnnotations
         ? {
             name: 'edit.ts',
@@ -67,13 +70,24 @@
 export default shared;
 `,
           }
-        : {
-            name: 'edit.ts',
-            contents: `const value = 1;
+        : withMixedBlocks
+          ? {
+              name: 'edit.ts',
+              contents: `const value = 1;
+const removed = 'old';
+const keep = true;
+const dropped = 'gone';
+export default value;
+// trailing
+`,
+            }
+          : {
+              name: 'edit.ts',
+              contents: `const value = 1;
 const removed = 'old';
 export default value;
 `,
-          };
+            };
 
       const newFile = withAnnotations
         ? {
@@ -83,13 +97,22 @@ const annotated = 2;
 export default shared;
 `,
           }
-        : {
-            name: 'edit.ts',
-            contents: `const value = 1;
+        : withMixedBlocks
+          ? {
+              name: 'edit.ts',
+              contents: `const value = 1;
+const added = 'new';
+const keep = true;
+export default value;
+`,
+            }
+          : {
+              name: 'edit.ts',
+              contents: `const value = 1;
 const added = 'new';
 export default value;
 `,
-          };
+            };
       const lineAnnotations = withAnnotations
         ? [{ lineNumber: 2, side: 'additions' }]
         : undefined;
@@ -110,10 +133,8 @@ export default value;
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',
-        diffStyle: 'split',
-        enableGutterUtility: new URLSearchParams(location.search).has(
-          'gutterUtility'
-        ),
+        diffStyle: params.has('unified') ? 'unified' : 'split',
+        enableGutterUtility: params.has('gutterUtility'),
         onGutterUtilityClick() {},
         renderAnnotation() {
           const annotation = document.createElement('div');
@@ -143,12 +164,19 @@ export default value;
         window.__syncCount += 1;
         return result;
       };
+      // A theme change gives every row new tokens, so the columns are
+      // written whole: the rebuild the focus tests wait for. A forced render
+      // alone patches rows in place and swaps nothing.
+      let forcedThemeType = 'dark';
       window.__forceEditorFullRender = () => {
-        instance.setOptions({
-          ...instance.options,
-          disableLineNumbers: !(instance.options.disableLineNumbers ?? false),
-        });
-        instance.render({ oldFile, newFile, forceRender: true });
+        forcedThemeType = forcedThemeType === 'dark' ? 'light' : 'dark';
+        instance.setThemeType(forcedThemeType);
+      };
+      // What every host render path tells the editor right before it swaps
+      // the editable DOM, exposed on its own so a spec can open the gap
+      // between that capture and the sync that follows it.
+      window.__captureEditorFocusForDOMReplacement = () => {
+        editor.__captureFocusForDOMReplacement();
       };
       window.__moveEditorContainer = () => {
         const previousContainer = mount.querySelector('diffs-container');

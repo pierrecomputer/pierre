@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import t from 'node:test';
 
-import type { Lang } from '../lib/index';
-import { codeToTokens, LiveTokenizer, StreamTokenizer } from '../lib/index';
+import type { Lang } from '../lib/core';
+import { codeToTokens, LiveTokenizer, StreamTokenizer } from '../lib/core';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { initFullModule } from './_util';
 

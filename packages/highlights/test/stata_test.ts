@@ -146,3 +146,43 @@ test('stata: comments, continuations, and programs', () => {
   assertLineFedParity('stata', code.replaceAll('\n', '\r\n'));
   assertLineFedParity('stata', 'reg y ///\n\n x\n');
 });
+
+test('stata: `#delimit ;` ends commands at `;` instead of line breaks', () => {
+  const code =
+    '#delimit ;\n* note ;\nregress price mpg\n    weight, robust;\n#delimit cr\ngen y = 2\n';
+  expect(tokenKinds('stata', code)).toEqual([
+    ['#delimit', 'preproc'],
+    [';', 'punctuation.delimiter'],
+    ['* note ;', 'comment'],
+    ['regress', 'keyword'],
+    ['price mpg', 'variable'],
+    ['weight', 'variable'],
+    [',', 'punctuation.delimiter'],
+    ['robust', 'variable.parameter'],
+    [';', 'punctuation.delimiter'],
+    ['#delimit cr', 'preproc'],
+    ['gen', 'keyword'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['2', 'number'],
+  ]);
+  assertLineFedParity('stata', code);
+  assertLineFedParity('stata', code.replaceAll('\n', '\r\n'));
+});
+
+test('stata: a `*` comment under `#delimit ;` runs to the `;`', () => {
+  const code = '#delimit ;\n* two\n\n  lines ; sum x;\n#delimit cr\nsum x\n';
+  expect(tokenKinds('stata', code)).toEqual([
+    ['#delimit', 'preproc'],
+    [';', 'punctuation.delimiter'],
+    ['* two', 'comment'],
+    ['lines ;', 'comment'],
+    ['sum', 'keyword'],
+    ['x', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['#delimit cr', 'preproc'],
+    ['sum', 'keyword'],
+    ['x', 'variable'],
+  ]);
+  assertLineFedParity('stata', code);
+});

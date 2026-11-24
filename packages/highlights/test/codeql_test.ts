@@ -114,3 +114,25 @@ test('codeql: QLDoc and block comments span lines', () => {
   ]);
   assertLineFedParity('codeql', code);
 });
+
+test('codeql: a transitive closure call is a call', () => {
+  expect(
+    tokenKinds('codeql', 'from Expr x select x.getParent+(), x.getAChild*()\n')
+  ).toEqual([
+    ['from', 'keyword.control'],
+    ['Expr', 'type'],
+    ['x', 'variable'],
+    ['select', 'keyword.control'],
+    ['x', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['getParent', 'function'],
+    ['+', 'operator'],
+    ['()', 'punctuation.bracket'],
+    [',', 'punctuation.delimiter'],
+    ['x', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['getAChild', 'function'],
+    ['*', 'operator'],
+    ['()', 'punctuation.bracket'],
+  ]);
+});

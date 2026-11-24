@@ -11,9 +11,9 @@ import type {
   VirtualFileMetrics,
 } from '../src/types';
 import { FILE_ANNOTATION_DOM_KEY } from '../src/utils/includesFileAnnotations';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, waitFor } from './domHarness';
+import { collectDiffRows } from './testUtils';
 
 const metrics: VirtualFileMetrics & { hunkSeparatorHeight: number } = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
@@ -148,7 +148,7 @@ const unannotatedFileHeight =
   metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing;
 
 describe('sparse layout checkpoints', () => {
-  test('iterateOverDiff windowing matches full iteration for a deep expanded window', () => {
+  test('DiffRowCursor windowing matches full iteration for a deep expanded window', () => {
     const oldFile = createLargeFile();
     const newFile: FileContents = {
       ...oldFile,
@@ -158,35 +158,33 @@ describe('sparse layout checkpoints', () => {
     const full: number[] = [];
     const windowed: number[] = [];
 
-    iterateOverDiff({
+    for (const { additionLine, deletionLine } of collectDiffRows({
       diff,
       diffStyle: 'split',
       expandedHunks: true,
-      callback: ({ additionLine, deletionLine }) => {
-        const lineIndex =
-          additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex;
-        if (lineIndex == null) {
-          throw new Error('Expected a diff line');
-        }
-        full.push(lineIndex);
-      },
-    });
+    })) {
+      const lineIndex =
+        additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex;
+      if (lineIndex == null) {
+        throw new Error('Expected a diff line');
+      }
+      full.push(lineIndex);
+    }
 
-    iterateOverDiff({
+    for (const { additionLine, deletionLine } of collectDiffRows({
       diff,
       diffStyle: 'split',
       startingLine: 10_000,
       totalLines: 5,
       expandedHunks: true,
-      callback: ({ additionLine, deletionLine }) => {
-        const lineIndex =
-          additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex;
-        if (lineIndex == null) {
-          throw new Error('Expected a diff line');
-        }
-        windowed.push(lineIndex);
-      },
-    });
+    })) {
+      const lineIndex =
+        additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex;
+      if (lineIndex == null) {
+        throw new Error('Expected a diff line');
+      }
+      windowed.push(lineIndex);
+    }
 
     expect(windowed).toEqual(full.slice(10_000, 10_005));
   });
@@ -237,6 +235,40 @@ describe('sparse layout checkpoints', () => {
       metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
     );
   });
+
+  test.each([
+    { name: 'even chunk count', top: 1501, bottom: 3001, budget: 200 },
+    { name: 'odd chunk count', top: 1501, bottom: 2501, budget: 150 },
+    { name: 'first row partly visible', top: -1499, bottom: 1, budget: 200 },
+  ])(
+    'VirtualizedFile covers both window edges with $name',
+    ({ top, bottom, budget }) => {
+      const file = createLargeFile();
+      const instance = new VirtualizedFile({}, virtualizer, {
+        ...metrics,
+        hunkLineCount: 50,
+      });
+      const fileTop = 2000;
+      const rowsTop = fileTop + metrics.diffHeaderHeight;
+      instance.updateCodeViewLayout(file, fileTop);
+
+      const range = inspectFile(instance).computeRenderRangeFromWindow(
+        file,
+        fileTop,
+        {
+          top: rowsTop + top,
+          bottom: rowsTop + bottom,
+        }
+      );
+      expect(range.startingLine).toBeLessThanOrEqual(
+        Math.max(0, Math.floor(top / metrics.lineHeight))
+      );
+      expect(range.startingLine + range.totalLines).toBeGreaterThanOrEqual(
+        Math.ceil(bottom / metrics.lineHeight)
+      );
+      expect(range.totalLines).toBeLessThanOrEqual(budget);
+    }
+  );
 
   test('VirtualizedFile uses a top render range when measured file-level annotations are visible', () => {
     const file = createLargeFile();

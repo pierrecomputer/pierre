@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.prismaWords 96)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bits 8 and up: the block a declaration opens, 1 fields, 2 enum values, 3
   ;; settings.
-  (keyword-table $prismaWords $mem.prismaWords $mem.bicepWords
+  (keyword-table $prismaWords $mem.prismaWords $mem.prismaWords+96
     (group $Token.keyword.declaration+256 "model" "type" "view")
     (group $Token.keyword.declaration+512 "enum")
     (group $Token.keyword.declaration+768 "datasource" "generator")

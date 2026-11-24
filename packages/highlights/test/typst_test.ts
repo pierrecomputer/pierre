@@ -148,3 +148,45 @@ test('typst: math, code blocks, nested comments, and raw blocks span lines', () 
   // open math, content, and raw text carry over to the next line
   assertLineFedParity('typst', '#figure([\n  $x +\n  y$ `a\nb`\n])\nText\n');
 });
+
+test('typst: string `\\u{...}` escapes, also in strings that span lines', () => {
+  const code = '#let s = "\\u{41}x\ny\\u{1F600}"\n';
+  expect(tokenKinds('typst', code)).toEqual([
+    ['#let', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"', 'string'],
+    ['\\u{41}', 'string.escape'],
+    ['x', 'string'],
+    ['y', 'string'],
+    ['\\u{1F600}', 'string.escape'],
+    ['"', 'string'],
+  ]);
+  assertLineFedParity('typst', code);
+  assertLineFedParity('typst', '$ "a\\u{41}\n b" $ x\n');
+});
+
+test('typst: brackets past the mode stack depth keep the outer mode', () => {
+  const deep = `${'('.repeat(22)}1${')'.repeat(22)}`;
+  const code = `#{\n  let a = ${deep}\n  let b = 2\n}\nafter\n`;
+  expect(tokenKinds('typst', code)).toEqual([
+    ['#{', 'punctuation.bracket'],
+    ['let', 'keyword.declaration'],
+    ['a', 'variable'],
+    ['=', 'operator'],
+    ['('.repeat(22), 'punctuation.bracket'],
+    ['1', 'number'],
+    [')'.repeat(22), 'punctuation.bracket'],
+    ['let', 'keyword.declaration'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['2', 'number'],
+    ['}', 'punctuation.bracket'],
+    ['after', null],
+  ]);
+  assertLineFedParity('typst', code);
+  assertLineFedParity(
+    'typst',
+    `#{\n${'['.repeat(30)}#f(1) $x$\n${']'.repeat(30)}\n}\n`
+  );
+});

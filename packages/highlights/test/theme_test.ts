@@ -3,8 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { bundledThemesInfo } from 'shiki';
 
+import type { Theme } from '../lib/core';
 import { HighlightsHighlighter } from '../lib/highlighter';
-import type { Theme } from '../lib/index';
 import {
   isThemeColor,
   resolveThemeStyle,
@@ -131,11 +131,11 @@ void test('span cache: HTML and token calls retain previously formatted styles',
     highlighter.buffer.slice(numberSlot, numberSlot + 66),
     number
   );
-  const spans = highlighter.buffer.slice(spanCache, spanCache + 4818);
+  const spans = highlighter.buffer.slice(spanCache, spanCache + 4950);
   const theme = highlighter.buffer.slice(themeCache, themeCache + 384);
   highlighter.codeToTokens('1 "s"', { lang: 'json', theme: pierreLight });
   assert.deepEqual(
-    highlighter.buffer.slice(spanCache, spanCache + 4818),
+    highlighter.buffer.slice(spanCache, spanCache + 4950),
     spans
   );
   assert.deepEqual(
@@ -204,13 +204,33 @@ void test('span cache: direct theme writes invalidate colors, alpha, and fonts',
   }
 });
 
+void test('theme: bold italic takes fonts only from the emphasis scopes', () => {
+  const style = (syntax: Record<string, object>) =>
+    resolveThemeStyle({ syntax }, 'emphasis.strong.italic');
+  const plain = style({
+    emphasis: { color: '#ff0000' },
+    'emphasis.strong': { color: '#00ff00' },
+  });
+  assert.equal(plain.fontStyle, 0);
+  assert.equal(plain.fontCss, undefined);
+  const both = style({
+    emphasis: { font_style: 'italic' },
+    'emphasis.strong': { font_weight: 700 },
+  });
+  assert.equal(both.fontStyle, 3);
+  assert.deepEqual(both.fontCss, {
+    'font-style': 'italic',
+    'font-weight': '700',
+  });
+});
+
 void test('token types: syntax captures are sorted and complete', () => {
   // One alphabetical run, then the rarely emitted members in a second run so
   // every common member keeps a one-byte Wasm constant (see src/token.wat).
   const syntax = tokenTypes.slice(1, -2);
   const descents = syntax.filter((name, i) => i > 0 && name < syntax[i - 1]);
   assert.equal(descents.length, 1, `runs start at: ${descents.join(', ')}`);
-  assert.equal(descents[0], 'enum');
+  assert.equal(descents[0], 'emphasis.strong.italic');
   for (const name of ['namespace', 'punctuation.markup', 'selector'])
     assert.ok(syntax.includes(name));
 });
@@ -441,7 +461,7 @@ void test('css variables: HTML and declarations use the supplied prefix', () => 
   const defaults = dec.decode(
     highlighter.codeToHtml(code, { lang: 'json', theme: cssVariables })
   );
-  const cached = highlighter.buffer.slice(spanCache, spanCache + 4818);
+  const cached = highlighter.buffer.slice(spanCache, spanCache + 4950);
   for (const cssVariablePrefix of [
     '--code-',
     '--日本語-',
@@ -465,7 +485,7 @@ void test('css variables: HTML and declarations use the supplied prefix', () => 
         )
       );
       assert.deepEqual(
-        highlighter.buffer.slice(spanCache, spanCache + 4818),
+        highlighter.buffer.slice(spanCache, spanCache + 4950),
         cached
       );
     }

@@ -10,21 +10,18 @@ import { customThemes } from '../src/highlighter/themes/themeResolver';
 import type { DiffsHighlighter } from '../src/types';
 import { getHighlighterThemeStyles } from '../src/utils/getHighlighterThemeStyles';
 
-// Byte-for-byte parity fixtures. These lock the exact --diffs-* string that the
-// pre-theming getHighlighterThemeStyles produced for the Pierre themes, so the
-// refactor onto normalizeThemeColors cannot drift the output. The values were
-// captured from the legacy implementation. Any change here is a real behavior
-// change and must be intentional.
+// Byte-for-byte fixtures for the surface, Git, and search colors emitted from
+// Pierre themes. Any change here is a real theme behavior change.
 const SINGLE_DARK =
-  'color:#fafafa;background-color:#0a0a0a;--diffs-fg:#fafafa;--diffs-bg:#0a0a0a;--diffs-addition-color:#07c480;--diffs-deletion-color:#ff2e3f;--diffs-modified-color:#009fff;';
+  'color:#fafafa;background-color:#0a0a0a;--diffs-fg:#fafafa;--diffs-bg:#0a0a0a;--diffs-addition-color:#07c480;--diffs-deletion-color:#ff2e3f;--diffs-modified-color:#009fff;--diffs-bg-search-match-theme:#ffde80;--diffs-fg-search-match-theme:#0a0a0a;--diffs-bg-search-match-current-theme:#97c4ff;--diffs-fg-search-match-current-theme:#0a0a0a;';
 
 const PAIRED_DARK_LIGHT =
-  '--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;';
+  '--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-dark-bg-search-match-theme:#ffde80;--diffs-dark-fg-search-match-theme:#0a0a0a;--diffs-dark-bg-search-match-current-theme:#97c4ff;--diffs-dark-fg-search-match-current-theme:#0a0a0a;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;--diffs-light-bg-search-match-theme:#ffde80;--diffs-light-fg-search-match-theme:#0a0a0a;--diffs-light-bg-search-match-current-theme:#97c4ff;--diffs-light-fg-search-match-current-theme:#0a0a0a;';
 
 // A custom `prefix` is applied only to the git-color variables, not to the
 // fg/bg/global vars — this asserts that asymmetry survives the refactor.
 const SINGLE_LIGHT_PREFIXED =
-  'color:#0a0a0a;background-color:#ffffff;--diffs-fg:#0a0a0a;--diffs-bg:#ffffff;--diffs-custom-addition-color:#18a46c;--diffs-custom-deletion-color:#d52c36;--diffs-custom-modified-color:#009fff;';
+  'color:#0a0a0a;background-color:#ffffff;--diffs-fg:#0a0a0a;--diffs-bg:#ffffff;--diffs-custom-addition-color:#18a46c;--diffs-custom-deletion-color:#d52c36;--diffs-custom-modified-color:#009fff;--diffs-bg-search-match-theme:#ffde80;--diffs-fg-search-match-theme:#0a0a0a;--diffs-bg-search-match-current-theme:#97c4ff;--diffs-fg-search-match-current-theme:#0a0a0a;';
 
 describe('getHighlighterThemeStyles --diffs-* parity', () => {
   let highlighter: DiffsHighlighter;
@@ -32,7 +29,7 @@ describe('getHighlighterThemeStyles --diffs-* parity', () => {
   beforeAll(async () => {
     await disposeHighlighter();
     highlighter = await getSharedHighlighter({
-      themes: ['pierre-dark', 'pierre-light'],
+      themes: ['pierre-dark', 'pierre-light', 'ayu-light'],
       langs: ['text'],
       preferredHighlighter: 'shiki-js',
     });
@@ -65,6 +62,12 @@ describe('getHighlighterThemeStyles --diffs-* parity', () => {
         prefix: 'custom',
       })
     ).toBe(SINGLE_LIGHT_PREFIXED);
+  });
+
+  test('uses fallback pairs when VS Code find foregrounds are missing', () => {
+    expect(
+      getHighlighterThemeStyles({ theme: 'ayu-light', highlighter })
+    ).not.toContain('search-match');
   });
 });
 

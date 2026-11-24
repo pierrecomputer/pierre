@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CodeView with very large files</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+      }
+      [data-bar] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid #ddd;
+      }
+      [data-bar] button {
+        font: inherit;
+        padding: 4px 8px;
+      }
+      [data-readout] {
+        padding: 6px 12px;
+        border-bottom: 1px solid #ddd;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        min-height: 32px;
+      }
+      [data-code-view-root] {
+        height: calc(100vh - 110px);
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      A view of very large files, for looking at what one render costs.
+
+        ?items=20      how many files
+        &lines=500000  lines in each file
+        &kind=files    files or diffs
+        &ext=txt       file extension, which picks the language
+        &pool          highlight in a worker pool instead of on the main thread
+
+      The readout lists every main-thread task over 50 ms as the browser
+      reports it. Press a "Go to" button to bring a file that is not rendered
+      onto the screen; going back and forth renders the same files again.
+    -->
+    <div data-bar>
+      <a href="/test/e2e/fixtures/index.html">&larr; All fixtures</a>
+      <span data-summary></span>
+      <button data-go="3">Go to file 3</button>
+      <button data-go="10">Go to file 10</button>
+      <button data-find>Open find</button>
+      <button data-clear>Clear</button>
+    </div>
+    <div data-readout>Building the view…</div>
+    <div data-code-view-root tabindex="0"></div>
+    <script type="module">
+      import { CodeView, parseDiffFromFile } from '/dist/index.js';
+      import { getOrCreateWorkerPoolSingleton } from '/dist/worker/index.js';
+
+      const params = new URLSearchParams(location.search);
+      const kind = params.get('kind') === 'diffs' ? 'diffs' : 'files';
+      const itemCount = Number(params.get('items') ?? 20);
+      const itemLines = Number(params.get('lines') ?? 500000);
+      const ext = params.get('ext') ?? 'txt';
+      const usePool = params.has('pool');
+
+      const readout = document.querySelector('[data-readout]');
+      const tasks = [];
+      // Shows the long tasks seen so far, newest last.
+      function showTasks() {
+        const longest = tasks.reduce((max, task) => Math.max(max, task), 0);
+        readout.textContent =
+          tasks.length === 0
+            ? 'No main-thread task over 50 ms yet.'
+            : `Longest task: ${longest} ms\nAll tasks over 50 ms: ${tasks.join(', ')} ms`;
+      }
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          tasks.push(Math.round(entry.duration));
+        }
+        showTasks();
+      }).observe({ type: 'longtask' });
+
+      // Every line has an "n" and an "e". "needle" is on lines 5 and 500.
+      function contents(item, changed) {
+        const lines = [];
+        for (let line = 1; line <= itemLines; line++) {
+          if (line === 5 || line === 500) lines.push(`needle ${item} ${line}`);
+          else if (changed && line % 10 === 0)
+            lines.push(`  const next${line} = derive(input${item}, ${line});`);
+          else
+            lines.push(
+              `  const value${line} = compute(input${item}, ${line});`
+            );
+        }
+        return lines.join('\n');
+      }
+
+      let workerPool;
+      if (usePool) {
+        workerPool = getOrCreateWorkerPoolSingleton({
+          poolOptions: {
+            poolSize: 2,
+            workerFactory: () => new Worker('/dist/worker/worker-portable.js'),
+          },
+          highlighterOptions: {
+            theme: { dark: 'pierre-dark', light: 'pierre-light' },
+            langs: ['typescript'],
+          },
+        });
+        await workerPool.initialize(['typescript']);
+      }
+
+      const view = new CodeView({ diffStyle: 'split' }, workerPool);
+      window.__codeView = view;
+      view.setup(document.querySelector('[data-code-view-root]'));
+      const items = [];
+      for (let item = 0; item < itemCount; item++) {
+        const name = `file-${item}.${ext}`;
+        items.push(
+          kind === 'files'
+            ? {
+                id: `file-${item}`,
+                type: 'file',
+                file: { name, contents: contents(item, false) },
+              }
+            : {
+                id: `file-${item}`,
+                type: 'diff',
+                fileDiff: parseDiffFromFile(
+                  { name, contents: contents(item, false) },
+                  { name, contents: contents(item, true) }
+                ),
+              }
+        );
+      }
+      view.setItems(items);
+
+      document.querySelector('[data-summary]').textContent =
+        `${itemCount} ${kind} of ${itemLines.toLocaleString()} lines, .${ext}, ${
+          usePool ? 'worker pool' : 'no worker pool'
+        }`;
+      for (const button of document.querySelectorAll('[data-go]')) {
+        button.addEventListener('click', () => {
+          view.scrollTo({
+            type: 'item',
+            id: `file-${button.dataset.go}`,
+            align: 'start',
+            behavior: 'instant',
+          });
+        });
+      }
+      document.querySelector('[data-find]').addEventListener('click', () => {
+        view.openSearch();
+      });
+      document.querySelector('[data-clear]').addEventListener('click', () => {
+        tasks.length = 0;
+        showTasks();
+      });
+      // The tasks from building the view are not what this page is for.
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          tasks.length = 0;
+          showTasks();
+          window.__ready = true;
+        }, 500);
+      });
+    </script>
+  </body>
+</html>

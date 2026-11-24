@@ -1,6 +1,8 @@
+import type { Language as HighlightsLanguage } from '@pierre/highlights';
 import type { LanguageRegistration } from 'shiki';
 
 import type {
+  DiffLib,
   DiffsTheme,
   DiffsThemeNames,
   ExtensionFormatMap,
@@ -23,6 +25,7 @@ export interface WorkerRenderingOptions {
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
+  preferredDiffLib?: DiffLib;
   maxLineDiffLength: number;
 }
 
@@ -78,6 +81,8 @@ export interface InitializeWorkerRequest {
 export interface ResolvedLanguage {
   name: Exclude<SupportedLanguages, 'text'>;
   data: LanguageRegistration[];
+  /** A lexer from `registerCustomLanguage(name, loader, files, 'highlights')`. */
+  highlights?: HighlightsLanguage;
 }
 
 export interface SetRenderOptionsWorkerRequest {

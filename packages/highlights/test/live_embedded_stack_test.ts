@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { codeToTokens, LiveTokenizer } from '../lib/index';
+import { codeToTokens, LiveTokenizer } from '../lib/core';
 import { distinctTheme, initFullModule } from './_util';
 
 t.before(initFullModule);

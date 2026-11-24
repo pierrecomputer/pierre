@@ -1,8 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { Lang, Theme, ThemedToken } from '../lib/core';
+import { codeToTokens, init, StreamTokenizer } from '../lib/core';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
@@ -518,3 +518,31 @@ void t.test('dart: a `$name` template ends before the next `$`', () => {
     )
   );
 });
+
+void t.test(
+  'dart: `when` guards a case pattern and stays a name elsewhere',
+  () => {
+    assert.deepEqual(tokenKinds('dart', 'case Circle(r: var r) when r > 0:'), [
+      ['case', 'keyword.control'],
+      ['Circle', 'type'],
+      ['(', 'punctuation.bracket'],
+      ['r', 'variable'],
+      [':', 'punctuation.delimiter'],
+      ['var', 'keyword.declaration'],
+      ['r', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['when', 'keyword.control'],
+      ['r', 'variable'],
+      ['>', 'operator'],
+      ['0', 'number'],
+      [':', 'punctuation.delimiter'],
+    ]);
+    assert.deepEqual(tokenKinds('dart', 'var when = 1;'), [
+      ['var', 'keyword.declaration'],
+      ['when', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+    ]);
+  }
+);

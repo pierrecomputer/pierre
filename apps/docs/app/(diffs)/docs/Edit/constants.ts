@@ -38,6 +38,9 @@ virtualizer.setup(root, content);
 const fileInstance = new VirtualizedFile(
   {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Recommended for editing: without it, entering edit mode re-highlights
+    // and re-renders the whole file.
+    useTokenTransformer: true,
     // Fired any time there's an edit to the document
     onEditChange(event) {
       console.log('change', event.file.name, event.lineAnnotations);
@@ -56,7 +59,8 @@ const fileInstance = new VirtualizedFile(
 fileInstance.render({ file, containerWrapper: content });
 
 const editor = new Editor('file');
-// Start an edit session
+// Wait for a worker pool highlight still in flight, then start a session
+await fileInstance.prepareForEditing();
 const dispose = editor.edit(fileInstance);
 
 // Later, complete the session and install an accepted result while the
@@ -118,6 +122,9 @@ virtualizer.setup(root, contentWrapper);
 const fileDiffInstance = new VirtualizedFileDiff<ThreadMetadata>(
   {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // Recommended for editing: without it, entering edit mode re-highlights
+    // and re-renders the whole file.
+    useTokenTransformer: true,
     renderAnnotation(annotation) {
       const element = document.createElement('div');
       element.textContent = 'Thread ' + annotation.metadata.id;
@@ -148,6 +155,8 @@ function renderFromApplicationState() {
 renderFromApplicationState();
 
 const editor = new Editor<'file-diff', ThreadMetadata>('file-diff');
+// Loads a partial diff and waits for a worker pool highlight still in flight
+await fileDiffInstance.prepareForEditing();
 const dispose = editor.edit(fileDiffInstance);
 
 // Later, complete the session and install an accepted result while the
@@ -194,6 +203,9 @@ root.style.overflow = 'auto';
 
 const viewer = new CodeView<ThreadMetadata>({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
   createEditor(editorType, options, editStateKey) {
     return new Editor(editorType, {
       ...options,
@@ -271,6 +283,7 @@ const button = document.getElementById('edit-button');
 async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
   const { Editor } = await import('@pierre/diffs/edit');
   const editor = new Editor('file');
+  await fileInstance.prepareForEditing();
   return editor.edit(fileInstance);
 }
 
@@ -281,6 +294,50 @@ button.addEventListener('click', () => {
     },
     options,
   };
+
+export const EDIT_VANILLA_READY_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'editor_ready.ts',
+    contents: `import { Editor } from '@pierre/diffs/edit';
+
+const button = document.getElementById('edit-button');
+const editor = new Editor('file', {
+  // Runs once the editor has its document, on either path below.
+  onAttach(attached) {
+    attached.focus({ lineNumber: 'first-visible', preventScroll: true });
+  },
+});
+let dispose: (() => void) | undefined;
+let preparing = false;
+
+button.addEventListener('click', () => {
+  if (dispose != null || preparing) {
+    return;
+  }
+  // Ready now: start on the same tick as the click.
+  if (fileInstance.isReadyToEdit()) {
+    dispose = editor.edit(fileInstance);
+    return;
+  }
+  // Not yet: a partial diff is still loading, or a worker pool highlight the
+  // session can reuse is still in flight. Wait for it instead of highlighting
+  // the whole file on the main thread.
+  preparing = true;
+  void fileInstance
+    .prepareForEditing()
+    .then(() => {
+      dispose = editor.edit(fileInstance);
+    })
+    .finally(() => {
+      preparing = false;
+    });
+});`,
+  },
+  options,
+};
 
 export const EDIT_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<
   undefined,
@@ -688,6 +745,9 @@ export { greet };\`,
 
 const fileOptions: FileOptions<undefined, undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
 };
 
 const virtualizerStyle = {
@@ -823,6 +883,9 @@ const initialDiff: FileDiffMetadata = parseDiffFromFile(
 
 const fileDiffOptions: FileDiffOptions<ThreadMetadata, undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
 };
 
 const virtualizerStyle = {
@@ -1079,8 +1142,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: { workerFactory },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
-    // Optional: pool markup is then already editor-compatible, so entering
-    // edit mode skips a one-time re-render of the file.
+    // Recommended for editing pool-rendered files: without it, entering edit
+    // mode re-highlights and re-renders the whole file on the main thread.
     useTokenTransformer: true,
   },
 });
@@ -1090,11 +1153,18 @@ const fileInstance = new File(
   workerPool
 );
 fileInstance.render({
-  file: { name: 'example.ts', contents: 'export const x = 1;' },
+  file: {
+    name: 'example.ts',
+    contents: 'export const x = 1;',
+    // The pool's task is joined through the cache key, so the session can
+    // wait for it and start from the pool's rows.
+    cacheKey: 'example.ts:v1',
+  },
   containerWrapper: document.body,
 });
 
 const editor = new Editor('file');
+await fileInstance.prepareForEditing();
 editor.edit(fileInstance);`,
   },
   options,
@@ -1125,8 +1195,8 @@ const file: FileContents = {
 const poolOptions = { workerFactory };
 const highlighterOptions = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  // Optional: pool markup is then already editor-compatible, so entering
-  // edit mode skips a one-time re-render of the file.
+  // Recommended for editing pool-rendered files: without it, entering edit
+  // mode re-highlights and re-renders the whole file on the main thread.
   useTokenTransformer: true,
 } as const;
 
@@ -1512,28 +1582,50 @@ fileInstance.render({
 });
 
 const editStateKey = 'review:example.ts';
-const editor = new Editor('file', {}, editStateKey);
+const editor = new Editor(
+  'file',
+  {
+    // The editor has its document once it has synced with the rendered rows,
+    // which can be a tick after edit() while the highlighter loads. Make the
+    // first document-dependent call from here.
+    onAttach(attached) {
+      // Apply text edits to the attached document. Positions are zero-based.
+      // Edits always join the undo stack, exactly like typed input. The
+      // optional updateHistory argument defaults to true; false remaps live
+      // selections instead of restoring snapshots but keeps the text edit
+      // undoable.
+      attached.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'Hello, world!',
+        },
+      ]);
+    },
+  },
+  editStateKey
+);
 
 // Merge partial options at runtime. Existing fields are preserved.
 editor.setOptions({
   roundedSelection: false,
 });
 
+// Whether a session can start now. When true, edit() can be called at once,
+// on the same tick as a user gesture.
+fileInstance.isReadyToEdit();
+
+// Resolves once the component can start a session: a partial diff is
+// loaded and a worker pool highlight the session can reuse is available.
+// Resolves at once when nothing stands in the way; edit() throws before then.
+await fileInstance.prepareForEditing();
+
 // This file editor attaches to a rendered File or VirtualizedFile. Create
 // an Editor('file-diff', ...) for FileDiff or VirtualizedFileDiff.
 // Normalizes conflicting fileInstance options and returns a dispose function.
 const dispose = editor.edit(fileInstance);
-
-// Apply text edits to the attached document. Positions are zero-based.
-// Edits always join the undo stack, exactly like typed input. The optional
-// updateHistory argument defaults to true; false remaps live selections instead
-// of restoring snapshots but keeps the text edit undoable.
-editor.applyEdits([
-  {
-    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    newText: 'Hello, world!',
-  },
-]);
 
 // Live FileContents for the current session or queued initialState. Undefined
 // when neither exists.
@@ -1667,6 +1759,9 @@ const initialNewFile: FileContents = {
 
 const fileDiffOptions: FileDiffOptions<undefined, undefined> = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  // Recommended for editing: without it, entering edit mode re-highlights
+  // and re-renders the whole file.
+  useTokenTransformer: true,
 };
 
 const virtualizerStyle = {

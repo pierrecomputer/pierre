@@ -88,6 +88,7 @@ async function createFixture(
 
   const fileDiff = new FileDiff<undefined>({
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
   });
@@ -364,6 +365,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
     document.body.appendChild(container);
     const fileDiff = new FileDiff<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       theme: DEFAULT_THEMES,
       diffStyle: 'split',
     });
@@ -433,18 +435,19 @@ async function waitForEditable(container: HTMLElement): Promise<void> {
 
 describe('file editor: theme toggle mid-edit', () => {
   // The plain-file twin of "keeps focus when replacement does not emit blur":
-  // File.applyFullRender rewrites the code columns' innerHTML, which destroys
-  // the DOM focus state without a blur event. The render must capture focus
-  // intent before the rewrite so __syncRenderView restores it — the same
-  // capture FileDiff.applyHunksToDOM performs. Focus arrives here without a
-  // caret (tab/pointer focus), so the selection-based fallback cannot restore
-  // it and only the captured request can.
+  // a new highlight result makes File.applyRowsToDOM rewrite every row, which
+  // destroys the DOM focus state without a blur event. The render must
+  // capture focus intent before the rewrite so __syncRenderView restores it,
+  // the same capture FileDiff.applyHunksToDOM performs. Focus arrives here
+  // without a caret (tab/pointer focus), so the selection-based fallback
+  // cannot restore it and only the captured request can.
   test('restores focus when a theme toggle forces a full render', async () => {
     const dom = installDom();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const file = new File<undefined>({
       disableFileHeader: true,
+      useTokenTransformer: true,
       theme: DEFAULT_THEMES,
       themeType: 'light',
     });
@@ -563,6 +566,7 @@ describe('diff editor: detach then re-attach', () => {
     const fileDiff = new FileDiff<undefined>(
       {
         disableFileHeader: true,
+        useTokenTransformer: true,
         theme: DEFAULT_THEMES,
         diffStyle: 'split',
       },
@@ -615,6 +619,7 @@ describe('diff editor: detach then re-attach', () => {
       remountedFileDiff = new FileDiff<undefined>(
         {
           disableFileHeader: true,
+          useTokenTransformer: true,
           theme: DEFAULT_THEMES,
           diffStyle: 'split',
         },

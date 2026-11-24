@@ -125,6 +125,14 @@ function getUtilityButton(row: HTMLElement): HTMLButtonElement {
   return button;
 }
 
+// A hidden utility stays in the DOM, so its visibility tells whether it shows.
+function getShownUtility(root: ParentNode): HTMLElement | null {
+  const utility = root.querySelector('[data-gutter-utility-slot]');
+  return utility instanceof HTMLElement && utility.style.visibility !== 'hidden'
+    ? utility
+    : null;
+}
+
 function isSelected(row: HTMLElement): boolean {
   return row.hasAttribute('data-selected-line');
 }
@@ -168,7 +176,7 @@ describe('InteractionManager editor active-line state', () => {
       expect(isSelected(contentRows[3])).toBe(false);
       expect(isEditorActive(contentRows[3])).toBe(true);
       expect(isEditorActive(gutterRows[3])).toBe(true);
-      expect(pre.querySelector('[data-gutter-utility-slot]')).toBe(null);
+      expect(getShownUtility(pre)).toBe(null);
     } finally {
       manager.cleanUp();
       cleanup();
@@ -424,6 +432,93 @@ describe('InteractionManager gutter utility', () => {
 
       expect(pre.querySelector('[data-gutter-utility-slot]')).toBe(null);
       expect(manager.getHoveredLine()).toBe(undefined);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('hides the gutter utility in place while a mouse drag is in progress', () => {
+    const { cleanup } = installDom();
+    const leftLines: number[] = [];
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+      onLineLeave: (props) => leftLines.push(props.lineNumber),
+    });
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(4);
+      manager.setup(pre);
+
+      dispatchPointer(contentRows[1], 'pointermove', { pointerType: 'mouse' });
+      expect(getShownUtility(gutterRows[1])).not.toBe(null);
+
+      // The drag crosses two more lines with the button held.
+      dispatchPointer(contentRows[2], 'pointermove', {
+        pointerType: 'mouse',
+        buttons: 1,
+      });
+      dispatchPointer(contentRows[3], 'pointermove', {
+        pointerType: 'mouse',
+        buttons: 1,
+      });
+
+      expect(getShownUtility(pre)).toBe(null);
+      expect(
+        gutterRows[1].querySelector('[data-gutter-utility-slot]')
+      ).not.toBe(null);
+      expect(manager.getHoveredLine()).toBe(undefined);
+      expect(leftLines).toEqual([2]);
+
+      // Hover picks up again once the button is released.
+      dispatchPointer(contentRows[3], 'pointermove', { pointerType: 'mouse' });
+
+      expect(getShownUtility(gutterRows[3])).not.toBe(null);
+      expect(manager.getHoveredLine()).toEqual({ lineNumber: 4 });
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('keeps the gutter utility shown while a press on it moves', () => {
+    const { cleanup } = installDom();
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+    });
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(3);
+      manager.setup(pre);
+
+      dispatchPointer(contentRows[1], 'pointermove', { pointerType: 'mouse' });
+      dispatchPointer(getUtilityButton(gutterRows[1]), 'pointermove', {
+        pointerType: 'mouse',
+        buttons: 1,
+      });
+
+      expect(getShownUtility(gutterRows[1])).not.toBe(null);
+      expect(manager.getHoveredLine()).toEqual({ lineNumber: 2 });
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('hides the gutter utility in place when the pointer leaves', () => {
+    const { cleanup } = installDom();
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+    });
+    try {
+      const { contentRows, gutterRows, pre } = createFilePre(3);
+      manager.setup(pre);
+
+      dispatchPointer(contentRows[1], 'pointermove', { pointerType: 'mouse' });
+      dispatchPointer(pre, 'pointerleave', { pointerType: 'mouse' });
+
+      expect(getShownUtility(pre)).toBe(null);
+      expect(
+        gutterRows[1].querySelector('[data-gutter-utility-slot]')
+      ).not.toBe(null);
     } finally {
       manager.cleanUp();
       cleanup();

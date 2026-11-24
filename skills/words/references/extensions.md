@@ -75,6 +75,33 @@ Pass the same `plugins` option as for Mermaid. Use a Highlights theme object.
 The fence supplies the language. Unknown languages fall back to plain code.
 During an active stream, an open fence reuses a live tokenizer.
 
+The plugin uses the main `@pierre/highlights` entry, which loads all built-in
+lexers. Only an open `ansi` fence renders again in full on each update.
+
+### Custom languages
+
+Build a lexer with `@pierre/wat-tools` at build time, and save the descriptor in
+a module. See the
+[Highlights custom lexers reference](../../highlights/references/custom-lexers.md)
+for the lexer contract.
+
+```ts
+import { registerLanguages } from '@pierre/highlights';
+import { createHighlightsPlugin } from '@pierre/words/highlights';
+import pierreLight from '@pierre/highlights/themes/pierre-light';
+import conf from './conf.js'; // from buildHighlightsLexer({ name: 'conf', alias: ['cfg'], wat })
+
+registerLanguages([conf]);
+const plugins = { code: createHighlightsPlugin({ theme: pierreLight }) };
+```
+
+- Register once at module level, before the first render. The registry is
+  global, and repeated calls with the same lexer do nothing.
+- Fences that use the name or an alias (`conf`, `cfg`) use the lexer, open or
+  closed. A registered name overrides a built-in name.
+- Use a custom fence renderer instead when the fence needs other HTML, not only
+  token colors.
+
 ## Custom code blocks
 
 Use `plugins.renderers` to replace an entire fenced block. Use `plugins.code` to

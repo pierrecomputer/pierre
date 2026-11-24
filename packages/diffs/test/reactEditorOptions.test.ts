@@ -1,5 +1,5 @@
+import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
 import {
   act,
   type ComponentType,
@@ -314,6 +314,7 @@ function createEditableSurfaceElement(
   if (surface === 'File') {
     const options: ReactFileOptions<undefined, undefined> = {
       disableFileHeader: true,
+      useTokenTransformer: true,
       theme: DEFAULT_THEMES,
       onPostRender(_node, instance, phase) {
         if (phase !== 'unmount') {
@@ -332,6 +333,7 @@ function createEditableSurfaceElement(
   }
   const options: ReactFileDiffOptions<undefined, undefined> = {
     disableFileHeader: true,
+    useTokenTransformer: true,
     theme: DEFAULT_THEMES,
     onPostRender(_node, instance, phase) {
       if (phase !== 'unmount') {
@@ -417,6 +419,7 @@ describe('React edit surfaces', () => {
 
   test('FileDiff renders editor token markup without mutating options', async () => {
     const { cleanup } = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -463,10 +466,13 @@ describe('React edit surfaces', () => {
       // waitFor times out silently; this is the real assertion.
       expect(shadowHTML(container)).toContain('data-char');
       expect(instance!.options.useTokenTransformer).toBe(false);
+      // Rendering without the transformer and then editing is reported.
+      expect(consoleError).toHaveBeenCalledTimes(1);
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
       cleanup();
+      consoleError.mockRestore();
     }
   });
 
@@ -778,6 +784,7 @@ describe('React editor factory lifecycle', () => {
       });
       const surfaceOptions = {
         disableFileHeader: true,
+        useTokenTransformer: true,
         theme: DEFAULT_THEMES,
       };
       const makeSurface = (
@@ -905,6 +912,7 @@ describe('React editor factory lifecycle', () => {
                     lineAnnotations,
                     options: {
                       disableFileHeader: true,
+                      useTokenTransformer: true,
                       theme: DEFAULT_THEMES,
                       diffStyle: 'unified',
                     },
@@ -1006,6 +1014,7 @@ describe('React editor factory lifecycle', () => {
         editorOptions: { onChange },
         options: {
           disableFileHeader: true,
+          useTokenTransformer: true,
           theme: DEFAULT_THEMES,
           ...(wrapper === 'PatchDiff'
             ? {
@@ -1110,6 +1119,7 @@ describe('React editor factory lifecycle', () => {
                 file: newFile,
                 options: {
                   disableFileHeader: true,
+                  useTokenTransformer: true,
                   theme: DEFAULT_THEMES,
                 },
               }),
@@ -1120,6 +1130,7 @@ describe('React editor factory lifecycle', () => {
                 fileDiff: parseDiffFromFile(oldFile, newFile),
                 options: {
                   disableFileHeader: true,
+                  useTokenTransformer: true,
                   theme: DEFAULT_THEMES,
                 },
               })
@@ -1392,6 +1403,7 @@ describe('React editor factory lifecycle', () => {
                     file: oldFile,
                     options: {
                       disableFileHeader: true,
+                      useTokenTransformer: true,
                       theme: DEFAULT_THEMES,
                     },
                   }),
@@ -1402,6 +1414,7 @@ describe('React editor factory lifecycle', () => {
                     fileDiff: parseDiffFromFile(oldFile, newFile),
                     options: {
                       disableFileHeader: true,
+                      useTokenTransformer: true,
                       theme: DEFAULT_THEMES,
                     },
                   })
@@ -1560,6 +1573,7 @@ describe('React completion lifecycle', () => {
           onEditComplete,
           options: {
             disableFileHeader: true,
+            useTokenTransformer: true,
             theme: DEFAULT_THEMES,
             onPostRender(_node, current, phase) {
               if (phase !== 'unmount') {
@@ -1843,6 +1857,7 @@ describe('React diff input bridges after acceptance', () => {
       extra?: Partial<ReactFileDiffOptions<undefined, undefined>>
     ) => ({
       disableFileHeader: true,
+      useTokenTransformer: true,
       theme: DEFAULT_THEMES,
       onPostRender(
         _node: HTMLElement,

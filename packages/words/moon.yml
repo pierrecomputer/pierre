@@ -16,7 +16,6 @@ tasks:
       - 'lib/**/*'
       - 'scripts/build.ts'
       - 'tables/*'
-      - '/packages/wat-tools/index.ts'
       - 'react/**/*'
       - 'html/**/*'
       # The docs demo imports this source; invalidate downstream builds too.

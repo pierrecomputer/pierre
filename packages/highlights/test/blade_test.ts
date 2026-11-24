@@ -182,3 +182,55 @@ test('blade: PHP blocks and verbatim blocks', () => {
     '@verbatim\n<script>\nlet a = `{{ x }}\n`;\n</script>\n@endverbatim\n'
   );
 });
+
+test('blade: echoes and directives inside script and style bodies', () => {
+  const code =
+    '<script>\n  const data = @json($data);\n  const url = "{{ route(1) }}";\n</script>\n<style>@media (x) { a { b: {{ $c }} } }</style>\n';
+  assertLineFedParity('blade', code);
+  expect(tokenKinds('blade', code)).toEqual([
+    ['<', 'punctuation.bracket.html'],
+    ['script', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ['const', 'keyword.declaration'],
+    ['data', 'variable'],
+    ['=', 'operator'],
+    ['@json', 'keyword'],
+    ['(', 'punctuation.bracket'],
+    ['$data', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['const', 'keyword.declaration'],
+    ['url', 'variable'],
+    ['=', 'operator'],
+    ['"', 'string'],
+    ['{{', 'punctuation.special'],
+    ['route', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['1', 'number'],
+    [')', 'punctuation.bracket'],
+    ['}}', 'punctuation.special'],
+    ['"', 'string'],
+    [';', 'punctuation.delimiter'],
+    ['</', 'punctuation.bracket.html'],
+    ['script', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ['<', 'punctuation.bracket.html'],
+    ['style', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+    ['@media', 'keyword'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'constant.builtin'],
+    [') {', 'punctuation.bracket'],
+    ['a', 'tag'],
+    ['{', 'punctuation.bracket'],
+    ['b', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['{{', 'punctuation.special'],
+    ['$c', 'variable'],
+    ['}}', 'punctuation.special'],
+    ['} }', 'punctuation.bracket'],
+    ['</', 'punctuation.bracket.html'],
+    ['style', 'tag'],
+    ['>', 'punctuation.bracket.html'],
+  ]);
+});

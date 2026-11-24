@@ -1,15 +1,20 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.vimlWords 544)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./vhdl.wat")
 
   ;; Positions where a word counts: 256 at a command start, 512 after an operand,
   ;; 1024 where an operand is expected. From bit 11, the next state: 0-5 a $st
-  ;; value, 6 a function header, 7 a command with several expressions.
-  (keyword-table $vimlWords $mem.vimlWords $mem.awkWords
+  ;; value, 6 a function header, 7 a command with several expressions, 8 a
+  ;; `catch` that may take a `/pattern/`.
+  (keyword-table $vimlWords $mem.vimlWords $mem.vimlWords+544
     (group $Token.keyword.control+2304 "if" "elseif" "while" "for" "return" "throw")
     (group $Token.keyword.control+4352
       "else" "endif" "endfor" "endwhile" "try" "finally" "endtry" "break" "continue")
-    (group $Token.keyword.control+10496 "catch")
+    (group $Token.keyword.control+16640 "catch")
     (group $Token.keyword.declaration+12544 "function" "func" "fun" "def")
     (group $Token.keyword.declaration+4352 "endfunction" "endfunc" "endf" "enddef")
     (group $Token.keyword.declaration+2304 "let" "const" "var" "final" "unlet")
@@ -26,7 +31,9 @@
     (group $Token.keyword.import+4352 "vim9script" "finish")
     (group $Token.keyword+256 "silent" "noautocmd" "keepjumps" "vertical" "botright")
     (group $Token.keyword.operator+2560 "is" "isnot" "in")
-    (group $Token.keyword+4608 "abort" "range" "dict" "closure")
+    (group $Token.keyword+4608 "abort" "range" "closure")
+    (group $Token.keyword+5632 "dict")
+    (group $Token.type+1024 "list")
     (group $Token.boolean+1024 "true" "false")
     (group $Token.constant.builtin+1024 "null"))
 
@@ -113,6 +120,15 @@
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $hl (enum.get $Token.constant.builtin))
+                (if (i32.ge_u (local.get $lhs) (i32.add (global.get $srcBase) (i32.const 4)))
+                  (then
+                    (local.set $v (i32.load (i32.sub (local.get $lhs) (i32.const 4))))
+                    (if (i32.and
+                          (i32.or (i32.eq (local.get $v) (i32.const "list")) (i32.eq (local.get $v) (i32.const "dict")))
+                          (i32.or
+                            (i32.eq (local.get $lhs) (i32.add (global.get $srcBase) (i32.const 4)))
+                            (i32.eqz (call $lexIsIdentContinue (i32.load8_u (i32.sub (local.get $lhs) (i32.const 5)))))))
+                      (then (local.set $hl (enum.get $Token.type))))))
                 (br $tok)))
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))))
         (if (i32.eq (local.get $st) (i32.const 3))
@@ -195,7 +211,21 @@
                 (local.set $hl (i32.and (local.get $v) (i32.const 255)))
                 (local.set $v (i32.shr_u (local.get $v) (i32.const 11)))
                 (if (i32.eq (local.get $st) (i32.const 1))
-                  (then (local.set $v (i32.const 2))))
+                  (then
+                    (local.set $v (i32.const 2))
+                    (if (i32.or (i32.eq (local.get $c) (i32.const "l")) (i32.eq (local.get $c) (i32.const "d")))
+                      (then
+                        (local.set $hl (enum.get $Token.type))
+                        (if (i32.ne (local.get $c2) (i32.const "<"))
+                          (then
+                            (local.set $hl
+                              (select (enum.get $Token.function) (enum.get $Token.variable) (i32.eq (local.get $c2) (i32.const "("))))
+                            (if (i32.eq (local.get $fn) (i32.const 2))
+                              (then (local.set $hl (enum.get $Token.variable.parameter))))
+                            (if (i32.eq (local.get $fn) (i32.const 1))
+                              (then
+                                (local.set $hl (enum.get $Token.function.definition))
+                                (local.set $fn (i32.const 2))))))))))
                 (if (i32.or (i32.eqz (local.get $st)) (i32.eq (local.get $st) (i32.const 5)))
                   (then
                     (if (i32.eq (local.get $c2) (i32.const "!"))
@@ -203,7 +233,19 @@
                     (local.set $multi (i32.eq (local.get $v) (i32.const 7)))
                     (local.set $fn (i32.eq (local.get $v) (i32.const 6)))
                     (if (i32.ge_u (local.get $v) (i32.const 6))
-                      (then (local.set $v (i32.const 1))))))
+                      (then
+                        (if (i32.eq (local.get $v) (i32.const 8))
+                          (then
+                            (local.set $gap (call $lexSkipSpaceAt (global.get $ptr)))
+                            (if (i32.eq (call $templateByte (local.get $gap)) (i32.const "/"))
+                              (then
+                                (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+                                (call $emitGap (global.get $ptr) (local.get $gap))
+                                (global.set $ptr (local.get $gap))
+                                (call $lexString (i32.const "/") (i32.const 0) (enum.get $Token.string.regex))
+                                (local.set $st (i32.const 5))
+                                (br $next)))))
+                        (local.set $v (select (i32.const 5) (i32.const 1) (i32.eq (local.get $v) (i32.const 8))))))))
                 (local.set $st (local.get $v)))
               (else
                 (if (i32.eq (local.get $c2) (i32.const "("))
@@ -310,6 +352,58 @@
                         (i32.ne (local.get $v) (i32.const "@"))))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
+            ;; `=<< END` text is scanned the way a stream chunk resumes it
+            (if (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 3))
+              (then
+                (if (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "=<<"))
+                  (then
+                    (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                    (local.set $hl (i32.const 0))
+                    (loop $word
+                      (local.set $gap (call $lexSkipSpaceAt (global.get $ptr)))
+                      (call $emitGap (global.get $ptr) (local.get $gap))
+                      (global.set $ptr (local.get $gap))
+                      (block $wordDone
+                        (loop $w
+                          (br_if $wordDone (i32.le_u (call $templateByte (global.get $ptr)) (i32.const 32)))
+                          (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                          (br $w)))
+                      (local.set $c2 (i32.sub (global.get $ptr) (local.get $gap)))
+                      (br_if $next (i32.eqz (local.get $c2)))
+                      (local.set $v (i32.load (local.get $gap)))
+                      (if (i32.and (i32.eq (local.get $c2) (i32.const 4))
+                            (i32.or (i32.eq (local.get $v) (i32.const "trim")) (i32.eq (local.get $v) (i32.const "eval"))))
+                        (then
+                          (local.set $hl (i32.or (local.get $hl) (i32.shl (i32.eq (local.get $v) (i32.const "trim")) (i32.const 1))))
+                          (call $emitTok (enum.get $Token.keyword) (local.get $gap) (global.get $ptr))
+                          (br $word))))
+                    (call $emitTok (enum.get $Token.string) (local.get $gap) (global.get $ptr))
+                    (br_if $next (i32.gt_u (local.get $c2) (i32.const 32)))
+                    (local.set $lhs (global.get $ptr))
+                    (call $scanToLineEnd)
+                    (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+                    (local.set $lhs (global.get $ptr))
+                    (if (i32.lt_u (global.get $ptr) (global.get $end))
+                      (then
+                        (global.set $ptr (i32.add (global.get $ptr)
+                          (i32.add (i32.const 1)
+                            (i32.and (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 13))
+                              (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 10))))))))
+                    (call $emitGap (local.get $lhs) (global.get $ptr))
+                    (memory.copy (i32.const $mem.streamDelimiter) (local.get $gap) (local.get $c2))
+                    (global.set $streamA (local.get $c2))
+                    (global.set $streamB (local.get $hl))
+                    (global.set $streamHl (enum.get $Token.string))
+                    (if (i32.and
+                          (call $streamResumeLine)
+                          (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof))))
+                      (then (global.set $streamMode (i32.const 22)))
+                      (else
+                        (global.set $streamA (i32.const 0))
+                        (global.set $streamB (i32.const 0))
+                        (global.set $streamHl (i32.const 0))))
+                    (local.set $bol (i32.const 1))
+                    (br $next)))))
             (local.set $hl (enum.get $Token.operator))
             (br $opTok)))
         (global.set $ptr (call $utf8SpanEnd (global.get $ptr) (global.get $end)))

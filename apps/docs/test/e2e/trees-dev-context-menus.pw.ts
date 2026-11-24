@@ -105,72 +105,6 @@ async function expectMainMenuTopLeftAlignedToPointerAnchor(
     .toBeLessThanOrEqual(4);
 }
 
-async function readReactMenuGeometry(
-  page: import('@playwright/test').Page
-): Promise<{
-  bottom: number;
-  left: number;
-  right: number;
-  top: number;
-  viewportHeight: number;
-  viewportWidth: number;
-  width: number;
-} | null> {
-  return page.evaluate(() => {
-    const slottedMenu = document
-      .querySelectorAll('file-tree-container')[1]
-      ?.querySelector('[slot="context-menu"] > div');
-    const portaledMenu = document.querySelector(
-      '[data-test-react-context-menu="true"]'
-    );
-    const menu =
-      portaledMenu instanceof HTMLElement
-        ? portaledMenu
-        : slottedMenu instanceof HTMLElement
-          ? slottedMenu
-          : null;
-    if (menu == null) {
-      return null;
-    }
-
-    const rect = menu.getBoundingClientRect();
-    return {
-      bottom: rect.bottom,
-      left: rect.left,
-      right: rect.right,
-      top: rect.top,
-      viewportHeight: window.innerHeight,
-      viewportWidth: window.innerWidth,
-      width: rect.width,
-    };
-  });
-}
-
-async function expectReactMenuVisibleInViewport(
-  page: import('@playwright/test').Page
-): Promise<void> {
-  await expect
-    .poll(() => readReactMenuGeometry(page))
-    .toEqual(
-      expect.objectContaining({
-        bottom: expect.any(Number),
-        left: expect.any(Number),
-        right: expect.any(Number),
-        top: expect.any(Number),
-        viewportHeight: expect.any(Number),
-        viewportWidth: expect.any(Number),
-        width: expect.any(Number),
-      })
-    );
-
-  const geometry = await readReactMenuGeometry(page);
-  expect(geometry).not.toBeNull();
-  expect(geometry!.width).toBeGreaterThan(100);
-  expect(geometry!.left).toBeGreaterThanOrEqual(0);
-  expect(geometry!.right).toBeLessThanOrEqual(geometry!.viewportWidth);
-  expect(geometry!.top).toBeGreaterThanOrEqual(0);
-  expect(geometry!.bottom).toBeLessThanOrEqual(geometry!.viewportHeight);
-}
 async function expectContextMenuTriggerOpacity(
   page: import('@playwright/test').Page,
   treeIndex: number,
@@ -334,6 +268,12 @@ test.describe('trees-dev real page context menus', () => {
     await row.hover();
     await row.click({ button: 'right' });
 
-    await expectReactMenuVisibleInViewport(page);
+    const menu = page.locator('[data-test-react-context-menu="true"]');
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    await expect
+      .poll(() =>
+        menu.evaluate((element) => element.getBoundingClientRect().width)
+      )
+      .toBeGreaterThan(100);
   });
 });

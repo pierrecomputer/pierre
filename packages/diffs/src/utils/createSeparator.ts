@@ -1,5 +1,6 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
+import { i18n } from '../i18n/I18n';
 import type { ExpansionDirections, HunkSeparators } from '../types';
 import {
   createHastElement,
@@ -94,7 +95,7 @@ export function createSeparator({
       contentChildren.push(
         createHastElement({
           tagName: 'div',
-          children: [createTextNodeElement('Expand all')],
+          children: [createTextNodeElement(i18n.t('expandAll'))],
           properties: {
             role: 'button',
             'data-expand-button': '',

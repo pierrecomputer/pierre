@@ -23,12 +23,22 @@ tasks:
       internal: true
       runInCI: 'skip'
 
+  # A published `workspace:*` dep becomes an exact version, which must exist on
+  # npm or installs of this package fail. Runs from the package directory.
+  assert-workspace-deps-published:
+    command: 'bun $workspaceRoot/scripts/assert-workspace-deps-published.ts'
+    options:
+      cache: false
+      internal: true
+      runInCI: 'skip'
+
   # Aggregator the prepublishOnly lifecycle hook points at. Projects append
   # extra guards via dep merge (e.g. trees adds assert-safe-publish).
   prepublish:
     command: 'noop'
     deps:
       - 'assert-pnpm-version'
+      - 'assert-workspace-deps-published'
       - 'build'
     options:
       cache: false

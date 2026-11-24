@@ -1,5 +1,8 @@
 (module
-  (import "../common.wat")
+  (import "../embed.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (import "@pierre/wat-tools/common.wat")
   (import "./html.wat")
   (import "./ruby.wat")
 
@@ -86,13 +89,23 @@
               (i32.or
                 (local.get $saveReset)
                 (i32.ne (global.get $streamRegionKind) (i32.const 27))))))
-        (block $ruby
-          ;; a resumed body first finishes the Ruby mode its previous chunk left
-          (if (i32.and (global.get $streaming) (i32.eqz (global.get $streamDepth)))
-            (then
-              (if (i32.eqz (global.get $streamReset))
-                (then (br_if $ruby (call $streamResumeCommon))))))
-          (call $hlRuby))
+        (if (global.get $externalEmbedding)
+          (then
+            (drop
+              (call $embedLanguage
+                (enum.get $Language.ruby) (global.get $ptr) (local.get $code)
+                (select
+                  (i32.ne (global.get $streamRegionKind) (i32.const 27))
+                  (i32.const -1)
+                  (global.get $streaming))
+                (i32.const -3))))
+          (else
+            (block $ruby
+              (if (i32.and (global.get $streaming) (i32.eqz (global.get $streamDepth)))
+                (then
+                  (if (i32.eqz (global.get $streamReset))
+                    (then (br_if $ruby (call $streamResumeCommon))))))
+              (call $hlRuby))))
         (global.set $end (local.get $save))
         (global.set $streamDepth (local.get $saveDepth))
         (global.set $streamReset (local.get $saveReset))

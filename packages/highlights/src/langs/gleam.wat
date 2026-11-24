@@ -1,8 +1,12 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.gleamWords 128)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Group order is the dispatch order in $gleamWordHl below.
-  (keyword-table $gleamWords $mem.gleamWords $mem.glslWords
+  (keyword-table $gleamWords $mem.gleamWords $mem.gleamWords+128
     (group $Token.keyword.control ;; 1: control
       "case" "if" "else" "panic" "todo" "assert" "echo" "use")
     (group $Token.keyword.declaration+256 "fn")   ;; 2: declaration, next name is a function
@@ -18,6 +22,36 @@
   (func $gleamWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (keyword-table.value $gleamWords (local.get $lhs) (local.get $rhs)))
 
+  ;; Returns 1 while the body is open at $end, 0 past the closing quote.
+  (func $gleamStringBody (param $seg i32) (result i32)
+    (local $e i32)
+    (block $done
+      (loop $scan
+        (global.set $ptr
+          (call $scanFindSpecial (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 0)))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 34))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+            (return (i32.const 0))))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+        (local.set $e (call $lexEscapeEnd (global.get $ptr)))
+        (if
+          (i32.and
+            (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "u"))
+            (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "{")))
+          (then
+            (local.set $e (call $scanHexRun (i32.add (global.get $ptr) (i32.const 3)) (i32.const 6)))
+            (local.set $e
+              (i32.add (local.get $e) (i32.eq (call $templateByte (local.get $e)) (i32.const "}"))))))
+        (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
+        (br $scan)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (i32.const 1))
+
   (func $gleamIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>|" (local.get $c)))
 
@@ -27,7 +61,7 @@
   ;; uppercase name before `(` is a type rather than a constructor; $fnHead
   ;; is 1 between `fn` and its body, where `->` opens the return type
   ;; rather than a case clause. $member is 1 after `.`. All are
-  ;; checkpointed.
+  ;; checkpointed, as is $str, 1 while a string is open at a chunk end.
   (func $hlGleam
     (local $c i32)
     (local $c2 i32)
@@ -43,7 +77,10 @@
     (local $importCtx i32)
     (local $typeCtx i32)
     (local $fnHead i32)
+    (local $str i32)
     (call $lexEmitLeadingContinuation)
+    (if (local.get $str)
+      (then (local.set $str (call $gleamStringBody (global.get $ptr)))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -78,7 +115,8 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (call $lexString (i32.const 34) (i32.const 1) (enum.get $Token.string))
+            (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+            (local.set $str (call $gleamStringBody (local.get $lhs)))
             (local.set $member (i32.const 0))
             (br $next)))
         (if
@@ -121,7 +159,14 @@
                   (then (local.set $importCtx (i32.const 1)))))
               (else
                 (if (local.get $importCtx)
-                  (then (local.set $hl (enum.get $Token.namespace)))
+                  (then
+                    (local.set $hl
+                      (select
+                        (enum.get $Token.keyword.import)
+                        (enum.get $Token.namespace)
+                        (i32.and
+                          (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2))
+                          (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "as"))))))
                   (else
                     (if (local.get $expect)
                       (then

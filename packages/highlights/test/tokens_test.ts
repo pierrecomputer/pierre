@@ -1,20 +1,20 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { HighlightsHighlighter, inputPtr, LANGS } from '../lib/highlighter';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
   Theme,
   ThemedToken,
-} from '../lib/index';
+} from '../lib/core';
 import {
   codeToHtml,
   codeToTokens,
   init,
   LiveTokenizer,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
+import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
 import tokenTypes from '../lib/token-types';
 import {
   lineRecordsToTokens,
@@ -22,7 +22,12 @@ import {
   resolveOptionThemes,
 } from '../lib/tokens';
 import { transformWat, wat2wasm } from '../scripts/build';
-import { cssVariables, getFontStyle } from '../themes/index';
+import {
+  cssVariables,
+  getFontStyle,
+  githubLight,
+  toCSS,
+} from '../themes/index';
 import pierreDarkVibrant from '../themes/pierre-dark-vibrant.json' with { type: 'json' };
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLightVibrant from '../themes/pierre-light-vibrant.json' with { type: 'json' };
@@ -162,10 +167,10 @@ void t.test(
       const length = hl.writeInput(code);
       assert.equal(length, expected.length);
       assert.deepEqual(
-        hl.buffer.subarray(inputPtr, inputPtr + length),
+        hl.buffer.subarray(hl.inputPtr, hl.inputPtr + length),
         expected
       );
-      assert.ok(hl.buffer.length >= inputPtr + length + 96);
+      assert.ok(hl.buffer.length >= hl.inputPtr + length + 96);
     }
   }
 );
@@ -226,6 +231,67 @@ void t.test('font-only bundled emphasis keeps italic and bold styling', () => {
     assert.match(html, /font-weight:700/);
   }
 });
+
+void t.test(
+  'Markdown emphasis survives literal and CSS-variable themes',
+  () => {
+    const code = '*em* **strong** ~~gone~~ ***both***';
+    for (const theme of [githubLight, cssVariables]) {
+      const options = {
+        lang: 'markdown',
+        theme,
+        cssVariablePrefix: '--code-',
+      } as const;
+      const tokens = codeToTokens(code, options).tokens[0];
+      assert.deepEqual(
+        tokens
+          .filter((t) => t.content.trim() !== '')
+          .map((t) => [t.content, t.fontStyle]),
+        [
+          ['*em*', 1],
+          ['**strong**', 2],
+          ['~~gone~~', 8],
+          ['***both***', 3],
+        ]
+      );
+      const stream = new StreamTokenizer(options);
+      assert.deepEqual([...stream.pushCode(code), ...stream.end()], [tokens]);
+      const live = new LiveTokenizer({ ...options, code });
+      try {
+        assert.deepEqual(live.getLineTokens(0).tokens, tokens);
+        const html = new TextDecoder().decode(codeToHtml(code, options));
+        const css = toCSS(githubLight, {
+          fontStyle: true,
+          cssVariablePrefix: '--code-',
+        });
+        for (const [text, property, value] of [
+          ['*em*', 'font-style', 'italic'],
+          ['**strong**', 'font-weight', '700'],
+          ['~~gone~~', 'text-decoration', 'line-through'],
+          ['***both***', 'font-style', 'italic'],
+          ['***both***', 'font-weight', '700'],
+        ] as const) {
+          const token = tokens.find((t) => t.content === text);
+          assert.ok(token !== undefined);
+          let expected: string = value;
+          if (theme === cssVariables) {
+            const variable = getFontStyle(token, property);
+            assert.ok(
+              variable !== undefined && variable.startsWith('var(--code-')
+            );
+            assert.ok(css.includes(`${variable.slice(4, -1)}: ${value};`));
+            expected = `${variable.slice(0, -1)},${value})`;
+          }
+          const font = spansOf(html).find((s) => s.text === text)?.font;
+          assert.ok(font?.includes(`${property}:${expected}`) === true, html);
+          assert.ok(live.getLineHtml(0).includes(`${property}:${expected}`));
+        }
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
 
 void t.test(
   'font-only syntax inherits a parent color or the foreground',

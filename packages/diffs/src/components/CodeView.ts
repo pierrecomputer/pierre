@@ -5,12 +5,12 @@ import {
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
-  DIFFS_DEVELOPMENT_BUILD,
   DIFFS_TAG_NAME,
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor, EditorOptions } from '../editor/editor';
+import { getCaretPosition } from '../editor/selection';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -27,6 +27,12 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
+  SearchOptionDefaults,
+  SearchPanelMode,
+  SearchPanelState,
+} from '../search';
+import { CodeViewSearchManager } from '../search/CodeViewSearchManager';
+import type {
   CodeViewDiffItem,
   CodeViewFileItem,
   CodeViewItem,
@@ -40,6 +46,7 @@ import type {
   DiffsThemeNames,
   HunkSeparators,
   PendingCodeViewLayoutReset,
+  ScrollRequestResult,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
@@ -57,6 +64,7 @@ import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollP
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
+import { isUserScrollInput } from '../utils/isUserScrollInput';
 import { isFirefox } from '../utils/platform';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
@@ -72,7 +80,55 @@ export type CodeViewCreateEditorOptions<
   EType extends EditorType,
   LAnnotation,
   Caret,
-> = Required<Pick<EditorOptions<EType, LAnnotation, Caret>, 'onChange'>>;
+> = Required<
+  Pick<
+    EditorOptions<EType, LAnnotation, Caret>,
+    'onChange' | 'onFocus' | 'onBlur' | 'onRender' | 'searchPanel'
+  >
+>;
+
+/**
+ * Which items a search covers. `'focused'` scopes to the focused editor, or
+ * keeps the current scope while the panel itself has focus, and otherwise
+ * searches every item. `'all'` always searches every item. An item id scopes
+ * to that item while it is an expanded edit-mode item, and otherwise falls
+ * back to every item.
+ */
+export type CodeViewSearchScope = 'focused' | 'all' | { itemId: string };
+
+export interface CodeViewOpenSearchOptions {
+  /**
+   * Requested panel mode. The replace row only shows while the scope is an
+   * edit-mode item; elsewhere the request is ignored.
+   * @default 'replace'
+   */
+  mode?: SearchPanelMode;
+  /** @default 'focused' */
+  scope?: CodeViewSearchScope;
+  /** Replaces the query. Omitted, an open panel keeps its query. */
+  query?: string;
+}
+
+export interface CodeViewSearchOptions {
+  /**
+   * Stop binding cmd/ctrl+f and cmd/ctrl+alt+f inside the CodeView root, for
+   * apps that bind the shortcut elsewhere, e.g. on window. Escape and
+   * find-again keep working while a panel is open.
+   * @default false
+   */
+  disableShortcuts?: boolean;
+  /**
+   * How the viewport moves to a match that navigation has to bring into
+   * view. Reduced-motion preferences still force instant scrolling.
+   * @default 'instant'
+   */
+  scrollBehavior?: CodeViewScrollBehavior;
+  /**
+   * Matching options a fresh panel opens with, e.g. a user's persisted
+   * preferences. An open panel keeps whatever the user toggled.
+   */
+  defaults?: SearchOptionDefaults;
+}
 
 type CodeViewEditor<LAnnotation, Caret> =
   | Editor<'file', LAnnotation, Caret>
@@ -90,7 +146,7 @@ interface ItemAnchor {
   viewportOffset: number;
 }
 
-interface LineAnchor {
+export interface LineAnchor {
   type: 'line';
   id: string;
   lineNumber: number;
@@ -98,9 +154,9 @@ interface LineAnchor {
   viewportOffset: number;
 }
 
-type ScrollAnchor = ItemAnchor | LineAnchor;
+export type ScrollAnchor = ItemAnchor | LineAnchor;
 
-interface LineScrollPosition {
+export interface LineScrollPosition {
   top: number;
   height: number;
 }
@@ -152,7 +208,7 @@ interface CodeViewVirtualizedInstanceKey {
   readonly renderType: 'virtualized';
 }
 
-interface CodeViewDiffItemContext<
+export interface CodeViewDiffItemContext<
   LAnnotation,
   Caret,
 > extends AdvancedVirtualizedBaseItem {
@@ -174,7 +230,7 @@ interface CodeViewFileItemContext<
   instance: VirtualizedFile<LAnnotation, Caret>;
 }
 
-type CodeViewContextItem<LAnnotation, Caret> =
+export type CodeViewContextItem<LAnnotation, Caret> =
   | CodeViewDiffItemContext<LAnnotation, Caret>
   | CodeViewFileItemContext<LAnnotation, Caret>;
 
@@ -310,6 +366,7 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'disableFileHeader',
   'disableVirtualizationBuffers',
   'preferredHighlighter',
+  'deferHydrationHighlight',
   'useCSSClasses',
   'useTokenTransformer',
   'tokenizeMaxLineLength',
@@ -344,6 +401,7 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
   'disableFileHeader',
   'disableVirtualizationBuffers',
   'preferredHighlighter',
+  'deferHydrationHighlight',
   'useCSSClasses',
   'useTokenTransformer',
   'tokenizeMaxLineLength',
@@ -573,6 +631,14 @@ export interface CodeViewOptions<LAnnotation, Caret>
   controlledSelection?: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   layout?: CodeViewLayout;
+  /** Find/replace behavior for the CodeView-owned search panel. */
+  searchOptions?: CodeViewSearchOptions;
+  /**
+   * Called with the search state when the panel opens and after every change,
+   * and with undefined when it closes. While `searching` is true the search is
+   * still running and the match count can still grow.
+   */
+  onSearchStateChange?(state: SearchPanelState | undefined): void;
   /**
    * Return an in-memory retention key for an item's editable draft and
    * undo/redo history. Called only when CodeView creates the item's editor.
@@ -582,8 +648,11 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
    * editor constructor — `new Editor(editorType, options, editStateKey)` —
-   * so CodeView can route document changes to `onItemEditChange` and retain
-   * history when requested. CodeView owns the returned editor's lifecycle: it
+   * so CodeView can track editor focus, route changes to `onItemEditChange`,
+   * and retain history when requested. Forward all supplied callbacks, including
+   * `onFocus`, `onBlur`, and `onRender`, to keep search scope and highlights
+   * synchronized with the editor.
+   * CodeView owns the returned editor's lifecycle: it
    * associates with the edited item, suspends and resumes rendering across
    * virtualization unmounts and collapse, and tears the editor down when the
    * session ends (edit off or removal).
@@ -622,6 +691,19 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * final pre-detach state.
    */
   onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation, Caret>;
+  /**
+   * Called after CodeView itself changes an item's `collapsed` state, as find
+   * does when it lands on a match inside a collapsed item. `item` is the item
+   * before the change and `nextItem` is the one CodeView has already applied:
+   * the new `collapsed` and a bumped `version`. An owner that keeps its own
+   * items records the change, or its next list collapses the item again.
+   *
+   * Not called for changes the owner makes through `updateItem` or `setItems`.
+   */
+  onItemCollapsedChange?(
+    item: CodeViewItem<LAnnotation>,
+    nextItem: CodeViewItem<LAnnotation>
+  ): void;
 
   /** Render a non-virtualized element at the very start of the scroll content,
    * before the first item. It is always rendered and scrolls with the content.
@@ -733,8 +815,12 @@ const MOBILE_SAFARI = (() => {
 
 type PendingAlignTypes = Exclude<CodeViewLineScrollTarget['align'], 'nearest'>;
 
-interface PendingLineTarget extends Omit<CodeViewLineScrollTarget, 'align'> {
+export interface PendingLineTarget extends Omit<
+  CodeViewLineScrollTarget,
+  'align'
+> {
   align?: PendingAlignTypes;
+  searchMatch?: true;
 }
 
 interface PendingRangeTarget extends Omit<CodeViewRangeScrollTarget, 'align'> {
@@ -766,8 +852,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     intersectionObserverMargin: 0,
     resizeDebugging: false,
   };
-  private items: CodeViewContextItem<LAnnotation, Caret>[] = [];
-  private idToItem: CodeViewItemMap<LAnnotation, Caret> = new Map();
+  /** @internal Public for internal classes to utilize. */
+  public items: CodeViewContextItem<LAnnotation, Caret>[] = [];
+  /** @internal Public for internal classes to utilize. */
+  public idToItem: CodeViewItemMap<LAnnotation, Caret> = new Map();
+  /** @internal Public for internal classes to utilize. */
+  public focusedEditor: CodeViewItemOptionsState<LAnnotation> | undefined;
   private selectedLines: CodeViewLineSelection | null = null;
   // One editor per edit-mode item, created lazily via options.createEditor.
   // Entries survive virtualization unmounts with their editor association;
@@ -795,7 +885,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private scrollHeight = 0;
   private containerHeight = -1;
   private scrollTop: number = 0;
-  private scrollPageOffset: number = 0;
+  /** @internal Public for internal classes to utilize. */
+  public scrollPageOffset: number = 0;
   private readonly scrollRebaseConfig: ScrollRebaseConfig = isFirefox()
     ? FIREFOX_SCROLL_REBASE
     : DEFAULT_SCROLL_REBASE;
@@ -805,14 +896,22 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private codeOverflowFix = false;
   private height: number = 0;
   private heightDirty = true;
+  // Whether the root is laid out and visible in the DOM, per its last
+  // ResizeObserver entry. A hidden or detached root is observed as 0x0.
+  // `undefined` assumes initial render.
+  private rootHasBox: boolean | undefined;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
-  private renderState = {
+  /** @internal Public for internal classes to utilize. */
+  public renderState = {
     scrollTop: -1,
     firstIndex: -1,
     lastIndex: -1,
     stickyHeight: 0,
     stickyTop: -1,
     stickyBottom: -1,
+    // Set when a render could not measure its rows because the root lost its
+    // layout during that frame. The next render measures everything rendered.
+    measurementsPending: false,
   };
   private itemMetricsCache: VirtualFileMetrics = DEFAULT_CODE_VIEW_FILE_METRICS;
   private readonly fileOptionsPrototype: FileOptions<LAnnotation, Caret>;
@@ -827,9 +926,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   //   target mid-flight.
   // - 'position' targets settle on the first frame that applies their
   //   scrollTop — there is no layout-dependent destination to chase.
-  private pendingScrollTarget: PendingScrollTarget | undefined;
+  /** @internal Public for CodeViewSearchManager, to see a scroll to a match. */
+  public pendingScrollTarget: PendingScrollTarget | undefined;
+  private pendingScrollDone:
+    | ((result: ScrollRequestResult) => void)
+    | undefined;
   private pendingLayoutAnchor: ScrollAnchor | undefined;
-  private shouldFixContainerFocus = false;
+  /** @internal Public for CodeViewSearchManager, to skip focus it parked. */
+  public shouldFixContainerFocus = false;
+  private focusedItemId: string | undefined;
 
   // Active smooth-scroll animation state. Only populated while a scrollTo
   // with `behavior: 'smooth'` is in flight; cleared on settle (position +
@@ -843,8 +948,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private root: HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
+  private readonly search: CodeViewSearchManager<LAnnotation, Caret> =
+    new CodeViewSearchManager(this);
 
-  private container: HTMLDivElement | undefined = document.createElement('div');
+  /** @internal Public for CodeViewSearchManager, to mount the find panel. */
+  public container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
   // Always-rendered, non-virtualized header/footer hosts (element wrapper,
@@ -870,7 +978,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // i.e. the react CodeView component will require a separate react cleanup
   // phase that we don't want to interrupt
   private pendingElementPool: HTMLElement[] = [];
-  private options: CodeViewOptions<LAnnotation, Caret>;
+  public options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
@@ -911,7 +1019,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // host height is the always-rendered header that sits before the items and
   // pushes every item down by its measured height. Anchor/scroll-target math adds
   // this to an item's local `top` to get its absolute scroll position.
-  private getItemTopOffset(): number {
+  public getItemTopOffset(): number {
     return this.getLayout().paddingTop + this.header.height;
   }
 
@@ -943,17 +1051,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return this.options.pointerEventsOnScroll !== true;
   }
 
-  private shouldValidateItemHeights(): boolean {
-    return (
-      DIFFS_DEVELOPMENT_BUILD &&
-      this.options.__devOnlyValidateItemHeights === true
-    );
-  }
-
   private validateRenderedItemHeight(
     item: CodeViewContextItem<LAnnotation, Caret>
   ): void {
-    if (!this.shouldValidateItemHeights() || item.element == null) {
+    if (
+      typeof process === 'undefined' ||
+      process.env.NODE_ENV !== 'development' ||
+      this.options.__devOnlyValidateItemHeights !== true ||
+      item.element == null
+    ) {
       return;
     }
 
@@ -998,7 +1104,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // rendered its header), and that mismatch is what drives the sticky container
   // to position against the wrong bounds.
   private validateStickyContainerHeight(): void {
-    if (!this.shouldValidateItemHeights()) {
+    if (
+      typeof process === 'undefined' ||
+      process.env.NODE_ENV !== 'development' ||
+      this.options.__devOnlyValidateItemHeights !== true
+    ) {
       return;
     }
 
@@ -1233,43 +1343,40 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.root.addEventListener('pointerdown', this.clearPendingScroll, {
       passive: true,
     });
+    this.root.addEventListener('keydown', this.search.handleKeyDown, true);
     this.root.addEventListener('keydown', this.clearPendingScroll, {
       passive: true,
     });
-    this.resizeObserver.observe(this.root);
+    this.root.addEventListener('focusin', this.handleFocusIn);
+    this.root.addEventListener('focusout', this.handleFocusOut);
+    this.resizeObserver.observe(this.root, { box: 'border-box' });
     this.render(true);
 
-    // FIXME(amadeus): Remove me before release
-    window.__INSTANCE = this;
-    // Test code to bring back in if needed
-    // window.__CODE_VIEW_SCROLL_BEFORE_REBASE = (pixelsBefore = 1_000) => {
-    //   const target = this.clampScrollTop(
-    //     this.scrollPageOffset + this.scrollRebaseConfig.threshold - pixelsBefore
-    //   );
-    //   this.scrollTo({
-    //     type: 'position',
-    //     position: target,
-    //     behavior: 'instant',
-    //   });
-    // };
-    window.__TOGGLE = () => {
-      if (CodeView.__STOP) {
-        CodeView.__STOP = false;
-        this.scrollTo({
-          type: 'position',
-          position: CodeView.__lastScrollPosition,
-          behavior: 'instant',
-        });
-      } else {
-        CodeView.__lastScrollPosition = this.getScrollTop();
-        CodeView.__STOP = true;
-      }
-    };
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development'
+    ) {
+      window.__INSTANCE = this;
+      window.__TOGGLE = () => {
+        if (CodeView.__STOP) {
+          CodeView.__STOP = false;
+          this.scrollTo({
+            type: 'position',
+            position: CodeView.__lastScrollPosition,
+            behavior: 'instant',
+          });
+        } else {
+          CodeView.__lastScrollPosition = this.getScrollTop();
+          CodeView.__STOP = true;
+        }
+      };
+    }
   }
 
   public reset(): void {
     dequeueRender(this.computeRenderRangeAndEmit);
     this.clearReadySubscription();
+    this.search.closeInPlace();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     const { items: discardedItems } = this;
@@ -1285,6 +1392,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return record;
     });
     this.itemEditors.clear();
+    this.focusedEditor = undefined;
     this.attachedEditors.clear();
     this.selectedLines = null;
     this.items = [];
@@ -1320,6 +1428,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.containerHeight = -1;
     this.windowSpecs = { top: 0, bottom: 0 };
     this.pendingLayoutAnchor = undefined;
+    this.cancelScroll();
     this.shouldFixContainerFocus = false;
     this.height = 0;
     this.scrollTop = 0;
@@ -1350,16 +1459,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       resetFailed = true;
       resetFailure = error;
     }
+    // Completion handlers can call back into CodeView while reset settles
+    // sessions, so discard any render they queued before detaching the root.
+    dequeueRender(this.computeRenderRangeAndEmit);
     this.clearElementPool();
     this.restoreScrollInteractions();
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
+    this.rootHasBox = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
     this.root?.removeEventListener('wheel', this.clearPendingScroll);
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
     this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
+    this.root?.removeEventListener('keydown', this.search.handleKeyDown, true);
     this.root?.removeEventListener('keydown', this.clearPendingScroll);
+    this.root?.removeEventListener('focusin', this.handleFocusIn);
+    this.root?.removeEventListener('focusout', this.handleFocusOut);
+    this.focusedItemId = undefined;
     this.root?.style.removeProperty('overflow-anchor');
     this.container?.remove();
     this.stickyOffset.remove();
@@ -1375,6 +1492,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.footer.height = 0;
     this.root = undefined;
     this.container = undefined;
+    this.search.clearTheme();
     if (resetFailed) {
       throw resetFailure;
     }
@@ -1440,8 +1558,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const { element } = item;
     if (element != null && this.renderedItemOwnsFocus(element)) {
       this.shouldFixContainerFocus = true;
+      dequeueRender(this.search.syncFocus);
     }
 
+    if (this.focusedEditor?.id === item.item.id) {
+      this.focusedEditor = undefined;
+    }
     item.instance.cleanUp(true);
     // Instance cleanup suspends the editor surface. The association stays in
     // itemEditors so the same component and editor resume on remount.
@@ -1467,9 +1589,97 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private fixContainerFocus(): void {
     if (this.shouldFixContainerFocus) {
-      this.shouldFixContainerFocus = false;
       this.root?.focus({ preventScroll: true });
+      this.shouldFixContainerFocus = false;
     }
+  }
+
+  // Keeps focusedItemId current: focus inside a rendered item names that
+  // item, focus on the root (parked there while the item is away) changes
+  // nothing, focus anywhere else clears it.
+  private handleFocusIn = (event: FocusEvent): void => {
+    if (event.target === this.root) {
+      return;
+    }
+    this.focusedItemId = this.renderedItemInPath(event.composedPath())?.item.id;
+  };
+
+  // Focus leaving the CodeView for nothing (a click on the page) or for an
+  // element outside the root clears the focused item; moves within the root
+  // are followed by a focusin that names the new owner. While a released
+  // item's focus is on its way to the root, the blur its teardown causes is
+  // not the user leaving.
+  private handleFocusOut = (event: FocusEvent): void => {
+    if (this.shouldFixContainerFocus) {
+      return;
+    }
+    const { relatedTarget } = event;
+    if (
+      !(relatedTarget instanceof Node) ||
+      this.root?.contains(relatedTarget) !== true
+    ) {
+      this.focusedItemId = undefined;
+    }
+  };
+
+  private renderedItemInPath(
+    path: ReadonlyArray<EventTarget | undefined>
+  ): CodeViewContextItem<LAnnotation, Caret> | undefined {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex < 0) {
+      return undefined;
+    }
+    for (let index = firstIndex; index <= lastIndex; index++) {
+      const item = this.items[index];
+      if (item?.element != null && path.includes(item.element)) {
+        return item;
+      }
+    }
+    return undefined;
+  }
+
+  // Gives focus back to the focused item's editor after virtualization
+  // released its element and parked focus on the root: once the editor is
+  // attached again and its primary caret's row is on screen, so the caret
+  // lands on its line. An open global search keeps root focus outside editors.
+  // Called for each edited item in a render pass.
+  private returnParkedFocus(
+    item: CodeViewContextItem<LAnnotation, Caret>
+  ): void {
+    const { id } = item.item;
+    if (
+      this.focusedItemId !== id ||
+      !this.rootHasFocus() ||
+      (this.search.isOpen() && this.search.state.scope?.itemId !== id)
+    ) {
+      return;
+    }
+    const record = this.itemEditors.get(id);
+    if (record == null || !this.attachedEditors.has(id)) {
+      return;
+    }
+    const primary = record.editor.getViewState().selections?.at(-1);
+    if (
+      primary == null ||
+      item.instance.lineElement(getCaretPosition(primary).line) == null
+    ) {
+      return;
+    }
+    record.editor.focus({ preventScroll: true });
+  }
+
+  // Whether the focus parked on the root by fixContainerFocus is still there.
+  private rootHasFocus(): boolean {
+    const { root } = this;
+    if (root == null) {
+      return false;
+    }
+    const rootNode = root.getRootNode();
+    const activeElement =
+      rootNode instanceof ShadowRoot
+        ? rootNode.activeElement
+        : document.activeElement;
+    return activeElement === root;
   }
 
   // Strip item-specific DOM while keeping the expensive shared shell assets
@@ -1574,19 +1784,55 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public scrollTo(target: CodeViewScrollTarget): void {
+    this.search.keepView();
+    this.requestScroll(target);
+  }
+
+  /** @internal Public for internal classes to utilize */
+  public requestScroll(
+    target: CodeViewScrollTarget,
+    onDone?: (result: ScrollRequestResult) => void
+  ): void {
     if (this.root == null) {
       return;
     }
+    // Read the box rather than trusting the observer's last report, which can
+    // be a frame behind a root that was just shown.
+    const { width, height } = this.root.getBoundingClientRect();
+    if (width === 0 && height === 0) {
+      console.error(
+        'CodeView.requestScroll: the root has no layout, scroll request ignored'
+      );
+      onDone?.('cancelled');
+      return;
+    }
+    this.setRootHasBox(true);
+    // Install the replacement before telling the replaced request it was
+    // cancelled, so a callback that requests again supersedes it in turn.
+    const { pendingScrollDone: replaced } = this;
+    this.pendingScrollDone = undefined;
+    this.installScrollRequest(target, onDone);
+    replaced?.('cancelled');
+  }
 
+  // The newest request replaces any scroll still in flight, even when it needs
+  // no scroll of its own.
+  private installScrollRequest(
+    target: CodeViewScrollTarget,
+    onDone: ((result: ScrollRequestResult) => void) | undefined
+  ): void {
     const pendingTarget = this.normalizeScrollTarget(target);
-    if (pendingTarget == null) {
+    const destination =
+      pendingTarget != null
+        ? this.resolveScrollTargetTop(pendingTarget)
+        : undefined;
+    if (pendingTarget == null || destination == null) {
+      this.pendingScrollTarget = undefined;
+      this.scrollAnimation = undefined;
+      onDone?.('cancelled');
       return;
     }
-
-    const destination = this.resolveScrollTargetTop(pendingTarget);
-    if (destination == null) {
-      return;
-    }
+    this.pendingScrollDone = onDone;
 
     this.primeScrollTarget(pendingTarget);
 
@@ -1594,7 +1840,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       pendingTarget,
       destination
     );
-    if (behavior === 'smooth') {
+    const needsScroll =
+      roundToDevicePixel(destination) !==
+      roundToDevicePixel(this.getScrollTop());
+    // A request that is already in place stops any earlier animation, so its
+    // momentum can't carry the view away.
+    if (behavior === 'smooth' && needsScroll) {
       // Use ??= so if we have an animation in progress it will be smoothly
       // transitioned into the new target and not reset
       this.scrollAnimation ??= {
@@ -1609,8 +1860,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.scrollAnimation = undefined;
     }
 
-    // We'll attempt to scroll to this new target on the next render frame
-    this.suspendScrollInteractions();
+    // We'll attempt to scroll to this new target on the next render frame.
+    // Interactions are only suspended for a request that actually moves.
+    if (needsScroll) {
+      this.suspendScrollInteractions();
+    }
     this.pendingLayoutAnchor = undefined;
     this.pendingScrollTarget = pendingTarget;
     this.render();
@@ -1629,6 +1883,43 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   public clearSelectedLines(options?: SelectionWriteOptions): void {
     this.applySelectedLines(null, options);
+  }
+
+  /**
+   * Opens the find/replace panel, or refocuses an open one, the way the find
+   * shortcut does. Apps binding the shortcut themselves (see
+   * `searchOptions.disableShortcuts`) call this from their own handler.
+   */
+  public openSearch(options?: CodeViewOpenSearchOptions): void {
+    this.search.open(options);
+  }
+
+  /** Closes the find/replace panel and clears its match highlights. */
+  public closeSearch(): void {
+    this.search.close();
+  }
+
+  // Removing a focused panel would leave focus on the page body. Keep it in
+  // the CodeView instead: on the editor the panel was searching, or on the
+  // root when there was none.
+  /** @internal Public for internal classes to utilize. */
+  public restoreFocus(scopedItemId: string | undefined): void {
+    this.root?.focus({ preventScroll: true });
+    const scopedItem =
+      scopedItemId != null ? this.idToItem.get(scopedItemId) : undefined;
+    if (scopedItem != null) {
+      this.focusedItemId = scopedItemId;
+      this.returnParkedFocus(scopedItem);
+    }
+  }
+
+  public isSearchOpen(): boolean {
+    return this.search.isOpen();
+  }
+
+  /** Steps the open panel to the next or previous match, like find-again. */
+  public navigateSearch(direction: 'next' | 'previous'): void {
+    this.search.navigate(direction);
   }
 
   public getItem(itemId: string): CodeViewItem<LAnnotation> | undefined {
@@ -1661,6 +1952,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.render();
     this.syncItemEditors();
     this.syncSelection();
+    this.search.rescanItem(input.id);
     return true;
   }
 
@@ -1699,6 +1991,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     this.renamePendingScrollTarget(oldId, newId);
     this.renamePendingLayoutAnchor(oldId, newId);
+    this.search.renameItem(oldId, newId);
     this.render();
     return true;
   }
@@ -1711,6 +2004,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.appendItemsInternal(inputs);
     this.syncItemEditors();
     this.syncSelection();
+    this.search.addItems(inputs.length);
   }
 
   public removeItem(itemId: string): boolean {
@@ -1726,11 +2020,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         nextItems.push(current.item);
       }
     }
-    this.setItems(nextItems);
+    this.search.removeItem(itemId);
+    this.replaceItems(nextItems);
     return true;
   }
 
   public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
+    this.search.invalidateScan();
+    this.replaceItems(items);
+  }
+
+  // Swaps in a new list of items, keeping the records of items that stay.
+  private replaceItems(items: readonly CodeViewItem<LAnnotation>[]): void {
     let removedItemsById:
       | Readonly<CodeViewItemMap<LAnnotation, Caret>>
       | undefined;
@@ -1747,6 +2048,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       }
     }
     this.syncSelection();
+    this.search.markMatchesDirty();
   }
 
   /**
@@ -1807,6 +2109,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   public onThemeChange(): void {
     this.invalidateElementPool();
+    this.search.invalidateTheme();
+    this.render();
   }
 
   public setOptions(
@@ -1821,7 +2125,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const previousLayout = this.getLayout();
     const { itemMetricsCache: previousItemMetrics } = this;
 
-    if (shouldClearPool(prevOptions, options)) {
+    const themeChanged = hasThemeOptionChanged(prevOptions, options);
+    if (themeChanged) {
+      this.search.invalidateTheme();
+    }
+    if (themeChanged || prevOptions.unsafeCSS !== options.unsafeCSS) {
       this.invalidateElementPool();
     }
 
@@ -1862,17 +2170,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     this.syncItemEditors();
 
-    // Render when there are items, OR when the header/footer presence changed —
-    // an otherwise-empty CodeView still needs a render to mount/unmount its hosts.
+    // An empty view can still have a search panel or header/footer to update.
     const headerFooterChanged =
       prevOptions.renderCodeViewHeader !== options.renderCodeViewHeader ||
       prevOptions.renderCodeViewFooter !== options.renderCodeViewFooter;
     if (
       !this.isComponentManaged &&
-      (this.items.length > 0 || headerFooterChanged)
+      (this.items.length > 0 || headerFooterChanged || themeChanged)
     ) {
       this.render();
     }
+    this.search.optionsChanged(prevOptions, options);
   }
 
   public capturePendingLayoutAnchor(
@@ -1893,7 +2201,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public render(immediate = false): void {
-    if (CodeView.__STOP) {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      CodeView.__STOP
+    ) {
       return;
     }
     if (immediate) {
@@ -1945,11 +2257,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.pendingHighlighterTheme = undefined;
   }
 
-  private isSharedHighlighterReady(): boolean {
-    const theme =
+  /** @internal The worker pool's theme takes precedence over the view option. */
+  public getTheme(): DiffsThemeNames | ThemesType {
+    return (
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
-      DEFAULT_THEMES;
+      DEFAULT_THEMES
+    );
+  }
+
+  private isSharedHighlighterReady(): boolean {
+    const theme = this.getTheme();
     if (getHighlighterIfLoaded({ theme }) != null) {
       this.clearReadySubscription();
       return true;
@@ -2014,6 +2332,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (!this.itemEditors.has(item.item.id)) {
       this.slotSnapshotStale = true;
     }
+    this.search.rescanItem(item.item.id);
     this.render();
   }
 
@@ -2128,6 +2447,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return item.top;
   }
 
+  public scrollToInstanceLine(
+    instance: CodeViewVirtualizedInstanceKey,
+    lineNumber: number,
+    align: ScrollLogicalPosition,
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    const item = this.instanceToItem.get(instance);
+    if (item == null) {
+      throw new Error(
+        'CodeView.scrollToInstanceLine: unknown virtualized instance'
+      );
+    }
+    this.requestScroll(
+      { type: 'line', id: item.item.id, lineNumber, align },
+      onDone
+    );
+  }
+
   public getTopForItem(id: string): number | undefined {
     const item = this.idToItem.get(id);
     if (item == null) {
@@ -2226,7 +2563,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   // Collapsing an edited item suspends editing until it expands again.
-  private isItemInEditMode(
+  /** @internal Public for internal classes to utilize. */
+  public isItemInEditMode(
     item: CodeViewContextItem<LAnnotation, Caret>
   ): boolean {
     return item.item.edit === true && item.item.collapsed !== true;
@@ -2257,11 +2595,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const record = this.itemEditors.get(id);
     let createdEditor: CodeViewEditor<LAnnotation, Caret> | undefined;
     try {
-      if (
-        record == null &&
-        item.type === 'diff' &&
-        !item.instance.__canAttachEditor()
-      ) {
+      if (record == null && !item.instance.isReadyToEdit()) {
         void item.instance.__prepareForEditing();
         return;
       }
@@ -2285,11 +2619,29 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           if (latest == null) {
             return;
           }
+          this.search.rescanItem(state.id);
           this.options.onItemEditChange?.(event, latest.item);
+        };
+        const onFocus = () => {
+          this.focusedEditor = state;
+          this.search.syncFocus();
+        };
+        const onBlur = () => {
+          if (this.focusedEditor === state) {
+            this.focusedEditor = undefined;
+            queueRender(this.search.syncFocus);
+          }
+        };
+        const onRender = () => {
+          this.search.editorRendered(state.id);
         };
         const editStateKey = this.options.getEditStateKey?.(item.item);
         if (item.type === 'diff') {
-          const editor = createEditor('file-diff', { onChange }, editStateKey);
+          const editor = createEditor(
+            'file-diff',
+            { onChange, onFocus, onBlur, onRender, searchPanel: 'host' },
+            editStateKey
+          );
           createdEditor = editor;
           this.itemEditors.set(id, {
             editor,
@@ -2297,7 +2649,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             dispose: editor.edit(item.instance),
           });
         } else {
-          const editor = createEditor('file', { onChange }, editStateKey);
+          const editor = createEditor(
+            'file',
+            { onChange, onFocus, onBlur, onRender, searchPanel: 'host' },
+            editStateKey
+          );
           createdEditor = editor;
           this.itemEditors.set(id, {
             editor,
@@ -3116,14 +3472,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return Math.max(logicalTop - this.scrollPageOffset, 0);
   }
 
-  private getStickyHeaderOffset(): number {
+  /** @internal Public for internal classes to utilize. */
+  public getStickyHeaderOffset(): number {
     return this.options.stickyHeaders === true &&
       this.options.disableFileHeader !== true
       ? this.itemMetricsCache.diffHeaderHeight
       : 0;
   }
 
-  private getScrollTargetRect(
+  /** @internal Public for internal classes to utilize. */
+  public getScrollTargetRect(
     target:
       | CodeViewItemScrollTarget
       | CodeViewLineScrollTarget
@@ -3192,14 +3550,20 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         ? this.getStickyHeaderOffset()
         : 0);
     const visibleBottom = currentTop + this.getHeight();
+    // For certain alignment scenarios, if the target is already visible, then
+    // we should just attempt to hold it in place
+    const holdInPlace: PendingScrollTarget = {
+      ...target,
+      align: 'start',
+      offset: targetTop - visibleTop,
+    };
 
-    // If the item is spanning beyond the full viewport,
-    // do nothing as it's already in view
+    // If the item is spanning beyond the full viewport, it's already in view
     if (
       targetTop - offset <= visibleTop &&
       targetBottom + offset >= visibleBottom
     ) {
-      return undefined;
+      return holdInPlace;
     }
 
     // Let's use the top as the target
@@ -3212,8 +3576,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return { ...target, align: 'end' };
     }
 
-    // The element is already in view, nothing to do.
-    return undefined;
+    // The element is already in view
+    return holdInPlace;
   }
 
   /**
@@ -3269,7 +3633,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       );
     }
 
-    const linePosition = this.getLineScrollPosition(item, target);
+    const linePosition =
+      (target.searchMatch === true
+        ? this.search.state.currentPosition
+        : undefined) ?? this.getLineScrollPosition(item, target);
     if (linePosition == null) {
       console.warn(
         `CodeView.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
@@ -3430,6 +3797,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (destination == null) {
       this.pendingScrollTarget = undefined;
       this.scrollAnimation = undefined;
+      this.finishPendingScroll('cancelled');
       return undefined;
     }
     const animation = this.scrollAnimation;
@@ -3465,10 +3833,20 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private computeRenderRangeAndEmit = (
     timestamp: number = performance.now()
   ): void => {
-    if (CodeView.__STOP || this.container == null) {
+    if (
+      (typeof process !== 'undefined' &&
+        process.env.NODE_ENV === 'development' &&
+        CodeView.__STOP) ||
+      this.container == null
+    ) {
       return;
     }
     if (!this.isReady()) {
+      return;
+    }
+
+    // If the view doesn't have layout, then we should not do any render work
+    if (!this.hasLayout()) {
       return;
     }
 
@@ -3521,6 +3899,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       scrollTopAfterLayout = this.clampScrollTop(scrollTopAfterLayout);
       this.syncContainerHeight();
     }
+
+    this.search.flushMatches();
 
     // Resolve the logical scrollTop this render frame should target. The paged
     // root scrollTop is derived later only if the scaffold needs to move.
@@ -3618,7 +3998,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         item.element = this.acquireElement();
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
-        if (renderItem(item, item.element)) {
+        if (renderItem(item, item.element, false)) {
           item.renderedOptionsRevision = this.renderOptionsRevision;
           updatedItems.add(item);
         }
@@ -3639,6 +4019,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       // no-ops unless the item is in edit mode and not already attached.
       if (item.item.edit === true) {
         this.attachItemEditor(item);
+        this.returnParkedFocus(item);
       }
     }
 
@@ -3646,14 +4027,21 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       startingIndex <= lastRenderedIndex ? startingIndex : -1;
     this.renderState.lastIndex = lastRenderedIndex;
 
+    this.search.flushPendingTheme();
     this.flushSlotCoordinator();
     this.flushManagers(updatedItems);
     // Read phase: measure a freshly mounted or re-populated host now so its
     // getBoundingClientRect batches into the same reflow as the item height reads.
-    if (hostsChanged) {
+    const { measurementsPending } = this.renderState;
+    if (hostsChanged || measurementsPending) {
       this.measureMountedHosts();
     }
-    this.reconcileRenderedItems(updatedItems);
+    // `false` when a rendered row read as zero: the root lost its layout during
+    // this frame, before its ResizeObserver could report it.
+    const measured = this.reconcileRenderedItems(
+      !measurementsPending ? updatedItems : undefined
+    );
+    this.renderState.measurementsPending = !measured;
     this.syncContainerHeight();
     this.updateStickyPositioning();
 
@@ -3681,6 +4069,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       anchoredScrollTopAfterRender != null
         ? anchoredScrollTopAfterRender - scrollTopAfterLayout
         : 0;
+
+    this.search.paintHighlights();
+    const { pendingScrollTarget } = this;
+    if (
+      pendingScrollTarget?.type === 'line' &&
+      pendingScrollTarget.searchMatch === true
+    ) {
+      this.search.measureCurrentMatch();
+    }
 
     let postRenderScrollTop = targetScrollTop;
     let shouldCheckPendingTargetSettled = false;
@@ -3714,6 +4111,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     if (
       shouldCheckPendingTargetSettled &&
+      measured &&
       this.pendingScrollTarget != null &&
       this.isPendingTargetSettled(this.pendingScrollTarget)
     ) {
@@ -3732,14 +4130,25 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // renderRange (no-arg path) so renderState.stickyHeight matches the slice
     // actually in the DOM before we validate it.
     this.updateStickyPositioning();
-
-    this.validateStickyContainerHeight();
+    if (measured) {
+      this.validateStickyContainerHeight();
+    }
     this.fixContainerFocus();
+
+    // The rendered slice and scroll position are final for this frame, so a
+    // request with no target left pending has reached its line.
+    if (this.pendingScrollTarget == null) {
+      this.finishPendingScroll('settled');
+    }
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
     // render to fill out content. If we are performing a scroll animation we'll
     // need another render to continue.
-    if (fitPerfectly || this.scrollAnimation != null) {
+    if (
+      fitPerfectly ||
+      this.scrollAnimation != null ||
+      this.renderState.measurementsPending
+    ) {
       this.render();
     }
   };
@@ -3828,16 +4237,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.applyStickyPositioning(stickyBounds);
   }
 
+  // Returns `false` if we can't measure layouts
   private reconcileRenderedItems(
     updatedItems?: Set<CodeViewContextItem<LAnnotation, Caret>>
-  ): void {
+  ): boolean {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1) {
-      return;
+      return true;
     }
 
     let currentTop = -1;
     let heightChanged = false;
+    let measured = true;
     // Iterate through the rendered items to reconcile height. If a height
     // has changed, we'll have to iterate all the way till the end to update
     // all appropriate heights
@@ -3864,7 +4275,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           heightChanged = true;
           item.height = item.instance.getVirtualizedHeight();
         }
-        this.validateRenderedItemHeight(item);
+        if (item.instance.unmeasured) {
+          measured = false;
+        } else {
+          this.validateRenderedItemHeight(item);
+        }
       }
       currentTop += item.instance.getVirtualizedHeight();
       if (index < this.items.length - 1) {
@@ -3876,6 +4291,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.scrollDirty = true;
       this.scrollHeight = currentTop;
     }
+    return measured;
   }
 
   private updateStickyPositioning(): void {
@@ -3904,7 +4320,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private handleScroll = (): void => {
-    if (CodeView.__STOP) {
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'development' &&
+      CodeView.__STOP
+    ) {
       return;
     }
     this.suspendScrollInteractions();
@@ -3916,14 +4336,67 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // Abort any in-flight programmatic scroll when the user takes over.
   // Attached to root as a passive listener for wheel / touchstart /
   // pointerdown / keydown; we never mutate the event, just drop our state.
-  private clearPendingScroll = (): void => {
-    this.pendingScrollTarget = undefined;
+  /** @internal Public for internal classes to utilize. */
+  public clearPendingScroll = (event?: Event): void => {
+    if (event != null) {
+      // Typing and pressing in the find panel is not the user scrolling the
+      // view. A wheel over it is.
+      if (
+        !isUserScrollInput(event) ||
+        (event.type !== 'wheel' && this.search.ownsEvent(event))
+      ) {
+        return;
+      }
+      this.search.userScrolled();
+    }
     this.pendingLayoutAnchor = undefined;
-    this.scrollAnimation = undefined;
+    this.cancelScroll();
   };
+
+  // Drop the in-flight scroll, reporting its request as cancelled. With
+  // onDone, only while that request is still the pending one.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    if (onDone != null && this.pendingScrollDone !== onDone) {
+      return;
+    }
+    this.pendingScrollTarget = undefined;
+    this.scrollAnimation = undefined;
+    this.finishPendingScroll('cancelled');
+  }
+
+  private finishPendingScroll(result: ScrollRequestResult): void {
+    const { pendingScrollDone } = this;
+    this.pendingScrollDone = undefined;
+    pendingScrollDone?.(result);
+  }
+
+  // A container that's detached or hidden can't be measured
+  private hasLayout(): boolean {
+    return this.rootHasBox !== false;
+  }
+
+  private setRootHasBox(hasBox: boolean): void {
+    this.rootHasBox = hasBox;
+    if (!hasBox) {
+      this.renderState.measurementsPending = true;
+    }
+  }
 
   private handleResize = (entries: ResizeObserverEntry[]) => {
     let shouldRender = false;
+    // Handle the root's entry first: its size decides whether the other entries
+    // in this batch are real measurements or just the collapse to zero.
+    const rootEntry = entries.find((entry) => entry.target === this.root);
+    if (rootEntry != null) {
+      const { inlineSize, blockSize } = rootEntry.borderBoxSize[0];
+      this.setRootHasBox(inlineSize > 0 || blockSize > 0);
+      this.scrollDirty = true;
+      this.heightDirty = true;
+      shouldRender = true;
+    }
+    if (!this.hasLayout()) {
+      return;
+    }
     for (const entry of entries) {
       // If the sticky container resizes (could be from a render, which it will
       // probably ignore) or if an annotation or line wrap triggers a resize
@@ -4012,12 +4485,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           shouldRender = true;
         }
       }
-      // Root element resize (element-mode only)
-      else {
-        this.scrollDirty = true;
-        this.heightDirty = true;
-        shouldRender = true;
-      }
     }
 
     // If the DOM changed in an unexpected way, we should kick
@@ -4048,7 +4515,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * A scroll anchor represents the first fully visible element (in other
    * words, the first file or first line who's top is fully in the viewport).
    */
-  private getScrollAnchor(
+  /** @internal Public for internal classes to utilize. */
+  public getScrollAnchor(
     scrollTop: number,
     availableItems: ReadonlyMap<
       string,
@@ -4194,6 +4662,40 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     const absoluteLineTop = itemTopOffset + item.top + linePosition.top;
     return this.clampScrollTop(absoluteLineTop - anchor.viewportOffset);
+  }
+
+  /**
+   * An external API so CodeView can be given an existing scroll anchor from an
+   * external source
+   */
+  public scrollToAnchor(
+    anchor: ScrollAnchor,
+    behavior?: CodeViewScrollBehavior
+  ): void {
+    const { id, viewportOffset } = anchor;
+    this.requestScroll(
+      anchor.type === 'line'
+        ? {
+            type: 'line',
+            id,
+            lineNumber: anchor.lineNumber,
+            side: anchor.side,
+            align: 'start',
+            // A line target starts below the sticky file header.
+            offset: viewportOffset - this.getStickyHeaderOffset(),
+            behavior,
+          }
+        : { type: 'item', id, align: 'start', offset: viewportOffset, behavior }
+    );
+  }
+
+  /**
+   * Whether the anchor's item or line is still where it was when the anchor
+   * was taken.
+   */
+  public isAtScrollAnchor(anchor: ScrollAnchor): boolean {
+    const top = this.resolveAnchoredScrollTop(anchor);
+    return top != null && Math.abs(top - this.getScrollTop()) < 1;
   }
 
   /**
@@ -4430,6 +4932,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.renderState.stickyHeight = 0;
     this.renderState.stickyTop = -1;
     this.renderState.stickyBottom = -1;
+    this.renderState.measurementsPending = false;
   }
 
   // We actually need a bit of overscroll even when attempting to fit perfectly
@@ -4463,7 +4966,7 @@ function prepareItemInstance<LAnnotation, Caret>(
   }
 }
 
-function shouldClearPool<LAnnotation, Caret>(
+function hasThemeOptionChanged<LAnnotation, Caret>(
   previousOptions: CodeViewOptions<LAnnotation, Caret>,
   nextOptions: CodeViewOptions<LAnnotation, Caret>
 ): boolean {
@@ -4473,8 +4976,7 @@ function shouldClearPool<LAnnotation, Caret>(
       nextOptions.theme ?? DEFAULT_THEMES
     ) ||
     (previousOptions.themeType ?? 'system') !==
-      (nextOptions.themeType ?? 'system') ||
-    previousOptions.unsafeCSS !== nextOptions.unsafeCSS
+      (nextOptions.themeType ?? 'system')
   );
 }
 

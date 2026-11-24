@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView edit fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-code-view-root] {
+        width: 1000px;
+        height: 600px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <a data-fixtures-index href="/test/e2e/fixtures/index.html"
+      >&larr; All fixtures</a
+    >
+    <div data-code-view-root></div>
+    <script type="module">
+      // Several tall editable files, so scrolling the edited one out of the
+      // window releases its element and the editor is recycled.
+      import { CodeView } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+      const root = document.querySelector('[data-code-view-root]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('Missing CodeView root.');
+      }
+      const itemIds = ['first', 'second', 'third', 'fourth'];
+      const items = itemIds.map((id) => ({
+        id,
+        type: 'file',
+        version: 0,
+        edit: true,
+        file: {
+          name: `${id}.ts`,
+          contents: Array.from(
+            { length: 120 },
+            (_, index) => `const ${id}${index + 1} = ${index + 1};`
+          ).join('\n'),
+        },
+      }));
+      const viewer = new CodeView({
+        createEditor: (type, options, key) => new Editor(type, options, key),
+        __devOnlyValidateItemHeights: true,
+      });
+      viewer.setup(root);
+      viewer.setItems(items);
+      window.__codeViewEdit = {
+        root,
+        itemIds,
+        getHost: (id) =>
+          viewer.getRenderedItems().find((item) => item.id === id)?.element,
+      };
+      window.__codeViewEditReady = true;
+    </script>
+  </body>
+</html>

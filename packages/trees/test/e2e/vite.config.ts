@@ -15,6 +15,9 @@ const config: UserConfig = defineConfig({
     'apps/docs/public'
   ),
   root: resolve(import.meta.dirname, '..', '..'),
+  // The context-menu fixture loads the built React adapter dynamically.
+  // Prebundle its imports so Vite won't reload other fixtures mid-test.
+  optimizeDeps: { include: ['react', 'react/jsx-runtime'] },
   server: {
     host: '127.0.0.1',
     port,

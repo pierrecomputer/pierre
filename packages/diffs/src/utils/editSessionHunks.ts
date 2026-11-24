@@ -1,6 +1,7 @@
 import type {
   ChangeContent,
   ContextContent,
+  ExpandedHunksMap,
   FileDiffMetadata,
   Hunk,
   HunkExpansionRegion,
@@ -11,7 +12,6 @@ import { parseDiffFromFile } from './parseDiffFromFile';
 import { slideBlankBoundaryBlocksUp } from './realignChangeContent';
 import {
   offsetHunkContent,
-  preserveTrailingEditorBlankLine,
   recomputeDiffHunks,
   recomputeDiffHunksForEdit,
   recomputeDiffRenderLineCounts,
@@ -58,22 +58,9 @@ interface RegionPlan {
   previousSpan: PreviousRegionSpan | undefined;
 }
 
-const deletionLineSetCache = new WeakMap<
-  FileDiffMetadata,
-  { lines: string[]; set: Set<string> }
->();
-
-/**
- * Drops the editor document's phantom trailing empty line (a document ending
- * in a newline exposes one extra empty line the parsed diff never contains)
- * so session line arrays compare like parse-derived ones.
- */
-export function normalizeEditorLines(lines: string[]): string[] {
-  if (lines.length > 1 && lines[lines.length - 1] === '') {
-    return lines.slice(0, -1);
-  }
-  return lines;
-}
+// The old side's lines keep their array while a session runs, so the set is
+// kept by that array.
+const deletionLineSetCache = new WeakMap<readonly string[], Set<string>>();
 
 /**
  * Find the complete old/current divergence core. The old side is immutable
@@ -116,14 +103,8 @@ export function rebuildSessionHunks(
   getPreviousAdditionLine?: (index: number) => string | undefined
 ): SessionRegionChange | undefined {
   const previousHunks = diff.hunks;
-  const editorAdditionLines = diff.additionLines;
-  const canonicalAdditionLines = normalizeEditorLines(editorAdditionLines);
-  const canonicalDiff =
-    canonicalAdditionLines === editorAdditionLines
-      ? diff
-      : { ...diff, additionLines: canonicalAdditionLines };
   const blocks = parseSessionChangeBlocks(
-    canonicalDiff,
+    diff,
     parseDiffOptions,
     getPreviousAdditionLine
   );
@@ -133,12 +114,9 @@ export function rebuildSessionHunks(
     diff.deletionLines.length
   );
 
-  const nextHunks = buildRegionHunks(canonicalDiff, plans);
-  diff.additionLines = canonicalAdditionLines;
-  diff.hunks = nextHunks;
+  diff.hunks = buildRegionHunks(diff, plans);
   diff.editSessionDirty = true;
   finalizeSessionHunks(diff);
-  preserveTrailingEditorBlankLine(diff, editorAdditionLines);
   const layoutChanged = hasRegionOrSplitLayoutChanged(
     previousHunks,
     diff.hunks
@@ -268,12 +246,12 @@ function canRetainCanonicalBlocks(
 }
 
 function getDeletionLineSet(diff: FileDiffMetadata): Set<string> {
-  const cached = deletionLineSetCache.get(diff);
-  if (cached?.lines === diff.deletionLines) {
-    return cached.set;
+  const { deletionLines } = diff;
+  let set = deletionLineSetCache.get(deletionLines);
+  if (set == null) {
+    set = new Set(deletionLines);
+    deletionLineSetCache.set(deletionLines, set);
   }
-  const set = new Set(diff.deletionLines);
-  deletionLineSetCache.set(diff, { lines: diff.deletionLines, set });
   return set;
 }
 
@@ -288,9 +266,9 @@ function isPureChange(
 
 /** Preserve expansion at the surviving outer edges of rebuilt old-side gaps. */
 export function remapExpandedHunksForRegionChange(
-  expandedHunks: Map<number, HunkExpansionRegion>,
+  expandedHunks: ExpandedHunksMap,
   change: SessionRegionChange
-): Map<number, HunkExpansionRegion> {
+): ExpandedHunksMap {
   const remapped = new Map<number, HunkExpansionRegion>();
   const { regions } = change;
   for (let key = 0; key <= regions.length; key++) {
@@ -324,7 +302,7 @@ export type ExpansionAnchorRange = [start: number, end: number];
 /** Snapshot the expanded gap-edge slices before the exit recompute. */
 export function captureExpansionAnchors(
   diff: FileDiffMetadata,
-  expandedHunks: Map<number, HunkExpansionRegion>,
+  expandedHunks: ExpandedHunksMap,
   collapsedContextThreshold: number
 ): ExpansionAnchorRange[] {
   const anchors: ExpansionAnchorRange[] = [];
@@ -381,7 +359,7 @@ export function captureExpansionAnchors(
 export function rebuildExpansionFromAnchors(
   diff: FileDiffMetadata,
   anchors: ExpansionAnchorRange[]
-): Map<number, HunkExpansionRegion> {
+): ExpandedHunksMap {
   const rebuilt = new Map<number, HunkExpansionRegion>();
   if (anchors.length === 0) {
     return rebuilt;

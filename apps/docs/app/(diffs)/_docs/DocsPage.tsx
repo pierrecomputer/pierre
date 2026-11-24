@@ -17,6 +17,8 @@ import {
   CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE,
   CODE_VIEW_REACT_EXAMPLE,
   CODE_VIEW_SCROLL_TARGETS_EXAMPLE,
+  CODE_VIEW_SEARCH_REACT_EXAMPLE,
+  CODE_VIEW_SEARCH_VANILLA_EXAMPLE,
   CODE_VIEW_VANILLA_EXAMPLE,
 } from '../docs/CodeView/constants';
 import {
@@ -55,6 +57,7 @@ import {
   EDIT_VANILLA_CODE_VIEW_EXAMPLE,
   EDIT_VANILLA_FILE_DIFF_EXAMPLE,
   EDIT_VANILLA_FILE_EXAMPLE,
+  EDIT_VANILLA_READY_EXAMPLE,
   EDIT_WORKER_POOL_REACT_EXAMPLE,
   EDIT_WORKER_POOL_VANILLA_EXAMPLE,
   EDITOR_OPTIONS_TYPE,
@@ -62,6 +65,7 @@ import {
 } from '../docs/Edit/constants';
 import { HIGHLIGHTER_EXAMPLE } from '../docs/Highlighters/constants';
 import {
+  HIGHLIGHTS_ALL_LANGUAGES,
   HIGHLIGHTS_API_RUNTIME,
   HIGHLIGHTS_API_TYPES,
   HIGHLIGHTS_CSS_VARIABLES,
@@ -69,8 +73,10 @@ import {
   HIGHLIGHTS_DUAL_THEMES,
   HIGHLIGHTS_DUAL_THEMES_CSS,
   HIGHLIGHTS_HTML,
+  HIGHLIGHTS_INIT,
   HIGHLIGHTS_INSTALL,
   HIGHLIGHTS_LIVE,
+  HIGHLIGHTS_QUICK_START,
   HIGHLIGHTS_SKILL,
   HIGHLIGHTS_STREAM,
   HIGHLIGHTS_STREAM_PIPE,
@@ -83,6 +89,11 @@ import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
 } from '../docs/Installation/constants';
+import {
+  I18N_PLURALS,
+  I18N_SETUP,
+  I18N_SWITCH,
+} from '../docs/Internationalization/constants';
 import {
   OVERVIEW_INITIAL_EXAMPLE,
   OVERVIEW_REACT_PATCH_FILE,
@@ -218,6 +229,7 @@ export default function DocsPage() {
           <UtilitiesSection />
           <StylingSection />
           <ThemingSection />
+          <InternationalizationSection />
           <TokenHooksSection />
           <WorkerPoolSection />
           <SSRSection />
@@ -437,6 +449,8 @@ async function CodeViewSection() {
     codeViewItemMetricsOptionsExample,
     codeViewReactExample,
     codeViewScrollTargetsExample,
+    codeViewSearchReactExample,
+    codeViewSearchVanillaExample,
     codeViewVanillaExample,
     codeViewHeaderFooterReactExample,
     codeViewHeaderFooterVanillaExample,
@@ -446,6 +460,8 @@ async function CodeViewSection() {
     preloadCodeExample(CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE),
     preloadCodeExample(CODE_VIEW_REACT_EXAMPLE),
     preloadCodeExample(CODE_VIEW_SCROLL_TARGETS_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_SEARCH_REACT_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_SEARCH_VANILLA_EXAMPLE),
     preloadCodeExample(CODE_VIEW_VANILLA_EXAMPLE),
     preloadCodeExample(CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE),
     preloadCodeExample(CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE),
@@ -458,6 +474,8 @@ async function CodeViewSection() {
       codeViewItemMetricsOptionsExample,
       codeViewReactExample,
       codeViewScrollTargetsExample,
+      codeViewSearchReactExample,
+      codeViewSearchVanillaExample,
       codeViewVanillaExample,
       codeViewHeaderFooterReactExample,
       codeViewHeaderFooterVanillaExample,
@@ -473,6 +491,7 @@ async function EditSection() {
     editVanillaFileDiffExample,
     editVanillaCodeViewExample,
     editLazyFileExample,
+    editVanillaReadyExample,
     editPredictionExample,
     editPredictionResponseExample,
     editPredictionCodestralExample,
@@ -503,6 +522,7 @@ async function EditSection() {
     preloadCodeExample(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
     preloadCodeExample(EDIT_VANILLA_CODE_VIEW_EXAMPLE),
     preloadCodeExample(EDIT_LAZY_FILE_EXAMPLE),
+    preloadCodeExample(EDIT_VANILLA_READY_EXAMPLE),
     preloadCodeExample(EDIT_PREDICTION_EXAMPLE),
     preloadCodeExample(EDIT_PREDICTION_RESPONSE_EXAMPLE),
     preloadCodeExample(EDIT_PREDICTION_CODESTRAL_EXAMPLE),
@@ -536,6 +556,7 @@ async function EditSection() {
       editVanillaFileDiffExample,
       editVanillaCodeViewExample,
       editLazyFileExample,
+      editVanillaReadyExample,
       editPredictionExample,
       editPredictionResponseExample,
       editPredictionCodestralExample,
@@ -682,6 +703,9 @@ async function HighlightsHighlighterSection() {
     highlightsDiff,
     highlightsInstall,
     highlightsSkill,
+    highlightsQuickStart,
+    highlightsAllLanguages,
+    highlightsInit,
     highlightsHtml,
     highlightsTokens,
     highlightsStreamPipe,
@@ -699,6 +723,9 @@ async function HighlightsHighlighterSection() {
     preloadCodeExample(HIGHLIGHTS_DIFF),
     preloadCodeExample(HIGHLIGHTS_INSTALL),
     preloadCodeExample(HIGHLIGHTS_SKILL),
+    preloadCodeExample(HIGHLIGHTS_QUICK_START),
+    preloadCodeExample(HIGHLIGHTS_ALL_LANGUAGES),
+    preloadCodeExample(HIGHLIGHTS_INIT),
     preloadCodeExample(HIGHLIGHTS_HTML),
     preloadCodeExample(HIGHLIGHTS_TOKENS),
     preloadCodeExample(HIGHLIGHTS_STREAM_PIPE),
@@ -719,6 +746,9 @@ async function HighlightsHighlighterSection() {
       highlightsDiff,
       highlightsInstall,
       highlightsSkill,
+      highlightsQuickStart,
+      highlightsAllLanguages,
+      highlightsInit,
       highlightsHtml,
       highlightsTokens,
       highlightsStreamPipe,
@@ -792,6 +822,19 @@ async function SSRSection() {
       preloadUnresolvedFileResult,
       preloadPatchFile,
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function InternationalizationSection() {
+  const [i18nSetup, i18nSwitch, i18nPlurals] = await Promise.all([
+    preloadCodeExample(I18N_SETUP),
+    preloadCodeExample(I18N_SWITCH),
+    preloadCodeExample(I18N_PLURALS),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/Internationalization/content.mdx',
+    scope: { i18nSetup, i18nSwitch, i18nPlurals },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

@@ -1,13 +1,13 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import type { Lang, ThemedToken } from '../lib/index';
+import type { Lang, ThemedToken } from '../lib/core';
 import {
   codeToTokens,
   init,
   LiveTokenizer,
   StreamTokenizer,
-} from '../lib/index';
+} from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {

@@ -1,9 +1,13 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.bicepWords 160)
+
+  (import "@pierre/wat-tools/common.wat")
 
   ;; Bits 8 and up queue the next declaration words, four bits each: 1 a name, 2
   ;; a type, 3 a resource type string, 4 a type name, 5 a function name.
-  (keyword-table $bicepWords $mem.bicepWords $mem.plsqlWords
+  (keyword-table $bicepWords $mem.bicepWords $mem.bicepWords+160
     (group $Token.keyword.declaration+8448 "param" "output")
     (group $Token.keyword.declaration+12544 "resource" "module")
     (group $Token.keyword.declaration+256 "var" "metadata")
@@ -45,6 +49,14 @@
                 (br $done)))
             (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (local.set $seg (call $lexEscapeEnd (global.get $ptr)))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "u"))
+                (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "{")))
+              (then
+                (local.set $seg (call $scanHexRun (i32.add (global.get $ptr) (i32.const 3)) (i32.const 6)))
+                (if (i32.eq (call $templateByte (local.get $seg)) (i32.const "}"))
+                  (then (local.set $seg (i32.add (local.get $seg) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $seg))
             (global.set $ptr (local.get $seg))
             (br $scan)))

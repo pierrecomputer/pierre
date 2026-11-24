@@ -1,10 +1,14 @@
 (module
-  (import "../common.wat")
+  (import "../emitter.wat")
+  (import "@pierre/wat-tools/lexer-state.wat")
+  (memory-region $mem.bladeWords 320)
+
+  (import "@pierre/wat-tools/common.wat")
   (import "./php.wat")
   (import "./template.wat")
 
   ;; An `@end...` name takes the class of the name it closes, so those stay out.
-  (keyword-table $bladeWords $mem.bladeWords $mem.razorWords
+  (keyword-table $bladeWords $mem.bladeWords $mem.bladeWords+320
     (group $Token.keyword.control
       "if" "elseif" "else" "unless" "isset" "empty" "switch" "case" "break" "default" "for"
       "foreach" "forelse" "while" "continue" "auth" "guest" "can" "cannot" "env" "production"
@@ -227,9 +231,12 @@
         (local.set $skip (i32.const 0))
         (loop $markupNext
           (local.set $r
-            (call $tmplMarkup
-              (local.get $markup)
-              (i32.or (i32.shl (local.get $verbatim) (i32.const 2)) (i32.shl (local.get $skip) (i32.const 4)))))
+            (if (result i32) (i32.eq (i32.and (local.get $markup) (i32.const 7)) (i32.const 5))
+              (then (call $tmplBody (local.get $markup) (i32.shl (local.get $skip) (i32.const 4))))
+              (else
+                (call $tmplMarkup
+                  (local.get $markup)
+                  (i32.or (i32.shl (local.get $verbatim) (i32.const 2)) (i32.shl (local.get $skip) (i32.const 4)))))))
           (global.set $end (local.get $saveEnd))
           (local.set $markup (i32.and (local.get $r) (i32.const 0xffffff)))
           (local.set $r (i32.shr_u (local.get $r) (i32.const 24)))

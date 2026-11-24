@@ -214,6 +214,28 @@ interface DiffOptions {
   maxLineDiffLength: 1000,
 
   // ─────────────────────────────────────────────────────────────
+  // DIFF PARSING
+  // ─────────────────────────────────────────────────────────────
+
+  // Options for diffs computed from oldFile/newFile and for edited diffs.
+  // Hunks in supplied patches stay unchanged until an edit recomputes them.
+  parseDiffOptions: {
+    // Diff library for file diffs and inline change highlights:
+    // 'jsdiff' (default) - the jsdiff package
+    // '@pierre/patches' - WebAssembly diff library
+    preferredDiffLib: 'jsdiff',
+
+    // Unchanged lines around each change (default: 4)
+    context: 4,
+
+    // Compare lines without leading and trailing whitespace (default: false)
+    ignoreWhitespace: false,
+
+    // Remove the CR of each CRLF before the diff (default: false)
+    stripTrailingCr: false,
+  },
+
+  // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY
   // ─────────────────────────────────────────────────────────────
 
@@ -231,7 +253,8 @@ interface DiffOptions {
   // (default: false)
   disableErrorHandling: false,
 
-  // Skip syntax highlighting for lines exceeding this length
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 
   // Fires after hydration, after DOM-committing render updates, and before
@@ -982,7 +1005,8 @@ interface FileOptions {
   // (default: false)
   disableErrorHandling: false,
 
-  // Skip syntax highlighting for lines exceeding this length
+  // Max line length in characters. Longer lines skip syntax highlighting
+  // and show only their start, with a button to show the rest
   tokenizeMaxLineLength: 1000,
 
   // Fires after hydration, after DOM-committing render updates, and before

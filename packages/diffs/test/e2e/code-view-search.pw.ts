@@ -1,0 +1,1937 @@
+import { expect, type Locator, type Page, test } from '@playwright/test';
+
+import type { CodeViewOptions } from '../../src/components/CodeView';
+import {
+  expectCurrentMatchHorizontallyVisible,
+  getCurrentMatchLine,
+  resetCurrentMatchHorizontalScroll,
+  trackHorizontalSearchScrolls,
+} from './search-scroll-helpers';
+
+// Native highlights are ranges in the document registry, not span elements.
+// Follow shadow hosts when checking whether a range belongs to this surface.
+async function expectSearchHighlights(container: Locator, count: number) {
+  await expect
+    .poll(() =>
+      container.evaluateAll((containers) => {
+        const ranges = [
+          ...(CSS.highlights.get('diffs-search-match') ?? []),
+          ...(CSS.highlights.get('diffs-search-current') ?? []),
+        ];
+        return ranges.filter((range) => {
+          if (range.collapsed) return false;
+          let node: Node | null = range.startContainer;
+          while (node != null) {
+            if (containers.some((container) => container === node)) return true;
+            node = node instanceof ShadowRoot ? node.host : node.parentNode;
+          }
+          return false;
+        }).length;
+      })
+    )
+    .toBe(count);
+}
+
+// Wait for the first match to be current and the text ranges to be painted before clicking.
+async function openHighlightedMatches(
+  page: Page,
+  fixture: string,
+  query: string,
+  count: number
+) {
+  await page.goto(`/test/e2e/fixtures/code-view-search.html?${fixture}`);
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill(query);
+  await expect(root.locator('[data-matches]')).toHaveText(`1/${count}`);
+  await expectSearchHighlights(root, count);
+  return root;
+}
+
+test('Escape restores the scroll position from before the query', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?candidates&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.evaluate(() =>
+    window.__codeView!.scrollTo({
+      type: 'position',
+      position: 1237,
+      behavior: 'instant',
+    })
+  );
+  const scrollTop = () => root.evaluate((element) => element.scrollTop);
+  await expect.poll(scrollTop).toBe(1237);
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root.getByRole('textbox', { name: 'Search' });
+  await input.fill('target 1000');
+  await expect(root.locator('[data-line="1000"]')).toBeInViewport();
+  await expect.poll(scrollTop).toBeGreaterThan(1237);
+  await input.press('Escape');
+  await expect(input).toHaveCount(0);
+  await expect.poll(scrollTop).toBe(1237);
+});
+
+test('larger result counts shrink the input without shifting controls', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?highlight&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+
+  const input = root.getByRole('textbox', { name: 'Search' });
+  const toggles = root.locator('[data-search-toggles]');
+  const inputBox = root.locator('[data-input-box][data-find]');
+  const before = {
+    input: await input.boundingBox(),
+    toggles: await toggles.boundingBox(),
+    inputBox: await inputBox.boundingBox(),
+  };
+
+  await root.locator('[data-matches]').evaluate((element) => {
+    element.textContent = '1/100,000';
+  });
+  const after = {
+    input: await input.boundingBox(),
+    toggles: await toggles.boundingBox(),
+    inputBox: await inputBox.boundingBox(),
+  };
+
+  expect(after.inputBox).toEqual(before.inputBox);
+  expect(after.toggles).toEqual(before.toggles);
+  expect(after.input!.width).toBeLessThan(before.input!.width);
+});
+
+// Return the center of each painted piece of the first matching range in this row.
+function getHighlightPoints(row: Locator, highlight: 'match' | 'current') {
+  return row.evaluate((element, highlight) => {
+    for (const range of CSS.highlights.get(`diffs-search-${highlight}`) ?? []) {
+      if (range instanceof Range && element.contains(range.startContainer)) {
+        return Array.from(
+          range.getClientRects(),
+          ({ left, top, width, height }) => ({
+            x: left + width / 2,
+            y: top + height / 2,
+          })
+        );
+      }
+    }
+    return [];
+  }, highlight);
+}
+
+test('Escape keeps the viewport after clicking a different match', async ({
+  page,
+}) => {
+  const root = await openHighlightedMatches(
+    page,
+    'viewport&kind=file',
+    'target 10',
+    2
+  );
+  const row = root.locator('[data-line="101"][data-line-type]');
+  await expect(row).toBeInViewport();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__codeView!.pendingScrollTarget == null)
+    )
+    .toBe(true);
+  const before = await root.evaluate((element) => element.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  const [point] = await getHighlightPoints(row, 'match');
+  // The view ignores the pointer for a moment after it scrolls. Wait until
+  // the row is what sits under the point again.
+  await expect
+    .poll(() =>
+      row.evaluate(
+        (element, [x, y]) => {
+          const shadowRoot = element.getRootNode();
+          return (
+            shadowRoot instanceof ShadowRoot &&
+            element.contains(shadowRoot.elementFromPoint(x, y))
+          );
+        },
+        [point.x, point.y]
+      )
+    )
+    .toBe(true);
+  await page.mouse.click(point.x, point.y);
+  await expect(root.locator('[data-matches]')).toHaveText('2/2');
+  await page.keyboard.press('Escape');
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+  await page.evaluate(() => window.__codeView!.render(true));
+  expect(await root.evaluate((element) => element.scrollTop)).toBe(before);
+});
+
+for (const kind of ['file', 'split']) {
+  const name =
+    kind === 'file'
+      ? 'clicking a later file match sets the current match'
+      : 'clicking an old-side match in a split diff sets the current match';
+  test(name, async ({ page }) => {
+    const count = kind === 'file' ? 3 : 6;
+    const root = await openHighlightedMatches(
+      page,
+      `highlight&kind=${kind}`,
+      'target',
+      count
+    );
+    const code = root.locator('diffs-container').first();
+    const firstLine = '[data-line="1"][data-line-type]';
+    const row = code.locator(
+      kind === 'file' ? firstLine : `[data-deletions] ${firstLine}`
+    );
+    // Highlighting replaces the rows; wait for it before measuring them.
+    await expect(row.getByText('value', { exact: true })).toBeVisible();
+    const points = await getHighlightPoints(row, 'match');
+    const [point] = points;
+    await page.mouse.click(point.x, point.y);
+    await expect(root.locator('[data-matches]')).toHaveText(`2/${count}`);
+    await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+
+    await page.keyboard.press('ControlOrMeta+g');
+    await expect(root.locator('[data-matches]')).toHaveText(`3/${count}`);
+    const nextRow = code.locator(
+      kind === 'file'
+        ? '[data-line="2"][data-line-type]'
+        : `[data-additions] ${firstLine}`
+    );
+    await expect
+      .poll(() => getHighlightPoints(nextRow, 'current'))
+      .not.toHaveLength(0);
+  });
+}
+
+test('clicking the wrapped part of a match sets the current match', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 440, height: 800 });
+  const root = await openHighlightedMatches(
+    page,
+    'horizontal&kind=file&wrap',
+    'x'.repeat(100),
+    3
+  );
+  const row = root.locator('[data-line="8"][data-line-type]');
+  const points = await getHighlightPoints(row, 'match');
+  const last = points[points.length - 1];
+  expect(last.y).toBeGreaterThan(points[0].y);
+  await page.mouse.click(last.x, last.y);
+  await expect(root.locator('[data-matches]')).toHaveText('2/3');
+  await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+});
+
+test('clicking text outside a match keeps the current match', async ({
+  page,
+}) => {
+  const root = await openHighlightedMatches(
+    page,
+    'highlight&kind=file',
+    'target',
+    3
+  );
+  const row = root
+    .locator('diffs-container')
+    .first()
+    .locator('[data-line="1"][data-line-type]');
+  const token = row.getByText('value', { exact: true });
+  await expect(token).toBeVisible();
+  const points = await getHighlightPoints(row, 'current');
+  await token.click();
+  await expect(root.locator('[data-matches]')).toHaveText('1/3');
+  await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+});
+
+test('dragging a text selection across a match keeps the current match', async ({
+  page,
+}) => {
+  const root = await openHighlightedMatches(
+    page,
+    'highlight&kind=file',
+    'target',
+    3
+  );
+  const row = root
+    .locator('diffs-container')
+    .first()
+    .locator('[data-line="1"][data-line-type]');
+  await expect(row.getByText('value', { exact: true })).toBeVisible();
+  const points = await getHighlightPoints(row, 'current');
+  const [from] = points;
+  const [to] = await getHighlightPoints(row, 'match');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  expect(
+    await page.evaluate(() => document.getSelection()?.toString())
+  ).toMatch(/\w+ \w+/);
+  await expect(root.locator('[data-matches]')).toHaveText('1/3');
+  await expect.poll(() => getHighlightPoints(row, 'current')).toEqual(points);
+});
+
+test('time-sliced find grows the match count, then settles', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?sliced');
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.locator('[data-line="11"]')).toBeInViewport();
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1/7,200');
+
+  const states = await page.evaluate(() =>
+    (window.__searchStates ?? []).filter(({ text }) => text === 'target')
+  );
+  const counts = states.map(({ matchCount }) => matchCount);
+  const growing = states.filter(({ searching }) => searching);
+  // The count only goes up, and is reported more than once on the way.
+  expect(counts).toEqual([...counts].sort((a, b) => a - b));
+  expect(
+    new Set(growing.map(({ matchCount }) => matchCount)).size
+  ).toBeGreaterThan(1);
+  // The match on screen is current before the rest of the view is searched.
+  expect(growing.some(({ currentMatchIndex }) => currentMatchIndex === 0)).toBe(
+    true
+  );
+  expect(await getCurrentMatchLine(page)).toBe(10);
+  // Once a report says the search is done, the count is final.
+  expect(states.slice(growing.length)).not.toHaveLength(0);
+  for (const state of states.slice(growing.length)) {
+    expect(state).toMatchObject({ matchCount: 7200, searching: false });
+  }
+});
+
+for (const kind of ['file', 'split', 'unified'] as const) {
+  test(`scoped find preserves selections across recycling in ${kind}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?recycle&kind=${kind}&diffStyle=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    const content = root.locator('[contenteditable="true"]');
+    const selection = root.locator('[data-selection-range]');
+    await content.focus();
+    await page.evaluate(() =>
+      window.__codeView?.getEditor('item')?.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 4 },
+          direction: 'forward',
+        },
+      ])
+    );
+    const selected = await page.evaluate(
+      () => window.__codeView?.getEditor('item')?.getViewState().selections
+    );
+    await expect(selection).toHaveCount(1);
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    await input.fill('target');
+    await input.press('Enter');
+    await expect(root.locator('[data-matches]')).toHaveText('2/2');
+    await expect(selection).toHaveCount(1);
+    expect(
+      await page.evaluate(
+        () => window.__codeView?.getEditor('item')?.getViewState().selections
+      )
+    ).toEqual(selected);
+    await root.hover();
+    await page.mouse.wheel(0, 6000);
+    await expect(content).toHaveCount(0);
+    await page.evaluate(() =>
+      window.__codeView?.scrollTo({
+        type: 'position',
+        position: 0,
+        behavior: 'instant',
+      })
+    );
+    await expect(content).toBeVisible();
+    await expect(input).toBeFocused();
+    await expect(selection).toHaveCount(1);
+    await page.evaluate(() =>
+      window.__codeView?.updateItemId('item', 'renamed')
+    );
+    await input.press('Escape');
+    await expect(selection).toHaveCount(1);
+    expect(
+      await page.evaluate(
+        () => window.__codeView?.getEditor('renamed')?.getViewState().selections
+      )
+    ).toEqual(selected);
+  });
+
+  test(`native highlights preserve code DOM and survive recycling in ${kind}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?highlight&kind=${kind}&diffStyle=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+
+    // This query crosses the identifier, operator, and string token spans.
+    await input.fill('value = "target');
+    await expectSearchHighlights(root, kind === 'split' ? 2 : 1);
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          [...CSS.highlights.values()].flatMap((highlight) =>
+            [...highlight].map((range) => (range as Range).toString())
+          )
+        )
+      )
+      .toEqual(Array(kind === 'split' ? 2 : 1).fill('value = "target'));
+
+    await input.fill('target');
+    const count = kind === 'split' ? 6 : kind === 'unified' ? 4 : 3;
+    await expectSearchHighlights(root, count);
+    await expect(root.locator('[data-search-match]')).toHaveCount(0);
+    const code = root.locator('diffs-container').first();
+    await expect(code.locator('[data-line="1"] span').first()).toBeVisible();
+    const probe = await code.evaluateHandle((element) => {
+      const rows = [
+        ...element.shadowRoot!.querySelectorAll('[data-line][data-line-type]'),
+      ];
+      const state = { nodes: [] as Node[], mutations: 0 };
+      const observer = new MutationObserver((records) => {
+        state.mutations += records.length;
+      });
+      for (const row of rows) {
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode()) != null) state.nodes.push(node);
+        observer.observe(row, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+      }
+      return { state, observer };
+    });
+    await input.press('Enter');
+    await expect(root.locator('[data-matches]')).toHaveText(`2/${count}`);
+    await expectSearchHighlights(root, count);
+    await input.fill('value = "target');
+    await expectSearchHighlights(root, kind === 'split' ? 2 : 1);
+    await input.fill('target');
+    await expectSearchHighlights(root, count);
+    expect(
+      await probe.evaluate(({ state, observer }) => {
+        observer.disconnect();
+        return {
+          retained:
+            state.nodes.length > 0 && state.nodes.every((n) => n.isConnected),
+          mutations: state.mutations,
+        };
+      })
+    ).toEqual({ retained: true, mutations: 0 });
+    expect(
+      await page.evaluate(() => {
+        const range = [...CSS.highlights.get('diffs-search-current')!][0];
+        return getComputedStyle(
+          range.startContainer.parentElement!,
+          '::highlight(diffs-search-current)'
+        ).backgroundColor;
+      })
+    ).not.toBe('rgba(0, 0, 0, 0)');
+
+    await root.hover();
+    await page.mouse.wheel(0, 6000);
+    await expectSearchHighlights(root, 0);
+    await page.evaluate(() =>
+      window.__codeView?.scrollTo({
+        type: 'position',
+        position: 0,
+        behavior: 'instant',
+      })
+    );
+    await expectSearchHighlights(root, count);
+    await input.press('Escape');
+    await expectSearchHighlights(root, 0);
+    await probe.dispose();
+  });
+}
+
+for (const kind of ['file', 'split', 'unified']) {
+  for (const edit of [false, true]) {
+    test(`search reveals horizontal matches instantly in ${kind} ${edit ? 'edit' : 'readonly'}`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/test/e2e/fixtures/code-view-search.html?horizontal&kind=${kind}&diffStyle=${kind}${edit ? '&edit' : ''}`
+      );
+      const root = page.locator('[data-code-view-root]');
+      if (edit) await root.locator('[contenteditable="true"]').focus();
+      else await root.focus();
+      const selections = await page.evaluate(
+        () => window.__codeView!.getEditor('item')?.getViewState().selections
+      );
+      await page.keyboard.press('ControlOrMeta+f');
+      const input = root.getByRole('textbox', { name: 'Search' });
+      await input.fill('target');
+      await expectCurrentMatchHorizontallyVisible(page);
+      const initialTop = await root.evaluate((element) => element.scrollTop);
+      const probe = await trackHorizontalSearchScrolls(page);
+      try {
+        await input.press('Enter');
+        await expectCurrentMatchHorizontallyVisible(page);
+        expect(await root.evaluate((element) => element.scrollTop)).toBe(
+          initialTop
+        );
+        await resetCurrentMatchHorizontalScroll(page);
+        await page.evaluate(() => window.__codeView!.render(true));
+        expect(
+          await page.evaluate(() => {
+            const range = [
+              ...CSS.highlights.get('diffs-search-current')!,
+            ][0] as Range;
+            return range.startContainer.parentElement!.closest('[data-code]')!
+              .scrollLeft;
+          })
+        ).toBe(0);
+        await input.press('Shift+Enter');
+        await expectCurrentMatchHorizontallyVisible(page);
+        await input.press('Enter');
+        await expectCurrentMatchHorizontallyVisible(page);
+        expect(await root.evaluate((element) => element.scrollTop)).toBe(
+          initialTop
+        );
+        for (
+          let step = 0;
+          step < 8 && (await getCurrentMatchLine(page)) !== 201;
+          step++
+        ) {
+          await input.press('Enter');
+          await expectCurrentMatchHorizontallyVisible(page);
+        }
+        expect(await getCurrentMatchLine(page)).toBe(201);
+        await expect
+          .poll(() => root.evaluate((element) => element.scrollTop))
+          .toBeGreaterThan(initialTop);
+        await input.fill('xxxxxxxx target');
+        await expectCurrentMatchHorizontallyVisible(page);
+        await expect(root.locator('[data-matches]')).toHaveText('1/1');
+        await resetCurrentMatchHorizontalScroll(page);
+        await input.press('Enter');
+        await expectCurrentMatchHorizontallyVisible(page);
+        const calls = await probe.evaluate(({ calls }) => calls);
+        expect(calls.length).toBeGreaterThan(0);
+        expect(
+          calls.every(
+            ({ behavior, immediate, verticalUnchanged }) =>
+              behavior === 'instant' && immediate && verticalUnchanged
+          )
+        ).toBe(true);
+        expect(
+          await page.evaluate(
+            () =>
+              window.__codeView!.getEditor('item')?.getViewState().selections
+          )
+        ).toEqual(selections);
+        await expect(input).toBeFocused();
+      } finally {
+        await probe.evaluate(({ restore }) => restore());
+        await probe.dispose();
+      }
+    });
+  }
+}
+
+for (const overflow of ['scroll', 'wrap']) {
+  test(`find steps to a cut line's button in ${overflow} mode`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 640, height: 800 });
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?highlight&kind=file&${overflow}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.evaluate((element) => {
+      element.style.setProperty(
+        '--diffs-bg-search-match-override',
+        'rgb(230, 190, 45)'
+      );
+      element.style.setProperty(
+        '--diffs-bg-search-match-current-override',
+        'rgb(75, 155, 240)'
+      );
+    });
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    const count = root.locator('[data-matches]');
+    const button = root.getByRole('button', { name: 'Show full line' });
+    await input.fill('updated');
+    await expect(count).toHaveText('1/1');
+
+    // Moving the only match leaves the panel open with no current match.
+    await page.evaluate(() =>
+      window.__codeView?.updateItem({
+        id: 'item',
+        type: 'file',
+        version: 1,
+        file: {
+          name: 'cut.txt',
+          contents:
+            'padding\n'.repeat(23) +
+            'word '.repeat(400) +
+            'updated updated updated',
+        },
+      })
+    );
+    await expect(count).toHaveText('1 result');
+    await expect(button).toHaveAttribute('data-search-match', '');
+    await expect(button).toHaveCSS('background-color', 'rgb(230, 190, 45)');
+    await expect(button).not.toBeInViewport();
+    await input.press('Enter');
+    await expect(count).toHaveText('1/1');
+    await expect(button).toHaveAttribute('data-search-match', 'current');
+    await expect(button).toHaveCSS('background-color', 'rgb(75, 155, 240)');
+    // The sideways scroll lands within a pixel of the button's far edge.
+    await expect(button).toBeInViewport({ ratio: 0.9 });
+
+    await input.fill('');
+    await expect(button).not.toHaveAttribute('data-search-match');
+    await input.fill('word updated');
+    await expect(button).toHaveAttribute('data-search-match', 'current');
+    await expectSearchHighlights(root, 0);
+    await input.press('Escape');
+    await expect(button).not.toHaveAttribute('data-search-match');
+
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    await input.fill('updated');
+    await expect(count).toHaveText('1/1');
+    await button.click();
+    await expect(button).toHaveCount(0);
+    await expect(count).toHaveText('1/3');
+    await expectSearchHighlights(root, 3);
+    // The match the button stood for is scrolled into view.
+    await expect
+      .poll(() =>
+        root.evaluate((element) => {
+          const [range] = CSS.highlights.get('diffs-search-current') ?? [];
+          if (!(range instanceof Range)) return false;
+          const code =
+            range.startContainer.parentElement?.closest('[data-code]');
+          if (code == null) return false;
+          const match = range.getBoundingClientRect();
+          const column = code.getBoundingClientRect();
+          const view = element.getBoundingClientRect();
+          return (
+            match.left >= column.left - 1 &&
+            match.right <= column.right + 1 &&
+            match.top >= view.top - 1 &&
+            match.bottom <= view.bottom + 1
+          );
+        })
+      )
+      .toBe(true);
+  });
+}
+
+test('closing or resetting one viewer preserves another viewer’s ranges', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?highlight&kind=file&multiple'
+  );
+  const first = page.locator('[data-code-view-root]');
+  const second = page.locator('[data-secondary-view]');
+  for (const root of [first, second]) {
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    await root.getByRole('textbox', { name: 'Search' }).fill('target');
+  }
+  await expectSearchHighlights(first, 3);
+  await expectSearchHighlights(second, 2);
+  await first.getByRole('textbox', { name: 'Search' }).press('Escape');
+  await expectSearchHighlights(first, 0);
+  await expectSearchHighlights(second, 2);
+  await first.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await first.getByRole('textbox', { name: 'Search' }).fill('target');
+  await expectSearchHighlights(first, 3);
+  await page.evaluate(() => window.__codeView?.reset());
+  await expectSearchHighlights(first, 0);
+  await expectSearchHighlights(second, 2);
+  await second.getByRole('textbox', { name: 'Search' }).press('Escape');
+  expect(
+    await page.evaluate(() =>
+      [...CSS.highlights.values()].reduce(
+        (total, highlight) => total + highlight.size,
+        0
+      )
+    )
+  ).toBe(0);
+});
+
+for (const kind of ['file', 'split', 'unified'] as const) {
+  test(`replace all while recycled renders current text and undo in ${kind}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?recycle&kind=${kind}&diffStyle=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    const content = root.locator('[contenteditable="true"]');
+    await content
+      .locator('[data-line="1"]:not([data-line-type="change-deletion"])')
+      .click();
+    await page.keyboard.press('ControlOrMeta+Alt+f');
+    const panel = root.locator('[data-search-panel-overlay]');
+    const search = panel.getByRole('textbox', { name: 'Search' });
+    const replacement = panel.getByRole('textbox', {
+      name: 'Replace',
+      exact: true,
+    });
+    await expect(search).toBeVisible();
+    await search.fill('target');
+    await replacement.fill('NEW');
+    await root.hover();
+    await page.mouse.wheel(0, 6000);
+    await expect(content).toHaveCount(0);
+    await expect(replacement).toBeFocused();
+    await panel
+      .getByRole('button', { name: 'Replace All', exact: true })
+      .click();
+    await expect(panel.locator('[data-matches]')).toHaveText('0/0');
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__codeView?.getEditor('item')?.getText())
+      )
+      .toBe('NEW one\nkeep\nNEW two\n');
+    await page.evaluate(() =>
+      window.__codeView?.scrollTo({
+        type: 'position',
+        position: 0,
+        behavior: 'instant',
+      })
+    );
+    const rows = content.locator(
+      '[data-line]:not([data-line-type="change-deletion"])'
+    );
+    await expect(rows.filter({ hasText: 'NEW' })).toHaveText([
+      'NEW one',
+      'NEW two',
+    ]);
+    await expect(content).not.toContainText('target');
+    await expectSearchHighlights(root, 0);
+    await root.hover();
+    await page.mouse.wheel(0, 6000);
+    await expect(content).toHaveCount(0);
+    await page.evaluate(() => window.__codeView?.getEditor('item')?.undo());
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__codeView?.getEditor('item')?.canUndo)
+      )
+      .toBe(false);
+    await page.evaluate(() =>
+      window.__codeView?.scrollTo({
+        type: 'position',
+        position: 0,
+        behavior: 'instant',
+      })
+    );
+    await expect(rows.filter({ hasText: 'target' })).toHaveText([
+      'target one',
+      'target two',
+    ]);
+    await expect(panel.locator('[data-matches]')).toContainText('2');
+    await expectSearchHighlights(content, 2);
+  });
+}
+
+for (const width of [1200, 360]) {
+  test(`global find skips hidden replacement controls and preserves them across scope changes at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+Alt+f');
+    const panel = root.locator('[data-search-panel-overlay]');
+    const search = panel.getByRole('textbox', { name: 'Search' });
+    const replacement = panel.locator('input[data-replace]');
+    const actions = panel.locator('[data-replace-actions] button');
+    const toggle = panel.locator('[data-replace-toggle]');
+    await search.fill('target');
+    await expect(panel.locator('[data-search-grid]')).toHaveAttribute(
+      'data-mode',
+      'find'
+    );
+    await expect(replacement).toHaveCount(1);
+    await expect(actions).toHaveCount(2);
+    await expect(replacement).toBeHidden();
+    await expect(actions.nth(0)).toBeHidden();
+    await expect(actions.nth(1)).toBeHidden();
+    await expect(toggle).toBeHidden();
+    for (const name of [
+      'Match Case',
+      'Whole Word',
+      'Regexp',
+      'Previous',
+      'Next',
+      'Close',
+    ]) {
+      await page.keyboard.press('Tab');
+      await expect(
+        panel.getByRole('button', { name, exact: true })
+      ).toBeFocused();
+    }
+
+    const content = root.locator('[contenteditable="true"]').nth(1);
+    await content.focus();
+    await expect(replacement).toBeVisible();
+    await expect(actions.nth(0)).toBeVisible();
+    await expect(actions.nth(1)).toBeVisible();
+    await expect(toggle).toBeVisible();
+    await replacement.fill('retained');
+    await root.focus();
+    await expect(replacement).toBeHidden();
+    await expect(toggle).toBeHidden();
+    await content.focus();
+    await expect(replacement).toBeVisible();
+    await expect(replacement).toHaveValue('retained');
+  });
+}
+
+test('ending edit mode with replacement input focused leaves find usable', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+  const root = page.locator('[data-code-view-root]');
+  await root.locator('[contenteditable="true"]').nth(1).click();
+  await page.keyboard.press('ControlOrMeta+Alt+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  const search = panel.getByRole('textbox', { name: 'Search' });
+  const replacement = panel.getByRole('textbox', {
+    name: 'Replace',
+    exact: true,
+  });
+  await search.fill('target');
+  await replacement.fill('NEW');
+  await expect(replacement).toBeFocused();
+  await page.evaluate(() => {
+    const view = window.__codeView!;
+    view.updateItem({ ...view.getItem('second')!, edit: false, version: 1 });
+  });
+  await expect(replacement).toBeHidden();
+  await expect(panel.locator('[data-matches]')).toContainText('5');
+  await search.click();
+  await expect(search).toBeFocused();
+  await search.fill('readonly');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/1');
+});
+
+for (const diffStyle of ['split', 'unified'] as const) {
+  test(`scoped search reveals collapsed context without changing selections in ${diffStyle} mode`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?collapsed&diffStyle=${diffStyle}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    const content = root.locator('[contenteditable="true"]');
+    const hiddenLine = content.locator(
+      '[data-line="101"]:not([data-line-type="change-deletion"])'
+    );
+    await expect(hiddenLine).toHaveCount(0);
+    await content
+      .locator('[data-line="10"]:not([data-line-type="change-deletion"])')
+      .click();
+    const selected = await page.evaluate(
+      () => window.__codeView?.getEditor('diff')?.getViewState().selections
+    );
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    await input.fill('target');
+    await expect(root.locator('[data-matches]')).toHaveText('1/1');
+    await expect(hiddenLine).toBeInViewport();
+    await expect(input).toBeFocused();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.__codeView?.getEditor('diff')?.getViewState().selections
+        )
+      )
+      .toEqual(selected);
+    await expect(content.locator('[data-line="210"]')).toHaveCount(0);
+    await input.press('Enter');
+    await expect(hiddenLine).toBeInViewport();
+    await expect(input).toBeFocused();
+
+    const replacement = root.getByRole('textbox', {
+      name: 'Replace',
+      exact: true,
+    });
+    await replacement.fill('changed');
+    await replacement.press('Enter');
+    await expect(hiddenLine).toContainText('hidden changed');
+    await expect(root.locator('[data-matches]')).toHaveText('0/0');
+    await expect(replacement).toBeFocused();
+    await page.evaluate(() => window.__codeView?.getEditor('diff')?.undo());
+    await expect(hiddenLine).toContainText('hidden target');
+    await expect(root.locator('[data-matches]')).toContainText('1');
+  });
+}
+
+test('search scope follows focus across editors, the panel, and outside CodeView', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+  const root = page.locator('[data-code-view-root]');
+  const editors = root.locator('[contenteditable="true"]');
+  const first = editors.nth(0);
+  const second = editors.nth(1);
+  await first.click();
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  const input = panel.getByRole('textbox', { name: 'Search' });
+  const count = panel.locator('[data-matches]');
+  const replacement = panel.getByRole('textbox', {
+    name: 'Replace',
+    exact: true,
+  });
+  await expect(replacement).toBeVisible();
+  await replacement.fill('changed');
+  await input.fill('target');
+  await expect(count).toHaveText('1/1');
+  await expectSearchHighlights(root.locator('[data-deletions]'), 0);
+
+  await second.click();
+  await expect(count).toHaveText('2 results');
+  await expect(second).toBeFocused();
+  await expect(replacement).toHaveValue('changed');
+  const matchCase = panel.getByRole('button', { name: 'Match Case' });
+  await matchCase.click();
+  await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
+  await expect(count).toContainText('/2');
+  await input.click();
+  await page.keyboard.press('ControlOrMeta+f');
+  await input.press('Enter');
+  await expect(count).toContainText('/2');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('target');
+
+  await page.locator('[data-outside]').click();
+  await expect(count).toContainText('/5');
+  await expectSearchHighlights(root.locator('[data-deletions]'), 1);
+  await expect(page.locator('[data-outside]')).toBeFocused();
+  await expect(replacement).toBeHidden();
+  await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
+  await first.click();
+  await expect(count).toHaveText('1 result');
+  await expectSearchHighlights(root.locator('[data-deletions]'), 0);
+  await expect(first).toBeFocused();
+  await expect(replacement).toBeVisible();
+  await expect(replacement).toHaveValue('changed');
+
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(count).toHaveText('5 results');
+  await expect(replacement).toBeHidden();
+  await expect(input).toHaveValue('target');
+  await expect(root.getByRole('textbox', { name: 'Search' })).toHaveCount(1);
+  await input.press('Escape');
+  await first.click();
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+});
+
+test('scoped replacement advances past inserted matches and replace all is one undo step', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+  const root = page.locator('[data-code-view-root]');
+  const content = root.locator('[contenteditable="true"]').nth(1);
+  await expect(content).toBeVisible();
+  await page.evaluate(() =>
+    window.__codeView?.getEditor('second')?.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 13 },
+        },
+        newText: 'target target target',
+      },
+    ])
+  );
+  await expect(content).toContainText('target target target');
+  await content.click();
+  await page.keyboard.press('ControlOrMeta+Alt+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  const input = panel.getByRole('textbox', { name: 'Search' });
+  const replacement = panel.getByRole('textbox', {
+    name: 'Replace',
+    exact: true,
+  });
+  const count = panel.locator('[data-matches]');
+  await input.fill('target');
+  await input.press('Enter');
+  await expect(count).toHaveText('2/3');
+  await replacement.fill('targettarget');
+  await replacement.press('Enter');
+  await expect(content).toContainText('target targettarget target');
+  await expect(count).toHaveText('4/4');
+  await expect(replacement).toBeFocused();
+  await replacement.press('Enter');
+  await expect(content).toContainText('target targettarget targettarget');
+  await expect(count).toHaveText('5 results');
+  await replacement.fill('new');
+  await panel.getByRole('button', { name: 'Replace All', exact: true }).click();
+  await expect(content).toContainText('new newnew newnew');
+  await expect(count).toHaveText('0/0');
+  await expectSearchHighlights(root, 0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__codeView?.getEditor('diff')?.getText())
+    )
+    .toBe('target added\nunchanged\n');
+  await page.evaluate(() => window.__codeView?.getEditor('second')?.undo());
+  await expect(content).toContainText('target targettarget targettarget');
+  await expect(count).toContainText('5');
+  await expectSearchHighlights(content, 5);
+});
+
+test('unified edit highlights follow reconciled rows', async ({ page }) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?recycle&diffStyle=unified'
+  );
+  const root = page.locator('[data-code-view-root]');
+  const content = root.locator('[contenteditable="true"]');
+  await content.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1/2');
+  const line = content.locator(
+    '[data-line="1"]:not([data-line-type="change-deletion"])'
+  );
+  await line.click();
+  await page.keyboard.press('Home');
+  await page.keyboard.type('X');
+  await expect(line).toContainText('Xtarget');
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [
+          ...CSS.highlights.get('diffs-search-match')!,
+          ...CSS.highlights.get('diffs-search-current')!,
+        ].map((range) => (range as Range).toString())
+      )
+    )
+    .toEqual(['target', 'target']);
+});
+
+for (const kind of ['file', 'split', 'unified']) {
+  test(`edit highlights survive background retokenization in ${kind}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?retokenize&edit&kind=${kind}&diffStyle=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.locator('[contenteditable="true"]').focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    await input.fill('target');
+    await expectSearchHighlights(root, 3);
+    const rendered = await page.evaluateHandle(() => {
+      const view = window.__codeView!;
+      const { options } = view as unknown as {
+        options: CodeViewOptions<undefined, undefined>;
+      };
+      view.setOptions({ ...options, themeType: 'light' });
+      view.render(true);
+      const row = document
+        .querySelector('diffs-container')!
+        .shadowRoot!.querySelector(
+          '[contenteditable="true"] [data-line="1"]:not([data-line-type="change-deletion"])'
+        )!;
+      return { row, text: row.firstChild! };
+    });
+    try {
+      await expect
+        .poll(() => rendered.evaluate(({ text }) => text.isConnected))
+        .toBe(false);
+      expect(await rendered.evaluate(({ row }) => row.isConnected)).toBe(true);
+      await expectSearchHighlights(root, 3);
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            [
+              ...CSS.highlights.get('diffs-search-match')!,
+              ...CSS.highlights.get('diffs-search-current')!,
+            ].map((range) => (range as Range).toString())
+          )
+        )
+        .toEqual(['target', 'target', 'target']);
+      await expect(input).toBeFocused();
+    } finally {
+      await rendered.dispose();
+    }
+  });
+}
+
+test('refreshes search after typing and undo without a host update', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html');
+  const root = page.locator('[data-code-view-root]');
+  const content = root.locator('[contenteditable="true"]');
+  await content.click();
+  await page.keyboard.press('ControlOrMeta+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  await panel.getByRole('textbox', { name: 'Search' }).fill('github');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/4');
+
+  const line = content.locator('[data-line="125"]');
+  await line.click();
+  await page.keyboard.press('Home');
+  await page.keyboard.type('github ');
+  await expect(panel.locator('[data-matches]')).toContainText('5');
+  await expectSearchHighlights(line, 2);
+  await expect(content).toBeFocused();
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(panel.locator('[data-matches]')).toContainText('4');
+  await expectSearchHighlights(line, 1);
+});
+
+test('find from an editable CodeView uses its panel and reaches offscreen matches', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html');
+  const root = page.locator('[data-code-view-root]');
+  const content = root.locator('[contenteditable="true"]');
+  await content.click();
+  const selected = await page.evaluate(
+    () => window.__codeView?.getEditor('file')?.getViewState().selections
+  );
+  await page.keyboard.press('ControlOrMeta+f');
+
+  const panel = root.locator('[data-search-panel-overlay]');
+  const input = panel.getByRole('textbox', { name: 'Search' });
+  await expect(input).toBeFocused();
+  await expect(root.getByRole('textbox', { name: 'Search' })).toHaveCount(1);
+  await input.fill('github');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/4');
+  for (let match = 2; match <= 4; match++) {
+    await input.press('Enter');
+    await expect(panel.locator('[data-matches]')).toHaveText(`${match}/4`);
+  }
+
+  const line201 = content.locator('[data-line="201"]');
+  await expect(line201).toBeInViewport();
+  await expect(input).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.__codeView?.getEditor('file')?.getViewState().selections
+      )
+    )
+    .toEqual(selected);
+
+  // Returning focus to an editor must keep find-again on the CodeView panel.
+  await line201.click();
+  await page.keyboard.press('ControlOrMeta+Shift+g');
+  await expect(panel.locator('[data-matches]')).toHaveText('3/4');
+  await expect(content.locator('[data-line="128"]')).toBeInViewport();
+  await page.keyboard.press('ControlOrMeta+g');
+  await expect(panel.locator('[data-matches]')).toHaveText('4/4');
+  await expect(line201).toBeInViewport();
+
+  // User scrolling must remain usable after visiting the offscreen match.
+  await root.hover();
+  await page.mouse.wheel(0, 2000);
+  await expect(line201).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(input).toBeFocused();
+  await input.press('Enter');
+  await expect(panel.locator('[data-matches]')).toHaveText('1/4');
+  await expect(content.locator('[data-line="125"]')).toBeInViewport();
+
+  await content.locator('[data-line="125"]').click();
+  await page.keyboard.press('Escape');
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+  await page.keyboard.type('typed');
+  await expect(content).toContainText('typed');
+});
+
+for (const kind of ['file', 'split', 'unified'] as const) {
+  for (const edit of [false, true]) {
+    test(`find preserves the viewport until the first scroll, then centers navigation in ${kind} ${edit ? 'edit' : 'readonly'}`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/test/e2e/fixtures/code-view-search.html?viewport&kind=${kind}&diffStyle=${kind}${edit ? '&edit' : ''}`
+      );
+      const root = page.locator('[data-code-view-root]');
+      const row = (line: number) =>
+        root.locator(
+          `[data-line="${line}"]:not([data-line-type="change-deletion"])`
+        );
+      // Centered in the part of the viewport below the find panel.
+      const expectCentered = (line: number) =>
+        expect
+          .poll(() =>
+            row(line).evaluate((element) => {
+              const root = document.querySelector('[data-code-view-root]')!;
+              const viewport = root.getBoundingClientRect();
+              const panel = root
+                .querySelector('[data-search-panel]')!
+                .shadowRoot!.querySelector('[data-editor-widget]')!
+                .getBoundingClientRect();
+              const rect = element.getBoundingClientRect();
+              return Math.abs(
+                (rect.top + rect.bottom) / 2 -
+                  (panel.bottom + viewport.bottom) / 2
+              );
+            })
+          )
+          .toBeLessThan(2);
+      const offsetViewport = async () => {
+        const position = await page.evaluate(() => {
+          const position =
+            document.querySelector('[data-code-view-root]')!.scrollTop + 12;
+          window.__codeView!.scrollTo({
+            type: 'position',
+            position,
+            behavior: 'instant',
+          });
+          return position;
+        });
+        await expect
+          .poll(() => root.evaluate((element) => element.scrollTop))
+          .toBe(position);
+      };
+      await page.evaluate(() =>
+        window.__codeView?.scrollTo({
+          type: 'line',
+          id: 'item',
+          lineNumber: 90,
+          align: 'start',
+          behavior: 'instant',
+        })
+      );
+      await expect(row(100)).toBeInViewport();
+      await expect(row(101)).toBeInViewport();
+      await expect(row(20)).not.toBeInViewport();
+      if (edit) {
+        await page.evaluate(async () => {
+          const editor = window.__codeView?.getEditor('item');
+          editor?.focus({
+            lineNumber: 101,
+            character: 1,
+            preventScroll: true,
+          });
+          // Flush deferred focus before capturing the viewport and selection.
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          );
+        });
+        await expect(root.locator('[contenteditable="true"]')).toBeFocused();
+      } else {
+        await root.focus();
+      }
+      await expect(row(100)).toBeInViewport();
+      await expect(row(20)).not.toBeInViewport();
+      const selected = await page.evaluate(
+        () => window.__codeView?.getEditor('item')?.getViewState().selections
+      );
+      const scrollTop = await root.evaluate((element) => element.scrollTop);
+      await page.keyboard.press('ControlOrMeta+f');
+      const input = root.getByRole('textbox', { name: 'Search' });
+      await input.fill('target');
+      await expect(root.locator('[data-matches]')).toHaveText('2/4');
+      await expect
+        .poll(() => root.evaluate((element) => element.scrollTop))
+        .toBe(scrollTop);
+      await input.press('Enter');
+      await expect(root.locator('[data-matches]')).toHaveText('3/4');
+      expect(await root.evaluate((element) => element.scrollTop)).toBe(
+        scrollTop
+      );
+      await input.press('Enter');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
+      await expectCentered(161);
+      await input.press('Shift+Enter');
+      await expect(root.locator('[data-matches]')).toHaveText('3/4');
+      await expectCentered(101);
+      if (edit) {
+        await page.evaluate(() =>
+          window.__codeView!.getEditor('item')!.applyEdits([
+            {
+              range: {
+                start: { line: 190, character: 0 },
+                end: { line: 190, character: 0 },
+              },
+              newText: 'target ',
+            },
+          ])
+        );
+        await expect(root.locator('[data-matches]')).toHaveText('3/5');
+        await page.evaluate(() => window.__codeView!.getEditor('item')!.undo());
+        await expect(root.locator('[data-matches]')).toHaveText('3/4');
+      }
+      // These adjacent results are already visible, but centering now persists
+      // in both directions and through background match refreshes.
+      await input.press('Shift+Enter');
+      await expectCentered(100);
+      await input.press('Enter');
+      await expectCentered(101);
+      await input.press('Enter');
+      await expectCentered(161);
+      await offsetViewport();
+      const centeredScroll = await root.evaluate(
+        (element) => element.scrollTop
+      );
+      if (edit) {
+        await root
+          .getByRole('textbox', { name: 'Replace', exact: true })
+          .fill('new');
+        await expect(root.locator('[data-matches]')).toHaveText('4/4');
+        expect(await root.evaluate((element) => element.scrollTop)).toBe(
+          centeredScroll
+        );
+      }
+      // A fresh query stays on the first visible result, even with earlier hits.
+      await input.fill('TARGET');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
+      expect(await root.evaluate((element) => element.scrollTop)).toBe(
+        centeredScroll
+      );
+      await input.press('Enter');
+      await expect(root.locator('[data-matches]')).toHaveText('1/4');
+      await expectCentered(20);
+      await expect
+        .poll(() => root.evaluate((element) => element.scrollTop))
+        .toBeLessThan(centeredScroll);
+      await input.press('Shift+Enter');
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
+      await expectCentered(161);
+      await offsetViewport();
+      const beforeOption = await root.evaluate((element) => element.scrollTop);
+      await root
+        .getByRole('button', { name: 'Whole Word', exact: true })
+        .click();
+      await expect(root.locator('[data-matches]')).toHaveText('4/4');
+      expect(await root.evaluate((element) => element.scrollTop)).toBe(
+        beforeOption
+      );
+      expect(
+        await page.evaluate(
+          () => window.__codeView?.getEditor('item')?.getViewState().selections
+        )
+      ).toEqual(selected);
+    });
+  }
+}
+
+for (const kind of ['file', 'split', 'unified'] as const) {
+  for (const edit of [false, true]) {
+    test(`initial search moves after the visible area before wrapping in ${kind} ${edit ? 'edit' : 'readonly'}`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/test/e2e/fixtures/code-view-search.html?candidates&kind=${kind}&diffStyle=${kind}${edit ? '&edit' : ''}`
+      );
+      const root = page.locator('[data-code-view-root]');
+      const row = (line: number) =>
+        root.locator(
+          `[data-line="${line}"]:not([data-line-type="change-deletion"])`
+        );
+      const prepare = async (line: number) => {
+        await page.evaluate(
+          (line) =>
+            window.__codeView?.scrollTo({
+              type: 'line',
+              id: 'item',
+              lineNumber: line,
+              align: 'start',
+              behavior: 'instant',
+            }),
+          line
+        );
+        await expect(row(line)).toBeInViewport();
+        if (edit) {
+          await page.evaluate(async (line) => {
+            const editor = window.__codeView?.getEditor('item');
+            editor?.focus({
+              lineNumber: line,
+              character: 0,
+              preventScroll: true,
+            });
+            // Flush deferred focus before opening the search panel.
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve())
+              )
+            );
+          }, line);
+          await expect(root.locator('[contenteditable="true"]')).toBeFocused();
+        } else await root.focus();
+      };
+      await prepare(500);
+      await expect(row(10)).toHaveCount(0);
+      await expect(row(1000)).toHaveCount(0);
+      await page.keyboard.press('ControlOrMeta+f');
+      let input = root.getByRole('textbox', { name: 'Search' });
+      await input.fill('target');
+      await expect(root.locator('[data-matches]')).toHaveText('2/3');
+      await expect(row(1000)).toBeInViewport();
+      await input.press('Escape');
+      // A hit mounted above the viewport loses to the next hit below it.
+      await prepare(1002);
+      await expect(row(1000)).toHaveCount(1);
+      await expect(row(1000)).not.toBeInViewport();
+      await page.keyboard.press('ControlOrMeta+f');
+      input = root.getByRole('textbox', { name: 'Search' });
+      await input.fill('target');
+      await expect(root.locator('[data-matches]')).toHaveText('3/3');
+      await expect(row(1800)).toBeInViewport();
+      await input.press('Escape');
+      await prepare(2800);
+      await expect(row(1800)).toHaveCount(0);
+      await page.keyboard.press('ControlOrMeta+f');
+      input = root.getByRole('textbox', { name: 'Search' });
+      await input.fill('target');
+      await expect(root.locator('[data-matches]')).toHaveText('1/3');
+      await expect(row(10)).toBeInViewport();
+    });
+  }
+}
+
+for (const kind of ['file', 'split', 'unified']) {
+  for (const edit of [false, true]) {
+    test(`highlight repaint only prepares mounted matches in dense ${kind} ${edit ? 'edit' : 'readonly'}`, async ({
+      page,
+    }) => {
+      await page.goto(
+        `/test/e2e/fixtures/code-view-search.html?dense&kind=${kind}&diffStyle=${kind}${edit ? '&edit' : ''}`
+      );
+      const root = page.locator('[data-code-view-root]');
+      if (edit) await root.locator('[contenteditable="true"]').focus();
+      else await root.focus();
+      await page.keyboard.press('ControlOrMeta+f');
+      await root.getByRole('textbox', { name: 'Search' }).fill('target');
+      await expect(root.locator('[data-matches]')).toHaveText(
+        /[\d,]+\/\d{2},\d{3}/
+      );
+
+      const measureRepaint = () =>
+        page.evaluate(() => {
+          const { search } = window.__codeView as unknown as {
+            search: {
+              state: { matches: { endCharacter: number }[] };
+              paintHighlights(): void;
+            };
+          };
+          let reads = 0;
+          const matches = search.state.matches;
+          const ends = matches.map((match) => match.endCharacter);
+          try {
+            for (const [index, match] of matches.entries()) {
+              Object.defineProperty(match, 'endCharacter', {
+                configurable: true,
+                get: () => {
+                  reads++;
+                  return ends[index];
+                },
+              });
+            }
+            search.paintHighlights();
+            const ranges = [
+              ...CSS.highlights.get('diffs-search-match')!,
+              ...CSS.highlights.get('diffs-search-current')!,
+            ] as Range[];
+            return {
+              reads,
+              painted: ranges.length,
+              matches: matches.length,
+              correctText: ranges.every(
+                (range) => range.toString() === 'target'
+              ),
+            };
+          } finally {
+            for (const [index, match] of matches.entries()) {
+              Object.defineProperty(match, 'endCharacter', {
+                configurable: true,
+                writable: true,
+                value: ends[index],
+              });
+            }
+          }
+        });
+
+      for (const lineNumber of [1, 6000, 1]) {
+        await page.evaluate(
+          (lineNumber) =>
+            window.__codeView!.scrollTo({
+              type: 'line',
+              id: 'item',
+              lineNumber,
+              align: 'center',
+              behavior: 'instant',
+            }),
+          lineNumber
+        );
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (lineNumber) =>
+                [
+                  ...CSS.highlights.get('diffs-search-match')!,
+                  ...CSS.highlights.get('diffs-search-current')!,
+                ].some(
+                  (range) =>
+                    Number(
+                      (range as Range).startContainer.parentElement
+                        ?.closest('[data-line]')
+                        ?.getAttribute('data-line')
+                    ) === lineNumber
+                ),
+              lineNumber
+            )
+          )
+          .toBe(true);
+        const result = await measureRepaint();
+        expect(result.matches).toBeGreaterThanOrEqual(10000);
+        expect(result.painted).toBeGreaterThan(0);
+        expect(result.painted).toBeLessThan(500);
+        expect(result.correctText).toBe(true);
+        expect(result.reads).toBeLessThanOrEqual(result.painted + 2);
+      }
+    });
+  }
+}
+
+for (const diffStyle of ['split', 'unified']) {
+  test(`a match hidden under an on-screen separator is the first match and is revealed in ${diffStyle}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?collapsed&many&diffStyle=${diffStyle}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    const content = root.locator('[contenteditable="true"]');
+    await expect(content).toBeVisible();
+    await content.focus();
+    const rows = content.locator(
+      '[data-line][data-line-type]:not([data-line-type="change-deletion"])'
+    );
+    const rowCount = await rows.count();
+    expect(rowCount).toBeLessThan(100);
+    const firstVisibleLine = await rows.evaluateAll((rows) => {
+      const viewport = document
+        .querySelector('[data-code-view-root]')!
+        .getBoundingClientRect();
+      const row = rows.find((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.top >= viewport.top && rect.bottom <= viewport.bottom;
+      });
+      return Number(row?.getAttribute('data-line'));
+    });
+    expect(firstVisibleLine).toBeGreaterThan(1);
+    // Lines above the first visible one sit in collapsed context, under the
+    // separator at the top of the view.
+    await page.keyboard.press('ControlOrMeta+f');
+    await root.getByRole('textbox', { name: 'Search' }).fill('target');
+    await expect(root.locator('[data-matches]')).toHaveText('1/10,000');
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const range = [
+            ...(CSS.highlights.get('diffs-search-current') ?? []),
+          ][0] as Range | undefined;
+          return Number(
+            range?.startContainer.parentElement
+              ?.closest('[data-line]')
+              ?.getAttribute('data-line')
+          );
+        })
+      )
+      .toBe(1);
+  });
+}
+
+for (const retry of [false, true]) {
+  test(`the open search panel picks up a ${retry ? 'retried' : 'preloaded'} theme when the view is ready`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/test/e2e/fixtures/code-view-search.html');
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    const inputBox = root.locator('[data-input-box][data-find]');
+    await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+    await page.evaluate(
+      (retry) => window.__switchToPreloadingTheme!(retry),
+      retry
+    );
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(20, 37, 55)');
+    await expect(input).toHaveCSS('color', 'rgb(171, 205, 239)');
+  });
+}
+
+test('opening Find during a theme switch uses the palette on the visible rows', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/test/e2e/fixtures/code-view-search.html?nestedTheme');
+  const root = page.locator('[data-code-view-root]');
+  const file = root.locator('diffs-container').first();
+  await expect(file).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+  const finishLoad = await page.evaluateHandle(() => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const loaded = window.__switchToPreloadingTheme!(false, promise);
+    return () => {
+      resolve();
+      return loaded;
+    };
+  });
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  const inputBox = root.locator('[data-input-box][data-find]');
+  await expect(inputBox).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+  await expect(file).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+  await finishLoad.evaluate((finish) => finish());
+  await expect(file).toHaveCSS('background-color', 'rgb(20, 37, 55)');
+  await expect(inputBox).toHaveCSS('background-color', 'rgb(20, 37, 55)');
+});
+
+for (const nested of [false, true]) {
+  test(`the open search panel follows the default light and dark themes ${nested ? 'inside a light file' : 'in a standalone CodeView'}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html${nested ? '?nestedTheme' : ''}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.focus();
+    await page.keyboard.press('ControlOrMeta+f');
+
+    const input = root.getByRole('textbox', { name: 'Search' });
+    const inputBox = root.locator('[data-input-box][data-find]');
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(10, 10, 10)');
+    await expect(inputBox).toHaveCSS('outline-color', 'rgb(0, 159, 255)');
+    await expect(input).toHaveCSS('color', 'rgb(250, 250, 250)');
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(inputBox).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+  });
+}
+
+test('scrolling across files leaves the open panel styles untouched', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?sliced&unsafe');
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.locator('[data-line]').first()).toBeVisible();
+  await page.evaluate(() => window.__codeView!.openSearch());
+  const panel = root.locator('[data-search-panel-overlay]');
+  const result = await panel.evaluate(async (host) => {
+    const view = window.__codeView!;
+    const styles = Array.from(
+      host.shadowRoot!.querySelectorAll(
+        'style[data-theme-css], style[data-unsafe-css]'
+      )
+    );
+    let writes = 0;
+    const observer = new MutationObserver((records) => {
+      writes += records.length;
+    });
+    for (const style of styles) {
+      observer.observe(style, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    }
+    try {
+      for (const id of ['file-1', 'file-2', 'file-0']) {
+        view.scrollTo({
+          type: 'line',
+          id,
+          lineNumber: 300,
+          align: 'center',
+          behavior: 'instant',
+        });
+        view.render(true);
+        await new Promise(requestAnimationFrame);
+        if (!view.getRenderedItems().some((item) => item.id === id)) {
+          throw new Error(`Expected ${id} to be rendered`);
+        }
+      }
+      return {
+        retained: styles.filter((style) => style.isConnected).length,
+        writes: writes + observer.takeRecords().length,
+      };
+    } finally {
+      observer.disconnect();
+    }
+  });
+  expect(result).toEqual({ retained: 2, writes: 0 });
+});
+
+test('unsafeCSS reaches the CodeView search panel and wins over its own styles', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?unsafe');
+  const root = page.locator('[data-code-view-root]');
+  await root.click();
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveCSS('color', 'rgb(1, 2, 3)');
+  await input.fill('github');
+  await page.evaluate(() => {
+    const view = window.__codeView!;
+    view.setOptions({
+      ...view.options,
+      unsafeCSS: 'input[data-search] { color: rgb(4, 5, 6); }',
+    });
+  });
+  await expect(input).toHaveCSS('color', 'rgb(4, 5, 6)');
+  await page.evaluate(() => {
+    const view = window.__codeView!;
+    view.setOptions({
+      ...view.options,
+      unsafeCSS: undefined,
+      themeType: 'light',
+    });
+  });
+  await expect(input).toHaveCSS('color', 'rgb(10, 10, 10)');
+  await expect(input).toHaveValue('github');
+  await expect(input).toBeFocused();
+});
+
+for (const kind of ['file', 'split'] as const) {
+  test(`find opens on the text selected in a ${kind} code line`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?highlight&kind=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    await root.getByText('value', { exact: true }).first().dblclick();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root
+      .locator('[data-search-panel-overlay]')
+      .getByRole('textbox', { name: 'Search' });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue('value');
+    await expect(root.locator('[data-matches]')).toContainText('/');
+  });
+}
+
+test('find opens empty when the selection spans lines or sits outside the code', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?highlight&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  const firstLine = root.locator('[data-line="1"]').first();
+  const secondLine = root.locator('[data-line="2"]').first();
+  // Highlighting replaces the rows; wait for it before measuring them.
+  await expect(root.getByText('value', { exact: true }).first()).toBeVisible();
+
+  // A selection that starts on one line and ends on the next.
+  const from = await firstLine.boundingBox();
+  const to = await secondLine.boundingBox();
+  if (from == null || to == null) throw new Error('Expected two code lines');
+  await page.mouse.move(from.x + 4, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 60, to.y + to.height / 2, { steps: 4 });
+  await page.mouse.up();
+  expect(
+    await page.evaluate(() => document.getSelection()?.toString() ?? '')
+  ).not.toBe('');
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('');
+  await input.press('Escape');
+
+  // A selection in the page around the CodeView.
+  await page.locator('[data-outside]').evaluate((button) => {
+    document.getSelection()?.selectAllChildren(button);
+  });
+  await page.evaluate(() => window.__codeView?.openSearch());
+  await expect(input).toHaveValue('');
+});
+
+test('a match under the find panel is moved out from under it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?viewport&kind=file'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await page.evaluate(() =>
+    window.__codeView?.scrollTo({
+      type: 'line',
+      id: 'item',
+      lineNumber: 20,
+      align: 'start',
+      behavior: 'instant',
+    })
+  );
+  await expect(root.locator('[data-line="20"]')).toBeInViewport();
+  await root.click({ position: { x: 20, y: 300 } });
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await input.fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1/4');
+
+  // Line 20 was at the top of the viewport, where the panel sits.
+  await expect
+    .poll(() =>
+      root.evaluate((element) => {
+        const match = [
+          ...(CSS.highlights.get('diffs-search-current') ?? []),
+        ][0] as Range | undefined;
+        const panel = element
+          .querySelector('[data-search-panel]')
+          ?.shadowRoot?.querySelector('[data-editor-widget]')
+          ?.getBoundingClientRect();
+        if (match == null || panel == null) return 'not painted';
+        const rect = match.getBoundingClientRect();
+        return rect.width > 0 &&
+          rect.top < panel.bottom &&
+          rect.bottom > panel.top &&
+          rect.left < panel.right &&
+          rect.right > panel.left
+          ? 'covered'
+          : 'clear';
+      })
+    )
+    .toBe('clear');
+});
+
+test('the find panel stays at the top of the scroll view above a CodeView header', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?viewport&kind=file&header'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.getByText('CodeView header')).toBeVisible();
+  await root.click({ position: { x: 20, y: 300 } });
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await expect(input).toBeFocused();
+  const panelTop = () =>
+    root.evaluate((element) => {
+      const panel = element
+        .querySelector('[data-search-panel]')!
+        .shadowRoot!.querySelector('[data-editor-widget]')!
+        .getBoundingClientRect();
+      return Math.round(panel.top - element.getBoundingClientRect().top);
+    });
+
+  // 16px is the panel's own inset. The 200px header does not push it down.
+  expect(await panelTop()).toBe(16);
+  await page.evaluate(() =>
+    window.__codeView?.scrollTo({
+      type: 'position',
+      position: 600,
+      behavior: 'instant',
+    })
+  );
+  await expect.poll(() => root.evaluate((el) => el.scrollTop)).toBe(600);
+  expect(await panelTop()).toBe(16);
+});
+
+test('a match in the last row of a tall wrapped line is brought into view', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?horizontal&kind=file&wrap'
+  );
+  await page.addStyleTag({
+    content: '[data-code-view-root] { height: 260px !important; }',
+  });
+  const root = page.locator('[data-code-view-root]');
+  await expect(root.locator('[data-line="8"]')).toBeVisible();
+  await root.click({ position: { x: 20, y: 10 } });
+  await page.keyboard.press('ControlOrMeta+f');
+  const input = root
+    .locator('[data-search-panel-overlay]')
+    .getByRole('textbox', { name: 'Search' });
+  await input.fill('target');
+  await expect(root.locator('[data-matches]')).toHaveText('1/4');
+  // Wrap around to the last match: the end of line 201, far below.
+  await input.press('Shift+Enter');
+  await expect(root.locator('[data-matches]')).toHaveText('4/4');
+
+  await expect
+    .poll(() =>
+      root.evaluate((element) => {
+        const match = [
+          ...(CSS.highlights.get('diffs-search-current') ?? []),
+        ][0] as Range | undefined;
+        const panel = element
+          .querySelector('[data-search-panel]')
+          ?.shadowRoot?.querySelector('[data-editor-widget]')
+          ?.getBoundingClientRect();
+        if (match == null || panel == null) return 'not painted';
+        const rect = match.getBoundingClientRect();
+        const viewport = element.getBoundingClientRect();
+        if (rect.height === 0) return 'not painted';
+        if (rect.bottom > viewport.bottom + 1) return 'below the view';
+        if (rect.top < panel.bottom - 1) return 'under the panel';
+        return 'visible';
+      })
+    )
+    .toBe('visible');
+});
+
+test('two quick steps in split view leave the last match scrolled into view', async ({
+  page,
+}) => {
+  await page.goto(
+    '/test/e2e/fixtures/code-view-search.html?horizontal&kind=split&diffStyle=split'
+  );
+  const root = page.locator('[data-code-view-root]');
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await root.getByRole('textbox', { name: 'Search' }).fill('target');
+  await expectCurrentMatchHorizontallyVisible(page);
+  // Line 8 has a match at each end, on each side. Step from the far end of
+  // the old side to the near end of the new side with no frame in between.
+  await page.evaluate(() => {
+    window.__codeView!.navigateSearch('next');
+    window.__codeView!.navigateSearch('next');
+  });
+  await expect(root.locator('[data-matches]')).toContainText('3/');
+  await expectCurrentMatchHorizontallyVisible(page);
+});
