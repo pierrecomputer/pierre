@@ -2600,8 +2600,9 @@
             (then
               (call $m.push (call $m.letter (local.get $c)) (i32.const 0) (i32.const 0))
               (br $next)))
-          (local.set $k (select (i32.load8_u offset=$mem.mathAscii (i32.sub (local.get $c) (i32.const 32))) (i32.const 0)
-            (i32.ge_u (local.get $c) (i32.const 32))))
+          (local.set $k (if (result i32) (i32.ge_u (local.get $c) (i32.const 32))
+            (then (i32.load8_u offset=$mem.mathAscii (i32.sub (local.get $c) (i32.const 32))))
+            (else (i32.const 0))))
           ;; a hyphen is a minus sign, an asterisk a centered one
           (if (i32.eq (local.get $c) (i32.const "-")) (then (local.set $c (i32.const 0x2212))))
           (if (i32.eq (local.get $c) (i32.const "*")) (then (local.set $c (i32.const 0x2217))))
