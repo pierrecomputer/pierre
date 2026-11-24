@@ -334,11 +334,7 @@ export class Renderer {
   }
 }
 
-/**
- * The renderer of one entry. Each entry (`@pierre/words`, `/no-math`, ...)
- * owns one, so entries loaded together keep their own Wasm build.
- */
-export type State = { renderer: Renderer };
+type State = { renderer: Renderer };
 
 const tooLarge = () =>
   new RangeError(`input exceeds ${maxInput} bytes of UTF-8`);
@@ -356,7 +352,7 @@ export type RenderToHtml = {
   ): Uint8Array | [T | null, Uint8Array];
 };
 
-export function renderToHtml(
+function html(
   state: State,
   input: Input,
   options?: RenderOptions
@@ -366,11 +362,7 @@ export function renderToHtml(
   return [meta != null ? JSON.parse(dec.decode(meta)) : null, output];
 }
 
-export function renderToAnsi(
-  state: State,
-  input: Input,
-  options?: AnsiOptions
-): Uint8Array {
+function ansi(state: State, input: Input, options?: AnsiOptions): Uint8Array {
   return state.renderer.render(input, 1, {
     width: options?.width,
     cjk: options?.cjk,
@@ -382,7 +374,7 @@ export type HtmlSession = {
   render(input: string, options?: HtmlSessionOptions): HtmlUpdate;
 };
 
-export function createHtmlSession(state: State): HtmlSession {
+function session(state: State): HtmlSession {
   let previous = '';
   let stable = '';
   let offset = 0;
@@ -742,3 +734,42 @@ export function createHtmlSession(state: State): HtmlSession {
     },
   };
 }
+
+export type Words = {
+  /** Replace the Wasm module of this entry. */
+  init(module: WebAssembly.Module): Renderer;
+  renderToHtml: RenderToHtml;
+  renderToAnsi(input: Input, options?: AnsiOptions): Uint8Array;
+  /**
+   * Render a growing string to HTML. A session keeps completed HTML and
+   * reparses only the unfinished end.
+   */
+  createHtmlSession(): HtmlSession;
+};
+
+/**
+ * Build the public API around one renderer. Each entry (`@pierre/words`,
+ * `/no-math`, ...) owns one, so entries loaded together keep their own Wasm
+ * build. Without a renderer, rendering throws until `init()` is called.
+ */
+export function createWords(renderer?: Renderer): Words {
+  const state: State = {
+    get renderer() {
+      if (renderer === undefined)
+        throw new Error('@pierre/words/core: call init() before rendering');
+      return renderer;
+    },
+  };
+  return {
+    init: (module) => (renderer = new Renderer(module)),
+    renderToHtml: ((input: Input, options?: RenderOptions) =>
+      html(state, input, options)) as RenderToHtml,
+    renderToAnsi: (input, options) => ansi(state, input, options),
+    createHtmlSession: () => session(state),
+  };
+}
+
+// `@pierre/words/core`: the root API without the embedded module.
+export type * from './types';
+export const { init, renderToHtml, renderToAnsi, createHtmlSession } =
+  createWords();

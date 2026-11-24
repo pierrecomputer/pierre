@@ -26,9 +26,9 @@
       "default": "./dist/no-math.js"
     },
     "./core": {
-      "types": "./dist/core-entry.d.ts",
-      "import": "./dist/core-entry.js",
-      "default": "./dist/core-entry.js"
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "default": "./dist/core.js"
     },
     "./words.wasm": "./dist/words.wasm",
     "./words-no-math.wasm": "./dist/words-no-math.wasm",
