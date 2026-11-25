@@ -196,6 +196,21 @@ test.describe('edit mode', () => {
     }
   });
 
+  test('the caret sits on whole device pixels', async ({ page }) => {
+    await openFixture(page);
+    await clickIntoAdditions(page);
+
+    const caret = page
+      .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
+      .first();
+    await expect(caret).toHaveCSS('visibility', 'visible');
+    const devicePixelX = await caret.evaluate(
+      (element) =>
+        element.getBoundingClientRect().left * window.devicePixelRatio
+    );
+    expect(devicePixelX).toBe(Math.round(devicePixelX));
+  });
+
   test('additions are editable while deletions stay read-only', async ({
     page,
   }) => {
