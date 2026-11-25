@@ -196,19 +196,50 @@ test.describe('edit mode', () => {
     }
   });
 
-  test('the caret sits on whole device pixels', async ({ page }) => {
-    await openFixture(page);
-    await clickIntoAdditions(page);
-
+  async function caretDevicePixelX(page: Page): Promise<number> {
     const caret = page
       .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
       .first();
     await expect(caret).toHaveCSS('visibility', 'visible');
-    const devicePixelX = await caret.evaluate(
+    return caret.evaluate(
       (element) =>
         element.getBoundingClientRect().left * window.devicePixelRatio
     );
+  }
+
+  test('the caret sits on whole device pixels', async ({ page }) => {
+    await openFixture(page);
+    await clickIntoAdditions(page);
+
+    const devicePixelX = await caretDevicePixelX(page);
     expect(devicePixelX).toBe(Math.round(devicePixelX));
+  });
+
+  test('the caret sits on whole device pixels when its column starts between them', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    // Split columns share an odd width, so the additions column starts at a
+    // half pixel.
+    await page
+      .locator('[data-diff-mount]')
+      .evaluate((element: HTMLElement) => (element.style.maxWidth = '901px'));
+    await clickIntoAdditions(page);
+
+    const devicePixelX = await caretDevicePixelX(page);
+    expect(devicePixelX).toBe(Math.round(devicePixelX));
+  });
+
+  test.describe('at a fractional scale', () => {
+    test.use({ deviceScaleFactor: 1.5 });
+
+    test('the caret sits on whole device pixels', async ({ page }) => {
+      await openFixture(page);
+      await clickIntoAdditions(page);
+
+      const devicePixelX = await caretDevicePixelX(page);
+      expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 6);
+    });
   });
 
   test('additions are editable while deletions stay read-only', async ({
