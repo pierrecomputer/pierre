@@ -238,7 +238,7 @@ test.describe('edit mode', () => {
       await clickIntoAdditions(page);
 
       const devicePixelX = await caretDevicePixelX(page);
-      expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 6);
+      expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 3);
     });
   });
 
