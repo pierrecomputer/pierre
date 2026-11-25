@@ -38,6 +38,7 @@ import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { getDefaultWorkerPoolSize } from '../utils/getDefaultWorkerPoolSize';
 import {
   getCustomExtensionsMap,
   getCustomExtensionsVersion,
@@ -81,7 +82,7 @@ import type {
 } from './workerMessage';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
-const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
+const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 5_000;
 
 interface GetCachesResult {
   fileCache: LRUMap<string, RenderFileResult>;
@@ -92,10 +93,39 @@ interface ManagedWorker {
   worker: Worker;
   requestId: string | undefined;
   pendingSetupRequestId: WorkerRequestId | undefined;
-  initialized: boolean;
+  renderOptionsVersion: number;
   langs: Set<SupportedLanguages>;
   customExtensionsVersion: number;
 }
+
+interface WorkerSlot {
+  state: 'starting' | 'retrying' | 'ready' | 'failed';
+  error?: WorkerPoolWorkerError;
+  worker?: ManagedWorker;
+  startup?: WorkerStartup;
+}
+
+interface WorkerStartup {
+  timeout?: ReturnType<typeof setTimeout>;
+  resolve(): void;
+}
+
+interface PendingPoolInitialization {
+  state: 'pending';
+  promise: Promise<void>;
+  resolve(): void;
+  reject(error: unknown): void;
+  stopThemeWait?(): void;
+}
+
+type PoolInitializationFailure =
+  | { reason: 'preparation'; error: Error; languages: SupportedLanguages[] }
+  | { reason: 'workers'; error: WorkerPoolWorkerError };
+
+type PoolInitialization =
+  | PendingPoolInitialization
+  | { state: 'succeeded' }
+  | ({ state: 'failed' } & PoolInitializationFailure);
 
 interface ThemeSubscriber {
   onThemeChange(): void;
@@ -105,13 +135,21 @@ type RenderTask = RenderFileTask | RenderDiffTask;
 
 type RenderTaskInstance = FileRendererInstance | DiffRendererInstance;
 
+type LocalThemeView = Pick<RenderTaskInstance, 'onHighlightError'>;
+
 export class WorkerPoolManager {
   private readonly preferredHighlighter: HighlighterTypes;
   private renderOptions: WorkerRenderingOptions;
   private renderOptionsRequestVersion = 0;
   private renderOptionsVersion = 0;
-  private initialized: Promise<void> | boolean = false;
-  private workers: ManagedWorker[] = [];
+  private initialization: PoolInitialization | undefined;
+  private readonly configuredWorkers: number;
+  private workerSlots: WorkerSlot[] = [];
+  private readyWorkerCount = 0;
+  // Stays true through explicit retries until one of the workers joins.
+  private workerSlotsExhausted = false;
+  private resolvedWorkerThemes: DiffsTheme[] = [];
+  private resolvedWorkerLanguages: ResolvedLanguage[] = [];
   // Tasks that are waiting to get processed by a worker
   private queuedTasks: RenderTask[] = [];
   private queuedTaskByInstance = new Map<RenderTaskInstance, RenderTask>();
@@ -132,7 +170,9 @@ export class WorkerPoolManager {
 
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
-  private workersFailed = false;
+  // Views that could not render until the local theme loads, with the
+  // callback that renders each one.
+  private pendingThemeRenders = new Map<LocalThemeView, () => void>();
   private terminated = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
   private fileCache: LRUMap<string, RenderFileResult>;
@@ -154,6 +194,7 @@ export class WorkerPoolManager {
       preferredHighlighter,
     }: WorkerInitializationRenderOptions
   ) {
+    this.configuredWorkers = options.poolSize ?? getDefaultWorkerPoolSize();
     this.preferredHighlighter = resolveHighlighterType(preferredHighlighter);
     this.renderOptions = {
       theme,
@@ -172,7 +213,83 @@ export class WorkerPoolManager {
   }
 
   public isWorkingPool(): boolean {
-    return !this.workersFailed && !this.terminated;
+    return !this.terminated && !this.shouldUseLocalFallback();
+  }
+
+  public shouldUseLocalFallback(): boolean {
+    const { initialization } = this;
+    return (
+      initialization?.state === 'failed' ||
+      (initialization?.state === 'succeeded' && this.readyWorkerCount === 0)
+    );
+  }
+
+  /**
+   * @internal Returns true if the view must wait for the local theme. When
+   * the theme is ready, calls the latest callback registered for each view.
+   * Optional grammars start loading alongside the theme.
+   */
+  public renderWhenLocalThemeLoads(
+    view: LocalThemeView,
+    onRenderUpdate: () => void,
+    langs: SupportedLanguages[] = []
+  ): boolean {
+    if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) != null) {
+      this.pendingThemeRenders.delete(view);
+      return false;
+    }
+    this.pendingThemeRenders.set(view, onRenderUpdate);
+    this.loadLocalThemeForRender(this.isWorkingPool() ? undefined : view);
+    if (langs.length > 0) {
+      void this.loadSharedHighlighter([], langs).catch(() => {});
+    }
+    return true;
+  }
+
+  /** @internal Drops the render callback `view` registered, if any. */
+  public cancelLocalThemeRender(view: LocalThemeView): void {
+    this.pendingThemeRenders.delete(view);
+  }
+
+  // Loads only the theme and plain text. A failed load leaves views waiting
+  // until initialize() retries or a later render asks again.
+  private loadLocalThemeForRender(fallbackView?: LocalThemeView): void {
+    const { theme } = this.renderOptions;
+    const { lifecycleGeneration } = this;
+    void this.loadSharedHighlighter(getThemes(theme), ['text']).then(
+      () => {
+        // A mounted view can finish locally after termination. A restarted
+        // pool owns its own requests for the active theme.
+        if (
+          (!this.terminated && !this.isCurrentLifecycle(lifecycleGeneration)) ||
+          !areThemesEqual(theme, this.renderOptions.theme)
+        ) {
+          return;
+        }
+        this.renderPendingThemeViews();
+      },
+      (error: unknown) => fallbackView?.onHighlightError(error)
+    );
+  }
+
+  // Renders the views waiting for the current theme, once it has loaded.
+  private renderPendingThemeViews(): void {
+    if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) == null) {
+      return;
+    }
+    // An earlier callback can cancel or replace a later one.
+    for (const view of [...this.pendingThemeRenders.keys()]) {
+      const onRenderUpdate = this.pendingThemeRenders.get(view);
+      if (onRenderUpdate == null) {
+        continue;
+      }
+      this.pendingThemeRenders.delete(view);
+      try {
+        onRenderUpdate();
+      } catch (error) {
+        console.error(error);
+      }
+    }
   }
 
   /**
@@ -296,19 +413,8 @@ export class WorkerPoolManager {
         maxLineDiffLength,
         tokenizeMaxLineLength,
       };
-      if (!this.isInitialized()) {
-        try {
-          await this.initialize();
-        } catch (error) {
-          // When the workers fail to start, components highlight on the main
-          // thread with this pool's render options. Keep applying the new
-          // options so theme changes still take effect there;
-          // setRenderOptionsOnWorkers skips the failed workers. The pool has
-          // already reported the failure.
-          if (!this.workersFailed) {
-            throw error;
-          }
-        }
+      if (this.terminated) {
+        this.queueInitialization();
       }
       if (
         !isCurrentRequest() ||
@@ -318,15 +424,13 @@ export class WorkerPoolManager {
       }
 
       const themeNames = getThemes(theme);
-      let resolvedThemes: DiffsTheme[] = [];
-      if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
-        resolvedThemes = hasResolvedThemes(
-          themeNames,
-          this.preferredHighlighter
-        )
-          ? getResolvedThemes(themeNames, this.preferredHighlighter)
-          : await resolveThemes(themeNames, this.preferredHighlighter);
-      }
+      const themeChanged = !areThemesEqual(theme, this.renderOptions.theme);
+      const resolvedThemes =
+        !themeChanged && this.resolvedWorkerThemes.length > 0
+          ? this.resolvedWorkerThemes
+          : hasResolvedThemes(themeNames, this.preferredHighlighter)
+            ? getResolvedThemes(themeNames, this.preferredHighlighter)
+            : await resolveThemes(themeNames, this.preferredHighlighter);
 
       if (!isCurrentRequest()) {
         return;
@@ -341,20 +445,34 @@ export class WorkerPoolManager {
         }
       }
 
-      const workerSetup = this.setRenderOptionsOnWorkers(
-        newRenderOptions,
-        resolvedThemes
-      );
-
       this.renderOptions = newRenderOptions;
+      this.resolvedWorkerThemes = resolvedThemes;
       this.renderOptionsVersion++;
+      if (this.initialization?.state === 'pending') {
+        this.initialization.stopThemeWait?.();
+      }
       this.diffCache.clear();
       this.fileCache.clear();
       this.failedHighlightKeys.clear();
       this.invalidateRenderTasks();
 
+      if (
+        themeChanged &&
+        this.initialization?.state === 'failed' &&
+        this.initialization.reason === 'preparation'
+      ) {
+        const { languages } = this.initialization;
+        this.initialization = undefined;
+        this.queueInitialization(languages);
+      }
+      const workerSetup = this.setRenderOptionsOnWorkers(themeChanged);
+
       for (const instance of this.themeSubscribers) {
         instance.onThemeChange();
+      }
+      // The previous theme's load no longer wakes views still waiting.
+      if (themeChanged) {
+        this.renderPendingThemeViews();
       }
 
       await workerSetup;
@@ -381,53 +499,62 @@ export class WorkerPoolManager {
   }
 
   private async setRenderOptionsOnWorkers(
-    renderOptions: WorkerRenderingOptions,
-    resolvedThemes: DiffsTheme[]
+    themeChanged: boolean
   ): Promise<void> {
-    if (this.workersFailed) {
-      return;
-    }
-    if (!this.isInitialized()) {
-      await this.initialize();
-    }
+    const { renderOptionsVersion } = this;
     const taskPromises: Promise<void>[] = [];
-    for (const managedWorker of this.workers) {
-      if (!managedWorker.initialized) {
-        if (
-          typeof process !== 'undefined' &&
-          process.env.NODE_ENV === 'development'
-        ) {
-          console.log({ managedWorker });
-        }
-        throw new Error(
-          'setRenderOptionsOnWorkers: Somehow we have an uninitialized worker'
+    for (const slot of this.workerSlots) {
+      const { worker } = slot;
+      if (slot.state === 'ready' && worker != null) {
+        const resolvedThemes =
+          themeChanged || worker.pendingSetupRequestId != null
+            ? this.resolvedWorkerThemes
+            : [];
+        taskPromises.push(
+          this.setRenderOptionsOnWorker(worker, resolvedThemes).catch(
+            (error: unknown) => {
+              // Only the current setup can disqualify a worker. Old renders
+              // were canceled when the manager committed the new options.
+              if (
+                slot.worker === worker &&
+                this.renderOptionsVersion === renderOptionsVersion
+              ) {
+                this.failWorkerSlot(slot, normalizeWorkerStartupError(error));
+              }
+              throw error;
+            }
+          )
         );
       }
-      taskPromises.push(
-        new Promise<void>((resolve, reject) => {
-          const id = this.generateRequestId();
-          const task: SetRenderOptionsWorkerTask = {
-            type: 'set-render-options',
-            id,
-            request: {
-              type: 'set-render-options',
-              id,
-              renderOptions,
-              resolvedThemes,
-            },
-            resolve,
-            reject,
-            requestStart: Date.now(),
-          };
-          // Render-option updates are posted immediately, but the worker stays
-          // unavailable for new render work until it acknowledges this message.
-          this.activeTaskById.set(id, task);
-          managedWorker.pendingSetupRequestId = id;
-          managedWorker.worker.postMessage(task.request);
-        })
-      );
     }
     await Promise.all(taskPromises);
+  }
+
+  private setRenderOptionsOnWorker(
+    managedWorker: ManagedWorker,
+    resolvedThemes: DiffsTheme[]
+  ): Promise<void> {
+    const { renderOptionsVersion } = this;
+    return new Promise<void>((resolve, reject) => {
+      const id = this.generateRequestId();
+      const task: SetRenderOptionsWorkerTask = {
+        type: 'set-render-options',
+        id,
+        request: {
+          type: 'set-render-options',
+          id,
+          renderOptions: this.renderOptions,
+          resolvedThemes,
+        },
+        resolve() {
+          managedWorker.renderOptionsVersion = renderOptionsVersion;
+          resolve();
+        },
+        reject,
+        requestStart: Date.now(),
+      };
+      this.postWorkerSetup(managedWorker, task);
+    });
   }
 
   public subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
@@ -488,91 +615,146 @@ export class WorkerPoolManager {
     this.queueBroadcastStateChanges();
   }
 
+  /** Whether a worker has joined since construction or the last termination. */
   public isInitialized(): boolean {
-    return this.initialized === true;
+    return this.initialization?.state === 'succeeded';
   }
 
-  public async initialize(languages: SupportedLanguages[] = []): Promise<void> {
-    if (this.initialized === true) {
+  public async initialize(languages?: SupportedLanguages[]): Promise<void> {
+    const { initialization: current } = this;
+    if (current?.state === 'succeeded') {
       if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) == null) {
-        await this.loadSharedHighlighter(getThemes(this.renderOptions.theme), [
-          'text',
-          ...languages,
-        ]);
+        await this.preloadLocalHighlighter(languages ?? []);
       }
       return;
-    } else if (this.initialized === false) {
-      this.terminated = false;
-      const { lifecycleGeneration } = this;
-      const initialization = new Promise<void>((resolve, reject) => {
-        void (async () => {
-          try {
-            const themes = getThemes(this.renderOptions.theme);
-            const resolvedThemes = hasResolvedThemes(
-              themes,
-              this.preferredHighlighter
-            )
-              ? getResolvedThemes(themes, this.preferredHighlighter)
-              : await resolveThemes(themes, this.preferredHighlighter);
-            if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-              resolve();
-              return;
-            }
-
-            const resolving = this.resolveWorkerLanguages(languages);
-            const resolvedLanguages = Array.isArray(resolving)
-              ? resolving
-              : await resolving;
-            if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-              resolve();
-              return;
-            }
-
-            await Promise.all([
-              this.loadSharedHighlighter(themes, ['text', ...languages]),
-              this.initializeWorkers(resolvedThemes, resolvedLanguages),
-            ]);
-
-            if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-              this.terminateWorkers();
-              resolve();
-              return;
-            }
-            this.initialized = true;
-            this.drainQueue();
-            this.queueBroadcastStateChanges();
-            resolve();
-          } catch (e) {
-            if (
-              e instanceof WorkerPoolTerminatedError ||
-              !this.isCurrentLifecycle(lifecycleGeneration)
-            ) {
-              resolve();
-              return;
-            }
-            this.initialized = false;
-            this.workersFailed = true;
-            // A partial pool is not supported, so stop every worker before
-            // consumers rerender through the main-thread fallback.
-            this.cancelActiveWorkerTasks();
-            this.terminateWorkers();
-            this.activeTaskById.clear();
-            for (const task of this.queuedTasks) {
-              this.rejectRenderTaskCallbacks(task, normalizeWorkerError(e));
-            }
-            this.queueBroadcastStateChanges();
-            reject(e);
-          }
-        })();
-      });
-      this.initialized = initialization;
-      this.queueBroadcastStateChanges();
-      // Return the startup promise so callers can await initialization and the
-      // constructor's error handler can catch startup failures.
-      return initialization;
-    } else {
-      return this.initialized;
     }
+    if (current?.state === 'pending') {
+      return current.promise;
+    }
+    if (current?.state === 'failed') {
+      if (current.reason === 'workers') {
+        throw current.error;
+      }
+      languages ??= current.languages;
+    }
+
+    this.terminated = false;
+    const initialization: PendingPoolInitialization = (this.initialization = {
+      state: 'pending',
+      promise: Promise.resolve(),
+      resolve() {},
+      reject() {},
+    });
+    initialization.promise = new Promise((resolve, reject) => {
+      initialization.resolve = resolve;
+      initialization.reject = reject;
+    });
+    this.workerSlots = Array.from({ length: this.configuredWorkers }, () => ({
+      state: 'starting',
+    }));
+    void this.startPool(initialization, languages ?? []);
+    this.queueBroadcastStateChanges();
+    return initialization.promise;
+  }
+
+  private async startPool(
+    initialization: PendingPoolInitialization,
+    languages: SupportedLanguages[]
+  ): Promise<void> {
+    const { lifecycleGeneration, renderOptionsVersion } = this;
+    const themes = getThemes(this.renderOptions.theme);
+    // Local preloading can overlap worker startup. Only worker setup determines
+    // when the pool can serve requests.
+    void this.preloadLocalHighlighter(languages).catch((error: unknown) => {
+      if (this.isCurrentLifecycle(lifecycleGeneration)) {
+        console.error(error);
+      }
+    });
+    try {
+      try {
+        const resolvedThemes = hasResolvedThemes(
+          themes,
+          this.preferredHighlighter
+        )
+          ? getResolvedThemes(themes, this.preferredHighlighter)
+          : await this.waitForWorkerThemes(initialization, themes);
+        if (
+          this.initialization === initialization &&
+          this.renderOptionsVersion === renderOptionsVersion
+        ) {
+          this.resolvedWorkerThemes = resolvedThemes;
+        }
+      } catch (error) {
+        // A newer theme can commit while the initial theme is still loading.
+        // Its resolved themes are already available for worker setup.
+        if (this.renderOptionsVersion === renderOptionsVersion) {
+          throw error;
+        }
+      }
+      if (this.initialization !== initialization) {
+        return;
+      }
+      const resolving = this.resolveWorkerLanguages(languages);
+      const resolvedLanguages = Array.isArray(resolving)
+        ? resolving
+        : await resolving;
+      if (this.initialization !== initialization) {
+        return;
+      }
+
+      this.resolvedWorkerLanguages = resolvedLanguages;
+      if (this.workerSlots.length === 0) {
+        const error = new WorkerPoolWorkerError(
+          'WorkerPoolManager: no workers configured'
+        );
+        this.workerSlotsExhausted = true;
+        this.rejectInitialization(initialization, { reason: 'workers', error });
+        this.rejectAllQueuedRenderTasks(error);
+        return;
+      }
+      void this.startWorkerAttempts(this.workerSlots, 'starting');
+    } catch (error) {
+      if (this.initialization !== initialization) {
+        return;
+      }
+      this.workerSlots = [];
+      const setupError = normalizeWorkerError(error);
+      this.rejectInitialization(initialization, {
+        reason: 'preparation',
+        error: setupError,
+        languages: [...languages],
+      });
+      this.rejectAllQueuedRenderTasks(setupError);
+    }
+  }
+
+  // A render-options commit supplies the worker themes itself. Let startup
+  // continue with its language preloads even if the original theme never loads.
+  private waitForWorkerThemes(
+    initialization: PendingPoolInitialization,
+    themes: DiffsThemeNames[]
+  ): Promise<DiffsTheme[]> {
+    const stopped = new Promise<DiffsTheme[]>((resolve) => {
+      initialization.stopThemeWait = () => resolve(this.resolvedWorkerThemes);
+    });
+    return Promise.race([
+      resolveThemes(themes, this.preferredHighlighter),
+      stopped,
+    ]);
+  }
+
+  // A previous theme load may have failed while views were waiting to paint.
+  // Give those views the new theme load independently of optional grammars.
+  private preloadLocalHighlighter(
+    languages: SupportedLanguages[]
+  ): Promise<void> {
+    if (this.pendingThemeRenders.size > 0) {
+      this.loadLocalThemeForRender();
+    }
+    return this.loadSharedHighlighter(getThemes(this.renderOptions.theme), [
+      'text',
+      ...languages,
+    ]);
   }
 
   // Warning: workers never use the main-thread highlighter. If
@@ -595,103 +777,285 @@ export class WorkerPoolManager {
     }
   }
 
-  private async initializeWorkers(
-    resolvedThemes: DiffsTheme[],
-    resolvedLanguages: ResolvedLanguage[]
-  ): Promise<void> {
-    this.workersFailed = false;
-    const initPromises: Promise<unknown>[] = [];
-    const customExtensionVersion = getCustomExtensionsVersion();
-    const customExtensionMap =
-      customExtensionVersion > 0 ? getCustomExtensionsMap() : undefined;
-    if (this.workers.length > 0) {
-      this.terminateWorkers();
+  /**
+   * Give currently failed slots one new attempt each. Resolve when these
+   * attempts settle, including if termination cancels them.
+   */
+  public async retryFailedWorkers(): Promise<WorkerStats> {
+    const failedSlots = this.workerSlots.filter(
+      (slot) => slot.state === 'failed'
+    );
+    if (failedSlots.length > 0) {
+      await Promise.all(this.startWorkerAttempts(failedSlots, 'retrying'));
     }
-    for (let i = 0; i < (this.options.poolSize ?? 8); i++) {
+    return this.getStats();
+  }
+
+  private startWorkerAttempts(
+    slots: WorkerSlot[],
+    state: 'starting' | 'retrying'
+  ): Promise<void>[] {
+    const settlements = slots.map(
+      (slot) =>
+        new Promise<void>((resolve) => {
+          const startup: WorkerStartup = { resolve };
+          slot.startup = startup;
+          slot.state = state;
+          slot.error = undefined;
+          void this.startWorkerAttempt(slot, startup);
+        })
+    );
+    this.queueBroadcastStateChanges();
+    return settlements;
+  }
+
+  // The attempt's timeout covers initialization and catching up to the current
+  // render options before this worker can take work.
+  private async startWorkerAttempt(
+    slot: WorkerSlot,
+    startup: WorkerStartup
+  ): Promise<void> {
+    const timeoutMs =
+      this.options.workerInitializationTimeout ??
+      DEFAULT_WORKER_INITIALIZATION_TIMEOUT;
+    startup.timeout = setTimeout(() => {
+      this.failWorkerAttempt(
+        slot,
+        startup,
+        new WorkerPoolWorkerError(
+          `WorkerPoolManager: worker initialization timed out after ${timeoutMs}ms`
+        )
+      );
+    }, timeoutMs);
+    try {
       const worker = this.options.workerFactory();
       const managedWorker: ManagedWorker = {
         worker,
         requestId: undefined,
         pendingSetupRequestId: undefined,
-        initialized: false,
-        langs: new Set(['text', ...resolvedLanguages.map(({ name }) => name)]),
+        renderOptionsVersion: this.renderOptionsVersion,
+        langs: new Set([
+          'text',
+          ...this.resolvedWorkerLanguages.map(({ name }) => name),
+        ]),
         customExtensionsVersion: 0,
       };
+      slot.worker = managedWorker;
       worker.addEventListener(
         'message',
         (event: MessageEvent<WorkerWireResponse>) => {
-          this.handleWorkerMessage(managedWorker, event.data);
+          if (slot.worker === managedWorker) {
+            this.handleWorkerMessage(managedWorker, event.data);
+          }
         }
       );
-      worker.addEventListener('error', (error) =>
-        this.handleWorkerError(managedWorker, error)
-      );
-      this.workers.push(managedWorker);
-      initPromises.push(
-        new Promise<void>((resolve, reject) => {
-          const id = this.generateRequestId();
-          const request: InitializeWorkerWireRequest = {
-            type: 'initialize',
-            resultFormat: 'hast-ops-v1',
-            id,
-            renderOptions: this.renderOptions,
-            preferredHighlighter: this.preferredHighlighter,
-            resolvedThemes,
-            resolvedLanguages,
-            customExtensionsVersion:
-              customExtensionMap != null ? customExtensionVersion : undefined,
-            customExtensionMap,
-          };
-          const task: InitializeWorkerTask = {
-            type: 'initialize',
-            id,
-            request,
-            resolve() {
-              managedWorker.initialized = true;
-              resolve();
-            },
-            reject,
-            requestStart: Date.now(),
-          };
-          managedWorker.pendingSetupRequestId = id;
-          this.activeTaskById.set(id, task);
-          this.executeTask(managedWorker, task);
-        })
-      );
+      worker.addEventListener('error', (event) => {
+        if (slot.worker === managedWorker) {
+          this.handleWorkerError(slot, managedWorker, event);
+        }
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const id = this.generateRequestId();
+        const request: InitializeWorkerWireRequest = {
+          type: 'initialize',
+          resultFormat: 'hast-ops-v1',
+          id,
+          renderOptions: this.renderOptions,
+          preferredHighlighter: this.preferredHighlighter,
+          resolvedThemes: this.resolvedWorkerThemes,
+          resolvedLanguages: this.resolvedWorkerLanguages,
+        };
+        const task: InitializeWorkerTask = {
+          type: 'initialize',
+          id,
+          request,
+          resolve,
+          reject,
+          requestStart: Date.now(),
+        };
+        this.postWorkerSetup(managedWorker, task);
+      });
+
+      while (
+        slot.startup === startup &&
+        managedWorker.renderOptionsVersion !== this.renderOptionsVersion
+      ) {
+        await this.setRenderOptionsOnWorker(
+          managedWorker,
+          this.resolvedWorkerThemes
+        );
+      }
+      if (slot.startup !== startup) {
+        return;
+      }
+
+      slot.state = 'ready';
+      this.settleWorkerStartup(slot);
+      this.readyWorkerCount++;
+      this.workerSlotsExhausted = false;
+      const { initialization } = this;
+      if (initialization?.state !== 'succeeded') {
+        this.initialization = { state: 'succeeded' };
+        if (initialization?.state === 'pending') {
+          initialization.resolve();
+        }
+      }
+      this.queueDrain();
+      this.queueBroadcastStateChanges();
+    } catch (cause) {
+      this.failWorkerAttempt(slot, startup, cause);
     }
-    const timeoutMs =
-      this.options.workerInitializationTimeout ??
-      DEFAULT_WORKER_INITIALIZATION_TIMEOUT;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        Promise.all(initPromises),
-        new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(
-              new Error(
-                `WorkerPoolManager: worker initialization timed out after ${timeoutMs}ms`
-              )
-            );
-          }, timeoutMs);
-        }),
-      ]);
-    } finally {
-      if (timeoutId != null) {
-        clearTimeout(timeoutId);
+  }
+
+  private postWorkerSetup(
+    worker: ManagedWorker,
+    task: InitializeWorkerTask | SetRenderOptionsWorkerTask
+  ): void {
+    // Setup can overlap a render already on this worker. Use a separate
+    // request ID so neither acknowledgement clears the other's work.
+    this.cancelWorkerSetup(worker);
+    this.activeTaskById.set(task.id, task);
+    worker.pendingSetupRequestId = task.id;
+    this.executeTask(worker, task);
+  }
+
+  private cancelWorkerSetup(worker: ManagedWorker, error?: Error): void {
+    const { pendingSetupRequestId } = worker;
+    if (pendingSetupRequestId != null) {
+      const task = this.activeTaskById.get(pendingSetupRequestId);
+      if (task?.type === 'initialize' || task?.type === 'set-render-options') {
+        task.reject(error ?? new WorkerPoolTaskCanceledError());
+      }
+      this.cleanWorkerAndTask(worker, task, pendingSetupRequestId);
+    }
+  }
+
+  private retireWorker(slot: WorkerSlot, error: Error): void {
+    const { worker } = slot;
+    if (worker == null) {
+      return;
+    }
+    slot.worker = undefined;
+    this.cancelWorkerSetup(worker, error);
+    worker.worker.terminate();
+  }
+
+  // If initialization fails, give the same slot a replacement worker when an
+  // automatic retry is available. Otherwise, mark the slot as failed.
+  private failWorkerAttempt(
+    slot: WorkerSlot,
+    startup: WorkerStartup,
+    cause: unknown
+  ): void {
+    if (slot.startup !== startup) {
+      return;
+    }
+    const error = normalizeWorkerStartupError(cause);
+    if (slot.state !== 'starting') {
+      this.failWorkerSlot(slot, error);
+      return;
+    }
+
+    clearTimeout(startup.timeout);
+    // Use a new attempt record so callbacks from the retired worker are stale.
+    const replacement: WorkerStartup = { resolve: startup.resolve };
+    slot.startup = replacement;
+    slot.state = 'retrying';
+    this.retireWorker(slot, error);
+    this.queueBroadcastStateChanges();
+    void this.startWorkerAttempt(slot, replacement);
+  }
+
+  // Retire the worker and leave the slot failed until retryFailedWorkers is
+  // called. Other ready workers keep taking work.
+  private failWorkerSlot(slot: WorkerSlot, error: WorkerPoolWorkerError): void {
+    const wasReady = slot.state === 'ready';
+    this.retireWorker(slot, error);
+    slot.state = 'failed';
+    slot.error = error;
+    this.settleWorkerStartup(slot);
+    if (wasReady) {
+      this.readyWorkerCount--;
+    }
+    this.queueBroadcastStateChanges();
+    if (this.readyWorkerCount > 0 || this.workerSlotsExhausted) {
+      return;
+    }
+
+    const errors = this.workerSlots.map(({ error }) => error);
+    if (!errors.every((error) => error != null)) {
+      if (wasReady) {
+        this.rejectAllQueuedRenderTasks(slot.error);
+      }
+      return;
+    }
+
+    this.workerSlotsExhausted = true;
+    const poolError =
+      errors.length === 1
+        ? slot.error
+        : new WorkerPoolWorkerError(
+            `WorkerPoolManager: all ${errors.length} worker slots failed`,
+            { cause: new AggregateError(errors, 'Worker slot failures') }
+          );
+    if (errors.length > 1 && errors.every(isHandledWorkerPoolError)) {
+      markWorkerErrorReported(poolError);
+    }
+    const { initialization } = this;
+    if (initialization?.state === 'pending') {
+      this.rejectInitialization(initialization, {
+        reason: 'workers',
+        error: poolError,
+      });
+    }
+    this.rejectAllQueuedRenderTasks(poolError);
+  }
+
+  private settleWorkerStartup(slot: WorkerSlot): void {
+    const { startup } = slot;
+    if (startup != null) {
+      slot.startup = undefined;
+      clearTimeout(startup.timeout);
+      startup.resolve();
+    }
+  }
+
+  private rejectInitialization(
+    initialization: PendingPoolInitialization,
+    failure: PoolInitializationFailure
+  ): void {
+    this.initialization = { state: 'failed', ...failure };
+    initialization.reject(failure.error);
+  }
+
+  // Clear waiting work before notifying renderers so they can immediately
+  // rerender using their local highlighter. A renderer may share multiple tasks.
+  private rejectAllQueuedRenderTasks(error: Error): void {
+    const instances = new Set<RenderTaskInstance>();
+    for (const task of this.removeAllQueuedRenderTasks()) {
+      this.rejectRenderTaskCallbacks(task, error);
+      for (const instance of getInstances(task)) {
+        instances.add(instance);
+      }
+    }
+    this.queueBroadcastStateChanges();
+    for (const instance of instances) {
+      try {
+        instance.onLocalFallback();
+      } catch (callbackError) {
+        console.error(callbackError);
       }
     }
   }
 
   /**
-   * Pass worker errors to onWorkerError, or log them if no callback is set.
-   *
-   * A startup error rejects initialization so components can highlight on the
-   * main thread. Other requests wait for their own responses: worker.ts catches
-   * request errors, so this event may be unrelated to the current request.
-   * A worker that stops responding remains busy and receives no further work.
+   * Pass browser errors to onWorkerError, or log them if no callback is set.
+   * Only startup errors interrupt the current request. A ready worker can
+   * still acknowledge its work after an unrelated error event.
    */
   private handleWorkerError(
+    slot: WorkerSlot,
     managedWorker: ManagedWorker,
     event: ErrorEvent | Event
   ): void {
@@ -706,26 +1070,26 @@ export class WorkerPoolManager {
       console.error('Worker error:', event, managedWorker);
     }
     const { pendingSetupRequestId } = managedWorker;
-    if (pendingSetupRequestId == null) {
+    if (slot.startup == null || pendingSetupRequestId == null) {
       return;
     }
     const task = this.activeTaskById.get(pendingSetupRequestId);
-    if (task?.type !== 'initialize') {
+    if (task == null || !('reject' in task)) {
       return;
     }
     const error = errorFromWorkerErrorEvent(event);
     if (onWorkerError != null) {
       markWorkerErrorReported(error);
     }
-    task.reject(error);
     this.cleanWorkerAndTask(managedWorker, task);
+    task.reject(error);
   }
 
   private drainQueue = () => {
     this._queuedDrain = undefined;
     // If we are initializing or things got cancelled while initializing, we
     // should not attempt to drain the queue
-    if (this.initialized !== true || this.queuedTasks.length === 0) {
+    if (this.readyWorkerCount === 0 || this.queuedTasks.length === 0) {
       return;
     }
     for (let i = 0; i < this.queuedTasks.length; ) {
@@ -1025,23 +1389,38 @@ export class WorkerPoolManager {
 
   public terminate(): void {
     this.lifecycleGeneration++;
-    this.cancelActiveWorkerTasks();
-    this.terminateWorkers();
     const error = new WorkerPoolTerminatedError();
-    for (const task of this.queuedTasks) {
+    this.terminated = true;
+    this.readyWorkerCount = 0;
+    this.workerSlotsExhausted = false;
+    if (this.initialization?.state === 'pending') {
+      this.initialization.stopThemeWait?.();
+      this.initialization.resolve();
+    }
+    this.initialization = undefined;
+    for (const slot of this.workerSlots) {
+      this.settleWorkerStartup(slot);
+      this.retireWorker(slot, error);
+    }
+    this.workerSlots.length = 0;
+    this.resolvedWorkerThemes.length = 0;
+    this.resolvedWorkerLanguages.length = 0;
+    for (const task of this.removeAllQueuedRenderTasks()) {
       this.rejectRenderTaskCallbacks(task, error);
+    }
+    for (const task of this.activeTaskById.values()) {
+      if ('reject' in task) {
+        task.reject(error);
+      } else if (isRenderTask(task)) {
+        this.rejectRenderTaskCallbacks(task, error);
+      }
     }
     this.fileCache.clear();
     this.diffCache.clear();
     this.failedHighlightKeys.clear();
     this.activeRequestByInstance.clear();
-    this.queuedTasks.length = 0;
-    this.queuedTaskByInstance.clear();
     this.taskByHighlightKey.clear();
     this.activeTaskById.clear();
-    this.initialized = false;
-    this.workersFailed = false;
-    this.terminated = true;
     this.queueBroadcastStateChanges();
   }
 
@@ -1049,7 +1428,18 @@ export class WorkerPoolManager {
     return this.lifecycleGeneration === lifecycleGeneration;
   }
 
+  public initializeIfNeeded(): void {
+    if (this.initialization == null) {
+      this.queueInitialization();
+    }
+  }
+
   private queueInitialization(languages?: SupportedLanguages[]): void {
+    // Plain renders can request setup repeatedly. Leave a failed attempt
+    // settled until the host retries or changes the theme.
+    if (this.initialization?.state === 'failed') {
+      return;
+    }
     void this.initialize(languages).catch((error) => {
       // Skip cancellations and worker errors already passed to onWorkerError.
       if (isHandledWorkerPoolError(error)) {
@@ -1059,40 +1449,53 @@ export class WorkerPoolManager {
     });
   }
 
-  private cancelActiveWorkerTasks(): void {
-    const error = new WorkerPoolTerminatedError();
-    for (const task of this.activeTaskById.values()) {
-      if ('reject' in task) {
-        task.reject(error);
-      } else if (isRenderTask(task)) {
-        this.rejectRenderTaskCallbacks(task, error);
-      }
+  private removeAllQueuedRenderTasks(): RenderTask[] {
+    const { queuedTasks } = this;
+    this.queuedTasks = [];
+    this.queuedTaskByInstance.clear();
+    for (const task of queuedTasks) {
+      this.clearHighlightKey(task);
     }
-  }
-
-  private terminateWorkers() {
-    for (const managedWorker of this.workers) {
-      managedWorker.worker.terminate();
-    }
-    this.workers.length = 0;
+    return queuedTasks;
   }
 
   public getStats(): WorkerStats {
+    const initializationState = this.initialization?.state;
+    let totalWorkers = 0;
+    let busyWorkers = 0;
+    let retryingWorkerSlots = 0;
+    let failedWorkerSlots = 0;
+    for (const { state, worker } of this.workerSlots) {
+      if (worker != null) {
+        totalWorkers++;
+        if (worker.requestId != null || worker.pendingSetupRequestId != null) {
+          busyWorkers++;
+        }
+      }
+      switch (state) {
+        case 'retrying':
+          retryingWorkerSlots++;
+          break;
+        case 'failed':
+          failedWorkerSlots++;
+          break;
+      }
+    }
+
     return {
-      managerState: (() => {
-        if (this.initialized === false) {
-          return 'waiting';
-        }
-        if (this.initialized !== true) {
-          return 'initializing';
-        }
-        return 'initialized';
-      })(),
-      totalWorkers: this.workers.length,
-      workersFailed: this.workersFailed,
-      busyWorkers: this.workers.filter(
-        (w) => w.requestId != null || w.pendingSetupRequestId != null
-      ).length,
+      managerState:
+        initializationState === 'succeeded'
+          ? 'initialized'
+          : initializationState === 'pending'
+            ? 'initializing'
+            : 'waiting',
+      configuredWorkers: this.configuredWorkers,
+      totalWorkers,
+      readyWorkers: this.readyWorkerCount,
+      retryingWorkerSlots,
+      failedWorkerSlots,
+      workersFailed: this.workerSlotsExhausted,
+      busyWorkers,
       queuedTasks: this.queuedTasks.length,
       activeTasks: this.activeTaskById.size,
       themeSubscribers: this.themeSubscribers.size,
@@ -1113,9 +1516,10 @@ export class WorkerPoolManager {
     instance: FileRendererInstance | DiffRendererInstance,
     request: SubmitRequest
   ): void {
-    if (this.initialized === false) {
-      this.queueInitialization();
+    if (this.shouldUseLocalFallback()) {
+      return;
     }
+    this.initializeIfNeeded();
 
     const highlightKey = this.getHighlightKeyForRequest(request);
     const existingTask =
@@ -1168,9 +1572,7 @@ export class WorkerPoolManager {
     request: SubmitRequest,
     highlightKey: string
   ): RenderTask {
-    if (this.initialized === false) {
-      this.queueInitialization();
-    }
+    this.initializeIfNeeded();
     const id = this.generateRequestId();
     const requestStart = Date.now();
     const { renderOptionsVersion } = this;
@@ -1417,15 +1819,10 @@ export class WorkerPoolManager {
     this.queueBroadcastStateChanges();
   }
 
-  private assignWorkerToTask(
-    task: AllWorkerTasks,
-    managedWorker: ManagedWorker
-  ) {
+  private assignWorkerToTask(task: RenderTask, managedWorker: ManagedWorker) {
     managedWorker.requestId = task.id;
-    if (isRenderTask(task)) {
-      this.clearQueuedInstanceRequests(task);
-      this.trackInstanceRequests(task);
-    }
+    this.clearQueuedInstanceRequests(task);
+    this.trackInstanceRequests(task);
     this.activeTaskById.set(task.id, task);
   }
 
@@ -1456,9 +1853,6 @@ export class WorkerPoolManager {
   ): void {
     if (shouldSyncCustomExtensions(task.request)) {
       this.maybeAttachCustomExtensions(managedWorker, task.request);
-    }
-    if (!this.activeTaskById.has(task.id)) {
-      this.assignWorkerToTask(task, managedWorker);
     }
     try {
       // postMessage clones the request now, so keep the matching cache key on
@@ -1514,11 +1908,13 @@ export class WorkerPoolManager {
     langs: SupportedLanguages[]
   ): ManagedWorker | undefined {
     let worker: ManagedWorker | undefined;
-    for (const managedWorker of this.workers) {
+    for (const { state, worker: managedWorker } of this.workerSlots) {
       if (
+        state !== 'ready' ||
+        managedWorker == null ||
         managedWorker.requestId != null ||
         managedWorker.pendingSetupRequestId != null ||
-        !managedWorker.initialized
+        managedWorker.renderOptionsVersion !== this.renderOptionsVersion
       ) {
         continue;
       }
@@ -1861,6 +2257,14 @@ function normalizeWorkerError(error: unknown): Error {
     }
   }
   return new Error(String(error));
+}
+
+function normalizeWorkerStartupError(error: unknown): WorkerPoolWorkerError {
+  return error instanceof WorkerPoolWorkerError
+    ? error
+    : new WorkerPoolWorkerError(normalizeWorkerError(error).message, {
+        cause: error,
+      });
 }
 
 // Convert a worker error event into a startup error, preserving its cause.

@@ -1597,15 +1597,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         nextRenderRange
       );
       if (fileResult == null) {
-        if (
-          this.workerManager?.isInitialized() === false &&
-          this.workerManager.isWorkingPool()
-        ) {
-          void this.workerManager
-            .initialize()
-            .catch(() => {})
-            .then(() => this.rerender());
-        }
         return false;
       }
       this.applyThemeState(

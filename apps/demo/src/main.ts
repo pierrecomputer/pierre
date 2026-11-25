@@ -714,6 +714,9 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
           onHighlightError(error: unknown) {
             console.error(error);
           },
+          onLocalFallback() {
+            console.warn('Worker Render: skipped file:', fileDiff.name);
+          },
         },
         fileDiff
       );

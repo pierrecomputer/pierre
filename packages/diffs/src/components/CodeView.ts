@@ -266,7 +266,7 @@ export interface CodeViewSlotSnapshot<LAnnotation, Caret> {
   // undefined when the corresponding renderCodeViewHeader/Footer callback is not
   // set. Because these live in the snapshot, a host mounting/unmounting changes
   // it and triggers a publish — which is how React learns about hosts that are
-  // created on a later (worker-ready) render.
+  // created on a later (theme-ready) render.
   header: HTMLElement | undefined;
   footer: HTMLElement | undefined;
 }
@@ -1376,6 +1376,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   public reset(): void {
     dequeueRender(this.computeRenderRangeAndEmit);
     this.clearReadySubscription();
+    this.workerManager?.cancelLocalThemeRender(this);
     this.search.closeInPlace();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
@@ -1462,6 +1463,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // Completion handlers can call back into CodeView while reset settles
     // sessions, so discard any render they queued before detaching the root.
     dequeueRender(this.computeRenderRangeAndEmit);
+    this.workerManager?.cancelLocalThemeRender(this);
     this.clearElementPool();
     this.restoreScrollInteractions();
     this.workerManager?.unsubscribeToThemeChanges(this);
@@ -2216,38 +2218,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  private isReady(): boolean {
-    const { workerManager } = this;
-    // A failed worker pool never reaches the 'initialized' state (it reverts
-    // to 'waiting' with workersFailed: true), so it renders through the shared
-    // highlighter instead.
-    if (workerManager == null || workerManager.getStats().workersFailed) {
-      return this.isSharedHighlighterReady();
-    }
-    if (workerManager.isInitialized()) {
-      this.clearReadySubscription();
-      return true;
-    }
-
-    this.isReadySubscription ??= workerManager.subscribeToStatChanges(
-      (stats) => {
-        if (stats.managerState !== 'initialized' && !stats.workersFailed) {
-          return;
-        }
-
-        this.clearReadySubscription();
-        this.render(true);
-      }
-    );
-
-    // If the worker is awiting on initialization, we should attempt to
-    // initialize
-    if (workerManager.getStats().managerState === 'waiting') {
-      void workerManager.initialize().catch(() => {});
-    }
-    return false;
-  }
-
   private clearReadySubscription(): void {
     if (this.isReadySubscription == null) {
       return;
@@ -2267,6 +2237,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private isSharedHighlighterReady(): boolean {
+    const { workerManager } = this;
+    if (workerManager != null) {
+      return !workerManager.renderWhenLocalThemeLoads(
+        this,
+        this.renderOnLocalTheme
+      );
+    }
     const theme = this.getTheme();
     if (getHighlighterIfLoaded({ theme }) != null) {
       this.clearReadySubscription();
@@ -2310,6 +2287,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       };
     })();
     return false;
+  }
+
+  private renderOnLocalTheme = (): void => {
+    this.render();
+  };
+
+  /** @internal */
+  public onHighlightError(error: unknown): void {
+    console.error(error);
   }
 
   public instanceChanged(
@@ -3841,7 +3827,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     ) {
       return;
     }
-    if (!this.isReady()) {
+    this.workerManager?.initializeIfNeeded();
+    // Plain rows only need the local theme. Workers highlight in the
+    // background and their results rerender items through instanceChanged().
+    if (!this.isSharedHighlighterReady()) {
       return;
     }
 

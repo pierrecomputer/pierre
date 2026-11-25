@@ -42,10 +42,6 @@ export function PlaygroundWorkerPool({
       if (cancelled) return;
       manager = new WorkerPoolManager(
         {
-          poolSize: Math.min(
-            3,
-            Math.max(1, (navigator.hardwareConcurrency ?? 2) - 1)
-          ),
           mainThreadMaxCharacters:
             highlighter === 'highlights'
               ? MAIN_THREAD_MAX_CHARACTERS

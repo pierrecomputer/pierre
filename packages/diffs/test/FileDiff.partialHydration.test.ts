@@ -96,12 +96,10 @@ function createPrimeWorkerManager(): {
       return undefined;
     },
     highlightDiffAST() {},
-    initialize() {
-      return Promise.resolve();
+    renderWhenLocalThemeLoads() {
+      return false;
     },
-    isInitialized() {
-      return true;
-    },
+    cancelLocalThemeRender() {},
     isWorkingPool() {
       return true;
     },
@@ -723,12 +721,10 @@ describe('FileDiff partial hydration', () => {
           return undefined;
         },
         highlightDiffAST() {},
-        initialize() {
-          return Promise.resolve();
+        renderWhenLocalThemeLoads() {
+          return false;
         },
-        isInitialized() {
-          return true;
-        },
+        cancelLocalThemeRender() {},
         isWorkingPool() {
           return true;
         },

@@ -52,6 +52,7 @@ describe('WorkerPoolManager worker error events', () => {
       const errors: unknown[] = [];
       const instance: DiffRendererInstance = {
         __id: 'alive-worker-diff-renderer',
+        onLocalFallback: mock(),
         onHighlightSuccess(diff) {
           successes.push(diff);
         },
@@ -69,6 +70,7 @@ describe('WorkerPoolManager worker error events', () => {
 
       await withTimeout(prime);
       expect(errors).toEqual([]);
+      expect(instance.onLocalFallback).not.toHaveBeenCalled();
       expect(successes).toHaveLength(1);
       expect(manager.getDiffResultCache(diff)).toBeDefined();
     } finally {
@@ -141,10 +143,12 @@ describe('WorkerPoolManager worker error events', () => {
   test('a failed initialization that only the constructor started is not an unhandled rejection', async () => {
     spyOn(console, 'error').mockImplementation(() => {});
     const worker = new TestWorker();
+    const replacement = new TestWorker();
+    const workers = [worker, replacement];
     const manager = new WorkerPoolManager(
       {
         poolSize: 1,
-        workerFactory: () => worker as unknown as Worker,
+        workerFactory: () => workers.shift() as unknown as Worker,
         onWorkerError: () => {},
       },
       { langs: [], preferredHighlighter: 'shiki-js', theme: 'github-dark' }
@@ -152,6 +156,8 @@ describe('WorkerPoolManager worker error events', () => {
     try {
       await worker.waitForInitializeRequest();
       worker.emitError(new Error('worker failed to load'));
+      await replacement.waitForInitializeRequest();
+      replacement.emitError(new Error('replacement failed to load'));
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(manager.isWorkingPool()).toBe(false);

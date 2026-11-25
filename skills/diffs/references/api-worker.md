@@ -13,32 +13,43 @@ This reference lists every export from `@pierre/diffs/worker`, every public
 
 ## `WorkerPoolManager` members
 
-| Member                                                         | Purpose                                           |
-| -------------------------------------------------------------- | ------------------------------------------------- |
-| `new WorkerPoolManager(options, renderOptions)`                | Creates a worker pool.                            |
-| `initialize(languages?)`                                       | Starts workers and loads languages.               |
-| `isInitialized()`                                              | Reports whether initialization finished.          |
-| `isWorkingPool()`                                              | Reports whether workers can accept work.          |
-| `setRenderOptions(options)`                                    | Updates theme and render settings in each worker. |
-| `getFileRenderOptions()`                                       | Gets active file render options.                  |
-| `getDiffRenderOptions()`                                       | Gets active diff render options.                  |
-| `highlightFileAST(instance, file)`                             | Queues a highlighted file result for an instance. |
-| `highlightDiffAST(instance, diff)`                             | Queues a highlighted diff result for an instance. |
-| `primeFileHighlightCache(file)`                                | Preloads one highlighted file result.             |
-| `primeDiffHighlightCache(diff)`                                | Preloads one highlighted diff result.             |
-| `getFileResultCache(file)`                                     | Gets one cached file result.                      |
-| `getDiffResultCache(diff)`                                     | Gets one cached diff result.                      |
-| `getPlainFileAST(file, start, total, lines?)`                  | Gets a plain-text file result.                    |
-| `getPlainDiffAST(diff, start, total, expansions?, threshold?)` | Gets a plain-text diff result.                    |
-| `inspectCaches()`                                              | Gets both result caches.                          |
-| `evictFileFromCache(cacheKey)`                                 | Removes one file cache entry.                     |
-| `evictDiffFromCache(cacheKey)`                                 | Removes one diff cache entry.                     |
-| `subscribeToThemeChanges(instance)`                            | Subscribes a render instance to theme changes.    |
-| `unsubscribeToThemeChanges(instance)`                          | Removes a theme subscription.                     |
-| `subscribeToStatChanges(callback)`                             | Subscribes to worker statistics.                  |
-| `cleanUpTasks(instance)`                                       | Removes queued and active tasks for an instance.  |
-| `getStats()`                                                   | Gets worker and cache statistics.                 |
-| `terminate()`                                                  | Stops workers and clears pool resources.          |
+| Member                                                         | Purpose                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------- |
+| `new WorkerPoolManager(options, renderOptions)`                | Creates a worker pool.                                  |
+| `initialize(languages?)`                                       | Starts the pool and resolves on its first ready worker. |
+| `isInitialized()`                                              | Reports whether a worker has joined since pool startup. |
+| `isWorkingPool()`                                              | Reports whether workers can accept work.                |
+| `setRenderOptions(options)`                                    | Updates theme and render settings in each worker.       |
+| `getFileRenderOptions()`                                       | Gets active file render options.                        |
+| `getDiffRenderOptions()`                                       | Gets active diff render options.                        |
+| `highlightFileAST(instance, file)`                             | Queues a highlighted file result for an instance.       |
+| `highlightDiffAST(instance, diff)`                             | Queues a highlighted diff result for an instance.       |
+| `primeFileHighlightCache(file)`                                | Preloads one highlighted file result.                   |
+| `primeDiffHighlightCache(diff)`                                | Preloads one highlighted diff result.                   |
+| `getFileResultCache(file)`                                     | Gets one cached file result.                            |
+| `getDiffResultCache(diff)`                                     | Gets one cached diff result.                            |
+| `getPlainFileAST(file, start, total, lines?)`                  | Gets a plain-text file result.                          |
+| `getPlainDiffAST(diff, start, total, expansions?, threshold?)` | Gets a plain-text diff result.                          |
+| `inspectCaches()`                                              | Gets both result caches.                                |
+| `evictFileFromCache(cacheKey)`                                 | Removes one file cache entry.                           |
+| `evictDiffFromCache(cacheKey)`                                 | Removes one diff cache entry.                           |
+| `subscribeToThemeChanges(instance)`                            | Subscribes a render instance to theme changes.          |
+| `unsubscribeToThemeChanges(instance)`                          | Removes a theme subscription.                           |
+| `subscribeToStatChanges(callback)`                             | Subscribes to worker statistics.                        |
+| `cleanUpTasks(instance)`                                       | Removes queued and active tasks for an instance.        |
+| `getStats()`                                                   | Gets worker and cache statistics.                       |
+| `retryFailedWorkers()`                                         | Gives each failed slot one new startup attempt.         |
+| `terminate()`                                                  | Stops workers and clears pool resources.                |
+
+If a theme or language fails to load before workers start, `initialize()`
+retries with the same language preloads. Pass `initialize(languages)` to replace
+the list for that attempt.
+
+Custom instances passed to `highlightFileAST` or `highlightDiffAST` must
+implement `onLocalFallback()`. The pool calls it once per waiting instance when
+it drops queued work because workers are unavailable. Use it to rerender with
+the local highlighter. Individual highlight failures go to
+`onHighlightError(error)`.
 
 ## Configuration and state types
 

@@ -51,6 +51,7 @@ test('worker results carry the pool diff library', async () => {
       const instance: DiffRendererInstance = {
         __id,
         onHighlightError: reject,
+        onLocalFallback: () => reject(new Error('Worker pool unavailable')),
         onHighlightSuccess(_, result, options) {
           expect(result.code.additionLines).toHaveLength(1);
           resolve(options);

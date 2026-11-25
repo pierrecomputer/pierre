@@ -19,9 +19,9 @@ export class WorkerPoolTaskCanceledError extends Error {
 }
 
 /**
- * A worker failed during initialization. The pool rejects initialization and
- * pending highlight requests with this error. Components then highlight on
- * the main thread.
+ * Worker setup failed and the pool has no usable workers. The pool rejects
+ * pending initialization and highlight requests with this error. Components
+ * highlight on the main thread.
  */
 export class WorkerPoolWorkerError extends Error {
   constructor(message: string, options?: ErrorOptions) {

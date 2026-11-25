@@ -24,28 +24,15 @@ function isMobileBrowser(): boolean {
   );
 }
 
-function getWorkerResourceLimits(): Pick<
-  Required<WorkerPoolOptions>,
-  'poolSize' | 'totalASTLRUCacheSize'
-> {
-  return isMobileBrowser()
-    ? { poolSize: 1, totalASTLRUCacheSize: 10 }
-    : { poolSize: 3, totalASTLRUCacheSize: 100 };
-}
-
-const WorkerResourceLimits = getWorkerResourceLimits();
+const isMobile = isMobileBrowser();
 
 // Files and diffs up to this many characters highlight on the main thread,
 // where highlights finishes faster than a worker round trip.
 export const MAIN_THREAD_MAX_CHARACTERS = 100_000;
 
 const PoolOptions: WorkerPoolOptions = {
-  // We really shouldn't let the pool get too big...
-  poolSize: Math.min(
-    Math.max(1, (global.navigator?.hardwareConcurrency ?? 1) - 1),
-    WorkerResourceLimits.poolSize
-  ),
-  totalASTLRUCacheSize: WorkerResourceLimits.totalASTLRUCacheSize,
+  poolSize: isMobile ? 1 : undefined,
+  totalASTLRUCacheSize: isMobile ? 10 : 100,
   // The shiki-js fallback leaves this unset so every
   // highlight goes through a worker.
   mainThreadMaxCharacters:

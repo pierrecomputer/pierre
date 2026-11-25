@@ -148,9 +148,10 @@ export class TestWorker {
 
   async waitForFileRequest(): Promise<RenderFileRequest> {
     const request = this.fileRequests.at(-1);
-    if (request != null) {
-      return request;
-    }
+    return request ?? this.waitForNextFileRequest();
+  }
+
+  waitForNextFileRequest(): Promise<RenderFileRequest> {
     return new Promise<RenderFileRequest>((resolve) => {
       this.fileRequestResolve = resolve;
     });

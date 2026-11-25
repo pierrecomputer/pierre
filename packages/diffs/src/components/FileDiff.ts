@@ -1660,15 +1660,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         nextRenderRange
       );
       if (hunksResult == null) {
-        if (
-          this.workerManager?.isInitialized() === false &&
-          this.workerManager.isWorkingPool()
-        ) {
-          void this.workerManager
-            .initialize()
-            .catch(() => {})
-            .then(() => this.rerender());
-        }
         return false;
       }
 

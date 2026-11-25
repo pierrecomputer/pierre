@@ -1,10 +1,13 @@
-import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeAll, expect, mock, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { UnresolvedFile } from '../src/components/UnresolvedFile';
 import { Editor } from '../src/editor/editor';
 import { TextDocument } from '../src/editor/textDocument';
+import { RegisteredCustomLanguages } from '../src/highlighter/languages/constants';
+import { registerCustomLanguage } from '../src/highlighter/languages/registerCustomLanguage';
+import * as sharedHighlighter from '../src/highlighter/shared_highlighter';
 import {
   disposeHighlighter,
   getSharedHighlighter,
@@ -14,8 +17,14 @@ import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { DiffLib, FileContents } from '../src/types';
 import { diffLibs } from '../src/utils/diffLibs';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { WorkerPoolManager } from '../src/worker';
 import { installDom, wait, waitFor } from './domHarness';
-import { createInitializedManager } from './workerPoolHarness';
+import { createDeferred, getRejection } from './testUtils';
+import {
+  createInitializedManager,
+  TestWorker,
+  withTimeout,
+} from './workerPoolHarness';
 
 // Files and diffs below this many characters highlight on the main thread.
 const MAIN_THREAD_MAX_CHARACTERS = 200;
@@ -79,6 +88,248 @@ test('File highlights a file within the threshold on its first render', async ()
   } finally {
     instance.cleanUp();
     cleanup();
+  }
+});
+
+test('cold File and FileDiff highlight visible plain rows after all worker attempts fail', async () => {
+  await disposeHighlighter();
+  const dom = installDom();
+  const initial = new TestWorker();
+  const replacement = new TestWorker();
+  const recovery = new TestWorker();
+  const attempts = [initial, replacement, recovery];
+  const manager = new WorkerPoolManager(
+    {
+      poolSize: 1,
+      workerFactory: () => attempts.shift() as unknown as Worker,
+      onWorkerError: () => {},
+    },
+    { langs: [], theme: 'pierre-dark', lineDiffType: 'none' }
+  );
+  const fileContainer = document.createElement('div');
+  const diffContainer = document.createElement('div');
+  document.body.append(fileContainer, diffContainer);
+  const file = new File({}, manager);
+  const fileDiff = new FileDiff({ diffStyle: 'unified' }, manager);
+  const updated = {
+    ...smallFile,
+    contents: 'const answer = 42;\n',
+    cacheKey: 'fallback:updated',
+  };
+
+  try {
+    file.render({ file: smallFile, fileContainer });
+    fileDiff.render({
+      fileDiff: parseDiffFromFile(smallFile, updated),
+      fileContainer: diffContainer,
+    });
+    const containers = [fileContainer, diffContainer];
+    const firstRow = (container: HTMLElement) =>
+      container.shadowRoot?.querySelector('[data-line="1"]');
+    expect(containers.map(firstRow)).toEqual([null, null]);
+    await withTimeout(initial.waitForInitializeRequest());
+    await waitFor(() =>
+      containers.every((container) => firstRow(container) != null)
+    );
+    for (const container of containers) {
+      expect(firstRow(container)?.textContent).toBe('const alpha = 1;');
+      expect(isLineHighlighted(container)).toBe(false);
+    }
+
+    initial.emitError(new Error('worker failed'));
+    await withTimeout(replacement.waitForInitializeRequest());
+    replacement.emitError(new Error('replacement failed'));
+    await waitFor(
+      () => isLineHighlighted(fileContainer) && isLineHighlighted(diffContainer)
+    );
+    expect(isLineHighlighted(fileContainer)).toBe(true);
+    expect(isLineHighlighted(diffContainer)).toBe(true);
+
+    const retry = manager.retryFailedWorkers();
+    await withTimeout(recovery.waitForInitializeRequest());
+    file.render({ file: updated, fileContainer });
+    expect(isLineHighlighted(fileContainer)).toBe(true);
+    expect(
+      fileContainer.shadowRoot?.querySelector('[data-line="1"]')?.textContent
+    ).toBe(updated.contents.trimEnd());
+    expect(recovery.fileRequestCount).toBe(0);
+    manager.terminate();
+    await withTimeout(retry);
+  } finally {
+    file.cleanUp();
+    fileDiff.cleanUp();
+    manager.terminate();
+    dom.cleanup();
+  }
+});
+
+test('File and FileDiff highlight visible plain rows when an unrelated language preload fails', async () => {
+  const dom = installDom();
+  const language = 'worker-fallback-unrelated-language';
+  const preload = createDeferred<never>();
+  registerCustomLanguage(language, () => preload.promise);
+  const report = spyOn(console, 'error').mockImplementation(() => {});
+  const factory = mock(() => new TestWorker() as unknown as Worker);
+  const manager = new WorkerPoolManager(
+    { poolSize: 1, workerFactory: factory },
+    { langs: [language], theme: 'pierre-dark', lineDiffType: 'none' }
+  );
+  const fileContainer = document.createElement('div');
+  const diffContainer = document.createElement('div');
+  document.body.append(fileContainer, diffContainer);
+  const file = new File({}, manager);
+  const fileDiff = new FileDiff({ diffStyle: 'unified' }, manager);
+  const fileRerender = spyOn(file, 'rerender');
+  const diffRerender = spyOn(fileDiff, 'rerender');
+  const updated = { name: smallFile.name, contents: 'const answer = 42;\n' };
+  const error = new Error('unrelated language could not load');
+
+  try {
+    const initialization = getRejection(manager.initialize());
+    file.render({ file: smallFile, fileContainer });
+    fileDiff.render({
+      fileDiff: parseDiffFromFile(smallFile, updated),
+      fileContainer: diffContainer,
+    });
+    for (const container of [fileContainer, diffContainer]) {
+      expect(
+        container.shadowRoot?.querySelector('[data-line="1"]')?.children.length
+      ).toBe(1);
+    }
+    expect(manager.getStats().queuedTasks).toBe(2);
+
+    preload.reject(error);
+    expect(await initialization).toBe(error);
+    expect(factory).not.toHaveBeenCalled();
+    expect(isLineHighlighted(fileContainer)).toBe(true);
+    expect(isLineHighlighted(diffContainer)).toBe(true);
+    expect(fileRerender).toHaveBeenCalledTimes(1);
+    expect(diffRerender).toHaveBeenCalledTimes(1);
+  } finally {
+    file.cleanUp();
+    fileDiff.cleanUp();
+    manager.terminate();
+    report.mockRestore();
+    RegisteredCustomLanguages.delete(language);
+    dom.cleanup();
+  }
+});
+
+test('File and FileDiff keep pool render options after the last ready worker fails', async () => {
+  const { manager, worker, container, cleanup } = await createFixture();
+  const diffContainer = document.createElement('div');
+  document.body.appendChild(diffContainer);
+  const file = new File({}, manager);
+  const fileDiff = new FileDiff({ lineDiffType: 'none' }, manager);
+  const before = { name: 'sample.ts', contents: 'x = 1;\nconst tail = 0;' };
+  const after = { ...before, contents: 'x = 2;\nconst tail = 0;' };
+  const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const update = manager.setRenderOptions({
+      useTokenTransformer: true,
+      tokenizeMaxLineLength: 10,
+      lineDiffType: 'char',
+    });
+    const request = await withTimeout(worker.waitForSetRenderOptionsRequest());
+    worker.respond({ type: 'error', id: request.id, error: 'update failed' });
+    expect(await update.catch((error: unknown) => error)).toEqual(
+      new Error('update failed')
+    );
+    expect(manager.shouldUseLocalFallback()).toBe(true);
+
+    file.render({ file: after, fileContainer: container });
+    fileDiff.render({
+      fileDiff: parseDiffFromFile(before, after),
+      fileContainer: diffContainer,
+    });
+    for (const view of [container, diffContainer]) {
+      const root = view.shadowRoot;
+      expect(root?.querySelector('[data-line="2"]')?.textContent).toBe(
+        'const tail'
+      );
+      expect(root?.querySelector('[data-line="1"] [data-char]')).toBeTruthy();
+    }
+    expect(
+      diffContainer.shadowRoot?.querySelector(
+        '[data-line-type="change-addition"] [data-diff-span]'
+      )?.textContent
+    ).toBe('2');
+  } finally {
+    consoleError.mockRestore();
+    file.cleanUp();
+    fileDiff.cleanUp();
+    cleanup();
+  }
+});
+
+test('File and FileDiff finish painting when a ready worker gets ahead of the local theme', async () => {
+  await disposeHighlighter();
+  const dom = installDom();
+  const release = createDeferred<void>();
+  const load = sharedHighlighter.getSharedHighlighter;
+  const preload = spyOn(sharedHighlighter, 'getSharedHighlighter');
+  preload.mockImplementation(async (options) => {
+    await release.promise;
+    return load(options);
+  });
+
+  const worker = new TestWorker();
+  const manager = new WorkerPoolManager(
+    { poolSize: 1, workerFactory: () => worker as unknown as Worker },
+    { langs: [], theme: 'pierre-dark' }
+  );
+  const fileContainer = document.createElement('div');
+  const diffContainer = document.createElement('div');
+  document.body.append(fileContainer, diffContainer);
+  const file = new File({}, manager);
+  const fileDiff = new FileDiff({ diffStyle: 'unified' }, manager);
+  const oldFile = { name: 'plain.txt', contents: 'original text\n' };
+  const newFile = { ...oldFile, contents: 'updated text\n' };
+  const diff = parseDiffFromFile(oldFile, newFile);
+  const readRow = (container: HTMLElement) =>
+    container.shadowRoot?.querySelector('[data-line="1"]')?.textContent;
+
+  try {
+    const setup = await withTimeout(worker.waitForInitializeRequest());
+    file.render({ file: newFile, fileContainer });
+    fileDiff.render({ fileDiff: diff, fileContainer: diffContainer });
+    worker.respond({
+      type: 'success',
+      requestType: 'initialize',
+      id: setup.id,
+      sentAt: Date.now(),
+    });
+
+    await waitFor(() => manager.isInitialized());
+    expect(manager.isInitialized()).toBe(true);
+    expect(readRow(fileContainer)).toBeUndefined();
+    expect(readRow(diffContainer)).toBeUndefined();
+    release.resolve();
+    await withTimeout(
+      load({
+        themes: ['pierre-dark'],
+        langs: ['text'],
+        preferredHighlighter: 'shiki-js',
+      })
+    );
+
+    await waitFor(
+      () => readRow(fileContainer) != null && readRow(diffContainer) != null
+    );
+    expect(readRow(fileContainer)).toBe('updated text');
+    expect(readRow(diffContainer)).toBe('original text');
+  } finally {
+    release.resolve();
+    file.cleanUp();
+    fileDiff.cleanUp();
+    manager.terminate();
+    preload.mockRestore();
+    dom.cleanup();
+    await load({
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+      preferredHighlighter: 'shiki-js',
+    });
   }
 });
 

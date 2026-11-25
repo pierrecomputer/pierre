@@ -213,6 +213,7 @@ export class FileRenderer<LAnnotation = undefined> {
   public recycle(): void {
     this.file = undefined;
     if (this.editSessionActive) {
+      this.workerManager?.cancelLocalThemeRender(this);
       // A recycled editor keeps its document and undo history while offscreen,
       // so its rows and model are kept with it.
       if (this.renderCache != null) {
@@ -424,7 +425,17 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
+  private waitForLocalTheme(langs?: SupportedLanguages[]): boolean {
+    const { workerManager, onRenderUpdate } = this;
+    return (
+      onRenderUpdate != null &&
+      workerManager?.renderWhenLocalThemeLoads(this, onRenderUpdate, langs) ===
+        true
+    );
+  }
+
   public clearRenderCache(): void {
+    this.workerManager?.cancelLocalThemeRender(this);
     this.renderCache = undefined;
     this.pendingHighlightResult = undefined;
     this.layout = undefined;
@@ -554,12 +565,9 @@ export class FileRenderer<LAnnotation = undefined> {
   public getEffectiveCodeOptions(
     options: BaseCodeOptions = this.options
   ): Pick<BaseCodeOptions, 'theme' | 'tokenizeMaxLineLength'> {
-    const poolOptions =
-      this.workerManager?.isWorkingPool() === true
-        ? this.workerManager.getFileRenderOptions()
-        : undefined;
+    const poolOptions = this.workerManager?.getFileRenderOptions();
     return {
-      theme: this.getLocalHighlightTheme(),
+      theme: poolOptions?.theme ?? this.options.theme ?? DEFAULT_THEMES,
       tokenizeMaxLineLength:
         poolOptions?.tokenizeMaxLineLength ?? options.tokenizeMaxLineLength,
     };
@@ -567,7 +575,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private getRenderOptions(file: FileContents): GetRenderOptionsReturn {
     const options: RenderFileOptions = (() => {
-      if (this.workerManager?.isWorkingPool() === true) {
+      if (this.workerManager != null) {
         const poolOptions = this.workerManager.getFileRenderOptions();
         // Active edit sessions require `useTokenTransformer: true`
         if (
@@ -695,6 +703,7 @@ export class FileRenderer<LAnnotation = undefined> {
   public renderCollapsed(
     file: FileContents
   ): CollapsedFileRenderResult | undefined {
+    this.workerManager?.cancelLocalThemeRender(this);
     this.file = file;
     // Two kinds of cached state do not outlast a collapse. Rows of another
     // file are only kept while they are on screen, waiting for this file's
@@ -806,6 +815,9 @@ export class FileRenderer<LAnnotation = undefined> {
             renderRange.totalLines,
             model.lines
           );
+          if (windowResult == null) {
+            this.waitForLocalTheme();
+          }
           // A plain result for the same file keeps its rows as the window
           // moves, so rows that stay on screen stay the same objects.
           const { result: currentResult } = this.renderCache;
@@ -873,6 +885,18 @@ export class FileRenderer<LAnnotation = undefined> {
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
+        // A blank view can show plain text as soon as the theme is ready.
+        // Hydrated syntax and editor rows keep their usual highlight request.
+        if (
+          this.renderCache.result == null &&
+          !this.renderCache.highlighted &&
+          !this.editSessionActive &&
+          this.waitForLocalTheme(
+            forcePlainText || hasLangs ? [] : [this.computedLang]
+          )
+        ) {
+          return undefined;
+        }
         void this.asyncHighlight(file, lazyLineAST)
           .then(({ result, options }) => {
             if (!forcePlainText) {
@@ -889,6 +913,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
 
     if (this.renderCache.result != null) {
+      this.workerManager?.cancelLocalThemeRender(this);
       return this.layoutResult(
         this.renderCache.file,
         renderRange,
@@ -1213,6 +1238,10 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public onHighlightError(error: unknown): void {
     console.error(error);
+  }
+
+  public onLocalFallback(): void {
+    this.onRenderUpdate?.();
   }
 
   private getTokenizeMaxLength(): number {

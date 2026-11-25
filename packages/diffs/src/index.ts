@@ -94,6 +94,7 @@ export * from './utils/detachString';
 export * from './utils/diffAcceptRejectHunk';
 export * from './utils/endsWithNewline';
 export * from './utils/formatCSSVariablePrefix';
+export * from './utils/getDefaultWorkerPoolSize';
 export * from './utils/getFiletypeFromFileName';
 export * from './utils/getHighlighterOptions';
 export * from './utils/getHighlighterThemeStyles';
