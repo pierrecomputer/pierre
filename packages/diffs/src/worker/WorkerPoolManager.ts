@@ -135,6 +135,8 @@ type RenderTask = RenderFileTask | RenderDiffTask;
 
 type RenderTaskInstance = FileRendererInstance | DiffRendererInstance;
 
+type LocalThemeView = Pick<RenderTaskInstance, 'onHighlightError'>;
+
 export class WorkerPoolManager {
   private readonly preferredHighlighter: HighlighterTypes;
   private renderOptions: WorkerRenderingOptions;
@@ -170,7 +172,7 @@ export class WorkerPoolManager {
   private themeSubscribers = new Set<ThemeSubscriber>();
   // Views that could not render until the local theme loads, with the
   // callback that renders each one.
-  private pendingThemeRenders = new Map<RenderTaskInstance, () => void>();
+  private pendingThemeRenders = new Map<LocalThemeView, () => void>();
   private terminated = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
   private fileCache: LRUMap<string, RenderFileResult>;
@@ -228,11 +230,12 @@ export class WorkerPoolManager {
    * Optional grammars start loading alongside the theme.
    */
   public renderWhenLocalThemeLoads(
-    view: RenderTaskInstance,
+    view: LocalThemeView,
     onRenderUpdate: () => void,
     langs: SupportedLanguages[] = []
   ): boolean {
     if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) != null) {
+      this.pendingThemeRenders.delete(view);
       return false;
     }
     this.pendingThemeRenders.set(view, onRenderUpdate);
@@ -244,13 +247,13 @@ export class WorkerPoolManager {
   }
 
   /** @internal Drops the render callback `view` registered, if any. */
-  public cancelLocalThemeRender(view: RenderTaskInstance): void {
+  public cancelLocalThemeRender(view: LocalThemeView): void {
     this.pendingThemeRenders.delete(view);
   }
 
   // Loads only the theme and plain text. A failed load leaves views waiting
   // until initialize() retries or a later render asks again.
-  private loadLocalThemeForRender(fallbackView?: RenderTaskInstance): void {
+  private loadLocalThemeForRender(fallbackView?: LocalThemeView): void {
     const { theme } = this.renderOptions;
     const { lifecycleGeneration } = this;
     void this.loadSharedHighlighter(getThemes(theme), ['text']).then(
@@ -1425,6 +1428,12 @@ export class WorkerPoolManager {
     return this.lifecycleGeneration === lifecycleGeneration;
   }
 
+  public initializeIfNeeded(): void {
+    if (this.initialization == null) {
+      this.queueInitialization();
+    }
+  }
+
   private queueInitialization(languages?: SupportedLanguages[]): void {
     // Plain renders can request setup repeatedly. Leave a failed attempt
     // settled until the host retries or changes the theme.
@@ -1510,9 +1519,7 @@ export class WorkerPoolManager {
     if (this.shouldUseLocalFallback()) {
       return;
     }
-    if (this.initialization == null) {
-      this.queueInitialization();
-    }
+    this.initializeIfNeeded();
 
     const highlightKey = this.getHighlightKeyForRequest(request);
     const existingTask =
@@ -1565,9 +1572,7 @@ export class WorkerPoolManager {
     request: SubmitRequest,
     highlightKey: string
   ): RenderTask {
-    if (this.initialization == null) {
-      this.queueInitialization();
-    }
+    this.initializeIfNeeded();
     const id = this.generateRequestId();
     const requestStart = Date.now();
     const { renderOptionsVersion } = this;
