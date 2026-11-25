@@ -236,6 +236,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public recycle(): void {
     this.diff = undefined;
     if (this.editSessionActive) {
+      this.workerManager?.cancelLocalThemeRender(this);
       // A recycled editor keeps its document and undo history while offscreen,
       // so its rows and model are kept with it.
       if (this.renderCache != null) {
@@ -589,7 +590,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.renderCache?.diff ?? this.diff;
   }
 
+  private waitForLocalTheme(langs?: SupportedLanguages[]): boolean {
+    const { workerManager, onRenderUpdate } = this;
+    return (
+      onRenderUpdate != null &&
+      workerManager?.renderWhenLocalThemeLoads(this, onRenderUpdate, langs) ===
+        true
+    );
+  }
+
   public clearRenderCache(): void {
+    this.workerManager?.cancelLocalThemeRender(this);
     this.renderCache = undefined;
     this.pendingHighlightResult = undefined;
     this.layout = undefined;
@@ -1027,6 +1038,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public renderCollapsed(
     diff: FileDiffMetadata
   ): CollapsedDiffRenderResult | undefined {
+    this.workerManager?.cancelLocalThemeRender(this);
     this.diff = diff;
     // Two kinds of cached state do not outlast a collapse. Rows of another
     // diff are only kept while they are on screen, waiting for this diff's
@@ -1144,6 +1156,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                 : this.expandedHunks,
             collapsedContextThreshold
           );
+          if (windowResult == null) {
+            this.waitForLocalTheme();
+          }
           // A plain result for the same diff keeps its rows as the window
           // moves, so rows that stay on screen stay the same objects.
           const { result: currentResult } = this.renderCache;
@@ -1209,6 +1224,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
+        // A blank view can show plain text as soon as the theme is ready.
+        // Hydrated syntax and editor rows keep their usual highlight request.
+        if (
+          this.renderCache.result == null &&
+          !this.renderCache.highlighted &&
+          !this.editSessionActive &&
+          this.waitForLocalTheme(
+            forcePlainText || hasLangs ? [] : this.computedLangs
+          )
+        ) {
+          return undefined;
+        }
         void this.asyncHighlight(diff, lazyLineAST)
           .then(({ result, options }) => {
             if (!forcePlainText) {
@@ -1224,6 +1251,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
     if (this.renderCache.result != null) {
+      this.workerManager?.cancelLocalThemeRender(this);
       return this.layoutResult(
         this.renderCache.diff,
         renderRange,

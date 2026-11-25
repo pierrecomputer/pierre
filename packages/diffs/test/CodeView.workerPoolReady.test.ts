@@ -58,9 +58,11 @@ class FakeWorkerPoolManager {
     return this.failed;
   }
 
-  public shouldRetryRender(): undefined {
-    return undefined;
+  public renderWhenLocalThemeLoads(): boolean {
+    return false;
   }
+
+  public cancelLocalThemeRender(): void {}
 
   // Mirror the real manager: a waiting pool only leaves 'waiting' once
   // initialize() runs. When auto-initialize is enabled, initialize() drives the

@@ -1597,9 +1597,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         nextRenderRange
       );
       if (fileResult == null) {
-        void this.workerManager?.shouldRetryRender()?.then((shouldRetry) => {
-          if (shouldRetry) this.rerender();
-        });
         return false;
       }
       this.applyThemeState(

@@ -47,8 +47,8 @@ the list for that attempt.
 
 Custom instances passed to `highlightFileAST` or `highlightDiffAST` must
 implement `onLocalFallback()`. The pool calls it once per waiting instance when
-it drops queued work because workers are unavailable. Use it to redraw with the
-local highlighter. Individual highlight failures go to
+it drops queued work because workers are unavailable. Use it to rerender with
+the local highlighter. Individual highlight failures go to
 `onHighlightError(error)`.
 
 ## Configuration and state types

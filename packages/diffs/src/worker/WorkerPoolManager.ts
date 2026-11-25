@@ -107,7 +107,6 @@ interface WorkerSlot {
 
 interface WorkerStartup {
   timeout?: ReturnType<typeof setTimeout>;
-  retryOnFailure: boolean;
   resolve(): void;
 }
 
@@ -169,6 +168,9 @@ export class WorkerPoolManager {
 
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
+  // Views that could not render until the local theme loads, with the
+  // callback that renders each one.
+  private pendingThemeRenders = new Map<RenderTaskInstance, () => void>();
   private terminated = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
   private fileCache: LRUMap<string, RenderFileResult>;
@@ -220,20 +222,71 @@ export class WorkerPoolManager {
     );
   }
 
-  public shouldRetryRender(): Promise<boolean> | undefined {
-    if (!this.isWorkingPool()) {
-      return undefined;
+  /**
+   * @internal Returns true if the view must wait for the local theme. When
+   * the theme is ready, calls the latest callback registered for each view.
+   * Optional grammars start loading alongside the theme.
+   */
+  public renderWhenLocalThemeLoads(
+    view: RenderTaskInstance,
+    onRenderUpdate: () => void,
+    langs: SupportedLanguages[] = []
+  ): boolean {
+    if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) != null) {
+      return false;
     }
-    const waitingForWorker = !this.isInitialized();
-    const isThemeReady = () =>
-      getHighlighterIfLoaded({ theme: this.renderOptions.theme }) != null;
-    if (!waitingForWorker && isThemeReady()) {
-      return undefined;
+    this.pendingThemeRenders.set(view, onRenderUpdate);
+    this.loadLocalThemeForRender(this.isWorkingPool() ? undefined : view);
+    if (langs.length > 0) {
+      void this.loadSharedHighlighter([], langs).catch(() => {});
     }
-    return this.initialize().then(
-      () => waitingForWorker || isThemeReady(),
-      () => waitingForWorker
+    return true;
+  }
+
+  /** @internal Drops the render callback `view` registered, if any. */
+  public cancelLocalThemeRender(view: RenderTaskInstance): void {
+    this.pendingThemeRenders.delete(view);
+  }
+
+  // Loads only the theme and plain text. A failed load leaves views waiting
+  // until initialize() retries or a later render asks again.
+  private loadLocalThemeForRender(fallbackView?: RenderTaskInstance): void {
+    const { theme } = this.renderOptions;
+    const { lifecycleGeneration } = this;
+    void this.loadSharedHighlighter(getThemes(theme), ['text']).then(
+      () => {
+        // A mounted view can finish locally after termination. A restarted
+        // pool owns its own requests for the active theme.
+        if (
+          (!this.terminated && !this.isCurrentLifecycle(lifecycleGeneration)) ||
+          !areThemesEqual(theme, this.renderOptions.theme)
+        ) {
+          return;
+        }
+        this.renderPendingThemeViews();
+      },
+      (error: unknown) => fallbackView?.onHighlightError(error)
     );
+  }
+
+  // Renders the views waiting for the current theme, once it has loaded.
+  private renderPendingThemeViews(): void {
+    if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) == null) {
+      return;
+    }
+    // An earlier callback can cancel or replace a later one.
+    for (const view of [...this.pendingThemeRenders.keys()]) {
+      const onRenderUpdate = this.pendingThemeRenders.get(view);
+      if (onRenderUpdate == null) {
+        continue;
+      }
+      this.pendingThemeRenders.delete(view);
+      try {
+        onRenderUpdate();
+      } catch (error) {
+        console.error(error);
+      }
+    }
   }
 
   /**
@@ -414,6 +467,10 @@ export class WorkerPoolManager {
       for (const instance of this.themeSubscribers) {
         instance.onThemeChange();
       }
+      // The previous theme's load no longer wakes views still waiting.
+      if (themeChanged) {
+        this.renderPendingThemeViews();
+      }
 
       await workerSetup;
     } catch (error) {
@@ -564,10 +621,7 @@ export class WorkerPoolManager {
     const { initialization: current } = this;
     if (current?.state === 'succeeded') {
       if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) == null) {
-        await this.loadSharedHighlighter(getThemes(this.renderOptions.theme), [
-          'text',
-          ...(languages ?? []),
-        ]);
+        await this.preloadLocalHighlighter(languages ?? []);
       }
       return;
     }
@@ -608,13 +662,11 @@ export class WorkerPoolManager {
     const themes = getThemes(this.renderOptions.theme);
     // Local preloading can overlap worker startup. Only worker setup determines
     // when the pool can serve requests.
-    void this.loadSharedHighlighter(themes, ['text', ...languages]).catch(
-      (error: unknown) => {
-        if (this.isCurrentLifecycle(lifecycleGeneration)) {
-          console.error(error);
-        }
+    void this.preloadLocalHighlighter(languages).catch((error: unknown) => {
+      if (this.isCurrentLifecycle(lifecycleGeneration)) {
+        console.error(error);
       }
-    );
+    });
     try {
       try {
         const resolvedThemes = hasResolvedThemes(
@@ -657,7 +709,7 @@ export class WorkerPoolManager {
         this.rejectAllQueuedRenderTasks(error);
         return;
       }
-      void this.startWorkerAttempts(this.workerSlots, true);
+      void this.startWorkerAttempts(this.workerSlots, 'starting');
     } catch (error) {
       if (this.initialization !== initialization) {
         return;
@@ -685,6 +737,20 @@ export class WorkerPoolManager {
     return Promise.race([
       resolveThemes(themes, this.preferredHighlighter),
       stopped,
+    ]);
+  }
+
+  // A previous theme load may have failed while views were waiting to paint.
+  // Give those views the new theme load independently of optional grammars.
+  private preloadLocalHighlighter(
+    languages: SupportedLanguages[]
+  ): Promise<void> {
+    if (this.pendingThemeRenders.size > 0) {
+      this.loadLocalThemeForRender();
+    }
+    return this.loadSharedHighlighter(getThemes(this.renderOptions.theme), [
+      'text',
+      ...languages,
     ]);
   }
 
@@ -717,21 +783,21 @@ export class WorkerPoolManager {
       (slot) => slot.state === 'failed'
     );
     if (failedSlots.length > 0) {
-      await Promise.all(this.startWorkerAttempts(failedSlots, false));
+      await Promise.all(this.startWorkerAttempts(failedSlots, 'retrying'));
     }
     return this.getStats();
   }
 
   private startWorkerAttempts(
     slots: WorkerSlot[],
-    retryOnFailure: boolean
+    state: 'starting' | 'retrying'
   ): Promise<void>[] {
     const settlements = slots.map(
       (slot) =>
         new Promise<void>((resolve) => {
-          const startup: WorkerStartup = { retryOnFailure, resolve };
+          const startup: WorkerStartup = { resolve };
           slot.startup = startup;
-          slot.state = retryOnFailure ? 'starting' : 'retrying';
+          slot.state = state;
           slot.error = undefined;
           void this.startWorkerAttempt(slot, startup);
         })
@@ -883,17 +949,14 @@ export class WorkerPoolManager {
       return;
     }
     const error = normalizeWorkerStartupError(cause);
-    if (!startup.retryOnFailure) {
+    if (slot.state !== 'starting') {
       this.failWorkerSlot(slot, error);
       return;
     }
 
     clearTimeout(startup.timeout);
     // Use a new attempt record so callbacks from the retired worker are stale.
-    const replacement: WorkerStartup = {
-      retryOnFailure: false,
-      resolve: startup.resolve,
-    };
+    const replacement: WorkerStartup = { resolve: startup.resolve };
     slot.startup = replacement;
     slot.state = 'retrying';
     this.retireWorker(slot, error);

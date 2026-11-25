@@ -544,7 +544,6 @@ describe('WorkerPoolManager lifecycle', () => {
       expect(ready.terminated).toBe(true);
       expect(manager.isInitialized()).toBe(true);
       expect(manager.isWorkingPool()).toBe(false);
-      expect(manager.shouldRetryRender()).toBeUndefined();
       await withTimeout(manager.initialize());
       expect(manager.getStats()).toMatchObject({
         managerState: 'initialized',
@@ -685,7 +684,6 @@ describe('WorkerPoolManager lifecycle', () => {
       expect(
         manager.getPlainFileAST(createCacheableFile(), 0, 1)
       ).toBeUndefined();
-      expect(manager.shouldRetryRender()).toBeUndefined();
       expect(await manager.retryFailedWorkers()).toMatchObject({
         managerState: 'waiting',
         readyWorkers: 0,

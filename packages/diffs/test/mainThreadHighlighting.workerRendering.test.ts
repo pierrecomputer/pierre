@@ -91,7 +91,8 @@ test('File highlights a file within the threshold on its first render', async ()
   }
 });
 
-test('File and FileDiff highlight visible plain rows after all worker attempts fail', async () => {
+test('cold File and FileDiff highlight visible plain rows after all worker attempts fail', async () => {
+  await disposeHighlighter();
   const dom = installDom();
   const initial = new TestWorker();
   const replacement = new TestWorker();
@@ -117,16 +118,21 @@ test('File and FileDiff highlight visible plain rows after all worker attempts f
   };
 
   try {
-    await withTimeout(initial.waitForInitializeRequest());
     file.render({ file: smallFile, fileContainer });
     fileDiff.render({
       fileDiff: parseDiffFromFile(smallFile, updated),
       fileContainer: diffContainer,
     });
-    for (const container of [fileContainer, diffContainer]) {
-      expect(
-        container.shadowRoot?.querySelector('[data-line="1"]')
-      ).toBeDefined();
+    const containers = [fileContainer, diffContainer];
+    const firstRow = (container: HTMLElement) =>
+      container.shadowRoot?.querySelector('[data-line="1"]');
+    expect(containers.map(firstRow)).toEqual([null, null]);
+    await withTimeout(initial.waitForInitializeRequest());
+    await waitFor(() =>
+      containers.every((container) => firstRow(container) != null)
+    );
+    for (const container of containers) {
+      expect(firstRow(container)?.textContent).toBe('const alpha = 1;');
       expect(isLineHighlighted(container)).toBe(false);
     }
 
@@ -173,8 +179,8 @@ test('File and FileDiff highlight visible plain rows when an unrelated language 
   document.body.append(fileContainer, diffContainer);
   const file = new File({}, manager);
   const fileDiff = new FileDiff({ diffStyle: 'unified' }, manager);
-  const fileRedraw = spyOn(file, 'rerender');
-  const diffRedraw = spyOn(fileDiff, 'rerender');
+  const fileRerender = spyOn(file, 'rerender');
+  const diffRerender = spyOn(fileDiff, 'rerender');
   const updated = { name: smallFile.name, contents: 'const answer = 42;\n' };
   const error = new Error('unrelated language could not load');
 
@@ -197,8 +203,8 @@ test('File and FileDiff highlight visible plain rows when an unrelated language 
     expect(factory).not.toHaveBeenCalled();
     expect(isLineHighlighted(fileContainer)).toBe(true);
     expect(isLineHighlighted(diffContainer)).toBe(true);
-    expect(fileRedraw).toHaveBeenCalledTimes(1);
-    expect(diffRedraw).toHaveBeenCalledTimes(1);
+    expect(fileRerender).toHaveBeenCalledTimes(1);
+    expect(diffRerender).toHaveBeenCalledTimes(1);
   } finally {
     file.cleanUp();
     fileDiff.cleanUp();
@@ -260,15 +266,9 @@ test('File and FileDiff finish painting when a ready worker gets ahead of the lo
   await disposeHighlighter();
   const dom = installDom();
   const release = createDeferred<void>();
-  const loadingAfterWorkerReady = createDeferred<void>();
   const load = sharedHighlighter.getSharedHighlighter;
   const preload = spyOn(sharedHighlighter, 'getSharedHighlighter');
-  let firstLoad = true;
   preload.mockImplementation(async (options) => {
-    if (!firstLoad) {
-      loadingAfterWorkerReady.resolve();
-    }
-    firstLoad = false;
     await release.promise;
     return load(options);
   });
@@ -300,7 +300,7 @@ test('File and FileDiff finish painting when a ready worker gets ahead of the lo
       sentAt: Date.now(),
     });
 
-    await withTimeout(loadingAfterWorkerReady.promise);
+    await waitFor(() => manager.isInitialized());
     expect(manager.isInitialized()).toBe(true);
     expect(readRow(fileContainer)).toBeUndefined();
     expect(readRow(diffContainer)).toBeUndefined();

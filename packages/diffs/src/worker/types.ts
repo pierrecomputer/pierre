@@ -37,7 +37,8 @@ export interface FileRendererInstance {
     options: RenderFileOptions
   ): unknown;
   onHighlightError(error: unknown): unknown;
-  /** The pool dropped this renderer's queued work. Redraw using the local highlighter. */
+  /** The pool dropped this renderer's queued work. Rerender using the local
+   * highlighter. */
   onLocalFallback(): unknown;
 }
 
@@ -49,7 +50,8 @@ export interface DiffRendererInstance {
     options: RenderDiffOptions
   ): unknown;
   onHighlightError(error: unknown): unknown;
-  /** The pool dropped this renderer's queued work. Redraw using the local highlighter. */
+  /** The pool dropped this renderer's queued work. Rerender using the local
+   * highlighter. */
   onLocalFallback(): unknown;
 }
 
