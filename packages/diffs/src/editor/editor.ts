@@ -37,6 +37,7 @@ import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { normalizeLineBreaks } from '../utils/lineEndings';
+import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import {
   type EditorCommand,
@@ -6372,7 +6373,7 @@ export class Editor<
       return;
     }
 
-    const x = left - 1;
+    const x = roundToDevicePixel(left - 1);
     const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
 
     const caretEl = h(
