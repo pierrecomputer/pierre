@@ -229,36 +229,78 @@ Shiki stays in the workers.
 
 ### Worker Errors
 
-A worker that cannot start — its script failed to load, or it threw while it
-initialized — never answers the pool. The pool rejects that initialization,
-terminates the other workers and highlights on the main thread instead, so
-components still render. By default the worker's `error` event is logged with
-`console.error`, and the browser also reports the worker's uncaught error on the
-page.
+`initialize()` resolves when the first worker acknowledges the current render
+options. It can start highlighting queued files and diffs immediately. The other
+workers join as they become ready.
+
+If theme or language loading fails before workers start, `initialize()` rejects
+with the loading error. Call it again to retry with the same language preloads,
+or pass a replacement list to `initialize(languages)`. Overlapping calls wait
+for the same attempt.
+
+Each worker attempt gets the full `workerInitializationTimeout` (5 seconds by
+default). If the first worker fails or times out during startup, the pool tries
+one replacement in the same slot. A slot fails if its replacement also fails or
+times out. Healthy workers keep highlighting. If every slot fails, pending cache
+primes reject and components highlight on the main thread.
+
+After the pool has started, losing its last ready worker also switches
+highlighting to the main thread until another worker joins. `isInitialized()`
+still reports that the pool started successfully.
+
+`getStats()` returns the current counts. `subscribeToStatChanges(callback)`
+calls the subscriber immediately and batches subsequent updates once per
+animation frame.
+
+- `managerState` tracks initialization. It stays `initialized` after the first
+  worker joins, even if all available workers later fail.
+- `configuredWorkers` is the number of worker slots.
+- `readyWorkers` counts workers available for highlighting, including those
+  already busy.
+- `retryingWorkerSlots` counts slots with a replacement attempt in progress.
+- `failedWorkerSlots` counts slots that have used up their attempts or time.
+- `workersFailed` means all worker slots ran out of attempts. It stays true
+  during recovery until the first replacement is ready.
+
+Call `retryFailedWorkers()` from an explicit trigger, such as a retry button.
+Each currently failed slot gets one attempt with a fresh timeout. The promise
+resolves with current stats when those attempts settle. A call with no failed
+slots resolves immediately. Triggering a retry on every stats update can keep
+retrying the same persistent failure.
+
+```ts
+retryButton.addEventListener('click', () => {
+  void workerPool.retryFailedWorkers();
+});
+```
+
+By default the pool logs native worker `error` events with `console.error`, and
+the browser also reports the worker's uncaught error on the page.
 
 To report worker failures through your own channel instead, pass `onWorkerError`
-in the pool options. The pool then hands you each `error` event and logs nothing
-itself; call `event.preventDefault()` to keep an error the pool has handled from
-also surfacing as an uncaught error on the page.
+in the pool options. The pool hands you each native `error` event. Call
+`event.preventDefault()` to keep that event from surfacing as an uncaught error
+on the page.
 
 <DocsCodeExample {...workerErrors} />
 
 <Notice icon={<IconInfoFill />}>
-  The hook runs once per `error` event, not once per failure: a pool of 3
-  workers whose script fails to load calls it up to 3 times, so deduplicate on
-  your side if you report once per page. A worker script that failed to load
-  fires a plain `Event` with no `message` or `error`; a worker that threw fires
-  an `ErrorEvent`. The parameter is typed `ErrorEvent | Event` for that reason.
+  The hook can run for every failed attempt, including replacements. If your
+  application reports once per page, deduplicate those events. A worker script
+  that failed to load fires a plain `Event` with no `message` or `error`. A
+  worker that threw fires an `ErrorEvent`.
 </Notice>
 
 A promise the pool settles without a result rejects with an error exported from
 `@pierre/diffs/worker`: `WorkerPoolTerminatedError` (the pool was terminated
 while the operation was pending), `WorkerPoolTaskCanceledError` (the task was
-superseded or dropped before a worker answered) and `WorkerPoolWorkerError` (a
-worker failed to start). `isWorkerPoolCancellation(error)` is true for the first
-two; `isHandledWorkerPoolError(error)` also accepts a `WorkerPoolWorkerError`
-whose event your `onWorkerError` already received, so a `catch` that logs
-highlight failures can skip the errors you have already accounted for.
+superseded or dropped before a worker answered) and `WorkerPoolWorkerError`
+(worker setup failed and no usable worker remained). When every slot in a
+multi-worker pool fails, `WorkerPoolWorkerError.cause` is an `AggregateError`
+with the last error from each slot. `isWorkerPoolCancellation(error)` is true
+for the first two error types. `isHandledWorkerPoolError(error)` also detects
+worker errors already reported through `onWorkerError`, so a `catch` that logs
+highlight failures can skip those errors.
 
 ### Render Cache
 

@@ -554,12 +554,9 @@ export class FileRenderer<LAnnotation = undefined> {
   public getEffectiveCodeOptions(
     options: BaseCodeOptions = this.options
   ): Pick<BaseCodeOptions, 'theme' | 'tokenizeMaxLineLength'> {
-    const poolOptions =
-      this.workerManager?.isWorkingPool() === true
-        ? this.workerManager.getFileRenderOptions()
-        : undefined;
+    const poolOptions = this.workerManager?.getFileRenderOptions();
     return {
-      theme: this.getLocalHighlightTheme(),
+      theme: poolOptions?.theme ?? this.options.theme ?? DEFAULT_THEMES,
       tokenizeMaxLineLength:
         poolOptions?.tokenizeMaxLineLength ?? options.tokenizeMaxLineLength,
     };
@@ -567,7 +564,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private getRenderOptions(file: FileContents): GetRenderOptionsReturn {
     const options: RenderFileOptions = (() => {
-      if (this.workerManager?.isWorkingPool() === true) {
+      if (this.workerManager != null) {
         const poolOptions = this.workerManager.getFileRenderOptions();
         // Active edit sessions require `useTokenTransformer: true`
         if (
@@ -1213,6 +1210,10 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public onHighlightError(error: unknown): void {
     console.error(error);
+  }
+
+  public onLocalFallback(): void {
+    this.onRenderUpdate?.();
   }
 
   private getTokenizeMaxLength(): number {

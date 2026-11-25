@@ -913,12 +913,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public getEffectiveCodeOptions(
     options: BaseCodeOptions = this.options
   ): Pick<BaseCodeOptions, 'theme' | 'tokenizeMaxLineLength'> {
-    const poolOptions =
-      this.workerManager?.isWorkingPool() === true
-        ? this.workerManager.getDiffRenderOptions()
-        : undefined;
+    const poolOptions = this.workerManager?.getDiffRenderOptions();
     return {
-      theme: this.getLocalHighlightTheme(),
+      theme: poolOptions?.theme ?? this.options.theme ?? DEFAULT_THEMES,
       tokenizeMaxLineLength:
         poolOptions?.tokenizeMaxLineLength ?? options.tokenizeMaxLineLength,
     };
@@ -926,7 +923,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
     const options: RenderDiffOptions = (() => {
-      if (this.workerManager?.isWorkingPool() === true) {
+      if (this.workerManager != null) {
         const poolOptions = this.workerManager.getDiffRenderOptions();
         // Active edit sessions require `useTokenTransformer: true`
         if (
@@ -1424,6 +1421,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public onHighlightError(error: unknown): void {
     console.error(error);
+  }
+
+  public onLocalFallback(): void {
+    this.onRenderUpdate?.();
   }
 
   private getTokenizeMaxLength(): number {

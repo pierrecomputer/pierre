@@ -10,6 +10,7 @@ import {
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_HIGHLIGHTER, DEFAULT_THEMES } from '../src/constants';
+import * as languageResolver from '../src/highlighter/languages/resolveLanguages';
 import {
   disposeHighlighter,
   preloadHighlighter,
@@ -20,8 +21,15 @@ import type {
   RenderFileOptions,
 } from '../src/types';
 import { getThemes } from '../src/utils/getThemes';
-import type { WorkerPoolManager, WorkerStats } from '../src/worker';
-import { createRoot, installDom, makeFileItem, wait } from './domHarness';
+import { WorkerPoolManager, type WorkerStats } from '../src/worker';
+import {
+  createRoot,
+  installDom,
+  makeFileItem,
+  wait,
+  waitFor,
+} from './domHarness';
+import { createDeferred } from './testUtils';
 
 class FakeWorkerPoolManager {
   private initialized = false;
@@ -44,6 +52,14 @@ class FakeWorkerPoolManager {
 
   public isWorkingPool(): boolean {
     return false;
+  }
+
+  public shouldUseLocalFallback(): boolean {
+    return this.failed;
+  }
+
+  public shouldRetryRender(): undefined {
+    return undefined;
   }
 
   // Mirror the real manager: a waiting pool only leaves 'waiting' once
@@ -136,7 +152,11 @@ class FakeWorkerPoolManager {
     return {
       managerState: this.initialized ? 'initialized' : 'waiting',
       workersFailed: this.failed,
+      configuredWorkers: 1,
       totalWorkers: 0,
+      readyWorkers: this.initialized ? 1 : 0,
+      retryingWorkerSlots: 0,
+      failedWorkerSlots: this.failed ? 1 : 0,
       busyWorkers: 0,
       queuedTasks: 0,
       activeTasks: 0,
@@ -235,6 +255,49 @@ describe('CodeView worker pool readiness', () => {
     } finally {
       viewer.cleanUp();
       await wait(0);
+      cleanup();
+    }
+  });
+
+  test('renders via the local highlighter after a worker language preload rejects', async () => {
+    const { cleanup } = installDom();
+    spyOn(console, 'error').mockImplementation(() => {});
+    const preload =
+      createDeferred<
+        Awaited<ReturnType<typeof languageResolver.resolveLanguages>>
+      >();
+    const originalResolve = languageResolver.resolveLanguages;
+    spyOn(languageResolver, 'resolveLanguages').mockImplementation((langs) =>
+      langs.includes('ruby') ? preload.promise : originalResolve(langs)
+    );
+    const workerFactory = mock(() => {
+      throw new Error('Unexpected worker startup');
+    });
+    const workerManager = new WorkerPoolManager(
+      { poolSize: 1, workerFactory },
+      { langs: ['ruby'] }
+    );
+    const viewer = new CodeView({ disableFileHeader: true }, workerManager);
+    const item = makeFileItem('file:worker-preload-failed', 3);
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+      viewer.setItems([item]);
+      viewer.render(true);
+      expect(viewer.getRenderedItems()).toHaveLength(0);
+
+      const error = new Error('Ruby preload failed');
+      const initialization = workerManager
+        .initialize()
+        .catch((cause: unknown) => cause);
+      preload.reject(error);
+      expect(await initialization).toBe(error);
+      await waitFor(() => viewer.getRenderedItems().length > 0);
+      expect(viewer.getRenderedItems().map(({ id }) => id)).toEqual([item.id]);
+      expect(workerManager.getStats().workersFailed).toBe(false);
+      expect(workerFactory).not.toHaveBeenCalled();
+    } finally {
+      viewer.cleanUp();
+      workerManager.terminate();
       cleanup();
     }
   });

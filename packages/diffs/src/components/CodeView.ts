@@ -2218,12 +2218,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private isReady(): boolean {
     const { workerManager } = this;
-    // A failed worker pool never reaches the 'initialized' state (it reverts
-    // to 'waiting' with workersFailed: true), so it renders through the shared
-    // highlighter instead.
-    if (workerManager == null || workerManager.getStats().workersFailed) {
+    if (workerManager == null || workerManager.shouldUseLocalFallback()) {
       return this.isSharedHighlighterReady();
     }
+    // The fallback check also covers a previously initialized pool with no
+    // ready workers.
     if (workerManager.isInitialized()) {
       this.clearReadySubscription();
       return true;
@@ -2231,7 +2230,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     this.isReadySubscription ??= workerManager.subscribeToStatChanges(
       (stats) => {
-        if (stats.managerState !== 'initialized' && !stats.workersFailed) {
+        if (
+          stats.readyWorkers === 0 &&
+          !workerManager.shouldUseLocalFallback()
+        ) {
           return;
         }
 

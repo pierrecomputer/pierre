@@ -102,6 +102,9 @@ function createPrimeWorkerManager(): {
     isInitialized() {
       return true;
     },
+    shouldRetryRender() {
+      return undefined;
+    },
     isWorkingPool() {
       return true;
     },
@@ -728,6 +731,9 @@ describe('FileDiff partial hydration', () => {
         },
         isInitialized() {
           return true;
+        },
+        shouldRetryRender() {
+          return undefined;
         },
         isWorkingPool() {
           return true;

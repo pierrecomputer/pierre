@@ -416,12 +416,16 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - workerFactory: () => Worker - Function that creates a Worker instance
 //   - poolSize?: number - Defaults to hardwareConcurrency minus one,
 //     limited to 1–3 workers. Uses 1 if hardwareConcurrency is unavailable.
+//   - workerInitializationTimeout?: number (default: 5000)
+//     How long to wait, in milliseconds, for each worker to say it is ready.
+//     If a worker fails or times out during startup, the pool tries one
+//     replacement with the full timeout.
 //   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
 //   - onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void
 //     Called for each worker error instead of logging it with console.error.
-//     Failed initialization switches components to main-thread highlighting.
+//     Components switch to main-thread highlighting if every slot fails.
 //   - mainThreadMaxCharacters?: number (default: unset) - Files and diffs with
 //     at most this many characters highlight on the main thread instead of a
 //     worker. Diffs count both sides. Unset (default behavior) sends every
@@ -439,12 +443,14 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 
 // Methods:
 poolManager.initialize()
-// Returns: Promise<void> - Resolves when the workers are ready. Startup begins
-// automatically when the manager is constructed; call this to await it, or to
-// start the pool again after terminate()
+// Returns: Promise<void> - Resolves when the first worker is ready.
+// Startup begins when the manager is constructed. Call initialize() to wait
+// for the first ready worker or to start the pool again after terminate().
+// If loading a theme or language failed before workers started, initialize()
+// retries the same language preloads. Pass a language list to replace them.
 
 poolManager.isInitialized()
-// Returns: boolean
+// Returns: boolean - True after the first worker joins, until terminate().
 
 poolManager.setRenderOptions(options)
 // Returns: Promise<void> - Changes render options dynamically
@@ -480,7 +486,12 @@ poolManager.terminate()
 // thread until initialize() starts the pool again.
 
 poolManager.getStats()
-// Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
+// Returns: WorkerStats - Includes configuredWorkers, readyWorkers,
+// retryingWorkerSlots, failedWorkerSlots, queuedTasks, and activeTasks.
+
+poolManager.retryFailedWorkers()
+// Returns: Promise<WorkerStats> - Gives each failed slot one new attempt
+// and resolves with current stats when those attempts settle.
 
 poolManager.inspectCaches()
 // Returns: { fileCache, diffCache } - LRU cache instances for debugging

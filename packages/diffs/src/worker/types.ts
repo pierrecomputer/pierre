@@ -37,6 +37,8 @@ export interface FileRendererInstance {
     options: RenderFileOptions
   ): unknown;
   onHighlightError(error: unknown): unknown;
+  /** The pool dropped this renderer's queued work. Redraw using the local highlighter. */
+  onLocalFallback(): unknown;
 }
 
 export interface DiffRendererInstance {
@@ -47,6 +49,8 @@ export interface DiffRendererInstance {
     options: RenderDiffOptions
   ): unknown;
   onHighlightError(error: unknown): unknown;
+  /** The pool dropped this renderer's queued work. Redraw using the local highlighter. */
+  onLocalFallback(): unknown;
 }
 
 export interface RenderFileRequest {
@@ -154,7 +158,9 @@ export type WorkerResponse =
 export interface WorkerPoolOptions {
   /**
    * Factory function that creates a new Web Worker instance for the pool.
-   * This is called once per worker in the pool during initialization.
+   * Called for the initial workers and their replacements. Do not perform any
+   * additional side effects in this function other than creating a worker
+   * instance.
    */
   workerFactory: () => Worker;
 
@@ -166,8 +172,8 @@ export interface WorkerPoolOptions {
   poolSize?: number;
 
   /**
-   * Maximum time to wait for the worker pool to initialize, in milliseconds.
-   * @default 10000
+   * Timeout in milliseconds for initializing a worker.
+   * @default 5000
    */
   workerInitializationTimeout?: number;
 
@@ -177,8 +183,8 @@ export interface WorkerPoolOptions {
    * as an uncaught error.
    *
    * Script load failures may provide a plain Event without message or error;
-   * uncaught exceptions provide an ErrorEvent. If initialization fails, the
-   * pool stops its workers and components highlight on the main thread.
+   * uncaught exceptions provide an ErrorEvent. Components highlight on the
+   * main thread if every worker slot fails to start.
    *
    * Several workers can report the same script load failure. Track errors in
    * this callback if your application should report that failure only once.
@@ -268,8 +274,13 @@ export type AllWorkerTasks =
 
 export interface WorkerStats {
   managerState: 'waiting' | 'initializing' | 'initialized';
+  /** The pool fell back to local highlighting after all worker slots failed. */
   workersFailed: boolean;
+  configuredWorkers: number;
   totalWorkers: number;
+  readyWorkers: number;
+  retryingWorkerSlots: number;
+  failedWorkerSlots: number;
   busyWorkers: number;
   queuedTasks: number;
   activeTasks: number;
