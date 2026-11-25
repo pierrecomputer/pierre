@@ -152,6 +152,51 @@ test('full and partial diffs defer both sides without losing line decorations', 
   }
 });
 
+test.each([
+  ['highlighted', false, false],
+  ['lazy highlighted', false, true],
+  ['plain text', true, false],
+] as const)(
+  '%s focused diffs retain original line indices',
+  (_, forcePlainText, lazyLineAST) => {
+    const oldFile = {
+      name: 'example.ts',
+      contents: 'const prefix = 1;\nconst before = 2;\nconst after = 3;\n',
+    };
+    const diff = parseDiffFromFile(
+      oldFile,
+      { ...oldFile, contents: oldFile.contents.replace('before', 'changed') },
+      { context: 0 }
+    );
+    const [hunk] = diff.hunks;
+    // Omit the leading context without changing the source file indices.
+    diff.splitLineCount -= hunk.collapsedBefore;
+    diff.unifiedLineCount -= hunk.collapsedBefore;
+    hunk.collapsedBefore = 0;
+    hunk.splitLineStart = 0;
+    hunk.unifiedLineStart = 0;
+
+    const { code } = renderDiffWithHighlighter(diff, highlighter, options, {
+      forcePlainText,
+      lazyLineAST,
+    });
+
+    for (const [rows, expected] of [
+      [code.deletionLines, 'before'],
+      [code.additionLines, 'changed'],
+    ] as const) {
+      expect(0 in rows).toBe(false);
+      if (lazyLineAST) {
+        expect(Object.getOwnPropertyDescriptor(rows, '1')?.get).toBeDefined();
+      }
+      const html = toHtml(rows[1]);
+      expect(html).toContain('data-line="2"');
+      expect(html).toContain(expected);
+      expect(toHtml(rows[2])).toContain('data-line="3"');
+    }
+  }
+);
+
 test('plain-text windows retain sparse absolute indexes', () => {
   const result = renderFileWithHighlighter(file, highlighter, options, {
     forcePlainText: true,
