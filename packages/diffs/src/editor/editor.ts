@@ -5908,8 +5908,11 @@ export class Editor<
         elements.set(trackedCaret, element);
       }
       const [left, wrapLine] = this.#getCharX(line, character);
-      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
+      const x = roundToDevicePixel(left);
+      const y = roundToDevicePixel(
+        this.#getLineY(line) + wrapLine * this.#metrics.lineHeight
+      );
+      element.style.transform = `translateX(${x}px) translateY(${y}px)`;
     }
     this.#caretHighlightElements = highlightElements;
     overlayElement.appendChild(fragment);

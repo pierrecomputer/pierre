@@ -168,6 +168,38 @@ describe('Editor carets', () => {
     }
   });
 
+  test('places a caret on whole device pixels at a fractional device scale', async () => {
+    const { cleanup, editor, fileContainer } = await createEditorFixture(
+      'alpha\nbravo',
+      { renderCaret: (caret) => caretElement(caret.metadata.id) }
+    );
+    const devicePixelRatio = window.devicePixelRatio;
+    Object.defineProperty(window, 'devicePixelRatio', {
+      configurable: true,
+      value: 1.1,
+    });
+
+    try {
+      editor.setCarets([
+        {
+          anchor: { line: 1, character: 5 },
+          focus: { line: 1, character: 5 },
+          metadata: { id: 'ada', color: '#7c3aed' },
+        },
+      ]);
+
+      const { x, y } = getCaretTransform(getCaretAnchor(fileContainer, 'ada'));
+      expect(x * 1.1).toBeCloseTo(Math.round(x * 1.1), 3);
+      expect(y * 1.1).toBeCloseTo(Math.round(y * 1.1), 3);
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        configurable: true,
+        value: devicePixelRatio,
+      });
+      cleanup();
+    }
+  });
+
   test('renders a caret highlight across every covered line and remaps it through edits', async () => {
     const { cleanup, editor, fileContainer } = await createEditorFixture(
       'alpha\nbravo',
