@@ -753,23 +753,39 @@ export type Words = {
    * reparses only the unfinished end.
    */
   createHtmlSession(): HtmlSession;
+  /**
+   * Whether this engine can run Words' Wasm, which needs SIMD. Use it to pick a
+   * fallback renderer. It compiles the Wasm once and keeps it for rendering.
+   */
+  canUseWASM(): boolean;
 };
 
 /**
  * Build the public API around one renderer. Each entry (`@pierre/words`,
  * `/no-math`, ...) owns one, so entries loaded together keep their own Wasm
- * build. Without a renderer, rendering throws until `init()` is called.
+ * build. `load` runs on the first render, so an engine without Wasm SIMD
+ * fails there, not at import. Without `load`, rendering throws until `init()`
+ * is called.
  */
-export function createWords(renderer?: Renderer): Words {
+export function createWords(load?: () => WebAssembly.Module): Words {
+  let renderer: Renderer | undefined;
   const state: State = {
     get renderer() {
-      if (renderer === undefined)
+      if (renderer !== undefined) return renderer;
+      if (load === undefined)
         throw new Error('@pierre/words/core: call init() before rendering');
-      return renderer;
+      return (renderer = new Renderer(load()));
     },
   };
   return {
     init: (module) => (renderer = new Renderer(module)),
+    canUseWASM() {
+      try {
+        return state.renderer !== undefined;
+      } catch {
+        return false;
+      }
+    },
     renderToHtml: ((input: Input, options?: RenderOptions) =>
       html(state, input, options)) as RenderToHtml,
     renderToAnsi: (input, options) => ansi(state, input, options),
@@ -779,5 +795,10 @@ export function createWords(renderer?: Renderer): Words {
 
 // `@pierre/words/core`: the root API without the embedded module.
 export type * from './types';
-export const { init, renderToHtml, renderToAnsi, createHtmlSession } =
-  createWords();
+export const {
+  init,
+  renderToHtml,
+  renderToAnsi,
+  createHtmlSession,
+  canUseWASM,
+} = createWords();

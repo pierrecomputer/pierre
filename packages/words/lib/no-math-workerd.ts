@@ -3,5 +3,10 @@ import wasmModule from './words-no-math.wasm';
 
 export type * from './types.ts';
 
-export const { init, renderToHtml, renderToAnsi, createHtmlSession } =
-  core.createWords(new core.Renderer(wasmModule));
+export const {
+  init,
+  renderToHtml,
+  renderToAnsi,
+  createHtmlSession,
+  canUseWASM,
+} = core.createWords(() => wasmModule);

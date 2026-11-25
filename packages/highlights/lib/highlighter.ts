@@ -482,6 +482,15 @@ let shared: HighlightsHighlighter | undefined;
 /** The compiled Wasm module required by the shared highlighter. */
 let wasmModule: WebAssembly.Module | undefined;
 
+// The default entry compiles its module on first use, so an engine without
+// Wasm SIMD fails at the first call, not at import.
+let loadModule: (() => WebAssembly.Module) | undefined;
+
+/** Set the module that the first call compiles when `init` has not run. */
+export function initLazy(load: () => WebAssembly.Module): void {
+  loadModule = load;
+}
+
 // Reuse one completed stream instance. Bun's Wasm instantiation is expensive,
 // while one slot keeps concurrent streams isolated and bounds retained memory.
 let pooledStreamHighlighter: HighlightsHighlighter | undefined;
@@ -513,13 +522,13 @@ function oversized(
   );
 }
 
-/** The shared highlighter, or throw before `init`. */
+/** The shared highlighter, or throw when no module is set. */
 function assertShared(
   input: string | Uint8Array | ArrayBuffer
 ): HighlightsHighlighter {
-  if (shared == null) throw new Error('highlights is not initialized');
-  if (oversized(shared, input)) shared = createShared(shared.wasmModule);
-  return shared;
+  if (shared == null) assertWasmModule();
+  const hl = shared!;
+  return oversized(hl, input) ? (shared = createShared(hl.wasmModule)) : hl;
 }
 
 /**
@@ -571,8 +580,12 @@ export function hasRegisteredLanguages(): boolean {
 
 /** The compiled Wasm module required by isolated tokenizers. */
 export function assertWasmModule(): WebAssembly.Module {
-  if (wasmModule == null) throw new Error('highlights is not initialized');
-  return wasmModule;
+  if (wasmModule == null) {
+    if (loadModule === undefined)
+      throw new Error('highlights is not initialized');
+    init(loadModule());
+  }
+  return wasmModule!;
 }
 
 /**
@@ -630,7 +643,7 @@ export function initEmitter(wasm: WebAssembly.Module): void {
 
 /** Decode base64 Wasm. */
 export function wasmBytes(wasm: string): Uint8Array<ArrayBuffer> {
-  // This runs at import, before the JIT: the `atob` loop is about 1 ms slower
+  // This runs before the JIT warms up: the `atob` loop is about 1 ms slower
   // than a native decoder for the combined module.
   const native = globalThis as unknown as {
     Uint8Array: { fromBase64?: (text: string) => Uint8Array<ArrayBuffer> };

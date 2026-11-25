@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -128,12 +129,48 @@ void test('carriage returns are accepted as line endings', () => {
   );
 });
 
+void test('import compiles no Wasm; the first render reports a compile error', () => {
+  // A child process, so the stub cannot leak into the Wasm this file shares.
+  const out = execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      `
+      const Module = WebAssembly.Module;
+      WebAssembly.Module = function () {
+        throw new WebAssembly.CompileError('Wasm SIMD unsupported');
+      };
+      const words = await import(${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)});
+      const results = [words.canUseWASM()];
+      try { words.renderToHtml('# a'); } catch (e) { results.push(e.message); }
+      WebAssembly.Module = Module;
+      results.push(words.canUseWASM(), new TextDecoder().decode(words.renderToHtml('# a')));
+      console.log(JSON.stringify(results));
+      `,
+    ],
+    { encoding: 'utf8' }
+  );
+  assert.deepEqual(JSON.parse(out), [
+    false,
+    'Wasm SIMD unsupported',
+    true,
+    '<h1>a</h1>\n',
+  ]);
+});
+
 void test('the core entry renders with a module the caller loads', async () => {
-  const { init, renderToHtml: render } = await import('@pierre/words/core');
+  const {
+    init,
+    renderToHtml: render,
+    canUseWASM,
+  } = await import('@pierre/words/core');
   const wasm = readFileSync(
     fileURLToPath(import.meta.resolve('@pierre/words/words.wasm'))
   );
   assert.throws(() => render('# a'), /call init\(\)/);
+  assert.equal(canUseWASM(), false);
   init(new WebAssembly.Module(wasm));
+  assert.equal(canUseWASM(), true);
   assert.equal(dec.decode(render('# a')), '<h1>a</h1>\n');
 });
