@@ -3177,12 +3177,12 @@ export class Editor<
   }
 
   // The viewport x where the overlay's positioned elements start.
-  get #overlayOrigin(): number {
-    const column = this.#overlayElement?.parentElement;
-    if (column == null) {
+  #getOverlayLeft(): number {
+    const code = this.#overlayElement?.parentElement;
+    if (code == null) {
       return 0;
     }
-    return column.getBoundingClientRect().left + column.clientLeft;
+    return code.getBoundingClientRect().left + code.clientLeft;
   }
 
   // #computeContentOffset only assigns #contentOffset in a split + wrap diff and
@@ -6382,7 +6382,8 @@ export class Editor<
       return;
     }
 
-    const x = roundToDevicePixel(left - 1, this.#overlayOrigin);
+    const overlayLeft = this.#getOverlayLeft();
+    const x = roundToDevicePixel(overlayLeft + left - 1) - overlayLeft;
     const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
 
     const caretEl = h(

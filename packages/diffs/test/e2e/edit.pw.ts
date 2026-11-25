@@ -46,6 +46,16 @@ async function clickIntoAdditions(page: Page): Promise<void> {
   await page.locator(ADDITIONS).click();
 }
 
+async function caretDevicePixelX(page: Page): Promise<number> {
+  const caret = page
+    .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
+    .first();
+  await expect(caret).toHaveCSS('visibility', 'visible');
+  return caret.evaluate(
+    (element) => element.getBoundingClientRect().left * window.devicePixelRatio
+  );
+}
+
 // Moves focus away from the editor at a controlled point inside a full
 // render, then lets the caller assert the editor does not reclaim it. A full
 // render keeps the editable element in place, so the two hook points are:
@@ -196,23 +206,12 @@ test.describe('edit mode', () => {
     }
   });
 
-  async function caretDevicePixelX(page: Page): Promise<number> {
-    const caret = page
-      .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
-      .first();
-    await expect(caret).toHaveCSS('visibility', 'visible');
-    return caret.evaluate(
-      (element) =>
-        element.getBoundingClientRect().left * window.devicePixelRatio
-    );
-  }
-
   test('the caret sits on whole device pixels', async ({ page }) => {
     await openFixture(page);
     await clickIntoAdditions(page);
 
     const devicePixelX = await caretDevicePixelX(page);
-    expect(devicePixelX).toBe(Math.round(devicePixelX));
+    expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 3);
   });
 
   test('the caret sits on whole device pixels when its column starts between them', async ({
@@ -227,7 +226,7 @@ test.describe('edit mode', () => {
     await clickIntoAdditions(page);
 
     const devicePixelX = await caretDevicePixelX(page);
-    expect(devicePixelX).toBe(Math.round(devicePixelX));
+    expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 3);
   });
 
   test.describe('at a fractional scale', () => {

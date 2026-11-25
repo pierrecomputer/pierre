@@ -4,12 +4,10 @@
  * etc.), so rounding computed scroll targets against that grid keeps delta
  * math settling cleanly instead of hovering around fractional residuals.
  *
- * Pass `origin` to snap a value relative to that viewport x.
- *
  * Reads window.devicePixelRatio fresh on each call so monitor-switching and
  * zoom changes are picked up without needing to flush any cached value.
  */
-export function roundToDevicePixel(value: number, origin = 0): number {
+export function roundToDevicePixel(value: number): number {
   const dpr = window.devicePixelRatio ?? 1;
-  return Math.round((origin + value) * dpr) / dpr - origin;
+  return Math.round(value * dpr) / dpr;
 }
