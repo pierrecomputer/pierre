@@ -6374,7 +6374,9 @@ export class Editor<
     }
 
     const x = roundToDevicePixel(left - 1);
-    const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+    const y = roundToDevicePixel(
+      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight
+    );
 
     const caretEl = h(
       'div',
