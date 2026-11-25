@@ -3176,15 +3176,6 @@ export class Editor<
     }
   }
 
-  // The viewport x where the overlay's positioned elements start.
-  #getOverlayLeft(): number {
-    const code = this.#overlayElement?.parentElement;
-    if (code == null) {
-      return 0;
-    }
-    return code.getBoundingClientRect().left + code.clientLeft;
-  }
-
   // #computeContentOffset only assigns #contentOffset in a split + wrap diff and
   // never clears it, so after toggling wrap off (or switching to unified) the
   // same editor keeps a stale offset. Read it through this getter, which returns
@@ -6382,8 +6373,7 @@ export class Editor<
       return;
     }
 
-    const overlayLeft = this.#getOverlayLeft();
-    const x = roundToDevicePixel(overlayLeft + left - 1) - overlayLeft;
+    const x = roundToDevicePixel(left - 1);
     const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
 
     const caretEl = h(

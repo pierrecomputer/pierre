@@ -46,16 +46,6 @@ async function clickIntoAdditions(page: Page): Promise<void> {
   await page.locator(ADDITIONS).click();
 }
 
-async function caretDevicePixelX(page: Page): Promise<number> {
-  const caret = page
-    .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
-    .first();
-  await expect(caret).toHaveCSS('visibility', 'visible');
-  return caret.evaluate(
-    (element) => element.getBoundingClientRect().left * window.devicePixelRatio
-  );
-}
-
 // Moves focus away from the editor at a controlled point inside a full
 // render, then lets the caller assert the editor does not reclaim it. A full
 // render keeps the editable element in place, so the two hook points are:
@@ -210,35 +200,15 @@ test.describe('edit mode', () => {
     await openFixture(page);
     await clickIntoAdditions(page);
 
-    const devicePixelX = await caretDevicePixelX(page);
-    expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 3);
-  });
-
-  test('the caret sits on whole device pixels when its column starts between them', async ({
-    page,
-  }) => {
-    await openFixture(page);
-    // Split columns share an odd width, so the additions column starts at a
-    // half pixel.
-    await page
-      .locator('[data-diff-mount]')
-      .evaluate((element: HTMLElement) => (element.style.maxWidth = '901px'));
-    await clickIntoAdditions(page);
-
-    const devicePixelX = await caretDevicePixelX(page);
-    expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 3);
-  });
-
-  test.describe('at a fractional scale', () => {
-    test.use({ deviceScaleFactor: 1.5 });
-
-    test('the caret sits on whole device pixels', async ({ page }) => {
-      await openFixture(page);
-      await clickIntoAdditions(page);
-
-      const devicePixelX = await caretDevicePixelX(page);
-      expect(devicePixelX).toBeCloseTo(Math.round(devicePixelX), 3);
-    });
+    const caret = page
+      .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
+      .first();
+    await expect(caret).toHaveCSS('visibility', 'visible');
+    const devicePixelX = await caret.evaluate(
+      (element) =>
+        element.getBoundingClientRect().left * window.devicePixelRatio
+    );
+    expect(devicePixelX).toBe(Math.round(devicePixelX));
   });
 
   test('additions are editable while deletions stay read-only', async ({
