@@ -45,6 +45,14 @@ export function renderDiffWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
+  // A focused full diff can omit leading context while keeping source indices.
+  const firstHunk = diff.hunks[0];
+  const preserveLineIndices =
+    isWindowedHighlight ||
+    (!diff.isPartial &&
+      firstHunk != null &&
+      (firstHunk.additionLineIndex > firstHunk.collapsedBefore ||
+        firstHunk.deletionLineIndex > firstHunk.collapsedBefore));
   lazyLineAST &&= !forcePlainText && !options.useTokenTransformer;
   const baseThemeType =
     typeof options.theme === 'string'
@@ -76,7 +84,7 @@ export function renderDiffWithHighlighter(
     segments: HighlightSegment[],
     contentWrapper: FakeArrayType
   ) {
-    if (isWindowedHighlight) {
+    if (preserveLineIndices) {
       let segment = segments.at(-1);
       if (
         segment == null ||
@@ -176,7 +184,7 @@ export function renderDiffWithHighlighter(
       lazyLineAST,
     });
 
-    if (shouldGroupAll) {
+    if (shouldGroupAll && !preserveLineIndices) {
       code.deletionLines = deletionLines;
       code.additionLines = additionLines;
       continue;
@@ -189,8 +197,17 @@ export function renderDiffWithHighlighter(
       if (segments.length > 0) {
         for (const segment of segments) {
           for (let index = 0; index < segment.count; index++) {
-            target[segment.targetIndex + index] =
-              lines[segment.originalOffset + index];
+            const sourceIndex = segment.originalOffset + index;
+            const targetIndex = segment.targetIndex + index;
+            if (lazyLineAST) {
+              setDeferredArrayItem(
+                target,
+                targetIndex,
+                () => lines[sourceIndex]
+              );
+            } else {
+              target[targetIndex] = lines[sourceIndex];
+            }
           }
         }
       } else if (lazyLineAST) {
