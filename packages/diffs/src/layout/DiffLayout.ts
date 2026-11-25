@@ -27,6 +27,7 @@ import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createSeparator } from '../utils/createSeparator';
 import { DiffRowCursor } from '../utils/DiffRowCursor';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
+import { getSeparatorContext } from '../utils/getSeparatorContext';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import { createGutterGap } from '../utils/hast_utils';
 import {
@@ -224,6 +225,7 @@ interface SeparatorProps {
   collapsedLines: number | 'unknown';
   rangeSize: number;
   hunkSpecs: string | undefined;
+  hunkContext: string | undefined;
   isFirstHunk: boolean;
   isLastHunk: boolean;
   isExpandable: boolean;
@@ -496,6 +498,22 @@ export class DiffLayout<LAnnotation = undefined> {
           collapsedLines: collapsedBefore,
           rangeSize: Math.max(hunk?.collapsedBefore ?? 0, 0),
           hunkSpecs: hunk?.hunkSpecs,
+          hunkContext:
+            deletionLine != null
+              ? getSeparatorContext(
+                  diff,
+                  hunk,
+                  'deletions',
+                  deletionLine.lineIndex
+                )
+              : additionLine != null
+                ? getSeparatorContext(
+                    diff,
+                    hunk,
+                    'additions',
+                    additionLine.lineIndex
+                  )
+                : hunk?.hunkContext,
           isFirstHunk: hunkIndex === 0,
           isLastHunk: false,
           isExpandable: isExpandableDiff,
@@ -817,6 +835,7 @@ export class DiffLayout<LAnnotation = undefined> {
             isFinalHunkRow && canHydrateContext ? 'unknown' : collapsedAfter,
           rangeSize: trailingRangeSize,
           hunkSpecs: undefined,
+          hunkContext: undefined,
           isFirstHunk: false,
           isLastHunk: true,
           isExpandable: isExpandableDiff,
@@ -925,6 +944,7 @@ export class DiffLayout<LAnnotation = undefined> {
       collapsedLines,
       rangeSize,
       hunkSpecs,
+      hunkContext,
       isFirstHunk,
       isLastHunk,
       isExpandable,
@@ -986,6 +1006,7 @@ export class DiffLayout<LAnnotation = undefined> {
       createSeparator({
         type: hunkSeparators,
         content,
+        hunkContext,
         expandIndex,
         chunked,
         slotName,
@@ -995,7 +1016,7 @@ export class DiffLayout<LAnnotation = undefined> {
     this.#cells.fixedRow(
       column,
       `sep:${slotName}`,
-      `${hunkSeparators}|${content}|${expandIndex}|${chunked}|${isFirstHunk}|${isLastHunk}`,
+      `${hunkSeparators}|${content}|${hunkContext ?? ''}|${expandIndex}|${chunked}|${isFirstHunk}|${isLastHunk}`,
       () => ({
         gutter: separator(),
         content: readOnly(separator()),
@@ -1006,6 +1027,7 @@ export class DiffLayout<LAnnotation = undefined> {
       hunkIndex,
       lines: typeof collapsedLines === 'number' ? collapsedLines : 0,
       lineCountKnown: typeof collapsedLines === 'number',
+      hunkContext,
       type,
       expandable: isExpandable
         ? { up: !isFirstHunk, down: !isLastHunk, chunked }

@@ -1228,6 +1228,20 @@
     flex: 0 1 auto;
   }
 
+  /* The function name shrinks before the line count does, so a long
+     signature never hides how many lines are collapsed. */
+  [data-hunk-context] {
+    display: block;
+    overflow: hidden;
+    min-width: 0;
+    margin-inline-start: 2ch;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1000 auto;
+    color: var(--diffs-fg);
+    opacity: 0.75;
+  }
+
   @supports (width: 1cqi) {
     [data-unified] {
       [data-separator='line-info'] [data-separator-wrapper] {

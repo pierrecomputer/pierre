@@ -798,6 +798,11 @@ export interface HunkData {
   hunkIndex: number;
   lines: number;
   lineCountKnown: boolean;
+  /**
+   * Function/method name from the `@@` header of the hunk after this
+   * separator, if the diff had one.
+   */
+  hunkContext?: string;
   type: CodeColumnType;
   expandable?: {
     chunked: boolean;
