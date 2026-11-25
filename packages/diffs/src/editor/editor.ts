@@ -37,6 +37,7 @@ import { getComposedSelectionRange } from '../utils/getComposedSelectionRange';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { normalizeLineBreaks } from '../utils/lineEndings';
+import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import {
   type EditorCommand,
@@ -5907,8 +5908,11 @@ export class Editor<
         elements.set(trackedCaret, element);
       }
       const [left, wrapLine] = this.#getCharX(line, character);
-      const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-      element.style.transform = `translateX(${left}px) translateY(${top}px)`;
+      const x = roundToDevicePixel(left);
+      const y = roundToDevicePixel(
+        this.#getLineY(line) + wrapLine * this.#metrics.lineHeight
+      );
+      element.style.transform = `translateX(${x}px) translateY(${y}px)`;
     }
     this.#caretHighlightElements = highlightElements;
     overlayElement.appendChild(fragment);
@@ -6372,8 +6376,10 @@ export class Editor<
       return;
     }
 
-    const x = left - 1;
-    const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+    const x = roundToDevicePixel(left - 1);
+    const y = roundToDevicePixel(
+      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight
+    );
 
     const caretEl = h(
       'div',

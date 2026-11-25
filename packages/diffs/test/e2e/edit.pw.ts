@@ -196,6 +196,37 @@ test.describe('edit mode', () => {
     }
   });
 
+  test.describe('at a 1.25x device scale', () => {
+    test.use({ deviceScaleFactor: 1.25 });
+
+    // Chrome paints the code column on whole device pixels, so the caret is
+    // sharp when its offset in the column is a whole number of device pixels
+    // too. A 19px line height puts line tops between device pixels at 1.25x.
+    test('the caret is placed on whole device pixels', async ({ page }) => {
+      await openFixture(page);
+      await page
+        .locator('diffs-container')
+        .evaluate((host) =>
+          host.style.setProperty('--diffs-line-height', '19px')
+        );
+      await clickIntoAdditions(page);
+      for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+
+      const caret = page
+        .locator(`${ADDITIONS} ~ [data-editor-overlay] [data-caret]`)
+        .first();
+      await expect(caret).toHaveCSS('visibility', 'visible');
+      const transform = await caret.evaluate(
+        (element) => element.style.transform
+      );
+      const [x, y] = [...transform.matchAll(/(-?[\d.]+)px/g)].map((match) =>
+        Number(match[1])
+      );
+      expect(x * 1.25).toBeCloseTo(Math.round(x * 1.25), 3);
+      expect(y * 1.25).toBeCloseTo(Math.round(y * 1.25), 3);
+    });
+  });
+
   test('additions are editable while deletions stay read-only', async ({
     page,
   }) => {
