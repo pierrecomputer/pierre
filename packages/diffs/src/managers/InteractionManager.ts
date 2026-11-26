@@ -93,6 +93,11 @@ interface ExpandoEventProps {
   all: boolean;
 }
 
+interface FoldEventProps {
+  type: 'fold';
+  foldIndex: number;
+}
+
 export type GetHoveredLineResult<TMode extends InteractionManagerMode> =
   TMode extends 'file'
     ? { lineNumber: number }
@@ -185,6 +190,7 @@ type ResolvedPointerTarget<TMode extends InteractionManagerMode> =
   | ResolvedTokenTarget<TMode>
   | ResolvedLineExpandTarget<TMode>
   | ExpandoEventProps
+  | FoldEventProps
   | MergeConflictActionTarget;
 
 type LinePointerTarget<TMode extends InteractionManagerMode> =
@@ -261,6 +267,7 @@ export interface InteractionManagerOptions<
     direction: ExpansionDirections,
     expansionLineCountOverride?: number
   ): unknown;
+  onFoldToggle?(foldIndex: number): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
 }
 
@@ -461,6 +468,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     const {
       onLineExpand,
       onHunkExpand,
+      onFoldToggle,
       onLineClick,
       onLineNumberClick,
       onTokenClick,
@@ -469,6 +477,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (
       onLineExpand == null &&
       onHunkExpand == null &&
+      onFoldToggle == null &&
       onLineClick == null &&
       onLineNumberClick == null &&
       onMergeConflictActionClick == null &&
@@ -634,6 +643,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave,
       onLineExpand,
       onHunkExpand,
+      onFoldToggle,
       onMergeConflictActionClick,
     } = this.options;
 
@@ -698,6 +708,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           onLineExpand?.(target.expansion);
           break;
         }
+        if (isFoldPointerTarget(target)) {
+          onFoldToggle?.(target.foldIndex);
+          break;
+        }
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
           onHunkExpand(
             target.hunkIndex,
@@ -745,6 +759,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave,
       onLineExpand,
       onHunkExpand,
+      onFoldToggle,
       onMergeConflictActionClick,
       enableGutterUtility = false,
       enableLineSelection = false,
@@ -762,6 +777,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave != null ||
       onLineExpand != null ||
       onHunkExpand != null ||
+      onFoldToggle != null ||
       onMergeConflictActionClick != null ||
       enableGutterUtility ||
       enableLineSelection ||
@@ -796,6 +812,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
               }
               if (onHunkExpand != null) {
                 reasons.push('expandable hunk separators');
+              }
+              if (onFoldToggle != null) {
+                reasons.push('fold separators');
               }
               if (onMergeConflictActionClick != null) {
                 reasons.push('merge conflict actions');
@@ -2174,6 +2193,18 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         continue;
       }
 
+      // A host-rendered fold row handles its own clicks.
+      const foldIndexValue =
+        element.getAttribute('data-separator') === 'custom'
+          ? null
+          : element.getAttribute('data-fold-index');
+      if (foldIndexValue != null) {
+        const foldIndex = Number.parseInt(foldIndexValue, 10);
+        if (!Number.isNaN(foldIndex)) {
+          return { type: 'fold', foldIndex };
+        }
+      }
+
       if (
         expandInfo == null &&
         (element.hasAttribute('data-expand-button') ||
@@ -2384,7 +2415,8 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     expansionLineCountOverride?: number
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
-  onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
+  onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void,
+  onFoldToggle?: (foldIndex: number) => unknown
 ): InteractionManagerOptions<TMode> {
   return {
     enableTokenInteractionsOnWhitespace,
@@ -2399,6 +2431,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onGutterUtilityClick,
     onLineExpand,
     onHunkExpand,
+    onFoldToggle,
     onMergeConflictActionClick,
     onLineClick,
     onLineEnter,
@@ -2464,6 +2497,12 @@ function isLineExpandPointerTarget<TMode extends InteractionManagerMode>(
   target: ResolvedPointerTarget<TMode> | undefined
 ): target is ResolvedLineExpandTarget<TMode> {
   return target != null && 'kind' in target && target.kind === 'expand-line';
+}
+
+function isFoldPointerTarget<TMode extends InteractionManagerMode>(
+  target: ResolvedPointerTarget<TMode>
+): target is FoldEventProps {
+  return 'type' in target && target.type === 'fold';
 }
 
 function isExpandoPointerTarget<TMode extends InteractionManagerMode>(

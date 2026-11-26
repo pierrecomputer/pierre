@@ -3,6 +3,7 @@ import type {
   HighlighterTypes,
   HunkExpansionRegion,
   RenderRange,
+  ResolvedDiffFold,
   SmoothScrollSettings,
   ThemesType,
   VirtualFileMetrics,
@@ -26,6 +27,8 @@ export const MERGE_CONFLICT_START_MARKER_REGEX: RegExp = /^<{7,}(?:\s.*)?$/;
 export const MERGE_CONFLICT_BASE_MARKER_REGEX: RegExp = /^\|{7,}(?:\s.*)?$/;
 export const MERGE_CONFLICT_SEPARATOR_MARKER_REGEX: RegExp = /^={7,}$/;
 export const MERGE_CONFLICT_END_MARKER_REGEX: RegExp = /^>{7,}(?:\s.*)?$/;
+
+export const EMPTY_RESOLVED_FOLDS: ResolvedDiffFold[] = [];
 
 export const HEADER_PREFIX_SLOT_ID = 'header-prefix';
 export const HEADER_FILENAME_SUFFIX_SLOT_ID = 'header-filename-suffix';
@@ -71,6 +74,12 @@ export const DEFAULT_MESSAGES = {
    * happens for partial diffs parsed from patches.
    */
   unknownUnmodifiedLines: 'More unchanged context may be available',
+  /**
+   * Fold separator text for a `foldedRanges` entry without a label. The
+   * folded lines may be changed, so this does not call them unmodified.
+   * Receives `count`.
+   */
+  foldedLines: '{count, plural, one {# line} other {# lines}}',
   /** Button that expands an entire collapsed region at once. */
   expandAll: 'Expand all',
   expandLine: 'Show full line',

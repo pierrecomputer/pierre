@@ -29,6 +29,7 @@ import type {
   RenderDiffResult,
   RenderFileOptions,
   RenderFileResult,
+  ResolvedDiffFold,
   SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
@@ -1369,7 +1370,8 @@ export class WorkerPoolManager {
     startingLine: number,
     totalLines: number,
     expandedHunks?: ExpandedHunksMap | true,
-    collapsedContextThreshold?: number
+    collapsedContextThreshold?: number,
+    folds?: ResolvedDiffFold[]
   ): ThemedDiffResult | undefined {
     const highlighter = getHighlighterIfLoaded({
       theme: this.renderOptions.theme,
@@ -1384,6 +1386,7 @@ export class WorkerPoolManager {
       totalLines,
       expandedHunks,
       collapsedContextThreshold,
+      folds,
     });
   }
 

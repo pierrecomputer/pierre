@@ -13,12 +13,14 @@ import type {
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
+  FoldedRange,
   Hunk,
   HunkSeparators,
   NumericScrollLineAnchor,
   PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
+  ResolvedDiffFold,
   ScrollRequestResult,
   SelectionSide,
   StickySpecs,
@@ -39,6 +41,12 @@ import {
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
 import { DiffRowCursor } from '../utils/DiffRowCursor';
+import {
+  areExpandedFoldsEqual,
+  areFoldedRangesEqual,
+  getFoldedRowCount,
+  getHunkFolds,
+} from '../utils/foldedDiffRanges';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
@@ -50,10 +58,12 @@ import {
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
   getExpandedRegion,
+  getFoldSeparatorLayout,
   getLeadingHunkSeparatorLayout,
   getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
   growExpandedRegion,
+  type HunkSeparatorLayout,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeView } from './CodeView';
@@ -157,6 +167,8 @@ export class VirtualizedFileDiff<
   private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
   private layoutDirty = true;
   private currentCollapsed: boolean | undefined;
+  private currentFoldedRanges: FoldedRange[] | undefined;
+  private currentExpandedFolds: number[] | undefined;
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
   // CodeView applies expansions at its next layout pass. Until then this is
   // the expansion state as it will be once they are applied.
@@ -707,6 +719,21 @@ export class VirtualizedFileDiff<
       this.currentCollapsed = collapsed;
       dropMeasurements = true;
     }
+    // A CodeView item's folds come from the item, so a new item version can
+    // change them; the renderer reads them before the next render does.
+    // Item options are live getters, so a new array means new folds.
+    const { foldedRanges, expandedFolds } = this.options;
+    if (
+      foldedRanges !== this.currentFoldedRanges ||
+      expandedFolds !== this.currentExpandedFolds
+    ) {
+      this.currentFoldedRanges = foldedRanges;
+      this.currentExpandedFolds = expandedFolds;
+      this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
+      this.forceRenderOverride = true;
+      dropMeasurements = true;
+      resetEstimatedHeights = true;
+    }
     if (dropMeasurements) {
       this.resetMeasurements();
       this.invalidateLayout({ includeEstimatedHeights: resetEstimatedHeights });
@@ -773,11 +800,33 @@ export class VirtualizedFileDiff<
           this.hunksRenderer.getExpandedHunksMap()),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      folds: this.hunksRenderer.getResolvedFolds(fileDiff),
     });
     while (rows.next()) {
-      const { hunkIndex, hunk, collapsedBefore, collapsedAfter } = rows;
+      const {
+        hunkIndex,
+        hunk,
+        foldSeparators,
+        foldSeparatorsAfter,
+        collapsedBefore,
+        collapsedAfter,
+      } = rows;
       const lineIndex =
         diffStyle === 'split' ? rows.splitLineIndex : rows.unifiedLineIndex;
+
+      if (foldSeparators != null) {
+        const hidden = foldSeparators.filter((fold) => !fold.expanded);
+        position = this.findFoldSeparator(
+          hidden,
+          lineIndex - collapsedBefore - getFoldedRowCount(hidden, diffStyle),
+          targetLineIndex,
+          top
+        );
+        if (position != null) {
+          break;
+        }
+        top += this.getFoldSeparatorsHeight(hidden);
+      }
 
       if (collapsedBefore > 0) {
         const separator = getLeadingHunkSeparatorLayout({
@@ -802,6 +851,11 @@ export class VirtualizedFileDiff<
         }
       }
 
+      // An open fold comes last: its separator sits right above this row.
+      if (foldSeparators?.at(-1)?.expanded === true) {
+        top += this.getFoldSeparatorLayout().totalHeight;
+      }
+
       const lineHeight = this.getLineHeight(
         lineIndex,
         rows.hasAddition ? rows.additionLineIndex : undefined,
@@ -816,6 +870,23 @@ export class VirtualizedFileDiff<
       }
       top += lineHeight;
 
+      const foldedAfter =
+        foldSeparatorsAfter != null
+          ? getFoldedRowCount(foldSeparatorsAfter, diffStyle)
+          : 0;
+      if (foldSeparatorsAfter != null) {
+        position = this.findFoldSeparator(
+          foldSeparatorsAfter,
+          lineIndex + 1,
+          targetLineIndex,
+          top
+        );
+        if (position != null) {
+          break;
+        }
+        top += this.getFoldSeparatorsHeight(foldSeparatorsAfter);
+      }
+
       if (collapsedAfter > 0) {
         const separator = getTrailingHunkSeparatorLayout({
           type: hunkSeparators,
@@ -823,8 +894,8 @@ export class VirtualizedFileDiff<
         });
         if (separator != null) {
           if (
-            targetLineIndex > lineIndex &&
-            targetLineIndex <= lineIndex + collapsedAfter
+            targetLineIndex > lineIndex + foldedAfter &&
+            targetLineIndex <= lineIndex + foldedAfter + collapsedAfter
           ) {
             position = {
               top: top + separator.gapBefore,
@@ -950,11 +1021,21 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      folds: this.hunksRenderer.getResolvedFolds(fileDiff),
     });
     while (rows.next()) {
-      const { hunkIndex, hunk, collapsedBefore, collapsedAfter } = rows;
+      const {
+        hunkIndex,
+        hunk,
+        foldSeparators,
+        foldSeparatorsAfter,
+        collapsedBefore,
+        collapsedAfter,
+      } = rows;
       const lineIndex =
         diffStyle === 'split' ? rows.splitLineIndex : rows.unifiedLineIndex;
+
+      top += this.getFoldSeparatorsHeight(foldSeparators);
 
       if (collapsedBefore > 0) {
         const separator = getLeadingHunkSeparatorLayout({
@@ -981,6 +1062,8 @@ export class VirtualizedFileDiff<
         this.hasNoNewlineMarker(rows)
       );
       top += lineHeight;
+
+      top += this.getFoldSeparatorsHeight(foldSeparatorsAfter);
 
       if (collapsedAfter > 0) {
         const separator = getTrailingHunkSeparatorLayout({
@@ -1070,6 +1153,18 @@ export class VirtualizedFileDiff<
       this.virtualizer.instanceChanged(this, true);
     }
   }
+
+  override toggleFold = (foldIndex: number): void => {
+    if (this.getInputDiff() == null) {
+      return;
+    }
+    this.hunksRenderer.toggleFold(foldIndex);
+    this.resetMeasurements();
+    this.invalidateLayout({ includeEstimatedHeights: true });
+    this.computeApproximateSize();
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this, true);
+  };
 
   override expandHunk = (
     hunkIndex: number,
@@ -1420,6 +1515,8 @@ export class VirtualizedFileDiff<
       ),
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       showNoNewlineMarkers: this.hunksRenderer.showsNoNewlineMarkers(),
+      folds: this.hunksRenderer.getResolvedFolds(fileDiff),
+      customFoldSeparator: this.options.renderFoldSeparator != null,
     });
     this.cache.estimatedSplitHeight = splitHeight;
     this.cache.estimatedUnifiedHeight = unifiedHeight;
@@ -1680,6 +1777,47 @@ export class VirtualizedFileDiff<
     return this.options.diffStyle ?? 'split';
   }
 
+  // The separator standing in for `targetLineIndex`, when one of the
+  // collapsed `folds` hides it. The first fold's rows start at `foldStart`
+  // and its separator at `top`, so scrolling to a hidden line lands on it.
+  private findFoldSeparator(
+    folds: ResolvedDiffFold[],
+    foldStart: number,
+    targetLineIndex: number,
+    top: number
+  ): { top: number; height: number } | undefined {
+    const { gapBefore, gapAfter, height } = this.getFoldSeparatorLayout();
+    const diffStyle = this.getDiffStyle();
+    let rowStart = foldStart;
+    let rowTop = top;
+    for (const fold of folds) {
+      const rows = diffStyle === 'split' ? fold.splitRows : fold.unifiedRows;
+      rowTop += gapBefore;
+      if (targetLineIndex >= rowStart && targetLineIndex < rowStart + rows) {
+        return { top: rowTop, height };
+      }
+      rowStart += rows;
+      rowTop += height + gapAfter;
+    }
+    return undefined;
+  }
+
+  private getFoldSeparatorsHeight(
+    folds: ResolvedDiffFold[] | undefined
+  ): number {
+    return folds == null
+      ? 0
+      : folds.length * this.getFoldSeparatorLayout().totalHeight;
+  }
+
+  private getFoldSeparatorLayout(): HunkSeparatorLayout {
+    return getFoldSeparatorLayout({
+      type: this.getHunkSeparatorType(),
+      metrics: this.metrics,
+      custom: this.options.renderFoldSeparator != null,
+    });
+  }
+
   private getHunkSeparatorType(): HunkSeparators {
     return getOptionHunkSeparatorType(this.options.hunkSeparators);
   }
@@ -1713,6 +1851,8 @@ export class VirtualizedFileDiff<
       this.ghostTextRowsByIndex(fileDiff),
       this.metrics.lineHeight
     );
+    const folds = this.hunksRenderer.getResolvedFolds(fileDiff);
+    const foldSeparatorHeight = this.getFoldSeparatorLayout().totalHeight;
     let top =
       getVirtualFileHeaderRegion(this.metrics, disableFileHeader) +
       this.cache.fileAnnotationHeight;
@@ -1849,20 +1989,62 @@ export class VirtualizedFileDiff<
         diffStyle === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
       const hunkBodyStartLineIndex =
         diffStyle === 'split' ? hunk.splitLineStart : hunk.unifiedLineStart;
+      const metadataOffsets = this.hunksRenderer.showsNoNewlineMarkers()
+        ? getHunkMetadataOffsets({
+            diffStyle,
+            hunk,
+            rowCount: hunkBodyRowCount,
+          })
+        : [];
+
+      // A collapsed fold cuts the hunk body into the rendered runs around it.
+      // Each fold's separator height is charged to the run after it, the way
+      // a leading hunk separator is, because that run's first row is the one
+      // the row walk reports the fold on.
+      let bodyRowOffset = 0;
+      let pendingSeparatorHeight = pendingLeadingSeparatorHeight;
+      for (const fold of getHunkFolds(folds, hunkIndex)) {
+        const foldRowStart =
+          diffStyle === 'split' ? fold.splitRowStart : fold.unifiedRowStart;
+        const foldRowCount = fold.expanded
+          ? 0
+          : diffStyle === 'split'
+            ? fold.splitRows
+            : fold.unifiedRows;
+        const runRowCount =
+          foldRowStart - hunkBodyStartLineIndex - bodyRowOffset;
+        processRows({
+          rowCount: runRowCount,
+          startLineIndex: hunkBodyStartLineIndex + bodyRowOffset,
+          preSeparatorHeight: pendingSeparatorHeight,
+        });
+        if (runRowCount > 0) {
+          pendingSeparatorHeight = 0;
+        }
+        pendingSeparatorHeight += foldSeparatorHeight;
+        bodyRowOffset = foldRowStart - hunkBodyStartLineIndex + foldRowCount;
+      }
+
+      const lastRunRowCount = hunkBodyRowCount - bodyRowOffset;
       processRows({
-        rowCount: hunkBodyRowCount,
-        startLineIndex: hunkBodyStartLineIndex,
-        preSeparatorHeight: pendingLeadingSeparatorHeight,
+        rowCount: lastRunRowCount,
+        startLineIndex: hunkBodyStartLineIndex + bodyRowOffset,
+        preSeparatorHeight: pendingSeparatorHeight,
         postSeparatorHeight:
           trailingExpandedCount === 0 ? trailingSeparatorHeight : 0,
-        metadataOffsets: this.hunksRenderer.showsNoNewlineMarkers()
-          ? getHunkMetadataOffsets({
-              diffStyle,
-              hunk,
-              rowCount: hunkBodyRowCount,
-            })
-          : [],
+        metadataOffsets:
+          bodyRowOffset === 0
+            ? metadataOffsets
+            : metadataOffsets.map((offset) => offset - bodyRowOffset),
       });
+      // A fold that ends the hunk is reported on the next hunk's first row,
+      // which a walk starting there skips, so its height belongs above. One
+      // that ends the diff takes the trailing separator's place below it.
+      if (lastRunRowCount <= 0) {
+        top +=
+          pendingSeparatorHeight +
+          (trailingExpandedCount === 0 ? trailingSeparatorHeight : 0);
+      }
 
       if (trailingRegion != null && trailingExpandedCount > 0) {
         processRows({
@@ -2128,11 +2310,14 @@ export class VirtualizedFileDiff<
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
       includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      folds: this.hunksRenderer.getResolvedFolds(fileDiff),
     });
     while (rows.next()) {
       const {
         hunkIndex,
         hunk,
+        foldSeparators,
+        foldSeparatorsAfter,
         collapsedBefore,
         collapsedAfter,
         splitLineIndex,
@@ -2140,12 +2325,13 @@ export class VirtualizedFileDiff<
       } = rows;
       const hasMetadata = this.hasNoNewlineMarker(rows);
       const isFinalHunkRow =
-        hunkIndex === fileDiff.hunks.length - 1 &&
-        hunk != null &&
-        (diffStyle === 'split'
-          ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
-          : unifiedLineIndex ===
-            hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
+        foldSeparatorsAfter != null ||
+        (hunkIndex === fileDiff.hunks.length - 1 &&
+          hunk != null &&
+          (diffStyle === 'split'
+            ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
+            : unifiedLineIndex ===
+              hunk.unifiedLineStart + hunk.unifiedLineCount - 1));
       const leadingSeparator =
         collapsedBefore > 0
           ? getLeadingHunkSeparatorLayout({
@@ -2155,7 +2341,9 @@ export class VirtualizedFileDiff<
               hunkSpecs: hunk?.hunkSpecs,
             })
           : undefined;
-      const gapAdjustment = leadingSeparator?.totalHeight ?? 0;
+      const gapAdjustment =
+        (leadingSeparator?.totalHeight ?? 0) +
+        this.getFoldSeparatorsHeight(foldSeparators);
 
       absoluteLineTop += gapAdjustment;
 
@@ -2198,6 +2386,7 @@ export class VirtualizedFileDiff<
 
       currentLine++;
       absoluteLineTop += lineHeight;
+      absoluteLineTop += this.getFoldSeparatorsHeight(foldSeparatorsAfter);
 
       if (collapsedAfter > 0 || (isFinalHunkRow && canHydratePartialDiff)) {
         const trailingSeparator = getTrailingHunkSeparatorLayout({
@@ -2432,6 +2621,7 @@ function hasDiffLayoutOptionChanged<LAnnotation, Caret>(
       DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
       (nextOptions.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
+    hasFoldOptionChanged(previousOptions, nextOptions) ||
     previousOptions.unsafeCSS !== nextOptions.unsafeCSS
   );
 }
@@ -2452,7 +2642,30 @@ function hasDiffEstimateOptionChanged<LAnnotation, Caret>(
     (previousOptions.collapsedContextThreshold ??
       DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
       (nextOptions.collapsedContextThreshold ??
-        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
+    hasFoldOptionChanged(previousOptions, nextOptions)
+  );
+}
+
+// Fold options change which rows render and how tall the file is, so both the
+// layout cache and the height estimates have to follow them. Ranges are
+// compared by value because hosts rebuild the array on every render.
+function hasFoldOptionChanged<LAnnotation, Caret>(
+  previousOptions: FileDiffOptions<LAnnotation, Caret>,
+  nextOptions: FileDiffOptions<LAnnotation, Caret>
+): boolean {
+  return (
+    !areFoldedRangesEqual(
+      previousOptions.foldedRanges,
+      nextOptions.foldedRanges
+    ) ||
+    !areExpandedFoldsEqual(
+      previousOptions.expandedFolds,
+      nextOptions.expandedFolds
+    ) ||
+    // A host row lifts the line-info requirement and changes the row's shape.
+    (previousOptions.renderFoldSeparator != null) !==
+      (nextOptions.renderFoldSeparator != null)
   );
 }
 

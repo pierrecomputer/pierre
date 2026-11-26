@@ -198,6 +198,16 @@ interface DiffOptions {
   // (default: 1)
   collapsedContextThreshold: 1,
 
+  // Line ranges to fold behind one separator row each (one-based, inclusive).
+  // Ranges that cannot fold cleanly are dropped.
+  foldedRanges?: FoldedRange[],
+
+  // Folds kept open, by index into foldedRanges. Makes fold state controlled.
+  expandedFolds?: number[],
+
+  // Called when a fold's expand control is clicked
+  onFoldToggle?: (index: number, expanded: boolean) => void,
+
   // ─────────────────────────────────────────────────────────────
   // INLINE CHANGE HIGHLIGHTING
   // ─────────────────────────────────────────────────────────────
@@ -488,6 +498,23 @@ const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   // annotation.
   renderAnnotation={(annotation) => (
     <CommentThread threadId={annotation.metadata.threadId} />
+  )}
+
+  // Replaces the built-in label and control on every fold from
+  // options.foldedRanges. A fold is open while its index is in
+  // options.expandedFolds.
+  renderFoldSeparator={(fold) => (
+    <button
+      onClick={() =>
+        setExpandedFolds((open) =>
+          fold.expanded
+            ? open.filter((index) => index !== fold.foldIndex)
+            : [...open, fold.foldIndex]
+        )
+      }
+    >
+      {fold.label}
+    </button>
   )}
 
   // ─────────────────────────────────────────────────────────────

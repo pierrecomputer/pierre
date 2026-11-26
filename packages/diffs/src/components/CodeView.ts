@@ -44,6 +44,7 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffsThemeNames,
+  FoldData,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   ScrollRequestResult,
@@ -280,6 +281,8 @@ export interface CodeViewCoordinator<LAnnotation, Caret> {
   hasHeaderRenderers: boolean;
   hasAnnotationRenderer: boolean;
   hasGutterRenderer: boolean;
+  /** React renders fold rows, so diff items with folds need slots. */
+  hasFoldRenderer?: boolean;
   onSnapshotChange(
     snapshot: CodeViewSlotSnapshot<LAnnotation, Caret> | undefined
   ): void;
@@ -691,6 +694,17 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * final pre-detach state.
    */
   onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation, Caret>;
+  /** Called when a diff item's fold control is clicked. */
+  onFoldToggle?(
+    index: number,
+    expanded: boolean,
+    item: CodeViewDiffItem<LAnnotation>
+  ): void;
+  /** Renders a diff item's fold rows, as `FileDiff`'s `renderFoldSeparator`. */
+  renderFoldSeparator?(
+    fold: FoldData,
+    item: CodeViewDiffItem<LAnnotation>
+  ): HTMLElement | null | undefined;
   /**
    * Called after CodeView itself changes an item's `collapsed` state, as find
    * does when it lands on a match inside a collapsed item. `item` is the item
@@ -2935,6 +2949,31 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return (event: FileDiffEditCompleteEvent<LAnnotation, Caret>) =>
         this.completeDiffItemEdit(state, event);
     });
+    defineItemOption(
+      prototype,
+      'foldedRanges',
+      (receiver) => this.getDiffItemForOptions(receiver)?.foldedRanges
+    );
+    defineItemOption(
+      prototype,
+      'expandedFolds',
+      (receiver) => this.getDiffItemForOptions(receiver)?.expandedFolds
+    );
+    defineItemOption(prototype, 'onFoldToggle', (receiver) => {
+      const { onFoldToggle } = this.options;
+      const item = this.getDiffItemForOptions(receiver);
+      return onFoldToggle != null && item != null
+        ? (index: number, expanded: boolean) =>
+            onFoldToggle(index, expanded, item)
+        : undefined;
+    });
+    defineItemOption(prototype, 'renderFoldSeparator', (receiver) => {
+      const { renderFoldSeparator } = this.options;
+      const item = this.getDiffItemForOptions(receiver);
+      return renderFoldSeparator != null && item != null
+        ? (fold: FoldData) => renderFoldSeparator(fold, item)
+        : undefined;
+    });
 
     for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
       this.defineItemSharedCallback(prototype, 'diff', key);
@@ -2996,6 +3035,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return undefined;
     }
     return item as CodeViewModeItemContext<LAnnotation, Caret, TMode>;
+  }
+
+  // The diff item whose options object is reading a per-item value.
+  private getDiffItemForOptions(
+    receiver: FileDiffOptions<LAnnotation, Caret>
+  ): CodeViewDiffItem<LAnnotation> | undefined {
+    const state = getItemOptionsState(receiver);
+    return state != null ? this.getItemOptions(state, 'diff')?.item : undefined;
   }
 
   private defineItemSharedCallback<
@@ -4992,7 +5039,9 @@ function hasItemLayoutOptionChanged<LAnnotation, Caret>(
     (previousOptions.collapsedContextThreshold ??
       DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
       (nextOptions.collapsedContextThreshold ??
-        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
+    (previousOptions.renderFoldSeparator != null) !==
+      (nextOptions.renderFoldSeparator != null)
   );
 }
 
@@ -5010,7 +5059,9 @@ function hasCodeViewDiffEstimateOptionChanged<LAnnotation, Caret>(
     (previousOptions.collapsedContextThreshold ??
       DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
       (nextOptions.collapsedContextThreshold ??
-        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
+    (previousOptions.renderFoldSeparator != null) !==
+      (nextOptions.renderFoldSeparator != null)
   );
 }
 
@@ -5101,12 +5152,22 @@ function hasAnnotations<LAnnotation, Caret>(
   );
 }
 
+function hasFolds<LAnnotation, Caret>(
+  renderedItem: CodeViewRenderedItem<LAnnotation, Caret>
+): boolean {
+  return (
+    renderedItem.item.type === 'diff' &&
+    (renderedItem.item.foldedRanges?.length ?? 0) > 0
+  );
+}
+
 function getSlotItems<LAnnotation, Caret>(
   renderedItems: CodeViewRenderedItem<LAnnotation, Caret>[],
   {
     hasHeaderRenderers,
     hasAnnotationRenderer,
     hasGutterRenderer,
+    hasFoldRenderer = false,
   }: CodeViewCoordinator<LAnnotation, Caret>
 ): CodeViewRenderedItem<LAnnotation, Caret>[] | undefined {
   if (renderedItems.length === 0) {
@@ -5117,14 +5178,17 @@ function getSlotItems<LAnnotation, Caret>(
     return renderedItems;
   }
 
-  if (!hasAnnotationRenderer) {
+  if (!hasAnnotationRenderer && !hasFoldRenderer) {
     return undefined;
   }
 
   const slotSnapshot: CodeViewRenderedItem<LAnnotation, Caret>[] = [];
 
   for (const renderedItem of renderedItems) {
-    if (hasAnnotations(renderedItem)) {
+    if (
+      (hasAnnotationRenderer && hasAnnotations(renderedItem)) ||
+      (hasFoldRenderer && hasFolds(renderedItem))
+    ) {
       slotSnapshot.push(renderedItem);
     }
   }

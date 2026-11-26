@@ -78,6 +78,7 @@ interface UseFileDiffInstanceProps<LAnnotation, Caret> {
   metrics?: VirtualFileMetrics;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
+  hasFoldSeparator?: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
   onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
@@ -105,6 +106,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
   metrics,
   hasGutterRenderUtility,
   hasCustomHeader,
+  hasFoldSeparator = false,
   disableWorkerPool,
   edit,
   onEditChange: _onEditChange,
@@ -196,6 +198,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
           mergeFileDiffOptions({
             controlledSelection,
             hasCustomHeader,
+            hasFoldSeparator,
             hasGutterRenderUtility,
             onEditChange,
             onEditComplete,
@@ -211,6 +214,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
           mergeFileDiffOptions({
             controlledSelection,
             hasCustomHeader,
+            hasFoldSeparator,
             hasGutterRenderUtility,
             onEditChange,
             onEditComplete,
@@ -244,6 +248,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     const newOptions = mergeFileDiffOptions({
       controlledSelection,
       hasCustomHeader,
+      hasFoldSeparator,
       hasGutterRenderUtility,
       onEditChange,
       onEditComplete,
@@ -432,6 +437,7 @@ function resolveAcceptedValues<LAnnotation>(
 interface MergeFileDiffOptionsProps<LAnnotation, Caret> {
   controlledSelection: boolean;
   hasCustomHeader: boolean;
+  hasFoldSeparator: boolean;
   hasGutterRenderUtility: boolean;
   onEditChange?: FileDiffEditChangeHandler<LAnnotation, Caret>;
   onEditComplete?: FileDiffEditCompleteHandler<LAnnotation, Caret>;
@@ -442,6 +448,7 @@ function mergeFileDiffOptions<LAnnotation, Caret>({
   options,
   controlledSelection,
   hasCustomHeader,
+  hasFoldSeparator,
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
@@ -458,6 +465,9 @@ function mergeFileDiffOptions<LAnnotation, Caret>({
     renderGutterUtility: hasGutterRenderUtility
       ? noopRender
       : options?.renderGutterUtility,
+    renderFoldSeparator: hasFoldSeparator
+      ? noopRender
+      : options?.renderFoldSeparator,
     onEditChange,
     onEditComplete,
   };

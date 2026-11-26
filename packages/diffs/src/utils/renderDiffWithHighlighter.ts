@@ -34,6 +34,7 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks,
     collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    folds,
   }: ForceDiffPlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedDiffResult {
   if (forcePlainText) {
@@ -101,6 +102,7 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
     collapsedContextThreshold,
+    folds: isWindowedHighlight ? folds : undefined,
   });
   while (rows.next()) {
     const { hunkIndex, type, splitLineIndex } = rows;

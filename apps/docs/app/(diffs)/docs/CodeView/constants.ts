@@ -33,6 +33,10 @@ type CodeViewDiffItem<T = undefined> = {
   id: string;
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<T>[];
+  // Line ranges to fold, and the ones kept open, as on FileDiff. Toggle a fold
+  // from renderFoldSeparator by updating expandedFolds and the version.
+  foldedRanges?: FoldedRange[];
+  expandedFolds?: number[];
   collapsed?: boolean;
   // Enables per-item edit mode when editing is configured.
   edit?: boolean;

@@ -71,6 +71,7 @@ import type {
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
+  FoldData,
   HighlightedToken,
   HunkData,
   HunkSeparators,
@@ -89,6 +90,7 @@ import type {
 import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
+import { areFoldDataEqual } from '../utils/areFoldDataEqual';
 import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
@@ -259,6 +261,14 @@ export interface FileDiffOptions<LAnnotation, Caret>
     annotation: DiffLineAnnotation<LAnnotation>,
     fileDiff: FileDiffMetadata
   ): HTMLElement | undefined;
+  /**
+   * Renders the contents of a collapsed `foldedRanges` separator. Supplying it
+   * replaces the built-in label and expand control for every fold, so the
+   * element is responsible for its own toggle (call `toggleFold`). The row
+   * keeps the standard separator height; raise
+   * `VirtualFileMetrics.hunkSeparatorHeight` for a taller one.
+   */
+  renderFoldSeparator?(fold: FoldData): HTMLElement | null | undefined;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
@@ -297,9 +307,9 @@ interface AnnotationElementCache<LAnnotation> {
   fileDiff: FileDiffMetadata;
 }
 
-interface CustomHunkElementCache {
+interface SlotElementCache<T> {
   element: HTMLElement;
-  hunkData: HunkData;
+  data: T;
 }
 
 interface ColumnElements {
@@ -392,7 +402,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected headerFilenameSuffix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
   protected headerCustom: HTMLElement | undefined;
-  protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
+  protected separatorCache: Map<string, SlotElementCache<HunkData>> = new Map();
+  protected foldSeparatorCache: Map<string, SlotElementCache<FoldData>> =
+    new Map();
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
 
@@ -469,7 +481,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined,
-        this.getLineIndex
+        this.getLineIndex,
+        undefined,
+        this.handleToggleFold
       )
     );
     this.enabled = true;
@@ -568,7 +582,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           this.options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined,
-        this.getLineIndex
+        this.getLineIndex,
+        undefined,
+        this.handleToggleFold
       )
     );
   }
@@ -1141,6 +1157,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.expandHunk(hunkIndex, direction, expansionLineCountOverride);
   };
 
+  // Same late-binding contract as `handleExpandHunk`: subclasses replace
+  // `toggleFold` after `super()` returns, so the InteractionManager gets a
+  // stable callback that resolves the override at click time.
+  public handleToggleFold = (foldIndex: number): void => {
+    this.toggleFold(foldIndex);
+  };
+
+  public toggleFold = (foldIndex: number): void => {
+    this.hunksRenderer.toggleFold(foldIndex);
+    this.rerender();
+  };
+
   public expandHunk = (
     hunkIndex: number,
     direction: ExpansionDirections,
@@ -1625,6 +1653,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           );
         }
         this.renderSeparators([]);
+        this.renderFoldSeparators([]);
         this.adoptRenderData(workingDiff);
         this.injectUnsafeCSS();
       } catch (error: unknown) {
@@ -1685,6 +1714,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.pre = undefined;
       }
       this.renderSeparators(hunksResult.hunkData);
+      this.renderFoldSeparators(hunksResult.foldData);
       this.adoptRenderData(hunksResult.fileDiff);
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
@@ -2483,6 +2513,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     this.separatorCache.clear();
 
+    for (const { element } of this.foldSeparatorCache.values()) {
+      element.remove();
+    }
+    this.foldSeparatorCache.clear();
+
     for (const { element } of this.annotationCache.values()) {
       element.remove();
     }
@@ -2599,38 +2634,62 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   private renderSeparators(hunkData: HunkData[]): void {
     const { hunkSeparators } = this.options;
-    if (
-      this.isComponentManaged ||
-      this.fileContainer == null ||
-      typeof hunkSeparators !== 'function'
-    ) {
-      for (const { element } of this.separatorCache.values()) {
+    this.projectSlots(
+      this.separatorCache,
+      hunkData,
+      typeof hunkSeparators === 'function'
+        ? (hunk) => hunkSeparators(hunk, this)
+        : undefined,
+      areHunkDataEqual
+    );
+  }
+
+  private renderFoldSeparators(foldData: FoldData[]): void {
+    this.projectSlots(
+      this.foldSeparatorCache,
+      foldData,
+      this.options.renderFoldSeparator,
+      areFoldDataEqual
+    );
+  }
+
+  // Projects host-rendered nodes into their slots: one element per slot,
+  // reused while its data is unchanged, removed when the slot goes away.
+  private projectSlots<T extends { slotName: string }>(
+    cache: Map<string, SlotElementCache<T>>,
+    items: T[],
+    render: ((item: T) => Node | null | undefined) | undefined,
+    isEqual: (a: T, b: T) => boolean
+  ): void {
+    const { fileContainer } = this;
+    if (this.isComponentManaged || fileContainer == null || render == null) {
+      for (const { element } of cache.values()) {
         element.remove();
       }
-      this.separatorCache.clear();
+      cache.clear();
       return;
     }
-    const staleSeparators = new Map(this.separatorCache);
-    for (const hunk of hunkData) {
-      const id = hunk.slotName;
-      let cache = this.separatorCache.get(id);
-      if (cache == null || !areHunkDataEqual(hunk, cache.hunkData)) {
-        cache?.element.remove();
+    const stale = new Map(cache);
+    for (const item of items) {
+      const id = item.slotName;
+      let entry = cache.get(id);
+      if (entry == null || !isEqual(item, entry.data)) {
+        entry?.element.remove();
         const element = document.createElement('div');
         element.style.display = 'contents';
-        element.slot = hunk.slotName;
-        const child = hunkSeparators(hunk, this);
+        element.slot = item.slotName;
+        const child = render(item);
         if (child != null) {
           element.appendChild(child);
         }
-        this.fileContainer.appendChild(element);
-        cache = { element, hunkData: hunk };
-        this.separatorCache.set(id, cache);
+        fileContainer.appendChild(element);
+        entry = { element, data: item };
+        cache.set(id, entry);
       }
-      staleSeparators.delete(id);
+      stale.delete(id);
     }
-    for (const [id, { element }] of staleSeparators.entries()) {
-      this.separatorCache.delete(id);
+    for (const [id, { element }] of stale.entries()) {
+      cache.delete(id);
       element.remove();
     }
   }
