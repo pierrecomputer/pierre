@@ -14,22 +14,35 @@ export function attachResolvedLanguages(
   resolvedLanguages: ResolvedLanguage | ResolvedLanguage[],
   highlighter: DiffsHighlighter
 ): void {
-  const langs = (
-    Array.isArray(resolvedLanguages) ? resolvedLanguages : [resolvedLanguages]
-  ).map((resolvedLang) => {
-    // The first resolution of a name wins so every instance and worker
-    // attaches the same grammar data for it.
-    const cache =
-      resolvedLang.highlights == null
-        ? ResolvedLanguages
-        : ResolvedHighlightsLanguages;
-    let lang = cache.get(resolvedLang.name);
-    if (lang == null) {
-      lang = resolvedLang;
-      cache.set(resolvedLang.name, lang);
+  const languages = Array.isArray(resolvedLanguages)
+    ? resolvedLanguages
+    : [resolvedLanguages];
+
+  // Shiki can reject a later grammar after earlier ones are already loaded.
+  if (languages.length > 1 && highlighter.name !== 'highlights') {
+    for (const language of languages) {
+      const lang = cacheResolvedLanguage(language);
+      highlighter.attachLanguages([lang]);
+      AttachedLanguages.add(lang.name);
     }
-    return lang;
-  });
+    return;
+  }
+
+  const langs = languages.map(cacheResolvedLanguage);
   highlighter.attachLanguages(langs);
-  for (const lang of langs) AttachedLanguages.add(lang.name);
+  for (const lang of langs) {
+    AttachedLanguages.add(lang.name);
+  }
+}
+
+// Every instance and worker uses the first resolution of a name for its backend.
+function cacheResolvedLanguage(language: ResolvedLanguage): ResolvedLanguage {
+  const cache =
+    language.highlights == null
+      ? ResolvedLanguages
+      : ResolvedHighlightsLanguages;
+  const cached = cache.get(language.name);
+  if (cached != null) return cached;
+  cache.set(language.name, language);
+  return language;
 }

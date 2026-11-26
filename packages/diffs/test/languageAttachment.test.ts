@@ -8,6 +8,7 @@ import {
   type DiffsHighlighter,
   disposeHighlighter,
   getSharedHighlighter,
+  hasResolvedLanguages,
   registerCustomLanguage,
 } from '../src';
 import {
@@ -136,6 +137,26 @@ test('Shiki renders a name with only a Highlights lexer as plain text', async ()
 });
 
 describe('language attachment', () => {
+  test('keeps earlier Shiki grammars attached when a later grammar fails', async () => {
+    const highlighter = await getSharedHighlighter({ themes: [], langs: [] });
+    const { default: data } = await bundledLanguages.hcl();
+
+    expect(() =>
+      attachResolvedLanguages(
+        [
+          { name: 'hcl', data },
+          { name: 'tf', data },
+          { name: 'terraform', data: [] },
+        ],
+        highlighter
+      )
+    ).toThrow('No returned grammar declares "tf"');
+    expect(highlighter.hasLoadedLanguages(['hcl'])).toBe(true);
+    expect(areLanguagesAttached('hcl')).toBe(true);
+    expect(areLanguagesAttached('tf')).toBe(false);
+    expect(hasResolvedLanguages('terraform')).toBe(false);
+  });
+
   for (const preloadTerraform of [false, true]) {
     test(`rejects a mismatched custom loader and cached retries, Terraform ${preloadTerraform ? 'loaded' : 'absent'}`, async () => {
       const highlighter = await getSharedHighlighter({
