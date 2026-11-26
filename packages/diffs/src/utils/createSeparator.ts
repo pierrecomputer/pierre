@@ -11,6 +11,7 @@ import {
 interface CreateSeparatorProps {
   type: HunkSeparators;
   content?: string;
+  hunkContext?: string;
   expandIndex?: number;
   chunked?: boolean;
   slotName?: string;
@@ -40,6 +41,7 @@ function createExpandButton(type: ExpansionDirections) {
 export function createSeparator({
   type,
   content,
+  hunkContext,
   expandIndex,
   chunked = false,
   slotName,
@@ -87,6 +89,15 @@ export function createSeparator({
             children: [createTextNodeElement(content)],
             properties: { 'data-unmodified-lines': '' },
           }),
+          ...(hunkContext != null && hunkContext !== ''
+            ? [
+                createHastElement({
+                  tagName: 'span',
+                  children: [createTextNodeElement(hunkContext)],
+                  properties: { 'data-hunk-context': '' },
+                }),
+              ]
+            : []),
         ],
         properties: { 'data-separator-content': '' },
       })

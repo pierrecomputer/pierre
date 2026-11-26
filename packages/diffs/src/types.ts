@@ -798,6 +798,13 @@ export interface HunkData {
   hunkIndex: number;
   lines: number;
   lineCountKnown: boolean;
+  /**
+   * Function/method name for the first line below this separator. It's the
+   * hunk's `@@` header context until expanding reveals the line that name was
+   * taken from, after which it's the nearest line above that starts with a
+   * letter, `_` or `$`. Undefined if the header had no context.
+   */
+  hunkContext?: string;
   type: CodeColumnType;
   expandable?: {
     chunked: boolean;
