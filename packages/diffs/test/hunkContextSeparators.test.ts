@@ -1,7 +1,12 @@
 import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { DiffHunksRenderer, disposeHighlighter, processFile } from '../src';
+import {
+  areHunkDataEqual,
+  DiffHunksRenderer,
+  disposeHighlighter,
+  processFile,
+} from '../src';
 import type { FileDiffMetadata } from '../src/types';
 import { assertDefined } from './testUtils';
 
@@ -128,5 +133,22 @@ describe('hunk context in separators', () => {
     renderer.expandHunk(1, 'down', 10);
 
     expect((await separatorContexts(renderer, diff))[1]).toBe('func alpha() {');
+  });
+
+  // Custom separators are only rebuilt when their HunkData differs, so a
+  // changed name alone has to make it differ.
+  test('treats separators with different names as different', async () => {
+    const before = await createRenderer().asyncRender(
+      parseWithContexts(['func alpha() {', 'func beta() {'])
+    );
+    const after = await createRenderer().asyncRender(
+      parseWithContexts(['func alpha() {', 'func gamma() {'])
+    );
+    const [beforeData, afterData] = [before.hunkData[1], after.hunkData[1]];
+    assertDefined(beforeData, 'expected a separator above the second hunk');
+    assertDefined(afterData, 'expected a separator above the second hunk');
+
+    expect(areHunkDataEqual(beforeData, { ...beforeData })).toBe(true);
+    expect(areHunkDataEqual(beforeData, afterData)).toBe(false);
   });
 });
