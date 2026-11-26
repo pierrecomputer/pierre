@@ -500,6 +500,22 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 
   /**
+   * Line ranges the host wants rendered folded, each as one separator row with
+   * an expand control. Ranges are per side, one-based and inclusive, and may
+   * arrive unsorted. A range that cannot fold cleanly is dropped rather than
+   * throwing: see `foldedRanges` handling in `resolveFoldedRanges`.
+   */
+  foldedRanges?: FoldedRange[];
+  /**
+   * Folds the host is keeping open, by index into `foldedRanges`. Supplying
+   * this makes fold state controlled: the renderer stops tracking its own and
+   * only reports clicks through `onFoldToggle`.
+   */
+  expandedFolds?: number[];
+  /** Fires when a fold's expand control is clicked. */
+  onFoldToggle?: FoldToggleCallback;
+
+  /**
    * Parser options used when computing diffs from file contents
    * (oldFile/newFile) or recomputing edited diffs. Includes diff settings
    * and the disableLineMatching escape hatch. Also used when deriving cache
@@ -534,6 +550,9 @@ export type BaseDiffOptionsWithDefaults = Required<
     | 'deferHydrationHighlight'
     | 'parseDiffOptions'
     | 'loadDiffFiles'
+    | 'foldedRanges'
+    | 'expandedFolds'
+    | 'onFoldToggle'
   >
 >;
 
@@ -576,6 +595,19 @@ export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
 export type AnnotationSide = 'deletions' | 'additions';
 export type SelectionSide = 'deletions' | 'additions';
+
+/** One host-defined run of lines rendered folded behind a separator row. */
+export interface FoldedRange {
+  side: AnnotationSide;
+  /** First line of the run on `side`, one-based. */
+  start: number;
+  /** Last line of the run on `side`, one-based and inclusive. */
+  end: number;
+  /** Separator text. Falls back to a `N lines` count. */
+  label?: string;
+}
+
+export type FoldToggleCallback = (index: number, expanded: boolean) => void;
 
 export interface SelectedLineRange {
   start: number;
@@ -633,6 +665,10 @@ export type CodeViewDiffItem<LAnnotation = undefined> = {
    * true. Make sure you bump the version when also changing the value.
    */
   edit?: boolean;
+  /** Line ranges to fold in this diff, as `FileDiff`'s `foldedRanges`. */
+  foldedRanges?: FoldedRange[];
+  /** Folds kept open; makes this diff's fold state controlled. */
+  expandedFolds?: number[];
 };
 
 export type CodeViewItem<LAnnotation> =
@@ -806,6 +842,25 @@ export interface HunkData {
   };
 }
 
+/** One fold, as handed to `renderFoldSeparator`. */
+export interface FoldData {
+  slotName: string;
+  /** Index into the host's `foldedRanges` array. */
+  foldIndex: number;
+  side: AnnotationSide;
+  /** One-based, inclusive line bounds actually folded on `side`. */
+  start: number;
+  end: number;
+  /** Source lines the fold hides on its own side. */
+  lines: number;
+  label: string | undefined;
+  /** Which column this copy of the separator belongs to. */
+  type: CodeColumnType;
+  expanded: boolean;
+}
+
+export type FoldSeparatorRenderMode = 'default' | 'custom';
+
 export type AnnotationLineMap<LAnnotation> = Record<
   number,
   DiffLineAnnotation<LAnnotation>[] | undefined
@@ -837,6 +892,35 @@ export interface HunkExpansionRegion {
 
 /** How far each collapsed region is expanded, keyed by hunk index. */
 export type ExpandedHunksMap = Map<number, HunkExpansionRegion>;
+/**
+ * A host `foldedRange` resolved against one parsed diff. `blockStart`/
+ * `blockEnd` bound the `hunk.hunkContent` entries the fold touches, and
+ * `start`/`end` are the one-based lines on `side` that survived clamping:
+ * the values the separator label and the layout walkers both read.
+ */
+export interface ResolvedDiffFold {
+  /** Index into the host's `foldedRanges` array. Stable across expansion. */
+  index: number;
+  label: string | undefined;
+  side: AnnotationSide;
+  hunkIndex: number;
+  blockStart: number;
+  blockEnd: number;
+  start: number;
+  end: number;
+  /** Source lines hidden on the fold's own side. */
+  lines: number;
+  /** Rows the fold removes from unified layout. */
+  unifiedRows: number;
+  /** Rows the fold removes from split layout. */
+  splitRows: number;
+  /** Absolute index of the fold's first unified row, before it is hidden. */
+  unifiedRowStart: number;
+  /** Absolute index of the fold's first split row, before it is hidden. */
+  splitRowStart: number;
+  /** Open folds keep their rows and render the separator above them. */
+  expanded: boolean;
+}
 
 export interface ForceDiffPlainTextOptions {
   forcePlainText: boolean;
@@ -845,6 +929,7 @@ export interface ForceDiffPlainTextOptions {
   totalLines?: number;
   expandedHunks?: ExpandedHunksMap | true;
   collapsedContextThreshold?: number;
+  folds?: ResolvedDiffFold[];
 }
 
 export interface ForceFilePlainTextOptions {

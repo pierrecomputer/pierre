@@ -7,7 +7,12 @@ import {
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
-import type { DiffLineAnnotation, FileDiffMetadata } from '../../types';
+import type {
+  CodeColumnType,
+  DiffLineAnnotation,
+  FileDiffMetadata,
+} from '../../types';
+import { getFoldData, resolveFoldedRanges } from '../../utils/foldedDiffRanges';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { getMergeConflictActionSlotName } from '../../utils/getMergeConflictActionSlotName';
 import {
@@ -37,6 +42,11 @@ interface RenderDiffChildrenProps<LAnnotation, Caret, T> {
     Caret
   >['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation, Caret>['renderAnnotation'];
+  renderFoldSeparator?: DiffBasePropsReact<
+    LAnnotation,
+    Caret
+  >['renderFoldSeparator'];
+  options?: DiffBasePropsReact<LAnnotation, Caret>['options'];
   renderGutterUtility: DiffBasePropsReact<
     LAnnotation,
     Caret
@@ -59,6 +69,8 @@ export function renderDiffChildren<LAnnotation, Caret, T>({
   renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
+  renderFoldSeparator,
+  options,
   renderGutterUtility,
   renderMergeConflictUtility,
   lineAnnotations,
@@ -91,6 +103,21 @@ export function renderDiffChildren<LAnnotation, Caret, T>({
             {renderAnnotation(annotation, fileDiff)}
           </div>
         ))}
+      {renderFoldSeparator != null &&
+        resolveFoldedRanges({
+          fileDiff,
+          foldedRanges: options?.foldedRanges,
+          expandedFolds: options?.expandedFolds,
+        }).flatMap((fold) =>
+          getFoldColumns(options?.diffStyle).map((type) => {
+            const foldData = getFoldData(fold, type);
+            return (
+              <div key={foldData.slotName} slot={foldData.slotName}>
+                {renderFoldSeparator(foldData)}
+              </div>
+            );
+          })
+        )}
       {actions != null &&
         renderMergeConflictUtility != null &&
         getInstance != null &&
@@ -112,6 +139,13 @@ export function renderDiffChildren<LAnnotation, Caret, T>({
       )}
     </>
   );
+}
+
+// The columns a fold separator renders in, one slot each.
+function getFoldColumns(
+  diffStyle: 'unified' | 'split' | undefined
+): CodeColumnType[] {
+  return diffStyle === 'unified' ? ['unified'] : ['deletions', 'additions'];
 }
 
 function getSlotName(

@@ -16,6 +16,7 @@ import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
+  FoldData,
   LineAnnotation,
   SelectedLineRange,
   VirtualFileMetrics,
@@ -67,6 +68,11 @@ export interface DiffBasePropsReact<LAnnotation, Caret> {
     fileDiff: FileDiffMetadata
   ): ReactNode;
   renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
+  /**
+   * Replaces the built-in label and control on every collapsed fold. The row
+   * opens and closes its fold through a controlled `options.expandedFolds`.
+   */
+  renderFoldSeparator?(fold: FoldData): ReactNode;
   renderHeaderPrefix?(fileDiff: FileDiffMetadata): ReactNode;
   renderHeaderFilenameSuffix?(fileDiff: FileDiffMetadata): ReactNode;
   renderHeaderMetadata?(fileDiff: FileDiffMetadata): ReactNode;

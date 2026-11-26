@@ -4,6 +4,7 @@ import type {
   FileDiffMetadata,
   Hunk,
   HunkSeparators,
+  ResolvedDiffFold,
   VirtualFileMetrics,
 } from '../types';
 import {
@@ -11,8 +12,10 @@ import {
   getVirtualFilePaddingBottom,
 } from './computeVirtualFileMetrics';
 import { endsWithNewline } from './endsWithNewline';
+import { getFoldedRowCount, getHunkFolds } from './foldedDiffRanges';
 import {
   getExpandedRegion,
+  getFoldSeparatorLayout,
   getLeadingHunkSeparatorLayout,
   getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
@@ -32,6 +35,10 @@ export interface ComputeEstimatedDiffHeightsOptions {
   includeTrailingNewline?: boolean;
   // Count the "No newline at end of file" marker rows.
   showNoNewlineMarkers?: boolean;
+  /** Collapsed host folds, already resolved against `fileDiff`. */
+  folds?: ResolvedDiffFold[];
+  /** True when `renderFoldSeparator` owns each fold row's contents. */
+  customFoldSeparator?: boolean;
 }
 
 export interface EstimatedDiffHeights {
@@ -52,6 +59,8 @@ export function computeEstimatedDiffHeights({
   canHydratePartialDiff,
   includeTrailingNewline = false,
   showNoNewlineMarkers = true,
+  folds,
+  customFoldSeparator = false,
 }: ComputeEstimatedDiffHeightsOptions): EstimatedDiffHeights {
   let splitHeight = getVirtualFileHeaderRegion(metrics, disableFileHeader);
   let unifiedHeight = splitHeight;
@@ -91,7 +100,28 @@ export function computeEstimatedDiffHeights({
     splitHeight += hunk.splitLineCount * metrics.lineHeight;
     unifiedHeight += hunk.unifiedLineCount * metrics.lineHeight;
 
-    if (showNoNewlineMarkers) {
+    // Each fold adds a separator row; a collapsed one also drops its rows.
+    const foldSeparatorHeight = getFoldSeparatorLayout({
+      type: hunkSeparators,
+      metrics,
+      custom: customFoldSeparator,
+    }).totalHeight;
+    const hunkFolds = getHunkFolds(folds, hunkIndex);
+    const foldsHeight = hunkFolds.length * foldSeparatorHeight;
+    splitHeight +=
+      foldsHeight - getFoldedRowCount(hunkFolds, 'split') * metrics.lineHeight;
+    unifiedHeight +=
+      foldsHeight -
+      getFoldedRowCount(hunkFolds, 'unified') * metrics.lineHeight;
+
+    // The marker hangs off the hunk's last row, which a fold can hide.
+    const endFolded = hunkFolds.some(
+      (fold) =>
+        !fold.expanded &&
+        fold.unifiedRowStart + fold.unifiedRows ===
+          hunk.unifiedLineStart + hunk.unifiedLineCount
+    );
+    if (showNoNewlineMarkers && !endFolded) {
       const metadataLineCounts = getNoNewlineMetadataLineCounts(hunk);
       splitHeight += metadataLineCounts.split * metrics.lineHeight;
       unifiedHeight += metadataLineCounts.unified * metrics.lineHeight;

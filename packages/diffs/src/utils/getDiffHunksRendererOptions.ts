@@ -35,7 +35,12 @@ export function getDiffHunksRendererOptions<LAnnotation, Caret>(
     lineDiffType: options?.lineDiffType,
     maxLineDiffLength: options?.maxLineDiffLength,
     expansionLineCount: options?.expansionLineCount,
+    foldedRanges: options?.foldedRanges,
+    expandedFolds: options?.expandedFolds,
+    onFoldToggle: options?.onFoldToggle,
     headerRenderMode:
       options?.renderCustomHeader != null ? 'custom' : 'default',
+    foldSeparatorRenderMode:
+      options?.renderFoldSeparator != null ? 'custom' : 'default',
   };
 }

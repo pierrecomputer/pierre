@@ -435,6 +435,20 @@ const instance = new FileDiff<ThreadMetadata>({
   // (default: 1)
   collapsedContextThreshold: 1,
 
+  // Line ranges to fold behind one separator row each (one-based, inclusive).
+  // Ranges that cannot fold cleanly are dropped.
+  foldedRanges?: FoldedRange[],
+
+  // Folds kept open, by index into foldedRanges. Makes fold state controlled.
+  expandedFolds?: number[],
+
+  // Called when a fold's expand control is clicked
+  onFoldToggle?: (index: number, expanded: boolean) => void,
+
+  // Renders a fold row's contents in place of the built-in label and control.
+  // The element must call instance.toggleFold(fold.foldIndex) itself.
+  renderFoldSeparator?: (fold: FoldData) => HTMLElement | undefined,
+
   // ─────────────────────────────────────────────────────────────
   // INLINE CHANGE HIGHLIGHTING
   // ─────────────────────────────────────────────────────────────

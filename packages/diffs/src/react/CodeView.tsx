@@ -43,6 +43,7 @@ import {
   type DiffLineAnnotation,
   type FileContents,
   type FileDiffMetadata,
+  type FoldData,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -138,6 +139,11 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderMetadata?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderAnnotation?(...args: CodeViewAnnotationArgs<LAnnotation>): ReactNode;
+  /** Replaces the built-in label and control on a diff item's folds. */
+  renderFoldSeparator?(
+    fold: FoldData,
+    item: CodeViewDiffItem<LAnnotation>
+  ): ReactNode;
   renderGutterUtility?(
     getHoveredLine: CodeViewGutterUtilityGetter,
     item: CodeViewItem<LAnnotation>
@@ -256,6 +262,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
     renderCodeViewFooter,
     renderCodeViewHeader,
     renderCustomHeader,
+    renderFoldSeparator,
     renderGutterUtility,
     renderHeaderFilenameSuffix,
     renderHeaderMetadata,
@@ -272,13 +279,17 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
   const hasCustomHeader = renderCustomHeader != null;
   const hasAnnotationRenderer = renderAnnotation != null;
   const hasGutterRenderer = renderGutterUtility != null;
+  const hasFoldSeparator = renderFoldSeparator != null;
   const hasHeaderRenderers =
     hasCustomHeader ||
     renderHeaderPrefix != null ||
     renderHeaderFilenameSuffix != null ||
     renderHeaderMetadata != null;
   const hasRenderers =
-    hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
+    hasHeaderRenderers ||
+    hasAnnotationRenderer ||
+    hasGutterRenderer ||
+    hasFoldSeparator;
   const hasCodeViewHeader = renderCodeViewHeader != null;
   const hasCodeViewFooter = renderCodeViewFooter != null;
   const emitSelectedLinesChange = useStableCallback(
@@ -346,6 +357,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
         options,
         hasCustomHeader,
         hasGutterRenderer,
+        hasFoldSeparator,
         hasCodeViewHeader,
         hasCodeViewFooter,
         onSelectedLinesChange:
@@ -368,6 +380,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
       hasCodeViewFooter,
       hasCodeViewHeader,
       hasCustomHeader,
+      hasFoldSeparator,
       hasGutterRenderer,
       getEditStateKey,
       onItemEditChange,
@@ -437,6 +450,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
         !hasHeaderRenderers &&
         !hasAnnotationRenderer &&
         !hasGutterRenderer &&
+        !hasFoldSeparator &&
         !hasCodeViewHeader &&
         !hasCodeViewFooter
       ) {
@@ -446,6 +460,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
           hasHeaderRenderers,
           hasAnnotationRenderer,
           hasGutterRenderer,
+          hasFoldRenderer: hasFoldSeparator,
           onSnapshotChange,
         };
       }
@@ -453,6 +468,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
       onSnapshotChange,
       hasAnnotationRenderer,
       hasGutterRenderer,
+      hasFoldSeparator,
       hasHeaderRenderers,
       hasCodeViewHeader,
       hasCodeViewFooter,
@@ -706,6 +722,8 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
           renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
           renderHeaderMetadata={renderHeaderMetadata}
           renderAnnotation={renderAnnotation}
+          renderFoldSeparator={renderFoldSeparator}
+          diffStyle={options?.diffStyle}
           renderGutterUtility={renderGutterUtility}
           renderCodeViewHeader={renderCodeViewHeader}
           renderCodeViewFooter={renderCodeViewFooter}
@@ -803,6 +821,7 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation, Caret> {
   options: CodeViewReactOptions<LAnnotation, Caret> | undefined;
   hasCustomHeader: boolean;
   hasGutterRenderer: boolean;
+  hasFoldSeparator: boolean;
   hasCodeViewHeader: boolean;
   hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
@@ -817,6 +836,7 @@ function createManagedCodeViewOptions<LAnnotation, Caret>({
   options,
   hasCustomHeader,
   hasGutterRenderer,
+  hasFoldSeparator,
   hasCodeViewHeader,
   hasCodeViewFooter,
   onSelectedLinesChange,
@@ -864,6 +884,11 @@ function createManagedCodeViewOptions<LAnnotation, Caret>({
     managedOptions.renderGutterUtility = noopRender;
   }
 
+  // Same for fold separators: the placeholder makes each fold emit a slot.
+  if (hasFoldSeparator) {
+    managedOptions.renderFoldSeparator = noopRender;
+  }
+
   // The imperative CodeView adapters use these callbacks' presence to create the
   // header/footer host elements. React portals the actual content into them (via
   // the slot snapshot), so these placeholders intentionally return nothing.
@@ -895,6 +920,11 @@ interface CodeViewItemRenderers<LAnnotation, Caret> {
     Caret
   >['renderHeaderMetadata'];
   renderAnnotation: CodeViewBaseProps<LAnnotation, Caret>['renderAnnotation'];
+  renderFoldSeparator: CodeViewBaseProps<
+    LAnnotation,
+    Caret
+  >['renderFoldSeparator'];
+  diffStyle: CodeViewReactOptions<LAnnotation, Caret>['diffStyle'];
   renderGutterUtility: CodeViewBaseProps<
     LAnnotation,
     Caret
@@ -944,6 +974,11 @@ interface SlotPortalsProps<LAnnotation, Caret> {
     Caret
   >['renderHeaderMetadata'];
   renderAnnotation: CodeViewBaseProps<LAnnotation, Caret>['renderAnnotation'];
+  renderFoldSeparator: CodeViewBaseProps<
+    LAnnotation,
+    Caret
+  >['renderFoldSeparator'];
+  diffStyle: CodeViewReactOptions<LAnnotation, Caret>['diffStyle'];
   renderGutterUtility: CodeViewBaseProps<
     LAnnotation,
     Caret
@@ -965,6 +1000,8 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
   renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
+  renderFoldSeparator,
+  diffStyle,
   renderGutterUtility,
   renderCodeViewHeader,
   renderCodeViewFooter,
@@ -990,6 +1027,8 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
         renderHeaderFilenameSuffix,
         renderHeaderMetadata,
         renderAnnotation,
+        renderFoldSeparator,
+        diffStyle,
         renderGutterUtility,
       };
       return snapshot?.items?.map((renderedItem) =>
@@ -1029,6 +1068,8 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
       renderHeaderFilenameSuffix,
       renderHeaderMetadata,
       renderAnnotation,
+      renderFoldSeparator,
+      diffStyle,
       renderGutterUtility,
       snapshot?.items,
     ]
@@ -1066,6 +1107,8 @@ const DiffItemSlots = memo(function DiffItemSlots<LAnnotation, Caret>({
   renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
+  renderFoldSeparator,
+  diffStyle,
   renderGutterUtility,
 }: DiffItemSlotsProps<LAnnotation, Caret>): ReactNode {
   return renderDiffChildren({
@@ -1086,6 +1129,15 @@ const DiffItemSlots = memo(function DiffItemSlots<LAnnotation, Caret>({
       renderAnnotation != null
         ? (annotation, fileDiff) => renderAnnotation(annotation, fileDiff, item)
         : undefined,
+    renderFoldSeparator:
+      renderFoldSeparator != null
+        ? (fold) => renderFoldSeparator(fold, item)
+        : undefined,
+    options: {
+      diffStyle,
+      foldedRanges: item.foldedRanges,
+      expandedFolds: item.expandedFolds,
+    },
     lineAnnotations,
     renderGutterUtility:
       renderGutterUtility != null

@@ -6,6 +6,7 @@ import {
   DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
+  EMPTY_RESOLVED_FOLDS,
 } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
@@ -52,6 +53,9 @@ import type {
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
+  FoldData,
+  FoldedRange,
+  FoldSeparatorRenderMode,
   HighlightedToken,
   HunkData,
   HunkExpansionRegion,
@@ -60,6 +64,7 @@ import type {
   RenderDiffResult,
   RenderedDiffASTCache,
   RenderRange,
+  ResolvedDiffFold,
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
@@ -72,6 +77,7 @@ import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
 import { endsWithNewline } from '../utils/endsWithNewline';
+import { resolveFoldedRanges } from '../utils/foldedDiffRanges';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
@@ -122,6 +128,7 @@ interface HighlightedLines {
 
 export interface DiffHunksRendererOptions extends BaseDiffOptions {
   headerRenderMode?: FileHeaderRenderMode;
+  foldSeparatorRenderMode?: FoldSeparatorRenderMode;
 }
 
 export interface DiffHunksRendererOptionsWithDefaults extends Omit<
@@ -129,6 +136,7 @@ export interface DiffHunksRendererOptionsWithDefaults extends Omit<
   'themeType'
 > {
   headerRenderMode: FileHeaderRenderMode;
+  foldSeparatorRenderMode: FoldSeparatorRenderMode;
 }
 
 export type {
@@ -159,6 +167,7 @@ export interface HunksRenderResult {
    */
   patched: LayoutColumns | undefined;
   hunkData: HunkData[];
+  foldData: FoldData[];
   preNode: HASTElement;
   headerElement: HASTElement | undefined;
   totalLines: number;
@@ -188,6 +197,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public readonly lineCuts: LineCuts = new LineCuts();
   private expandedHunks = new Map<number, HunkExpansionRegion>();
+  // Fold state is only tracked here while the host leaves `expandedFolds`
+  // unset. A host that supplies it owns the state and gets `onFoldToggle`.
+  private expandedFolds: readonly number[] = [];
+  // The last `getResolvedFolds` result, reused while its inputs hold so the
+  // layout sees the same array and can patch rather than walk again.
+  private resolvedFolds:
+    | {
+        fileDiff: FileDiffMetadata;
+        hunks: FileDiffMetadata['hunks'];
+        foldedRanges: FoldedRange[] | undefined;
+        expandedFolds: readonly number[];
+        folds: ResolvedDiffFold[];
+      }
+    | undefined;
 
   // The annotations last given, so setLineAnnotations can tell an unchanged
   // list apart and keep the maps below as they are. The layout only patches
@@ -229,6 +252,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.recycle();
     this.lineCuts.clear();
     this.expandedHunks.clear();
+    this.expandedFolds = [];
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
   }
@@ -658,6 +682,72 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.layout?.invalidateLines();
   }
 
+  /**
+   * Flip one `foldedRanges` entry between folded and expanded. Uncontrolled
+   * hosts get the renderer's own state updated; controlled ones (those that
+   * supply `expandedFolds`) only get the `onFoldToggle` call, and re-render
+   * when they change the option.
+   */
+  public toggleFold(index: number): void {
+    const expanded = !this.getExpandedFolds().includes(index);
+    if (this.options.expandedFolds == null) {
+      this.expandedFolds = expanded
+        ? [...this.expandedFolds, index]
+        : this.expandedFolds.filter((folded) => folded !== index);
+      this.clearRenderCache();
+      // Folding moves rows, and the layout cannot see that on its own.
+      this.layout?.invalidateLines();
+    }
+    this.options.onFoldToggle?.(index, expanded);
+  }
+
+  public getExpandedFolds(): readonly number[] {
+    return this.options.expandedFolds ?? this.expandedFolds;
+  }
+
+  /**
+   * The host's folds resolved against `fileDiff`, minus any expanded ones.
+   * A fold separator has to carry a label and an expand control, which only
+   * the `line-info` separator shapes render, so folds are ignored under the
+   * label-less ones rather than hiding rows behind a bar with no way back.
+   */
+  public getResolvedFolds(fileDiff: FileDiffMetadata): ResolvedDiffFold[] {
+    const { hunkSeparators, foldSeparatorRenderMode } =
+      this.getOptionsWithDefaults();
+    const { foldedRanges } = this.options;
+    if (
+      foldSeparatorRenderMode === 'default' &&
+      hunkSeparators !== 'line-info' &&
+      hunkSeparators !== 'line-info-basic'
+    ) {
+      return EMPTY_RESOLVED_FOLDS;
+    }
+    const expandedFolds = this.getExpandedFolds();
+    const cached = this.resolvedFolds;
+    if (
+      cached?.fileDiff === fileDiff &&
+      // Edits and hydration replace the hunks on the same diff.
+      cached.hunks === fileDiff.hunks &&
+      cached.foldedRanges === foldedRanges &&
+      cached.expandedFolds === expandedFolds
+    ) {
+      return cached.folds;
+    }
+    const folds = resolveFoldedRanges({
+      fileDiff,
+      foldedRanges,
+      expandedFolds,
+    });
+    this.resolvedFolds = {
+      fileDiff,
+      hunks: fileDiff.hunks,
+      foldedRanges,
+      expandedFolds,
+      folds,
+    };
+    return folds;
+  }
+
   public getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
     return this.expandedHunks.get(hunkIndex) ?? DEFAULT_EXPANDED_REGION;
   }
@@ -765,6 +855,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader = false,
       theme = DEFAULT_THEMES,
       headerRenderMode = 'default',
+      foldSeparatorRenderMode = 'default',
       tokenizeMaxLineLength = 1000,
       tokenizeMaxLength = DEFAULT_TOKENIZE_MAX_LENGTH,
       useTokenTransformer = false,
@@ -788,6 +879,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
       theme: this.workerManager?.getDiffRenderOptions().theme ?? theme,
       headerRenderMode,
+      foldSeparatorRenderMode,
       tokenizeMaxLineLength,
       tokenizeMaxLength,
       useTokenTransformer,
@@ -1154,7 +1246,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               : expandUnchanged
                 ? true
                 : this.expandedHunks,
-            collapsedContextThreshold
+            collapsedContextThreshold,
+            this.getResolvedFolds(diff)
           );
           if (windowResult == null) {
             this.waitForLocalTheme();
@@ -1469,6 +1562,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expansionLineCount,
       collapsedContextThreshold,
       hunkSeparators,
+      foldSeparatorRenderMode,
     } = this.getOptionsWithDefaults();
     const { lineDiffType, maxLineDiffLength, preferredDiffLib } =
       this.getRenderOptions(diff).options;
@@ -1481,6 +1575,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineDiffType,
       maxLineDiffLength,
       preferredDiffLib,
+      customFoldSeparator: foldSeparatorRenderMode === 'custom',
       canHydrateContext: canHydrateCollapsedContext(
         diff,
         this.options.loadDiffFiles != null
@@ -1557,6 +1652,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       annotationSlotName: this.annotationSlotName,
       includeTrailingNewline: this.includesTrailingNewline(),
       showNoNewlineMarkers: this.showsNoNewlineMarkers(),
+      folds: this.getResolvedFolds(model.diff),
     };
   }
 
@@ -1578,15 +1674,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         : (this.model = DiffModel.fromDiff(diff));
     const previousResult = this.rowSource?.result;
     const rows = this.getRowSource(result, model, lines);
-    const { columns, patched, hunkData, rowCount, totalLines } = layout.layout(
-      this.layoutInput(model, rows, renderRange)
-    );
+    const { columns, patched, hunkData, foldData, rowCount, totalLines } =
+      layout.layout(this.layoutInput(model, rows, renderRange));
     return {
       fileDiff: diff,
       columns,
       allRowsChanged: previousResult !== result,
       patched,
       hunkData,
+      foldData,
       preNode: this.createPreElement(
         columns.deletions != null && columns.additions != null,
         totalLines

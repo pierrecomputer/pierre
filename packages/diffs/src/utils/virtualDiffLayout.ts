@@ -509,6 +509,31 @@ export function getLeadingHunkSeparatorLayout({
   };
 }
 
+export interface FoldSeparatorLayoutProps extends HunkSeparatorBaseProps {
+  /** True when `renderFoldSeparator` owns the row's contents. */
+  custom?: boolean;
+}
+
+// Mirrors the renderer/CSS spacing rules for a collapsed `foldedRanges`
+// separator. A fold always sits between rendered rows, so it keeps the gap on
+// both sides regardless of which hunk it falls in. A host-rendered fold takes
+// the `custom` shape, so its height stops following `hunkSeparators`.
+export function getFoldSeparatorLayout({
+  type,
+  metrics,
+  custom = false,
+}: FoldSeparatorLayoutProps): HunkSeparatorLayout {
+  const resolvedType = custom ? 'custom' : type;
+  const height = getHunkSeparatorHeight({ type: resolvedType, metrics });
+  const gap = getHunkSeparatorGap({ type: resolvedType, metrics });
+  return {
+    height,
+    gapBefore: gap,
+    gapAfter: gap,
+    totalHeight: gap + height + gap,
+  };
+}
+
 // Mirrors the renderer/CSS spacing rules for the separator shown after the last
 // hunk when trailing unchanged context is collapsed.
 export function getTrailingHunkSeparatorLayout({

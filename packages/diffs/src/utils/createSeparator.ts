@@ -12,10 +12,30 @@ interface CreateSeparatorProps {
   type: HunkSeparators;
   content?: string;
   expandIndex?: number;
+  /** Set on a `foldedRanges` separator; carries the host's range index. */
+  foldIndex?: number;
+  foldExpanded?: boolean;
   chunked?: boolean;
   slotName?: string;
   isFirstHunk: boolean;
   isLastHunk: boolean;
+}
+
+function createFoldButton(expanded: boolean) {
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      createIconElement({
+        name: 'diffs-icon-expand',
+        properties: { 'data-icon': '' },
+      }),
+    ],
+    properties: {
+      role: 'button',
+      'aria-expanded': String(expanded),
+      'data-expand-button': '',
+    },
+  });
 }
 
 function createExpandButton(type: ExpansionDirections) {
@@ -41,11 +61,16 @@ export function createSeparator({
   type,
   content,
   expandIndex,
+  foldIndex,
+  foldExpanded = false,
   chunked = false,
   slotName,
   isFirstHunk,
   isLastHunk,
 }: CreateSeparatorProps): HASTElement {
+  // A fold separator with a slot hands the whole row to the host, so none of
+  // the built-in chrome renders and the row takes the `custom` shape.
+  const customFold = foldIndex != null && slotName != null;
   let buttonCount = 0;
   const children = [];
   if (type === 'metadata' && content != null) {
@@ -57,9 +82,16 @@ export function createSeparator({
       })
     );
   }
-  if ((type === 'line-info' || type === 'line-info-basic') && content != null) {
+  if (
+    !customFold &&
+    (type === 'line-info' || type === 'line-info-basic') &&
+    content != null
+  ) {
     const contentChildren: ElementContent[] = [];
-    if (expandIndex != null) {
+    if (foldIndex != null) {
+      contentChildren.push(createFoldButton(foldExpanded));
+      buttonCount++;
+    } else if (expandIndex != null) {
       if (!chunked) {
         contentChildren.push(
           createExpandButton(
@@ -115,7 +147,21 @@ export function createSeparator({
       })
     );
   }
-  if (type === 'custom' && slotName != null) {
+  if (customFold && slotName != null) {
+    // Inside the wrapper so the row does not widen the gutter column.
+    children.push(
+      createHastElement({
+        tagName: 'div',
+        children: [
+          createHastElement({
+            tagName: 'slot',
+            properties: { name: slotName },
+          }),
+        ],
+        properties: { 'data-separator-wrapper': '' },
+      })
+    );
+  } else if (type === 'custom' && slotName != null) {
     children.push(
       createHastElement({
         tagName: 'slot',
@@ -127,7 +173,12 @@ export function createSeparator({
     tagName: 'div',
     children,
     properties: {
-      'data-separator': children.length === 0 ? 'simple' : type,
+      'data-separator': customFold
+        ? 'custom'
+        : children.length === 0
+          ? 'simple'
+          : type,
+      'data-fold-index': foldIndex,
       'data-expand-index': expandIndex,
       'data-separator-first': isFirstHunk ? '' : undefined,
       'data-separator-last': isLastHunk ? '' : undefined,

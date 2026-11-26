@@ -14,11 +14,13 @@ import type {
   DiffLib,
   DiffLineAnnotation,
   ExpandedHunksMap,
+  FoldData,
   HunkData,
   HunkSeparators,
   LineDiffTypes,
   LineTypes,
   RenderRange,
+  ResolvedDiffFold,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import type { LineDiffRange } from '../utils/computeLineDiffRanges';
@@ -26,6 +28,7 @@ import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createSeparator } from '../utils/createSeparator';
 import { DiffRowCursor } from '../utils/DiffRowCursor';
+import { getFoldData } from '../utils/foldedDiffRanges';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import { createGutterGap } from '../utils/hast_utils';
@@ -63,6 +66,8 @@ export interface DiffLayoutOptions {
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
   preferredDiffLib?: DiffLib;
+  /** `renderFoldSeparator` owns each fold row's contents through a slot. */
+  customFoldSeparator?: boolean;
   /** Collapsed context can still be loaded, so every gap is expandable. */
   canHydrateContext: boolean;
 }
@@ -83,6 +88,8 @@ export interface DiffLayoutInput<LAnnotation> {
   includeTrailingNewline: boolean;
   /** Render the "No newline at end of file" marker rows. */
   showNoNewlineMarkers: boolean;
+  /** Collapsed host folds, already resolved against the model's diff. */
+  folds?: ResolvedDiffFold[];
 }
 
 export interface DiffLayoutResult {
@@ -96,6 +103,8 @@ export interface DiffLayoutResult {
    */
   patched: LayoutColumns | undefined;
   hunkData: HunkData[];
+  /** The collapsed folds whose rows carry a slot for host content. */
+  foldData: FoldData[];
   rowCount: number;
   totalLines: number;
 }
@@ -187,6 +196,7 @@ function sameInputs<LAnnotation>(
     last.annotationSlotName === next.annotationSlotName &&
     last.includeTrailingNewline === next.includeTrailingNewline &&
     last.showNoNewlineMarkers === next.showNoNewlineMarkers &&
+    last.folds === next.folds &&
     areRenderRangesEqual(last.renderRange, next.renderRange)
   );
 }
@@ -347,6 +357,7 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks: expandUnchanged ? true : input.expandedHunks,
       collapsedContextThreshold,
       includeTrailingNewline: input.includeTrailingNewline,
+      folds: input.folds,
     });
     while (rows.next()) {
       if (rows.hasAddition) {
@@ -397,6 +408,7 @@ export class DiffLayout<LAnnotation = undefined> {
       additions: createColumn(),
     };
     const hunkData: HunkData[] = [];
+    const foldData: FoldData[] = [];
     let rowCount = 0;
     let firstNewFileLine: number | undefined;
     let lastNewFileLine: number | undefined;
@@ -415,12 +427,12 @@ export class DiffLayout<LAnnotation = undefined> {
       }));
     };
 
+    const separatorTypes: CodeColumnType[] = unified
+      ? ['unified']
+      : ['deletions', 'additions'];
     const pushSeparators = (props: SeparatorProps) => {
       flushBuffer();
-      const types: CodeColumnType[] = unified
-        ? ['unified']
-        : ['deletions', 'additions'];
-      for (const type of types) {
+      for (const type of separatorTypes) {
         const rowsAdded = this.#pushSeparator(
           columns[type],
           type,
@@ -431,6 +443,20 @@ export class DiffLayout<LAnnotation = undefined> {
         );
         if (rowsAdded && type !== 'additions') rowCount++;
       }
+    };
+
+    const pushFoldSeparators = (fold: ResolvedDiffFold) => {
+      flushBuffer();
+      for (const type of separatorTypes) {
+        this.#pushFoldSeparator(
+          columns[type],
+          type,
+          fold,
+          hunkSeparators,
+          foldData
+        );
+      }
+      rowCount++;
     };
 
     // An annotation row is keyed by the line it hangs under, so it follows
@@ -469,12 +495,15 @@ export class DiffLayout<LAnnotation = undefined> {
       expandedHunks: expandUnchanged ? true : expandedHunks,
       collapsedContextThreshold,
       includeTrailingNewline,
+      folds: input.folds,
     });
     while (rows.next()) {
       const { deletionLine, additionLine } = readDiffRowLines(rows);
       const {
         hunkIndex,
         hunk,
+        foldSeparators,
+        foldSeparatorsAfter,
         collapsedBefore,
         collapsedAfter,
         type,
@@ -490,6 +519,12 @@ export class DiffLayout<LAnnotation = undefined> {
         flushBuffer();
       }
 
+      // Hidden folds above this row come before any hunk separator; an open
+      // fold's separator sits right above its own first row, after it.
+      foldSeparators
+        ?.filter((fold) => !fold.expanded)
+        .forEach(pushFoldSeparators);
+
       if (collapsedBefore > 0) {
         pushSeparators({
           hunkIndex,
@@ -501,6 +536,9 @@ export class DiffLayout<LAnnotation = undefined> {
           isExpandable: isExpandableDiff,
         });
       }
+      foldSeparators
+        ?.filter((fold) => fold.expanded)
+        .forEach(pushFoldSeparators);
 
       const lineIndex = unified ? unifiedLineIndex : splitLineIndex;
       const lineContext: RenderedLineContext = {
@@ -728,13 +766,16 @@ export class DiffLayout<LAnnotation = undefined> {
         !unified &&
         hunk != null &&
         splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
+      // Folds that end the diff make this the last row shown.
       const isFinalHunkRow =
-        hunkIndex === diff.hunks.length - 1 &&
-        hunk != null &&
-        (unified
-          ? unifiedLineIndex ===
-            hunk.unifiedLineStart + hunk.unifiedLineCount - 1
-          : splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1);
+        foldSeparatorsAfter != null ||
+        (hunkIndex === diff.hunks.length - 1 &&
+          hunk != null &&
+          (unified
+            ? unifiedLineIndex ===
+              hunk.unifiedLineStart + hunk.unifiedLineCount - 1
+            : splitLineIndex ===
+              hunk.splitLineStart + hunk.splitLineCount - 1));
       const noEOFCRDeletion =
         (deletionLine?.noEOFCR ?? false) ||
         (isFinalSplitHunkRow && hunk.noEOFCRDeletions);
@@ -806,6 +847,8 @@ export class DiffLayout<LAnnotation = undefined> {
         rowCount++;
       }
 
+      foldSeparatorsAfter?.forEach(pushFoldSeparators);
+
       if (
         hunkSeparators !== 'simple' &&
         hunkSeparators !== 'metadata' &&
@@ -851,6 +894,7 @@ export class DiffLayout<LAnnotation = undefined> {
           : { first: firstNewFileLine, last: lastNewFileLine },
       patched: undefined,
       hunkData,
+      foldData,
       rowCount,
       totalLines,
     };
@@ -914,6 +958,47 @@ export class DiffLayout<LAnnotation = undefined> {
     const result = { ...last.result, columns, patched };
     this.#last = { input, result };
     return result;
+  }
+
+  // Adds the separator row for one collapsed fold to one column. Folds reuse
+  // the line-info separator shape, so the row is as tall as the collapsed
+  // context separators the virtualizer already measures.
+  #pushFoldSeparator(
+    column: Column,
+    type: CodeColumnType,
+    fold: ResolvedDiffFold,
+    hunkSeparators: HunkSeparators,
+    foldData: FoldData[]
+  ): void {
+    const { index, lines, label, expanded } = fold;
+    const content = label ?? i18n.t('foldedLines', { count: lines });
+    const foldDatum =
+      this.options.customFoldSeparator === true
+        ? getFoldData(fold, type)
+        : undefined;
+    const slotName = foldDatum?.slotName;
+    const separator = () =>
+      createSeparator({
+        type: hunkSeparators,
+        content,
+        foldIndex: index,
+        foldExpanded: expanded,
+        slotName,
+        isFirstHunk: false,
+        isLastHunk: false,
+      });
+    this.#cells.fixedRow(
+      column,
+      `sep:fold-${type}-${index}`,
+      `${hunkSeparators}|${content}|${slotName}|${expanded}`,
+      () => ({
+        gutter: separator(),
+        content: readOnly(separator()),
+      })
+    );
+    if (foldDatum != null) {
+      foldData.push(foldDatum);
+    }
   }
 
   // Adds a separator row to one column. Returns whether a row was added.
