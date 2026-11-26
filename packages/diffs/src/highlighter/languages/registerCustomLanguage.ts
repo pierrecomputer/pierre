@@ -16,15 +16,15 @@ import {
  */
 export function registerCustomLanguage(
   lang: string,
-  loader: DynamicImportLanguageRegistration,
-  extensionsOrFilenames?: string[],
-  type?: 'textmate'
-): void;
-export function registerCustomLanguage(
-  lang: string,
   loader: () => Promise<{ default: HighlightsLanguage }>,
   extensionsOrFilenames: string[] | undefined,
   type: 'highlights'
+): void;
+export function registerCustomLanguage(
+  lang: string,
+  loader: DynamicImportLanguageRegistration,
+  extensionsOrFilenames?: string[],
+  type?: 'textmate'
 ): void;
 export function registerCustomLanguage(
   lang: string,
