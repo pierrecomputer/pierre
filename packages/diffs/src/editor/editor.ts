@@ -554,14 +554,9 @@ export class Editor<
   // Set for the hover, cleared when the pointer leaves or the gesture ends, so
   // that selection is not read back into #selections.
   #isPointerOverAnnotation = false;
-  // Set when the browser's native Selection is temporarily not the source of
-  // truth for editor text selections. Select-all can only mirror rendered
-  // lines, while diff line-selection and gutter-utility gestures can move the
-  // native range without selecting editor text. Gutter gestures only enable
-  // this when an editor selection exists to preserve; otherwise refocus must
-  // remain free to seed a caret. The next direct content pointerdown or keydown
-  // clears this, and keeping it through gutter pointerup also protects against
-  // a queued selectionchange.
+  // A clipped native range, or one moved by a gutter action, cannot describe
+  // the editor selection. Resume reading it after an exact placement or when
+  // the user starts a native selection gesture.
   #suppressNativeSelectionSync = false;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
@@ -1266,16 +1261,7 @@ export class Editor<
       this.#focusAtPosition(position, preventScroll);
       return;
     }
-    const primarySelection = this.#selections?.at(-1);
-    if (primarySelection !== undefined) {
-      const pos =
-        primarySelection.direction === DirectionBackward
-          ? primarySelection.end
-          : primarySelection.start;
-      this.#focus(pos, preventScroll);
-    } else {
-      this.#focus(undefined, preventScroll);
-    }
+    this.#focus(this.#selections?.at(-1), preventScroll);
   }
 
   blur(): void {
@@ -2481,7 +2467,7 @@ export class Editor<
             this.#selections !== undefined &&
             this.#selections.length > 0
           ) {
-            this.#setWindowSelection(this.#selections.at(-1)!);
+            this.#syncNativeSelection(this.#selections.at(-1)!);
           }
         },
         { passive: true }
@@ -2629,10 +2615,6 @@ export class Editor<
           return;
         }
         this.#canMountSelectionAction = true;
-        // A keystroke is the user acting on the select-all selection (deleting,
-        // typing, moving); let selectionchange sync #selections again.
-        this.#suppressNativeSelectionSync = false;
-
         // keyCode 229 opens the composition, before compositionstart fires.
         if (e.isComposing || e.keyCode === 229) {
           return;
@@ -2721,6 +2703,18 @@ export class Editor<
           this.#scrollToPrimaryCaret();
           e.preventDefault();
           return;
+        }
+
+        // Unhandled navigation (such as Option+Arrow on macOS) lets the
+        // browser choose the next range, including after a clipped selection.
+        if (
+          e.key.startsWith('Arrow') ||
+          e.key === 'Home' ||
+          e.key === 'End' ||
+          e.key === 'PageUp' ||
+          e.key === 'PageDown'
+        ) {
+          this.#suppressNativeSelectionSync = false;
         }
 
         const normalizedKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -2865,6 +2859,22 @@ export class Editor<
           }
           this.#cancelEditPrediction(true);
           this.#setComposing(true);
+          // Compose at a caret so the browser cannot delete the selected DOM
+          // rows before a commit. The model keeps the range to replace.
+          const shadowRoot = this.#fileContainer?.shadowRoot;
+          const range =
+            shadowRoot != null
+              ? getComposedSelectionRange(shadowRoot)
+              : undefined;
+          if (
+            range != null &&
+            !range.collapsed &&
+            this.#rangeBelongsToEditor(range)
+          ) {
+            window
+              .getSelection()
+              ?.collapse(range.startContainer, range.startOffset);
+          }
         },
         { passive: true }
       ),
@@ -2882,6 +2892,11 @@ export class Editor<
           // candidate was canceled (e.g. Esc), so there is nothing to commit.
           if (e.data !== '' || !wasComposing) {
             this.#handleInput('insertText', e.data);
+          } else if (this.#contentHasFocus) {
+            const primary = this.#selections?.at(-1);
+            if (primary != null && !isCollapsedSelection(primary)) {
+              this.#syncNativeSelection(primary);
+            }
           }
         },
         { passive: true }
@@ -3055,12 +3070,7 @@ export class Editor<
             this.#isGutterMouseDown = true;
             this.#selectionStart = selection;
             this.#updateSelections([selection]);
-            // Span the native selection across the clicked line and focus
-            // without collapsing it. #focus(position) would drop a collapsed
-            // caret at the line end, which a later selectionchange then turns
-            // into a bare caret — so a single click on a line number would
-            // place a cursor instead of selecting the whole line's text.
-            this.#setWindowSelection(selection);
+            this.#syncNativeSelection(selection);
             this.#focus();
             this.#replaceSelectEventListeners([
               addEventListener(
@@ -3094,11 +3104,7 @@ export class Editor<
                   );
                   this.#selectionStart ??= selection;
                   this.#updateSelections([selection]);
-                  this.#focus(
-                    selection.direction === DirectionBackward
-                      ? selection.start
-                      : selection.end
-                  );
+                  this.#focus(selection);
                 },
                 { passive: true }
               ),
@@ -3250,13 +3256,16 @@ export class Editor<
         }
         if (selections.length > 1) {
           this.#updateSelections([primarySelection]);
-          this.#focus(getCaretPosition(primarySelection));
+          this.#focus(primarySelection);
         } else if (!isCollapsedSelection(primarySelection)) {
           const caret = getCaretPosition(primarySelection);
-          this.#updateSelections([
-            { start: caret, end: caret, direction: DirectionNone },
-          ]);
-          this.#focus(caret);
+          const selection: EditorSelection = {
+            start: caret,
+            end: caret,
+            direction: DirectionNone,
+          };
+          this.#updateSelections([selection]);
+          this.#focus(selection);
         }
         break;
       }
@@ -3420,34 +3429,6 @@ export class Editor<
         const fullSelection = getDocumentFullSelection(textDocument);
         this.#updateSelections([fullSelection]);
         this.focus();
-        // The editor paints selections with an overlay and otherwise leaves the
-        // native selection a collapsed caret. focus() above collapses it to the
-        // document start, and Safari/WebKit then fires no delete beforeinput for
-        // a following Backspace — nothing sits before a caret at offset 0 — so
-        // select-all then delete is silently dropped. Give WebKit a non-collapsed
-        // native selection so it emits the delete; Chrome already deletes via
-        // #selections regardless. #setWindowSelection can only resolve lines that
-        // are currently rendered, and in a virtualized diff most of the document
-        // is offscreen, so anchor the native range to the editable lines on
-        // screen rather than the document bounds. The native range only needs to
-        // be non-collapsed — the edit uses #selections, which still spans the
-        // whole document. #suppressNativeSelectionSync then stops the resulting
-        // selectionchange from reading that shorter range back over #selections
-        // before the delete runs.
-        const renderedLineRanges = this.#getEditableLineRanges().rendered;
-        const firstRenderedLine = renderedLineRanges[0]?.[0];
-        const lastRenderedLine = renderedLineRanges.at(-1)?.[1];
-        if (firstRenderedLine !== undefined && lastRenderedLine !== undefined) {
-          this.#suppressNativeSelectionSync = true;
-          this.#setWindowSelection({
-            start: { line: firstRenderedLine, character: 0 },
-            end: {
-              line: lastRenderedLine,
-              character: textDocument.getLineLength(lastRenderedLine),
-            },
-            direction: DirectionForward,
-          });
-        }
         break;
       }
 
@@ -4027,15 +4008,15 @@ export class Editor<
     }
   }
 
-  // Focuses the content, placing the caret at `position` when given. Each
+  // Focuses the content, mirroring the supplied editor selection. Each
   // call replaces any focus request still in flight. `restore` is set when
   // the call puts focus back after a host DOM replacement.
   #focus(
-    position?: Position,
+    selection?: EditorSelection,
     preventScroll = true,
     restore?: FocusRequest['restore']
   ) {
-    // Mark focus eagerly: the positional branch defers the real focus() to a
+    // Mark focus eagerly: selection placement defers the real focus() to a
     // rAF, so a same-tick applyEdits would otherwise see the editor as
     // unfocused and skip repositioning while this focus still lands afterward.
     this.#contentHasFocus = true;
@@ -4049,12 +4030,13 @@ export class Editor<
           this.#replacementFocusIsAvailable(contentElement))
       );
     };
-    if (position !== undefined) {
-      this.#setWindowSelection({
-        start: position,
-        end: position,
-        direction: DirectionNone,
-      });
+    if (selection !== undefined) {
+      const placed = this.#syncNativeSelection(selection);
+      // A virtualized host can return before any of the selected text does.
+      // Keep the restore pending for the render that can place the range.
+      if (restore != null && !placed) {
+        return;
+      }
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
       const frame = () => {
@@ -4116,7 +4098,7 @@ export class Editor<
   // A full host render can remove the focused contenteditable before the
   // replacement view synchronizes. Restore only after the new content is live
   // and only while focus has not moved to another real control in the gap.
-  #restoreReplacementFocus(position?: Position): void {
+  #restoreReplacementFocus(): void {
     const restore = this.#focusRequest?.restore;
     if (restore == null) {
       return;
@@ -4136,26 +4118,7 @@ export class Editor<
       return;
     }
 
-    if (position != null) {
-      this.#focus(position, true, restore);
-      return;
-    }
-    const primarySelection = this.#selections?.at(-1);
-    if (primarySelection == null) {
-      this.#focus(undefined, true, restore);
-      return;
-    }
-    const primaryPosition =
-      primarySelection.direction === DirectionBackward
-        ? primarySelection.end
-        : primarySelection.start;
-    // A virtualized view can come back without the caret's row yet; the
-    // request waits for the render that has it, so the caret lands on its
-    // line and not wherever focus alone would put it.
-    if (this.#getLineElement(primaryPosition.line) == null) {
-      return;
-    }
-    this.#focus(primaryPosition, true, restore);
+    this.#focus(this.#selections?.at(-1), true, restore);
   }
 
   #replacementFocusIsAvailable(contentElement: HTMLElement): boolean {
@@ -4267,17 +4230,43 @@ export class Editor<
     this.#updateSelections([selection]);
     this.#revealLineIfCollapsed(position.line);
     if (preventScroll) {
-      this.#focus(position, true);
+      this.#focus(selection, true);
     } else {
       this.#scrollToPrimaryCaret();
     }
   }
 
-  // set window native selection to match the selection
-  #setWindowSelection(selection: EditorSelection) {
+  // Mirror the model range when possible. WebKit needs a non-collapsed
+  // native range to issue Backspace even when part of the selection is
+  // offscreen. Only the model knows the bounds of that clipped selection.
+  #syncNativeSelection(selection: EditorSelection): boolean {
+    const exact = this.#setWindowSelection(selection);
+    this.#suppressNativeSelectionSync = !exact;
+    if (exact || isCollapsedSelection(selection)) {
+      return exact;
+    }
+    const { start, end, direction } = selection;
+    const rendered = this.#getEditableLineRanges().rendered;
+    const first = rendered.find(([, last]) => last >= start.line)?.[0];
+    const last = rendered.findLast(([first]) => first <= end.line)?.[1];
+    const textDocument = this.#editSession?.document;
+    if (textDocument == null || first == null || last == null || first > last) {
+      return false;
+    }
+    return this.#setWindowSelection({
+      start: first > start.line ? { line: first, character: 0 } : start,
+      end:
+        last < end.line
+          ? { line: last, character: textDocument.getLineLength(last) }
+          : end,
+      direction,
+    });
+  }
+
+  #setWindowSelection(selection: EditorSelection): boolean {
     const winSelection = window.getSelection();
     if (winSelection === null) {
-      return;
+      return false;
     }
     let { start, end, direction } = selection;
     if (comparePosition(start, end) > 0) {
@@ -4286,7 +4275,7 @@ export class Editor<
     const startLineElement = this.#getLineElement(start.line);
     const endLineElement = this.#getLineElement(end.line);
     if (startLineElement === undefined || endLineElement === undefined) {
-      return;
+      return false;
     }
     let [anchorNode, anchorOffset] = getSelectionAnchor(
       startLineElement,
@@ -4311,8 +4300,10 @@ export class Editor<
         focusNode,
         clampDomOffset(focusNode, focusOffset)
       );
+      return true;
     } catch (err) {
       console.error('[diffs/editor] failed to update window selection:', err);
+      return false;
     }
   }
 
@@ -4338,11 +4329,7 @@ export class Editor<
       return;
     }
     if (!noFocus) {
-      this.#focusAt(
-        primarySelection.direction === DirectionBackward
-          ? primarySelection.end
-          : primarySelection.start
-      );
+      this.#focusAfterScroll();
     }
   }
 
@@ -4373,11 +4360,11 @@ export class Editor<
     }
   };
 
-  #focusAt(position: Position): void {
+  #focusAfterScroll(): void {
     if (this.#focusRequest?.restore != null) {
-      this.#restoreReplacementFocus(position);
+      this.#restoreReplacementFocus();
     } else {
-      this.#focus(position);
+      this.#focus(this.#selections?.at(-1));
     }
   }
 
@@ -4400,7 +4387,7 @@ export class Editor<
 
     if (this.#scrollCaretIntoView(line, char, 'center')) {
       if (!noFocus) {
-        this.#focusAt({ line, character: char });
+        this.#focusAfterScroll();
       }
       this.#scrollingToLine = undefined;
       this.#scrollingToLineChar = undefined;
