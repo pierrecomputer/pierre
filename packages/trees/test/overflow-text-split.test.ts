@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import { h, render } from 'preact';
 
-import { splitCenter, splitExtension } from '../src/components/OverflowText';
+import {
+  MiddleTruncate,
+  splitCenter,
+  splitExtension,
+} from '../src/components/OverflowText';
+import { installDom } from './helpers/dom';
 
 // A split boundary that lands adjacent to whitespace causes the boundary space
 // to collapse under `white-space: nowrap`, making the name visually lose its
@@ -62,5 +68,58 @@ describe('splitCenter whitespace boundary (issue #744)', () => {
 
   test('name without spaces still splits near the center', () => {
     expect(splitCenter('abcdef')).toEqual(['abc', 'def']);
+  });
+});
+
+describe('MiddleTruncate rendered shape', () => {
+  test('splits extension names into two native truncation containers without duplicate marker content', () => {
+    const { cleanup, dom } = installDom();
+    const mount = dom.window.document.createElement('div');
+    try {
+      render(
+        h(MiddleTruncate, {
+          children: 'archive.tar.gz',
+          minimumLength: 5,
+          split: 'extension',
+        }),
+        mount
+      );
+
+      const group = mount.querySelector(
+        '[data-truncate-group-container="middle"]'
+      );
+      if (!(group instanceof dom.window.HTMLElement)) {
+        throw new Error('expected middle truncation group');
+      }
+
+      const directContainers = Array.from(group.children).filter((child) =>
+        child.hasAttribute('data-truncate-container')
+      );
+
+      expect(directContainers).toHaveLength(2);
+      expect(group.children).toHaveLength(2);
+      expect(
+        directContainers.map((container) =>
+          container.getAttribute('data-truncate-container')
+        )
+      ).toEqual(['truncate', 'fruncate']);
+      expect(
+        directContainers.map((container) =>
+          container.getAttribute('data-truncate-segment-priority')
+        )
+      ).toEqual(['2', '1']);
+      expect(
+        directContainers.map((container) => container.textContent)
+      ).toEqual(['archive.tar.', 'gz']);
+      expect(group.textContent).toBe('archive.tar.gz');
+      expect(
+        group.querySelectorAll(
+          '[data-truncate-marker], [data-truncate-grid], [data-truncate-fill]'
+        )
+      ).toHaveLength(0);
+    } finally {
+      render(null, mount);
+      cleanup();
+    }
   });
 });
