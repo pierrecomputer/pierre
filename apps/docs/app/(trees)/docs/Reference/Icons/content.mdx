@@ -39,6 +39,7 @@ Built-in slot remapping:
 
 File-specific remapping:
 
+- `byPath` for exact full tree paths such as `before/screenshot.png`
 - `byFileName` for exact basename matches such as `package.json`
 - `byFileNameContains` for basename substring rules such as `dockerfile`
 - `byFileExtension` for extension rules without a leading dot, and for
@@ -48,11 +49,12 @@ File-specific remapping:
 
 File icon lookup resolves in this order:
 
-1. exact basename match from `byFileName`
-2. basename-contains match from `byFileNameContains`
-3. extension match from `byFileExtension`, and the more specific suffix wins
-4. built-in set mapping
-5. generic file-slot remap or fallback
+1. exact full-path match from `byPath` (case-sensitive)
+2. exact basename match from `byFileName`
+3. basename-contains match from `byFileNameContains`
+4. extension match from `byFileExtension`, and the more specific suffix wins
+5. built-in set mapping
+6. generic file-slot remap or fallback
 
 So `spec.ts` wins over `ts` when both rules exist.
 

@@ -18,6 +18,11 @@ export interface FileTreeIconConfig {
   spriteSheet?: string;
   /** Remap built-in tree icon slots (file, chevron, dot, lock). */
   remap?: Record<string, RemappedIcon>;
+  /**
+   * Remap file icons by exact full tree path (e.g. "before/screenshot.png").
+   * Case-sensitive; takes precedence over every other file icon rule.
+   */
+  byPath?: Record<string, RemappedIcon>;
   /** Remap file icons by exact basename (e.g. "package.json", ".gitignore"). */
   byFileName?: Record<string, RemappedIcon>;
   /** Remap file icons by extension without a leading dot (e.g. "ts", "spec.ts"). */
@@ -37,6 +42,7 @@ function hasCustomIconOverrides(icons: FileTreeIconConfig): boolean {
   return (
     icons.spriteSheet != null ||
     icons.remap != null ||
+    icons.byPath != null ||
     icons.byFileName != null ||
     icons.byFileExtension != null ||
     icons.byFileNameContains != null
